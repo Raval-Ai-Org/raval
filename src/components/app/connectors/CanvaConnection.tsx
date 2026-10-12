@@ -80,10 +80,14 @@ export function CanvaConnection() {
     setBusy(true);
     setError(null);
     try {
-      await removeCanvaConnection({ data: { workspaceId } });
+      const result = await removeCanvaConnection({ data: { workspaceId } });
       await refresh();
       emitAppEvent("connections:changed");
-      toast.success("Canva disconnected");
+      if (result.revocationConfirmed) toast.success("Canva disconnected");
+      else
+        toast.warning(
+          "Disconnected from Mellox. Remove Mellox in your Canva account settings to confirm Canva access is revoked.",
+        );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not disconnect Canva.");
     } finally {

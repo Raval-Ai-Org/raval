@@ -14,10 +14,62 @@ import {
   importPptx,
   exportPngPages,
   createSingleImageDesign,
+  revokeCanvaToken,
+  getCanvaIdentity,
 } from "./api.server";
 import { safeCanvaReturn } from "@/lib/canva-return";
 
 describe("Canva connector boundary", () => {
+  it("validates Canva user/team identifiers without requesting profile data", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ team_user: { user_id: "provider-user", team_id: "provider-team" } }),
+      ),
+    );
+    await expect(getCanvaIdentity("access")).resolves.toEqual({
+      user_id: "provider-user",
+      team_id: "provider-team",
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ team_user: { user_id: "provider-user" } })),
+    );
+    await expect(getCanvaIdentity("access")).rejects.toThrow(/invalid account identity/);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("https://api.canva.com/rest/v1/users/me");
+  });
+  it("rejects local production callbacks and non-origin configuration", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    for (const value of [
+      "http://127.0.0.1:8080",
+      "https://localhost",
+      "https://user:secret@mellox.ai",
+      "https://mellox.ai/redirect",
+      "https://mellox.ai?next=evil",
+      "https://mellox.ai#callback",
+    ]) {
+      expect(() => canvaOrigins(value)).toThrow();
+    }
+    expect(canvaOrigins("https://mellox.ai").redirectUri).toBe(
+      "https://mellox.ai/api/integrations/canva/callback",
+    );
+    expect(canvaMagicLayersEnabled(undefined)).toBe(false);
+  });
+
+  it("does not report successful revocation for HTTP or network failures", async () => {
+    vi.stubEnv("CANVA_CLIENT_ID", "test-client");
+    vi.stubEnv("CANVA_CLIENT_SECRET", "test-secret");
+    vi.stubEnv("CANVA_TOKEN_ENCRYPTION_KEY", Buffer.alloc(32, 1).toString("base64"));
+    vi.stubEnv("APP_URL", "https://mellox.ai");
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 503 }));
+    expect(await revokeCanvaToken("refresh-token")).toBe(false);
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("network"));
+    expect(await revokeCanvaToken("refresh-token")).toBe(false);
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 200 }));
+    expect(await revokeCanvaToken("refresh-token")).toBe(true);
+    expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({
+      redirect: "error",
+      cache: "no-store",
+    });
+  });
   beforeEach(() => vi.stubGlobal("fetch", vi.fn()));
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -141,6 +193,30 @@ describe("Canva connector boundary", () => {
     } catch (error) {
       expect(String(error)).not.toContain("do-not-leak");
     }
+  });
+
+  it.each([null, [], "invalid", 42])("rejects a non-object API response: %j", async (body) => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json(body));
+    await expect(canvaRequest("token", "/designs")).rejects.toMatchObject({ status: 502 });
+  });
+
+  it.each(
+    (
+      [
+        new Headers({ "content-type": "application/json", authorization: "Bearer stale" }),
+        [
+          ["content-type", "application/json"],
+          ["authorization", "Bearer stale"],
+        ],
+        { "content-type": "application/json", Authorization: "Bearer stale" },
+      ] satisfies HeadersInit[]
+    ).map((headers) => ({ headers })),
+  )("preserves request headers and uses the current token: %j", async ({ headers }) => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ design: { id: "D1" } }));
+    await canvaRequest("current", "/designs", { headers });
+    const sent = new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers);
+    expect(sent.get("content-type")).toBe("application/json");
+    expect(sent.get("authorization")).toBe("Bearer current");
   });
 
   it.each([401, 403, 429, 503])("normalizes Canva HTTP %i", async (status) => {

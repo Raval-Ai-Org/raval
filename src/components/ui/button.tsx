@@ -26,7 +26,7 @@ import { Spinner } from "@/components/icons";
  */
 const buttonVariants = cva(
   [
-    "relative inline-flex items-center justify-center gap-2 rounded-md text-center",
+    "relative inline-flex max-w-full items-center justify-center gap-2 rounded-md text-center",
     "font-medium tracking-tight cursor-pointer select-none",
     "transition-[background-color,border-color,color,box-shadow,transform]",
     "duration-[--motion-duration-base] ease-[--motion-ease-standard]",
@@ -65,10 +65,10 @@ const buttonVariants = cva(
         link: "h-auto p-0 text-primary underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-8 px-3 text-xs [&_svg]:size-4",
-        default: "h-9 px-4 text-sm [&_svg]:size-4",
-        lg: "h-10 px-5 text-sm [&_svg]:size-[18px]",
-        xl: "h-12 px-6 text-base [&_svg]:size-5",
+        sm: "h-8 px-3 text-xs max-sm:h-auto max-sm:min-h-8 max-sm:py-1.5 [&_svg]:size-4",
+        default: "h-9 px-4 text-sm max-sm:h-auto max-sm:min-h-9 max-sm:py-2 [&_svg]:size-4",
+        lg: "h-10 px-5 text-sm max-sm:h-auto max-sm:min-h-10 max-sm:py-2 [&_svg]:size-[18px]",
+        xl: "h-12 px-6 text-base max-sm:h-auto max-sm:min-h-12 max-sm:py-3 [&_svg]:size-5",
         icon: "size-9 [&_svg]:size-4",
         "icon-sm": "size-8 [&_svg]:size-4",
         "icon-lg": "size-10 [&_svg]:size-[18px]",
@@ -125,7 +125,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             <Spinner className="size-4 animate-spin" />
           </span>
         ) : null}
-        <span className={cn("inline-flex items-center gap-2", loading && "invisible")}>
+        <span
+          className={cn(
+            "inline-flex min-w-0 max-w-full items-center justify-center gap-2",
+            loading && "invisible",
+          )}
+        >
           {children}
         </span>
       </Comp>

@@ -134,6 +134,8 @@ function guardedLookup(resolve: LookupFn, isBlocked: AddressPredicate): LookupFn
 }
 
 export type SafeFetchOptions = {
+  /** Optional provider boundary, checked before connecting on every redirect hop. */
+  validateUrl?: (url: URL) => boolean;
   method?: "GET" | "HEAD";
   headers?: Record<string, string>;
   /** Whole-request deadline, redirects included. Default 10s. */
@@ -225,6 +227,7 @@ export function createSafeFetch(deps: SafeFetchDeps = {}) {
     let url = assertPublicUrl(typeof input === "string" ? input : new URL(input.toString()));
 
     for (let hop = 0; ; hop++) {
+      if (opts.validateUrl && !opts.validateUrl(url)) throw new SsrfBlockedError();
       const res = await undiciFetch(url, {
         method: opts.method ?? "GET",
         headers: opts.headers,

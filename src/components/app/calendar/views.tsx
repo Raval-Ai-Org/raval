@@ -406,7 +406,7 @@ function PlannedRow({ slot, onPick }: { slot: PlannedSlot; onPick: (slot: Planne
     <button
       type="button"
       onClick={() => onPick(slot)}
-      className="flex w-full items-center gap-2.5 rounded-[var(--ds-radius-tile)] border border-dashed border-foreground/20 p-2.5 text-left transition-colors hover:border-foreground/35"
+      className="grid w-full grid-cols-[36px_minmax(0,1fr)] items-center gap-2.5 rounded-[var(--ds-radius-tile)] border border-dashed border-foreground/20 p-2.5 text-left transition-colors hover:border-foreground/35 sm:flex"
     >
       <ChannelBadge channel={slot.channel} />
       <span className="min-w-0 flex-1">
@@ -415,7 +415,7 @@ function PlannedRow({ slot, onPick }: { slot: PlannedSlot; onPick: (slot: Planne
           {clock(slot.time)} · {slot.format}
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+      <span className="col-start-2 flex w-fit max-w-full shrink-0 items-center gap-1 rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
         {slot.state === "writing" ? (
           <Loader2 className="h-2.5 w-2.5 animate-spin" />
         ) : (
@@ -467,7 +467,7 @@ export function ListView({
                     type="button"
                     {...dragProps(e, p)}
                     onClick={() => p.onPickEntry(e.id)}
-                    className="ds-tile ds-tile-hover flex w-full items-center gap-3 p-2.5 pr-12 text-left"
+                    className="ds-tile ds-tile-hover grid w-full grid-cols-[36px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 p-2.5 pr-12 text-left sm:flex sm:gap-3"
                   >
                     <ChannelBadge channel={e.channel} size={36} />
                     <span className="min-w-0 flex-1">
@@ -477,9 +477,11 @@ export function ListView({
                         {e.topic ? ` · ${e.topic}` : ""}
                       </span>
                     </span>
-                    {p.autopilotIds.has(e.id) && <AutopilotMark />}
-                    {scores?.[e.id] ? <ScoreChip overall={scores[e.id].overall} /> : null}
-                    <StatusChip status={e.status} />
+                    <span className="col-start-2 flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">
+                      {p.autopilotIds.has(e.id) && <AutopilotMark />}
+                      {scores?.[e.id] ? <ScoreChip overall={scores[e.id].overall} /> : null}
+                      <StatusChip status={e.status} />
+                    </span>
                   </button>
                   {!isLocked(e.status) && (
                     <button

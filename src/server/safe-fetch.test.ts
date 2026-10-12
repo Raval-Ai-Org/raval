@@ -22,6 +22,20 @@ const fakeLookup = ((
 let server: Server;
 let port = 0;
 
+it("checks a provider URL boundary on every redirect before fetching its destination", async () => {
+  const fetcher = createSafeFetch({ lookup: fakeLookup, isBlockedAddress: () => false });
+  const visited: string[] = [];
+  await expect(
+    fetcher(`http://public.example:${port}/to-relative`, {
+      validateUrl: (url) => {
+        visited.push(url.pathname);
+        return url.pathname === "/to-relative";
+      },
+    }),
+  ).rejects.toBeInstanceOf(SsrfBlockedError);
+  expect(visited).toEqual(["/to-relative", "/ok"]);
+});
+
 beforeAll(async () => {
   server = createServer((req, res) => {
     switch (req.url) {

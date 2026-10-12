@@ -47,15 +47,15 @@ export function SurfaceLayout<T extends string>({
   // One animated highlight per rail, so two open surfaces never share it.
   const group = useId();
   return (
-    <div className="flex h-full min-h-0 flex-col lg:flex-row">
+    <div className="flex h-full min-h-0 min-w-0 flex-col lg:flex-row">
       <nav
         aria-label={label}
-        className="shrink-0 border-b border-border/60 lg:flex lg:w-[216px] lg:flex-col lg:border-b-0 lg:border-r lg:bg-surface-2/40 lg:px-3 lg:py-4"
+        className="min-w-0 shrink-0 border-b border-border/60 lg:flex lg:w-[216px] lg:flex-col lg:border-b-0 lg:border-r lg:bg-surface-2/40 lg:px-3 lg:py-4"
       >
         {railTop && <div className="mb-4 hidden px-1 lg:block">{railTop}</div>}
         <LayoutGroup id={group}>
           <ul
-            className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] lg:flex-col lg:overflow-visible lg:p-0 [&::-webkit-scrollbar]:hidden"
+            className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] lg:min-h-0 lg:overflow-y-auto lg:flex-col lg:px-0 lg:py-0 [&::-webkit-scrollbar]:hidden"
             role="list"
           >
             {items.map((item) => {
@@ -142,20 +142,22 @@ export function SurfacePage({
   return (
     <div
       className={cn(
-        "mx-auto w-full px-4 pb-10 pt-5 sm:px-7 sm:pt-6",
+        "mx-auto min-w-0 w-full px-4 pb-10 pt-5 sm:px-7 sm:pt-6",
         width === "narrow" ? "max-w-[760px]" : "max-w-[1100px]",
         className,
       )}
     >
       {(title || actions) && (
         <header className="mb-5 flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="min-w-0">
-            {title && <h3 className="ds-page-title truncate">{title}</h3>}
+          <div className="min-w-0 max-w-full">
+            {title && <h3 className="ds-page-title break-words">{title}</h3>}
             {subtitle && (
-              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{subtitle}</p>
+              <p className="mt-0.5 break-words text-[13px] text-muted-foreground">{subtitle}</p>
             )}
           </div>
-          {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+          {actions && (
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div>
+          )}
         </header>
       )}
       {children}
@@ -177,7 +179,10 @@ export function Tile({
   as?: "div" | "section" | "li" | "article";
 } & React.HTMLAttributes<HTMLElement>) {
   return (
-    <Tag className={cn("ds-tile p-4 sm:p-5", interactive && "ds-tile-hover", className)} {...rest}>
+    <Tag
+      className={cn("ds-tile min-w-0 p-4 sm:p-5", interactive && "ds-tile-hover", className)}
+      {...rest}
+    >
       {children}
     </Tag>
   );
@@ -186,7 +191,7 @@ export function Tile({
 /** Small uppercase label above a group of tiles. */
 export function GroupLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-2.5 mt-7 flex items-center justify-between gap-3 first:mt-0">
+    <div className="mb-2.5 mt-7 flex flex-wrap items-center justify-between gap-3 first:mt-0">
       <h4 className="ds-label">{children}</h4>
       {action}
     </div>

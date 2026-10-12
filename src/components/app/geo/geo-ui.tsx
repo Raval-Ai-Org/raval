@@ -386,7 +386,7 @@ export function Segmented<T extends string>({
       role="group"
       aria-label={label}
       className={cn(
-        "inline-flex rounded-full border border-border/70 bg-card p-0.5 text-[12px]",
+        "inline-flex max-w-full flex-wrap rounded-full border border-border/70 bg-card p-0.5 text-[12px]",
         className,
       )}
     >
@@ -397,7 +397,7 @@ export function Segmented<T extends string>({
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "whitespace-nowrap rounded-full px-3 py-1 font-medium transition-colors",
+            "max-w-full shrink-0 whitespace-nowrap rounded-full px-3 py-1 font-medium transition-colors",
             dsFocus,
             value === o.value
               ? "bg-primary text-primary-foreground"

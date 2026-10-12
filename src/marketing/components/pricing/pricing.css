@@ -144,13 +144,15 @@
   }
   .px-toggle button {
     flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
     justify-content: center;
     gap: 6px;
     padding: 12px 10px;
     font-size: 15px;
-    white-space: nowrap;
+    white-space: normal;
   }
-  .px-free-tag {
+  .px-toggle .px-free-tag {
     font-size: 10px;
   }
 }

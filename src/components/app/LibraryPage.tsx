@@ -523,7 +523,7 @@ export function LibraryPage({
                 )}
               </label>
 
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
                 {tab !== "media" ? (
                   <select
                     value={status}
@@ -623,7 +623,7 @@ export function LibraryPage({
           {/* ── Results ── */}
           <main className="min-h-0 flex-1 overflow-y-auto p-3 @3xl/library:p-5">
             {loading ? (
-              <div className="grid grid-cols-2 gap-3 @2xl/library:grid-cols-3 @4xl/library:grid-cols-4 @6xl/library:grid-cols-5">
+              <div className="grid grid-cols-1 gap-3 @sm/library:grid-cols-2 @2xl/library:grid-cols-3 @4xl/library:grid-cols-4 @6xl/library:grid-cols-5">
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div
                     key={index}
@@ -673,7 +673,7 @@ export function LibraryPage({
             ) : view === "grid" ? (
               <ul
                 key={`${tab}-grid`}
-                className="grid grid-cols-2 gap-3 @2xl/library:grid-cols-3 @4xl/library:grid-cols-4 @6xl/library:grid-cols-5"
+                className="grid grid-cols-1 gap-3 @sm/library:grid-cols-2 @2xl/library:grid-cols-3 @4xl/library:grid-cols-4 @6xl/library:grid-cols-5"
               >
                 {items.map((item, i) => (
                   <motion.li
@@ -801,7 +801,10 @@ function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOp
         <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
           {group.title}
         </span>
-        <span className="mt-auto flex items-center gap-1.5 pt-2 text-[11px] text-muted-foreground">
+        <span
+          data-testid="library-post-meta"
+          className="mt-auto flex min-w-0 flex-wrap items-center gap-1.5 pt-2 text-[11px] text-muted-foreground"
+        >
           <span className="truncate">
             {legacy ? (group.legacyLabel ?? "Content") : STUDIO_FORMATS[type].label}
           </span>

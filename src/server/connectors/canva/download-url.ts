@@ -6,6 +6,7 @@ export function validCanvaDownloadUrl(raw: string) {
       url.protocol === "https:" &&
       (url.hostname === "canva.com" || url.hostname.endsWith(".canva.com")) &&
       !url.username &&
+      !url.port &&
       !url.password
     );
   } catch {

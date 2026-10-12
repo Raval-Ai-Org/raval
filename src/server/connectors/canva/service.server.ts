@@ -20,6 +20,7 @@ import {
 import { consumeCanvaState } from "./oauth.server";
 import {
   tokenGrant,
+  getCanvaIdentity,
   revokeCanvaToken,
   uploadImage,
   getDesignEditUrl,
@@ -111,57 +112,32 @@ export async function completeCanvaOAuth(args: {
     code_verifier: txn.verifier,
     redirect_uri: config.redirectUri,
   });
-  const { data: prior } = await db
-    .from("workspace_connections")
-    .select("id")
-    .eq("workspace_id", txn.workspaceId)
-    .eq("provider", "canva")
-    .eq("external_account_id", "workspace")
-    .maybeSingle();
-  const existing = prior as { id: string } | null;
-  const values = {
-    workspace_id: txn.workspaceId,
-    provider: "canva",
-    status: "active",
-    external_account_id: "workspace",
-    account_login: "Canva",
-    verification: "oauth",
-    connected_by: args.userId,
-    revoked_at: null,
-    last_error: null,
-    permissions: { scopes: tokens.scope?.split(" ") ?? [...CANVA_SCOPES] },
-    updated_at: new Date().toISOString(),
-  };
-  let connectionId = existing?.id;
-  if (connectionId) {
-    const { error } = await db
-      .from("workspace_connections")
-      .update(values)
-      .eq("id", connectionId)
-      .eq("workspace_id", txn.workspaceId);
-    if (error) throw new HttpError(500, "Could not save Canva connection.");
-  } else {
-    const { data, error } = await db
-      .from("workspace_connections")
-      .insert(values)
-      .select("id")
-      .single();
-    if (error || !data) throw new HttpError(500, "Could not save Canva connection.");
-    connectionId = data.id;
+  let identity: Awaited<ReturnType<typeof getCanvaIdentity>>;
+  try {
+    identity = await getCanvaIdentity(tokens.access_token);
+  } catch (error) {
+    await revokeCanvaToken(tokens.refresh_token);
+    throw error;
   }
-  const { error } = await db.from("canva_oauth_credentials").upsert(
-    {
-      connection_id: connectionId,
-      workspace_id: txn.workspaceId,
-      access_token_enc: encryptWithKey(tokens.access_token, config.key),
-      refresh_token_enc: encryptWithKey(tokens.refresh_token, config.key),
-      access_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-      scopes: tokens.scope?.split(" ") ?? [...CANVA_SCOPES],
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "connection_id" },
-  );
-  if (error) throw new HttpError(500, "Could not save Canva credentials.");
+  const { data: connectionId, error } = await db.rpc("save_canva_authorization", {
+    // Provider owner identifiers are validated before the transactional write.
+    p_workspace_id: txn.workspaceId,
+    p_user_id: args.userId,
+    p_state_id: txn.stateId,
+    p_canva_user_id: identity.user_id,
+    p_canva_team_id: identity.team_id,
+    p_access_token_enc: encryptWithKey(tokens.access_token, config.key),
+    p_refresh_token_enc: encryptWithKey(tokens.refresh_token, config.key),
+    p_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    p_scopes: tokens.scope?.split(" ").filter(Boolean) ?? [...CANVA_SCOPES],
+  });
+  if (error || !connectionId) {
+    await revokeCanvaToken(tokens.refresh_token);
+    throw new HttpError(
+      409,
+      "Could not save Canva authorization. It may have expired or been withdrawn. Start again.",
+    );
+  }
   await recordAudit({
     workspaceId: txn.workspaceId,
     userId: args.userId,
@@ -195,37 +171,48 @@ export async function canvaAccessToken(workspaceId: string) {
         grant_type: "refresh_token",
         refresh_token: decryptCanvaToken(data.refresh_token_enc, config.readKeys),
       });
-      const { error } = await db
-        .from("canva_oauth_credentials")
-        .update({
-          access_token_enc: encryptWithKey(tokens.access_token, config.key),
-          refresh_token_enc: encryptWithKey(tokens.refresh_token, config.key),
-          access_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("connection_id", connected.id)
-        .eq("workspace_id", workspaceId);
+      const { data: saved, error } = await db.rpc("refresh_canva_authorization", {
+        p_workspace_id: workspaceId,
+        p_connection_id: connected.id,
+        p_previous_refresh_token_enc: data.refresh_token_enc,
+        p_access_token_enc: encryptWithKey(tokens.access_token, config.key),
+        p_refresh_token_enc: encryptWithKey(tokens.refresh_token, config.key),
+        p_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      });
       if (error) throw new HttpError(500, "Could not refresh Canva connection.");
+      const current = await connection(workspaceId);
+      if (!current || current.id !== connected.id || current.status !== "active") {
+        await revokeCanvaToken(tokens.refresh_token);
+        throw new HttpError(409, "Canva disconnected. Connect again to continue.");
+      }
+      if (!saved) throw new HttpError(409, "Canva authorization changed. Try again.");
       return tokens.access_token;
     } catch (error) {
       if (error instanceof HttpError && error.status !== 409) throw error;
       // Another server instance may already have consumed Canva's one-use refresh token.
-      const { data: rotated } = await db
+      const current = await connection(workspaceId);
+      if (!current || current.id !== connected.id || current.status !== "active")
+        throw new HttpError(409, "Canva disconnected. Connect again to continue.");
+      const { data: rotated, error: rotatedError } = await db
         .from("canva_oauth_credentials")
         .select("access_token_enc, access_token_expires_at")
         .eq("connection_id", connected.id)
         .eq("workspace_id", workspaceId)
         .maybeSingle();
+      if (rotatedError) throw new HttpError(503, "Canva credentials are unavailable. Try again.");
       if (
         rotated?.access_token_enc &&
         Date.parse(rotated.access_token_expires_at) > Date.now() + 60_000
       ) {
         return decryptCanvaToken(rotated.access_token_enc, config.readKeys);
       }
-      await db
+      const { error: statusError } = await db
         .from("workspace_connections")
         .update({ status: "error", last_error: "Reconnect Canva to continue." })
-        .eq("id", connected.id);
+        .eq("id", connected.id)
+        .eq("workspace_id", workspaceId)
+        .eq("status", "active");
+      if (statusError) throw new HttpError(503, "Could not update Canva connection.");
       throw new HttpError(409, "Reconnect Canva to continue.");
     }
   })().finally(() => refreshes.delete(connected.id));
@@ -234,28 +221,23 @@ export async function canvaAccessToken(workspaceId: string) {
 }
 
 export async function disconnectCanva(workspaceId: string, userId: string) {
-  const row = await connection(workspaceId);
-  if (!row) return;
-  const { data } = await db
-    .from("canva_oauth_credentials")
-    .select("refresh_token_enc")
-    .eq("connection_id", row.id)
-    .maybeSingle();
-  await db
-    .from("canva_oauth_credentials")
-    .delete()
-    .eq("connection_id", row.id)
-    .eq("workspace_id", workspaceId);
-  await db
-    .from("workspace_connections")
-    .update({ status: "revoked", revoked_at: new Date().toISOString() })
-    .eq("id", row.id)
-    .eq("workspace_id", workspaceId);
-  if (data?.refresh_token_enc) {
+  // Atomic withdrawal also cancels any pending or already-consumed installation.
+  const { data: credentials, error: withdrawalError } = await db.rpc(
+    "withdraw_canva_authorization",
+    {
+      p_workspace_id: workspaceId,
+    },
+  );
+  if (withdrawalError) throw new HttpError(503, "Could not remove Canva authorization. Try again.");
+  let revocationConfirmed = (credentials?.length ?? 0) > 0;
+  for (const credential of credentials ?? []) {
     try {
-      await revokeCanvaToken(decryptWithKeys(data.refresh_token_enc, canvaConfig().readKeys));
+      const revoked = await revokeCanvaToken(
+        decryptWithKeys(credential.refresh_token_enc, canvaConfig().readKeys),
+      );
+      if (!revoked) revocationConfirmed = false;
     } catch {
-      /* local credentials removed */
+      revocationConfirmed = false;
     }
   }
   await recordAudit({
@@ -264,6 +246,7 @@ export async function disconnectCanva(workspaceId: string, userId: string) {
     action: "connector.canva.disconnected",
     entity: "connector",
   });
+  return { disconnected: true, revocationConfirmed };
 }
 
 type Mode = "magic_layers" | "flat_image" | "design_import";
@@ -912,6 +895,7 @@ export async function importCanvaChanges(args: {
     let bytes: Buffer;
     try {
       const response = await safeFetch(url, {
+        validateUrl: (candidate) => validCanvaDownloadUrl(candidate.toString()),
         timeoutMs: 30_000,
         maxBytes: 50 * 1024 * 1024,
         onOverflow: "error",

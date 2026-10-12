@@ -1,6 +1,7 @@
 import { requireUserId, checkWorkspaceMembership } from "@/server/api-auth";
 import { startCanvaOAuth } from "@/server/connectors/canva/oauth.server";
 import { safeReturnPath } from "@/server/connectors/return-url";
+import { enforceRateLimit } from "@/server/rate-limit";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const auth = await requireUserId(request);
@@ -10,6 +11,8 @@ export async function GET(request: Request) {
     minRole: "editor",
   });
   if (!workspace.ok) return workspace.response;
+  const limited = await enforceRateLimit("connector-connect", auth.userId);
+  if (limited) return limited;
   try {
     const url = await startCanvaOAuth({
       userId: auth.userId,

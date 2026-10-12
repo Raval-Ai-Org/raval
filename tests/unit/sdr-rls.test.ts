@@ -4,7 +4,7 @@
 // read per-workspace SDR keys or webhook secrets. A static test over the
 // migration SQL (deterministic; real RLS is verified at deploy with a live DB).
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -19,11 +19,15 @@ function migrationSql(): string {
 
 function filesContaining(root: string, pattern: RegExp): string[] {
   const hits: string[] = [];
-  for (const entry of readdirSync(root)) {
-    const fullPath = path.join(root, entry);
-    if (statSync(fullPath).isDirectory()) {
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
       hits.push(...filesContaining(fullPath, pattern));
-    } else if (pattern.test(readFileSync(fullPath, "utf8"))) {
+    } else if (
+      entry.isFile() &&
+      /\.[cm]?[jt]sx?$/.test(entry.name) &&
+      pattern.test(readFileSync(fullPath, "utf8"))
+    ) {
       hits.push(fullPath);
     }
   }
@@ -67,9 +71,11 @@ describe("workspace_sdr RLS posture (FR-014)", () => {
       // workspace_sdr access must live in server-only modules: it must never be
       // in a client component, a client-server fn (.functions.ts), or the
       // browser supabase client. (Server libs may be named without `.server.ts`.)
-      expect(f).not.toMatch(/components\//);
-      expect(f).not.toMatch(/\.functions\.ts$/);
-      expect(f).not.toMatch(/supabase\/client\.ts$/);
+      const normalized = f.split(path.sep).join("/");
+      expect(normalized).not.toMatch(/components\//);
+      expect(normalized).not.toMatch(/\.functions\.ts$/);
+      expect(normalized).not.toMatch(/supabase\/client\.ts$/);
     }
-  });
+    // This audit reads the source tree from disk; allow for slower CI volumes.
+  }, 30_000);
 });

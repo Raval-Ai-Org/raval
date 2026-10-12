@@ -204,7 +204,7 @@ export function AppModalShell({
                 {/* Header */}
                 <header
                   className={cn(
-                    "relative z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl sm:gap-3 sm:px-5",
+                    "relative z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-border/50 bg-background/60 px-3 py-1.5 backdrop-blur-xl sm:gap-3 sm:px-5",
                     maximized && "sm:px-8",
                   )}
                 >
@@ -225,7 +225,7 @@ export function AppModalShell({
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-[15px] font-semibold leading-tight tracking-tight text-foreground">
+                    <h2 className="break-words text-[15px] font-semibold leading-tight tracking-tight text-foreground">
                       {title}
                     </h2>
                     {description && (
@@ -235,10 +235,12 @@ export function AppModalShell({
                     )}
                   </div>
 
+                  {headerAccessory && (
+                    <div className="order-last flex w-full min-w-0 flex-wrap items-center gap-1.5 pb-1 sm:order-none sm:w-auto sm:pb-0">
+                      {headerAccessory}
+                    </div>
+                  )}
                   <div className="flex shrink-0 items-center gap-1">
-                    {headerAccessory && (
-                      <div className="flex min-w-0 items-center gap-1.5">{headerAccessory}</div>
-                    )}
                     {canMaximize && (
                       <button
                         type="button"

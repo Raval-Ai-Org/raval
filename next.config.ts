@@ -8,12 +8,11 @@ import type { NextConfig } from "next";
 // content-security-policy.md). Scripts therefore keep 'unsafe-inline' for
 // Next's inline bootstrap and the JSON-LD blocks, while the directives that
 // matter most for a client-side token store are strict:
-//   connect-src  only our origin, Supabase, and the pdf.js worker CDN —
-//                an injected script cannot exfiltrate the session elsewhere;
+//   connect-src  only the application's required service origins;
 //   frame-ancestors 'none' / X-Frame-Options DENY — no clickjacking;
 //   object-src 'none', base-uri 'self', form-action 'self'.
-// Session tokens live in localStorage (Supabase browser client); this policy
-// is the main mitigation until the admin surface gets its own origin.
+// The Supabase SSR browser client persists sessions in cookies; the client
+// also migrates legacy localStorage sessions when needed.
 const isDev = process.env.NODE_ENV !== "production";
 
 function supabaseOrigins(): string[] {
@@ -37,15 +36,15 @@ const CLARITY_HOSTS = [
 
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${isDev ? " 'unsafe-eval'" : ""}`,
   `worker-src 'self' blob: ${PDF_WORKER_CDN}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
   "font-src 'self' data: https://fonts.gstatic.com",
   // Generated images/videos come from provider CDNs; stock media from
   // Pexels/Unsplash/Coverr; avatars from Google.
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
-  `connect-src 'self' ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com${isDev ? " ws: http://localhost:*" : ""}`,
+  `connect-src 'self' https://accounts.google.com/gsi/ ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com${isDev ? " ws: http://localhost:*" : ""}`,
   "frame-src 'self' https://accounts.google.com",
   "frame-ancestors 'none'",
   "object-src 'none'",

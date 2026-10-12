@@ -239,9 +239,9 @@ export function CalendarToolbar({
   const unit = view === "week" ? "week" : "month";
   return (
     <div className="@container border-b border-border">
-      <div className="flex items-center gap-1.5 px-3 py-2 sm:px-4">
+      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 sm:px-4">
         <div
-          className="shrink-0 whitespace-nowrap text-[15px] font-semibold tracking-[-0.01em]"
+          className="min-w-0 text-[15px] font-semibold tracking-[-0.01em]"
           role="heading"
           aria-level={2}
           aria-live="polite"
@@ -274,7 +274,7 @@ export function CalendarToolbar({
           Today
         </button>
 
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+        <div className="flex min-w-0 basis-full flex-wrap items-center justify-end gap-1.5 @lg:basis-auto @lg:flex-1">
           <SearchBox value={filter.query} onChange={(query) => onFilter({ ...filter, query })} />
           <FilterMenu filter={filter} onChange={onFilter} />
           {showViews && (

@@ -1,0 +1,116 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { createGoogleNonce, loadGoogleIdentity } from "@/lib/google-identity";
+import { signInWithGoogle, friendlyAuthError } from "@/lib/auth";
+
+export function GoogleSignInButton({
+  disabled,
+  onSuccess,
+  onBusyChange,
+  onError,
+}: {
+  disabled: boolean;
+  onSuccess: () => Promise<void>;
+  onBusyChange: (busy: boolean) => void;
+  onError: (error: unknown) => void;
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  const handlers = useRef({ disabled, onSuccess, onBusyChange, onError });
+  handlers.current = { disabled, onSuccess, onBusyChange, onError };
+  const [attempt, setAttempt] = useState(0);
+  const [status, setStatus] = useState<"loading" | "ready" | "busy" | "error">("loading");
+  const [loadError, setLoadError] = useState("");
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+
+  useEffect(() => {
+    if (!clientId) return;
+    let active = true;
+    let consumed = false;
+    const element = host.current!;
+    setStatus("loading");
+    element.replaceChildren();
+    async function setup() {
+      try {
+        const [google, { nonce, hashedNonce }] = await Promise.all([
+          loadGoogleIdentity(),
+          createGoogleNonce(),
+        ]);
+        if (!active) return;
+        const createdAt = Date.now();
+        google.initialize({
+          client_id: clientId!,
+          nonce: hashedNonce,
+          ux_mode: "popup",
+          auto_select: false,
+          callback: async ({ credential }) => {
+            if (!active || consumed || handlers.current.disabled) return;
+            consumed = true;
+            setStatus("busy");
+            handlers.current.onBusyChange(true);
+            try {
+              if (Date.now() - createdAt > 10 * 60 * 1000) {
+                throw new Error("Google sign-in attempt expired");
+              }
+              await signInWithGoogle(credential ?? "", nonce);
+              if (active) await handlers.current.onSuccess();
+            } catch (error) {
+              if (active) {
+                handlers.current.onError(error);
+                setAttempt((value) => value + 1);
+              }
+            } finally {
+              if (active) handlers.current.onBusyChange(false);
+            }
+          },
+        });
+        google.renderButton(element, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "pill",
+          width: Math.min(400, Math.floor(element.getBoundingClientRect().width)),
+        });
+        setStatus("ready");
+      } catch (error) {
+        if (active) {
+          setLoadError(friendlyAuthError(error));
+          setStatus("error");
+        }
+      }
+    }
+    void setup();
+    return () => {
+      active = false;
+      element.replaceChildren();
+    };
+  }, [clientId, attempt]);
+
+  return (
+    <div className="min-h-10 w-full">
+      <div ref={host} inert={disabled || status !== "ready"} className="flex justify-center" />
+      {(!clientId || status !== "ready") && (
+        <div role="status" className="text-center text-sm text-muted-foreground">
+          {!clientId
+            ? "Google sign-in is temporarily unavailable. Please use email."
+            : status === "error"
+              ? loadError
+              : status === "busy"
+                ? "Finishing Google sign-in…"
+                : "Loading Google sign-in…"}
+          {clientId && status === "error" && (
+            <button
+              type="button"
+              className="ml-2 underline"
+              disabled={disabled}
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

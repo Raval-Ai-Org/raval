@@ -224,9 +224,14 @@ export type DeleteDeps = {
   removeObjects: (paths: string[]) => Promise<void>;
   releaseSocialBrand: (brandId: string) => Promise<void>;
   disconnectPostForMeAccounts?: (workspaceId: string) => Promise<void>;
+  disconnectCanva?: (workspaceId: string, userId: string) => Promise<void>;
 };
 
 const defaultDeleteDeps: DeleteDeps = {
+  disconnectCanva: async (workspaceId, userId) => {
+    const { disconnectCanva } = await import("@/server/connectors/canva/service.server");
+    await disconnectCanva(workspaceId, userId);
+  },
   listObjects: listWorkspaceObjects,
   removeObjects: async (paths) => {
     for (let i = 0; i < paths.length; i += 100) {
@@ -296,6 +301,7 @@ export async function deleteWorkspace(
     .maybeSingle();
 
   const objects = await deps.listObjects(args.workspaceId).catch(() => [] as string[]);
+  if (deps.disconnectCanva) await deps.disconnectCanva(args.workspaceId, args.userId);
 
   if (deps.disconnectPostForMeAccounts) {
     try {

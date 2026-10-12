@@ -104,6 +104,29 @@ function deps() {
 }
 
 describe("deleteWorkspace", () => {
+  it("disconnects Canva before deleting its grant and blocks deletion on cleanup failure", async () => {
+    const db = seed();
+    const disconnectCanva = vi.fn(async (): Promise<void> => {
+      expect(db.rows("workspaces")).toHaveLength(2);
+      throw new Error("Canva cleanup unavailable");
+    });
+    await expect(
+      deleteWorkspace(
+        { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
+        { ...deps(), disconnectCanva },
+        db as never,
+      ),
+    ).rejects.toThrow("Canva cleanup unavailable");
+    expect(disconnectCanva).toHaveBeenCalledWith(A, OWNER);
+    expect(db.rows("workspaces")).toHaveLength(2);
+    disconnectCanva.mockImplementation(async () => undefined);
+    await deleteWorkspace(
+      { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
+      { ...deps(), disconnectCanva },
+      db as never,
+    );
+    expect(db.rows("workspaces")).toHaveLength(1);
+  });
   it("requires the exact typed confirmation", async () => {
     const db = seed();
     for (const confirmation of ["", "confirm", "CONFIRM ", "Confirm"]) {

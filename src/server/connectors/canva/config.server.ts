@@ -11,11 +11,11 @@ export const CANVA_SCOPES = [
 ] as const;
 export const CANVA_CALLBACK = "/api/integrations/canva/callback";
 
-/** Turning a picture into editable text and elements. On unless set to `false`. */
+/** Preview endpoints must be explicitly enabled; public integrations use stable APIs. */
 export function canvaMagicLayersEnabled(
   value = process.env.FEATURE_FLAG_CANVA_MAGIC_LAYERS_ENABLED,
 ) {
-  return value !== "false";
+  return value === "true" || (value !== "false" && process.env.NODE_ENV !== "production");
 }
 
 export function canvaConfig() {
@@ -48,8 +48,17 @@ export function canvaOrigins(appUrl = process.env.APP_URL) {
   } catch {
     throw new HttpError(503, "APP_URL must be a valid HTTPS origin for Canva.");
   }
+  const loopback = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(origin.hostname);
   const local = origin.protocol === "http:" && /^(localhost|127\.0\.0\.1)$/.test(origin.hostname);
-  if (origin.protocol !== "https:" && !local)
+  if (
+    (origin.protocol !== "https:" && !local) ||
+    (process.env.NODE_ENV === "production" && loopback) ||
+    origin.username ||
+    origin.password ||
+    origin.search ||
+    origin.hash ||
+    origin.pathname !== "/"
+  )
     throw new HttpError(503, "APP_URL must be a valid HTTPS origin for Canva.");
   const callbackOrigin = local
     ? `http://127.0.0.1${origin.port ? `:${origin.port}` : ""}`

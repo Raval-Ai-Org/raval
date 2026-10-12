@@ -133,13 +133,15 @@ function BrainTile({
         </span>
         <HealthRing value={card.health} color={meta.color} locked={!!lockedPlan} />
       </span>
-      <span className="relative flex h-5 items-center gap-2">
+      <span className="relative flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-[15px] font-semibold leading-none tracking-tight">{meta.label}</span>
         <Badge count={news} />
       </span>
       <span className="relative flex flex-col justify-between gap-3">
-        <span className="line-clamp-1 text-[12.5px] leading-5 text-muted-foreground">{line}</span>
-        <span className="flex h-[22px] flex-wrap gap-1.5 overflow-hidden">
+        <span className="line-clamp-2 text-[12.5px] leading-5 text-muted-foreground sm:line-clamp-1">
+          {line}
+        </span>
+        <span className="flex min-h-[22px] flex-wrap gap-1.5">
           {(lockedPlan ? [] : card.facts).map((fact) => (
             <span
               key={fact}

@@ -14,7 +14,12 @@ export type CanvaTokens = z.infer<typeof Token>;
 
 async function timedFetch(url: string, init: RequestInit) {
   try {
-    return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(20_000) });
+    return await fetch(url, {
+      ...init,
+      redirect: "error",
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
   } catch {
     throw new HttpError(504, "Canva did not respond in time.");
   }
@@ -41,9 +46,9 @@ export async function tokenGrant(params: Record<string, string>): Promise<CanvaT
 }
 
 export async function revokeCanvaToken(token: string) {
-  const { clientId, clientSecret } = canvaConfig();
   try {
-    await timedFetch(`${BASE}/oauth/revoke`, {
+    const { clientId, clientSecret } = canvaConfig();
+    const response = await timedFetch(`${BASE}/oauth/revoke`, {
       method: "POST",
       headers: {
         authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
@@ -51,15 +56,19 @@ export async function revokeCanvaToken(token: string) {
       },
       body: new URLSearchParams({ token }),
     });
+    return response.ok;
   } catch {
     /* Local deletion still makes this Mellox connection unusable. */
+    return false;
   }
 }
 
 export async function canvaRequest(token: string, path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
   const res = await timedFetch(`${BASE}${path}`, {
     ...init,
-    headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+    headers,
   });
   if (res.status === 401) throw new HttpError(409, "Canva connection expired. Reconnect Canva.");
   if (res.status === 403)
@@ -75,9 +84,26 @@ export async function canvaRequest(token: string, path: string, init: RequestIni
   }
   if (res.status === 404) throw new HttpError(404, "This Canva design no longer exists.");
   if (!res.ok) throw new HttpError(502, "Canva could not complete this action.");
-  return res.json().catch(() => {
+  const body: unknown = await res.json().catch(() => {
     throw new HttpError(502, "Canva returned an invalid response.");
   });
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw new HttpError(502, "Canva returned an invalid response.");
+  return body;
+}
+
+/** Link the grant to its Canva user and team without requesting profile access. */
+export async function getCanvaIdentity(token: string) {
+  const identity = z
+    .object({
+      team_user: z.object({
+        user_id: z.string().min(1).max(256),
+        team_id: z.string().min(1).max(256),
+      }),
+    })
+    .safeParse(await canvaRequest(token, "/users/me"));
+  if (!identity.success) throw new HttpError(502, "Canva returned an invalid account identity.");
+  return identity.data.team_user;
 }
 
 export async function uploadImage(token: string, bytes: Buffer, name: string): Promise<string> {
@@ -109,7 +135,8 @@ function safeEditUrl(value: string | undefined): string {
   if (!value) throw new HttpError(502, "Canva did not return a safe editor link.");
   try {
     const url = new URL(value);
-    if (url.protocol === "https:" && url.hostname === "www.canva.com") return url.toString();
+    if (url.origin === "https://www.canva.com" && !url.username && !url.password)
+      return url.toString();
   } catch {
     /* Invalid provider response. */
   }

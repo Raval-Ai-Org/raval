@@ -166,6 +166,9 @@ export function friendlyAuthError(error: unknown) {
   if (lower.includes("popup") && lower.includes("blocked")) {
     return "Your browser blocked the Google sign-in window. Allow popups for this app and try again.";
   }
+  if (lower.includes("google sign-in could not load")) {
+    return "Google sign-in could not load. Check your connection or browser restrictions and retry.";
+  }
   if (
     lower.includes("cancelled") ||
     lower.includes("canceled") ||
@@ -187,26 +190,16 @@ export function friendlyAuthError(error: unknown) {
   return "Authentication could not be completed. Please try again.";
 }
 
-export async function signInWithGoogle(nextPath = "/projects") {
-  // Native Supabase Google OAuth. The browser is redirected to Google, then
-  // Supabase returns the user to /auth/callback, which exchanges the PKCE
-  // code for a session (see authCallbackUrl).
-  const { data, error } = await supabase.auth.signInWithOAuth({
+export async function signInWithGoogle(credential: string, nonce: string) {
+  if (!credential || !nonce) throw new Error("Missing Google sign-in credential");
+  // Supabase validates Google's signature, audience, expiry and hashed nonce.
+  // Reuse the existing SSR browser client so cookies and auth listeners agree.
+  const { data, error } = await supabase.auth.signInWithIdToken({
     provider: "google",
-    options: {
-      redirectTo: authCallbackUrl(nextPath),
-    },
+    token: credential,
+    nonce,
   });
-
   if (error) throw error;
-
-  // signInWithOAuth triggers a full-page redirect to Google. Fall back to an
-  // explicit navigation if the URL was returned without redirecting.
-  if (data?.url && typeof window !== "undefined") {
-    window.location.assign(data.url);
-  }
-
-  // The page is leaving for Google; signal the caller not to run the
-  // post-login workspace/navigation flow that applies to inline sessions.
-  return { redirected: true } as const;
+  if (!data.session || !data.user) throw new Error("Google sign-in returned no session");
+  return data;
 }

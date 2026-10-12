@@ -8,6 +8,7 @@ describe("Canva export URL boundary", () => {
 
   it.each([
     "http://export-download.canva.com/file",
+    "https://export-download.canva.com:8443/file",
     "https://canva.com.evil.test/file",
     "https://127.0.0.1/file",
     "https://user:password@export-download.canva.com/file",

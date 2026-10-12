@@ -1,0 +1,38 @@
+name: SAST
+
+on:
+  pull_request:
+    branches: [master, main]
+  push:
+    branches: [master, main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned scanner
+        run: python -m pip install semgrep==1.180.0
+      # Local CLI scanning; no Semgrep account, source upload, or app secrets.
+      # Registry rules are downloaded, so record the rule pack used in run output.
+      - name: Scan application, services, and scripts
+        run: >-
+          semgrep scan --config p/security-audit --error --metrics=off
+          --disable-version-check --exclude node_modules --exclude .next
+          --exclude '.next-*' --exclude '*.test.ts' --exclude '*.spec.ts'
+          src scripts Social-Distribtion-Engine-MelloxAI-SDE/app

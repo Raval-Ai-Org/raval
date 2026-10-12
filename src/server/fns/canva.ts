@@ -58,8 +58,7 @@ export const removeCanvaConnection = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireWorkspaceRole(context, data.workspaceId, "editor");
     const { disconnectCanva } = await import("@/server/connectors/canva/service.server");
-    await disconnectCanva(data.workspaceId, context.userId);
-    return { disconnected: true };
+    return disconnectCanva(data.workspaceId, context.userId);
   });
 
 export const createCanvaEdit = createServerFn({ method: "POST" })

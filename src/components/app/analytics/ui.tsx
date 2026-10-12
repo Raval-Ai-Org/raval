@@ -85,7 +85,7 @@ export function Card({
     // top margin to the second card of every two-column grid row.
     <section
       data-no-rhythm
-      className={cn("rounded-2xl border border-border bg-card/60 p-4 sm:p-5", className)}
+      className={cn("min-w-0 rounded-2xl border border-border bg-card/60 p-4 sm:p-5", className)}
     >
       <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
@@ -419,7 +419,7 @@ export function RankedTable({
   const shown = rows.slice(0, limit);
   const max = Math.max(1, ...shown.map((r) => r.current));
   return (
-    <div className="-mx-1 overflow-x-auto">
+    <div className="-mx-1 min-w-0 overflow-x-auto">
       <table className="w-full min-w-[420px] text-[12px]">
         <thead>
           <tr className="text-left text-[10.5px] uppercase tracking-wider text-muted-foreground">

@@ -15,8 +15,7 @@ export async function GET(request: Request) {
         provider: "canva",
         operation: "oauth_callback",
         status: "failed",
-        error: query.get("error")?.slice(0, 80) ?? "no_code",
-        description: query.get("error_description")?.slice(0, 200) ?? null,
+        reason: query.has("error") ? "authorization_rejected" : "no_code",
       }),
     );
   // Canva calls back on 127.0.0.1 in development; the session lives on APP_URL.
@@ -24,7 +23,10 @@ export async function GET(request: Request) {
   try {
     origin = canvaOrigins().appOrigin;
   } catch {
-    /* Stay on this origin; the page reports the configuration problem. */
+    return new Response("Canva callback URL is not configured.", {
+      status: 503,
+      headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
+    });
   }
   return new Response(null, {
     status: 302,

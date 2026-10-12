@@ -70,18 +70,20 @@ export async function startCanvaOAuth(args: {
 
 export async function consumeCanvaState(state: string, userId: string) {
   if (!STATE_RE.test(state)) throw new HttpError(400, "Invalid Canva connection state.");
-  const { data: row } = await supabaseAdmin
+  const { data: row, error: readError } = await supabaseAdmin
     .from("connector_install_states")
     .select("id, user_id, workspace_id, return_path, expires_at, consumed_at, pkce_verifier_enc")
     .eq("provider", "canva")
     .eq("state_hash", hashState(state))
     .maybeSingle();
+  if (readError) throw new HttpError(503, "Canva connection state is unavailable. Try again.");
   if (!row?.pkce_verifier_enc || !validCanvaStateRow(state, row, userId))
     throw new HttpError(400, "Canva connection expired. Start again.");
   const { readKeys } = canvaConfig();
   let verifier: string;
   try {
     verifier = decryptWithKeys(row.pkce_verifier_enc, readKeys);
+    if (!/^[A-Za-z0-9_-]{43,128}$/.test(verifier)) throw new Error("Invalid PKCE verifier");
   } catch {
     throw new HttpError(409, "Canva connection state cannot be read. Start the connection again.");
   }
@@ -90,7 +92,13 @@ export async function consumeCanvaState(state: string, userId: string) {
     .update({ consumed_at: new Date().toISOString(), pkce_verifier_enc: null })
     .eq("id", row.id)
     .is("consumed_at", null)
+    .gt("expires_at", new Date().toISOString())
     .select("id");
   if (error || !consumed?.length) throw new HttpError(400, "Canva connection already used.");
-  return { workspaceId: row.workspace_id, verifier, returnPath: safeReturnPath(row.return_path) };
+  return {
+    stateId: row.id,
+    workspaceId: row.workspace_id,
+    verifier,
+    returnPath: safeReturnPath(row.return_path),
+  };
 }
