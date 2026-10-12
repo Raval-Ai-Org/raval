@@ -242,12 +242,15 @@ const defaultDeleteDeps: DeleteDeps = {
     if (!process.env.POST_FOR_ME_API_KEY) return;
     const { createPostForMeAdapter } = await import("@/lib/postforme/client.server");
     const call = createPostForMeAdapter(workspaceId);
-    const listed = await call<{ data: Array<{ id: string; status: string }> }>({
+    const listed = await call<{ data: Array<{ id: string; status: string; brand_id?: string }> }>({
       path: "/accounts",
     });
     if (listed.status !== 200) throw new Error("Could not list connected social accounts");
     for (const account of listed.data.data) {
       if (account.status !== "active") continue;
+      if (account.brand_id !== workspaceId) {
+        throw new Error("A connected account is outside this workspace");
+      }
       const removed = await call({
         method: "DELETE",
         path: `/accounts/${encodeURIComponent(account.id)}`,

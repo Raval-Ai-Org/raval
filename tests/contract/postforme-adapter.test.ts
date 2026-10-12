@@ -77,6 +77,19 @@ describe("Post for Me adapter", () => {
     expect(result.data.auth_url).toBe("https://app.postforme.dev/authorize/test");
   });
 
+  it("drops another workspace's accounts even when the upstream ignores its filter", async () => {
+    mocks.listAccounts.mockResolvedValue({
+      data: [
+        { id: "own", platform: "x", status: "connected", external_id: "ws_1" },
+        { id: "foreign", platform: "x", status: "connected", external_id: "ws_2" },
+        { id: "unassigned", platform: "x", status: "connected", external_id: null },
+      ],
+      meta: { next: null },
+    });
+    const result = await createPostForMeAdapter("ws_1", "pfm_test_key")({ path: "/accounts" });
+    expect(result.data.data.map((account: { id: string }) => account.id)).toEqual(["own"]);
+  });
+
   it("maps publishing fields without retrying a create", async () => {
     const call = createPostForMeAdapter("ws_1", "pfm_test_key");
     const result = await call({

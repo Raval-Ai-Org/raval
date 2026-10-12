@@ -7,9 +7,9 @@ test("Studio shows inline account connection and platform expansion before publi
   await page.route("**/api/sdr/accounts**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
   );
-  await page.goto("/studio-lab", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(500);
-  await page.locator("select").first().selectOption("review-approved");
+  await page.goto("/studio-lab?scene=review-approved", { waitUntil: "domcontentloaded" });
+  await expect(page.locator('[data-ready="true"]')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("combobox", { name: "Studio scene" })).toHaveValue("review-approved");
   await page.getByRole("button", { name: "Publish all" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Publish your post" });
