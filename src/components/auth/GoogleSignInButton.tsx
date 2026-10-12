@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createGoogleNonce, loadGoogleIdentity, loadGoogleClientId } from "@/lib/google-identity";
 import { signInWithGoogle, friendlyAuthError } from "@/lib/auth";
+import styles from "./GoogleSignInButton.module.css";
 
 export function GoogleSignInButton({
   disabled,
@@ -69,7 +70,8 @@ export function GoogleSignInButton({
           theme: "outline",
           size: "large",
           text: "continue_with",
-          shape: "pill",
+          shape: "rectangular",
+          logo_alignment: "center",
           width: Math.min(400, Math.floor(element.getBoundingClientRect().width)),
         });
         setStatus("ready");
@@ -89,7 +91,7 @@ export function GoogleSignInButton({
 
   return (
     <div className="min-h-10 w-full">
-      <div ref={host} inert={disabled || status !== "ready"} className="flex justify-center" />
+      <div ref={host} inert={disabled || status !== "ready"} className={styles.host} />
       {status !== "ready" && (
         <div role="status" className="text-center text-sm text-muted-foreground">
           {status === "error"

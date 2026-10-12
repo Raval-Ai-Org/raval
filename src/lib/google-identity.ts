@@ -28,7 +28,8 @@ export type GoogleIdentity = {
       theme: "outline";
       size: "large";
       text: "continue_with";
-      shape: "pill";
+      shape: "rectangular";
+      logo_alignment: "center";
       width: number;
     },
   ): void;

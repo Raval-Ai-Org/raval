@@ -1190,8 +1190,9 @@ const FOOT_LINKS = [
   { label: "Docs", href: "/docs" },
   { label: "Changelog", href: "/changelog" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Privacy", href: "/privacy" },
-  { label: "Terms", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" },
+  { label: "Terms of Service", href: "/terms" },
+  { label: "AI safety & report abuse", href: "/safety" },
 ] as const;
 
 /**

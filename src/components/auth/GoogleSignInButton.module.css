@@ -1,0 +1,80 @@
+.host {
+  width: 100%;
+  min-height: 48px;
+}
+
+.host > div,
+.host > div > div {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Style the SDK's actual interactive control, retaining its click/keyboard
+   handlers, accessible name and official Google logo. */
+.host :global([role="button"]) {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 48px !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 16px !important;
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: inherit !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.025em !important;
+  box-shadow: var(--shadow-1);
+  transition:
+    background-color 200ms,
+    border-color 200ms,
+    transform 200ms;
+}
+
+.host :global([role="button"]):hover {
+  border-color: hsl(var(--foreground) / 0.25) !important;
+  background: hsl(var(--surface-2)) !important;
+  transform: translateY(-1px);
+}
+
+.host :global([role="button"]):focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.55) !important;
+  outline-offset: 2px;
+}
+
+.host :global([role="button"]):active {
+  transform: scale(0.98);
+}
+
+/* GIS puts the logo and label in its last div; the earlier div is the
+   interaction-state layer. Keep the group centered like the original UI. */
+.host :global([role="button"]) > div:last-of-type {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  height: 100% !important;
+  margin: 0 !important;
+}
+
+.host :global([role="button"]) > div:last-of-type > div:first-child {
+  width: 20px !important;
+  height: 20px !important;
+  margin: 0 !important;
+}
+
+.host :global([role="button"]) > div:last-of-type > div:first-child svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.host :global([role="button"]) > div:last-of-type > span:first-of-type {
+  flex: none !important;
+  margin: 0 !important;
+  font: inherit !important;
+}
+
+.host[inert] {
+  pointer-events: none;
+  opacity: 0.5;
+}

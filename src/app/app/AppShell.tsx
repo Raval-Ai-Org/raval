@@ -997,35 +997,6 @@ function AppShell() {
             />
           </main>
         </div>
-        <footer
-          aria-label="Mellox policies"
-          className="flex shrink-0 flex-wrap justify-center gap-x-5 gap-y-1 border-t border-border/60 px-3 py-1.5 text-[11px] text-muted-foreground"
-        >
-          <a
-            href="/privacy"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
-          >
-            Privacy Policy
-          </a>
-          <a
-            href="/terms"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
-          >
-            Terms of Service
-          </a>
-          <a
-            href="/safety"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
-          >
-            AI safety & report abuse
-          </a>
-        </footer>
         <nav
           aria-label="Mobile workspace navigation"
           className="flex shrink-0 items-center justify-around border-t border-border/60 bg-sidebar px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
