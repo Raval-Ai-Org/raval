@@ -1,112 +1,12 @@
 .host {
+  display: flex;
+  justify-content: center;
   width: 100%;
-  min-height: 48px;
+  min-height: 40px;
 }
 
-.host > div,
-.host > div > div {
-  width: 100% !important;
-  max-width: 100% !important;
-}
-
-/* Style the SDK's actual interactive control, retaining its click/keyboard
-   handlers, accessible name and official Google logo. */
-.host :global([role="button"]) {
-  position: relative !important;
-  isolation: isolate;
-  overflow: hidden;
-  box-sizing: border-box;
-  width: 100% !important;
-  max-width: 100% !important;
-  height: 48px !important;
-  border: 1px solid hsl(var(--border)) !important;
-  border-radius: 16px !important;
-  background: hsl(var(--card)) !important;
-  color: hsl(var(--foreground)) !important;
-  font-family: inherit !important;
-  font-size: 16px !important;
-  font-weight: 500 !important;
-  letter-spacing: -0.025em !important;
-  box-shadow: var(--shadow-1);
-  transition:
-    background-color 200ms,
-    border-color 200ms,
-    transform 200ms;
-}
-
-/* Google's hover layer belongs inside the surface, behind the visible row. */
-.host :global([role="button"]) > div:first-of-type:not(:last-of-type) {
-  position: absolute !important;
-  inset: 0 !important;
-  z-index: 0;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-.host :global([role="button"]):hover {
-  border-color: hsl(var(--foreground) / 0.25) !important;
-  background: hsl(var(--surface-2)) !important;
-  transform: translateY(-1px);
-}
-
-.host :global([role="button"]):focus-visible {
-  outline: 2px solid hsl(var(--ring) / 0.55) !important;
-  outline-offset: 2px;
-}
-
-.host :global([role="button"]):active {
-  transform: scale(0.98);
-}
-
-/* GIS puts the logo and label in its last div; the earlier div is the
-   interaction-state layer. Keep the group centered like the original UI. */
-.host :global([role="button"]) > div:last-of-type {
-  position: relative !important;
-  z-index: 1;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 12px !important;
-  height: 100% !important;
-  margin: 0 !important;
-}
-
-.host :global([role="button"]) > div:last-of-type > div:first-child {
-  width: 20px !important;
-  height: 20px !important;
-  margin: 0 !important;
-}
-
-.host :global([role="button"]) > div:last-of-type > div:first-child svg {
-  width: 20px !important;
-  height: 20px !important;
-}
-
-.host :global([role="button"]) > div:last-of-type > span:first-of-type {
-  flex: none !important;
-  margin: 0 !important;
-  font: inherit !important;
-}
-
-/* The SDK adds a second, screen-reader-only label ("Opens in new tab").
-   Keep it accessible but clipped inside the button even if SDK CSS arrives
-   late or page styles override its defaults. Never hide the real control. */
-.host :global([role="button"]) > div:last-of-type > span:not(:first-of-type) {
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  width: 1px !important;
-  height: 1px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
-  clip-path: inset(50%) !important;
-  white-space: nowrap !important;
-  border: 0 !important;
-  pointer-events: none;
-}
-
+/* Google owns the button inside its iframe. Use renderButton's theme/shape
+   options rather than restyling only its temporary HTML fallback. */
 .host[inert] {
   pointer-events: none;
   opacity: 0.5;

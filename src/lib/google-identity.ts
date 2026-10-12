@@ -25,10 +25,10 @@ export type GoogleIdentity = {
     element: HTMLElement,
     options: {
       type: "standard";
-      theme: "outline";
+      theme: "outline" | "filled_black";
       size: "large";
       text: "continue_with";
-      shape: "rectangular";
+      shape: "pill";
       logo_alignment: "center";
       width: number;
     },

@@ -25,6 +25,8 @@ export function GoogleSignInButton({
   useEffect(() => {
     let active = true;
     let consumed = false;
+    let resizeObserver: ResizeObserver | undefined;
+    let themeObserver: MutationObserver | undefined;
     const element = host.current!;
     setStatus("loading");
     element.replaceChildren();
@@ -65,14 +67,35 @@ export function GoogleSignInButton({
             }
           },
         });
-        google.renderButton(element, {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          text: "continue_with",
-          shape: "rectangular",
-          logo_alignment: "center",
-          width: Math.min(400, Math.floor(element.getBoundingClientRect().width)),
+        let previousWidth = 0;
+        let previousTheme = "";
+        const render = () => {
+          if (!active || consumed) return;
+          const width = Math.min(400, Math.floor(element.getBoundingClientRect().width));
+          const theme = document.documentElement.classList.contains("dark")
+            ? "filled_black"
+            : "outline";
+          if (!width || (width === previousWidth && theme === previousTheme)) return;
+          previousWidth = width;
+          previousTheme = theme;
+          element.replaceChildren();
+          google.renderButton(element, {
+            type: "standard",
+            theme,
+            size: "large",
+            text: "continue_with",
+            shape: "pill",
+            logo_alignment: "center",
+            width,
+          });
+        };
+        render();
+        resizeObserver = new ResizeObserver(render);
+        resizeObserver.observe(element);
+        themeObserver = new MutationObserver(render);
+        themeObserver.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class"],
         });
         setStatus("ready");
       } catch (error) {
@@ -85,6 +108,8 @@ export function GoogleSignInButton({
     void setup();
     return () => {
       active = false;
+      resizeObserver?.disconnect();
+      themeObserver?.disconnect();
       element.replaceChildren();
     };
   }, [attempt]);

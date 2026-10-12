@@ -38,7 +38,8 @@ async function mockAuth(page: Page, rejectFirst = false) {
       body: `window.__gisAttempts = [];
       window.google = { accounts: { id: {
         initialize(options) { window.__gisOptions = options; window.__gisAttempts.push(options); },
-        renderButton(host) {
+        renderButton(host, buttonOptions) {
+          window.__gisButtonOptions = buttonOptions;
           const options = window.__gisOptions;
           const button = document.createElement('button');
           button.textContent = 'Continue with Google';
@@ -87,6 +88,17 @@ for (const path of ["/login", "/signup"]) {
   }) => {
     const state = await mockAuth(page);
     await page.goto(`${path}?next=${encodeURIComponent("/reset-password?gis=success")}`);
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __gisButtonOptions: { size: string; shape: string; text: string };
+            }
+          ).__gisButtonOptions,
+      ),
+    ).toMatchObject({ size: "large", shape: "pill", text: "continue_with" });
     await page.getByRole("button", { name: "Continue with Google" }).click();
     await expect(page).toHaveURL(/\/reset-password\?gis=success$/, { timeout: 20_000 });
     expect(state.exchanges).toHaveLength(1);
