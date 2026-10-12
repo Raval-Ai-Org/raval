@@ -35,7 +35,7 @@ end $$;
 -- Catalog discovery covers new features without an incomplete hardcoded table list.
 create or replace function private.switch_media_references(old_path text, new_path text)
 returns bigint language plpgsql set search_path = '' as $$
-declare c record; affected bigint; total bigint := 0;
+declare c record; affected bigint; total bigint := 0; scope text;
 begin
   if old_path !~ '^workspace/[0-9a-f-]{36}/assets/' or
      split_part(old_path,'/',2) <> split_part(new_path,'/',2) then
@@ -48,19 +48,22 @@ begin
     using old_path, '%/storage/v1/object/%/generated-assets/' || old_path || '%', split_part(old_path,'/',2);
   end if;
   for c in
-    select cols.table_name, cols.column_name, cols.data_type
+    select cols.table_name, cols.column_name, cols.data_type,
+      exists(select 1 from information_schema.columns owner_col where owner_col.table_schema='public'
+        and owner_col.table_name=cols.table_name and owner_col.column_name='workspace_id' and owner_col.udt_name='uuid') as has_workspace
     from information_schema.columns cols
     join information_schema.tables t using (table_schema,table_name)
     where cols.table_schema='public' and t.table_type='BASE TABLE'
       and cols.is_generated='NEVER' and cols.data_type in ('text','character varying','json','jsonb')
   loop
+    scope := case when c.has_workspace then ' and workspace_id=$4::uuid' else '' end;
     if c.data_type in ('json','jsonb') then
-      execute format('update public.%I set %I=private.replace_media_reference(%I::jsonb,$1,$2)::%s where %I::text like $3 and %I::jsonb is distinct from private.replace_media_reference(%I::jsonb,$1,$2)',
-        c.table_name,c.column_name,c.column_name,c.data_type,c.column_name,c.column_name,c.column_name)
-      using old_path,new_path,'%' || old_path || '%';
+      execute format('update public.%I set %I=private.replace_media_reference(%I::jsonb,$1,$2)::%s where %I::text like $3 and %I::jsonb is distinct from private.replace_media_reference(%I::jsonb,$1,$2)%s',
+        c.table_name,c.column_name,c.column_name,c.data_type,c.column_name,c.column_name,c.column_name,scope)
+      using old_path,new_path,'%' || old_path || '%',split_part(old_path,'/',2);
     else
-      execute format('update public.%I set %I=$2 where %I=$1',c.table_name,c.column_name,c.column_name)
-      using old_path,new_path;
+      execute format('update public.%I set %I=$2 where %I=$1%s',c.table_name,c.column_name,c.column_name,scope)
+      using old_path,new_path,null,split_part(old_path,'/',2);
     end if;
     get diagnostics affected = row_count;
     total := total + affected;

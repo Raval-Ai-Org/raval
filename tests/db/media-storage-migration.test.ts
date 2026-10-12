@@ -14,6 +14,7 @@ describe("media migration transaction and isolation", () => {
         create table public.media(id int primary key, path text, meta jsonb);
         create table public.content_items(id int primary key, workspace_id uuid, media_url text, meta jsonb);
         insert into public.content_items values(1,'${workspace}','https://example.supabase.co/storage/v1/object/sign/generated-assets/${oldPath}?token=expired','{"asset_storage_path":"${oldPath}"}');
+        insert into public.content_items values(2,'00000000-0000-4000-8000-000000000002',null,'{"asset_storage_path":"${oldPath}"}');
         insert into public.media values (1,'${oldPath}','{"paths":["${oldPath}"],"nested":{"path":"${oldPath}"},"text":"prefix ${oldPath}"}');`);
       await db.exec(
         readFileSync("supabase/migrations/20261012190000_r2_storage_migration.sql", "utf8"),
@@ -33,8 +34,15 @@ describe("media migration transaction and isolation", () => {
       expect(rows[0].meta.text).toBe(`prefix ${oldPath}`);
       expect(
         (
+          await db.query<{ meta: { asset_storage_path: string } }>(
+            "select meta from public.content_items where id=2",
+          )
+        ).rows[0].meta.asset_storage_path,
+      ).toBe(oldPath);
+      expect(
+        (
           await db.query<{ media_url: string | null; meta: { asset_storage_path: string } }>(
-            "select * from public.content_items",
+            "select * from public.content_items where id=1",
           )
         ).rows[0],
       ).toMatchObject({ media_url: null, meta: { asset_storage_path: newPath } });

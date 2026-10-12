@@ -156,7 +156,8 @@ type MigrationAlias = { source_path: string; target_path: string; status: string
 /** Server-only lookup. A missing RPC permits rolling deployment before the schema. */
 async function migrationAliases(paths: string[]): Promise<Map<string, MigrationAlias>> {
   const legacy = paths.filter((path) => !isMarkedR2Path(path));
-  if (!legacy.length || !isR2StorageEnabled()) return new Map();
+  if (!legacy.length || (process.env.NODE_ENV !== "production" && !isR2StorageEnabled()))
+    return new Map();
   const admin = supabaseAdmin as unknown as SupabaseClient;
   const { data, error } = await admin.rpc(
     "resolve_media_storage_paths" as never,

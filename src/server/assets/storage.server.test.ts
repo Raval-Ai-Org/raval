@@ -40,6 +40,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("private R2 and legacy Supabase storage", () => {
+  it("protects migration originals when production R2 credentials are missing", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("R2_ACCESS_KEY_ID", "");
+    vi.stubEnv("R2_SECRET_ACCESS_KEY", "");
+    mocks.rpc.mockResolvedValue({
+      data: [{ source_path: legacy, target_path: r2, status: "active" }],
+      error: null,
+    });
+    await expect(removeAssetObjects([legacy], db)).rejects.toThrow("not configured");
+    expect(from).not.toHaveBeenCalled();
+  });
   it("resolves stale migration aliases without exposing or deleting originals", async () => {
     mocks.rpc.mockResolvedValue({
       data: [{ source_path: legacy, target_path: r2, status: "active" }],
