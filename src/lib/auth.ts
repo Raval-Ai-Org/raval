@@ -169,6 +169,9 @@ export function friendlyAuthError(error: unknown) {
   if (lower.includes("google sign-in could not load")) {
     return "Google sign-in could not load. Check your connection or browser restrictions and retry.";
   }
+  if (lower.includes("google sign-in configuration unavailable")) {
+    return "Google sign-in is unavailable right now. Please retry or use email.";
+  }
   if (
     lower.includes("cancelled") ||
     lower.includes("canceled") ||

@@ -25,6 +25,13 @@ function session() {
 async function mockAuth(page: Page, rejectFirst = false) {
   const authSession = session();
   const state = { exchanges: [] as Record<string, string>[], workspaceCalls: 0, authorizeCalls: 0 };
+  // Production verification can exercise the real runtime endpoint while
+  // keeping Google credentials and Supabase sessions safely stubbed.
+  if (process.env.PLAYWRIGHT_GOOGLE_RUNTIME_CONFIG !== "1") {
+    await page.route("**/api/auth/google/config", (route) =>
+      route.fulfill({ json: { clientId: "123-test.apps.googleusercontent.com" } }),
+    );
+  }
   await page.route("https://accounts.google.com/gsi/client", (route) =>
     route.fulfill({
       contentType: "application/javascript",
@@ -79,9 +86,9 @@ for (const path of ["/login", "/signup"]) {
     context,
   }) => {
     const state = await mockAuth(page);
-    await page.goto(`${path}?next=${encodeURIComponent("/privacy?gis=success")}`);
+    await page.goto(`${path}?next=${encodeURIComponent("/reset-password?gis=success")}`);
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect(page).toHaveURL(/\/privacy\?gis=success$/);
+    await expect(page).toHaveURL(/\/reset-password\?gis=success$/, { timeout: 20_000 });
     expect(state.exchanges).toHaveLength(1);
     expect(state.exchanges[0]).toMatchObject({
       provider: "google",
@@ -104,7 +111,7 @@ for (const path of ["/login", "/signup"]) {
     page,
   }) => {
     const state = await mockAuth(page, true);
-    await page.goto(`${path}?next=${encodeURIComponent("/privacy?gis=retry")}`);
+    await page.goto(`${path}?next=${encodeURIComponent("/reset-password?gis=retry")}`);
     await page.getByRole("button", { name: "Continue with Google" }).click();
     await expect(page.getByText("Google sign-in failed", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
@@ -115,7 +122,7 @@ for (const path of ["/login", "/signup"]) {
       () => (window as unknown as { __gisOptions: { nonce: string } }).__gisOptions.nonce,
     );
     await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect(page).toHaveURL(/\/privacy\?gis=retry$/);
+    await expect(page).toHaveURL(/\/reset-password\?gis=retry$/, { timeout: 20_000 });
     expect(state.exchanges).toHaveLength(2);
     expect(state.exchanges[0].nonce).not.toBe(state.exchanges[1].nonce);
     const digest = await crypto.subtle.digest(
@@ -140,6 +147,42 @@ test("blocked GIS script can retry while email login remains usable", async ({ p
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
 });
 
+test("runtime configuration failure can retry without disabling email auth or loading GIS", async ({
+  page,
+}) => {
+  const state = await mockAuth(page);
+  let sdkRequests = 0;
+  page.on("request", (request) => {
+    if (request.url() === "https://accounts.google.com/gsi/client") sdkRequests++;
+  });
+  await page.route("**/api/auth/google/config", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: "GOOGLE_SIGN_IN_NOT_CONFIGURED" },
+    }),
+  );
+  await page.goto("/login");
+  await expect(
+    page.getByText("Google sign-in is unavailable right now. Please retry or use email."),
+  ).toBeVisible();
+  expect(sdkRequests).toBe(0);
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeEnabled();
+  await page.unroute("**/api/auth/google/config");
+  await page.route("**/api/auth/google/config", (route) =>
+    route.fulfill({
+      json: { clientId: "123-runtime.apps.googleusercontent.com" },
+    }),
+  );
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __gisOptions: { client_id: string } }).__gisOptions.client_id,
+    ),
+  ).toBe("123-runtime.apps.googleusercontent.com");
+  expect(state.exchanges).toHaveLength(0);
+});
+
 test("email signup still sends confirmation instead of Google authentication", async ({ page }) => {
   const state = await mockAuth(page);
   await page.goto("/signup");
@@ -159,11 +202,11 @@ test("email login still persists a session and preserves its destination", async
   context,
 }) => {
   const state = await mockAuth(page);
-  await page.goto(`/login?next=${encodeURIComponent("/privacy?email=success")}`);
+  await page.goto(`/login?next=${encodeURIComponent("/reset-password?email=success")}`);
   await page.getByPlaceholder("Email", { exact: true }).fill("email@example.com");
   await page.getByPlaceholder("Password", { exact: true }).fill("safe-test-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/privacy\?email=success$/);
+  await expect(page).toHaveURL(/\/reset-password\?email=success$/, { timeout: 20_000 });
   expect(state.exchanges).toHaveLength(0);
   expect(state.workspaceCalls).toBe(1);
   expect((await context.cookies()).some((cookie) => cookie.name.startsWith(STORAGE_KEY))).toBe(
@@ -182,8 +225,8 @@ test("legacy existing session remains signed in without a Google token exchange"
     },
     { key: STORAGE_KEY, data: session() },
   );
-  await page.goto(`/login?next=${encodeURIComponent("/privacy?existing=session")}`);
-  await expect(page).toHaveURL(/\/privacy\?existing=session$/);
+  await page.goto(`/login?next=${encodeURIComponent("/reset-password?existing=session")}`);
+  await expect(page).toHaveURL(/\/reset-password\?existing=session$/, { timeout: 20_000 });
   expect(state.exchanges).toHaveLength(0);
   expect((await context.cookies()).some((cookie) => cookie.name.startsWith(STORAGE_KEY))).toBe(
     true,
@@ -226,7 +269,7 @@ test("credentials from an unmounted login button are ignored after switching to 
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.getByRole("link", { name: "Create an account" }).click();
-  await expect(page).toHaveURL(/\/signup$/);
+  await expect(page).toHaveURL(/\/signup$/, { timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.evaluate(() => {
     const attempts = (

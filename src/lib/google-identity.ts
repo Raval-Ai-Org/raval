@@ -1,3 +1,18 @@
+import { isGoogleWebClientId } from "@/lib/google-auth-config";
+
+export async function loadGoogleClientId(): Promise<string> {
+  const response = await fetch("/api/auth/google/config", {
+    cache: "no-store",
+    credentials: "same-origin",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error("Google sign-in configuration unavailable");
+  const data: unknown = await response.json();
+  const clientId = data && typeof data === "object" && "clientId" in data ? data.clientId : null;
+  if (!isGoogleWebClientId(clientId)) throw new Error("Google sign-in configuration unavailable");
+  return clientId;
+}
+
 export type GoogleIdentity = {
   initialize(options: {
     client_id: string;

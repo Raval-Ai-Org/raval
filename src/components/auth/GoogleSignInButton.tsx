@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createGoogleNonce, loadGoogleIdentity } from "@/lib/google-identity";
+import { createGoogleNonce, loadGoogleIdentity, loadGoogleClientId } from "@/lib/google-identity";
 import { signInWithGoogle, friendlyAuthError } from "@/lib/auth";
 
 export function GoogleSignInButton({
@@ -21,10 +21,7 @@ export function GoogleSignInButton({
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "busy" | "error">("loading");
   const [loadError, setLoadError] = useState("");
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
-
   useEffect(() => {
-    if (!clientId) return;
     let active = true;
     let consumed = false;
     const element = host.current!;
@@ -32,6 +29,9 @@ export function GoogleSignInButton({
     element.replaceChildren();
     async function setup() {
       try {
+        // Load the SDK only after runtime configuration is valid.
+        const clientId = await loadGoogleClientId();
+        if (!active) return;
         const [google, { nonce, hashedNonce }] = await Promise.all([
           loadGoogleIdentity(),
           createGoogleNonce(),
@@ -39,7 +39,7 @@ export function GoogleSignInButton({
         if (!active) return;
         const createdAt = Date.now();
         google.initialize({
-          client_id: clientId!,
+          client_id: clientId,
           nonce: hashedNonce,
           ux_mode: "popup",
           auto_select: false,
@@ -85,21 +85,19 @@ export function GoogleSignInButton({
       active = false;
       element.replaceChildren();
     };
-  }, [clientId, attempt]);
+  }, [attempt]);
 
   return (
     <div className="min-h-10 w-full">
       <div ref={host} inert={disabled || status !== "ready"} className="flex justify-center" />
-      {(!clientId || status !== "ready") && (
+      {status !== "ready" && (
         <div role="status" className="text-center text-sm text-muted-foreground">
-          {!clientId
-            ? "Google sign-in is temporarily unavailable. Please use email."
-            : status === "error"
-              ? loadError
-              : status === "busy"
-                ? "Finishing Google sign-in…"
-                : "Loading Google sign-in…"}
-          {clientId && status === "error" && (
+          {status === "error"
+            ? loadError
+            : status === "busy"
+              ? "Finishing Google sign-in…"
+              : "Loading Google sign-in…"}
+          {status === "error" && (
             <button
               type="button"
               className="ml-2 underline"
