@@ -175,6 +175,44 @@ async function requestRoute(
     const download = await fetch(result.asset.public_url);
     expect(download.status).toBe(200);
     expect(Buffer.from(await download.arrayBuffer()).equals(png)).toBe(true);
+    const { data: post, error: postError } = await admin
+      .from("content_items")
+      .insert({
+        workspace_id: workspaceId,
+        agent: "echo",
+        kind: "image",
+        status: "draft",
+        title: "Metadata-only upload",
+        media_url: null,
+        meta: { asset_storage_path: result.asset.storage_path },
+      })
+      .select("id")
+      .single();
+    expect(postError).toBeNull();
+    const { POST: rpc } = await import("@/app/api/rpc/[...fn]/route");
+    const contentResponse = await requestRoute(
+      alice,
+      "/api/rpc/content/listContentItems",
+      (request) =>
+        rpc(request, { params: Promise.resolve({ fn: ["content", "listContentItems"] }) }),
+      { data: { workspaceId } },
+    );
+    expect(contentResponse.status).toBe(200);
+    const content = await contentResponse.json();
+    expect(
+      content.result.find((row: { id: string }) => row.id === post?.id)?.media_url,
+    ).toBeTruthy();
+    const agencyResponse = await requestRoute(
+      alice,
+      "/api/rpc/content/listAgencyFeed",
+      (request) => rpc(request, { params: Promise.resolve({ fn: ["content", "listAgencyFeed"] }) }),
+      { data: {} },
+    );
+    expect(agencyResponse.status).toBe(200);
+    const agency = await agencyResponse.json();
+    expect(
+      agency.result.items.find((row: { id: string }) => row.id === post?.id)?.media_url,
+    ).toBeTruthy();
     const { error } = await admin
       .from("workspace_members")
       .insert({ workspace_id: workspaceId, user_id: bob.id, role: "viewer" });

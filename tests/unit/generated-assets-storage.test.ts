@@ -53,7 +53,8 @@ describe("generated asset storage security posture", () => {
     expect(libraryRoute).toMatch(/ctx\.supabase/);
     expect(persistRoute).toMatch(/media_url: null/);
     expect(persistRoute).toMatch(/asset_storage_path: (asset\.)?path/);
-    expect(contentFn).toMatch(/signStoragePaths\(context.supabase, paths, 3600\)/);
+    expect(contentFn).toMatch(/signStoragePaths\((context\.)?supabase, paths, 3600\)/);
+    expect(contentFn).toMatch(/assetPathsFromMeta\(item.meta, item.workspace_id\)/);
     expect(sdrHandlers).toMatch(/resolveMediaUrl/);
   });
 
