@@ -12,6 +12,9 @@
 /* Style the SDK's actual interactive control, retaining its click/keyboard
    handlers, accessible name and official Google logo. */
 .host :global([role="button"]) {
+  position: relative !important;
+  isolation: isolate;
+  overflow: hidden;
   box-sizing: border-box;
   width: 100% !important;
   max-width: 100% !important;
@@ -29,6 +32,15 @@
     background-color 200ms,
     border-color 200ms,
     transform 200ms;
+}
+
+/* Google's hover layer belongs inside the surface, behind the visible row. */
+.host :global([role="button"]) > div:first-of-type:not(:last-of-type) {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 .host :global([role="button"]):hover {
@@ -49,6 +61,8 @@
 /* GIS puts the logo and label in its last div; the earlier div is the
    interaction-state layer. Keep the group centered like the original UI. */
 .host :global([role="button"]) > div:last-of-type {
+  position: relative !important;
+  z-index: 1;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -72,6 +86,25 @@
   flex: none !important;
   margin: 0 !important;
   font: inherit !important;
+}
+
+/* The SDK adds a second, screen-reader-only label ("Opens in new tab").
+   Keep it accessible but clipped inside the button even if SDK CSS arrives
+   late or page styles override its defaults. Never hide the real control. */
+.host :global([role="button"]) > div:last-of-type > span:not(:first-of-type) {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  pointer-events: none;
 }
 
 .host[inert] {
