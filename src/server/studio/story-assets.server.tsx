@@ -20,7 +20,8 @@ import { StoryArt } from "@/lib/stories/StoryArt";
 import { framesFromMeta, type StoryFrame } from "@/lib/stories/frames";
 import { STORY_CANVAS, cleanMentions } from "@/lib/stories/placement";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
-import { ASSET_BUCKET, persistAsset } from "@/server/assets/persist.server";
+import { persistAsset } from "@/server/assets/persist.server";
+import { downloadAssetObject } from "@/server/assets/storage.server";
 import { loadFonts } from "./carousel-render.server";
 
 const RENDER_VERSION = "story-design-1";
@@ -121,7 +122,7 @@ export function storyRenderable(frames: StoryFrame[], brand: string): boolean {
 async function readPicture(workspaceId: string, path: string | null): Promise<string | null> {
   if (!path || !isWorkspaceStoragePath(path, workspaceId)) return null;
   try {
-    const { data, error } = await db().storage.from(ASSET_BUCKET).download(path);
+    const { data, error } = await downloadAssetObject(db(), path);
     if (error || !data) return null;
     const fitted = await sharp(Buffer.from(await data.arrayBuffer()))
       .resize(STORY_CANVAS.width, STORY_CANVAS.height, { fit: "cover" })

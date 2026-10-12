@@ -8,6 +8,7 @@ import { requireWorkspaceRole } from "@/server/workspace-access.server";
 import { AiOutputError, runJsonPrompt, runStructuredPrompt } from "@/lib/ai";
 import { contentBatchPrompt, nextPostPrompt, regeneratePrompt } from "@/lib/ai/prompts";
 import { isNearDuplicateCopy } from "@/lib/studio/novelty";
+import { signStoragePaths } from "@/server/assets/storage.server";
 import { validContentBatch } from "@/lib/content-batch-quality";
 import { loadStudioContext, invalidateStudioContext } from "@/server/studio/context.server";
 import { buildNextSteps } from "@/lib/ai/deterministic-suggestions";
@@ -126,7 +127,6 @@ export const listContentItems = createServerFn({ method: "POST" })
     if (!contentIds.length) return items;
 
     type AssetRow = { content_item_id: string | null; storage_path: string | null };
-    type SignedAsset = { path: string | null; signedUrl: string | null };
     const assetDb = context.supabase as any;
     const { data: assetRows } = await assetDb
       .from("assets")
@@ -142,15 +142,7 @@ export const listContentItems = createServerFn({ method: "POST" })
       .filter((path): path is string => typeof path === "string");
     if (!paths.length) return items;
 
-    const { data: signedRows } = await assetDb.storage
-      .from("generated-assets")
-      .createSignedUrls(paths, 3600);
-    const signed = (signedRows ?? []) as SignedAsset[];
-    const signedByPath = new Map(
-      (signed ?? [])
-        .filter((asset) => asset.path && asset.signedUrl)
-        .map((asset) => [asset.path, asset.signedUrl] as const),
-    );
+    const signedByPath = await signStoragePaths(context.supabase, paths, 3600);
     const pathByContentId = new Map(
       (assets ?? [])
         .filter((asset) => asset.content_item_id && asset.storage_path)

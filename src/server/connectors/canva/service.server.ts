@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { encryptWithKey, decryptWithKeys } from "@/server/crypto/secret-box.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
-import { ASSET_BUCKET, persistAsset } from "@/server/assets/persist.server";
+import { persistAsset } from "@/server/assets/persist.server";
+import { downloadAssetObject, removeAssetObjects } from "@/server/assets/storage.server";
 import { safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
 import { recordAudit } from "@/server/audit.server";
@@ -476,7 +477,7 @@ async function createOrOpenCanvaEdit(args: {
   let dimensions: { width: number; height: number } | null = null;
   const files: Buffer[] = [];
   for (const path of source.paths) {
-    const { data, error } = await db.storage.from(ASSET_BUCKET).download(path);
+    const { data, error } = await downloadAssetObject(db, path);
     if (error || !data) throw new HttpError(404, "A stored image is unavailable.");
     const bytes = Buffer.from(await data.arrayBuffer());
     const info = await sharp(bytes)
@@ -527,7 +528,7 @@ async function createOrOpenCanvaEdit(args: {
       const coverPath = stored.cover_path;
       let coverArt: Buffer | null = null;
       if (typeof coverPath === "string" && isWorkspaceStoragePath(coverPath, args.workspaceId)) {
-        const { data: cover } = await db.storage.from(ASSET_BUCKET).download(coverPath);
+        const { data: cover } = await downloadAssetObject(db, coverPath);
         if (cover) coverArt = Buffer.from(await cover.arrayBuffer());
       }
       const pptx = await buildCarouselPptx(slides, stored as never, coverArt);
@@ -1001,7 +1002,10 @@ export async function importCanvaChanges(args: {
       .eq("id", versionId)
       .eq("workspace_id", args.workspaceId);
     if (saved.length) {
-      await db.storage.from(ASSET_BUCKET).remove(saved.map((asset) => asset.storage_path));
+      await removeAssetObjects(
+        saved.map((asset) => asset.storage_path),
+        db,
+      );
       await db
         .from("assets")
         .delete()

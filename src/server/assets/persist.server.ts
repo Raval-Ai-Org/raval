@@ -1,5 +1,5 @@
 // persist.server.ts — store a generated image/video in the private
-// `generated-assets` bucket and record it in `assets`. Shared by the
+// configured storage backend and record it in `assets`. Shared by the
 // /api/assets/persist route (browser-generated media) and Studio jobs
 // (provider URLs downloaded server-side, no base64 round-trip through the
 // browser). Idempotent per (workspace, idempotencyKey).
@@ -10,13 +10,21 @@ import { ResponseTooLargeError, safeFetch } from "@/server/safe-fetch";
 import { mergeMeta } from "@/lib/content-lifecycle";
 import { isAssetMetadataFinalizeEnabled } from "@/lib/feature-flags";
 import {
+  ASSET_BUCKET,
+  isR2StorageEnabled,
+  removeAssetObjects,
+  r2AssetPath,
+  signStoragePath,
+  uploadAssetObject,
+} from "@/server/assets/storage.server";
+import {
   finalizeImageMetadata,
   type ImageMetadataFinding,
 } from "@/server/assets/image-metadata.server";
 
 const DATA_URL_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i;
 export const MAX_ASSET_BYTES = 50 * 1024 * 1024;
-export const ASSET_BUCKET = "generated-assets";
+export { ASSET_BUCKET };
 
 export type PersistAssetInput = {
   workspaceId: string;
@@ -81,10 +89,7 @@ function errorMessage(error: { message?: string; code?: string } | null) {
 export async function signAssetPath(storagePath: string | null, ttlSeconds = 3600) {
   if (!storagePath) return null;
   const supabase = supabaseAdmin as unknown as SupabaseClient;
-  const { data, error } = await supabase.storage
-    .from(ASSET_BUCKET)
-    .createSignedUrl(storagePath, ttlSeconds);
-  return error ? null : data.signedUrl;
+  return signStoragePath(supabase, storagePath, ttlSeconds);
 }
 
 function extensionFor(assetType: "image" | "video", mimeType: string) {
@@ -305,7 +310,10 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
   if (!assetId)
     return { ok: false, status: 500, message: "Could not resolve persistent asset record" };
 
-  const path = `workspace/${workspaceId}/assets/${assetId}/original.${extensionFor(assetType, mimeType)}`;
+  const filename = `original.${extensionFor(assetType, mimeType)}`;
+  const path = isR2StorageEnabled()
+    ? r2AssetPath(workspaceId, assetId, filename)
+    : `workspace/${workspaceId}/assets/${assetId}/${filename}`;
   const markFailed = async (reason: string | undefined) => {
     await supabase
       .from("assets")
@@ -313,21 +321,35 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
       .eq("id", assetId);
   };
 
-  const { error: uploadError } = await supabase.storage
-    .from(ASSET_BUCKET)
-    .upload(path, bytes, { contentType: mimeType, upsert: true });
-  if (uploadError) {
-    await markFailed(uploadError.message);
+  try {
+    if (path.includes("/assets/r2/")) {
+      await uploadAssetObject(path, bytes, mimeType);
+    } else {
+      const { error: uploadError } = await supabase.storage
+        .from(ASSET_BUCKET)
+        .upload(path, bytes, { contentType: mimeType, upsert: true });
+      if (uploadError) throw uploadError;
+    }
+  } catch (uploadError) {
+    const message = uploadError instanceof Error ? uploadError.message : "Unknown storage error";
+    await markFailed(message);
     return {
       ok: false,
       status: 502,
-      message: `Generated ${assetType} could not be stored: ${errorMessage(uploadError)}`,
+      message: `Generated ${assetType} could not be stored: ${message}`,
     };
   }
 
-  const signedUrl = await signAssetPath(path);
+  let signedUrl: string | null;
+  try {
+    signedUrl = await signAssetPath(path);
+  } catch (error) {
+    await removeAssetObjects([path]);
+    await markFailed(error instanceof Error ? error.message : "signed URL unavailable");
+    return { ok: false, status: 502, message: "Generated asset could not receive a signed URL" };
+  }
   if (!signedUrl) {
-    await supabase.storage.from(ASSET_BUCKET).remove([path]);
+    await removeAssetObjects([path]);
     await markFailed("signed URL unavailable");
     return { ok: false, status: 502, message: "Generated asset could not receive a signed URL" };
   }
@@ -346,7 +368,7 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
     )
     .single();
   if (readyError || !ready) {
-    await supabase.storage.from(ASSET_BUCKET).remove([path]);
+    await removeAssetObjects([path]);
     await markFailed(errorMessage(readyError));
     return {
       ok: false,

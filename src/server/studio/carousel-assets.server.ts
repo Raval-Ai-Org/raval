@@ -19,7 +19,8 @@ import { safeDesign, safeTheme } from "@/lib/studio/carousel/design";
 import { normalizeSlides } from "@/lib/studio/carousel/story";
 import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
-import { ASSET_BUCKET, persistAsset } from "@/server/assets/persist.server";
+import { persistAsset } from "@/server/assets/persist.server";
+import { downloadAssetObject } from "@/server/assets/storage.server";
 import { carouselRenderable, renderCarouselSlides } from "./carousel-render.server";
 
 const RENDER_VERSION = "carousel-design-1";
@@ -103,7 +104,7 @@ export function carouselHash(
 
 async function readCover(workspaceId: string, path: string | null): Promise<Buffer | null> {
   if (!path || !isWorkspaceStoragePath(path, workspaceId)) return null;
-  const { data, error } = await db().storage.from(ASSET_BUCKET).download(path);
+  const { data, error } = await downloadAssetObject(db(), path);
   if (error || !data) return null;
   return Buffer.from(await data.arrayBuffer());
 }

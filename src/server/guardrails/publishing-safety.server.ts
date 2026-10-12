@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { signStoragePath } from "@/server/assets/storage.server";
 import { HttpError } from "@/server/http-error";
 import { assertSafeVideo } from "./video-safety.server";
 import {
@@ -42,11 +43,9 @@ export async function assertSafePublishingItems(
     for (const path of paths) {
       if (!isWorkspaceStoragePath(path, workspaceId))
         throw new HttpError(403, "This media does not belong to the workspace.");
-      const { data: signed, error: signError } = await db.storage
-        .from("generated-assets")
-        .createSignedUrl(path as string, 300);
-      if (signError || !signed?.signedUrl) throw new MediaSafetyError(true);
-      images.push(signed.signedUrl);
+      const signedUrl = await signStoragePath(db, path as string, 300);
+      if (!signedUrl) throw new MediaSafetyError(true);
+      images.push(signedUrl);
     }
     if (!images.length && row.media_url) images.push(row.media_url);
     if (video) {

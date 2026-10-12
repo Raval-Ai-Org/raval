@@ -16,6 +16,7 @@ import { normalizeDomain } from "@/lib/workspace/domain";
 import { HttpError } from "@/server/http-error";
 import { optionalWorkspaceEntitlements } from "@/server/billing/readiness.server";
 import { LimitReachedError } from "@/server/billing/errors";
+import { listR2WorkspaceAssetPaths, removeAssetObjects } from "@/server/assets/storage.server";
 
 export const DELETE_CONFIRMATION = "CONFIRM";
 const STORAGE_BUCKET = "generated-assets";
@@ -205,7 +206,8 @@ async function listWorkspaceObjects(workspaceId: string): Promise<string[]> {
       const { data, error } = await admin.storage
         .from(STORAGE_BUCKET)
         .list(prefix, { limit: 1000, offset });
-      if (error || !data?.length) return;
+      if (error) throw new Error(`Could not list workspace assets: ${error.message}`);
+      if (!data?.length) return;
       for (const entry of data) {
         const full = `${prefix}/${entry.name}`;
         // Folders come back without an id.
@@ -216,7 +218,7 @@ async function listWorkspaceObjects(workspaceId: string): Promise<string[]> {
     }
   };
   await walk(`workspace/${workspaceId}`, 0);
-  return paths;
+  return [...paths, ...(await listR2WorkspaceAssetPaths(workspaceId))];
 }
 
 export type DeleteDeps = {
@@ -233,12 +235,7 @@ const defaultDeleteDeps: DeleteDeps = {
     await disconnectCanva(workspaceId, userId);
   },
   listObjects: listWorkspaceObjects,
-  removeObjects: async (paths) => {
-    for (let i = 0; i < paths.length; i += 100) {
-      const { error } = await admin.storage.from(STORAGE_BUCKET).remove(paths.slice(i, i + 100));
-      if (error) console.error("[workspaces] storage cleanup failed", error.message);
-    }
-  },
+  removeObjects: (paths) => removeAssetObjects(paths, admin),
   // Historical SocialAPI brands are no longer contacted during deletion.
   releaseSocialBrand: async () => undefined,
   disconnectPostForMeAccounts: async (workspaceId) => {

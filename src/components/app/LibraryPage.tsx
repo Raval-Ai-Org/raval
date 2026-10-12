@@ -31,6 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
+import { getSignedAssetUrls } from "@/lib/persistent-assets";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
@@ -258,12 +259,7 @@ export function LibraryPage({
         ),
       ];
       if (paths.length) {
-        const { data } = await supabase.storage
-          .from("generated-assets")
-          .createSignedUrls(paths, 3600);
-        const next: Record<string, string> = {};
-        for (const s of data ?? []) if (s.path && s.signedUrl) next[s.path] = s.signedUrl;
-        setThumbs(next);
+        setThumbs(await getSignedAssetUrls(workspaceId, paths));
       }
     } catch (cause) {
       console.error("Library query failed", cause);

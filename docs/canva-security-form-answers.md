@@ -34,13 +34,13 @@ Requests require Supabase authentication and server-side workspace role checks. 
 
 Not applicable to this implementation: no Canva webhook receiver, webhook subscription code or collaboration event scope is present. Actions use authenticated REST requests and bounded job polling. We do not claim Canva webhook signature verification. Confirm there are no subscriptions configured externally; future webhook support must verify Canva signatures and reject replayed or invalid events before processing.
 
-## Canva data collected and stored (468 characters)
+## Canva data collected and stored (473 characters)
 
-We store encrypted OAuth tokens, expiry/scopes, connection status, Canva user/team and design/asset IDs, source mappings, import versions/pages and operation audit identifiers in Supabase Postgres. Edited image files are stored in Supabase Storage generated-assets under the user's workspace asset path. Temporary export links are processed server-side and are not persisted as asset identity. The integration does not fetch Canva profile email or all library designs.
+We store encrypted OAuth tokens, expiry/scopes, connection status, Canva user/team and design/asset IDs, source mappings, import versions/pages and audit identifiers in Supabase Postgres. Newly persisted edited images use the configured Cloudflare R2 bucket under the workspace path; older images remain readable in Supabase Storage. Temporary export links are processed server-side, not stored as asset identity. We do not fetch Canva profile email or all library designs.
 
-## Storage locations and subprocessors (438 characters)
+## Storage locations and subprocessors (440 characters)
 
-Logical storage is Supabase Postgres and Supabase Storage; the hosting server processes Canva requests and image bytes. Canva receives user-selected images and design content. Actual Supabase/hosting countries, replicas, backup locations and processor contracts have not been verified and require operator confirmation before submission. User-selected publishing or other Mellox workflows may send imported assets to the selected service.
+Logical storage is Supabase Postgres and Cloudflare R2 for new assets; older files may remain in Supabase Storage. The hosting server processes Canva requests and image bytes. Canva receives user-selected images and design content. Provider regions, replicas, backups and processor contracts are unverified and require operator confirmation. User-selected publishing or other Mellox workflows may send imported assets to the chosen service.
 
 ## Retention periods (453 characters)
 

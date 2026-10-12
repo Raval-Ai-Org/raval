@@ -3,6 +3,7 @@
 // them directly with the MockSDR. Callers supply the per-workspace token + SDR
 // base URL; the publish handler additionally takes an injectable `db`.
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { signStoragePath } from "@/server/assets/storage.server";
 import {
   callSdr,
   classifySdrStatus,
@@ -189,10 +190,7 @@ async function resolveMediaUrl(db: any, item: any): Promise<string | null> {
   if (!storagePath) return typeof item.media_url === "string" ? item.media_url : null;
   // meta is user-editable: never sign a path outside the item's own workspace.
   if (!isWorkspaceStoragePath(storagePath, item.workspace_id)) return null;
-  const { data, error } = await db.storage
-    .from("generated-assets")
-    .createSignedUrl(storagePath, 3600);
-  return error ? null : (data?.signedUrl ?? null);
+  return signStoragePath(db, storagePath, 3600);
 }
 
 export type PublishOutcome = {

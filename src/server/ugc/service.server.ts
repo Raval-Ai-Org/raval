@@ -37,7 +37,7 @@ import {
   type Script,
 } from "@/lib/ugc/schemas";
 import { BudgetExceededError } from "@/server/ai/budget";
-import { ASSET_BUCKET } from "@/server/assets/persist.server";
+import { signStoragePath, signStoragePaths } from "@/server/assets/storage.server";
 import { getAppUrl } from "@/server/env";
 import { HttpError } from "@/server/http-error";
 import { getPlanLimits } from "@/server/plans";
@@ -325,10 +325,7 @@ async function signPaths(paths: string[], ttl = 3600): Promise<Map<string, strin
   const unique = [...new Set(paths.filter(Boolean))];
   if (!unique.length) return new Map();
   const db = supabaseAdmin as unknown as SupabaseClient;
-  const { data } = await db.storage.from(ASSET_BUCKET).createSignedUrls(unique, ttl);
-  const out = new Map<string, string>();
-  for (const s of data ?? []) if (s.path && s.signedUrl) out.set(s.path, s.signedUrl);
-  return out;
+  return signStoragePaths(db, unique, ttl);
 }
 
 async function assetPaths(workspaceId: string, ids: string[]) {
@@ -765,11 +762,9 @@ export async function renderDownload(db: UserSupabaseClient, workspaceId: string
   const asset = (await assetPaths(workspaceId, [row.asset_id])).get(row.asset_id);
   if (!asset) throw new HttpError(404, "The stored video was not found.");
   const db2 = supabaseAdmin as unknown as SupabaseClient;
-  const { data, error } = await db2.storage
-    .from(ASSET_BUCKET)
-    .createSignedUrl(asset.path, 300, { download: asset.filename });
-  if (error || !data) throw new Error(error?.message ?? "Could not sign the download");
-  return { url: data.signedUrl, filename: asset.filename };
+  const url = await signStoragePath(db2, asset.path, 300, asset.filename);
+  if (!url) throw new Error("Could not sign the download");
+  return { url, filename: asset.filename };
 }
 
 const CHANNEL_BY_PLATFORM: Record<string, string> = {

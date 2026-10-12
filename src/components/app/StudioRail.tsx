@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { updateContentItem } from "@/lib/content.functions";
+import { getSignedAssetUrls } from "@/lib/persistent-assets";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
 import { cancelSession, getStudioState, openJob, useStudioStore } from "@/lib/studio/session-store";
@@ -124,12 +125,7 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
       ),
     ];
     if (paths.length) {
-      const { data } = await supabase.storage
-        .from("generated-assets")
-        .createSignedUrls(paths, 3600);
-      const next: Record<string, string> = {};
-      for (const s of data ?? []) if (s.path && s.signedUrl) next[s.path] = s.signedUrl;
-      setThumbs(next);
+      setThumbs(await getSignedAssetUrls(workspaceId, paths));
     }
   }, [workspaceId]);
 

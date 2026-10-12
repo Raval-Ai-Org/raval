@@ -6,7 +6,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
 import type { RenderStatus } from "@/lib/ugc/schemas";
-import { ASSET_BUCKET, persistAsset } from "@/server/assets/persist.server";
+import { persistAsset } from "@/server/assets/persist.server";
+import { signStoragePaths } from "@/server/assets/storage.server";
 import { ugcBillingColumnReady } from "@/server/billing/schema.server";
 import type {
   NewRenderRow,
@@ -204,11 +205,8 @@ export const supabaseUgcStore: UgcRenderStore = {
     );
     const paths = assetIds.map((id) => byId.get(id)).filter((p): p is string => Boolean(p));
     if (!paths.length) return [];
-    const { data: signed, error: signError } = await db.storage
-      .from(ASSET_BUCKET)
-      .createSignedUrls(paths, ttlSeconds);
-    if (signError) throw new Error(signError.message);
-    return (signed ?? []).map((s) => s.signedUrl).filter((u): u is string => Boolean(u));
+    const signed = await signStoragePaths(db, paths, ttlSeconds);
+    return paths.map((path) => signed.get(path)).filter((url): url is string => Boolean(url));
   },
 
   async persistVideo({

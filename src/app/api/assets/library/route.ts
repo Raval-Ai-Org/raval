@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
+import { signStoragePaths } from "@/server/assets/storage.server";
 
 export const dynamic = "force-dynamic";
 
@@ -56,13 +57,7 @@ export const GET = defineRoute({
     const storagePaths = (rows ?? [])
       .map((row) => row.storage_path)
       .filter((path): path is string => typeof path === "string");
-    const { data: signedRows } = storagePaths.length
-      ? await supabase.storage.from("generated-assets").createSignedUrls(storagePaths, 3600)
-      : { data: [] };
-    const signedUrls = new Map<string, string>();
-    for (const row of signedRows ?? []) {
-      if (row.path && row.signedUrl) signedUrls.set(row.path, row.signedUrl);
-    }
+    const signedUrls = await signStoragePaths(supabase, storagePaths, 3600);
     const assets = (rows ?? []).map((row) =>
       normalizeAsset(row as Record<string, unknown>, signedUrls),
     );

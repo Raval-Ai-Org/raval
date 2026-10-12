@@ -11,6 +11,7 @@
 // row per (content item × target account), sdr_post_id = SocialAPI post id,
 // sdr_target_id = account id, provider = 'socialapi'.
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { downloadAssetObject, signStoragePaths } from "@/server/assets/storage.server";
 import { createHash, randomBytes } from "node:crypto";
 import {
   socialApiErrorResponse,
@@ -797,7 +798,6 @@ export async function applyPostSnapshot(
 // ─── Media ──────────────────────────────────────────────────────────────────
 type MediaSource = { source_type: "url" | "media_id"; source: string };
 const SERVER_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
-const STORAGE_BUCKET = "generated-assets";
 
 /** The item's stored asset path — only when it lies inside the item's own workspace. */
 function storagePathOf(item: any): string | null {
@@ -849,8 +849,8 @@ function publicMediaUrl(item: any): string | null {
 
 /** Short-lived URL good enough for validation and immediate publishing. */
 async function signedUrl(db: any, path: string): Promise<string | null> {
-  const { data, error } = await db.storage.from(STORAGE_BUCKET).createSignedUrl(path, 3600);
-  return error ? null : (data?.signedUrl ?? null);
+  const signed = await signStoragePaths(db, [path], 3600);
+  return signed.get(path) ?? null;
 }
 
 /**
@@ -862,7 +862,7 @@ async function uploadStoredAsset(
   deps: SocialApiDeps,
   path: string,
 ): Promise<{ ok: true; mediaId: string } | { ok: false; reason: string }> {
-  const { data: blob, error } = await deps.db.storage.from(STORAGE_BUCKET).download(path);
+  const { data: blob, error } = await downloadAssetObject(deps.db, path);
   if (error || !blob)
     return { ok: false, reason: "The attached media couldn't be read from storage." };
   const filename = path.split("/").pop() || "media";

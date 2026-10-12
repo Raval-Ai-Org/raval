@@ -31,3 +31,23 @@ export async function persistGeneratedAsset(input: PersistGeneratedAssetInput) {
   if (typeof window !== "undefined") emitAppEvent("assets:changed");
   return payload.asset;
 }
+
+export async function getSignedAssetUrls(
+  workspaceId: string,
+  paths: string[],
+): Promise<Record<string, string>> {
+  const response = await authedFetch("/api/assets/sign", {
+    method: "POST",
+    workspaceId,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspaceId, paths }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    urls?: Array<{ path: string; url: string }>;
+    error?: string;
+  };
+  if (!response.ok || !payload.urls) {
+    throw new Error(payload.error || "Could not sign asset URLs");
+  }
+  return Object.fromEntries(payload.urls.map(({ path, url }) => [path, url]));
+}
