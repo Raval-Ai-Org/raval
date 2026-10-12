@@ -151,12 +151,43 @@ export async function signAssetObject(
   );
 }
 
+type MigrationAlias = { source_path: string; target_path: string; status: string };
+
+/** Server-only lookup. A missing RPC permits rolling deployment before the schema. */
+async function migrationAliases(paths: string[]): Promise<Map<string, MigrationAlias>> {
+  const legacy = paths.filter((path) => !isMarkedR2Path(path));
+  if (!legacy.length || !isR2StorageEnabled()) return new Map();
+  const admin = supabaseAdmin as unknown as SupabaseClient;
+  const { data, error } = await admin.rpc(
+    "resolve_media_storage_paths" as never,
+    { paths: legacy } as never,
+  );
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code)) return new Map();
+    throw new Error("Could not resolve migrated storage paths");
+  }
+  const aliases = new Map<string, MigrationAlias>();
+  for (const row of (data ?? []) as MigrationAlias[]) {
+    if (
+      !isR2AssetPath(row.target_path) ||
+      row.source_path.split("/")[1] !== row.target_path.split("/")[1]
+    ) {
+      throw new Error("Invalid migrated workspace storage mapping");
+    }
+    aliases.set(row.source_path, row);
+  }
+  return aliases;
+}
+
 export async function signStoragePath(
   supabase: SupabaseClient,
   path: string,
   ttlSeconds = 3600,
   downloadFilename?: string,
 ): Promise<string | null> {
+  const alias = (await migrationAliases([path])).get(path);
+  if (alias?.status === "deleted") return null;
+  if (alias?.status === "active") path = alias.target_path;
   if (isMarkedR2Path(path)) {
     return signAssetObject(path, ttlSeconds, downloadFilename);
   }
@@ -179,8 +210,15 @@ export async function signStoragePaths(
   const unique = [...new Set(paths.filter(Boolean))];
   const malformedR2Path = invalidR2Path(unique);
   if (malformedR2Path) throw new Error("Invalid R2 asset path");
-  const r2Paths = unique.filter(isR2AssetPath);
-  const supabasePaths = unique.filter((path) => !isR2AssetPath(path));
+  const aliases = await migrationAliases(unique);
+  const r2Paths = unique.filter(
+    (path) =>
+      isR2AssetPath(path) || ["active", "deleted"].includes(aliases.get(path)?.status ?? ""),
+  );
+  const supabasePaths = unique.filter(
+    (path) =>
+      !isR2AssetPath(path) && !["active", "deleted"].includes(aliases.get(path)?.status ?? ""),
+  );
   const signed = new Map<string, string>();
 
   if (supabasePaths.length) {
@@ -194,7 +232,15 @@ export async function signStoragePaths(
   }
 
   const r2Signed = await Promise.all(
-    r2Paths.map(async (path) => [path, await signAssetObject(path, ttlSeconds)] as const),
+    r2Paths
+      .filter((path) => aliases.get(path)?.status !== "deleted")
+      .map(
+        async (path) =>
+          [
+            path,
+            await signAssetObject(aliases.get(path)?.target_path ?? path, ttlSeconds),
+          ] as const,
+      ),
   );
   for (const [path, url] of r2Signed) signed.set(path, url);
   return signed;
@@ -204,6 +250,9 @@ export async function downloadAssetObject(
   supabase: SupabaseClient,
   path: string,
 ): Promise<{ data: Blob | null; error: { message: string } | null }> {
+  const alias = (await migrationAliases([path])).get(path);
+  if (alias?.status === "deleted") return { data: null, error: { message: "Asset was deleted" } };
+  if (alias?.status === "active") path = alias.target_path;
   if (!isMarkedR2Path(path)) {
     const { data, error } = await supabase.storage.from(ASSET_BUCKET).download(path);
     return { data, error };
@@ -232,12 +281,31 @@ export async function removeAssetObjects(
   const unique = [...new Set(paths.filter(Boolean))];
   const malformedR2Path = invalidR2Path(unique);
   if (malformedR2Path) throw new Error("Invalid R2 asset path");
-  const r2Paths = unique.filter(isR2AssetPath);
-  const supabasePaths = unique.filter((path) => !isR2AssetPath(path));
+  const aliases = await migrationAliases(unique);
+  const r2Paths = [
+    ...new Set(
+      unique
+        .map((path) =>
+          ["active", "deleted"].includes(aliases.get(path)?.status ?? "")
+            ? aliases.get(path)!.target_path
+            : path,
+        )
+        .filter(isR2AssetPath),
+    ),
+  ];
+  // Migration originals are retained even when a user deletes the R2 copy.
+  const supabasePaths = unique.filter((path) => !isR2AssetPath(path) && !aliases.has(path));
 
   if (r2Paths.length) {
     const config = r2Config();
     if (!config) throw new Error("R2 storage is not configured");
+    const { error: tombstoneError } = await (supabaseAdmin as unknown as SupabaseClient).rpc(
+      "tombstone_migrated_media" as never,
+      { paths: r2Paths } as never,
+    );
+    if (tombstoneError && !["PGRST202", "42883"].includes(tombstoneError.code)) {
+      throw new Error("Could not record migrated asset deletion");
+    }
     for (let offset = 0; offset < r2Paths.length; offset += 1000) {
       const response = await r2Client(config).send(
         new DeleteObjectsCommand({

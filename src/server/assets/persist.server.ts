@@ -30,6 +30,7 @@ export { ASSET_BUCKET };
 export type PersistAssetInput = {
   workspaceId: string;
   idempotencyKey: string;
+  bytes?: Buffer;
   dataUrl?: string;
   sourceUrl?: string;
   /** Content items to link. The first becomes assets.content_item_id. */
@@ -159,7 +160,7 @@ async function tryFinalizeImageMetadata(
 
 export async function persistAsset(input: PersistAssetInput): Promise<PersistResult> {
   const { workspaceId, idempotencyKey, assetType } = input;
-  if (!idempotencyKey || (!input.dataUrl && !input.sourceUrl)) {
+  if (!idempotencyKey || (!input.bytes && !input.dataUrl && !input.sourceUrl)) {
     return { ok: false, status: 400, message: "idempotencyKey and asset data are required" };
   }
 
@@ -211,7 +212,9 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
 
   let mimeType = (input.mimeType ?? "").toLowerCase();
   let bytes: Buffer;
-  if (input.dataUrl) {
+  if (input.bytes) {
+    bytes = input.bytes;
+  } else if (input.dataUrl) {
     const match = input.dataUrl.match(DATA_URL_RE);
     if (!match) return { ok: false, status: 400, message: "Generated asset data is invalid" };
     mimeType = match[1].toLowerCase();
@@ -253,6 +256,7 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
   let useR2: boolean;
   try {
     useR2 = isR2StorageEnabled();
+    if (!useR2 && process.env.NODE_ENV === "production") throw new Error("R2 is required");
   } catch {
     return {
       ok: false,

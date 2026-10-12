@@ -2,14 +2,15 @@
 
 Generated media is stored through `src/server/assets/storage.server.ts`.
 When R2 credentials are configured, new persisted Studio and AI-generated
-assets are written to the configured Cloudflare R2 bucket. Otherwise, new
-assets continue to use the Supabase `generated-assets` bucket.
+assets are written to the configured Cloudflare R2 bucket. Production writes require R2. Development and tests can retain the legacy
+Supabase fallback. Studio user uploads and report logos also use R2.
 
 R2 objects use keys under
 `workspace/<workspaceId>/assets/r2/<assetId>/...`; older keys without the
 `r2` segment remain in Supabase Storage. The key marker lets reads, signed
 playback URLs, downloads, and deletion choose the correct backend without
-moving existing objects. Workspace-scoped API routes validate membership and
+requiring an immediate bulk cutover. Migrated legacy paths have server-only
+aliases for cached and in-flight readers. Workspace-scoped API routes validate membership and
 the workspace path before signing URLs. R2 buckets must remain private; the
 application issues short-lived signed URLs for access.
 
@@ -56,4 +57,7 @@ or revert the release commit. Keep R2 credentials configured during rollback so
 already-created R2 media remains accessible. Rollback never requires deleting
 objects or migrating legacy Supabase media.
 
-This storage change does not migrate or copy existing media.
+Existing-file migration, checkpoints, checksum verification, safe reference
+cutover and rollback are documented in [storage-migration.md](storage-migration.md).
+Original Supabase objects remain retained until independently verified and
+explicitly approved for retirement.

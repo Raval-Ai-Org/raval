@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), sign: vi.fn() }));
-vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
+const mocks = vi.hoisted(() => ({ send: vi.fn(), sign: vi.fn(), rpc: vi.fn() }));
+vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: { rpc: mocks.rpc } }));
 vi.mock("@aws-sdk/client-s3", async (original) => ({
   ...(await original<typeof import("@aws-sdk/client-s3")>()),
   S3Client: class {
@@ -33,12 +33,48 @@ beforeEach(() => {
   vi.stubEnv("R2_SECRET_ACCESS_KEY", "test-secret");
   vi.stubEnv("R2_BUCKET_NAME", "private-media");
   vi.stubEnv("R2_ENDPOINT", "");
+  mocks.rpc.mockResolvedValue({ data: [], error: null });
   mocks.send.mockResolvedValue({});
   mocks.sign.mockResolvedValue("https://r2.example/signed");
 });
 afterEach(() => vi.unstubAllEnvs());
 
 describe("private R2 and legacy Supabase storage", () => {
+  it("resolves stale migration aliases without exposing or deleting originals", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ source_path: legacy, target_path: r2, status: "active" }],
+      error: null,
+    });
+    const signed = await signStoragePaths(db, [legacy]);
+    expect(signed.get(legacy)).toBe("https://r2.example/signed");
+    expect(mocks.sign.mock.calls[0][1].input.Key).toBe(r2);
+    await removeAssetObjects([legacy], db);
+    expect(from).not.toHaveBeenCalled();
+    expect(mocks.send.mock.calls[0][0].input.Delete.Objects).toEqual([{ Key: r2 }]);
+  });
+
+  it("refuses cross-workspace aliases, deleted objects and lookup outages", async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: [
+        {
+          source_path: legacy,
+          target_path: r2.replace(workspace, "00000000-0000-4000-8000-000000000002"),
+          status: "active",
+        },
+      ],
+      error: null,
+    });
+    await expect(signStoragePaths(db, [legacy])).rejects.toThrow("Invalid migrated workspace");
+    mocks.rpc.mockResolvedValueOnce({
+      data: [{ source_path: legacy, target_path: r2, status: "deleted" }],
+      error: null,
+    });
+    expect((await signStoragePaths(db, [legacy])).size).toBe(0);
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "08006" } });
+    await expect(signStoragePaths(db, [legacy])).rejects.toThrow("Could not resolve");
+    expect(from).not.toHaveBeenCalled();
+  });
+
   it("signs mixed paths through their original backends and deduplicates", async () => {
     const createSignedUrls = vi.fn().mockResolvedValue({
       data: [{ path: legacy, signedUrl: "https://supabase.example/signed" }],

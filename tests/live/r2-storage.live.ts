@@ -136,6 +136,57 @@ async function requestRoute(
     if (failures.length) throw new Error(`R2 test cleanup failed: ${failures.join("; ")}`);
   }, 120_000);
 
+  it("uploads user media to R2 and rejects unauthorized or mislabeled uploads", async () => {
+    const { POST } = await import("@/app/api/assets/upload/route");
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2cAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const params = new URLSearchParams({
+      workspaceId,
+      requestId: randomUUID(),
+      filename: "upload.png",
+    });
+    const url = new URL(
+      `/api/assets/upload?${params}`,
+      process.env.R2_SMOKE_BASE_URL || "http://localhost",
+    );
+    const send = async (actor: Actor | null, body: Buffer, type = "image/png") => {
+      const request = new Request(url, {
+        method: "POST",
+        headers: {
+          ...(actor ? { Authorization: `Bearer ${actor.token}` } : {}),
+          "Content-Type": type,
+        },
+        body: new Uint8Array(body),
+      });
+      return process.env.R2_SMOKE_BASE_URL ? fetch(request) : POST(request);
+    };
+    expect((await send(null, png)).status).toBe(401);
+    expect((await send(bob, png)).status).toBe(403);
+    expect((await send(alice, Buffer.from("<script>bad</script>"))).status).toBe(415);
+    const response = await send(alice, png);
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.asset.storage_path).toContain(`/workspace/${workspaceId}/`.slice(1));
+    expect(result.asset.storage_path).toContain("/assets/r2/");
+    extraPaths.push(result.asset.storage_path);
+    expect((await send(alice, png)).status).toBe(200);
+    const download = await fetch(result.asset.public_url);
+    expect(download.status).toBe(200);
+    expect(Buffer.from(await download.arrayBuffer()).equals(png)).toBe(true);
+    const { error } = await admin
+      .from("workspace_members")
+      .insert({ workspace_id: workspaceId, user_id: bob.id, role: "viewer" });
+    expect(error).toBeNull();
+    expect((await send(bob, png)).status).toBe(403);
+    await admin
+      .from("workspace_members")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", bob.id);
+  }, 120_000);
+
   it("persists, signs, streams, authorizes, and deletes generated media while retaining Supabase reads", async () => {
     const { persistAsset } = await import("@/server/assets/persist.server");
     const png =

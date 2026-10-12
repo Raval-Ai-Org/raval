@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// Original retention is mandatory during the R2 migration. A separate verified,
+// owner-approved retirement procedure must replace this legacy deletion command.
+if (process.argv.includes("--confirm")) {
+  throw new Error("Supabase original deletion is disabled during the R2 migration");
+}
 // purge-brand-kit-files.mjs — remove the files Brand Styles left in storage.
 //
 // Brand Styles and the Brand Kit library are gone (ADR-0032): a brand has one
