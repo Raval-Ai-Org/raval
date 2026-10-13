@@ -72,6 +72,8 @@ export const organizationJsonLd = {
   name: SITE_NAME,
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
+  description:
+    "Mellox AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
   sameAs: SOCIAL_PROFILES,
   // Who founded the company. The same people, by the same names, as the About page (src/marketing/lib/about.ts).
   founder: FOUNDERS.map((f) => ({
@@ -96,6 +98,8 @@ export const webSiteJsonLd = {
   url: SITE_URL,
   name: SITE_NAME,
   publisher: { "@id": `${SITE_URL}/#organization` },
+  description: "Get visible inside LLMs. The AI-native marketing platform for brands and agencies.",
+  inLanguage: "en",
 };
 
 /** SoftwareApplication with one Offer per priced plan (Scale is quoted, so it is left out). Prices come from /pricing data. */

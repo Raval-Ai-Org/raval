@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Google_Sans_Flex, Michroma } from "next/font/google";
-import { BASE_URL } from "@/lib/seo";
+import { BASE_URL, BRAND_NAME } from "@/lib/seo";
 import { siteGraph, serializeJsonLd } from "@/marketing/lib/seo";
 import { Providers } from "@/app/providers";
 
@@ -99,6 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <head>
+        <meta property="og:site_name" content={BRAND_NAME} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteGraph) }}
