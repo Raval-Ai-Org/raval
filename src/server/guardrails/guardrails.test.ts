@@ -109,6 +109,24 @@ describe("output checks", () => {
 });
 
 describe("image moderation", () => {
+  it.each(["marketing_content", "marketing_creative"])(
+    "accepts safe artwork described as %s",
+    async (category) => {
+      setModerationClassifier(async () => ({ safe: true, categories: [category] }));
+      expect(await moderateImage("https://cdn.example.com/marketing.png")).toEqual({
+        verdict: "safe",
+        categories: [],
+      });
+    },
+  );
+  it.each([
+    { safe: false, categories: ["marketing_content"] },
+    { safe: true, categories: ["marketing_creative", "sexual_content"] },
+    { safe: true, categories: ["unknown_rule"] },
+  ])("flags unsafe or contradictory image decisions %j", async (decision) => {
+    setModerationClassifier(async () => decision);
+    expect((await moderateImage("https://cdn.example.com/flagged.png")).verdict).toBe("flagged");
+  });
   it("returns flagged verdicts from the classifier and logs a block", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     setModerationClassifier(async () => ({

@@ -379,12 +379,12 @@ export type StartedImageTask = {
 
 type ParkedResult =
   | { state: "success"; b64: string; mimeType: string; model: string; costUsd: number }
-  | { state: "failed"; message: string; model: string };
+  | { state: "failed"; message: string; model: string; code?: string; retryable?: boolean };
 
 export type ImageTaskCheck =
   | { state: "pending" }
   | { state: "success"; dataUrl: string; model: string; costUsd: number }
-  | { state: "failed"; message: string };
+  | { state: "failed"; message: string; code?: string; retryable?: boolean };
 
 const taskKey = (taskId: string) => `studio:image-task:${taskId}`;
 
@@ -445,11 +445,25 @@ export async function startImageTask(opts: {
           costUsd: image.costUsd,
         };
       } catch (error) {
+        log.warn("openrouter.studio.image.failed", {
+          taskId,
+          model,
+          code:
+            error instanceof AiGatewayError || error instanceof MediaSafetyError
+              ? error.code
+              : undefined,
+          message: error instanceof Error ? error.message : String(error),
+        });
         parked = {
           state: "failed",
           model,
+          ...(error instanceof MediaSafetyError
+            ? { code: error.code, retryable: error.code === "safety_unavailable" }
+            : error instanceof AiGatewayError
+              ? { code: error.code, retryable: !TERMINAL_CODES.has(error.code ?? "") }
+              : {}),
           message:
-            error instanceof AiGatewayError
+            error instanceof AiGatewayError || error instanceof MediaSafetyError
               ? error.message.slice(0, 300)
               : "The image provider could not complete this render.",
         };
@@ -474,7 +488,13 @@ export function isImageTask(taskId: string): boolean {
 export async function checkImageTask(taskId: string): Promise<ImageTaskCheck> {
   const parked = await cache.get<ParkedResult>(taskKey(taskId));
   if (!parked) return { state: "pending" };
-  if (parked.state === "failed") return { state: "failed", message: parked.message };
+  if (parked.state === "failed")
+    return {
+      state: "failed",
+      message: parked.message,
+      code: parked.code,
+      retryable: parked.retryable,
+    };
   return {
     state: "success",
     dataUrl: `data:${parked.mimeType};base64,${parked.b64}`,

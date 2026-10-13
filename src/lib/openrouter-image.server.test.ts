@@ -3,6 +3,10 @@ import { setMediaSafetyClassifier } from "@/server/guardrails/media-safety.serve
 import { setModerationClassifier } from "@/server/guardrails/moderation";
 
 const usage = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
+const background = vi.hoisted(() => ({ work: [] as (() => Promise<void>)[] }));
+vi.mock("next/server", () => ({
+  after: (work: () => Promise<void>) => background.work.push(work),
+}));
 vi.mock("@/server/ai/budget", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/ai/budget")>();
   return { ...actual, enforceBudget: vi.fn(async () => undefined) };
@@ -19,6 +23,8 @@ import {
   generateImage,
   imageGenerationStream,
   setImageTransport,
+  startImageTask,
+  checkImageTask,
   type ImageRequest,
 } from "./openrouter-image.server";
 
@@ -30,6 +36,7 @@ beforeEach(() => {
   setMediaSafetyClassifier(async () => ({ safe: true, categories: [] }));
   setModerationClassifier(async () => ({ safe: true, categories: [] }));
   usage.rows = [];
+  background.work = [];
 });
 afterEach(() => {
   setMediaSafetyClassifier(null);
@@ -51,6 +58,42 @@ function fakeImages(failFor: Record<string, AiGatewayError> = {}) {
 }
 
 describe("OpenRouter image generation", () => {
+  it("completes a Studio image with safe marketing labels in both safety checks", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    setMediaSafetyClassifier(async () => ({ safe: true, categories: ["marketing_creative"] }));
+    setModerationClassifier(async () => ({ safe: true, categories: ["marketing_content"] }));
+    const calls = fakeImages();
+    await asUser(async () => {
+      const task = await startImageTask({
+        prompt: "A business marketing poster",
+        size: "1024x1024",
+      });
+      await background.work[0]();
+      expect(await checkImageTask(task.taskId)).toMatchObject({ state: "success" });
+    });
+    expect(calls).toHaveLength(1);
+  });
+  it.each(["refusal", "safety_unavailable"])(
+    "preserves %s through a background task",
+    async (code) => {
+      vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+      setMediaSafetyClassifier(async () => {
+        if (code === "safety_unavailable") throw new Error("offline");
+        return { safe: false, categories: ["deceptive_impersonation"] };
+      });
+      const calls = fakeImages();
+      await asUser(async () => {
+        const task = await startImageTask({ prompt: "A marketing poster", size: "1024x1024" });
+        await background.work[0]();
+        expect(await checkImageTask(task.taskId)).toMatchObject({
+          state: "failed",
+          code,
+          retryable: code === "safety_unavailable",
+        });
+      });
+      expect(calls).toHaveLength(0);
+    },
+  );
   it("routes everyday social images to Flare and meters OpenRouter's cost", async () => {
     const calls = fakeImages();
     const image = await asUser(() => generateImage({ prompt: "A tip for a social post" }));

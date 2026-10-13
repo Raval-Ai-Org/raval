@@ -153,6 +153,7 @@ type ProviderTask = {
   compose?: boolean;
   startedAt: number;
   state: "pending" | "done" | "failed";
+  failure?: JobErrorInfo;
 };
 
 type JobRow = StudioJob & {
@@ -1992,7 +1993,7 @@ async function startStudioVideo(opts: {
 
 type MediaCheck =
   | { state: "pending" }
-  | { state: "failed"; message: string }
+  | { state: "failed"; message: string; code?: string; retryable?: boolean }
   | { state: "success"; url?: string; dataUrl?: string; costUsd: number | null };
 
 /** Models return 3:4 for requested 4:5; crop only the finished model image. */
@@ -2082,7 +2083,10 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       if (check.state === "pending") continue;
       if (check.state === "failed") {
         // Image attempts are metered where they ran; a failed video costs nothing.
-        const next = task.kind === "image" ? task.fallbacks[0] : undefined;
+        const next =
+          task.kind === "image" && check.retryable !== false && check.code !== "safety_unavailable"
+            ? task.fallbacks[0]
+            : undefined;
         if (next) {
           const size = IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize;
           const restarted = await startImageTask({
@@ -2111,6 +2115,12 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           continue;
         }
         task.state = "failed";
+        task.failure = {
+          category:
+            check.code === "refusal" || check.code === "safety_unavailable" ? "safety" : "provider",
+          message: userSafeMessage(check.message, "The render failed. Please try again."),
+          retryable: check.retryable ?? true,
+        };
         setMedia({ status: "failed", error: check.message });
         continue;
       }
@@ -2354,7 +2364,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
     ) {
       Object.assign(patch, {
         status: "failed",
-        error: {
+        error: tasks.find((task) => task.slot === failed[0].slot)?.failure ?? {
           category: "provider",
           message: userSafeMessage(failed[0].error, "The render failed. Please try again."),
           retryable: true,

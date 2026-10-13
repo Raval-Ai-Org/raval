@@ -160,3 +160,27 @@ it("retains existing model fallback and references when the original image provi
   expect(mocks.review).not.toHaveBeenCalled();
   expect(mocks.save).not.toHaveBeenCalled();
 });
+it.each([
+  {
+    code: "refusal",
+    retryable: false,
+    message: "This request is blocked by Mellox's AI safety policy.",
+  },
+  {
+    code: "safety_unavailable",
+    retryable: true,
+    message: "Safety review could not complete. Generation is paused; try again later.",
+  },
+])("preserves $code and never switches models for safety decisions", async (failure) => {
+  const { row, client } = fixture();
+  mocks.check.mockResolvedValue({ state: "failed", ...failure });
+  const result = await advanceStudioJob(client, row);
+  expect(result.status).toBe("failed");
+  expect(result.error).toEqual({
+    category: "safety",
+    message: failure.message,
+    retryable: failure.retryable,
+  });
+  expect(mocks.start).not.toHaveBeenCalled();
+  expect(mocks.save).not.toHaveBeenCalled();
+});
