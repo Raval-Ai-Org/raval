@@ -2,12 +2,17 @@
 
 import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { type Faq as FaqItem } from "@/marketing/lib/faqs";
 import "./faq.css";
 
+const subscribeHydration = () => () => {};
+const hydratedSnapshot = () => true;
+const serverSnapshot = () => false;
+
 function Column({ items, offset }: { items: FaqItem[]; offset: number }) {
   const base = useId();
+  const hydrated = useSyncExternalStore(subscribeHydration, hydratedSnapshot, serverSnapshot);
   const [open, setOpen] = useState<number | null>(null);
 
   return (
@@ -19,10 +24,16 @@ function Column({ items, offset }: { items: FaqItem[]; offset: number }) {
           // The scroll-reveal lives on this wrapper, whose className never changes. The reveal adds `is-in` straight to the
           // DOM node, so it must not share an element with the `is-open` class that React re-renders on every click:
           // React would overwrite the whole class attribute, drop `is-in`, and the card would fade out each time.
-          <div key={f.q} className="faq-reveal" data-reveal style={{ transitionDelay: `${(i * 2 + offset) * 60}ms` }}>
+          <div
+            key={f.q}
+            className="faq-reveal"
+            data-reveal
+            style={{ transitionDelay: `${(i * 2 + offset) * 60}ms` }}
+          >
             <div className={`faq-item ${isOpen ? "is-open" : ""}`}>
               <h3>
                 <button
+                  id={`${id}-trigger`}
                   type="button"
                   aria-expanded={isOpen}
                   aria-controls={id}
@@ -32,13 +43,20 @@ function Column({ items, offset }: { items: FaqItem[]; offset: number }) {
                   <Plus size={22} strokeWidth={1.6} className="plus" aria-hidden="true" />
                 </button>
               </h3>
-              <div id={id} role="region" className="faq-panel">
+              <div
+                id={id}
+                role="region"
+                aria-labelledby={`${id}-trigger`}
+                aria-hidden={hydrated && !isOpen ? true : undefined}
+                inert={hydrated && !isOpen}
+                className="faq-panel"
+              >
                 <div>
                   <p>{f.a}</p>
                 </div>
               </div>
             </div>
-            </div>
+          </div>
         );
       })}
     </div>

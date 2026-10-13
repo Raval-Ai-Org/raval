@@ -18,6 +18,13 @@ export default function MotionGate() {
     const root = document.documentElement;
     const cleanups: Array<() => void> = [];
     let alive = true;
+    const syncVisibility = () => root.classList.toggle("mx-hidden", document.hidden);
+    syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
+    cleanups.push(() => {
+      document.removeEventListener("visibilitychange", syncVisibility);
+      root.classList.remove("mx-hidden");
+    });
 
     const goLive = () => {
       if (alive) root.classList.add("mx-live");
@@ -60,9 +67,12 @@ export default function MotionGate() {
     // pause the hero backdrop while it is off screen
     const hero = document.querySelector<HTMLElement>(".hero-bg");
     if (hero && "IntersectionObserver" in window) {
-      const io = new IntersectionObserver(([entry]) => hero.classList.toggle("is-offscreen", !entry.isIntersecting), {
-        rootMargin: "80px",
-      });
+      const io = new IntersectionObserver(
+        ([entry]) => hero.classList.toggle("is-offscreen", !entry.isIntersecting),
+        {
+          rootMargin: "80px",
+        },
+      );
       io.observe(hero);
       cleanups.push(() => io.disconnect());
     }

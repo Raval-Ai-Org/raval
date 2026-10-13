@@ -39,10 +39,21 @@ export default function SmoothScroll() {
 
       let raf = 0;
       const tick = (time: number) => {
+        if (document.hidden) {
+          raf = 0;
+          return;
+        }
         lenis.raf(time);
         raf = requestAnimationFrame(tick);
       };
-      raf = requestAnimationFrame(tick);
+      if (!document.hidden) raf = requestAnimationFrame(tick);
+      const syncVisibility = () => {
+        if (document.hidden) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        } else if (!raf) raf = requestAnimationFrame(tick);
+      };
+      document.addEventListener("visibilitychange", syncVisibility);
 
       // the preloader (and any future modal) locks scrolling by adding `mx-lock` to <html>
       const root = document.documentElement;
@@ -53,6 +64,7 @@ export default function SmoothScroll() {
 
       teardown = () => {
         observer.disconnect();
+        document.removeEventListener("visibilitychange", syncVisibility);
         cancelAnimationFrame(raf);
         setSmoothScroll(null);
         lenis.destroy();

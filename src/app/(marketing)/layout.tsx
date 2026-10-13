@@ -1,17 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Google_Sans_Flex, Michroma, Micro_5 } from "next/font/google";
+import { Micro_5 } from "next/font/google";
 import "@/marketing/globals.css";
 import Analytics from "@/marketing/components/Analytics";
 import MotionGate from "@/marketing/components/MotionGate";
 import Preloader from "@/marketing/components/Preloader";
 import SmoothScroll from "@/marketing/components/SmoothScroll";
 import CookieBanner from "@/marketing/components/legal/CookieBanner";
-import JsonLd from "@/marketing/components/JsonLd";
-import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_URL, siteGraph } from "@/marketing/lib/seo";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_URL } from "@/marketing/lib/seo";
 
-const michroma = Michroma({ variable: "--font-michroma", weight: "400", subsets: ["latin"] });
-const micro5 = Micro_5({ variable: "--font-micro5", weight: "400", subsets: ["latin"], preload: false });
-const googleSansFlex = Google_Sans_Flex({ variable: "--font-google-sans-flex", subsets: ["latin"] });
+const micro5 = Micro_5({
+  variable: "--font-micro5",
+  weight: "400",
+  subsets: ["latin"],
+  preload: false,
+});
 const PRELOADER_SKIP_SCRIPT =
   "try{if(sessionStorage.getItem('mx-preloaded'))document.documentElement.setAttribute('data-preloaded','1')}catch(e){}";
 
@@ -24,7 +26,10 @@ export const metadata: Metadata = {
   applicationName: "Mellox AI",
   robots: { index: true, follow: true },
   icons: {
-    icon: [{ url: "/marketing/icon.svg", type: "image/svg+xml" }, { url: "/marketing/favicon.ico" }],
+    icon: [
+      { url: "/marketing/icon.svg", type: "image/svg+xml" },
+      { url: "/marketing/favicon.ico" },
+    ],
     apple: [{ url: "/marketing/apple-icon.png" }],
   },
   openGraph: { siteName: "Mellox AI", type: "website", images: ["/marketing/opengraph-image.png"] },
@@ -41,13 +46,18 @@ export const viewport: Viewport = { themeColor: "#0d1114" };
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div id="marketing-root" className={`${michroma.variable} ${googleSansFlex.variable} ${micro5.variable} flex min-h-screen flex-col font-sans`}>
+    <div id="marketing-root" className={`${micro5.variable} flex min-h-screen flex-col font-sans`}>
       <script dangerouslySetInnerHTML={{ __html: PRELOADER_SKIP_SCRIPT }} />
-      <noscript><style>{".mx-pre{display:none!important}.hero-in{animation:none!important}"}</style></noscript>
+      <noscript>
+        <style>
+          {
+            ".mx-pre{display:none!important}.hero-in{animation:none!important}#marketing-root [data-reveal]{opacity:1!important;transform:none!important}.faq-panel{grid-template-rows:1fr!important}.faq-panel p{opacity:1!important;transform:none!important}"
+          }
+        </style>
+      </noscript>
       <Preloader />
       <MotionGate />
       <SmoothScroll />
-      <JsonLd data={siteGraph} />
       {children}
       <CookieBanner />
       <Analytics />

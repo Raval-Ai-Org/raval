@@ -1,13 +1,6 @@
 import type { MetadataRoute } from "next";
 
-// robots.txt generated from the deployment's own origin (APP_URL /
-// NEXT_PUBLIC_APP_URL). The static public/robots.txt hardcoded an old domain,
-// so every other deployment advertised someone else's sitemap.
-const ORIGIN = (
-  process.env.APP_URL ||
-  process.env.NEXT_PUBLIC_APP_URL ||
-  "https://mellox.ai"
-).replace(/\/+$/, "");
+import { SITE_URL } from "@/marketing/lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -31,6 +24,6 @@ export default function robots(): MetadataRoute.Robots {
         "/admin",
       ],
     },
-    sitemap: `${ORIGIN}/sitemap.xml`,
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }
