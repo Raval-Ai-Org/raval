@@ -122,6 +122,17 @@ describe("prompt engine", () => {
     expect(built.system).not.toMatch(/Write a LinkedIn post about/);
   });
 
+  it("includes saved visual feedback in future concepts without an approved profile", () => {
+    const built = buildSocialPrompt({
+      ctx: { ...ctx, visualFeedbackRules: "Reduce clutter. Use warmer lighting." },
+      intent: { brief: "Launch our new oat latte", goal: "launch" },
+      controls: { platforms: ["instagram"] },
+      angle: ANGLES[0],
+    });
+    expect(built.user).toContain("Reduce clutter. Use warmer lighting.");
+    expect(built.user).toContain("Northwind Coffee");
+  });
+
   it("includes the current draft and target when refining", () => {
     const built = buildArticlePrompt({
       ctx,

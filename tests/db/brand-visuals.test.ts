@@ -23,6 +23,29 @@ beforeAll(async () => {
 }, 60000);
 afterAll(() => db?.close());
 describe("visual taste database invariants", () => {
+  it("saves and replaces manual-look feedback while rejecting a creation in another workspace", async () => {
+    const job = (
+      await db.query<{ id: string }>(
+        "insert into public.studio_jobs(workspace_id,status,output) values($1,'succeeded','{}') returning id",
+        [a],
+      )
+    ).rows[0].id;
+    const save = `insert into public.brand_visual_feedback(workspace_id,job_id,created_by,reason,note)
+      values($1,$2,$3,$4,$5) on conflict(workspace_id,job_id,created_by)
+      do update set reason=excluded.reason,note=excluded.note`;
+    await db.query(save, [a, job, user, "too-busy", "Fewer props"]);
+    await db.query(save, [a, job, user, "wrong-theme", "Warmer lighting"]);
+    const feedback = await db.query<{ reason: string; note: string; profile_id: string | null }>(
+      "select reason,note,profile_id from public.brand_visual_feedback where job_id=$1",
+      [job],
+    );
+    expect(feedback.rows).toEqual([
+      { reason: "wrong-theme", note: "Warmer lighting", profile_id: null },
+    ]);
+    await expect(db.query(save, [b, job, user, "matches", ""])).rejects.toThrow(
+      /visual_job_wrong_workspace/,
+    );
+  });
   it("a cancelled or superseded worker cannot save an analysed profile", async () => {
     const token = "00000000-0000-4000-8000-000000000004";
     const job = (

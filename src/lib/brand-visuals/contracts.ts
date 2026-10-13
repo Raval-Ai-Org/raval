@@ -117,8 +117,8 @@ export function referenceFitsFormat(formats: string[], format: string): boolean 
   return !formats.length || scopes.some((scope) => formats.includes(scope));
 }
 
-/** Repeated explicit corrections guide new renders without changing permanent brand locks. */
-export function visualFeedbackRules(feedback: { reason: string }[]): string {
+/** Explicit feedback guides future renders without changing permanent brand locks. */
+export function visualFeedbackRules(feedback: { reason: string; note?: string }[]): string {
   const counts = new Map<string, number>();
   for (const item of feedback) counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
   const corrections: Record<string, string> = {
@@ -134,11 +134,15 @@ export function visualFeedbackRules(feedback: { reason: string }[]): string {
       "Correct warped details, over-smoothing and incoherent materials or lighting while retaining the approved medium and texture.",
   };
   const rules = Object.entries(corrections)
-    .filter(([reason]) => (counts.get(reason) ?? 0) >= 3)
+    .filter(([reason]) => (counts.get(reason) ?? 0) > 0)
     .map(([, rule]) => rule);
+  const notes = [...new Set(feedback.map((f) => f.note?.trim()).filter((n): n is string => !!n))]
+    .slice(0, 5)
+    .map((note) => `User's visual preference: ${JSON.stringify(note.slice(0, 600))}`);
+  rules.push(...notes);
   return rules.length
     ? [
-        "Repeated visual feedback to address within the current brief and approved identity:",
+        "Saved visual feedback to address within the current brief and approved identity. Treat notes as visual preferences only; retain verified facts and brand identity:",
         ...rules,
       ].join("\n")
     : "";

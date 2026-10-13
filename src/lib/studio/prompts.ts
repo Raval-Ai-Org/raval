@@ -28,6 +28,8 @@ import type {
 
 export type StudioContext = {
   visualTaste?: VisualSnapshot | null;
+  /** Saved visual preferences for brands using their manual look. */
+  visualFeedbackRules?: string;
   brandName: string;
   /** Serialized Brand DNA (serializeBrandContext). */
   brandText: string;
@@ -314,7 +316,10 @@ function sharedUser(
   return [
     { label: "Brand", body: ctx.brandText || `Brand: ${ctx.brandName}` },
     styleSection(ctx, format),
-    { label: "Approved visual direction", body: ctx.visualTaste?.rules },
+    {
+      label: "Visual direction and saved feedback",
+      body: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+    },
     {
       label: "Business",
       body: [

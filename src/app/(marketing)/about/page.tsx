@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Compass, Layers, UserRound, ListChecks, Route, Users } from "lucide-react";
+import { Compass, Layers, ListChecks, Route, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import Footer from "@/marketing/components/Footer";
@@ -8,12 +8,9 @@ import Navbar from "@/marketing/components/Navbar";
 import PricingHeroBackground from "@/marketing/components/pricing/PricingHeroBackground";
 import PricingReveal from "@/marketing/components/pricing/PricingReveal";
 import SectionHead from "@/marketing/components/pricing/SectionHead";
-import { AUDIENCES, BRAINS, FOUNDERS, PRINCIPLES, STACK_REPLACED, STATS, STEPS } from "@/marketing/lib/about";
+import { AUDIENCES, BRAINS, PRINCIPLES, STACK_REPLACED, STATS, STEPS } from "@/marketing/lib/about";
 import "@/marketing/components/pricing/pricing.css";
 import "@/marketing/components/about/about.css";
-import Founders from "@/marketing/components/about/Founders";
-import JsonLd from "@/marketing/components/JsonLd";
-import { founderPersonLd } from "@/marketing/lib/founder-ld";
 import CtaBand from "@/marketing/components/cta/CtaBand";
 import WhatsNew from "@/marketing/components/whats-new/WhatsNew";
 
@@ -46,24 +43,6 @@ export default function AboutPage() {
       </header>
 
       <main>
-        {/* Founders: first, so the people behind Mellox are the first thing on the page */}
-        <section id="founders" className="px-section ab-founders-first">
-          <div className="px-inner">
-            <SectionHead
-              icon={<UserRound size={32} strokeWidth={1.4} aria-hidden="true" />}
-              label="The founders"
-              title="Meet the people behind Mellox."
-              blurb="A founder and a co-founder building the AI marketing team they wanted for their own brands."
-              wide
-            />
-            <Founders />
-            {/* who the founders are and which accounts are theirs, for search and AI engines */}
-            <JsonLd
-              data={{ "@context": "https://schema.org", "@graph": FOUNDERS.map(founderPersonLd) }}
-            />
-          </div>
-        </section>
-
         {/* Mission */}
         <section id="mission" className="px-section">
           <div className="px-inner">

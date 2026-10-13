@@ -126,7 +126,7 @@ export async function createCheckoutSession(args: {
           currency: "usd",
           unit_amount: Math.round(pack.usd * 100),
           product_data: {
-            name: `Mellox balance — $${pack.valueUsd.toFixed(2)}`,
+            name: `Mellox AI balance — $${pack.valueUsd.toFixed(2)}`,
             description:
               bonusUsd > 0
                 ? `$${pack.usd.toFixed(2)} of balance plus $${bonusUsd.toFixed(2)} free`

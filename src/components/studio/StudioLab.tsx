@@ -896,6 +896,30 @@ const RAIL_ROWS: ContentRow[] = [
     updated_at: minutesAgo(10),
     scheduled_at: null,
   },
+  {
+    id: "x7",
+    title: "Meet the farmers behind your coffee",
+    body: "Our latest visit to the Huila co-op is now live.",
+    kind: "post",
+    channel: "linkedin",
+    status: "published",
+    meta: { source: "studio", studio_type: "social", platform: "linkedin" },
+    created_at: minutesAgo(120),
+    updated_at: minutesAgo(5),
+    scheduled_at: null,
+  },
+  {
+    id: "x8",
+    title: "Fresh roast delivery",
+    body: "This week's fresh roast is on its way.",
+    kind: "post",
+    channel: "instagram",
+    status: "publishing",
+    meta: { source: "studio", studio_type: "social", platform: "instagram" },
+    created_at: minutesAgo(60),
+    updated_at: minutesAgo(1),
+    scheduled_at: null,
+  },
 ];
 
 const RAIL_GROUPS = groupRows(RAIL_ROWS);

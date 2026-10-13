@@ -41,11 +41,22 @@ const direction = DirectionSchema.parse({
   sourceIds: [id(1)],
 });
 describe("visual taste decisions", () => {
-  it("uses repeated explicit corrections and keeps a single rejection from changing brand guidance", () => {
-    expect(visualFeedbackRules([{ reason: "too-busy" }])).toBe("");
+  it("uses a single explicit correction for future renders while retaining approved identity", () => {
+    expect(visualFeedbackRules([{ reason: "too-busy" }])).toContain(
+      "Reduce incidental background clutter",
+    );
     const rules = visualFeedbackRules(Array.from({ length: 3 }, () => ({ reason: "too-busy" })));
     expect(rules).toContain("Reduce incidental background clutter");
     expect(rules).toContain("approved layout");
+  });
+  it("includes written preferences once and ignores an empty positive rating", () => {
+    expect(visualFeedbackRules([{ reason: "matches", note: "  " }])).toBe("");
+    const rules = visualFeedbackRules([
+      { reason: "wrong-theme", note: " Use warm lighting " },
+      { reason: "wrong-theme", note: "Use warm lighting" },
+    ]);
+    expect(rules.match(/Use warm lighting/g)).toHaveLength(1);
+    expect(rules).toContain("retain verified facts and brand identity");
   });
   it("uses every correction category without replacing the approved visual medium", () => {
     const rows = ["wrong-theme", "wrong-product", "typography", "too-artificial"].flatMap(

@@ -104,7 +104,7 @@ export type AppEventMap = {
     | {
         tab?: "all" | "posts" | "media";
         /** Preselect a pipeline stage filter. */
-        status?: "review" | "ready" | "scheduled" | "published";
+        status?: "review" | "ready" | "scheduled" | "published" | "scheduled-published";
       }
     | undefined;
   "open:ai-visibility": undefined;

@@ -19,6 +19,13 @@ export type ContentRow = {
 
 /** Where a piece of work is on its way to being published. */
 export type Stage = "review" | "ready" | "scheduled" | "published";
+export type StageFilter = Stage | "scheduled-published";
+
+export function matchesStage(stage: Stage, filter: StageFilter): boolean {
+  return filter === "scheduled-published"
+    ? stage === "scheduled" || stage === "published"
+    : stage === filter;
+}
 
 /** What created it, so non-Studio drafts are recognisable. */
 export type ContentSource = "studio" | "chat" | "agent" | "calendar" | "other";
@@ -50,13 +57,15 @@ export type Group = {
 export const CONTENT_COLUMNS =
   "id, title, body, kind, channel, status, meta, created_at, updated_at, scheduled_at";
 
-/** Statuses that are still on their way out: not published and not discarded. */
+/** Content shown in the pipeline, including delivery in progress and completed posts. */
 export const PIPELINE_STATUSES = [
   "draft",
   "pending",
   "failed",
   "approved",
   "scheduled",
+  "publishing",
+  "published",
   "partial_failed",
 ] as const;
 

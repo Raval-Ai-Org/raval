@@ -41,9 +41,10 @@ import {
   STATUS_BADGE,
   ago,
   groupRows,
+  matchesStage,
   type ContentRow,
   type Group,
-  type Stage,
+  type StageFilter,
 } from "@/lib/studio/content-groups";
 import {
   STUDIO_FORMATS,
@@ -69,7 +70,7 @@ type LibraryApiAsset = {
 };
 
 export type LibraryTab = "all" | "posts" | "media";
-type StatusFilter = "all" | "review" | "ready" | "scheduled" | "published";
+type StatusFilter = "all" | StageFilter;
 type Sort = "newest" | "oldest";
 type View = "grid" | "list";
 
@@ -89,6 +90,7 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: "review", label: "Needs approval" },
   { id: "ready", label: "Ready to post" },
   { id: "scheduled", label: "Scheduled" },
+  { id: "scheduled-published", label: "Scheduled & Published" },
   { id: "published", label: "Published" },
 ];
 
@@ -131,7 +133,7 @@ export function LibraryPage({
 }: {
   initialTab?: LibraryTab;
   /** Preselect a pipeline stage (from the Studio rail). */
-  initialStatus?: Stage;
+  initialStatus?: StageFilter;
   /** Close the surrounding pop-up. */
   onClose?: () => void;
   /** Lets the pop-up ask "go back one level?" on Escape; returns true when handled. */
@@ -312,7 +314,7 @@ export function LibraryPage({
         ? []
         : groups
             .filter((g) => format === "all" || g.type === format)
-            .filter((g) => status === "all" || g.stage === status)
+            .filter((g) => status === "all" || matchesStage(g.stage, status))
             .filter(
               (g) => !q || g.title.toLowerCase().includes(q) || g.excerpt.toLowerCase().includes(q),
             )

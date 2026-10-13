@@ -426,20 +426,44 @@ export async function recordVisualFeedback(
   const output = job.output as { visualTaste?: VisualSnapshot };
   const snapshot = output?.visualTaste;
   // The source set is the saved generation's, never caller-supplied IDs.
-  checked(
-    await table("brand_visual_feedback").upsert(
-      {
-        workspace_id: c.workspaceId,
-        job_id: args.jobId,
-        created_by: c.userId,
-        reason: args.reason,
-        note: args.note,
-        profile_id: snapshot?.profileId ?? null,
-        source_ids: snapshot?.references.map((r) => r.sourceId) ?? [],
-      },
-      { onConflict: "workspace_id,job_id,created_by" },
-    ),
+  const result = await table("brand_visual_feedback").upsert(
+    {
+      workspace_id: c.workspaceId,
+      job_id: args.jobId,
+      created_by: c.userId,
+      reason: args.reason,
+      note: args.note,
+      created_at: new Date().toISOString(),
+      profile_id: snapshot?.profileId ?? null,
+      source_ids: snapshot?.references?.map((r) => r.sourceId) ?? [],
+    },
+    { onConflict: "workspace_id,job_id,created_by" },
   );
+  if (result.error) {
+    console.error("[visual-taste] feedback save failed", result.error);
+    throw new HttpError(
+      503,
+      "Your feedback could not be saved right now. Please try again in a moment.",
+    );
+  }
+}
+
+/** Feedback also applies to brands using the manual look, without an approved profile. */
+export async function loadVisualFeedbackRules(workspaceId: string): Promise<string> {
+  try {
+    const feedback = checked(
+      await table("brand_visual_feedback")
+        .select("reason,note")
+        .eq("workspace_id", workspaceId)
+        .is("profile_id", null)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    );
+    return visualFeedbackRules(feedback ?? []);
+  } catch (error) {
+    console.warn("[visual-taste] feedback unavailable", error);
+    return "";
+  }
 }
 
 export async function restoreManualVisualLook(c: VisualCaller, expectedActiveId: string | null) {
@@ -601,9 +625,9 @@ export async function compileVisualSnapshot(
   const [sources, feedback] = await Promise.all([
     readSources(workspaceId),
     table("brand_visual_feedback")
-      .select("source_ids,reason")
+      .select("source_ids,reason,note")
       .eq("workspace_id", workspaceId)
-      .eq("profile_id", row.id)
+      .or(`profile_id.eq.${row.id},profile_id.is.null`)
       .order("created_at", { ascending: false })
       .limit(100),
   ]);

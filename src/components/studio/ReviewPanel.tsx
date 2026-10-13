@@ -1237,6 +1237,7 @@ export function ReviewPanel({
                 ) : null}
                 {mediaReady && !fixtureRows && (
                   <VisualFeedback
+                    key={job.id}
                     workspaceId={session.workspaceId}
                     jobId={job.id}
                     disabled={revising}

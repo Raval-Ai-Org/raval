@@ -49,10 +49,12 @@ import {
   SOURCE_LABEL,
   ago,
   groupRows,
+  matchesStage,
   stageCounts,
   type ContentRow,
   type Group,
   type Stage,
+  type StageFilter,
 } from "@/lib/studio/content-groups";
 
 export type { Group } from "@/lib/studio/content-groups";
@@ -90,14 +92,24 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
     }
     setRefreshing(true);
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-    const [queue, published] = await Promise.all([
-      // Everything still on its way out: not published, not discarded.
+    const [queue, completed, published] = await Promise.all([
+      // Keep active work separate so published history cannot crowd it out.
       supabase
         .from("content_items")
         .select(CONTENT_COLUMNS)
         .eq("workspace_id", ws)
-        .in("status", [...PIPELINE_STATUSES])
+        .in(
+          "status",
+          PIPELINE_STATUSES.filter((status) => status !== "published"),
+        )
         .order("created_at", { ascending: false })
+        .limit(80),
+      supabase
+        .from("content_items")
+        .select(CONTENT_COLUMNS)
+        .eq("workspace_id", ws)
+        .eq("status", "published")
+        .order("updated_at", { ascending: false })
         .limit(80),
       supabase
         .from("content_items")
@@ -107,13 +119,13 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
         .gte("updated_at", weekAgo),
     ]);
     setRefreshing(false);
-    if (queue.error) {
+    if (queue.error || completed.error) {
       setLoadError("Couldn't load your content.");
       setRows((r) => r ?? []);
       return;
     }
     setLoadError(null);
-    const queueRows = (queue.data ?? []) as ContentRow[];
+    const queueRows = [...(queue.data ?? []), ...(completed.data ?? [])] as ContentRow[];
     setRows(queueRows);
     setPublishedThisWeek(published.count ?? 0);
 
@@ -140,7 +152,10 @@ export function StudioRail(_props: { embedded?: boolean } = {}) {
       removeAppEventListener("approvals:changed", on);
     };
   }, [load]);
-  useVisibleInterval(() => void load(), 60_000);
+  useVisibleInterval(
+    () => void load(),
+    rows?.some((row) => row.status === "publishing") ? 15_000 : 60_000,
+  );
 
   const allJobs = useStudioStore((s) => s.jobs);
   const jobs = useMemo(
@@ -380,7 +395,7 @@ export function JobRow({
 
 /* ───────────────────────── Content pipeline ─────────────────────────
  * The whole life of a post in one place: Creating → Review → Ready →
- * Scheduled. Approving a finished Studio post moves it to Ready; approving a
+ * Scheduled & Published. Approving a finished Studio post moves it to Ready; approving a
  * text-only draft creates the finished post (visual + captions), which shows
  * under Creating and lands in Ready by itself. */
 
@@ -390,7 +405,7 @@ const PIPELINE_STEPS: { id: PipelineStage; label: string; icon: LucideIcon }[] =
   { id: "generating", label: "Creating", icon: Sparkles },
   { id: "review", label: "Review", icon: Eye },
   { id: "ready", label: "Ready", icon: Check },
-  { id: "scheduled", label: "Scheduled", icon: CalendarClock },
+  { id: "scheduled", label: "Scheduled & Published", icon: CalendarClock },
 ];
 
 const PIPELINE_TAB_KEY = "studio:pipeline-tab";
@@ -508,14 +523,20 @@ export function PipelineSection({
     [jobs],
   );
   const counts = useMemo(() => stageCounts(visibleGroups), [visibleGroups]);
-  const countOf = (id: PipelineStage) => (id === "generating" ? generatingCount : counts[id]);
+  const countOf = (id: PipelineStage) =>
+    id === "generating"
+      ? generatingCount
+      : id === "scheduled"
+        ? counts.scheduled + counts.published
+        : counts[id];
 
   // Until someone picks a stage, open where there's something to do.
   const active: PipelineStage =
     picked ??
     (makingCount
       ? "generating"
-      : (PIPELINE_STEPS.find((st) => st.id !== "generating" && counts[st.id] > 0)?.id ?? "review"));
+      : (PIPELINE_STEPS.find((st) => st.id !== "generating" && countOf(st.id) > 0)?.id ??
+        "review"));
 
   const choose = (id: PipelineStage) => {
     setPicked(id);
@@ -538,15 +559,24 @@ export function PipelineSection({
 
   const list = useMemo(() => {
     if (active === "generating") return [];
-    const inStage = visibleGroups.filter((g) => g.stage === active);
+    const inStage = visibleGroups.filter((g) =>
+      matchesStage(g.stage, active === "scheduled" ? "scheduled-published" : active),
+    );
     return active === "scheduled"
-      ? inStage.sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""))
+      ? inStage.sort(
+          (a, b) =>
+            Number(a.stage === "published") - Number(b.stage === "published") ||
+            (a.stage === "scheduled"
+              ? (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? "")
+              : b.createdAt.localeCompare(a.createdAt)),
+        )
       : inStage.sort(
           (a, b) => Number(b.problem) - Number(a.problem) || b.createdAt.localeCompare(a.createdAt),
         );
   }, [visibleGroups, active]);
   const visible = list.slice(0, PIPELINE_VISIBLE);
-  const openLibrary = (status?: Stage) => emitAppEvent("open:library", { tab: "posts", status });
+  const openLibrary = (status?: StageFilter) =>
+    emitAppEvent("open:library", { tab: "posts", status });
 
   const dismissJob = (id: string) => {
     const next = [...dismissed, id].slice(-50);
@@ -602,6 +632,15 @@ export function PipelineSection({
         .map((g) => g.scheduledAt as string)
         .sort()[0]
     : null;
+  const publishedCount = visibleGroups.filter((g) => g.status === "published").length;
+  const publishingCount = visibleGroups.filter((g) => g.status === "publishing").length;
+  const deliverySummary = [
+    nextScheduled ? `Next one goes out ${when(nextScheduled)}` : null,
+    publishedCount ? `${publishedCount} published` : null,
+    publishingCount ? `${publishingCount} publishing` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const summary =
     active === "generating"
       ? makingCount
@@ -617,9 +656,7 @@ export function PipelineSection({
           ? counts.ready
             ? `${counts.ready} approved, not posted yet`
             : "Approve a draft and it's ready to post here."
-          : nextScheduled
-            ? `Next one goes out ${when(nextScheduled)}`
-            : "Nothing scheduled yet.";
+          : deliverySummary || "Nothing scheduled or published yet.";
 
   return (
     <section data-no-rhythm aria-labelledby="rail-pipeline" aria-busy={loading}>
@@ -711,7 +748,7 @@ export function PipelineSection({
               </motion.span>
               <span
                 className={cn(
-                  "text-[11px] font-medium transition-colors",
+                  "max-w-full px-0.5 text-center text-[11px] font-medium leading-tight transition-colors",
                   on ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
                 )}
               >
@@ -803,7 +840,7 @@ export function PipelineSection({
               ? "Nothing waiting for you. New drafts land here."
               : active === "ready"
                 ? "Approved posts wait here until you schedule or publish them."
-                : "Schedule a ready post and it shows here with its time."
+                : "Scheduled posts and successfully published posts appear here."
           }
           action={
             active === "review" ? (
@@ -840,7 +877,7 @@ export function PipelineSection({
       {!loading && active !== "generating" && list.length > PIPELINE_VISIBLE ? (
         <button
           type="button"
-          onClick={() => openLibrary(active)}
+          onClick={() => openLibrary(active === "scheduled" ? "scheduled-published" : active)}
           className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
         >
           View all {list.length} in Library
@@ -1124,7 +1161,26 @@ export function ApprovalCard({
         </span>
       </button>
 
-      {stage === "scheduled" ? (
+      {stage === "published" ? (
+        <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+          <span className="inline-flex items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-[10px] font-semibold text-success ring-1 ring-success-border">
+            {group.status === "publishing" ? (
+              <Spinner className="size-3 animate-spin" aria-hidden />
+            ) : (
+              <Check className="size-3" strokeWidth={3} />
+            )}
+            {group.status === "publishing" ? "Publishing" : "Published"}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto h-7 rounded-full px-2.5"
+            onClick={open}
+          >
+            View delivery
+          </Button>
+        </div>
+      ) : stage === "scheduled" ? (
         <div className="flex items-center gap-1 px-3 pb-3 pt-1">
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-success-surface px-2 py-0.5 text-[10px] font-semibold text-success ring-1 ring-success-border">
             <CalendarClock className="size-3 shrink-0" />

@@ -1126,11 +1126,13 @@
   color: #8b97c2;
 }
 .pp-strip-price {
+  max-width: 240px;
   font-size: 22px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .pp-strip-price span {
+  display: block;
   font-size: 14px;
   font-weight: 400;
   color: #8b97c2;

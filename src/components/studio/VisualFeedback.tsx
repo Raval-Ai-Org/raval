@@ -6,6 +6,7 @@ import { giveVisualFeedback } from "@/lib/brand-visuals.functions";
 import { FEEDBACK_REASONS } from "@/lib/brand-visuals/contracts";
 import { dsFocus, dsGhostBtn } from "@/components/app/surface/buttons";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 const labels = {
   matches: "Matches my brand",
   "wrong-theme": "Wrong theme",
@@ -34,7 +35,7 @@ export function VisualFeedback({
       <PopoverTrigger asChild>
         <button
           type="button"
-          disabled={disabled}
+          disabled={disabled || busy}
           className={cn(
             dsFocus,
             "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-foreground hover:bg-surface-2 disabled:opacity-45",
@@ -48,18 +49,26 @@ export function VisualFeedback({
         align="end"
       >
         <p className="text-[13px] font-medium">How does this visual feel?</p>
+        <p className="text-[12px] text-muted-foreground">
+          Your feedback helps improve future visuals for this brand.
+        </p>
         <div className="flex flex-wrap gap-1.5">
           {FEEDBACK_REASONS.map((r) => (
             <button
               key={r}
               type="button"
               aria-pressed={reason === r}
+              disabled={busy}
               className={cn(
                 dsGhostBtn,
                 "h-8 px-3 text-[11px]",
                 reason === r && "border-primary/40 bg-primary/10",
               )}
-              onClick={() => setReason(r)}
+              onClick={() => {
+                setReason(r);
+                setSaved(false);
+                setError("");
+              }}
             >
               {labels[r]}
             </button>
@@ -70,8 +79,13 @@ export function VisualFeedback({
           aria-label="Visual feedback details"
           placeholder="What would make it closer? (optional)"
           maxLength={600}
+          disabled={busy}
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setSaved(false);
+            setError("");
+          }}
           rows={2}
         />
         {error && (
@@ -80,14 +94,20 @@ export function VisualFeedback({
           </p>
         )}
         <button
+          type="button"
           className={cn(dsGhostBtn, "h-8 px-3 text-[12px]")}
           disabled={busy}
           onClick={async () => {
+            if (busy) return;
             setBusy(true);
+            setError("");
             try {
               await giveVisualFeedback({ data: { workspaceId, jobId, reason, note } });
               setSaved(true);
               setOpen(false);
+              toast.success("Feedback saved", {
+                description: "We'll use it to improve future visuals for this brand.",
+              });
             } catch (e) {
               setError(e instanceof Error ? e.message : "Feedback could not be saved.");
             } finally {

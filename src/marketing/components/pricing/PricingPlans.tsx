@@ -4,9 +4,23 @@
 // (src/components/app/billing/UpgradeScreen.tsx), drawn from the same catalog with the same helpers, so the two
 // always show the same plans, prices and lines. Three cards side by side, the biggest plan as a row under them.
 
-import { ArrowRight, Building2, Check, Columns2, ShieldCheck, Video, Zap, type LucideIcon } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  Check,
+  Columns2,
+  ShieldCheck,
+  Video,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
-import { CREDIT_ACTIONS, PLANS, type BillingInterval, type PaidPlanId } from "@/lib/billing/catalog";
+import {
+  CREDIT_ACTIONS,
+  PLANS,
+  type BillingInterval,
+  type PaidPlanId,
+} from "@/lib/billing/catalog";
 import { formatMeter, formatNumber, formatUsd, planPrice } from "@/lib/billing/present";
 import { PAID_PLANS } from "@/marketing/lib/pricing";
 import SectionHead from "./SectionHead";
@@ -74,14 +88,14 @@ function PlanCard({
 
       <p className="pp-price" aria-live="polite">
         {interval === "year" && <span className="old">{formatUsd(def.priceMonthlyUsd)}</span>}
-        <span className="now">{formatUsd(Math.round(price.perMonth))}</span>
-        <span className="per">a month</span>
+        <span className="now">{formatUsd(price.perMonth)}</span>
+        <span className="per">{interval === "year" ? "a month equivalent" : "a month"}</span>
       </p>
       <p className="pp-billed">
         {interval === "year" ? (
           <>
             <span>
-              {formatUsd(price.billed)} a year · {perDay(price.billed)} a day
+              Billed annually: {formatUsd(price.billed)} a year · {perDay(price.billed)} a day
             </span>
             <span className="pp-save">Save {formatUsd(price.savings)}</span>
           </>
@@ -110,7 +124,9 @@ function PlanCard({
         ))}
       </ul>
 
-      <p className="pp-label">{below ? `Everything in ${PLANS[below].label}, plus` : "What you can do"}</p>
+      <p className="pp-label">
+        {below ? `Everything in ${PLANS[below].label}, plus` : "What you can do"}
+      </p>
       <ul className="pp-list">
         {def.highlights.map((line) => (
           <li key={line}>
@@ -142,8 +158,12 @@ function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInte
         </p>
       </div>
       <p className="pp-strip-price" aria-live="polite">
-        {formatUsd(Math.round(price.perMonth))}
-        <span> a month</span>
+        {formatUsd(price.perMonth)}
+        <span>
+          {interval === "year"
+            ? ` a month equivalent · billed annually at ${formatUsd(price.billed)}`
+            : " a month · billed monthly"}
+        </span>
       </p>
       <div className="pp-strip-buttons">
         <a href="/demo?interest=scale" className="pp-talk">
@@ -158,7 +178,7 @@ function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInte
 }
 
 export default function PricingPlans() {
-  const [interval, setInterval] = useState<BillingInterval>("year");
+  const [interval, setInterval] = useState<BillingInterval>("month");
 
   return (
     <section id="plans" className="px-section">
@@ -172,17 +192,31 @@ export default function PricingPlans() {
         />
 
         <div className="px-toggle" role="group" aria-label="Billing period" data-reveal>
-          <button type="button" aria-pressed={interval === "month"} onClick={() => setInterval("month")}>
+          <button
+            type="button"
+            aria-pressed={interval === "month"}
+            onClick={() => setInterval("month")}
+          >
             Monthly
           </button>
-          <button type="button" aria-pressed={interval === "year"} onClick={() => setInterval("year")}>
+          <button
+            type="button"
+            aria-pressed={interval === "year"}
+            onClick={() => setInterval("year")}
+          >
             Yearly <span className="px-free-tag">2 months free</span>
           </button>
         </div>
 
         <div className="pp-plans">
           {CARDS.map((plan, i) => (
-            <PlanCard key={plan} plan={plan} interval={interval} onYearly={() => setInterval("year")} index={i} />
+            <PlanCard
+              key={plan}
+              plan={plan}
+              interval={interval}
+              onYearly={() => setInterval("year")}
+              index={i}
+            />
           ))}
         </div>
         <PlanStrip plan={STRIP} interval={interval} />

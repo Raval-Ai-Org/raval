@@ -14,26 +14,26 @@ const entries = [
         key: plan.id,
         interval: "month",
         cents: plan.priceMonthlyUsd * 100,
-        name: `${plan.label} monthly`,
+        name: `Mellox AI ${plan.label} monthly`,
       },
       {
         key: plan.id,
         interval: "year",
         cents: plan.priceAnnualUsd * 100,
-        name: `${plan.label} annual`,
+        name: `Mellox AI ${plan.label} annual`,
       },
     ]),
   ...CREDIT_PACKS.map((pack) => ({
     key: pack.key,
     interval: "one_time",
     cents: pack.usd * 100,
-    name: `${pack.credits + pack.bonusCredits} Mellox Credits`,
+    name: `Mellox AI ${pack.credits + pack.bonusCredits} Credits`,
   })),
   ...VIDEO_PACKS.map((pack) => ({
     key: pack.key,
     interval: "one_time",
     cents: pack.usd * 100,
-    name: `${pack.videoUnits / 100} Video Credits`,
+    name: `Mellox AI ${pack.videoUnits / 100} Video Credits`,
   })),
   ...Object.values(ADDONS)
     .filter((addon) => addon.availability === "launch")
@@ -42,16 +42,16 @@ const entries = [
         key: addon.key,
         interval: "month",
         cents: addon.usdPerMonth * 100,
-        name: `${addon.label} monthly`,
+        name: `Mellox AI ${addon.label} monthly`,
       },
       {
         key: addon.key,
         interval: "year",
         cents: addon.usdPerMonth * 1200,
-        name: `${addon.label} annual`,
+        name: `Mellox AI ${addon.label} annual`,
       },
     ]),
-  { key: "pause", interval: "month", cents: PAUSE.usdPerMonth * 100, name: "Mellox pause plan" },
+  { key: "pause", interval: "month", cents: PAUSE.usdPerMonth * 100, name: "Mellox AI pause plan" },
 ];
 
 if (!apply) {

@@ -8,7 +8,7 @@ import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { duration, ease, spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import type { LibraryAsset } from "@/lib/library";
-import type { Group, Stage } from "@/lib/studio/content-groups";
+import type { Group, StageFilter } from "@/lib/studio/content-groups";
 import { LibraryPage, type LibraryTab } from "./LibraryPage";
 
 /** Preview/testing data (the Studio lab); the app renders the live Library. */
@@ -27,7 +27,7 @@ type Fixtures = {
 export function LibraryDialog(fixtures: Fixtures = {}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<LibraryTab>("all");
-  const [status, setStatus] = useState<Stage | undefined>(undefined);
+  const [status, setStatus] = useState<StageFilter | undefined>(undefined);
   const isMobile = useIsMobile();
   const backRef = useRef<(() => boolean) | null>(null);
 

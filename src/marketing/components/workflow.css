@@ -1221,3 +1221,6 @@
 .wf-tab.is-active .n {
   opacity: 0.65;
 }
+
+/* Keep the active step number readable on its white pill. */
+.wf-tab.is-active .n { opacity: 0.65; }

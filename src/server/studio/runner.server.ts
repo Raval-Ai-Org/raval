@@ -112,6 +112,7 @@ import { loadMemories } from "@/server/memory/context.server";
 import { reviewGeneratedImage } from "./image-review.server";
 import {
   loadGenerationVisualSnapshot,
+  loadVisualFeedbackRules,
   resolveVisualReferenceUrls,
 } from "@/server/brand-visuals/service.server";
 import { applyVisualTaste } from "@/lib/brand-visuals/apply";
@@ -897,7 +898,7 @@ function imagePrompt(args: {
       ? "Portrait 4:5 composition: keep the subject centered with generous top and bottom margins."
       : "",
     args.extra ?? "",
-    args.ctx.visualTaste?.rules ?? "",
+    args.ctx.visualTaste?.rules ?? args.ctx.visualFeedbackRules ?? "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -917,7 +918,7 @@ function videoPrompt(
     "Keep on-screen text to at most one short verified phrase; if it cannot be spelled perfectly, use no text. No gibberish, watermarks, invented claims, or other brands' logos.",
     ctx.style ? videoStyleBlock(ctx.style) : "",
     ctx.brandText ? `Brand context:\n${(ctx.visualBrandText ?? ctx.brandText).slice(0, 1200)}` : "",
-    ctx.visualTaste?.rules,
+    ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -972,7 +973,7 @@ async function startMedia(args: {
     if (input.controls.videoPreview) {
       const prompt = [
         `Create one polished first frame for this branded video: ${output.concept ?? input.intent.brief}`,
-        ctx.visualTaste?.rules,
+        ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
         ctx.style ? imageStyleInput(ctx.style)?.block : "",
         "No words, logos, caption boxes or fake interface. Preserve the supplied product identity.",
       ]
@@ -1046,7 +1047,7 @@ async function startMedia(args: {
       spec: output.carousel,
       brandName: ctx.brandName,
       brandContext: ctx.visualBrandText ?? ctx.brandText,
-      visualTasteRules: ctx.visualTaste?.rules,
+      visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
       style: ctx.style ? imageStyleInput(ctx.style) : null,
       revision: refineNote,
       novelty: noveltyNote,
@@ -1086,7 +1087,7 @@ async function startMedia(args: {
           spec: output.carousel,
           brandName: ctx.brandName,
           brandContext: ctx.visualBrandText ?? ctx.brandText,
-          visualTasteRules: ctx.visualTaste?.rules,
+          visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
           ratio,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
@@ -1120,7 +1121,7 @@ async function startMedia(args: {
           spec: output.story!.spec,
           brandName: ctx.brandName,
           brandContext: ctx.visualBrandText ?? ctx.brandText,
-          visualTasteRules: ctx.visualTaste?.rules,
+          visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
@@ -1367,6 +1368,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
           )
         : null;
   ctx.visualTaste = visualTaste;
+  if (!visualTaste && needsMedia(type, input))
+    ctx.visualFeedbackRules = await loadVisualFeedbackRules(job.workspace_id);
   let visualLook: LoadedLook["look"] | null = null;
   if (visualTaste) {
     visualLook = applyVisualTaste(

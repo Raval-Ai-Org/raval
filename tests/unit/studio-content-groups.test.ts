@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   groupRows,
+  matchesStage,
+  PIPELINE_STATUSES,
   sourceOf,
   stageCounts,
   stageOf,
@@ -54,6 +56,50 @@ describe("sourceOf", () => {
 });
 
 describe("groupRows", () => {
+  it("keeps immediate and scheduled publications in the pipeline after successful delivery", () => {
+    const scheduledAt = new Date(Date.now() - 60_000).toISOString();
+    const groups = groupRows(
+      [
+        row({ title: "Published now", body: "a", status: "published" }),
+        row({
+          title: "Published on schedule",
+          body: "b",
+          status: "published",
+          scheduled_at: scheduledAt,
+        }),
+        row({ title: "Still sending", body: "c", status: "publishing" }),
+        row({ title: "Next post", body: "d", status: "scheduled" }),
+        row({ title: "Discarded", body: "e", status: "rejected" }),
+      ].filter((r) => (PIPELINE_STATUSES as readonly string[]).includes(r.status)),
+    );
+    expect(groups).toHaveLength(4);
+    expect(groups.every((g) => matchesStage(g.stage, "scheduled-published"))).toBe(true);
+    expect(groups.filter((g) => g.status === "published").map((g) => g.title)).toEqual([
+      "Published now",
+      "Published on schedule",
+    ]);
+    expect(groups.find((g) => g.title === "Still sending")?.status).toBe("publishing");
+  });
+
+  it("keeps mixed platform versions together and flags unsuccessful deliveries for review", () => {
+    const meta = { group_id: "delivery", source: "studio" };
+    const published = row({ title: "One post", body: "a", status: "published", meta });
+    const scheduled = row({ title: "One post", body: "b", status: "scheduled", meta });
+    const [waiting] = groupRows([published, scheduled]);
+    expect(waiting.ids).toHaveLength(2);
+    expect(waiting.stage).toBe("scheduled");
+    expect(matchesStage(waiting.stage, "scheduled-published")).toBe(true);
+
+    const [complete] = groupRows([published, { ...scheduled, status: "published" }]);
+    expect(complete.stage).toBe("published");
+    expect(complete.status).toBe("published");
+
+    const [failed] = groupRows([published, { ...scheduled, status: "partial_failed" }]);
+    expect(failed.stage).toBe("review");
+    expect(failed.problem).toBe(true);
+    expect(matchesStage(failed.stage, "scheduled-published")).toBe(false);
+  });
+
   it("makes one item per piece of work, titled by the job, with platforms merged", () => {
     const meta = { source: "studio", group_id: "g1", job_id: "j1", job_title: "Pay the farmer" };
     const groups = groupRows([
