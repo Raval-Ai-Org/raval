@@ -42,6 +42,7 @@ import {
   imageStyleInput,
   styleProtectedTerms,
   videoStyleBlock,
+  visualStyleBlock,
   writingStyleBlock,
 } from "@/lib/brand-look/prompt";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
@@ -95,7 +96,7 @@ import { paletteFromDnaColors } from "@/lib/brand-look/resolve";
 import type { CarouselSpecOutput } from "@/lib/studio/jobs";
 import { linkGeneratedCarousel, storeCarouselSlides } from "./carousel-assets.server";
 import { carouselRenderable } from "./carousel-render.server";
-import { linkGeneratedStory } from "./story-assets.server";
+import { linkGeneratedStory, storeStoryFrames } from "./story-assets.server";
 import {
   framesFromMeta,
   normalizeFrames,
@@ -109,6 +110,11 @@ import { studioOutputQualityIssue } from "@/lib/studio/quality";
 import { checkMemoryConformance } from "@/lib/memory/conformance";
 import { loadMemories } from "@/server/memory/context.server";
 import { reviewGeneratedImage } from "./image-review.server";
+import {
+  loadGenerationVisualSnapshot,
+  resolveVisualReferenceUrls,
+} from "@/server/brand-visuals/service.server";
+import { applyVisualTaste } from "@/lib/brand-visuals/apply";
 import {
   carouselBackdropPrompt,
   carouselSlidePrompt,
@@ -139,9 +145,12 @@ type ProviderTask = {
   ratio: AspectRatio;
   prompt: string;
   referenceAssets?: string[];
+  referenceAssetPath?: string;
   /** The workspace's real logo, drawn on by code once the image is finished. */
   logo?: { url: string; corner: LogoCorner };
+  referenceWarning?: string;
   reviewAttempts?: number;
+  compose?: boolean;
   startedAt: number;
   state: "pending" | "done" | "failed";
 };
@@ -565,7 +574,13 @@ async function writeDrafts(
  * Surface a finished group in the pipeline: in Review, or straight in Ready when
  * the user approved the draft it was made from.
  */
-async function revealDrafts(client: Db, workspaceId: string, ids: string[], approve = false) {
+async function revealDrafts(
+  client: Db,
+  workspaceId: string,
+  ids: string[],
+  approve = false,
+  finishedVideo?: { assetId: string; jobId: string },
+) {
   if (!ids.length) return;
   const { data } = await client
     .from("content_items")
@@ -573,7 +588,13 @@ async function revealDrafts(client: Db, workspaceId: string, ids: string[], appr
     .in("id", ids)
     .eq("workspace_id", workspaceId);
   for (const row of (data ?? []) as Array<{ id: string; status: string; meta: unknown }>) {
-    const meta = mergeMeta(row.meta, { studio_state: "ready" });
+    const existingMeta = row.meta as Record<string, unknown> | null;
+    const meta = mergeMeta(row.meta, {
+      studio_state: "ready",
+      ...(finishedVideo && existingMeta?.asset_id === finishedVideo.assetId
+        ? { storyboard_preview: false, job_id: finishedVideo.jobId }
+        : {}),
+    });
     const { error } = await client
       .from("content_items")
       .update({
@@ -722,7 +743,18 @@ function carouselSpec(args: {
     previous: ctx.recent.filter((r) => r.type === "carousel" && r.design).map((r) => r.design),
     palette,
   });
-  const design: CarouselDesign = input.controls.seamless ? { ...picked, flow: "seamless" } : picked;
+  if (ctx.visualTaste?.direction.lockTheme) {
+    Object.assign(picked, {
+      look: ctx.visualTaste.direction.layout,
+      colorway: ctx.visualTaste.direction.colorway,
+      motif: ctx.visualTaste.direction.motif,
+    });
+  }
+  const design: CarouselDesign = input.controls.seamless
+    ? { ...picked, flow: "seamless" }
+    : ctx.visualTaste?.direction.composed
+      ? { ...picked, flow: "composed" }
+      : picked;
   return {
     structure: args.structure,
     design,
@@ -766,6 +798,13 @@ function storyLook(args: {
     previous: args.ctx.recent.filter((r) => r.type === "story" && r.design).map((r) => r.design),
     palette,
   });
+  if (args.ctx.visualTaste?.direction.lockTheme) {
+    Object.assign(design, {
+      look: args.ctx.visualTaste.direction.layout,
+      colorway: args.ctx.visualTaste.direction.colorway,
+      motif: args.ctx.visualTaste.direction.motif,
+    });
+  }
   return {
     design,
     theme: carouselTheme({ palette, fonts, colorway: design.colorway }),
@@ -857,6 +896,7 @@ function imagePrompt(args: {
       ? "Portrait 4:5 composition: keep the subject centered with generous top and bottom margins."
       : "",
     args.extra ?? "",
+    args.ctx.visualTaste?.rules ?? "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -876,6 +916,7 @@ function videoPrompt(
     "Keep on-screen text to at most one short verified phrase; if it cannot be spelled perfectly, use no text. No gibberish, watermarks, invented claims, or other brands' logos.",
     ctx.style ? videoStyleBlock(ctx.style) : "",
     ctx.brandText ? `Brand context:\n${(ctx.visualBrandText ?? ctx.brandText).slice(0, 1200)}` : "",
+    ctx.visualTaste?.rules,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -888,6 +929,7 @@ async function startMedia(args: {
   output: StudioJobOutput;
   platforms: PlatformId[];
   referenceUrl?: string | null;
+  referencePath?: string | null;
   style?: LoadedLook | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
@@ -913,8 +955,45 @@ async function startMedia(args: {
   const noveltyNote = visualAvoidance
     ? `Recent visual concepts to avoid repeating; preserve the brand identity while changing the scene and focal idea:\n${visualAvoidance}`
     : undefined;
+  const approvedReferences = await resolveVisualReferenceUrls(
+    job.workspace_id,
+    output.visualTaste ?? null,
+  );
+  if (output.visualTaste?.references.length && !approvedReferences.length)
+    output.warnings = [
+      ...new Set([
+        ...(output.warnings ?? []),
+        "Visual reference images were unavailable. Saved brand guidance was still applied.",
+      ]),
+    ];
 
   if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
+    if (input.controls.videoPreview) {
+      const prompt = [
+        `Create one polished first frame for this branded video: ${output.concept ?? input.intent.brief}`,
+        ctx.visualTaste?.rules,
+        ctx.style ? imageStyleInput(ctx.style)?.block : "",
+        "No words, logos, caption boxes or fake interface. Preserve the supplied product identity.",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      const started = await startImageTask({
+        prompt,
+        size: IMAGE_SIZE_BY_RATIO[ratio] as ImageSize,
+        referenceAssets: approvedReferences,
+      });
+      return [
+        {
+          slot: "main",
+          kind: "image",
+          ratio,
+          prompt,
+          startedAt: Date.now(),
+          state: "pending",
+          ...started,
+        },
+      ];
+    }
     const seconds = [4, 6, 8].includes(input.controls.durationSec ?? 0)
       ? input.controls.durationSec!
       : 8;
@@ -933,7 +1012,10 @@ async function startMedia(args: {
       durationSec: seconds,
       resolution: input.controls.videoResolution ?? "720P",
       audio: input.controls.audio ?? true,
-      imageUrls: [],
+      imageUrls: [...(args.referenceUrl ? [args.referenceUrl] : []), ...approvedReferences].slice(
+        0,
+        4,
+      ),
     });
     return [
       {
@@ -952,13 +1034,18 @@ async function startMedia(args: {
   // A connected carousel asks for one wide background picture with no words.
   // The slides are drawn over it by code once it is ready (pollStudioJob), so
   // every slide edge still meets.
-  if (job.type === "carousel" && output.slides?.length && isSeamless(output.carousel?.design)) {
+  if (
+    job.type === "carousel" &&
+    output.slides?.length &&
+    (isSeamless(output.carousel?.design) || output.carousel?.design.flow === "composed")
+  ) {
     const prompt = carouselBackdropPrompt({
       slides: output.slides,
       title: output.title,
       spec: output.carousel,
       brandName: ctx.brandName,
       brandContext: ctx.visualBrandText ?? ctx.brandText,
+      visualTasteRules: ctx.visualTaste?.rules,
       style: ctx.style ? imageStyleInput(ctx.style) : null,
       revision: refineNote,
       novelty: noveltyNote,
@@ -966,7 +1053,7 @@ async function startMedia(args: {
     const started = await startImageTask({
       prompt,
       size: IMAGE_SIZE_BY_RATIO[BACKDROP_RATIO] as ImageSize,
-      referenceAssets: [],
+      referenceAssets: approvedReferences,
     });
     return [
       {
@@ -974,7 +1061,7 @@ async function startMedia(args: {
         kind: "image" as const,
         ratio: BACKDROP_RATIO,
         prompt,
-        referenceAssets: [],
+        referenceAssets: approvedReferences,
         startedAt: Date.now(),
         state: "pending" as const,
         ...started,
@@ -984,7 +1071,9 @@ async function startMedia(args: {
 
   const size = IMAGE_SIZE_BY_RATIO[ratio];
   if (!size) throw new StudioJobError(400, `${RATIOS[ratio].label} isn't available for images.`);
-  const referenceAssets = args.referenceUrl ? [args.referenceUrl] : [];
+  const referenceAssets = [
+    ...new Set([...(args.referenceUrl ? [args.referenceUrl] : []), ...approvedReferences]),
+  ].slice(0, 4);
   const seriesReferences = referenceAssets;
   if (job.type === "carousel" && output.slides?.length) {
     return Promise.all(
@@ -996,6 +1085,7 @@ async function startMedia(args: {
           spec: output.carousel,
           brandName: ctx.brandName,
           brandContext: ctx.visualBrandText ?? ctx.brandText,
+          visualTasteRules: ctx.visualTaste?.rules,
           ratio,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
@@ -1029,12 +1119,16 @@ async function startMedia(args: {
           spec: output.story!.spec,
           brandName: ctx.brandName,
           brandContext: ctx.visualBrandText ?? ctx.brandText,
+          visualTasteRules: ctx.visualTaste?.rules,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
         });
+        const renderPrompt = ctx.visualTaste?.direction.composed
+          ? `${prompt}\nRender only the supporting artwork with no words, labels or panels. Exact typography is drawn by Mellox afterward. The source copy describes the mood only.`
+          : prompt;
         const started = await startImageTask({
-          prompt,
+          prompt: renderPrompt,
           size: size as ImageSize,
           referenceAssets: seriesReferences,
         });
@@ -1042,7 +1136,7 @@ async function startMedia(args: {
           slot: `frame:${index}`,
           kind: "image" as const,
           ratio,
-          prompt,
+          prompt: renderPrompt,
           referenceAssets: seriesReferences,
           startedAt: Date.now(),
           state: "pending" as const,
@@ -1060,6 +1154,7 @@ async function startMedia(args: {
       : (concept ?? output.variants?.[0]?.body ?? input.intent.brief);
   // A media refine edits the previous render; otherwise the style's own
   // reference posts (close/exact) steer the look through image-to-image.
+  const compose = !!ctx.visualTaste?.direction.composed && job.type !== "story";
   const prompt = imagePrompt({
     body,
     title: output.title ?? input.intent.brief.slice(0, 80),
@@ -1069,7 +1164,15 @@ async function startMedia(args: {
     ratio,
     seed,
     variationKey,
-    extra: [refineNote, noveltyNote].filter(Boolean).join("\n\n"),
+    extra: [
+      refineNote,
+      noveltyNote,
+      compose
+        ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
+        : undefined,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     style: ctx.style ? imageStyleInput(ctx.style) : null,
   });
   const started = await startImageTask({
@@ -1085,6 +1188,7 @@ async function startMedia(args: {
   return [
     {
       slot: "main",
+      compose,
       kind: "image",
       ratio,
       prompt,
@@ -1251,6 +1355,31 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     { ...base, style: style?.look.customized ? style.look : null },
     input,
   );
+  const visualTaste =
+    input.refine && parent?.output?.visualTaste
+      ? structuredClone(parent.output.visualTaste)
+      : needsMedia(type, input)
+        ? await loadGenerationVisualSnapshot(
+            job.workspace_id,
+            type === "story" && input.controls.storyMode === "video" ? "story-video" : type,
+            input.controls.campaign,
+          )
+        : null;
+  ctx.visualTaste = visualTaste;
+  let visualLook: LoadedLook["look"] | null = null;
+  if (visualTaste) {
+    visualLook = applyVisualTaste(
+      style?.look ?? (await loadBrandLook(job.workspace_id)).look,
+      input.refine && parent?.output?.visualTaste ? undefined : style?.dna?.look,
+      visualTaste,
+    );
+    visualTaste.direction = {
+      ...visualTaste.direction,
+      visual: visualLook.visual,
+      video: visualLook.video,
+    };
+    visualTaste.rules = `${visualTaste.rules.split("\n\nRequired resolved visual settings")[0]}\n\nRequired resolved visual settings (these override inferred observations):\n${visualStyleBlock(visualLook)}\n${videoStyleBlock(visualLook)}`;
+  }
 
   const mediaOnly = !!input.refine && input.refine.target === "media" && !!parent;
   const addPlatforms = !!input.refine && input.refine.target === "platforms" && !!parent;
@@ -1429,6 +1558,18 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     angle: angle.label,
     partial: partial.length ? partial : undefined,
   });
+  if (visualTaste) output.visualTaste = visualTaste;
+  if (visualTaste?.direction.composed && !["video", "carousel", "story"].includes(type))
+    output.artwork = {
+      headline: output.title ?? input.intent.brief.slice(0, 90),
+      brandName: ctx.brandName,
+    };
+  if (
+    (type === "video" || (type === "story" && input.controls.storyMode === "video")) &&
+    input.controls.videoPreview
+  )
+    output.storyboard = { status: "preview" };
+  else if (output.storyboard) output.storyboard = { ...output.storyboard, status: "rendering" };
   // Second pass: rewrite only the captions that still read like AI marketing
   // copy (cliché phrasing, robotic structure). Most ship untouched — this
   // only ever replaces a variant with a validated, fact-preserving rewrite,
@@ -1457,6 +1598,11 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   if (addPlatforms && parent?.output) {
     output = mergeAddedPlatforms(parent.output, output, platforms);
   }
+  if (visualTaste?.warnings.length)
+    output.warnings = [...new Set([...(output.warnings ?? []), ...visualTaste.warnings])];
+  // Keep caption generation and its rewrite on the existing writing style.
+  // The approved visual layer is applied only when designing/rendering media.
+  if (visualLook) ctx.style = visualLook;
   const title = (output.title || input.intent.brief).slice(0, 120);
   if (type === "carousel" && output.slides?.length) {
     output = {
@@ -1498,6 +1644,9 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         // The job's headline, so every surface titles the piece consistently.
         job_title: title,
         brand_version: brandVersion(input.brand),
+        ...(visualTaste ? { visual_profile_id: visualTaste.profileId } : {}),
+        storyboard_preview: output.storyboard?.status === "preview",
+        ...(output.storyboard ? { requires_visual_video: true } : {}),
         ...(needsMedia(type, input) ? { aspect_ratio: mediaRatio(type, input, platforms) } : {}),
       },
       addPlatforms,
@@ -1526,7 +1675,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     type === "carousel" &&
     output.slides?.length &&
     output.carousel &&
-    isSeamless(output.carousel.design) &&
+    (isSeamless(output.carousel.design) || output.carousel.design.flow === "composed") &&
     !carouselRenderable({ slides: output.slides, brand: output.carousel.brand })
   ) {
     const { flow: _flow, ...plain } = output.carousel.design;
@@ -1541,17 +1690,38 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       ],
     };
   }
-  const connected = type === "carousel" && isSeamless(output.carousel?.design);
+  const connected =
+    type === "carousel" &&
+    (isSeamless(output.carousel?.design) || output.carousel?.design.flow === "composed");
 
   if (needsMedia(type, input) && !addPlatforms) {
     await setStage(client, job.id, "render");
     let referenceUrl: string | null = null;
+    let referencePath: string | null = null;
     const currentMedia = parent?.output?.media?.find((m) => m.status === "ready");
-    if (mediaOnly && currentMedia?.storagePath && currentMedia.kind === "image") {
-      referenceUrl = await signAssetPath(currentMedia.storagePath);
+    const savedFrame =
+      currentMedia?.kind === "image"
+        ? currentMedia.storagePath
+        : parent?.output?.storyboard?.storagePath;
+    if (mediaOnly && savedFrame && isWorkspaceStoragePath(savedFrame, job.workspace_id)) {
+      referenceUrl = await signAssetPath(savedFrame);
+      referencePath = savedFrame;
     }
     try {
-      const tasks = await startMedia({ job, input, ctx, output, platforms, referenceUrl, style });
+      const tasks = await startMedia({
+        job,
+        input,
+        ctx,
+        output,
+        platforms,
+        referenceUrl,
+        referencePath,
+        style,
+      });
+      for (const task of tasks) {
+        if (output.visualTaste) task.referenceAssets = undefined;
+        if (referencePath) task.referenceAssetPath = referencePath;
+      }
       const media: MediaOutput[] = tasks.map((t) => ({
         slot: t.slot,
         kind: t.kind,
@@ -1598,7 +1768,12 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     completed_at: new Date().toISOString(),
   });
   if (!mediaOnly) {
-    await revealDrafts(client, job.workspace_id, job.content_item_ids, !!input.approve);
+    await revealDrafts(
+      client,
+      job.workspace_id,
+      job.content_item_ids,
+      !!input.approve && output.storyboard?.status !== "preview",
+    );
     await retireSourceDraft(client, job.workspace_id, input.fromContentId, job.id);
   }
 }
@@ -1781,7 +1956,13 @@ async function startStudioVideo(opts: {
   resolution: "480P" | "720P" | "1080P";
   audio: boolean;
   imageUrls: string[];
-}): Promise<{ taskId: string; model: string; provider: string; route: string }> {
+}): Promise<{
+  taskId: string;
+  model: string;
+  provider: string;
+  route: string;
+  referenceWarning?: string;
+}> {
   // The most expensive call in the product: quota + spend ceiling apply.
   await enforceBudget("video");
   const submitted = await routedVideoProvider.submit({
@@ -1792,6 +1973,7 @@ async function startStudioVideo(opts: {
     resolution: opts.resolution.toLowerCase() as UgcResolution,
     audio: opts.audio,
     imageUrls: opts.imageUrls,
+    requireReferences: opts.imageUrls.length > 0,
   });
   if (!submitted.ok) throw new StudioJobError(submitted.retryable ? 503 : 502, submitted.message);
   return {
@@ -1799,6 +1981,12 @@ async function startStudioVideo(opts: {
     model: submitted.providerModel,
     provider: submitted.provider,
     route: "video",
+    ...((submitted.request.visual_references as { limited?: boolean; used?: number } | undefined)
+      ?.limited
+      ? {
+          referenceWarning: `This video provider uses ${(submitted.request.visual_references as { used: number }).used} reference image(s). Other style evidence is applied through the saved brand rules.`,
+        }
+      : {}),
   };
 }
 
@@ -1872,7 +2060,10 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
   const tasks = [...row.provider_tasks];
   const media = [...(row.output?.media ?? [])];
   const assetIds = [...(row.asset_ids ?? [])];
-  const warnings = [...(row.output?.warnings ?? [])];
+  const warnings = [
+    ...(row.output?.warnings ?? []),
+    ...tasks.flatMap((task) => (task.referenceWarning ? [task.referenceWarning] : [])),
+  ];
   let stage: StageId = row.stage;
 
   for (const task of tasks) {
@@ -1898,7 +2089,18 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
             prompt: task.prompt,
             size,
             model: next,
-            referenceAssets: task.referenceAssets,
+            referenceAssets: !row.output?.visualTaste
+              ? task.referenceAssets
+              : [
+                  ...(task.referenceAssetPath &&
+                  isWorkspaceStoragePath(task.referenceAssetPath, row.workspace_id)
+                    ? [await signAssetPath(task.referenceAssetPath)].filter((s): s is string => !!s)
+                    : []),
+                  ...(await resolveVisualReferenceUrls(
+                    row.workspace_id,
+                    row.output?.visualTaste ?? null,
+                  )),
+                ].slice(0, 4),
           });
           Object.assign(task, {
             taskId: restarted.taskId,
@@ -1914,10 +2116,86 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       stage = "save";
       await setStage(c, row.id, "save");
-      const finalImage =
+      if (task.kind === "video" && row.output?.visualTaste) {
+        try {
+          const { sampleVideoFrames } = await import("@/server/brand-visuals/video-frames.server");
+          const { safeFetch } = await import("@/server/safe-fetch");
+          const bytes = check.dataUrl
+            ? Buffer.from(check.dataUrl.split(",")[1], "base64")
+            : Buffer.from(
+                (
+                  await safeFetch(check.url!, {
+                    maxBytes: 50 * 1024 * 1024,
+                    timeoutMs: 15_000,
+                    onOverflow: "error",
+                  })
+                ).bytes,
+              );
+          const sampled = await sampleVideoFrames(
+            bytes,
+            /^data:video\/webm/i.test(check.dataUrl ?? "") ? "video/webm" : "video/mp4",
+          );
+          const references = await resolveVisualReferenceUrls(
+            row.workspace_id,
+            row.output.visualTaste,
+          );
+          for (const [index, frame] of sampled.frames.entries()) {
+            const review = await reviewGeneratedImage(
+              `data:image/png;base64,${frame.bytes.toString("base64")}`,
+              `${row.output.concept ?? row.title} · Video frame at ${frame.time.toFixed(1)} seconds`,
+              undefined,
+              { rules: row.output.visualTaste.rules, references },
+            );
+            if (review?.status === "warn")
+              warnings.push(...review.issues.map((issue) => `Video brand review: ${issue}`));
+            else if (!review)
+              warnings.push(
+                "Video brand review was unavailable. Check the video before publishing.",
+              );
+            await persistAsset({
+              workspaceId: row.workspace_id,
+              idempotencyKey: `video-review:${row.id}:${task.taskId}:${index}`,
+              bytes: frame.bytes,
+              assetType: "image",
+              mimeType: "image/png",
+              metadata: { source: "video_review_frame", job_id: row.id, time: frame.time },
+            });
+          }
+          warnings.push("Check audio and caption timing before publishing this video.");
+        } catch {
+          warnings.push(
+            "Video frame review was unavailable. Check the finished video before publishing.",
+          );
+        }
+      }
+      let finalImage =
         check.dataUrl && task.kind === "image"
           ? await fitPortraitImage(check.dataUrl, task.ratio)
           : check.dataUrl;
+      if (task.compose && finalImage && row.output?.visualTaste && row.output.artwork) {
+        const art = await persistAsset({
+          workspaceId: row.workspace_id,
+          idempotencyKey: `studio-art:${row.id}:${task.slot}:${task.taskId}`,
+          dataUrl: finalImage,
+          assetType: "image",
+          metadata: { source: "visual_composition_background", job_id: row.id },
+        });
+        if (!art.ok || !art.asset.storage_path)
+          throw new Error("The editable image background could not be saved.");
+        row.output.artwork = { ...row.output.artwork, artStoragePath: art.asset.storage_path };
+        const { composeVisualArtwork } = await import("@/server/brand-visuals/compose.server");
+        const composed = await composeVisualArtwork({
+          art: Buffer.from(finalImage.split(",")[1], "base64"),
+          snapshot: row.output.visualTaste,
+          headline: row.output.artwork.headline,
+          brandName: row.output.artwork.brandName,
+          ratio: task.ratio,
+          onWarning: (message) => warnings.push(message),
+        });
+        finalImage = `data:image/jpeg;base64,${composed.toString("base64")}`;
+      }
+      if (row.output?.visualTaste && finalImage && task.kind === "image" && task.logo)
+        finalImage = await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner);
       const imageReview =
         task.kind === "image" && finalImage
           ? await reviewGeneratedImage(
@@ -1925,19 +2203,45 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
               [row.title, row.output?.concept, task.prompt.slice(-1900), task.prompt.slice(0, 350)]
                 .filter(Boolean)
                 .join("\n"),
+              undefined,
+              row.output?.visualTaste
+                ? {
+                    rules: row.output.visualTaste.rules,
+                    references: await resolveVisualReferenceUrls(
+                      row.workspace_id,
+                      row.output.visualTaste,
+                    ),
+                  }
+                : undefined,
             )
           : null;
-      if (imageReview?.status === "warn" && (task.reviewAttempts ?? 0) < 1) {
+      const artIssues =
+        imageReview?.issues.filter(
+          (issue) =>
+            !task.compose || !/typograph|font|spelling|text|letter|logo|headline/i.test(issue),
+        ) ?? [];
+      if (imageReview?.status === "warn" && artIssues.length && (task.reviewAttempts ?? 0) < 1) {
         const repairPrompt = [
           task.prompt,
           "The previous render was rejected by visual quality review. Correct these specific visible defects and create a fresh, polished composition:",
-          ...imageReview.issues.map((issue) => `- ${issue}`),
+          ...artIssues.map((issue) => `- ${issue}`),
           "Preserve the supplied brand identity and exact verified copy. Do not recreate the defect.",
         ].join("\n");
         const restarted = await startImageTask({
           prompt: repairPrompt,
           size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
-          referenceAssets: task.referenceAssets,
+          referenceAssets: !row.output?.visualTaste
+            ? task.referenceAssets
+            : [
+                ...(task.referenceAssetPath &&
+                isWorkspaceStoragePath(task.referenceAssetPath, row.workspace_id)
+                  ? [await signAssetPath(task.referenceAssetPath)].filter((s): s is string => !!s)
+                  : []),
+                ...(await resolveVisualReferenceUrls(
+                  row.workspace_id,
+                  row.output?.visualTaste ?? null,
+                )),
+              ].slice(0, 4),
         });
         Object.assign(task, {
           taskId: restarted.taskId,
@@ -1954,7 +2258,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       if (task.kind === "image" && !imageReview)
         warnings.push("Visual review was unavailable. Check this artwork before publishing.");
       const savedImage =
-        finalImage && task.kind === "image" && task.logo
+        !row.output?.visualTaste && finalImage && task.kind === "image" && task.logo
           ? await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner)
           : finalImage;
       const persisted = await persistAsset({
@@ -1993,6 +2297,16 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         continue;
       }
       task.state = "done";
+      if (row.output?.storyboard) {
+        if (task.kind === "video")
+          row.output.storyboard = { ...row.output.storyboard, status: "ready" };
+        else if (row.output.storyboard.status === "preview")
+          row.output.storyboard = {
+            ...row.output.storyboard,
+            assetId: persisted.asset.id,
+            storagePath: persisted.asset.storage_path ?? undefined,
+          };
+      }
       assetIds.push(persisted.asset.id);
       setMedia({
         status: "ready",
@@ -2026,7 +2340,10 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
     const isRefine = !!row.parent_job_id;
     // A connected carousel is drawn by code; its background picture is a
     // bonus, so a failed one never fails the carousel.
-    const connected = row.type === "carousel" && isSeamless(row.output?.carousel?.design);
+    const connected =
+      row.type === "carousel" &&
+      (isSeamless(row.output?.carousel?.design) ||
+        row.output?.carousel?.design.flow === "composed");
     const incompleteSeries =
       !connected && (row.type === "carousel" || row.type === "story") && failed.length > 0;
     if (
@@ -2086,16 +2403,45 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         });
       }
       if (row.type === "story" && row.output?.story?.mode === "frames") {
-        linked = await linkGeneratedStory({
-          workspaceId: row.workspace_id,
-          contentItemIds: row.content_item_ids,
-          frames: row.output.story.frames,
-          assets: row.output.story.frames.map((_, i) => {
-            const m = media.find((entry) => entry.slot === `frame:${i}`);
-            return { id: m?.assetId ?? "", path: m?.storagePath ?? "" };
-          }),
-        });
+        if (row.output.visualTaste?.direction.composed && row.output.story.spec) {
+          const stored = await storeStoryFrames({
+            workspaceId: row.workspace_id,
+            contentItemIds: row.content_item_ids,
+            frames: row.output.story.frames,
+            look: row.output.story.spec,
+            backgroundPaths: row.output.story.frames.map(
+              (_, i) => media.find((m) => m.slot === `frame:${i}`)?.storagePath ?? null,
+            ),
+          });
+          linked = !!stored;
+          if (stored) {
+            const { data: composedAssets } = await c
+              .from("assets")
+              .select("id,storage_path")
+              .eq("workspace_id", row.workspace_id)
+              .in("storage_path", stored.paths);
+            for (const [i, path] of stored.paths.entries()) {
+              const asset = composedAssets?.find((a) => a.storage_path === path);
+              const m = media.find((entry) => entry.slot === `frame:${i}`);
+              if (m) {
+                m.storagePath = path;
+                m.assetId = asset?.id;
+              }
+              if (asset) assetIds.push(asset.id);
+            }
+          }
+        } else
+          linked = await linkGeneratedStory({
+            workspaceId: row.workspace_id,
+            contentItemIds: row.content_item_ids,
+            frames: row.output.story.frames,
+            assets: row.output.story.frames.map((_, i) => {
+              const m = media.find((entry) => entry.slot === `frame:${i}`);
+              return { id: m?.assetId ?? "", path: m?.storagePath ?? "" };
+            }),
+          });
       }
+      patch.asset_ids = [...new Set(assetIds)];
       if (!linked) {
         Object.assign(patch, {
           status: "failed",
@@ -2107,7 +2453,18 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         });
         if (!isRefine) await markDraftsFailed(c, row.workspace_id, row.content_item_ids);
       } else {
-        await revealDrafts(c, row.workspace_id, row.content_item_ids, !!row.input?.approve);
+        await revealDrafts(
+          c,
+          row.workspace_id,
+          row.content_item_ids,
+          !!row.input?.approve && row.output?.storyboard?.status !== "preview",
+          media.find((m) => m.kind === "video" && m.status === "ready" && m.assetId)
+            ? {
+                assetId: media.find((m) => m.kind === "video" && m.status === "ready")!.assetId!,
+                jobId: row.id,
+              }
+            : undefined,
+        );
         await retireSourceDraft(c, row.workspace_id, row.input?.fromContentId, row.id);
       }
     }

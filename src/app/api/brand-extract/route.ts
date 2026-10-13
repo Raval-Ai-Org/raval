@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { after } from "next/server";
 import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { assertPublicUrl } from "@/server/safe-fetch";
@@ -117,6 +118,38 @@ export const POST = defineRoute({
               controller.enqueue(encoder.encode(JSON.stringify(finalEvent) + "\n"));
             } catch {
               // Provider work finished; capture remains valid after disconnect.
+            }
+            if (target.workspaceId && target.role !== "viewer") {
+              const workspaceId = target.workspaceId;
+              after(async () => {
+                try {
+                  const db = supabaseAdmin as unknown as SupabaseClient;
+                  const existing = await db
+                    .from("brand_visual_capture_jobs")
+                    .select("id")
+                    .eq("workspace_id", workspaceId)
+                    .limit(1);
+                  if (existing.error || existing.data?.length) return;
+                  const { startVisualCapture } =
+                    await import("@/server/brand-visuals/service.server");
+                  const job = await startVisualCapture(
+                    { workspaceId, userId, role: target.role },
+                    {
+                      url: safeUrl.href,
+                      idempotencyKey: `initial-visual:${workspaceId}`,
+                      maxPages: 4,
+                    },
+                  );
+                  const { advanceVisualCapture } =
+                    await import("@/server/brand-visuals/worker.server");
+                  await advanceVisualCapture(job.id, workspaceId);
+                } catch (error) {
+                  console.warn(
+                    "[brand-extract] visual capture could not start",
+                    error instanceof Error ? error.message : error,
+                  );
+                }
+              });
             }
           } else {
             await charge?.release();

@@ -84,6 +84,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   // Brand DNA runs once per brand and everything builds on it.
   "brand-extract": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
   "brand-extract.search": tier(ECONOMY, "low"),
+  "brand-visuals.analyze": tier(PREMIUM, "medium", { maxTokens: 6_000 }),
 
   "memory-extract": tier(WORKHORSE, "low"),
   "file-extract": tier(ECONOMY, "low", {
@@ -133,6 +134,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.research": tier(WORKHORSE, "medium"),
   "studio.trends": tier(WORKHORSE, "low"),
   "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
+  "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "campaign-generation": tier(PREMIUM, "low"),
   "schedule.*": tier(WORKHORSE, "medium"),
 

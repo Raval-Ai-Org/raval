@@ -70,6 +70,33 @@ export function kieCallbackUrl(): string | undefined {
 }
 
 export const renderEngine = createRenderEngine({
+  visualContext: async (row) => {
+    const { loadGenerationVisualSnapshot, resolveVisualReferenceUrls } =
+      await import("@/server/brand-visuals/service.server");
+    const snapshot =
+      (row.provider_meta.visualTaste as
+        import("@/lib/brand-visuals/contracts").VisualSnapshot | undefined) ??
+      (await loadGenerationVisualSnapshot(row.workspace_id, "ugc"));
+    if (snapshot && !row.provider_meta.visualTaste) {
+      const { applyVisualTaste } = await import("@/lib/brand-visuals/apply");
+      const { visualStyleBlock, videoStyleBlock } = await import("@/lib/brand-look/prompt");
+      const loaded = await loadBrandLook(row.workspace_id);
+      const resolved = applyVisualTaste(loaded.look, loaded.dna?.look, snapshot);
+      snapshot.direction = {
+        ...snapshot.direction,
+        visual: resolved.visual,
+        video: resolved.video,
+      };
+      snapshot.rules = `${snapshot.rules}\n\nRequired resolved visual settings:\n${visualStyleBlock(resolved)}\n${videoStyleBlock(resolved)}`;
+    }
+    return snapshot
+      ? {
+          rules: snapshot.rules,
+          urls: await resolveVisualReferenceUrls(row.workspace_id, snapshot),
+          snapshot,
+        }
+      : null;
+  },
   store: supabaseUgcStore,
   provider: routedVideoProvider,
   callbackUrl: kieCallbackUrl,

@@ -265,6 +265,14 @@ export function ControlsPanel({
                     aria-label="Sound"
                   />
                 </label>
+                <label className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2">
+                  <span className="text-xs font-medium text-foreground">Preview a frame first</span>
+                  <Switch
+                    checked={c.videoPreview ?? false}
+                    onCheckedChange={(videoPreview) => set({ videoPreview })}
+                    aria-label="Preview a frame first"
+                  />
+                </label>
               </div>
             ) : null}
 
@@ -278,6 +286,18 @@ export function ControlsPanel({
                   value={c.tone ?? ""}
                   onChange={(e) => set({ tone: e.target.value.slice(0, 80) || undefined })}
                   placeholder="e.g. Friendly and relaxed"
+                  className={INPUT}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="studio-visual-campaign" hint="Optional">
+                  Campaign references
+                </FieldLabel>
+                <input
+                  id="studio-visual-campaign"
+                  value={c.campaign ?? ""}
+                  onChange={(e) => set({ campaign: e.target.value.slice(0, 120) || undefined })}
+                  placeholder="Campaign name"
                   className={INPUT}
                 />
               </div>

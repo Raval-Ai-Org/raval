@@ -54,6 +54,11 @@ export type RoutedProviderDeps = {
 function requestFor(req: VideoRenderRequest, provider: VideoProviderId): VideoRenderRequest | null {
   const model: UgcModel | null = specFor(req.model, provider);
   if (!model) return null;
+  if (
+    usableImageCount(model, req.imageUrls.length) <
+    (req.requiredReferenceCount ?? (req.requireReferences ? 1 : 0))
+  )
+    return null;
   const settings = coerceRenderSettings(model, {
     model: model.key,
     durationSec: req.durationSec,
@@ -104,7 +109,20 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
       const first = deps.primary ? primary() : req.model.provider;
       const firstReq = requestFor(req, first);
       let result: SubmitResult | null = firstReq ? await providers[first].submit(firstReq) : null;
-      if (result?.ok) return result;
+      if (result?.ok) {
+        if (!req.requireReferences && !req.requiredReferenceCount) return result;
+        return {
+          ...result,
+          request: {
+            ...result.request,
+            visual_references: {
+              requested: req.imageUrls.length,
+              used: firstReq!.imageUrls.length,
+              limited: firstReq!.imageUrls.length < req.imageUrls.length,
+            },
+          },
+        };
+      }
 
       const second = first === "kie" ? fallback(first) : null;
       const refusedOutright =
@@ -118,7 +136,9 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
           result ?? {
             ok: false,
             code: "provider_model_unavailable",
-            message: "This video model isn't available on the configured provider.",
+            message: req.requireReferences
+              ? "This video model cannot preserve the required identity images. Choose a compatible model or fewer identity references."
+              : "This video model isn't available on the configured provider.",
             retryable: false,
           }
         );
@@ -140,7 +160,20 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
         reason: result && !result.ok ? result.code : "no_model",
       });
       const retried = await providers[second].submit(secondReq);
-      if (retried.ok) return retried;
+      if (retried.ok) {
+        if (!req.requireReferences && !req.requiredReferenceCount) return retried;
+        return {
+          ...retried,
+          request: {
+            ...retried.request,
+            visual_references: {
+              requested: req.imageUrls.length,
+              used: secondReq.imageUrls.length,
+              limited: secondReq.imageUrls.length < req.imageUrls.length,
+            },
+          },
+        };
+      }
       // Report the fallback's failure, but only retry later when either could still succeed.
       result = {
         ...retried,

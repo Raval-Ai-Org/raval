@@ -30,6 +30,9 @@ export const LEASE_SECONDS = 120;
 const IMAGE_URL_TTL_SECONDS = 6 * 60 * 60;
 
 export type EngineDeps = {
+  visualContext?: (
+    row: RenderRow,
+  ) => Promise<{ rules: string; urls: string[]; snapshot: unknown } | null>;
   store: UgcRenderStore;
   provider: VideoProvider;
   now?: () => number;
@@ -98,14 +101,38 @@ export function createRenderEngine(deps: EngineDeps) {
       }
     }
 
+    let visual: Awaited<ReturnType<NonNullable<EngineDeps["visualContext"]>>> = null;
+    const frozenWithoutProfile =
+      current.provider_meta.visualTasteResolved === true && !current.provider_meta.visualTaste;
+    const legacyRetry = current.submit_attempts > 0 && !current.provider_meta.visualTaste;
+    if (!frozenWithoutProfile && !legacyRetry) {
+      try {
+        visual = (await deps.visualContext?.(current)) ?? null;
+      } catch (error) {
+        log.warn("ugc.visual_context.unavailable", { renderId: current.id, error });
+      }
+    }
+    if (deps.visualContext && current.provider_meta.visualTasteResolved !== true) {
+      const frozen = await store.transition(current.id, ["submitting"], {
+        provider_meta: {
+          ...current.provider_meta,
+          visualTaste: visual?.snapshot ?? null,
+          visualTasteResolved: true,
+        },
+      });
+      if (!frozen) return (await store.getRender(current.id)) ?? current;
+      current.provider_meta = frozen.provider_meta;
+    }
     const result = await provider.submit({
       model,
-      prompt: current.prompt,
+      prompt: [current.prompt, visual?.rules].filter(Boolean).join("\n\n"),
       durationSec: current.duration_sec,
       aspectRatio: current.aspect_ratio as UgcAspectRatio,
       resolution: current.resolution as UgcResolution,
       audio: current.audio,
-      imageUrls,
+      imageUrls: visual ? [...new Set([...imageUrls, ...visual.urls])] : imageUrls,
+      // Legacy requests retain their provider's existing reference/fallback limits.
+      ...(visual?.urls.length ? { requireReferences: true, requiredReferenceCount: 1 } : {}),
       callbackUrl: deps.callbackUrl?.(),
     });
     const t = now();

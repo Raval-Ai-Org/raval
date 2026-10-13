@@ -84,6 +84,15 @@ const nextConfig: NextConfig = {
   // into its own directory instead of fighting over .next.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   poweredByHeader: false,
+  // Optional verification on small disks; normal development/deployment caching is unchanged.
+  ...(process.env.MELLOX_BUILD_WITHOUT_CACHE === "true"
+    ? {
+        webpack(config: Parameters<NonNullable<NextConfig["webpack"]>>[0]) {
+          config.cache = false;
+          return config;
+        },
+      }
+    : {}),
   // playwright-core drives the AI Visibility rendering fallback; typescript
   // parses proposed code changes. Both are large and must not be bundled.
   serverExternalPackages: ["pdfjs-dist", "mammoth", "xlsx", "playwright-core", "typescript"],

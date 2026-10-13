@@ -8,8 +8,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { resolveLook, type BrandLook } from "@/lib/brand-look/resolve";
+import { applyVisualTaste } from "@/lib/brand-visuals/apply";
+import { loadGenerationVisualSnapshot } from "@/server/brand-visuals/service.server";
+import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 
 export type LoadedLook = {
+  visualTaste?: VisualSnapshot | null;
   look: BrandLook;
   /** The stored Brand DNA this was resolved against (server copy, never the browser's). */
   dna: Record<string, unknown> | null;
@@ -27,18 +31,33 @@ const admin = () => supabaseAdmin as unknown as SupabaseClient;
 
 export async function loadBrandLook(
   workspaceId: string,
-  opts: { dna?: Record<string, unknown> | null } = {},
+  opts: { dna?: Record<string, unknown> | null; includeVisualTaste?: boolean } = {},
 ): Promise<LoadedLook> {
+  // Existing writing/chat callers retain the original Look. Media callers opt in.
+  const withVisualTaste = async (value: LoadedLook): Promise<LoadedLook> => {
+    if (!opts.includeVisualTaste) return value;
+    const visualTaste = await loadGenerationVisualSnapshot(workspaceId, "image");
+    return {
+      ...value,
+      visualTaste,
+      look: applyVisualTaste(value.look, value.dna?.look, visualTaste),
+    };
+  };
   if (opts.dna !== undefined) {
-    return { look: resolveLook(opts.dna as never), dna: opts.dna ?? null };
+    return withVisualTaste({
+      look: resolveLook(opts.dna as never),
+      dna: opts.dna ?? null,
+    });
   }
   const hit = cache.get(workspaceId);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
+  if (hit && Date.now() - hit.at < TTL_MS) {
+    return withVisualTaste(hit.value);
+  }
   const stored = await readBrandDna(admin(), workspaceId).catch(() => null);
   const dna = stored?.dna ?? null;
   const value: LoadedLook = { look: resolveLook(dna as never), dna };
   cache.set(workspaceId, { at: Date.now(), value });
-  return value;
+  return withVisualTaste(value);
 }
 
 /**

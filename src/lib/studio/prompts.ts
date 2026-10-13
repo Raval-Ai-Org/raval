@@ -8,6 +8,7 @@ import type { MarketingMoment } from "./moments";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { templateDirective } from "./templates";
 import type { BrandLook } from "@/lib/brand-look/resolve";
+import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import { slidePlanText, type CarouselStructure } from "./carousel/story";
 import { framePlanText, type StoryTheme } from "@/lib/stories/frames";
 import { consistencySection, memorySection, type HookStyle } from "./memory";
@@ -26,6 +27,7 @@ import type {
 /* ───────────────────────── Context ───────────────────────── */
 
 export type StudioContext = {
+  visualTaste?: VisualSnapshot | null;
   brandName: string;
   /** Serialized Brand DNA (serializeBrandContext). */
   brandText: string;
@@ -312,6 +314,7 @@ function sharedUser(
   return [
     { label: "Brand", body: ctx.brandText || `Brand: ${ctx.brandName}` },
     styleSection(ctx, format),
+    { label: "Approved visual direction", body: ctx.visualTaste?.rules },
     {
       label: "Business",
       body: [

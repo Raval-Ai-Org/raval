@@ -66,6 +66,7 @@ export async function createBilledStudioJob(args: {
     length: input.controls.length,
     regenerate: Boolean(input.regenerate || input.parentJobId),
     storyMode: input.controls.storyMode,
+    videoPreview: input.controls.videoPreview,
   });
   const billingRoute =
     input.type === "story" && input.controls.storyMode === "video"

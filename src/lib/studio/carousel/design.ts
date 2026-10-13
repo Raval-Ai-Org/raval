@@ -32,7 +32,7 @@ export type CarouselDesign = {
    * the last slide's right edge meets the first slide's left edge, so the
    * carousel also reads as a loop. Absent for an ordinary carousel.
    */
-  flow?: "seamless";
+  flow?: "seamless" | "composed";
 };
 
 export function isSeamless(design: { flow?: string } | null | undefined): boolean {
@@ -202,7 +202,17 @@ export function safeDesign(raw: unknown): CarouselDesign | null {
   const motif = CAROUSEL_MOTIFS.find((x) => x === d.motif);
   if (!look || !colorway || !motif) return null;
   // Key order is part of the stored hash: `flow` always comes last.
-  return { v: 1, look, colorway, motif, ...(d.flow === "seamless" ? { flow: "seamless" } : {}) };
+  return {
+    v: 1,
+    look,
+    colorway,
+    motif,
+    ...(d.flow === "seamless"
+      ? { flow: "seamless" as const }
+      : d.flow === "composed"
+        ? { flow: "composed" as const }
+        : {}),
+  };
 }
 
 /**

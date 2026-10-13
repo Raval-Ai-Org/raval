@@ -21,6 +21,7 @@ import { PaletteEditor } from "./ColorPicker";
 import { ChipsInput, Field, FontPicker, Segmented, ToneSlider } from "./controls";
 import { MoodChips } from "./look";
 import { LOOK_PRESETS, type LookPreset } from "./presets";
+import { VisualTastePanel } from "./VisualTastePanel";
 import {
   PostPreview,
   SlidePreview,
@@ -104,7 +105,15 @@ export function LookTilePreview({ dna }: { dna: BrandDna }) {
   );
 }
 
-export function LookEditor({ dna, save }: { dna: BrandDna; save: Save }) {
+export function LookEditor({
+  dna,
+  save,
+  workspaceId,
+}: {
+  dna: BrandDna;
+  save: Save;
+  workspaceId?: string | null;
+}) {
   const spec = React.useMemo(() => parseLook(dna.look), [dna.look]);
   const look = React.useMemo(() => resolveLook(dna as never), [dna]);
   useLookFonts(look);
@@ -159,6 +168,7 @@ export function LookEditor({ dna, save }: { dna: BrandDna; save: Save }) {
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
       <div className="min-w-0 space-y-4">
+        {workspaceId && <VisualTastePanel key={workspaceId} workspaceId={workspaceId} dna={dna} />}
         <Section title="Start from a look">
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {LOOK_PRESETS.map((preset, i) => {
@@ -466,6 +476,18 @@ export function LookEditor({ dna, save }: { dna: BrandDna; save: Save }) {
         </Section>
 
         <Section title="Video">
+          <Field
+            label="Motion direction"
+            hint="Camera movement, transitions, music and the feeling to keep"
+          >
+            <textarea
+              className={cn(dsFocus, "ds-well w-full px-3 py-2.5 text-[13px]")}
+              rows={2}
+              maxLength={600}
+              value={vid.notes ?? ""}
+              onChange={(e) => setVideo({ notes: e.target.value || undefined })}
+            />
+          </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Pace">
               <Segmented
