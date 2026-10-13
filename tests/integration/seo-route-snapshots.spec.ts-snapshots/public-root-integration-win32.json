@@ -13,7 +13,7 @@
   "canonical": "https://mellox.ai",
   "hreflang": [],
   "robots": "index, follow",
-  "h1": "Don’t just rank. Be recommended.Don’t just rank.Be recommended.",
+  "h1": "Don’t just rank. Be recommended.",
   "jsonLdTypes": [
     "FAQPage",
     "Organization",
@@ -41,20 +41,6 @@
       "url": "https://mellox.ai",
       "name": "Mellox AI",
       "hasDescription": true,
-      "publisherRef": null,
-      "logoUrl": "https://mellox.ai/_next/static/media/Favicon-updated.226a0354.png",
-      "offersCount": null,
-      "offerPrices": null,
-      "faqQuestionCount": null,
-      "breadcrumbDepth": null,
-      "inLanguage": null
-    },
-    {
-      "type": "Organization",
-      "id": "https://mellox.ai/#organization",
-      "url": "https://mellox.ai",
-      "name": "Mellox AI",
-      "hasDescription": false,
       "publisherRef": null,
       "logoUrl": "https://mellox.ai/icon-512.png",
       "offersCount": null,
@@ -95,20 +81,6 @@
       "faqQuestionCount": null,
       "breadcrumbDepth": null,
       "inLanguage": "en"
-    },
-    {
-      "type": "WebSite",
-      "id": "https://mellox.ai/#website",
-      "url": "https://mellox.ai",
-      "name": "Mellox AI",
-      "hasDescription": false,
-      "publisherRef": "https://mellox.ai/#organization",
-      "logoUrl": null,
-      "offersCount": null,
-      "offerPrices": null,
-      "faqQuestionCount": null,
-      "breadcrumbDepth": null,
-      "inLanguage": null
     }
   ],
   "approvedPhrasesPresent": [
