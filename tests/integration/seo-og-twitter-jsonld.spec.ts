@@ -198,9 +198,11 @@ test.describe("JSON-LD structured data � pitch-deck messaging", () => {
     // Current public pricing tiers.
     const byName = new Map(offers!.map((o) => [String(o.name), o]));
     for (const [name, price] of [
+      ["Free", "0"],
       ["Starter", "49"],
       ["Growth", "149"],
       ["Agency", "449"],
+      ["Scale", "1199"],
     ] as const) {
       const offer = byName.get(name);
       expect(offer, `${name} offer present`).toBeTruthy();

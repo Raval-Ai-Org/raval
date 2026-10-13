@@ -43,9 +43,10 @@
       "hasDescription": true,
       "publisherRef": "https://mellox.ai/#organization",
       "logoUrl": null,
-      "offersCount": 4,
+      "offersCount": 5,
       "offerPrices": [
         "USD0",
+        "USD1199",
         "USD149",
         "USD449",
         "USD49"
