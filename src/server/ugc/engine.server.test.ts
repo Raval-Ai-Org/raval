@@ -3,18 +3,23 @@ import { KieGatewayError } from "@/lib/kie-gateway.server";
 import { UGC_MODELS } from "@/lib/ugc/models";
 import { createRenderEngine, MAX_SUBMIT_ATTEMPTS, RENDER_TIMEOUT_MS } from "./engine.server";
 import { buildKieInput, kieFailure, kieGenerationType, kieModelId } from "./providers/kie.server";
-import type { ProviderCheck, SubmitResult, VideoProvider } from "./providers/types";
+import type {
+  ProviderCheck,
+  SubmitResult,
+  VideoProvider,
+  VideoRenderRequest,
+} from "./providers/types";
 import { MemoryUgcStore } from "./store.memory";
 import type { NewRenderRow } from "./store";
 
 class FakeProvider implements VideoProvider {
   id = "kie";
-  submits: Array<{ imageUrls: string[]; callbackUrl?: string }> = [];
+  submits: VideoRenderRequest[] = [];
   submitResults: SubmitResult[] = [];
   checks: ProviderCheck[] = [];
   generationType = kieGenerationType;
-  async submit(req: { imageUrls: string[]; callbackUrl?: string }) {
-    this.submits.push({ imageUrls: req.imageUrls, callbackUrl: req.callbackUrl });
+  async submit(req: VideoRenderRequest) {
+    this.submits.push(req);
     return (
       this.submitResults.shift() ?? {
         ok: true as const,
@@ -99,6 +104,108 @@ beforeEach(() => {
 });
 
 describe("UGC render engine", () => {
+  it("freezes the absence of a visual profile instead of changing an original retry", async () => {
+    const row = await start({ prompt: "Original product brief" });
+    let active = false;
+    let reads = 0;
+    engine = createRenderEngine({
+      store,
+      provider,
+      now: () => clock,
+      log: { info() {}, warn() {}, error() {} },
+      visualContext: async () => {
+        reads++;
+        return active
+          ? {
+              rules: "New direction",
+              urls: ["https://owned.test/new.png"],
+              snapshot: { profileId: "new" },
+            }
+          : null;
+      },
+    });
+    provider.submitResults = [{ ok: false, code: "temporary", message: "Retry", retryable: true }];
+    await tick(row.id, 0);
+    active = true;
+    await tick(row.id);
+    expect(reads).toBe(1);
+    expect(provider.submits.map((req) => req.prompt)).toEqual([
+      "Original product brief",
+      "Original product brief",
+    ]);
+    expect(provider.submits[1].imageUrls).toEqual([]);
+    expect((await store.getRender(row.id))?.provider_meta).toMatchObject({
+      visualTaste: null,
+      visualTasteResolved: true,
+    });
+  });
+  it("keeps retries started before the visual layer on their original request", async () => {
+    const row = await start({ prompt: "Existing retry brief" });
+    await store.transition(row.id, ["queued"], { submit_attempts: 1 });
+    let reads = 0;
+    engine = createRenderEngine({
+      store,
+      provider,
+      now: () => clock,
+      log: { info() {}, warn() {}, error() {} },
+      visualContext: async () => {
+        reads++;
+        return { rules: "New direction", urls: [], snapshot: { profileId: "new" } };
+      },
+    });
+    await tick(row.id, 0);
+    expect(reads).toBe(0);
+    expect(provider.submits[0].prompt).toBe("Existing retry brief");
+  });
+  it("retains the original request when the optional visual layer is unavailable", async () => {
+    const row = await start({ prompt: "Original product brief", reference_asset_ids: ["img1"] });
+    const urls = ["https://signed.example/img1.png"];
+    store.signImageAssets = async () => urls;
+    engine = createRenderEngine({
+      store,
+      provider,
+      now: () => clock,
+      log: { info() {}, warn() {}, error() {} },
+      visualContext: async () => {
+        throw new Error("Evidence store unavailable");
+      },
+    });
+    await tick(row.id, 0);
+    expect(provider.submits[0].prompt).toBe("Original product brief");
+    expect(provider.submits[0].imageUrls).toBe(urls);
+    expect(provider.submits[0]).not.toHaveProperty("requireReferences");
+    expect(provider.submits[0]).not.toHaveProperty("requiredReferenceCount");
+    expect((await store.getRender(row.id))?.status).toBe("processing");
+  });
+  it("retains the frozen visual profile through provider submission and retries", async () => {
+    const row = await start();
+    let profile = { profileId: "original" };
+    const snapshots: unknown[] = [];
+    engine = createRenderEngine({
+      store,
+      provider,
+      now: () => clock,
+      log: { info() {}, warn() {}, error() {} },
+      visualContext: async (current) => {
+        const snapshot = current.provider_meta.visualTaste ?? profile;
+        snapshots.push(snapshot);
+        return {
+          rules: "Keep the painted landscape",
+          urls: ["https://owned.test/ref.png"],
+          snapshot,
+        };
+      },
+    });
+    provider.submitResults = [{ ok: false, code: "temporary", message: "Retry", retryable: true }];
+    await tick(row.id, 0);
+    profile = { profileId: "changed" };
+    await tick(row.id);
+    expect(snapshots).toEqual([{ profileId: "original" }, { profileId: "original" }]);
+    expect((await store.getRender(row.id))?.provider_meta.visualTaste).toEqual({
+      profileId: "original",
+    });
+    expect(provider.submits[1].imageUrls).toContain("https://owned.test/ref.png");
+  });
   it("cannot claim a render until billing activates it", async () => {
     const row = await start({ billing_ready: false });
     await engine.runDue({ worker: "w", budgetMs: 10_000, max: 5, id: row.id });

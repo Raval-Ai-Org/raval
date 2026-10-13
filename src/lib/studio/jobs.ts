@@ -5,6 +5,7 @@ import type { PlatformId } from "@/lib/social-platforms";
 import type { AspectRatio } from "./aspect";
 import type { StageId, StudioType } from "./formats";
 import type { StoryFrame } from "@/lib/stories/frames";
+import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 
 export const PlatformIdSchema = z.enum([
   "linkedin",
@@ -61,6 +62,9 @@ export const ControlsSchema = z.object({
   storyTheme: z.string().max(24).optional(),
   /** Story: Instagram usernames to tag (no @). */
   mentions: z.array(z.string().max(31)).max(5).optional(),
+  /** Build a still storyboard before spending video credits. */
+  videoPreview: z.boolean().optional(),
+  campaign: z.string().trim().max(120).optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;
@@ -268,6 +272,13 @@ export type MediaOutput = {
 };
 
 export type StudioJobOutput = {
+  visualTaste?: VisualSnapshot;
+  artwork?: { headline: string; brandName: string; artStoragePath?: string };
+  storyboard?: {
+    status: "preview" | "rendering" | "ready";
+    assetId?: string;
+    storagePath?: string;
+  };
   title?: string;
   angle?: string;
   variants?: SocialVariant[];

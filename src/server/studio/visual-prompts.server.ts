@@ -8,6 +8,7 @@ type Common = {
   spec?: CarouselSpecOutput;
   brandName: string;
   brandContext: string;
+  visualTasteRules?: string;
   ratio?: string;
   style: ImageStyleInput | null;
   revision?: string;
@@ -33,6 +34,7 @@ function visualSystem(args: Common): string {
       ? `Use the ${args.style.references.count} attached visual reference(s) with ${args.style.references.strength} fidelity to the visual language.`
       : "",
     args.brandContext ? `Verified brand context: ${args.brandContext.slice(0, 1100)}` : "",
+    args.visualTasteRules,
     args.revision,
     args.novelty,
     "All type must be accurately spelled and legible at phone size. No invented claims, URLs, logos, testimonials, product features or people. No watermark. Respect generous platform safe margins.",
@@ -79,6 +81,7 @@ export function carouselBackdropPrompt(
     args.style ? `Approved style: ${args.style.block.slice(0, 1600)}` : "",
     args.style?.mood ? `Mood and finish: ${args.style.mood}` : "",
     args.brandContext ? `Verified brand context: ${args.brandContext.slice(0, 800)}` : "",
+    args.visualTasteRules,
     args.revision,
     args.novelty,
     "Absolutely no text, letters, numbers, logos, watermarks, people, faces, hands, products, frames, borders or panels. Avoid generic AI marketing imagery, plastic 3D objects and stock-photo clichés.",

@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { DeliveryView } from "@/components/app/DeliveryView";
 import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
 import { CanvaEditButton } from "./CanvaEditButton";
+import { VisualFeedback } from "./VisualFeedback";
+import { EditVisualText } from "./EditVisualText";
 import { StudioPublishFlow } from "./StudioPublishFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
@@ -422,6 +424,10 @@ export function ReviewPanel({
   };
 
   const approve = async (selectedIds?: string[]) => {
+    if (draft.storyboard?.status === "preview") {
+      toast("Make the video from this frame before approving it.");
+      return false;
+    }
     if (dirty && !(await save())) return false;
     setBusy("approve");
     try {
@@ -939,6 +945,27 @@ export function ReviewPanel({
             Create another {format.noun}
           </Button>
         </motion.div>
+      ) : draft.storyboard?.status === "preview" ? (
+        <motion.div key="make-video" {...fadeSwap} className="flex w-full gap-2">
+          <Button
+            className="w-full"
+            disabled={revising || !mediaReady}
+            onClick={() => {
+              updateSession(session.id, { controls: { ...session.controls, videoPreview: false } });
+              void generate(session.id, {
+                kind: "refine",
+                refine: {
+                  instruction:
+                    "Use this approved first frame to make the video. Keep the concept, product identity and brand direction.",
+                  target: "media",
+                },
+              });
+            }}
+          >
+            <Sparkles />
+            Make video
+          </Button>
+        </motion.div>
       ) : approvable && confirmDiscard ? (
         <motion.div key="confirm" {...fadeSwap} className="grid w-full min-w-0 grid-cols-2 gap-2">
           <span className="col-span-2 pl-1 text-sm text-foreground">
@@ -1208,6 +1235,25 @@ export function ReviewPanel({
                     onChanged={() => void refreshSessionJob(session.id)}
                   />
                 ) : null}
+                {mediaReady && !fixtureRows && (
+                  <VisualFeedback
+                    workspaceId={session.workspaceId}
+                    jobId={job.id}
+                    disabled={revising}
+                  />
+                )}
+                {draft.artwork?.artStoragePath && !fixtureRows && (
+                  <EditVisualText
+                    workspaceId={session.workspaceId}
+                    jobId={job.id}
+                    headline={draft.artwork.headline}
+                    disabled={revising || locked}
+                    onChanged={() => {
+                      void refreshSessionJob(session.id);
+                      void loadRows();
+                    }}
+                  />
+                )}
               </motion.div>
             ) : null}
           </AnimatePresence>

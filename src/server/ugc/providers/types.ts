@@ -17,6 +17,10 @@ export type VideoRenderRequest = {
   audio?: boolean;
   /** Publicly fetchable image URLs (signed), already capped to the model's max. */
   imageUrls: string[];
+  /** Required identity references must survive routing/fallback. */
+  requireReferences?: boolean;
+  /** Leading identity images that cannot be omitted; style references may be limited. */
+  requiredReferenceCount?: number;
   /** KIE callback; OpenRouter computes its own (see openRouterVideoCallbackUrl). */
   callbackUrl?: string;
 };

@@ -473,7 +473,7 @@ export function BrandDnaSurface({
               className="grid gap-5 px-4 py-4 sm:px-6 sm:py-5 lg:grid-cols-[minmax(0,1fr)_300px]"
             >
               <div className="min-w-0">
-                <TileEditor tile={activeTile} dna={dna} save={save} />
+                <TileEditor tile={activeTile} dna={dna} save={save} workspaceId={workspaceId} />
               </div>
               <aside aria-label="Live brand summary preview" className="hidden lg:block">
                 <div className="sticky top-2">
@@ -1595,10 +1595,12 @@ function TileEditor({
   tile,
   dna,
   save,
+  workspaceId,
 }: {
   tile: TileKey;
   dna: BrandDna;
   save: (n: Partial<BrandDna>) => void;
+  workspaceId?: string | null;
 }) {
   const meta: Record<TileKey, { title: string; subtitle: string }> = {
     logo: {
@@ -1665,7 +1667,7 @@ function TileEditor({
           <RulesGrid dna={dna} save={save} />
         </div>
       )}
-      {tile === "look" && <LookEditor dna={dna} save={save} />}
+      {tile === "look" && <LookEditor dna={dna} save={save} workspaceId={workspaceId} />}
       {tile === "assets" && <AssetsTab dna={dna} save={save} />}
       {tile === "notes" && <NotesTab dna={dna} save={save} />}
     </div>

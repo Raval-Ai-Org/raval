@@ -41,6 +41,12 @@ export const POST = defineCronRoute({
       }
       // Memory: temporary memories that have ended (one indexed delete).
       try {
+        const { runDueVisualCaptures } = await import("@/server/brand-visuals/worker.server");
+        await runDueVisualCaptures(1);
+      } catch (error) {
+        console.error("[visual-taste] capture sweep failed", error);
+      }
+      try {
         const { purgeExpiredMemories } = await import("@/server/memory/service.server");
         await purgeExpiredMemories();
       } catch (error) {

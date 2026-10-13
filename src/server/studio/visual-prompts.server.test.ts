@@ -28,6 +28,17 @@ describe("complete model-generated series prompts", () => {
     expect(prompt).toContain("complete 4:5 social post frame");
     expect(prompt).toContain("Warm paper, natural morning light");
     expect(prompt).toContain("attached visual reference(s)");
+    const enriched = carouselSlidePrompt({
+      ...common,
+      ratio: "4:5",
+      slide,
+      slides: [slide],
+      visualTasteRules: "Follow the approved warm documentary treatment.",
+    });
+    // Removing the new layer gives the exact original prompt, including its copy/context.
+    expect(enriched.replace("Follow the approved warm documentary treatment.\n\n", "")).toBe(
+      prompt,
+    );
   });
 
   it("reserves Story safe zones for native controls", () => {

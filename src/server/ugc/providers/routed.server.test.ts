@@ -58,6 +58,73 @@ const request = (over: Partial<VideoRenderRequest> = {}): VideoRenderRequest => 
 });
 
 describe("video provider fallback", () => {
+  it("retains legacy reference truncation and fallback without optional taste restrictions", async () => {
+    const kie = fake("kie", [
+      {
+        ok: false,
+        code: "provider_credits",
+        message: "No credits",
+        retryable: false,
+        definite: true,
+      },
+    ]);
+    const or = fake("openrouter", []);
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider, openrouter: or.provider },
+      primary: () => "kie",
+      fallback: () => "openrouter",
+    });
+    const result = await routed.submit(
+      request({
+        imageUrls: Array.from({ length: 7 }, (_, i) => `https://owned.test/${i}.png`),
+      }),
+    );
+    expect(result).toMatchObject({ ok: true, provider: "openrouter" });
+    expect(kie.submits).toHaveLength(1);
+    expect(or.submits).toHaveLength(1);
+    expect(result.ok && result.request).not.toHaveProperty("visual_references");
+  });
+  it("refuses a route that would drop required identity images", async () => {
+    const kie = fake("kie", []);
+    const or = fake("openrouter", []);
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider, openrouter: or.provider },
+      primary: () => "kie",
+      fallback: () => "openrouter",
+    });
+    const result = await routed.submit(
+      request({
+        imageUrls: ["https://owned.test/one.png"],
+        requireReferences: true,
+        requiredReferenceCount: 2,
+      }),
+    );
+    expect(result.ok).toBe(false);
+    expect(kie.submits).toHaveLength(0);
+    expect(or.submits).toHaveLength(0);
+  });
+  it("records reference capability limits with the actual provider request", async () => {
+    const kie = fake("kie", []);
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider },
+      primary: () => "kie",
+      fallback: () => null,
+    });
+    const result = await routed.submit(
+      request({
+        imageUrls: Array.from({ length: 5 }, (_, i) => `https://owned.test/${i}.png`),
+        requireReferences: true,
+        requiredReferenceCount: 1,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.request.visual_references).toMatchObject({
+        requested: 5,
+        used: kie.submits[0].imageUrls.length,
+        limited: true,
+      });
+  });
   it("uses the catalog provider split and supports a per-option override", () => {
     expect(videoProviderForModel("standard")).toBe("kie");
     expect(videoProviderForModel("draft")).toBe("kie");

@@ -46,9 +46,11 @@ ENV REDIS_URL=
 # (src/server/assets/image-metadata.server.ts, vendor/image-metadata-toolkit).
 # On by default (FEATURE_FLAG_ASSET_METADATA_ENABLED); fails open if missing.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium fonts-liberation python3 libimage-exiftool-perl ffmpeg \
+  && apt-get install -y --no-install-recommends chromium chromium-sandbox fonts-liberation python3 libimage-exiftool-perl ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 ENV GEO_RENDER_EXECUTABLE=/usr/bin/chromium
+# Brand DNA visual evidence and offline reference-video frame decoding.
+ENV VISUAL_CAPTURE_BROWSER_PATH=/usr/bin/chromium
 
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs

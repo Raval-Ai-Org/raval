@@ -6,6 +6,7 @@ import * as audience from "./audience";
 import * as autopilot from "./autopilot";
 import * as brain from "./brain";
 import * as brandDna from "./brand-dna";
+import * as brandVisuals from "./brand-visuals";
 import * as campaignGeneration from "./campaign-generation";
 import * as canva from "./canva";
 import * as chatActions from "./chat-actions";
@@ -46,6 +47,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   autopilot,
   brain,
   "brand-dna": brandDna,
+  "brand-visuals": brandVisuals,
   "campaign-generation": campaignGeneration,
   "chat-actions": chatActions,
   coach,

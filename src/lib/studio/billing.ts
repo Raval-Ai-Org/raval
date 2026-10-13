@@ -12,12 +12,17 @@ export function studioChargeFor(args: {
   regenerate?: boolean;
   /** Story: a video Story renders a video and is priced like one. */
   storyMode?: string;
+  videoPreview?: boolean;
 }): StudioCharge {
   switch (args.type) {
     case "video":
-      return "studio_video";
+      return args.videoPreview ? "image_post" : "studio_video";
     case "story":
-      return args.storyMode === "video" ? "studio_video" : "story";
+      return args.storyMode === "video"
+        ? args.videoPreview
+          ? "image_post"
+          : "studio_video"
+        : "story";
     case "image":
       return "image_post";
     case "carousel":

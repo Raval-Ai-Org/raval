@@ -56,11 +56,18 @@ async function styled(
       import("@/lib/brand-look/prompt"),
       import("@/lib/post-image"),
     ]);
-    const { look } = await loadBrandLook(workspaceId);
+    const { look, visualTaste } = await loadBrandLook(workspaceId, { includeVisualTaste: true });
     if (!look.customized) return { prompt, references };
     const style = imageStyleInput(look);
     if (!style) return { prompt, references };
-    return { prompt: restyleImagePrompt(prompt, style).slice(0, 9500), references };
+    const styledPrompt = restyleImagePrompt(prompt, style).slice(0, 9500);
+    if (!visualTaste) return { prompt: styledPrompt, references };
+    const { resolveVisualReferenceUrls } = await import("@/server/brand-visuals/service.server");
+    const approved = await resolveVisualReferenceUrls(workspaceId, visualTaste ?? null);
+    return {
+      prompt: `${styledPrompt}\n\n${visualTaste.rules}`.slice(0, 9500),
+      references: [...new Set([...references, ...approved])].slice(0, 4),
+    };
   } catch (error) {
     console.error("[generate-image] look load failed, generating without it", error);
     return { prompt, references };
