@@ -63,26 +63,34 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Build the app
-        run: npm run build:dev
+        run: npm run build
 
-      - name: Start dev server
+      - name: Start production server
         run: |
-          nohup npm run dev > /tmp/dev-server.log 2>&1 &
-          echo $! > /tmp/dev-server.pid
+          cp -r public .next/standalone/public
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/standalone/.next/static
+          nohup node .next/standalone/server.js > /tmp/seo-server.log 2>&1 &
+          echo $! > /tmp/seo-server.pid
         env:
           CI: "true"
+          NODE_ENV: production
+          PORT: "8080"
+          HOSTNAME: "127.0.0.1"
+          # CI intentionally has no production-only AI or cron credentials.
+          ENV_VALIDATION: warn
 
-      - name: Wait for dev server
+      - name: Wait for production server
         run: |
           for i in $(seq 1 60); do
             if curl -sSf http://localhost:8080/ -o /dev/null; then
-              echo "dev server up after ${i}s"
+              echo "production server up after ${i}s"
               exit 0
             fi
             sleep 1
           done
-          echo "dev server never became ready" >&2
-          tail -n 200 /tmp/dev-server.log >&2 || true
+          echo "production server never became ready" >&2
+          tail -n 200 /tmp/seo-server.log >&2 || true
           exit 1
 
       - name: Run SEO / meta / JSON-LD / route-snapshot tests
@@ -108,11 +116,11 @@ jobs:
           CI: "true"
           SITEMAP_BASE_URL: "http://localhost:8080"
 
-      - name: Stop dev server
+      - name: Stop production server
         if: always()
         run: |
-          if [ -f /tmp/dev-server.pid ]; then
-            kill "$(cat /tmp/dev-server.pid)" 2>/dev/null || true
+          if [ -f /tmp/seo-server.pid ]; then
+            kill "$(cat /tmp/seo-server.pid)" 2>/dev/null || true
           fi
 
       - name: Upload Playwright report on failure
@@ -126,11 +134,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload dev server log on failure
+      - name: Upload production server log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: dev-server-log
-          path: /tmp/dev-server.log
+          name: seo-server-log
+          path: /tmp/seo-server.log
           if-no-files-found: ignore
           retention-days: 7
