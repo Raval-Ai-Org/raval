@@ -14,7 +14,12 @@
   "hreflang": [],
   "robots": "noindex,nofollow",
   "h1": null,
-  "jsonLdTypes": ["Organization", "WebPage", "WebSite"],
+  "jsonLdTypes": [
+    "Organization",
+    "SoftwareApplication",
+    "WebPage",
+    "WebSite"
+  ],
   "jsonLdNodes": [
     {
       "type": "Organization",
@@ -23,9 +28,29 @@
       "name": "Mellox AI",
       "hasDescription": true,
       "publisherRef": null,
-      "logoUrl": "https://mellox.ai/favicon.svg",
+      "logoUrl": "https://mellox.ai/icon-512.png",
       "offersCount": null,
       "offerPrices": null,
+      "faqQuestionCount": null,
+      "breadcrumbDepth": null,
+      "inLanguage": null
+    },
+    {
+      "type": "SoftwareApplication",
+      "id": "https://mellox.ai/#software",
+      "url": "https://mellox.ai",
+      "name": "Mellox AI",
+      "hasDescription": true,
+      "publisherRef": "https://mellox.ai/#organization",
+      "logoUrl": null,
+      "offersCount": 5,
+      "offerPrices": [
+        "USD0",
+        "USD1199",
+        "USD149",
+        "USD449",
+        "USD49"
+      ],
       "faqQuestionCount": null,
       "breadcrumbDepth": null,
       "inLanguage": null
@@ -59,5 +84,11 @@
       "inLanguage": "en"
     }
   ],
-  "approvedPhrasesPresent": ["Marketing Intelligence Layer", "Brand DNA", "AEO", "GEO", "Mellox AI"]
+  "approvedPhrasesPresent": [
+    "Marketing Intelligence Layer",
+    "Brand DNA",
+    "AEO",
+    "GEO",
+    "Mellox AI"
+  ]
 }

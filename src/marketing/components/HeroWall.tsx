@@ -44,7 +44,9 @@ export default function HeroWall() {
     const hero = slot.previousElementSibling as HTMLElement | null;
     // the two parts of the hero that answer the wall's arrival; written to directly, so the rest of the hero is
     // never restyled while you scroll
-    const followers = hero ? Array.from(hero.querySelectorAll<HTMLElement>(".hero-copy, .hero-arc")) : [];
+    const followers = hero
+      ? Array.from(hero.querySelectorAll<HTMLElement>(".hero-copy, .hero-arc"))
+      : [];
     const slots = Array.from(el.querySelectorAll<HTMLElement>(".hw-slot"));
     const videos = slots.map((s) => s.querySelector("video"));
     // a phone only lets a clip start by itself if it is silent; the attribute alone isn't always enough
@@ -75,6 +77,8 @@ export default function HeroWall() {
     let last = 0;
     let lastY = window.scrollY;
     let onScreen = true;
+    const root = document.documentElement;
+    const canAnimate = () => onScreen && !document.hidden && !root.classList.contains("mx-lock");
     // slow at both ends, so the movement starts and lands softly instead of tracking the wheel 1:1
     const ease = (p: number) => p * p * (3 - 2 * p);
 
@@ -117,15 +121,19 @@ export default function HeroWall() {
           s.style.visibility = far ? "hidden" : "";
         }
         // just before a card comes round, fetch what it will show
-        if (!far && !ready[i] && onScreen) {
+        if (!far && !ready[i] && canAnimate()) {
           ready[i] = true;
-          if (videos[i]) videos[i]!.preload = "auto";
+          const video = videos[i];
+          if (video) {
+            video.src = video.dataset.src!;
+            video.preload = "auto";
+          }
           s.querySelectorAll<HTMLImageElement>("img[data-src]").forEach((img) => {
             img.src = img.dataset.src!;
           });
         }
         // a phone shows fewer cards, so fewer need to be playing
-        const visible = onScreen && Math.abs(a) < (phone ? 40 : Math.min(PLAY_WITHIN, fadeEnd));
+        const visible = canAnimate() && Math.abs(a) < (phone ? 40 : Math.min(PLAY_WITHIN, fadeEnd));
         near[i] = visible;
         const v = videos[i];
         if (!v) return;
@@ -157,8 +165,12 @@ export default function HeroWall() {
     };
 
     const frame = (now: number) => {
+      if (!canAnimate()) {
+        raf = 0;
+        return;
+      }
       // real time, so the wall keeps its pace on a slow machine too (capped, so a paused tab doesn't leap)
-      const dt = Math.min(0.25,(now - last) / 1000 || 0.016);
+      const dt = Math.min(0.25, (now - last) / 1000 || 0.016);
       last = now;
       angle += (DRIFT + boost) * dt;
       boost += (push - boost) * (1 - Math.exp(-dt / 0.14));
@@ -172,10 +184,10 @@ export default function HeroWall() {
       }
       place();
       slide(dt);
-      raf = onScreen ? requestAnimationFrame(frame) : 0;
+      raf = canAnimate() ? requestAnimationFrame(frame) : 0;
     };
     const wake = () => {
-      if (!raf && onScreen) {
+      if (!raf && canAnimate()) {
         last = performance.now();
         raf = requestAnimationFrame(frame);
       }
@@ -191,6 +203,18 @@ export default function HeroWall() {
       wake();
     };
 
+    const syncVisibility = () => {
+      if (!canAnimate()) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      place();
+      wake();
+    };
+    const lockObserver = new MutationObserver(syncVisibility);
+    lockObserver.observe(root, { attributes: true, attributeFilter: ["class"] });
+    document.addEventListener("visibilitychange", syncVisibility);
+
     measure();
     current = target;
     place();
@@ -201,14 +225,17 @@ export default function HeroWall() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       cancelAnimationFrame(raf);
+      lockObserver.disconnect();
+      document.removeEventListener("visibilitychange", syncVisibility);
+      videos.forEach((video) => video?.pause());
     };
   }, []);
 
   return (
     <div ref={ref} className="hw">
       <span className="sr-only">
-        Content made with Mellox, playing by itself: short vertical videos and picture posts that slide through their
-        pictures.
+        Content made with Mellox, playing by itself: short vertical videos and picture posts that
+        slide through their pictures.
       </span>
       <div className="hw-turn" aria-hidden="true">
         {WALL.map((item, i) => (
@@ -235,7 +262,11 @@ function Card({ item }: { item: WallItem }) {
         <div className="hw-track">
           {loop.map((src, i) =>
             // only the first picture is fetched up front; HeroWall asks for the rest when the card comes into view
-            i === 0 ? <img key={i} src={src} alt="" /> : <img key={i} data-src={src} alt="" />,
+            i === 0 ? (
+              <img key={i} src={src} alt="" loading="lazy" decoding="async" />
+            ) : (
+              <img key={i} data-src={src} alt="" decoding="async" />
+            ),
           )}
         </div>
         <span className="hw-count">
@@ -250,7 +281,7 @@ function Card({ item }: { item: WallItem }) {
     <div className="hw-card">
       <video
         className="hw-media"
-        src={item.src}
+        data-src={item.src}
         poster={item.poster}
         muted
         loop

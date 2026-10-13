@@ -3,7 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 const APP_URL = "/login";
 
@@ -17,12 +17,32 @@ const links: NavLink[] = [
     href: "/features/brand-dna",
     children: [
       { label: "Brand DNA", hint: "AI that sounds like you", href: "/features/brand-dna" },
-      { label: "AI Visibility (GEO)", hint: "See how AI talks about you", href: "/features/ai-visibility" },
-      { label: "The Four Brains", hint: "Four specialists, one answer", href: "/features/four-brains" },
-      { label: "Distribution", hint: "Publish natively everywhere", href: "/features/distribution" },
-      { label: "Agency Mode", hint: "Every client, one command deck", href: "/features/agency-mode" },
+      {
+        label: "AI Visibility (GEO)",
+        hint: "See how AI talks about you",
+        href: "/features/ai-visibility",
+      },
+      {
+        label: "The Four Brains",
+        hint: "Four specialists, one answer",
+        href: "/features/four-brains",
+      },
+      {
+        label: "Distribution",
+        hint: "Publish natively everywhere",
+        href: "/features/distribution",
+      },
+      {
+        label: "Agency Mode",
+        hint: "Every client, one command deck",
+        href: "/features/agency-mode",
+      },
       { label: "Autopilot", hint: "Sit back and watch it work", href: "/features/autopilot" },
-      { label: "Integrations", hint: "Claude, ChatGPT, Slack, Notion, Canva", href: "/integrations" },
+      {
+        label: "Integrations",
+        hint: "Claude, ChatGPT, Slack, Notion, Canva",
+        href: "/integrations",
+      },
     ],
   },
   {
@@ -30,7 +50,11 @@ const links: NavLink[] = [
     href: "/use-cases/agencies",
     children: [
       { label: "Agencies", hint: "Every client, one command deck", href: "/use-cases/agencies" },
-      { label: "Startups", hint: "A marketing team without hiring one", href: "/use-cases/startups" },
+      {
+        label: "Startups",
+        hint: "A marketing team without hiring one",
+        href: "/use-cases/startups",
+      },
       { label: "In-house teams", hint: "One shared workspace", href: "/use-cases/in-house-teams" },
     ],
   },
@@ -43,7 +67,12 @@ const links: NavLink[] = [
       { group: "Learn", label: "Blog", hint: "Guides and ideas", href: "/blog" },
       { group: "Learn", label: "Changelog", hint: "What's new", href: "/changelog" },
       { group: "Learn", label: "Compare", hint: "Mellox next to other tools", href: "/compare" },
-      { group: "More", label: "Security and trust", hint: "How we protect your data", href: "/security" },
+      {
+        group: "More",
+        label: "Security and trust",
+        hint: "How we protect your data",
+        href: "/security",
+      },
       { group: "More", label: "Contact", hint: "Message the team", href: "/contact" },
     ],
   },
@@ -56,13 +85,20 @@ const linkClass =
 function Menu({ link }: { link: NavLink }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLLIElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -70,7 +106,6 @@ function Menu({ link }: { link: NavLink }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
 
   return (
     <li
@@ -84,7 +119,8 @@ function Menu({ link }: { link: NavLink }) {
     >
       <button
         type="button"
-        aria-haspopup="menu"
+        ref={trigger}
+        aria-controls={panelId}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={`${linkClass} flex items-center gap-1.5`}
@@ -105,21 +141,21 @@ function Menu({ link }: { link: NavLink }) {
         }`}
       >
         <ul
-          role="menu"
+          id={panelId}
           className="rounded-3xl border border-white/10 bg-[#0b0e14]/95 p-2 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.8)] backdrop-blur-xl"
         >
           {link.children!.map((c, i, all) => {
             // show a group heading only where the group changes from the previous item
             const heading = c.group && c.group !== all[i - 1]?.group ? c.group : null;
             return (
-              <li key={c.href} role="none">
+              <li key={c.href}>
                 {heading && (
                   <p className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40 first:pt-2">
                     {heading}
                   </p>
                 )}
                 <Link
-                  role="menuitem"
+                  prefetch={false}
                   href={c.href}
                   onClick={() => setOpen(false)}
                   className="block rounded-2xl px-4 py-2.5 transition hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
@@ -139,6 +175,32 @@ function Menu({ link }: { link: NavLink }) {
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const mobileTrigger = useRef<HTMLButtonElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const mobileId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setExpanded(null);
+        mobileTrigger.current?.focus();
+      }
+    };
+    const onOutside = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setExpanded(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onOutside);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onOutside);
+    };
+  }, [open]);
 
   const close = () => {
     setOpen(false);
@@ -146,21 +208,29 @@ export default function Navbar() {
   };
 
   return (
-    <header className="absolute inset-x-0 top-0 z-50">
+    <header ref={headerRef} className="absolute inset-x-0 top-0 z-50">
       <div className="grid h-[96px] w-full grid-cols-[1fr_auto] items-center px-4 sm:px-6 min-[1180px]:grid-cols-[1fr_auto_1fr] min-[1180px]:px-8">
-        <Link href="/" aria-label="Mellox AI home" className="flex items-center gap-3 justify-self-start py-2.5">
+        <Link
+          prefetch={false}
+          href="/"
+          aria-label="Mellox AI home"
+          className="flex items-center gap-3 justify-self-start py-2.5"
+        >
           <Image src="/brand/mark-lime.svg" alt="" width={44} height={23} priority />
           <span className="font-display text-xl tracking-wide text-white">MELLOX</span>
         </Link>
 
-        <nav aria-label="Primary" className="glass hidden rounded-full px-2 py-3 min-[1180px]:block">
+        <nav
+          aria-label="Primary"
+          className="glass hidden rounded-full px-2 py-3 min-[1180px]:block"
+        >
           <ul className="flex items-center">
             {links.map((l) =>
               l.children ? (
                 <Menu key={l.label} link={l} />
               ) : (
                 <li key={l.href}>
-                  <Link href={l.href} className={linkClass}>
+                  <Link prefetch={false} href={l.href} className={linkClass}>
                     {l.label}
                   </Link>
                 </li>
@@ -177,6 +247,7 @@ export default function Navbar() {
             Log in
           </a>
           <Link
+            prefetch={false}
             href="/demo"
             className="glass glass-lime glass-interactive hidden whitespace-nowrap rounded-full px-6 py-3.5 text-[16px] font-semibold text-white min-[1180px]:inline-block xl:px-7 xl:text-[17px]"
           >
@@ -184,26 +255,38 @@ export default function Navbar() {
           </Link>
           <button
             type="button"
-            aria-label="Toggle menu"
+            ref={mobileTrigger}
+            aria-controls={mobileId}
+            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={open}
             onClick={() => (open ? close() : setOpen(true))}
             className="glass glass-interactive flex h-11 w-11 flex-col items-center justify-center gap-1.5 rounded-full min-[1180px]:hidden"
           >
-            <span className={`h-0.5 w-5 bg-white transition ${open ? "translate-y-2 rotate-45" : ""}`} />
+            <span
+              className={`h-0.5 w-5 bg-white transition ${open ? "translate-y-2 rotate-45" : ""}`}
+            />
             <span className={`h-0.5 w-5 bg-white transition ${open ? "opacity-0" : ""}`} />
-            <span className={`h-0.5 w-5 bg-white transition ${open ? "-translate-y-2 -rotate-45" : ""}`} />
+            <span
+              className={`h-0.5 w-5 bg-white transition ${open ? "-translate-y-2 -rotate-45" : ""}`}
+            />
           </button>
         </div>
       </div>
 
       {open && (
-        <nav aria-label="Mobile" data-lenis-prevent className="glass mx-4 mt-[-24px] max-h-[calc(100vh-110px)] overflow-y-auto rounded-3xl p-4 sm:mx-6 min-[1180px]:hidden">
+        <nav
+          id={mobileId}
+          aria-label="Mobile"
+          data-lenis-prevent
+          className="glass mx-4 mt-[-24px] max-h-[calc(100vh-110px)] overflow-y-auto rounded-3xl p-4 sm:mx-6 min-[1180px]:hidden"
+        >
           <ul className="flex flex-col">
             {links.map((l) =>
               l.children ? (
                 <li key={l.label}>
                   <button
                     type="button"
+                    aria-controls={`${mobileId}-${l.label.replace(/\s/g, "-")}`}
                     aria-expanded={expanded === l.label}
                     onClick={() => setExpanded((v) => (v === l.label ? null : l.label))}
                     className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-lg text-white/90 hover:bg-white/15"
@@ -216,10 +299,14 @@ export default function Navbar() {
                     />
                   </button>
                   {expanded === l.label && (
-                    <ul className="mb-1 ml-4 border-l border-white/15 pl-2">
+                    <ul
+                      id={`${mobileId}-${l.label.replace(/\s/g, "-")}`}
+                      className="mb-1 ml-4 border-l border-white/15 pl-2"
+                    >
                       {l.children.map((c) => (
                         <li key={c.href}>
                           <Link
+                            prefetch={false}
                             href={c.href}
                             onClick={close}
                             className="block rounded-2xl px-4 py-2.5 text-base text-white/80 hover:bg-white/15"
@@ -233,7 +320,12 @@ export default function Navbar() {
                 </li>
               ) : (
                 <li key={l.href}>
-                  <Link href={l.href} onClick={close} className="block rounded-2xl px-4 py-3 text-lg text-white/90 hover:bg-white/15">
+                  <Link
+                    prefetch={false}
+                    href={l.href}
+                    onClick={close}
+                    className="block rounded-2xl px-4 py-3 text-lg text-white/90 hover:bg-white/15"
+                  >
                     {l.label}
                   </Link>
                 </li>
@@ -247,7 +339,12 @@ export default function Navbar() {
               >
                 Log in
               </a>
-              <Link href="/demo" onClick={close} className="glass glass-lime rounded-full px-4 py-3 text-center font-semibold text-white">
+              <Link
+                prefetch={false}
+                href="/demo"
+                onClick={close}
+                className="glass glass-lime rounded-full px-4 py-3 text-center font-semibold text-white"
+              >
                 Book a demo
               </Link>
             </li>

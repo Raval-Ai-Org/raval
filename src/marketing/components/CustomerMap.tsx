@@ -81,6 +81,7 @@ export default function CustomerMap() {
     if (!el || !canvas || !ctx) return;
 
     let inView = false;
+    const canAnimate = () => inView && !document.hidden;
     let started = 0; // when the colour began to sweep in (seconds), 0 until then
     let turn = 0;
     let raf = 0;
@@ -156,21 +157,26 @@ export default function CustomerMap() {
     // thirty pictures a second is plenty for light that drifts, and leaves the page free to scroll
     let drawn = 0;
     const frame = (at: number) => {
+      if (!canAnimate()) {
+        raf = 0;
+        return;
+      }
       if (at - drawn >= 30) {
         drawn = at;
         draw();
       }
-      raf = inView ? requestAnimationFrame(frame) : 0;
+      raf = canAnimate() ? requestAnimationFrame(frame) : 0;
     };
     const wake = () => {
-      if (!raf && inView) raf = requestAnimationFrame(frame);
+      if (!raf && canAnimate()) raf = requestAnimationFrame(frame);
     };
 
     const show = (i: number) => {
       rings.push({ ...people[i].at, born: now() });
       setPins((p) => p.map((pin, k) => (k === i ? { on: true, run: pin.run + 1 } : pin)));
     };
-    const hide = (i: number) => setPins((p) => p.map((pin, k) => (k === i ? { ...pin, on: false } : pin)));
+    const hide = (i: number) =>
+      setPins((p) => p.map((pin, k) => (k === i ? { ...pin, on: false } : pin)));
 
     const start = () => {
       started = now();
@@ -179,7 +185,7 @@ export default function CustomerMap() {
         setTimeout(
           () => {
             loop = setInterval(() => {
-              if (!inView) return;
+              if (!canAnimate()) return;
               const i = ORDER[turn++ % ORDER.length];
               hide(i);
               timers.push(setTimeout(() => show(i), AWAY));
@@ -203,11 +209,20 @@ export default function CustomerMap() {
       draw();
     });
 
+    const syncVisibility = () => {
+      if (!canAnimate()) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      wake();
+    };
+    document.addEventListener("visibilitychange", syncVisibility);
     size();
     draw();
     io.observe(el);
     ro.observe(canvas);
     return () => {
+      document.removeEventListener("visibilitychange", syncVisibility);
       io.disconnect();
       ro.disconnect();
       cancelAnimationFrame(raf);

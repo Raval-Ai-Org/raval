@@ -220,4 +220,13 @@ html:not(.mx-live) .hero-bg *::after {
   contain-intrinsic-size: auto 1100px;
 }
 
-
+/* Focus indicators are visible only during keyboard navigation. */
+#marketing-root :is(a, button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--brand-lime);
+  outline-offset: 4px;
+}
+html.mx-hidden #marketing-root *,
+html.mx-hidden #marketing-root *::before,
+html.mx-hidden #marketing-root *::after {
+  animation-play-state: paused !important;
+}

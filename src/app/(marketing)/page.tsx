@@ -24,6 +24,12 @@ export const metadata: Metadata = {
   title: { absolute: "Mellox AI: AI Marketing Assistant & AI CMO for Brands" },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
+  twitter: {
+    card: "summary_large_image",
+    title: "Mellox AI: AI Marketing Assistant & AI CMO for Brands",
+    description: SITE_DESCRIPTION,
+    images: ["/marketing/twitter-image.png"],
+  },
   openGraph: {
     type: "website",
     siteName: "Mellox AI",
@@ -38,7 +44,7 @@ export default function Home() {
   return (
     <div className="relative flex min-h-screen flex-1 flex-col overflow-x-clip bg-[#030405] text-white">
       <JsonLd data={faqJsonLd(faqs.slice(0, FEATURED))} />
-      <main className="marketing-home-main flex flex-1 flex-col">
+      <div className="marketing-home-main flex flex-1 flex-col">
         {/* Hero: aurora + copy + chat. Its bottom edge is where the dashboard peeks in. */}
         <section className="relative flex flex-col items-center px-5 pb-[calc(var(--hero-dash-h)+0.5rem)] pt-36 sm:pt-40">
           <HeroBackground />
@@ -116,7 +122,7 @@ export default function Home() {
           blurb="Answers to common questions about our AI marketing platform."
           showAllLink
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

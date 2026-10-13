@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { Google_Sans_Flex, Michroma } from "next/font/google";
 import { BASE_URL, BRAND_NAME } from "@/lib/seo";
+import { siteGraph, serializeJsonLd } from "@/marketing/lib/seo";
 import { Providers } from "@/app/providers";
 
 import "@/styles.css";
@@ -7,6 +9,18 @@ import "@/styles.css";
 import faviconAsset from "@/assets/Favicon-updated.png";
 
 const faviconUrl = faviconAsset.src;
+const googleSansFlex = Google_Sans_Flex({
+  variable: "--font-google-sans-flex",
+  subsets: ["latin"],
+  display: "swap",
+  adjustFontFallback: false,
+});
+const michroma = Michroma({
+  variable: "--font-michroma",
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
@@ -51,35 +65,6 @@ export const viewport: Viewport = {
   ],
 };
 
-const ORGANIZATION_LD = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": `${BASE_URL}/#organization`,
-      name: "Mellox AI",
-      url: BASE_URL,
-      logo: {
-        "@type": "ImageObject",
-        url: `${BASE_URL}${faviconUrl}`,
-      },
-      description:
-        "Mellox AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
-      sameAs: [],
-    },
-    {
-      "@type": "WebSite",
-      "@id": `${BASE_URL}/#website`,
-      url: BASE_URL,
-      name: "Mellox AI",
-      description:
-        "Get visible inside LLMs. The AI-native marketing platform for brands and agencies.",
-      publisher: { "@id": `${BASE_URL}/#organization` },
-      inLanguage: "en",
-    },
-  ],
-};
-
 // Runs before paint so the page never flashes the wrong theme on reload.
 // The storage key must stay in sync with THEME_STORAGE_KEY in
 // src/hooks/use-theme.tsx; 'reach-theme' is the superseded key, read once so
@@ -100,23 +85,24 @@ const PRE_HYDRATE = `(function(){try{
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`dark ${googleSansFlex.variable} ${michroma.variable}`}
+      style={
+        {
+          "--font-sans":
+            "var(--font-google-sans-flex), Segoe UI, Helvetica Neue, Arial, sans-serif",
+          "--font-brand": "var(--font-michroma), Segoe UI, sans-serif",
+        } as React.CSSProperties
+      }
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
       <head>
         <meta property="og:site_name" content={BRAND_NAME} />
-        <meta property="og:type" content="website" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Text fonts only. The Material Symbols Rounded icon font that used
-            to be requested here is gone: icons are inline SVGs now
-            (src/components/icons), so there is no second blocking stylesheet
-            and no flash of glyph names like "arrow_back" before it lands. */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@8..144,100..1000&family=Michroma:wght@400&display=swap"
-        />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_LD) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteGraph) }}
         />
         {/* PRE_HYDRATE script: rendered identically on server and client to
             avoid hydration mismatches. It must run BEFORE React hydrates so

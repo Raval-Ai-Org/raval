@@ -142,6 +142,9 @@ function normalizeBody(body: string): string {
 
 async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot> {
   const raw = await page.evaluate(() => {
+    // Animation text is decoration; snapshot the stable accessible heading.
+    const heading = document.querySelector("h1")?.cloneNode(true) as HTMLElement | undefined;
+    heading?.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
     const pick = (sel: string, attr = "content") =>
       document.querySelector(sel)?.getAttribute(attr) ?? null;
     const hreflang = Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map(
@@ -246,7 +249,7 @@ async function collectSnapshot(page: Page, path: string): Promise<RouteSnapshot>
       canonical: pick('link[rel="canonical"]', "href"),
       hreflang,
       robots: pick('meta[name="robots"]'),
-      h1: document.querySelector("h1")?.textContent?.trim() ?? null,
+      h1: heading?.textContent?.trim() ?? null,
       bodyText: document.body?.innerText ?? "",
       jsonLdTypes,
       jsonLdNodes,

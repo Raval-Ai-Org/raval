@@ -9,11 +9,25 @@ export const PRODUCTION_URL = "https://mellox.ai";
  * - A localhost value is ignored in production, so a stray local setting can never leak into the live site.
  * - In development it defaults to http://localhost:3000.
  */
-export function resolveSiteUrl(env = process.env.NEXT_PUBLIC_SITE_URL, production = process.env.NODE_ENV === "production") {
-  const value = env?.trim().replace(/\/$/, "");
-  const isLocal = !!value && /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(value);
-  if (value && !(production && isLocal)) return value;
-  return production ? PRODUCTION_URL : "http://localhost:3000";
+export function resolveSiteUrl(
+  env = process.env.NEXT_PUBLIC_SITE_URL,
+  production = process.env.NODE_ENV === "production",
+) {
+  try {
+    const url = new URL(env?.trim() || (production ? PRODUCTION_URL : "http://localhost:3000"));
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(url.hostname);
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      (production && local)
+    ) {
+      return production ? PRODUCTION_URL : "http://localhost:3000";
+    }
+    return url.origin;
+  } catch {
+    return production ? PRODUCTION_URL : "http://localhost:3000";
+  }
 }
 
 export const SITE_URL = resolveSiteUrl();
@@ -58,6 +72,8 @@ export const organizationJsonLd = {
   name: SITE_NAME,
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
+  description:
+    "Mellox AI is the Marketing Intelligence Layer — an AI-native platform that helps brands and agencies get visible inside LLMs.",
   sameAs: SOCIAL_PROFILES,
   // Who founded the company. The same people, by the same names, as the About page (src/marketing/lib/about.ts).
   founder: FOUNDERS.map((f) => ({
@@ -82,6 +98,8 @@ export const webSiteJsonLd = {
   url: SITE_URL,
   name: SITE_NAME,
   publisher: { "@id": `${SITE_URL}/#organization` },
+  description: "Get visible inside LLMs. The AI-native marketing platform for brands and agencies.",
+  inLanguage: "en",
 };
 
 /** SoftwareApplication with one Offer per priced plan (Scale is quoted, so it is left out). Prices come from /pricing data. */

@@ -25,7 +25,8 @@ function Row({ hidden = false }: { hidden?: boolean }) {
             width={l.w}
             height={l.h}
             style={{ height: l.height, width: "auto" }}
-            loading="eager"
+            loading="lazy"
+            sizes={`${Math.ceil((l.height * l.w) / l.h)}px`}
             unoptimized={l.src.endsWith(".svg")}
           />
         </li>
