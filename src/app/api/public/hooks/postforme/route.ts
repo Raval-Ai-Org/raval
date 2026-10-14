@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { readWebhookBody } from "@/server/request-body";
 import { z } from "zod";
 import { createPostForMeAdapter } from "@/lib/postforme/client.server";
 import { listAccountsHandler, syncPostHandler } from "@/lib/postforme/handlers";
@@ -20,9 +21,8 @@ export async function POST(request: Request): Promise<Response> {
   if (!secretMatches(request.headers.get("Post-For-Me-Webhook-Secret"), secret)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const raw = await request.text();
-  if (Buffer.byteLength(raw) > 1_000_000)
-    return Response.json({ error: "Payload too large" }, { status: 413 });
+  const raw = await readWebhookBody(request);
+  if (raw instanceof Response) return raw;
   let parsed: z.infer<typeof Event>;
   try {
     parsed = Event.parse(JSON.parse(raw));

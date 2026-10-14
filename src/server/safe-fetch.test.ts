@@ -43,6 +43,26 @@ beforeAll(async () => {
         res.writeHead(200, { "content-type": "text/html" });
         res.end("<title>hello</title>");
         return;
+      case "/headers":
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(req.headers));
+        return;
+      case "/same-origin":
+        res.writeHead(302, { location: "/headers" });
+        res.end();
+        return;
+      case "/other-origin":
+        res.writeHead(302, { location: `http://other.test:${port}/headers` });
+        res.end();
+        return;
+      case "/bounce":
+        res.writeHead(302, { location: `http://other.test:${port}/return` });
+        res.end();
+        return;
+      case "/return":
+        res.writeHead(302, { location: `http://public.test:${port}/headers` });
+        res.end();
+        return;
       case "/big":
         res.writeHead(200, { "content-type": "text/plain" });
         res.end("x".repeat(10_000));
@@ -84,6 +104,13 @@ describe("isBlockedAddress", () => {
     "::ffff:7f00:1",
     "fd00::1",
     "fe80::1",
+    "fec0::1",
+    "64:ff9b:1::a00:1",
+    "2002:a00:1::1",
+    "2001:db8::1",
+    "192.0.2.1",
+    "198.51.100.1",
+    "203.0.113.1",
   ])("blocks %s", (address) => {
     expect(isBlockedAddress(address)).toBe(true);
   });
@@ -130,6 +157,39 @@ describe("safeFetch", () => {
   describe("with an allow-all address policy", () => {
     const safeFetch = createSafeFetch({ lookup: fakeLookup, isBlockedAddress: () => false });
     const base = () => `http://public.test:${port}`;
+
+    const credentials = {
+      Authorization: "Bearer synthetic-credential",
+      Cookie: "session=synthetic-cookie",
+      "X-Custom-Secret": "synthetic-key",
+      Accept: "application/json",
+      "User-Agent": "Mellox-Test",
+      Range: "bytes=0-100",
+    };
+
+    it("preserves required credentials for redirects within the same origin", async () => {
+      const res = await safeFetch(`${base()}/same-origin`, { headers: credentials });
+      const headers = JSON.parse(res.text());
+      expect(headers.authorization).toBe(credentials.Authorization);
+      expect(headers.cookie).toBe(credentials.Cookie);
+      expect(headers["x-custom-secret"]).toBe(credentials["X-Custom-Secret"]);
+    });
+
+    it.each(["other-origin", "bounce"])(
+      "strips credentials and custom headers on %s redirects",
+      async (path) => {
+        const res = await safeFetch(`${base()}/${path}`, { headers: credentials });
+        const headers = JSON.parse(res.text());
+        expect(headers.authorization).toBeUndefined();
+        expect(headers.cookie).toBeUndefined();
+        expect(headers["x-custom-secret"]).toBeUndefined();
+        expect(headers.accept).toBe(credentials.Accept);
+        expect(headers["user-agent"]).toBe(credentials["User-Agent"]);
+        expect(headers.range).toBe(credentials.Range);
+        // Never mutate the caller's header object.
+        expect(credentials.Authorization).toBe("Bearer synthetic-credential");
+      },
+    );
 
     it("returns status, headers and body", async () => {
       const res = await safeFetch(`${base()}/ok`);

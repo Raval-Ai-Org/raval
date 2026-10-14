@@ -5,6 +5,7 @@
 // recorded in sdr_webhook_events — the reliability worker reads rejection
 // spikes from there.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { readWebhookBody } from "@/server/request-body";
 import { handleSdrWebhook, type WebhookReceipt } from "@/lib/sdr.webhook";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,8 @@ function recordReceipt(r: WebhookReceipt): void {
 }
 
 export async function POST(request: Request) {
-  const rawBody = await request.text();
+  const rawBody = await readWebhookBody(request, MAX_BODY_BYTES);
+  if (rawBody instanceof Response) return rawBody;
   const signature = request.headers.get("x-signature-256");
   const eventType = request.headers.get("x-event-type");
   const out = await handleSdrWebhook(

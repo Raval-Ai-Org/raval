@@ -186,6 +186,16 @@ describe("structured output", () => {
 });
 
 describe("pricing", () => {
+  it.each([
+    { model: "openai/gpt-6.1-sol", inPerM: 2, outPerM: 10, expectedCost: 0.3 },
+    { model: "openai/gpt-6-luna", inPerM: 0.1, outPerM: 0.5, expectedCost: 0.015 },
+  ])("prices $model using the upgraded rates", ({ model, inPerM, outPerM, expectedCost }) => {
+    expect(tokenPrice(model)).toEqual({ inPerM, outPerM });
+    expect(estimateTextCost(model, { inputTokens: 100_000, outputTokens: 10_000 })).toBe(
+      expectedCost,
+    );
+  });
+
   it("prices Claude Opus 5.5 on OpenRouter at $4 / $20 per million tokens", () => {
     expect(tokenPrice("anthropic/claude-opus-5.5")).toEqual({ inPerM: 4, outPerM: 20 });
     expect(

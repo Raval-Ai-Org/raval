@@ -42,6 +42,11 @@ async function meterRpc(
   if (!result || typeof result.ok !== "boolean") {
     throw new HttpError(503, "Billing balance is temporarily unavailable.");
   }
+  // A successful hold MUST identify its reservation. Otherwise callers could
+  // run a paid provider call with no hold to capture afterwards.
+  if (name === "meter_hold" && result.ok && (typeof result.id !== "string" || !result.id.trim())) {
+    throw new HttpError(503, "Billing balance is temporarily unavailable.");
+  }
   if (!result.ok && result.code !== "insufficient_balance" && result.code !== "brand_cap") {
     throw new HttpError(409, result.reason ?? "Billing balance could not be updated.");
   }

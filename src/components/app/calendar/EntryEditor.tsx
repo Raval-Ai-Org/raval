@@ -324,7 +324,7 @@ export function EntryEditor({
           <Field label="Title">
             <Input
               value={entry.title}
-              disabled={locked}
+              disabled={locked || busy}
               maxLength={280}
               onFocus={() => snapshot()}
               onChange={(e) => onChange({ title: e.target.value })}
@@ -337,7 +337,7 @@ export function EntryEditor({
               <Input
                 type="date"
                 value={entry.date}
-                disabled={locked}
+                disabled={locked || busy}
                 onChange={(e) => e.target.value && onMove(e.target.value, entry.time)}
                 className="h-9 px-2 text-[12px]"
               />
@@ -346,7 +346,7 @@ export function EntryEditor({
               <Input
                 type="time"
                 value={entry.time}
-                disabled={locked}
+                disabled={locked || busy}
                 onChange={(e) => e.target.value && onMove(entry.date, e.target.value)}
                 className="h-9 px-2 text-[12px]"
               />
@@ -354,7 +354,7 @@ export function EntryEditor({
             <Field label="Channel">
               <select
                 value={entry.channel}
-                disabled={locked}
+                disabled={locked || busy}
                 onChange={(e) => onChange({ channel: e.target.value as CalendarChannel })}
                 className={cn(input, "h-9 px-2")}
               >
@@ -370,7 +370,7 @@ export function EntryEditor({
           <Field label="Caption">
             <textarea
               value={entry.caption ?? ""}
-              disabled={locked}
+              disabled={locked || busy}
               rows={9}
               onFocus={() => snapshot()}
               onChange={(e) => onChange({ caption: e.target.value })}
@@ -381,7 +381,7 @@ export function EntryEditor({
           <Field label="Hashtags">
             <Input
               value={entry.hashtags.join(" ")}
-              disabled={locked}
+              disabled={locked || busy}
               onFocus={() => snapshot()}
               onChange={(e) =>
                 onChange({ hashtags: e.target.value.split(/\s+/).filter(Boolean).slice(0, 30) })

@@ -2,6 +2,7 @@ import { resolveServerFn } from "@/server/fns";
 import { getRequestScope, runWithRequest, setRequestScope } from "@/server/request-context";
 import { knownErrorResponse } from "@/server/route";
 import { readJsonBody, RequestBodyTooLargeError } from "@/server/request-body";
+import { requireUserId } from "@/server/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ fn: string
   if (!serverFn) {
     return json(404, { error: "Unknown server function" });
   }
+
+  // Refuse unsigned callers before reading/validating potentially large input.
+  // Each function still applies its own authentication and resource checks.
+  const auth = await requireUserId(request);
+  if (!auth.ok) return auth.response;
 
   let data: unknown = null;
   try {

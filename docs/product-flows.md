@@ -3,8 +3,20 @@
 ## Sign in to workspace
 
 The user enters through `/login` or `/signup`, completes Supabase auth, and is
-sent to `/projects`. Workspace pages are then rooted at `/w/<workspaceId>/app`.
+sent to their saved destination, with `/projects` as the default. Workspace
+pages are then rooted at `/w/<workspaceId>/app`.
 The workspace provider supplies the explicit id to app surfaces and queries.
+
+Password reset links open `/reset-password`. The page captures and removes link
+credentials before establishing the session, supports PKCE codes and token
+links, and shows the password form only after a session is available. Recovery
+confirmed through `/auth/confirm` can arrive with an already-established session.
+Invalid or rejected links offer a return to the login page to request a new
+email; failed password updates leave the form available for another attempt.
+
+Email confirmation retains successful verification while account setup is
+retried, so a consumed OTP is not submitted again. Failed logout leaves the
+user signed in with a retry message rather than presenting a false success.
 
 ## Create and ground a brand
 
@@ -19,6 +31,10 @@ persisted and can require approval. Publishing/scheduling routes verify role,
 content ownership, destination accounts, provider status, and plan credits.
 Delivery is asynchronous and visible through publication state, webhooks, and
 reconciliation.
+
+Calendar text edits save in sequence for each post. Approval, scheduling and
+rewriting wait until pending edits are saved; a failed save retains the edits
+and blocks the action. Stale background reads cannot replace newer text.
 
 ## Improve visibility
 

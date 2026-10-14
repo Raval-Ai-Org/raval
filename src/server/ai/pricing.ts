@@ -14,11 +14,15 @@ import "server-only";
 type TokenPrice = { inPerM: number; outPerM: number };
 
 // USD per 1M tokens: OpenRouter list prices confirmed from /api/v1/models on
-// 2026-09-25. OpenRouter's own usage.cost is always preferred over these.
+// 2026-09-25; GPT-6 replacements verified 2026-10-14. OpenRouter's own
+// usage.cost is always preferred over these.
 const TOKEN_PRICES: Record<string, TokenPrice> = {
   "anthropic/claude-opus-5.5": { inPerM: 4, outPerM: 20 },
   "google/gemini-3.8-flash": { inPerM: 0.75, outPerM: 3.75 },
   "google/gemini-3.1-flash-lite": { inPerM: 0.25, outPerM: 1.5 },
+  "openai/gpt-6.1-sol": { inPerM: 2, outPerM: 10 },
+  "openai/gpt-6-luna": { inPerM: 0.1, outPerM: 0.5 },
+  // Retain estimates for historical calls and explicit model overrides.
   "openai/gpt-5.6-terra": { inPerM: 2, outPerM: 12 },
   "openai/gpt-5.6-luna": { inPerM: 0.2, outPerM: 1.2 },
   "perplexity/sonar": { inPerM: 1, outPerM: 1 },

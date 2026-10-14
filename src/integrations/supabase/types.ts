@@ -3328,6 +3328,286 @@ export type Database = {
           },
         ];
       };
+      brand_visual_capture_jobs: {
+        Row: {
+          attempts: number;
+          created_at: string;
+          created_by: string | null;
+          error: string | null;
+          id: string;
+          idempotency_key: string;
+          lease_token: string | null;
+          lease_until: string | null;
+          max_pages: number;
+          mode: string;
+          next_page: number;
+          pages: Json;
+          stage: string;
+          status: string;
+          updated_at: string;
+          url: string;
+          warnings: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          id?: string;
+          idempotency_key: string;
+          lease_token?: string | null;
+          lease_until?: string | null;
+          max_pages?: number;
+          mode?: string;
+          next_page?: number;
+          pages?: Json;
+          stage?: string;
+          status?: string;
+          updated_at?: string;
+          url: string;
+          warnings?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          attempts?: number;
+          created_at?: string;
+          created_by?: string | null;
+          error?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          lease_token?: string | null;
+          lease_until?: string | null;
+          max_pages?: number;
+          mode?: string;
+          next_page?: number;
+          pages?: Json;
+          stage?: string;
+          status?: string;
+          updated_at?: string;
+          url?: string;
+          warnings?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_visual_capture_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_visual_feedback: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          job_id: string | null;
+          note: string;
+          profile_id: string | null;
+          reason: string;
+          source_ids: string[];
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          job_id?: string | null;
+          note?: string;
+          profile_id?: string | null;
+          reason: string;
+          source_ids?: string[];
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          job_id?: string | null;
+          note?: string;
+          profile_id?: string | null;
+          reason?: string;
+          source_ids?: string[];
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_visual_feedback_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "studio_jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_visual_feedback_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_visual_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_visual_feedback_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_visual_profiles: {
+        Row: {
+          capture_job_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          profile: Json;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          capture_job_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          profile: Json;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          capture_job_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          profile?: Json;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_visual_profiles_capture_job_id_fkey";
+            columns: ["capture_job_id"];
+            isOneToOne: true;
+            referencedRelation: "brand_visual_capture_jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_visual_profiles_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_visual_settings: {
+        Row: {
+          active_profile_id: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          active_profile_id?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          active_profile_id?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_visual_settings_active_profile_id_fkey";
+            columns: ["active_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_visual_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_visual_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      brand_visual_sources: {
+        Row: {
+          asset_id: string;
+          campaign: string | null;
+          capture_job_id: string | null;
+          created_at: string;
+          formats: string[];
+          id: string;
+          kind: string;
+          label: string;
+          notes: string;
+          purpose: string;
+          region: Json;
+          source_url: string | null;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          asset_id: string;
+          campaign?: string | null;
+          capture_job_id?: string | null;
+          created_at?: string;
+          formats?: string[];
+          id?: string;
+          kind: string;
+          label: string;
+          notes?: string;
+          purpose?: string;
+          region?: Json;
+          source_url?: string | null;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          asset_id?: string;
+          campaign?: string | null;
+          capture_job_id?: string | null;
+          created_at?: string;
+          formats?: string[];
+          id?: string;
+          kind?: string;
+          label?: string;
+          notes?: string;
+          purpose?: string;
+          region?: Json;
+          source_url?: string | null;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "brand_visual_sources_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_visual_sources_capture_job_id_fkey";
+            columns: ["capture_job_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_visual_capture_jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "brand_visual_sources_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       canva_design_mappings: {
         Row: {
           asset_id: string | null;
@@ -10433,6 +10713,11 @@ export type Database = {
         Returns: string;
       };
       accept_workspace_invite: { Args: { _token: string }; Returns: string };
+      account_billable_seat_count: { Args: { p_account: string }; Returns: number };
+      account_has_billable_member: {
+        Args: { p_account: string; p_user: string };
+        Returns: boolean;
+      };
       account_wallet: {
         Args: { p_account: string };
         Returns: {
@@ -10453,6 +10738,10 @@ export type Database = {
         Returns: Json;
       };
       activate_billing_social_profile_slot: { Args: { p_workspace: string }; Returns: undefined };
+      activate_brand_visual_profile: {
+        Args: { p_workspace: string; p_profile: string; p_expected: string };
+        Returns: undefined;
+      };
       ai_usage_summary: {
         Args: { p_scope_key: string };
         Returns: {
@@ -10496,6 +10785,7 @@ export type Database = {
         }[];
       };
       apply_credit_entry: { Args: { p: Json }; Returns: Json };
+      auth_user_id_for_email: { Args: { p_email: string }; Returns: string };
       autopilot_overview: {
         Args: never;
         Returns: {
@@ -10586,6 +10876,14 @@ export type Database = {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["site_publications"]["Row"][];
       };
+      claim_slack_inbox: {
+        Args: { p_limit: number };
+        Returns: Database["public"]["Tables"]["slack_inbox"]["Row"][];
+      };
+      claim_slack_outbound: {
+        Args: { p_limit: number };
+        Returns: Database["public"]["Tables"]["slack_outbound"]["Row"][];
+      };
       claim_tracked_prompts: {
         Args: { p_limit: number; p_lease_seconds: number };
         Returns: Database["public"]["Tables"]["geo_tracked_prompts"]["Row"][];
@@ -10593,6 +10891,10 @@ export type Database = {
       claim_ugc_renders: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["ugc_renders"]["Row"][];
+      };
+      complete_visual_analysis: {
+        Args: { p_job: string; p_token: string; p_profile: Json };
+        Returns: undefined;
       };
       consume_rate_limit: {
         Args: { p_bucket_key: string; p_window_seconds: number; p_limit: number; p_cost?: number };
@@ -10658,6 +10960,17 @@ export type Database = {
         Returns: Json;
       };
       record_ai_usage: { Args: { p_event: Json }; Returns: number };
+      refresh_canva_authorization: {
+        Args: {
+          p_workspace_id: string;
+          p_connection_id: string;
+          p_previous_refresh_token_enc: string;
+          p_access_token_enc: string;
+          p_refresh_token_enc: string;
+          p_expires_at: string;
+        };
+        Returns: boolean;
+      };
       release_ai_usage_reservation: { Args: { p_id: string; p_reason?: string }; Returns: boolean };
       release_billing_social_profile_slot_if_empty: {
         Args: { p_workspace: string };
@@ -10669,10 +10982,39 @@ export type Database = {
         Args: { p_provider: string; p_token: string; p_phase?: string; p_lease_seconds?: number };
         Returns: boolean;
       };
+      replace_visual_artwork: {
+        Args: {
+          p_workspace: string;
+          p_job: string;
+          p_expected: Json;
+          p_output: Json;
+          p_asset: string;
+          p_headline: string;
+        };
+        Returns: undefined;
+      };
       reserve_ai_usage: { Args: { p_request: Json }; Returns: Json };
       reserve_billing_social_profile_slot: {
         Args: { p_workspace: string; p_limit: number };
         Returns: undefined;
+      };
+      resolve_media_storage_paths: {
+        Args: { paths: string[] };
+        Returns: { source_path: string; target_path: string; status: string }[];
+      };
+      save_canva_authorization: {
+        Args: {
+          p_workspace_id: string;
+          p_user_id: string;
+          p_state_id: string;
+          p_access_token_enc: string;
+          p_refresh_token_enc: string;
+          p_expires_at: string;
+          p_scopes: string[];
+          p_canva_user_id: string;
+          p_canva_team_id: string;
+        };
+        Returns: string;
       };
       set_billing_enforcement_override: {
         Args: {
@@ -10689,7 +11031,16 @@ export type Database = {
         Returns: { persona: string; persona_set_at: string }[];
       };
       sweep_rixot_donors: { Args: { p_before: string }; Returns: number };
+      tombstone_migrated_media: { Args: { paths: string[] }; Returns: undefined };
       upsert_rixot_donors: { Args: { p_rows: Json }; Returns: number };
+      use_manual_visual_look: {
+        Args: { p_workspace: string; p_expected: string };
+        Returns: undefined;
+      };
+      withdraw_canva_authorization: {
+        Args: { p_workspace_id: string };
+        Returns: { refresh_token_enc: string }[];
+      };
       workspace_member_profiles: {
         Args: { _workspace_id: string };
         Returns: {
@@ -10699,6 +11050,10 @@ export type Database = {
           avatar_url: string;
           joined_at: string;
         }[];
+      };
+      workspace_members_page: {
+        Args: { p_workspace: string; p_offset: number; p_limit: number };
+        Returns: Json;
       };
       workspace_overview: {
         Args: never;

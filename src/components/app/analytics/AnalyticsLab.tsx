@@ -455,6 +455,7 @@ export function AnalyticsLab() {
   const [state, setState] = useState<StateId>("connected");
   const [tab, setTab] = useState<AnalyticsTab>("overview");
   const [asModal, setAsModal] = useState(false);
+  const [ready, setReady] = useState(false);
   const connection = STATES.find((s) => s.id === state)!.view;
   // A fresh client per state so switching re-reads every stubbed report.
   const queryClient = useMemo(
@@ -464,6 +465,7 @@ export function AnalyticsLab() {
   );
 
   useEffect(() => {
+    setReady(true);
     const real = window.fetch;
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -492,7 +494,7 @@ export function AnalyticsLab() {
   }, [connection]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div data-ready={ready} className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 flex flex-wrap items-center gap-3 border-b border-border bg-background/90 px-4 py-2.5 backdrop-blur-xl">
         <span className="text-[12px] font-semibold">Analytics lab</span>
         <div className="flex flex-wrap gap-1">

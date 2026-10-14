@@ -192,8 +192,11 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="tasks" className="flex flex-col overflow-hidden">
-          <TabsList className="mx-6 mt-4 grid w-[calc(100%-3rem)] grid-cols-4 bg-muted/40 p-1">
+        <Tabs
+          defaultValue="tasks"
+          className="@container/agent flex min-w-0 flex-col overflow-hidden"
+        >
+          <TabsList className="mx-6 mt-4 grid w-[calc(100%-3rem)] grid-cols-2 bg-muted/40 p-1 @min-[420px]/agent:grid-cols-4">
             <TabsTrigger value="tasks" className="gap-1.5 text-xs data-[state=active]:shadow-sm">
               <Bell className="h-3.5 w-3.5" /> Tasks
             </TabsTrigger>

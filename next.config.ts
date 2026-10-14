@@ -26,6 +26,9 @@ function supabaseOrigins(): string[] {
 }
 
 const PDF_WORKER_CDN = "https://cdn.jsdelivr.net";
+const CAPTCHA_ORIGIN = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()
+  ? " https://challenges.cloudflare.com"
+  : "";
 const CLARITY_HOSTS = [
   "https://www.clarity.ms",
   ...Array.from(
@@ -36,7 +39,7 @@ const CLARITY_HOSTS = [
 
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${CAPTCHA_ORIGIN}${isDev ? " 'unsafe-eval'" : ""}`,
   `worker-src 'self' blob: ${PDF_WORKER_CDN}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -45,7 +48,7 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
   `connect-src 'self' https://accounts.google.com/gsi/ ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com${isDev ? " ws: http://localhost:*" : ""}`,
-  "frame-src 'self' https://accounts.google.com",
+  `frame-src 'self' https://accounts.google.com${CAPTCHA_ORIGIN}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",

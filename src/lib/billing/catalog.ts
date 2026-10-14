@@ -690,7 +690,7 @@ export const CREDIT_ACTIONS = {
     unit: "first scan per brand is free",
     feature: null,
     expectedCostUsd: 0.234,
-    routes: ["brand-extract", "brand-extract.search"],
+    routes: ["brand-extract", "brand-extract.search", "brand-visuals.analyze"],
   },
   file_extract: {
     credits: 4,
@@ -878,6 +878,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   // Shared social trends snapshot: collected for everyone, charged to no one.
   "studio.trends",
   "studio.image.review",
+  // Visual identity review is part of the already charged Studio image action.
+  "brand-visuals.review",
   "analytics/insights-auto",
   "agent.content-fit",
   "agent.distribution-reliability",

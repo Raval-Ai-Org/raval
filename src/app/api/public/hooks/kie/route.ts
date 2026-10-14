@@ -4,13 +4,15 @@
 // callback body is never trusted for status, video URL or cost. Idempotent:
 // repeated callbacks find the render already advanced.
 import { after } from "next/server";
+import { readWebhookBody } from "@/server/request-body";
 import { verifyKieCallback } from "@/server/ugc/webhook.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const rawBody = await request.text();
+  const rawBody = await readWebhookBody(request);
+  if (rawBody instanceof Response) return rawBody;
   const verdict = verifyKieCallback({
     rawBody,
     signature: request.headers.get("x-webhook-signature"),

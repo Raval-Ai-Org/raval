@@ -19,6 +19,12 @@ const Schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(10),
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9_-]{10,100}$/i)
+    .optional()
+    .or(z.literal("")),
   OPENROUTER_API_KEY: z.string().startsWith("sk-or-"),
   CRON_SECRET: z.string().min(16),
   // AI models: every text, vision and image call goes through OpenRouter
@@ -143,6 +149,20 @@ const RECOMMENDED = ["TAVILY_API_KEY", "REDIS_URL", "SENTRY_DSN", "ALERT_WEBHOOK
 
 export type EnvReport = { ok: boolean; errors: string[]; warnings: string[] };
 
+/** Configuration inspection only; never treats a decoded JWT as authorization. */
+function isServerSecret(value: string): boolean {
+  if (/^(?:sb_secret_|sk-or-v1-|sk-ant-|sk-proj-|[sr]k_(?:live|test)_|gh[pousr]_)/i.test(value))
+    return true;
+  if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(value)) return true;
+  const parts = value.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    return JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")).role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
 /** Validate an env object. Pure — exported for tests. */
 export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   const errors: string[] = [];
@@ -233,12 +253,40 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
   // A provider secret in a NEXT_PUBLIC_* variable is inlined into the browser bundle.
   for (const name of Object.keys(env)) {
     if (
-      /^NEXT_PUBLIC_.*(POST_FOR_ME|SOCIALAPI|SDR_ADMIN|SERVICE_ROLE|GITHUB_APP_PRIVATE|GITHUB_WEBHOOK|GITHUB_CLIENT_SECRET|GOOGLE_ANALYTICS_CLIENT_SECRET|GOOGLE_TOKEN_ENCRYPTION|GOOGLE_CLIENT_SECRET|RIXOT_API|STRIPE_SECRET|STRIPE_WEBHOOK|TAVILY_API)/i.test(
+      name.startsWith("NEXT_PUBLIC_") &&
+      env[name] &&
+      (/SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE|ENCRYPTION_KEY|POST_FOR_ME|SOCIALAPI|SDR_ADMIN|GITHUB_WEBHOOK|RIXOT_API|TAVILY_API|OPENROUTER_API|OPENAI_API|ANTHROPIC_API|KIE_API|FIRECRAWL_API/i.test(
         name,
-      ) &&
-      env[name]
+      ) ||
+        isServerSecret(env[name]!))
     ) {
       errors.push(`${name} exposes a server-only secret to the browser — remove it`);
+    }
+  }
+  if (env.SUPABASE_PUBLISHABLE_KEY && isServerSecret(env.SUPABASE_PUBLISHABLE_KEY)) {
+    errors.push(
+      "SUPABASE_PUBLISHABLE_KEY must be a public key, never a service-role or secret key",
+    );
+  }
+  if (production) {
+    for (const name of ["APP_URL", "NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_SUPABASE_URL"]) {
+      if (!env[name]) continue;
+      try {
+        const url = new URL(env[name]!);
+        if (url.protocol !== "https:" || url.username || url.password) {
+          errors.push(`${name} must use HTTPS without embedded credentials in production`);
+        }
+      } catch {
+        /* The schema validation already reports malformed URLs. */
+      }
+    }
+    if (/^[123]x0{20}[A-Z]{2}$/i.test(env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "")) {
+      errors.push("NEXT_PUBLIC_TURNSTILE_SITE_KEY is a testing key; use a production widget key");
+    }
+    if (!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()) {
+      warnings.push(
+        "NEXT_PUBLIC_TURNSTILE_SITE_KEY is not set (authentication bot protection is not activated)",
+      );
     }
   }
   if (env.APP_URL && env.NEXT_PUBLIC_APP_URL && env.APP_URL !== env.NEXT_PUBLIC_APP_URL) {

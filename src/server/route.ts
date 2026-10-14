@@ -169,8 +169,10 @@ function toResponse(result: unknown): Response {
   // A soft plan limit was crossed during this request (src/server/ai/budget.ts),
   // or the wallet balance moved (hold, charge or refund): tell the browser.
   const { usageWarning: warning, billingChanged } = getRequestScope();
-  if (!warning && !billingChanged) return response;
   const headers = new Headers(response.headers);
+  // Explicit Response objects (streams, downloads, errors) need the same
+  // protection as plain JSON, even outside Next's configured response headers.
+  headers.set("Cache-Control", "no-store");
   if (warning) headers.set("X-Usage-Warning", warning);
   if (billingChanged) headers.set("X-Billing-Changed", "1");
   return new Response(response.body, {

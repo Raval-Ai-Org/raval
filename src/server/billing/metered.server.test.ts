@@ -129,11 +129,23 @@ describe("runMetered", () => {
     expect(mocked.release).not.toHaveBeenCalled();
   });
 
-  it("refuses viewer spending before a hold", async () => {
-    mocked.entitlements.mockResolvedValue(entitlements("on", { role: "viewer" }));
-    await expect(runMetered(args, async () => "should not run")).rejects.toMatchObject({
-      code: "spend_not_allowed",
-    } satisfies Partial<BillingError>);
+  it.each(["on", "off", "shadow"] as const)(
+    "refuses viewer spending in %s mode before a hold",
+    async (mode) => {
+      mocked.entitlements.mockResolvedValue(entitlements(mode, { role: "viewer" }));
+      await expect(runMetered(args, async () => "should not run")).rejects.toMatchObject({
+        code: "spend_not_allowed",
+      } satisfies Partial<BillingError>);
+      expect(mocked.hold).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a quantity that overflows the calculated price before provider work", async () => {
+    const run = vi.fn();
+    await expect(
+      runMetered({ ...args, quantity: Number.MAX_SAFE_INTEGER }, run),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(run).not.toHaveBeenCalled();
     expect(mocked.hold).not.toHaveBeenCalled();
   });
 });
@@ -149,6 +161,53 @@ describe("deferred stream charges", () => {
     idempotencyKey: "chat-click-1",
     route: "chat",
   };
+
+  it.each(["off", "shadow"] as const)(
+    "refuses a viewer's streamed spending in %s mode",
+    async (mode) => {
+      mocked.entitlements.mockResolvedValue(entitlements(mode, { role: "viewer" }));
+      await expect(beginDeferredMetered(streamArgs)).rejects.toMatchObject({
+        code: "spend_not_allowed",
+      });
+      expect(mocked.hold).not.toHaveBeenCalled();
+    },
+  );
+
+  it("serializes capture and client cancellation so a completed answer is never released", async () => {
+    mocked.entitlements.mockResolvedValue(
+      entitlements("on", { meters: { flash_messages: { available: 10 } } }),
+    );
+    let finish!: () => void;
+    mocked.capture.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const charge = await beginDeferredMetered(streamArgs);
+    const capturing = charge.capture();
+    const cancelling = charge.release();
+    const duplicate = charge.capture();
+    expect(mocked.capture).toHaveBeenCalledOnce();
+    expect(mocked.release).not.toHaveBeenCalled();
+    finish();
+    await Promise.all([capturing, cancelling, duplicate]);
+    expect(mocked.release).not.toHaveBeenCalled();
+  });
+
+  it("keeps an ambiguous capture for reconciliation and permits a capture retry", async () => {
+    mocked.entitlements.mockResolvedValue(
+      entitlements("on", { meters: { flash_messages: { available: 10 } } }),
+    );
+    mocked.capture.mockRejectedValueOnce(new Error("response lost"));
+    const charge = await beginDeferredMetered(streamArgs);
+    await expect(charge.capture()).rejects.toThrow("response lost");
+    await charge.release();
+    expect(mocked.release).not.toHaveBeenCalled();
+    await charge.capture();
+    expect(mocked.capture).toHaveBeenCalledTimes(2);
+    expect(mocked.capture.mock.calls[0]).toEqual(mocked.capture.mock.calls[1]);
+  });
 
   it("reserves before streaming and captures only after completion", async () => {
     mocked.entitlements.mockResolvedValue(

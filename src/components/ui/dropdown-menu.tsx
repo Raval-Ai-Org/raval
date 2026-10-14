@@ -27,7 +27,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-surface-2 data-[state=open]:bg-surface-2 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      "flex min-w-0 cursor-default select-none items-center gap-2 [overflow-wrap:anywhere] rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-surface-2 data-[state=open]:bg-surface-2 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
       inset && "pl-8",
       className,
     )}
@@ -42,16 +42,65 @@ DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayNam
 const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
->(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.SubContent
-    ref={ref}
-    className={cn(
-      "z-50 min-w-[8rem] overflow-hidden rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, sideOffset = 4, collisionPadding = 8, ...props }, forwardedRef) => {
+  const [content, setContent] = React.useState<HTMLDivElement | null>(null);
+  const [overlapOffset, setOverlapOffset] = React.useState<number | null>(null);
+  const setRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setContent(node);
+      if (typeof forwardedRef === "function") forwardedRef(node);
+      else if (forwardedRef) forwardedRef.current = node;
+    },
+    [forwardedRef],
+  );
+  const placeWithinViewport = React.useCallback(() => {
+    const trigger = document.getElementById(content?.getAttribute("aria-labelledby") ?? "");
+    if (!content || !trigger) return;
+    const bounds = trigger.getBoundingClientRect();
+    const width = content.offsetWidth;
+    const margin = Math.max(8, typeof collisionPadding === "number" ? collisionPadding : 0);
+    if (
+      bounds.left - margin >= width + sideOffset ||
+      window.innerWidth - bounds.right - margin >= width + sideOffset
+    ) {
+      setOverlapOffset(null);
+      return;
+    }
+    // A phone cannot fit two menus side by side. Let the child overlap its
+    // parent using Radix's offset, preserving its focus and keyboard handling.
+    const left = Math.max(margin, Math.min(bounds.left, window.innerWidth - width - margin));
+    setOverlapOffset(
+      getComputedStyle(content).direction === "rtl"
+        ? bounds.left - width - left
+        : left - bounds.right,
+    );
+  }, [content, collisionPadding, sideOffset]);
+  React.useLayoutEffect(() => {
+    if (!content) return;
+    placeWithinViewport();
+    const observer = new ResizeObserver(placeWithinViewport);
+    observer.observe(content);
+    const trigger = document.getElementById(content.getAttribute("aria-labelledby") ?? "");
+    if (trigger) observer.observe(trigger);
+    window.addEventListener("resize", placeWithinViewport);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", placeWithinViewport);
+    };
+  }, [content, placeWithinViewport]);
+  return (
+    <DropdownMenuPrimitive.SubContent
+      ref={setRef}
+      sideOffset={overlapOffset ?? sideOffset}
+      collisionPadding={collisionPadding}
+      className={cn(
+        "z-50 min-w-[8rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
 const DropdownMenuContent = React.forwardRef<
@@ -63,7 +112,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl",
+        "z-50 max-w-[calc(100vw-1rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overscroll-contain overflow-y-auto overflow-x-hidden rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
         className,
       )}
@@ -89,7 +138,7 @@ const DropdownMenuItem = React.forwardRef<
     ref={ref}
     data-variant={variant}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+      "relative flex min-w-0 cursor-default select-none items-center gap-2 [overflow-wrap:anywhere] rounded-lg px-2.5 py-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
       variant === "destructive"
         ? "text-danger focus:bg-danger-surface focus:text-danger"
         : "focus:bg-surface-2 focus:text-foreground",

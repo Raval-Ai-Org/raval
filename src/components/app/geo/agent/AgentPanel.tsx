@@ -60,6 +60,9 @@ const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message
 const MODEL_NAMES: Record<string, string> = {
   "anthropic/claude-opus-5.5": "Claude Opus 5.5",
   "google/gemini-3.8-flash": "Gemini 3.8 Flash",
+  "openai/gpt-6.1-sol": "GPT-6.1 Sol",
+  "openai/gpt-6-luna": "GPT-6 Luna",
+  // Preserve labels for previously recorded runs.
   "openai/gpt-5.6-terra": "GPT-5.6 Terra",
   // Labels for runs recorded before the move to OpenRouter.
   "claude-sonnet-5": "Claude Sonnet 5",

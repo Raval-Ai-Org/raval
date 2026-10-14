@@ -293,6 +293,49 @@ describe("per-frame delivery", () => {
 });
 
 describe("timing", () => {
+  it("keeps complete schedules separated across narrow and wide posting windows", () => {
+    const hm = (minutes: number) =>
+      `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    for (let start = 0; start <= 1320; start += 30) {
+      for (const width of [60, 90, 120, 180, 360]) {
+        if (start + width >= 1440) continue;
+        for (let count = 1; count <= 4; count++) {
+          const { times } = storyTimes({
+            windowStart: hm(start),
+            windowEnd: hm(start + width),
+            perDay: count,
+          });
+          const minutes = times.map(
+            (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3)),
+          );
+          expect(times).toHaveLength(count);
+          expect(minutes.every((value) => value >= start && value <= start + width)).toBe(true);
+          for (let i = 1; i < count; i++)
+            expect(minutes[i] - minutes[i - 1]).toBeGreaterThanOrEqual(
+              Math.min(90, Math.floor(width / count)),
+            );
+        }
+      }
+    }
+  });
+  it("replaces blocked peak selections with a complete evenly spaced schedule", () => {
+    const { times, source } = storyTimes({ windowStart: "12:00", windowEnd: "13:00", perDay: 4 });
+    expect(source).toBe("even");
+    const minutes = times.map((time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3)));
+    expect(times).toHaveLength(4);
+    expect(times.every((time) => time >= "12:00" && time <= "13:00")).toBe(true);
+    for (let i = 1; i < minutes.length; i++)
+      expect(minutes[i] - minutes[i - 1]).toBeGreaterThanOrEqual(15);
+  });
+
+  it("never learns infinite reach as a successful posting hour", () => {
+    expect(
+      bestHours([
+        { hour: 12, reach: Infinity },
+        { hour: 12, reach: 5 },
+      ]),
+    ).toEqual([]);
+  });
   it("validates settings and reads stored ones safely", () => {
     expect(StorySettingsSchema.safeParse({ ...DEFAULT_STORY_SETTINGS, perDay: 9 }).success).toBe(
       false,

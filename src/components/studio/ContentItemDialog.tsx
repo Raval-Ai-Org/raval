@@ -60,6 +60,12 @@ export function ContentItemDialog() {
     if (!item) return;
     setBusy(true);
     try {
+      if (status === "rejected" && item.status === "draft") {
+        await updateContentItem({ data: { id: item.id, patch: { status: "pending" } } });
+        setItem((current) =>
+          current?.id === item.id ? { ...current, status: "pending" } : current,
+        );
+      }
       await updateContentItem({ data: { id: item.id, patch: { status } } });
       emitAppEvent("content:changed");
       toast.success(status === "approved" ? "Approved" : "Discarded");
@@ -88,6 +94,7 @@ export function ContentItemDialog() {
 
   const legacyLabel = item ? LEGACY_KINDS[item.kind] : undefined;
   const decidable = item && (item.status === "pending" || item.status === "draft");
+  const deliveryActive = item?.status === "scheduled" || item?.status === "publishing";
 
   return (
     <Dialog open={!!id} onOpenChange={(v) => !v && setId(null)}>
@@ -119,7 +126,10 @@ export function ContentItemDialog() {
             size="sm"
             variant="ghost"
             onClick={() => void remove()}
-            disabled={!item}
+            disabled={!item || deliveryActive}
+            title={
+              deliveryActive ? "Cancel the schedule or wait for publishing to finish" : undefined
+            }
             loading={busy}
           >
             <Trash />

@@ -10,7 +10,7 @@
  * that owns it, so the rules of that place still apply.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Slot } from "@radix-ui/react-slot";
 import {
@@ -63,8 +63,12 @@ function when(group: PublishGroup, at: string | null): string | null {
 export function PublishDialog({ workspaceId, children }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [queue, setQueue] = useState<PublishQueue | null>(null);
+  const [loaded, setLoaded] = useState<{ workspaceId: string; queue: PublishQueue } | null>(null);
+  const queue = loaded?.workspaceId === workspaceId ? loaded.queue : null;
   const [error, setError] = useState(false);
+  const request = useRef({ generation: 0 }).current;
+  const activeWorkspace = useRef(workspaceId);
+  activeWorkspace.current = workspaceId;
 
   useEffect(() => {
     const h = () => setOpen(true);
@@ -73,23 +77,34 @@ export function PublishDialog({ workspaceId, children }: Props) {
   }, []);
 
   const load = useCallback(async () => {
-    if (!workspaceId) return;
+    const generation = ++request.generation;
+    if (!workspaceId) {
+      setError(true);
+      return;
+    }
     try {
-      setQueue(await getPublishQueue({ data: { workspaceId } }));
+      const result = await getPublishQueue({ data: { workspaceId } });
+      if (generation !== request.generation || workspaceId !== activeWorkspace.current) return;
+      setLoaded({ workspaceId, queue: result });
       setError(false);
     } catch {
-      setError(true);
+      if (generation === request.generation && workspaceId === activeWorkspace.current)
+        setError(true);
     }
-  }, [workspaceId]);
+  }, [workspaceId, request]);
 
   useEffect(() => {
     if (!open) return;
-    setQueue(null);
+    setLoaded(null);
     setError(false);
     void load();
     // A post approved or scheduled elsewhere shows up without reopening.
-    return onAppEvent("content:changed", () => void load());
-  }, [open, load]);
+    const unsubscribe = onAppEvent("content:changed", () => void load());
+    return () => {
+      request.generation++;
+      unsubscribe();
+    };
+  }, [open, load, request]);
 
   const openEntry = (entry: PublishEntry) => {
     setOpen(false);
@@ -115,6 +130,17 @@ export function PublishDialog({ workspaceId, children }: Props) {
         srDescription="Approved posts, scheduled posts and website changes waiting to go live"
         bodyClassName="px-5 py-5 sm:px-6"
       >
+        {queue?.unavailableSources?.length && !error ? (
+          <div
+            role="status"
+            className="mb-4 rounded-lg border border-warning/20 bg-warning/5 p-3 text-sm"
+          >
+            <p>Some work couldn't be loaded: {queue.unavailableSources.join(", ")}.</p>
+            <Button variant="link" size="sm" onClick={() => void load()}>
+              Retry loading
+            </Button>
+          </div>
+        ) : null}
         {error ? (
           <ErrorState
             size="sm"
@@ -131,8 +157,16 @@ export function PublishDialog({ workspaceId, children }: Props) {
         ) : total === 0 ? (
           <EmptyState
             icon={CheckCircle}
-            title="Nothing waiting to go out"
-            description="Approve a post and it shows up here, ready for a time."
+            title={
+              queue.unavailableSources?.length
+                ? "The list is incomplete"
+                : "Nothing waiting to go out"
+            }
+            description={
+              queue.unavailableSources?.length
+                ? "Retry loading to check the remaining work."
+                : "Approve a post and it shows up here, ready for a time."
+            }
             action={
               <Button
                 onClick={() => {

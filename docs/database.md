@@ -25,18 +25,25 @@ reconciliation, and credit usage. If the database and browser disagree, the
 database is the authoritative system of record and the server logic is expected
 to reconcile the difference.
 
+Changing an approved post's `kind` while keeping its status unchanged now
+invalidates approval through `content_items_invalidate_kind_approval`. Apply
+`20261018090000_content_kind_approval.sql` before releasing this behavior. The
+trigger runs before the existing lifecycle validator; calendar-only moves and
+provider delivery transitions retain their existing rules. No columns or
+client-facing database function signatures change.
+
 ## Core domains
 
-| Domain | Tables (representative current objects) |
-| --- | --- |
-| Identity/workspaces | `profiles`, `workspaces`, `workspace_members`, `workspace_invites`, `workspace_brand_dna`, `workspace_sources`, `workspace_connections` |
-| Content and delivery | `content_items`, `content_publications`, `approvals`, `assets`, `scheduled_jobs` |
-| Conversation and memory | `conversations`, `chat_messages`, `memory_insights` |
-| AI usage and controls | `ai_usage_events`, `ai_usage_daily`, `ai_usage_reservations`, `guardrail_events`, `api_rate_limits` |
-| GEO and agents | `geo_scans`, `geo_scan_pages`, `geo_findings`, `geo_finding_states`, `geo_verifications`, `geo_fix_batches`, `geo_fix_proposals`, `geo_agent_runs`, `geo_agent_events`, `agent_runs`, `agent_run_steps`, `agent_findings`, `agent_action_requests` |
-| Media | `studio_jobs`, `ugc_projects`, `ugc_renders` |
-| Social and analytics | `social_accounts`, `social_oauth_states`, `social_usage_events`, `workspace_sdr`, `workspace_socialapi`, `analytics_sources`, `analytics_sync_runs`, `analytics_ga4_daily`, `analytics_gsc_daily`, aggregate and insight tables |
-| Operations | `audit_logs`, `cron_heartbeats`, `sdr_webhook_events`, `competitor_intelligence_runs`, `market_intelligence_cache`, `market_trend_collections` |
+| Domain                  | Tables (representative current objects)                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity/workspaces     | `profiles`, `workspaces`, `workspace_members`, `workspace_invites`, `workspace_brand_dna`, `workspace_sources`, `workspace_connections`                                                                                                            |
+| Content and delivery    | `content_items`, `content_publications`, `approvals`, `assets`, `scheduled_jobs`                                                                                                                                                                   |
+| Conversation and memory | `conversations`, `chat_messages`, `memory_insights`                                                                                                                                                                                                |
+| AI usage and controls   | `ai_usage_events`, `ai_usage_daily`, `ai_usage_reservations`, `guardrail_events`, `api_rate_limits`                                                                                                                                                |
+| GEO and agents          | `geo_scans`, `geo_scan_pages`, `geo_findings`, `geo_finding_states`, `geo_verifications`, `geo_fix_batches`, `geo_fix_proposals`, `geo_agent_runs`, `geo_agent_events`, `agent_runs`, `agent_run_steps`, `agent_findings`, `agent_action_requests` |
+| Media                   | `studio_jobs`, `ugc_projects`, `ugc_renders`                                                                                                                                                                                                       |
+| Social and analytics    | `social_accounts`, `social_oauth_states`, `social_usage_events`, `workspace_sdr`, `workspace_socialapi`, `analytics_sources`, `analytics_sync_runs`, `analytics_ga4_daily`, `analytics_gsc_daily`, aggregate and insight tables                    |
+| Operations              | `audit_logs`, `cron_heartbeats`, `sdr_webhook_events`, `competitor_intelligence_runs`, `market_intelligence_cache`, `market_trend_collections`                                                                                                     |
 
 This is a domain index, not a substitute for the migration definitions. New
 schema work must update the relevant migration and regenerate types.

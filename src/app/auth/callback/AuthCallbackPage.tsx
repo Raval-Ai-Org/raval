@@ -2,10 +2,11 @@
 
 import { Link, useNavigate } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, AlertTriangle, CheckCircle2 } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { consumeStoredNextPath, friendlyAuthError } from "@/lib/auth";
+import { exchangeAuthCode } from "@/lib/auth-code";
 import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ type CallbackState =
   | { status: "loading"; message: string }
   | { status: "success"; message: string }
   | { status: "error"; message: string };
+
+type CallbackResult = { nextPath: string } | { message: string };
 
 function decodeOAuthError(raw: string | null) {
   if (!raw) return null;
@@ -38,17 +41,15 @@ function AuthCallbackPage() {
     message: "Finishing secure sign-in…",
   });
 
-  const nextPath = useMemo(() => {
-    if (typeof window === "undefined") return "/projects";
-    return consumeStoredNextPath("/projects");
-  }, []);
+  const attempt = useRef<Promise<CallbackResult> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let redirect: ReturnType<typeof setTimeout> | undefined;
 
-    async function finishSignIn() {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      const queryParams = new URLSearchParams(window.location.search);
+    async function finishSignIn(callbackUrl: URL, nextPath: string): Promise<CallbackResult> {
+      const hashParams = new URLSearchParams(callbackUrl.hash.replace(/^#/, ""));
+      const queryParams = callbackUrl.searchParams;
       const error = decodeOAuthError(
         hashParams.get("error_description") ||
           queryParams.get("error_description") ||
@@ -56,16 +57,8 @@ function AuthCallbackPage() {
           queryParams.get("error"),
       );
 
-      // Remove codes, tokens, and provider error details from the address bar
-      // before any asynchronous work or user-visible error state.
-      window.history.replaceState({}, document.title, "/auth/callback");
-
       if (error) {
-        setState({
-          status: "error",
-          message: friendlyAuthError(new Error(error)),
-        });
-        return;
+        return { message: friendlyAuthError(new Error(error)) };
       }
 
       const accessToken = hashParams.get("access_token");
@@ -77,55 +70,57 @@ function AuthCallbackPage() {
           refresh_token: refreshToken,
         });
         if (sessionError) {
-          setState({ status: "error", message: friendlyAuthError(sessionError) });
-          return;
+          return { message: friendlyAuthError(sessionError) };
         }
       } else {
         const authCode = queryParams.get("code");
         if (!authCode) {
-          setState({
-            status: "error",
-            message: "Sign-in did not return an authorization code. Please try again.",
-          });
-          return;
+          return { message: "Sign-in did not return an authorization code. Please try again." };
         }
 
         // exchangeCodeForSession expects the raw one-time authorization code,
         // not the callback URL. Supabase uses the PKCE verifier it stored when
         // signInWithOAuth started the flow to exchange this code for a session.
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode);
+        const { error: exchangeError } = await exchangeAuthCode(callbackUrl);
         if (exchangeError) {
-          setState({ status: "error", message: friendlyAuthError(exchangeError) });
-          return;
+          return { message: friendlyAuthError(exchangeError) };
         }
       }
 
-      const { data } = await supabase.auth.getSession();
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) return { message: friendlyAuthError(sessionError) };
       if (!data.session) {
-        setState({
-          status: "error",
-          message: "Sign-in did not return a valid session. Please try again.",
-        });
-        return;
+        return { message: "Sign-in did not return a valid session. Please try again." };
       }
 
-      try {
-        await ensureWorkspace();
-      } catch (workspaceError) {
-        setState({ status: "error", message: friendlyAuthError(workspaceError) });
-        return;
-      }
-
-      if (cancelled) return;
-      setState({ status: "success", message: "Sign-in complete. Redirecting…" });
-      setTimeout(() => navigate({ to: nextPath as any, replace: true }), 350);
+      await ensureWorkspace();
+      return { nextPath };
     }
 
-    finishSignIn();
+    if (!attempt.current) {
+      const callbackUrl = new URL(window.location.href);
+      const nextPath = consumeStoredNextPath("/projects");
+      // Capture once, then scrub before loading Supabase. React may replay the
+      // effect, but the one-time code and stored destination are consumed once.
+      window.history.replaceState(window.history.state, document.title, "/auth/callback");
+      attempt.current = finishSignIn(callbackUrl, nextPath).catch((error) => ({
+        message: friendlyAuthError(error),
+      }));
+    }
+    void attempt.current.then((result) => {
+      if (cancelled) return;
+      if ("message" in result) {
+        setState({ status: "error", message: result.message });
+        return;
+      }
+      setState({ status: "success", message: "Sign-in complete. Redirecting…" });
+      redirect = setTimeout(() => navigate({ to: result.nextPath, replace: true }), 350);
+    });
     return () => {
       cancelled = true;
+      clearTimeout(redirect);
     };
-  }, [ensureWorkspace, navigate, nextPath]);
+  }, [ensureWorkspace, navigate]);
 
   return (
     <div className="grid min-h-dvh place-items-center bg-background px-6 text-foreground">

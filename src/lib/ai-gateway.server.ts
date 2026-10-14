@@ -480,7 +480,7 @@ export function buildRequestBody(args: BodyArgs): Record<string, unknown> {
     };
   }
   // A sampling knob the fallback may not support would make require_parameters
-  // exclude it (GPT-5.6 takes no temperature), so strict calls leave it out.
+  // exclude it (GPT-6 takes no temperature), so strict calls leave it out.
   if (args.temperature != null && !strict) body.temperature = args.temperature;
   if (args.responseFormat) body.response_format = args.responseFormat;
   if (args.tools?.length) {

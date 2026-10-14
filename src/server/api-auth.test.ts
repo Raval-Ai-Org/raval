@@ -7,6 +7,7 @@ vi.mock("@/integrations/supabase/client.user.server", () => ({
 
 import {
   checkWorkspaceMembership,
+  jsonError,
   markMcpRequest,
   oauthClientId,
   roleAtLeast,
@@ -22,7 +23,31 @@ beforeEach(() => {
   getClaims.mockReset();
 });
 
+describe("API errors", () => {
+  it("hides database and credential details and disables caching", async () => {
+    const response = jsonError(500, 'relation "private_customer_table" does not exist');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(JSON.stringify(await response.json())).not.toContain("private_customer_table");
+  });
+
+  it("preserves useful validation messages", async () => {
+    expect(await jsonError(400, "workspaceId is required").json()).toEqual({
+      error: "workspaceId is required",
+    });
+  });
+});
+
 describe("verifyBearer", () => {
+  it("refuses signed anonymous-account tokens even when OAuth access is allowed", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: "user-1", is_anonymous: true } },
+      error: null,
+    });
+    expect(await verifyBearer(withAuth("Bearer a.b.c"), { allowOAuthClient: true })).toMatchObject({
+      ok: false,
+      status: 401,
+    });
+  });
   it("requires a Bearer header", async () => {
     expect(await verifyBearer(withAuth())).toMatchObject({ ok: false, status: 401 });
     expect(await verifyBearer(withAuth("Basic abc"))).toMatchObject({ ok: false, status: 401 });

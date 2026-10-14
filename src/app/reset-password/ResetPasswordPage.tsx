@@ -1,15 +1,15 @@
 "use client";
 
 import { Link, useNavigate } from "@/lib/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Eye, EyeOff, KeyRound } from "@/components/ui/gemini-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { friendlyAuthError } from "@/lib/auth";
+import { preparePasswordRecovery } from "@/lib/password-recovery";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/brand/Logo";
-import { pageHead } from "@/lib/seo";
 import { toast } from "@/lib/toast";
 
 function ResetPasswordPage() {
@@ -18,40 +18,42 @@ function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const recovery = useRef<Promise<boolean> | null>(null);
+  const submitting = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function prepareRecoverySession() {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-      const queryParams = new URLSearchParams(window.location.search);
-      const accessToken = hashParams.get("access_token");
-      const refreshToken = hashParams.get("refresh_token");
-
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (error) {
-          toast.error("Reset link failed", { description: friendlyAuthError(error) });
-          return;
-        }
-        window.history.replaceState({}, document.title, "/reset-password");
-      } else if (queryParams.get("code")) {
-        const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-        if (error) {
-          toast.error("Reset link failed", { description: friendlyAuthError(error) });
-          return;
-        }
-        window.history.replaceState({}, document.title, "/reset-password");
+    if (!recovery.current) {
+      const href = window.location.href;
+      const url = new URL(href);
+      const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+      // Scrub before creating the lazy Supabase client so its URL detector cannot
+      // race our exchange. Reuse the promise when React replays this effect.
+      if (
+        ["code", "error", "error_description"].some((key) => url.searchParams.has(key)) ||
+        ["access_token", "refresh_token", "error", "error_description"].some((key) => hash.has(key))
+      ) {
+        window.history.replaceState(window.history.state, document.title, "/reset-password");
       }
-
-      const { data } = await supabase.auth.getSession();
-      if (!cancelled) setReady(Boolean(data.session));
+      recovery.current = preparePasswordRecovery(href);
     }
-
-    prepareRecoverySession();
+    void recovery.current
+      .then((hasSession) => {
+        if (!cancelled) setReady(hasSession);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast.error("Reset link failed", {
+            description:
+              "This reset link could not be verified. Request a new link from the login page.",
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -59,17 +61,20 @@ function ResetPasswordPage() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!ready || submitting.current) return;
+    submitting.current = true;
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-
-    if (error) {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast.success("Password updated", { description: "You can now continue to your workspace." });
+      navigate({ to: "/projects", replace: true });
+    } catch (error) {
       toast.error("Could not update password", { description: friendlyAuthError(error) });
-      return;
+    } finally {
+      submitting.current = false;
+      setLoading(false);
     }
-
-    toast.success("Password updated", { description: "You can now continue to your workspace." });
-    navigate({ to: "/projects", replace: true });
   };
 
   return (
@@ -87,9 +92,11 @@ function ResetPasswordPage() {
             <KeyRound className="mx-auto h-9 w-9 text-primary" />
             <h1 className="mt-4 text-3xl font-semibold">Set new password</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {ready
-                ? "Choose a new password for your Mellox AI account."
-                : "Open the reset link from your email to continue."}
+              {checking
+                ? "Verifying your password reset link…"
+                : ready
+                  ? "Choose a new password for your Mellox AI account."
+                  : "Open the reset link from your email to continue."}
             </p>
           </div>
 
@@ -119,10 +126,20 @@ function ResetPasswordPage() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" size="xl" className="w-full rounded-xl" loading={loading}>
+              <Button
+                type="submit"
+                size="xl"
+                className="w-full rounded-xl"
+                loading={loading}
+                disabled={loading}
+              >
                 Update password
               </Button>
             </form>
+          ) : checking ? (
+            <p role="status" className="text-center text-sm text-muted-foreground">
+              Checking your session…
+            </p>
           ) : (
             <Button asChild variant="outline" size="xl" className="w-full rounded-xl">
               <Link to="/login">Back to login</Link>

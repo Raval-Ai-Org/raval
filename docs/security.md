@@ -43,6 +43,26 @@ side effects use an editor-or-higher boundary where configured. RLS is the
 second enforcement layer. Authentication is not a substitute for workspace
 authorization.
 
+The browser client disables Supabase's automatic URL session detection because
+Mellox's callback and recovery pages own the exchange. Both capture credentials
+once, remove them from the address bar before asynchronous work, and reuse a
+single pending operation when React replays an effect. PKCE exchanges pass the
+raw authorization code and the captured `sb_flow_id` explicitly so concurrent
+flows use their own verifier. Supabase validates the credentials and persists
+the session; the client-side guards do not replace provider verification.
+Invalid recovery links cannot fall back to an unrelated existing session.
+
+Sign-out checks Supabase's result before clearing context or redirecting. If
+revocation fails, Mellox keeps the current account open and offers retry.
+Successful sign-out clears account context independently from local and session
+storage; failure to access one store does not prevent clearing the other.
+
+Implementation: `src/integrations/supabase/client.ts`, `src/lib/auth-code.ts`,
+`src/lib/password-recovery.ts`, `src/app/auth/callback/AuthCallbackPage.tsx`, and
+`src/app/reset-password/ResetPasswordPage.tsx`. Regression coverage is in
+`src/lib/password-recovery.test.ts` and
+`tests/integration/password-recovery.spec.ts`.
+
 ## Secrets
 
 Never commit `.env`, publish secret values, put provider credentials in

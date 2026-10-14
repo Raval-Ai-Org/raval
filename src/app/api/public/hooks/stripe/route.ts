@@ -4,6 +4,8 @@
 // authenticates itself by signing the request body, and the signature is
 // checked against the raw bytes before anything is read. An unsigned or
 // mis-signed request is refused before it can touch a credit balance.
+import { readWebhookBody } from "@/server/request-body";
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -14,7 +16,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // The raw body, byte for byte — parsing it first would break the signature.
-  const rawBody = await request.text();
+  const rawBody = await readWebhookBody(request);
+  if (rawBody instanceof Response) return rawBody;
 
   try {
     const { handleAccountStripeWebhook } = await import("@/server/billing/stripe-account.server");

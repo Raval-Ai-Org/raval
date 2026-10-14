@@ -22,18 +22,23 @@ export function CostChip({
   className?: string;
 }) {
   const base =
-    "inline-flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium tabular-nums text-muted-foreground";
+    "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium tabular-nums leading-4 text-muted-foreground";
   if (free) {
-    return <span className={cn(base, "bg-primary/12 text-primary", className)}>Free</span>;
+    return (
+      <span data-slot="cost-chip" className={cn(base, "bg-primary/12 text-primary", className)}>
+        Free
+      </span>
+    );
   }
   if (typeof videoUnits === "number") {
     const text = formatVideos(videoUnits);
     return (
       <span
+        data-slot="cost-chip"
         className={cn(base, className)}
         title="Uses your video balance. Charged only if it works."
       >
-        <Video className="h-3 w-3" aria-hidden />
+        <Video className="h-3 w-3 shrink-0" aria-hidden />
         {text} {text === "1" ? "video" : "videos"}
       </span>
     );
@@ -41,8 +46,8 @@ export function CostChip({
   if (!action) return null;
   const credits = Math.ceil(CREDIT_ACTIONS[action].credits * quantity);
   return (
-    <span className={cn(base, className)} title="Charged only if it works">
-      <Bolt className="h-3 w-3" aria-hidden />
+    <span data-slot="cost-chip" className={cn(base, className)} title="Charged only if it works">
+      <Bolt className="h-3 w-3 shrink-0" aria-hidden />
       {formatNumber(credits)} {credits === 1 ? "credit" : "credits"}
     </span>
   );

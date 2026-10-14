@@ -131,7 +131,7 @@ export const getPublishQueue = createServerFn({ method: "POST" })
       })),
     ].filter((row) => isGitHubPullRequest(row.pr_url));
 
-    return buildPublishQueue({
+    const queue = buildPublishQueue({
       content: content.data ?? [],
       publications: (publications.data ?? []).map((row) => ({
         ...row,
@@ -140,6 +140,13 @@ export const getPublishQueue = createServerFn({ method: "POST" })
       })),
       pullRequests,
     });
+    const unavailableSources = [
+      ...(publications.error ? ["Articles"] : []),
+      ...(fixes.error || batches.error ? ["Website fixes"] : []),
+      ...(blogs.error ? ["Blog setup"] : []),
+      ...(deliveries.error ? ["Experiments"] : []),
+    ];
+    return unavailableSources.length ? { ...queue, unavailableSources } : queue;
   });
 
 function pathOf(url: string): string {

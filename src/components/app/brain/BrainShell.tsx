@@ -5,7 +5,7 @@
 // the section itself. Each brain keeps its own inner navigation, so there is
 // never a rail inside a rail. The section comes from the URL (?s=…), which is
 // what makes every part of Brain linkable from elsewhere in Mellox.
-import { Suspense, lazy, useEffect, useMemo } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ArrowLeft, Home, Lock } from "@/components/icons";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
@@ -88,6 +88,7 @@ export type BrainShellProps = {
 };
 
 export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShellProps) {
+  const activeTabRef = useRef<HTMLButtonElement>(null);
   const overview = useBrainOverview(workspaceId);
   const { news, markSeen } = useBrainSeen(workspaceId, overview.data);
   const billing = useEntitlements();
@@ -114,6 +115,11 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
     { id: "strategy", label: "Strategy", color: BRAIN_META.strategy.color },
   ];
 
+  // Deep links can open a tab beyond the phone's visible strip.
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [section, locked]);
+
   // Looking at the news is reading it: leaving Home marks it seen.
   useEffect(() => {
     if (section !== "home") return;
@@ -134,13 +140,13 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
     : "overview";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       {/* ── the six tabs ── */}
       <LayoutGroup id="brain-tabs">
         <div
           role="tablist"
           aria-label="Brain"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/50 px-2 py-2 [scrollbar-width:none] sm:justify-center sm:px-4 [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 shrink-0 gap-1 overflow-x-auto border-b border-border/50 px-2 py-2 [scrollbar-width:none] sm:px-4 [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map((t, i) => {
             const active = t.id === section;
@@ -150,12 +156,13 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
             return (
               <button
                 key={t.id}
+                ref={active ? activeTabRef : undefined}
                 type="button"
                 role="tab"
                 aria-selected={active}
                 onClick={() => open(t.id)}
                 className={cn(
-                  "relative flex h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium transition-colors",
+                  "relative flex h-10 shrink-0 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium transition-colors first:ml-auto last:mr-auto",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                   dsFocus,
                 )}
@@ -206,7 +213,7 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
       </LayoutGroup>
 
       {/* ── the section ── */}
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 min-w-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={section === "audience" && tab === "customers" ? "audience-customers" : section}
@@ -218,12 +225,12 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
           >
             <Suspense fallback={<PageLoader />}>
               {section === "home" && (
-                <div className="flex h-full flex-col">
-                  <div className="flex shrink-0 justify-center px-4 pt-4">
+                <div className="flex h-full min-h-0 min-w-0 flex-col">
+                  <div className="flex min-w-0 shrink-0 justify-center px-4 pt-4">
                     <div
                       role="tablist"
                       aria-label="Home"
-                      className="ds-well inline-flex gap-0.5 rounded-full p-1"
+                      className="ds-well inline-flex max-w-full gap-0.5 rounded-full p-1"
                     >
                       {HOME_TABS.map((id) => {
                         const active = id === homeTab;
@@ -235,7 +242,7 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
                             aria-selected={active}
                             onClick={() => onNavigate("home", id === "overview" ? null : id)}
                             className={cn(
-                              "h-8 min-w-[92px] rounded-full px-4 text-[13px] font-medium transition-all duration-200",
+                              "h-8 min-w-0 flex-1 rounded-full px-3 text-[13px] font-medium transition-all duration-200 sm:min-w-[92px] sm:px-4",
                               active
                                 ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
                                 : "text-muted-foreground hover:text-foreground",

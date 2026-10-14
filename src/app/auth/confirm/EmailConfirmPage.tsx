@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@/lib/navigation";
 import { supabase } from "@/integrations/supabase/client";
-import { consumeStoredNextPath, friendlyAuthError } from "@/lib/auth";
+import { consumeStoredNextPath } from "@/lib/auth";
 import { emailConfirmationDestination, readEmailConfirmation } from "@/lib/email-confirmation";
 import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -16,9 +16,19 @@ export default function EmailConfirmPage() {
   const navigate = useNavigate();
   const ensureWorkspace = useServerFn(ensureAuthWorkspace);
   const captured = useRef(false);
+  const verified = useRef(false);
+  const busy = useRef(false);
+  const mounted = useRef(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [status, setStatus] = useState<"ready" | "loading" | "success" | "error">("ready");
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (captured.current) return;
@@ -26,7 +36,7 @@ export default function EmailConfirmPage() {
     // The hash never reaches the server or a referrer. Remove it before loading
     // the Supabase client or making any network request in this page.
     const parsed = readEmailConfirmation(window.location.hash);
-    window.history.replaceState({}, document.title, "/auth/confirm");
+    window.history.replaceState(window.history.state, document.title, "/auth/confirm");
     setConfirmation(parsed);
     if (!parsed)
       setMessage(
@@ -35,38 +45,50 @@ export default function EmailConfirmPage() {
   }, []);
 
   async function confirm() {
-    if (!confirmation || status === "loading") return;
+    if (!confirmation || busy.current) return;
+    busy.current = true;
     setStatus("loading");
-    const { data, error } = await supabase.auth.verifyOtp(confirmation);
-    if (error) {
-      setStatus("error");
-      setMessage(
-        "This link could not be confirmed. It may have expired or already been used. Request a new email and try again.",
-      );
-      return;
-    }
-    // Email changes can be confirmed without issuing a fresh session. Never
-    // call workspace RPCs or enter a protected route in that case.
-    const session = data.session ?? (await supabase.auth.getSession()).data.session;
-    if (!session) {
-      navigate({ to: "/login", replace: true });
-      return;
-    }
-    if (confirmation.type !== "recovery") {
-      try {
-        await ensureWorkspace();
-      } catch (workspaceError) {
-        setStatus("error");
-        setMessage(friendlyAuthError(workspaceError));
+    setMessage("");
+    try {
+      if (!verified.current) {
+        const { error } = await supabase.auth.verifyOtp(confirmation);
+        if (error) throw error;
+        // The token is single-use. A later workspace failure must retry setup,
+        // rather than submit the already-consumed token to Supabase again.
+        verified.current = true;
+      }
+      if (!mounted.current) return;
+      // Email changes can be confirmed without issuing a fresh session.
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (!mounted.current) return;
+      if (!data.session) {
+        setStatus("ready");
+        navigate({ to: "/login", replace: true });
         return;
       }
+      if (confirmation.type !== "recovery") {
+        await ensureWorkspace();
+      }
+      if (!mounted.current) return;
+      setStatus("success");
+      const destination =
+        confirmation.type === "recovery"
+          ? emailConfirmationDestination(confirmation.type)
+          : consumeStoredNextPath(emailConfirmationDestination(confirmation.type));
+      navigate({ to: destination, replace: true });
+    } catch {
+      if (mounted.current) {
+        setStatus("error");
+        setMessage(
+          verified.current
+            ? "Your email is confirmed, but we couldn't finish opening your account. Please retry."
+            : "This link could not be confirmed. Check your connection or request a new email and try again.",
+        );
+      }
+    } finally {
+      busy.current = false;
     }
-    setStatus("success");
-    const destination =
-      confirmation.type === "recovery"
-        ? emailConfirmationDestination(confirmation.type)
-        : consumeStoredNextPath(emailConfirmationDestination(confirmation.type));
-    navigate({ to: destination as "/projects", replace: true });
   }
 
   const action =

@@ -49,17 +49,17 @@ export function DiscoverTab({
   return (
     <div className="space-y-6">
       <div className="grid gap-3 lg:grid-cols-2">
-        <Card className="flex items-center gap-4">
+        <Card className="flex flex-wrap items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
             <Compass className="h-5 w-5" />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-24">
             <div className="text-[14px] font-semibold text-foreground">Find for me</div>
             <div className="truncate text-[12.5px] text-muted-foreground">
               {researchAvailable ? "Uses your Brand DNA" : "Web search is off"}
             </div>
           </div>
-          <FeatureGate feature="competitors">
+          <FeatureGate feature="competitors" className="max-w-full shrink-0">
             <button
               type="button"
               onClick={onDiscover}
