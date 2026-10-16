@@ -22,6 +22,8 @@ import { billingSchemaReady } from "./schema.server";
 import { globalBillingMode } from "./mode.server";
 import { HttpError } from "@/server/http-error";
 import { accountBillableSeatCount } from "./seat-count.server";
+import { applyOverrides, type AppliedOverride } from "@/lib/billing/overrides";
+import { loadActiveOverrides } from "./overrides.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 type Role = "owner" | "admin" | "editor" | "viewer";
@@ -44,6 +46,8 @@ export type Entitlements = {
   frozen: boolean;
   addons: Array<{ key: string; quantity: number }>;
   features: Record<FeatureKey, { allowed: boolean; requiredPlan: PlanId }>;
+  /** Exceptions to the plan that Mellox staff set and that apply right now (admin console). */
+  overrides?: AppliedOverride[];
   limits: (typeof PLANS)[PlanId]["limits"] & { brands: number; seats: number | null };
   usage: {
     brands: number;
@@ -235,7 +239,7 @@ export async function getEntitlements(args: {
   }
   const workspace = args.workspaceId ? await accountForWorkspace(args.workspaceId) : null;
   const account = workspace?.account ?? (await accountForUser(args.userId));
-  const [items, spaces, wallet, expiring] = await Promise.all([
+  const [items, spaces, wallet, expiring, overrideRows] = await Promise.all([
     admin
       .from("billing_subscription_items")
       .select("catalog_key,quantity")
@@ -254,6 +258,7 @@ export async function getEntitlements(args: {
       .gt("remaining", 0)
       .gte("expires_at", new Date().toISOString())
       .order("expires_at", { ascending: true }),
+    loadActiveOverrides(account.id),
   ]);
   if (items.error || spaces.error || wallet.error || expiring.error)
     throw new Error("Could not load billing entitlements.");
@@ -359,6 +364,15 @@ export async function getEntitlements(args: {
     },
     meters,
   });
+  // Staff exceptions to the plan. With none in force, nothing here changes.
+  if (overrideRows.length > 0) {
+    const applied = applyOverrides(entitlements, overrideRows, { workspaceId: args.workspaceId });
+    if (applied.applied.length > 0) {
+      entitlements.features = applied.features;
+      entitlements.limits = applied.limits;
+      entitlements.overrides = applied.applied;
+    }
+  }
   if (
     entitlements.enforcement === "on" &&
     !args.skipCapacityReconcile &&

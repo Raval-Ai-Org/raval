@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Building2,
   Gauge,
+  Layers,
   Shield,
   ShieldCheck,
   Users,
@@ -26,7 +27,8 @@ import type { AdminMe } from "@/lib/admin/types";
 import { AdminApiError, adminKeys, useAdminMe } from "./api";
 import { MfaPanel } from "./MfaPanel";
 
-type NavId = "overview" | "users" | "workspaces" | "audit" | "security" | "team" | "billing";
+type NavId =
+  "overview" | "users" | "workspaces" | "plans" | "audit" | "security" | "team" | "billing";
 
 type NavDef = {
   id: NavId;
@@ -46,6 +48,13 @@ const NAV: NavDef[] = [
     href: "/admin/workspaces",
     icon: Building2,
     permission: "workspaces.read",
+  },
+  {
+    id: "plans",
+    label: "Plans",
+    href: "/admin/plans",
+    icon: Layers,
+    permission: "entitlements.read",
   },
   { id: "billing", label: "Billing", href: "/admin/billing", icon: Wallet },
   {

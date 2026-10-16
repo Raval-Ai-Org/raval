@@ -20,6 +20,9 @@ export const PERMISSIONS = [
   "users.sessions.revoke",
   "users.notes.write",
   "workspaces.read",
+  "entitlements.read",
+  /** Grant or remove a feature, or change a limit, for one account or workspace. */
+  "entitlements.override",
   "audit.read",
   "security.read",
   "admins.read",
@@ -62,6 +65,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "users.sessions.revoke",
       "users.notes.write",
       "workspaces.read",
+      "entitlements.read",
+      "entitlements.override",
       "audit.read",
       "security.read",
     ],
@@ -75,22 +80,36 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "users.pii.read",
       "users.notes.write",
       "workspaces.read",
+      "entitlements.read",
     ],
   },
   finance: {
     label: "Finance admin",
     description: "Reads accounts and the audit trail. Billing has its own console.",
-    permissions: ["overview.read", "users.read", "workspaces.read", "audit.read"],
+    permissions: [
+      "overview.read",
+      "users.read",
+      "workspaces.read",
+      "entitlements.read",
+      "audit.read",
+    ],
   },
   engineering: {
     label: "Engineering admin",
     description: "Reads accounts, security and audit to investigate incidents.",
-    permissions: ["overview.read", "users.read", "workspaces.read", "audit.read", "security.read"],
+    permissions: [
+      "overview.read",
+      "users.read",
+      "workspaces.read",
+      "entitlements.read",
+      "audit.read",
+      "security.read",
+    ],
   },
   analyst: {
     label: "Read-only analyst",
     description: "Sees masked accounts and platform numbers. Changes nothing.",
-    permissions: ["overview.read", "users.read", "workspaces.read"],
+    permissions: ["overview.read", "users.read", "workspaces.read", "entitlements.read"],
   },
 };
 

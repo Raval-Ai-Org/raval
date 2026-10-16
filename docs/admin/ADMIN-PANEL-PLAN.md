@@ -2,7 +2,9 @@
 
 > **Status (phase 1 built):** foundation, Users, Workspaces (read), Audit log,
 > Security, Team & access, Overview. See ADR-0034. Everything below that is not
-> in that list is still planned.
+> in that list is still planned. **Phase 2 built:** entitlement overrides (per
+> account or workspace, audited, self-expiring) and a read-only Plans page; plan
+> definitions stay in code (ADR-0034).
 
 Source: `Mellox_AI_Admin_Panel_Complete_Product_Engineering_Roadmap.pdf` (28 sections,
 7 phases). This plan maps it onto what the codebase already has, so the admin is

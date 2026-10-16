@@ -157,3 +157,61 @@ export type AdminSecurity = {
   /** Refused attempts and sensitive changes, newest first. */
   events: AdminAuditRow[];
 };
+
+/* ───────────────────────── entitlements (phase 2) ───────────────────────── */
+
+export type AdminOverrideStatus = "active" | "scheduled" | "expired" | "revoked";
+
+export type AdminOverrideRow = {
+  id: string;
+  scope: "account" | "workspace";
+  kind: "feature" | "limit";
+  key: string;
+  allowed: boolean | null;
+  limitValue: number | null;
+  startsAt: string;
+  expiresAt: string | null;
+  status: AdminOverrideStatus;
+  reason: string;
+  createdBy: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  revokeReason: string | null;
+};
+
+export type AdminEntitlementView = {
+  workspace: { id: string; name: string };
+  account: {
+    id: string;
+    plan: string;
+    entitledPlan: string;
+    status: string;
+    enforcement: string;
+    ownerEmail: string | null;
+    overridesEnabled: boolean;
+  };
+  features: Array<{
+    key: string;
+    label: string;
+    module: string;
+    sold: boolean;
+    /** What this workspace can do now. */
+    allowed: boolean;
+    /** What its plan alone would allow. */
+    planAllows: boolean;
+    requiredPlan: string;
+    source: "plan" | "override";
+    overrideScope?: "account" | "workspace";
+  }>;
+  limits: Array<{
+    key: string;
+    planValue: number;
+    effective: number;
+    used: number | null;
+    source: "plan" | "override";
+    overrideScope?: "account" | "workspace";
+  }>;
+  /** Brands and seats follow the plan; overrides can't change them. */
+  fixedLimits: Array<{ key: "brands" | "seats"; effective: number | null; used: number }>;
+  overrides: AdminOverrideRow[];
+};

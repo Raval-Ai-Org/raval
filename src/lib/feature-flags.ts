@@ -285,3 +285,14 @@ export function isSdrEnabledForWorkspace(workspaceId: string): boolean {
   }
   return isSdrEnabled();
 }
+
+/**
+ * Entitlement overrides (admin console, phase 2): exceptions that Mellox staff
+ * set to what a plan allows. On unless set to "false"; off means every
+ * entitlement is exactly what the plan says, whatever rows exist.
+ */
+export function isEntitlementOverridesEnabled(): boolean {
+  return !isFalsy(
+    (process.env.FEATURE_FLAG_ENTITLEMENT_OVERRIDES_ENABLED ?? "").trim().toLowerCase(),
+  );
+}

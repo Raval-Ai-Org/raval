@@ -11,12 +11,15 @@ import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "@/components/icons";
 import type { AdminWorkspaceDetail } from "@/lib/admin/types";
-import { adminApi } from "./api";
+import { hasPermission } from "@/lib/admin/permissions";
+import { adminApi, useAdminMe } from "./api";
 import { AuditList } from "./AuditList";
 import { fmtDate } from "./format";
 import { Chip, Fact } from "./parts";
+import { WorkspaceEntitlements } from "./WorkspaceEntitlements";
 
 export function WorkspaceDetailScreen({ id }: { id: string }) {
+  const me = useAdminMe();
   const detail = useQuery({
     queryKey: ["admin", "workspaces", "detail", id],
     queryFn: () => adminApi<AdminWorkspaceDetail>(`/api/admin/workspaces/detail?id=${id}`),
@@ -41,6 +44,9 @@ export function WorkspaceDetailScreen({ id }: { id: string }) {
   }
 
   const { workspace, members, billing, studioJobs7d, audit } = detail.data;
+  const canSeeEntitlements = me.data
+    ? hasPermission(me.data.permissions, "entitlements.read")
+    : false;
   const jobTotal = Object.values(studioJobs7d).reduce((sum, value) => sum + value, 0);
 
   return (
@@ -118,6 +124,8 @@ export function WorkspaceDetailScreen({ id }: { id: string }) {
           ))}
         </div>
       )}
+
+      {canSeeEntitlements && <WorkspaceEntitlements workspaceId={workspace.id} />}
 
       <GroupLabel>Members ({members.length})</GroupLabel>
       <Tile className="p-0">

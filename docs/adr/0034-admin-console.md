@@ -38,10 +38,22 @@ are not developers.
 - The billing console is unchanged; it moved from `/admin` to `/admin/billing`
   and the new shell lists it for people who may open it.
 
-## Not in phase 1 (on purpose)
+## Phase 2: entitlement overrides
+
+Plans stay in code (`catalog.ts` is the baseline, costed against the pricing
+workbook, and the browser reads it directly for prices and upgrade copy).
+What staff can change is **exceptions**: `entitlement_overrides` rows that allow
+or deny a sold feature, or set a numeric limit, for a billing account or one
+workspace, each with a reason and an optional end. They are applied once, after
+the plan is resolved in `getEntitlements`, and the Plans page is a read-only view
+of the catalog. Editable, versioned plan definitions were **not** built: they
+would make the database a second source of prices next to the catalog. Revisit
+only together with the pricing workbook process.
+
+## Not built yet (on purpose)
 
 Workspace suspension and read-only mode (they need a check in the shared
-request path), impersonation, plan and entitlement management, credit tools, AI
+request path), impersonation, editable plan definitions, credit tools, AI
 routing controls, feature flags, announcements. Each has a phase in the plan.
 
 ## Consequences

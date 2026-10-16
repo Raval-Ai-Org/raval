@@ -900,9 +900,20 @@ UI `src/components/admin/console/`, API `src/app/api/admin/**` (except the older
 - **Access:** `admin_users` rows, plus `BILLING_ADMIN_USER_IDS` as super admin
   (the way back in). Nobody edits their own access; the last active super admin
   can't be removed. `ADMIN_REQUIRE_MFA` (default on in production).
+- **Entitlement overrides** (`entitlement_overrides`, pure rules in
+  `src/lib/billing/overrides.ts`, loader `src/server/billing/overrides.server.ts`):
+  staff allow/deny a sold feature or set a numeric limit for an account or one
+  workspace, with a reason and an optional end. They are applied in exactly one
+  place, right after the plan is resolved in `getEntitlements`; read the result
+  from there, never re-derive a plan's rules (`planAllows` is for upgrade copy).
+  The catalog stays the baseline: no rows, flag off (`FEATURE_FLAG_ENTITLEMENT_OVERRIDES_ENABLED`)
+  or a failed read means exactly the plan. **Brands and seats can't be overridden**
+  (lowering them freezes brands on the next capacity reconcile). An override ends
+  by itself (it is judged when read; no cron). Admin reads of entitlements must
+  pass `skipCapacityReconcile`.
 - The billing console is `/admin/billing` and has its own checks; leave it alone
   unless a billing task says otherwise.
-- DB check: `tests/db/admin-foundation.test.ts`.
+- DB checks: `tests/db/admin-foundation.test.ts`, `tests/db/admin-entitlement-overrides.test.ts`.
 
 ## Verifying work
 
