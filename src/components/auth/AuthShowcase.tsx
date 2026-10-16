@@ -184,7 +184,10 @@ const pop = (reduce: boolean, delay: number) =>
 function useTyped(text: string, startMs: number, perCharMs: number, reduce: boolean) {
   const [count, setCount] = useState(reduce ? text.length : 0);
   useEffect(() => {
-    if (reduce) return;
+    if (reduce) {
+      setCount(text.length);
+      return;
+    }
     let iv = 0;
     const t = window.setTimeout(() => {
       let i = 0;
@@ -217,7 +220,10 @@ function CountUp({
 }) {
   const [value, setValue] = useState(reduce ? to : 0);
   useEffect(() => {
-    if (reduce) return;
+    if (reduce) {
+      setValue(to);
+      return;
+    }
     const controls = animate(0, to, { delay, duration, ease: EASE, onUpdate: setValue });
     return () => controls.stop();
   }, [to, delay, duration, reduce]);

@@ -267,7 +267,7 @@ export function AutopilotView({
                   </span>
                 </button>
 
-                <div className="grid grid-cols-4 gap-1 sm:gap-3">
+                <div className="grid w-full min-w-0 grid-cols-2 gap-1 min-[480px]:grid-cols-4 sm:w-auto sm:gap-3">
                   <Count
                     value={row.needsApproval + (row.planWaiting ? 1 : 0)}
                     label="To approve"

@@ -86,7 +86,7 @@ export function OverviewView({
 
   const act = (a: AttentionItem) => {
     if (a.action === "review" || a.action === "ready" || a.action === "failed") {
-      onQueue(a.action);
+      onQueue(a.action, a.workspaceId ?? undefined);
       return;
     }
     const c = a.workspaceId ? cc.clientMap.get(a.workspaceId) : undefined;
@@ -110,7 +110,7 @@ export function OverviewView({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="font-display text-[32px] leading-[1.1] tracking-tight sm:text-[44px]"
+          className="break-words font-display text-[32px] leading-[1.1] tracking-tight sm:text-[44px]"
         >
           {greeting}
           {cc.userName ? `, ${cc.userName}` : ""}
@@ -407,7 +407,7 @@ function BriefComposer({
           rows={1}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();
             }

@@ -5,7 +5,8 @@
 // someone with no SEO background should be able to choose from these cards.
 // The numbers sit underneath as quiet supporting detail, and a figure we do not
 // have is left out rather than shown as a confident zero.
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 
 import { Check, Globe } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,7 @@ export function PlacementCard({
   onToggle: () => void;
   index?: number;
 }) {
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotionSafe();
   const verdict = placement.topic ? (VERDICT[placement.topic.verdict] ?? VERDICT.workable) : null;
   const locked = disabled && !selected;
 

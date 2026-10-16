@@ -4,7 +4,12 @@
 // in src/components/app/command-center/; its pure model (queues, health,
 // attention, schedule, report) in src/lib/agency/command-center.ts.
 import { CommandCenter } from "@/components/app/command-center/CommandCenter";
+import { Suspense } from "react";
 
 export default function AgencyHQ() {
-  return <CommandCenter />;
+  return (
+    <Suspense>
+      <CommandCenter />
+    </Suspense>
+  );
 }
