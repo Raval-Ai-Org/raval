@@ -1,0 +1,159 @@
+// types.ts — response shapes of /api/admin/*, shared by the server (which
+// builds them) and the console (which renders them). Browser-safe.
+import type { AdminRoleKey, Permission } from "./permissions";
+
+export type Paged<T> = { total: number; page: number; pageSize: number; rows: T[] };
+
+export type AdminMe = {
+  userId: string;
+  role: AdminRoleKey;
+  roleLabel: string;
+  permissions: Permission[];
+  source: "team" | "environment";
+  /** May open the billing console. */
+  billing: boolean;
+  /** The server asks for a second factor on admin routes. */
+  mfaRequired: boolean;
+};
+
+export type AdminUserRow = {
+  id: string;
+  /** Masked unless the admin holds users.pii.read. */
+  email: string | null;
+  name: string | null;
+  createdAt: string;
+  lastSignInAt: string | null;
+  suspended: boolean;
+  emailConfirmed: boolean;
+  providers: string[];
+  workspaceCount: number;
+  persona: string | null;
+  isAdmin: boolean;
+};
+
+export type AdminNote = {
+  id: string;
+  authorId: string;
+  authorEmail: string | null;
+  body: string;
+  createdAt: string;
+};
+
+export type AdminAuditRow = {
+  id: string;
+  createdAt: string;
+  actorUserId: string | null;
+  actorEmail: string | null;
+  actorRole: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  workspaceId: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  reason: string | null;
+  success: boolean;
+  error: string | null;
+  requestId: string | null;
+  /** Only for admins who may see personal data. */
+  ip: string | null;
+};
+
+export type AdminBillingSummary = {
+  id: string;
+  planId: string;
+  status: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  comped: boolean;
+};
+
+export type AdminUserDetail = {
+  user: AdminUserRow & {
+    bannedUntil: string | null;
+    sessions: number;
+    mfaFactors: number;
+  };
+  workspaces: Array<{
+    id: string;
+    name: string;
+    role: string;
+    plan: string | null;
+    owned: boolean;
+  }>;
+  billing: AdminBillingSummary[];
+  notes: AdminNote[];
+  audit: AdminAuditRow[];
+};
+
+export type AdminWorkspaceRow = {
+  id: string;
+  name: string;
+  domain: string | null;
+  plan: string | null;
+  billingPlan: string | null;
+  billingStatus: string | null;
+  ownerId: string;
+  ownerEmail: string | null;
+  memberCount: number;
+  createdAt: string;
+  frozen: boolean;
+  frozenReason: string | null;
+};
+
+export type AdminWorkspaceDetail = {
+  workspace: AdminWorkspaceRow & {
+    industry: string | null;
+    websiteUrl: string | null;
+    onboardedAt: string | null;
+  };
+  members: Array<{ userId: string; email: string | null; role: string; joinedAt: string }>;
+  billing: AdminBillingSummary | null;
+  studioJobs7d: Record<string, number>;
+  audit: AdminAuditRow[];
+};
+
+export type AdminTeamMember = {
+  userId: string;
+  email: string | null;
+  role: AdminRoleKey;
+  status: "active" | "disabled";
+  /** "environment" = super admin through the server's allowlist; not editable here. */
+  source: "team" | "environment";
+  extraPermissions: Permission[];
+  deniedPermissions: Permission[];
+  effectivePermissions: Permission[];
+  note: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+};
+
+export type AdminOverview = {
+  generatedAt: string;
+  users: {
+    total: number;
+    new7d: number;
+    new30d: number;
+    active7d: number;
+    suspended: number;
+    unconfirmed: number;
+  };
+  workspaces: { total: number; new7d: number; frozen: number };
+  billing: { payingAccounts: number; trialingAccounts: number; pendingRequests: number };
+  jobs: { studioFailed24h: number; studioRunning: number };
+  admins: { active: number };
+};
+
+export type AdminSecurity = {
+  mfaRequired: boolean;
+  admins: Array<{
+    userId: string;
+    email: string | null;
+    role: string;
+    status: string;
+    mfaFactors: number;
+    lastSeenAt: string | null;
+  }>;
+  /** Refused attempts and sensitive changes, newest first. */
+  events: AdminAuditRow[];
+};

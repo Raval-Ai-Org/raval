@@ -76,7 +76,10 @@ export type RateLimitTier =
   | "audience-run"
   | "audience-write"
   | "memory-write"
-  | "chat-action";
+  | "chat-action"
+  | "admin-read"
+  | "admin-write"
+  | "admin-danger";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -205,6 +208,12 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // A person clicking a button chat offered. The work it starts is held to
   // its own tier and billing as well.
   "chat-action": { limit: 30, windowSeconds: 60, label: "chat action" },
+  // The admin panel (src/server/admin/route.ts): a short list of staff. Reads
+  // are lists and lookups; changes are deliberate; sensitive ones (who is an
+  // admin, deletions) are slow on purpose.
+  "admin-read": { limit: 240, windowSeconds: 60, label: "admin" },
+  "admin-write": { limit: 60, windowSeconds: 60, label: "admin change" },
+  "admin-danger": { limit: 10, windowSeconds: 600, label: "sensitive admin change" },
 };
 
 export type RateLimitResult = {
