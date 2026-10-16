@@ -913,6 +913,10 @@ UI `src/components/admin/console/`, API `src/app/api/admin/**` (except the older
   pass `skipCapacityReconcile`.
 - The billing console is `/admin/billing` and has its own checks; leave it alone
   unless a billing task says otherwise.
+- `/admin-lab` (development only, never served in production) renders the real
+  screens in the real shell with sample data from `AdminLab.fixtures.ts`, typed
+  against `src/lib/admin/types.ts`; `?s=<section>&role=<role>` shows any role. Use it
+  for visual checks (no sign-in needed); add sample data there when you add a screen.
 - DB checks: `tests/db/admin-foundation.test.ts`, `tests/db/admin-entitlement-overrides.test.ts`.
 
 ## Verifying work

@@ -8,13 +8,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SurfacePage, GroupLabel, Tile } from "@/components/app/surface/SurfaceLayout";
-import { ErrorState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "@/components/icons";
 import { toast } from "@/lib/toast";
 import type { AdminUserDetail } from "@/lib/admin/types";
 import { adminApi, errorMessage, useAdminMe } from "./api";
+import { LoadError } from "./LoadError";
 import { AuditList } from "./AuditList";
 import { ConfirmAction } from "./ConfirmAction";
 import { ago, fmtDate, fmtDateTime } from "./format";
@@ -88,10 +88,7 @@ export function UserDetailScreen({ id }: { id: string }) {
   if (detail.error || !detail.data) {
     return (
       <SurfacePage>
-        <ErrorState
-          description={detail.error?.message ?? "Could not load this user."}
-          onRetry={() => void detail.refetch()}
-        />
+        <LoadError error={detail.error} onRetry={() => void detail.refetch()} />
       </SurfacePage>
     );
   }

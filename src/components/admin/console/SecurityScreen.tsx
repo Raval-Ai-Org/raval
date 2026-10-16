@@ -5,12 +5,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { SurfacePage, GroupLabel, Stat, Tile } from "@/components/app/surface/SurfaceLayout";
-import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldCheck, Users } from "@/components/icons";
 import { ROLE_PRESETS, isAdminRoleKey } from "@/lib/admin/permissions";
 import type { AdminSecurity } from "@/lib/admin/types";
 import { adminApi } from "./api";
+import { LoadError } from "./LoadError";
 import { AuditList } from "./AuditList";
 import { ago } from "./format";
 import { Chip } from "./parts";
@@ -31,10 +31,7 @@ export function SecurityScreen() {
   if (security.error || !security.data) {
     return (
       <SurfacePage title="Security">
-        <ErrorState
-          description={security.error?.message ?? "Could not load security."}
-          onRetry={() => void security.refetch()}
-        />
+        <LoadError error={security.error} onRetry={() => void security.refetch()} />
       </SurfacePage>
     );
   }

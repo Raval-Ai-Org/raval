@@ -14,7 +14,8 @@ describe("ago", () => {
     expect(ago("2026-10-18T11:15:00Z", NOW)).toBe("45 min ago");
     expect(ago("2026-10-18T07:00:00Z", NOW)).toBe("5 h ago");
     expect(ago("2026-10-16T12:00:00Z", NOW)).toBe("2 days ago");
-    expect(ago("2026-10-17T12:00:00Z", NOW)).toBe("24 h ago");
+    expect(ago("2026-10-17T13:00:00Z", NOW)).toBe("23 h ago");
+    expect(ago("2026-10-17T12:00:00Z", NOW)).toBe("1 day ago");
   });
 
   it("falls back to a date for old events", () => {

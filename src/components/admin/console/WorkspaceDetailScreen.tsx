@@ -7,12 +7,12 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { SurfacePage, GroupLabel, Tile } from "@/components/app/surface/SurfaceLayout";
-import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft } from "@/components/icons";
 import type { AdminWorkspaceDetail } from "@/lib/admin/types";
 import { hasPermission } from "@/lib/admin/permissions";
 import { adminApi, useAdminMe } from "./api";
+import { LoadError } from "./LoadError";
 import { AuditList } from "./AuditList";
 import { fmtDate } from "./format";
 import { Chip, Fact } from "./parts";
@@ -35,10 +35,7 @@ export function WorkspaceDetailScreen({ id }: { id: string }) {
   if (detail.error || !detail.data) {
     return (
       <SurfacePage>
-        <ErrorState
-          description={detail.error?.message ?? "Could not load this workspace."}
-          onRetry={() => void detail.refetch()}
-        />
+        <LoadError error={detail.error} onRetry={() => void detail.refetch()} />
       </SurfacePage>
     );
   }

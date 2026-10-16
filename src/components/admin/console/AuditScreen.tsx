@@ -6,12 +6,13 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
-import { EmptyState, ErrorState } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity } from "@/components/icons";
 import type { AdminAuditRow, Paged } from "@/lib/admin/types";
 import { adminApi, query } from "./api";
+import { LoadError } from "./LoadError";
 import { AuditList } from "./AuditList";
 import { Pager, SearchField } from "./parts";
 
@@ -85,9 +86,7 @@ export function AuditScreen() {
       </div>
 
       {audit.isLoading && <Skeleton className="h-64 rounded-2xl" />}
-      {audit.error && (
-        <ErrorState description={audit.error.message} onRetry={() => void audit.refetch()} />
-      )}
+      {audit.error && <LoadError error={audit.error} onRetry={() => void audit.refetch()} />}
       {audit.data && audit.data.rows.length === 0 && (
         <EmptyState
           icon={Activity}

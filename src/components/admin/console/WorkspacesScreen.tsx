@@ -6,12 +6,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
-import { EmptyState, ErrorState } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Building2 } from "@/components/icons";
 import type { AdminWorkspaceRow, Paged } from "@/lib/admin/types";
 import { adminApi, query } from "./api";
+import { LoadError } from "./LoadError";
 import { fmtDate } from "./format";
 import { Chip, Pager, SearchField, TableFrame, rowClass, td, th } from "./parts";
 
@@ -70,10 +71,7 @@ export function WorkspacesScreen() {
 
       {workspaces.isLoading && <Skeleton className="h-64 rounded-2xl" />}
       {workspaces.error && (
-        <ErrorState
-          description={workspaces.error.message}
-          onRetry={() => void workspaces.refetch()}
-        />
+        <LoadError error={workspaces.error} onRetry={() => void workspaces.refetch()} />
       )}
       {workspaces.data && workspaces.data.rows.length === 0 && (
         <EmptyState

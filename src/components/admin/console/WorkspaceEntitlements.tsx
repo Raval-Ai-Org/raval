@@ -8,7 +8,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroupLabel, Tile } from "@/components/app/surface/SurfaceLayout";
-import { ErrorState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/lib/toast";
@@ -17,6 +16,7 @@ import { OVERRIDE_LIMIT_KEYS, overridableFeatures } from "@/lib/billing/override
 import { hasPermission } from "@/lib/admin/permissions";
 import type { AdminEntitlementView, AdminOverrideRow } from "@/lib/admin/types";
 import { adminApi, errorMessage, useAdminMe } from "./api";
+import { LoadError } from "./LoadError";
 import { ConfirmAction } from "./ConfirmAction";
 import { fmtDate, fmtDateTime, fmtNumber } from "./format";
 import { Chip, Field, TableFrame, fieldClass, rowClass, td, textareaClass, th } from "./parts";
@@ -138,9 +138,9 @@ export function WorkspaceEntitlements({ workspaceId }: { workspaceId: string }) 
   if (view.error || !view.data) {
     return (
       <div className="mt-6">
-        <ErrorState
+        <LoadError
           title="Couldn't load entitlements"
-          description={view.error?.message ?? "Try again in a moment."}
+          error={view.error}
           onRetry={() => void view.refetch()}
         />
       </div>
@@ -309,7 +309,6 @@ export function WorkspaceEntitlements({ workspaceId }: { workspaceId: string }) 
                 maxLength={300}
                 value={draft.reason}
                 onChange={(event) => setDraft({ ...draft, reason: event.target.value })}
-                required
               />
             </Field>
             <div className="flex gap-2">

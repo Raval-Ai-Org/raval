@@ -6,11 +6,11 @@
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { SurfacePage, GroupLabel, Stat } from "@/components/app/surface/SurfaceLayout";
-import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Building2, Inbox, ShieldCheck, Users, Wallet } from "@/components/icons";
 import type { AdminOverview } from "@/lib/admin/types";
 import { adminApi, useAdminMe } from "./api";
+import { LoadError } from "./LoadError";
 import { ago, fmtNumber } from "./format";
 
 export function OverviewScreen() {
@@ -38,7 +38,7 @@ export function OverviewScreen() {
         </div>
       )}
       {overview.error && (
-        <ErrorState description={overview.error.message} onRetry={() => void overview.refetch()} />
+        <LoadError error={overview.error} onRetry={() => void overview.refetch()} />
       )}
       {data && (
         <>

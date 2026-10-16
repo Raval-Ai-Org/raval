@@ -7,7 +7,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SurfacePage, GroupLabel, Tile } from "@/components/app/surface/SurfaceLayout";
-import { ErrorState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/lib/toast";
@@ -21,6 +20,7 @@ import {
 } from "@/lib/admin/permissions";
 import type { AdminTeamMember } from "@/lib/admin/types";
 import { AdminApiError, adminApi, errorMessage, useAdminMe } from "./api";
+import { LoadError } from "./LoadError";
 import { ago } from "./format";
 import { MfaPanel } from "./MfaPanel";
 import { Chip, Field, fieldClass, textareaClass } from "./parts";
@@ -137,9 +137,7 @@ export function TeamScreen() {
       }
     >
       {team.isLoading && <Skeleton className="h-48 rounded-2xl" />}
-      {team.error && (
-        <ErrorState description={team.error.message} onRetry={() => void team.refetch()} />
-      )}
+      {team.error && <LoadError error={team.error} onRetry={() => void team.refetch()} />}
 
       {draft && stepUp && (
         <div className="mb-5">
@@ -252,7 +250,6 @@ export function TeamScreen() {
                 onChange={(event) => set({ reason: event.target.value })}
                 className={textareaClass}
                 maxLength={300}
-                required
               />
             </Field>
             <div className="flex gap-2">

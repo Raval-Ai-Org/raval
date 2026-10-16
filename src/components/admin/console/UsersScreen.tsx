@@ -7,12 +7,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
-import { EmptyState, ErrorState } from "@/components/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users } from "@/components/icons";
 import type { AdminUserRow, Paged } from "@/lib/admin/types";
 import { adminApi, query } from "./api";
+import { LoadError } from "./LoadError";
 import { ago, fmtDate } from "./format";
 import { Chip, Pager, SearchField, TableFrame, rowClass, td, th } from "./parts";
 
@@ -85,9 +86,7 @@ export function UsersScreen() {
       </div>
 
       {users.isLoading && <Skeleton className="h-64 rounded-2xl" />}
-      {users.error && (
-        <ErrorState description={users.error.message} onRetry={() => void users.refetch()} />
-      )}
+      {users.error && <LoadError error={users.error} onRetry={() => void users.refetch()} />}
       {users.data && users.data.rows.length === 0 && (
         <EmptyState
           icon={Users}
@@ -110,7 +109,7 @@ export function UsersScreen() {
             <tbody>
               {users.data.rows.map((user) => (
                 <tr key={user.id} className={rowClass}>
-                  <td className={td}>
+                  <td className={`${td} max-w-[300px]`}>
                     <Link
                       href={`/admin/users/${user.id}`}
                       className="block min-w-0 hover:underline"
