@@ -50,11 +50,40 @@ of the catalog. Editable, versioned plan definitions were **not** built: they
 would make the database a second source of prices next to the catalog. Revisit
 only together with the pricing workbook process.
 
+## Phase 3: health, usage and emergency switches
+
+- **System health** (`/admin/health`) and **Usage & cost** (`/admin/usage`) are
+  read-only views over rows that already exist: `cron_heartbeats`, `studio_jobs`
+  and `ai_usage_events`. A hook is "late" after two of its own intervals. Costs
+  are the providers' reported cost per call and are labelled as estimates.
+- **Emergency switches** (`platform_switches`: AI text, images, video, search)
+  are read at the one place every paid call already asks, `checkBudget`
+  (`src/server/platform/switches.server.ts`). They fail open (an unreadable table
+  means running), are cached about ten seconds per process, and a flip needs
+  `emergency.manage`, a reason, a fresh second factor, and writes its audit row
+  in the same transaction (`admin_switch_set`).
+
+## Phase 6: flags and announcements
+
+- **Feature flags** (`platform_flags`, `/admin/flags`) are a database layer for
+  NEW gates only: `isFlagOn(key, workspaceId)` in `src/server/platform/flags.server.ts`.
+  The env-var flags in `feature-flags.ts` are untouched. Order: env var
+  `FEATURE_FLAG_<KEY>` > the row > off. A missing flag or an unreadable table is
+  **off** (a new feature must never switch itself on). Rules are pure
+  (`src/lib/flags/evaluate.ts`): end date, workspace allow list, then a stable
+  percentage bucket per flag and workspace, so a roll-out only grows.
+- **Announcements** (`platform_announcements`, `/admin/announcements`) are shown
+  by `AnnouncementsOutlet` at the top of `AppShell`. Row-level security lets a
+  signed-in person read only live rows; a failed read shows nothing. Closing one
+  is a per-browser convenience. Saves are audited with the id and state, not the text.
+- `src/integrations/supabase/types.ts` is not regenerated yet: run `npm run db:types`
+  after the migrations are applied.
+
 ## Not built yet (on purpose)
 
 Workspace suspension and read-only mode (they need a check in the shared
-request path), impersonation, editable plan definitions, credit tools, AI
-routing controls, feature flags, announcements. Each has a phase in the plan.
+request path), impersonation, editable plan definitions, credit adjustments,
+AI model routing overrides, analytics, abuse detection. Each has a phase in the plan.
 
 ## Consequences
 

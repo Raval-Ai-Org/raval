@@ -215,3 +215,103 @@ export type AdminEntitlementView = {
   fixedLimits: Array<{ key: "brands" | "seats"; effective: number | null; used: number }>;
   overrides: AdminOverrideRow[];
 };
+
+/* ───────────────────── health, usage and switches ───────────────────── */
+
+export type AdminCronJob = {
+  job: string;
+  expectedIntervalSeconds: number;
+  lastStartedAt: string | null;
+  lastSucceededAt: string | null;
+  lastFailedAt: string | null;
+  failureCount: number;
+  runCount: number;
+  lastDurationMs: number | null;
+  lastError: string | null;
+  /** Worked out on the server from the stored times: healthy / late / failing / never. */
+  state: "healthy" | "late" | "failing" | "never";
+};
+
+export type AdminFailedJob = {
+  id: string;
+  type: string;
+  stage: string;
+  workspaceId: string;
+  updatedAt: string;
+  message: string;
+};
+
+export type AdminHealth = {
+  generatedAt: string;
+  cron: AdminCronJob[];
+  studio: { queued: number; running: number; failed24h: number; stuck: number };
+  recentFailures: AdminFailedJob[];
+};
+
+export type AdminUsageRow = {
+  calls: number;
+  costUsd: number;
+  errors?: number;
+};
+
+export type AdminUsage = {
+  generatedAt: string;
+  since: string;
+  days: number;
+  /** Estimated from the provider's reported cost, not an invoice. */
+  totals: {
+    calls: number;
+    costUsd: number;
+    savedUsd: number;
+    errors: number;
+    cached: number;
+    inputTokens: number;
+    outputTokens: number;
+  };
+  byDay: Array<AdminUsageRow & { day: string }>;
+  byKind: Array<AdminUsageRow & { kind: string }>;
+  byModel: Array<AdminUsageRow & { provider: string; model: string; avgLatencyMs: number | null }>;
+  byRoute: Array<AdminUsageRow & { route: string }>;
+  topWorkspaces: Array<AdminUsageRow & { workspaceId: string; name: string | null }>;
+};
+
+export type AdminSwitch = {
+  key: "ai_text" | "ai_image" | "ai_video" | "ai_search";
+  label: string;
+  description: string;
+  engaged: boolean;
+  reason: string | null;
+  changedAt: string | null;
+  changedByEmail: string | null;
+};
+
+/* ───────────────────── flags and announcements ───────────────────── */
+
+export type AdminFlag = {
+  key: string;
+  description: string;
+  enabled: boolean;
+  rolloutPercent: number;
+  workspaceIds: string[];
+  expiresAt: string | null;
+  updatedAt: string;
+  /** Set by an environment variable, which outranks this row. */
+  envOverride: "on" | "off" | null;
+  /** What the rules say for a workspace not on the allow list. */
+  state: "on" | "partial" | "off" | "expired";
+};
+
+export type AdminAnnouncement = {
+  id: string;
+  title: string;
+  body: string;
+  tone: "info" | "success" | "warning";
+  linkUrl: string | null;
+  dismissible: boolean;
+  active: boolean;
+  startsAt: string;
+  endsAt: string | null;
+  createdAt: string;
+  /** Worked out on the server: live now, scheduled, ended or switched off. */
+  status: "live" | "scheduled" | "ended" | "off";
+};

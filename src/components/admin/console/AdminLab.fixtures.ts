@@ -11,6 +11,11 @@ import {
   type AdminRoleKey,
 } from "@/lib/admin/permissions";
 import type {
+  AdminAnnouncement,
+  AdminFlag,
+  AdminHealth,
+  AdminSwitch,
+  AdminUsage,
   AdminAuditRow,
   AdminEntitlementView,
   AdminMe,
@@ -446,3 +451,198 @@ export const LAB_OVERVIEW: AdminOverview = {
   jobs: { studioFailed24h: 4, studioRunning: 7 },
   admins: { active: 3 },
 };
+
+/* ───────────────────── health, usage and switches ───────────────────── */
+
+const NOW = Date.now();
+const minutesAgo = (m: number) => new Date(NOW - m * 60_000).toISOString();
+
+export const LAB_HEALTH: AdminHealth = {
+  generatedAt: minutesAgo(0),
+  cron: [
+    {
+      job: "run-schedules",
+      expectedIntervalSeconds: 300,
+      lastStartedAt: minutesAgo(2),
+      lastSucceededAt: minutesAgo(2),
+      lastFailedAt: null,
+      failureCount: 0,
+      runCount: 4210,
+      lastDurationMs: 840,
+      lastError: null,
+      state: "healthy",
+    },
+    {
+      job: "competitor-watch",
+      expectedIntervalSeconds: 3600,
+      lastStartedAt: minutesAgo(400),
+      lastSucceededAt: minutesAgo(400),
+      lastFailedAt: null,
+      failureCount: 2,
+      runCount: 310,
+      lastDurationMs: 5200,
+      lastError: "Search provider timed out",
+      state: "late",
+    },
+    {
+      job: "link-orders",
+      expectedIntervalSeconds: 60,
+      lastStartedAt: minutesAgo(3),
+      lastSucceededAt: minutesAgo(30),
+      lastFailedAt: minutesAgo(3),
+      failureCount: 5,
+      runCount: 9020,
+      lastDurationMs: 120,
+      lastError: "Provider basket is locked",
+      state: "failing",
+    },
+  ],
+  studio: { queued: 4, running: 2, failed24h: 3, stuck: 1 },
+  recentFailures: [
+    {
+      id: "50000001-0000-4000-8000-000000000001",
+      type: "carousel",
+      stage: "render",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      updatedAt: minutesAgo(45),
+      message: "The image provider is briefly unavailable.",
+    },
+  ],
+};
+
+export const LAB_USAGE: AdminUsage = {
+  generatedAt: minutesAgo(0),
+  since: minutesAgo(7 * 24 * 60),
+  days: 7,
+  totals: {
+    calls: 18420,
+    costUsd: 142.3871,
+    savedUsd: 21.04,
+    errors: 212,
+    cached: 3100,
+    inputTokens: 41_200_000,
+    outputTokens: 9_800_000,
+  },
+  byDay: [
+    { day: "2026-10-16", calls: 2400, costUsd: 18.2, errors: 20 },
+    { day: "2026-10-17", calls: 2900, costUsd: 22.9, errors: 31 },
+  ],
+  byKind: [
+    { kind: "text", calls: 16000, costUsd: 80.1 },
+    { kind: "image", calls: 2100, costUsd: 55.3 },
+    { kind: "video", calls: 20, costUsd: 6.9 },
+  ],
+  byModel: [
+    {
+      provider: "openrouter",
+      model: "anthropic/claude-opus-5.5",
+      calls: 4000,
+      costUsd: 70.2,
+      errors: 40,
+      avgLatencyMs: 6200,
+    },
+    {
+      provider: "openrouter",
+      model: "google/gemini-3.8-flash",
+      calls: 12000,
+      costUsd: 9.9,
+      errors: 150,
+      avgLatencyMs: 1400,
+    },
+  ],
+  byRoute: [
+    { route: "brand-extract", calls: 5200, costUsd: 61.5, errors: 70 },
+    { route: "memory-extract", calls: 8100, costUsd: 33.2, errors: 40 },
+  ],
+  topWorkspaces: [
+    {
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      name: "Northwind Coffee",
+      calls: 1900,
+      costUsd: 22.4,
+    },
+  ],
+};
+
+export function labSwitches(pii: boolean): AdminSwitch[] {
+  const email = pii ? "ops@mellox.ai" : "o•••@mellox.ai";
+  return [
+    {
+      key: "ai_text",
+      label: "AI writing",
+      description: "Chat, Studio copy, plans and every other text model call.",
+      engaged: false,
+      reason: null,
+      changedAt: null,
+      changedByEmail: null,
+    },
+    {
+      key: "ai_image",
+      label: "Image generation",
+      description: "Every image the platform generates.",
+      engaged: true,
+      reason: "Provider is returning broken images",
+      changedAt: minutesAgo(25),
+      changedByEmail: email,
+    },
+    {
+      key: "ai_video",
+      label: "Video generation",
+      description: "Every video the platform generates.",
+      engaged: false,
+      reason: null,
+      changedAt: null,
+      changedByEmail: null,
+    },
+    {
+      key: "ai_search",
+      label: "Web research",
+      description: "Live web search for Market, Competitors and chat.",
+      engaged: false,
+      reason: null,
+      changedAt: null,
+      changedByEmail: null,
+    },
+  ];
+}
+
+export const LAB_FLAGS: AdminFlag[] = [
+  {
+    key: "new-editor",
+    description: "The rebuilt post editor",
+    enabled: true,
+    rolloutPercent: 25,
+    workspaceIds: ["20000001-0000-4000-8000-000000000001"],
+    expiresAt: null,
+    updatedAt: minutesAgo(90),
+    envOverride: null,
+    state: "partial",
+  },
+  {
+    key: "faster-scan",
+    description: "Parallel page fetching in scans",
+    enabled: true,
+    rolloutPercent: 100,
+    workspaceIds: [],
+    expiresAt: null,
+    updatedAt: minutesAgo(60 * 30),
+    envOverride: "off",
+    state: "on",
+  },
+];
+
+export const LAB_ANNOUNCEMENTS: AdminAnnouncement[] = [
+  {
+    id: "60000001-0000-4000-8000-000000000001",
+    title: "Scheduled maintenance on Saturday",
+    body: "Publishing may pause for a few minutes around 02:00 UTC.",
+    tone: "warning",
+    linkUrl: null,
+    dismissible: true,
+    active: true,
+    startsAt: minutesAgo(60),
+    endsAt: new Date(NOW + 3 * 86_400_000).toISOString(),
+    createdAt: minutesAgo(70),
+    status: "live",
+  },
+];

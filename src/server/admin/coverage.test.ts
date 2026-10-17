@@ -77,6 +77,9 @@ describe("admin API structure", () => {
       "admin.users.revoke-sessions",
       "admin.users.add-note",
       "admin.team.save",
+      "admin.switches.set",
+      "admin.flags.save",
+      "admin.announcements.save",
     ]) {
       expect(byName.get(name)?.write, name).toBe(true);
     }

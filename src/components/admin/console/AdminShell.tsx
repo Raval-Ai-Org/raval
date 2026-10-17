@@ -14,9 +14,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Activity,
   ArrowLeft,
+  BarChart,
   Building2,
+  Cpu,
   Gauge,
+  Bookmark as FlagIcon,
+  Megaphone,
   Layers,
+  Power,
   Shield,
   ShieldCheck,
   Users,
@@ -28,7 +33,19 @@ import { AdminApiError, adminKeys, useAdminMe } from "./api";
 import { MfaPanel } from "./MfaPanel";
 
 type NavId =
-  "overview" | "users" | "workspaces" | "plans" | "audit" | "security" | "team" | "billing";
+  | "overview"
+  | "users"
+  | "workspaces"
+  | "plans"
+  | "flags"
+  | "announcements"
+  | "usage"
+  | "health"
+  | "emergency"
+  | "audit"
+  | "security"
+  | "team"
+  | "billing";
 
 type NavDef = {
   id: NavId;
@@ -56,7 +73,42 @@ const NAV: NavDef[] = [
     icon: Layers,
     permission: "entitlements.read",
   },
+  {
+    id: "flags",
+    label: "Feature flags",
+    href: "/admin/flags",
+    icon: FlagIcon,
+    permission: "flags.read",
+  },
+  {
+    id: "announcements",
+    label: "Announcements",
+    href: "/admin/announcements",
+    icon: Megaphone,
+    permission: "announcements.manage",
+  },
+  {
+    id: "usage",
+    label: "Usage & cost",
+    href: "/admin/usage",
+    icon: BarChart,
+    permission: "usage.read",
+  },
   { id: "billing", label: "Billing", href: "/admin/billing", icon: Wallet },
+  {
+    id: "health",
+    label: "System health",
+    href: "/admin/health",
+    icon: Cpu,
+    permission: "health.read",
+  },
+  {
+    id: "emergency",
+    label: "Emergency",
+    href: "/admin/emergency",
+    icon: Power,
+    permission: "health.read",
+  },
   {
     id: "audit",
     label: "Audit log",

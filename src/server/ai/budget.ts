@@ -16,6 +16,7 @@
 // outage must not take the product down.
 import "server-only";
 import { cache } from "@/server/cache/store";
+import { switchBlockFor } from "@/server/platform/switches.server";
 import { getRequestScope, setRequestScope } from "@/server/request-context";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import { PLANS } from "@/lib/billing/catalog";
@@ -192,6 +193,10 @@ export async function checkBudget(
   kind: BudgetKind,
   opts: { workspaceId?: string | null; userId?: string | null } = {},
 ): Promise<BudgetDecision> {
+  // An admin's emergency switch outranks every plan and allowance.
+  const stopped = await switchBlockFor(kind);
+  if (stopped) return { mode: "block", scope: "none", reason: stopped };
+
   const scope = getRequestScope();
   const workspaceId = opts.workspaceId !== undefined ? opts.workspaceId : scope.workspaceId;
   const userId = opts.userId !== undefined ? opts.userId : scope.userId;

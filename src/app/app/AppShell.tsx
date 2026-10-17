@@ -116,6 +116,7 @@ import { PlanLock } from "@/components/app/billing/billing-ui";
 import { PLANS, type FeatureKey } from "@/lib/billing/catalog";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { useAppTourSeen } from "@/hooks/use-app-tour";
+import { AnnouncementsOutlet } from "@/components/app/announcements/AnnouncementsOutlet";
 import {
   TOUR_FIRST_POST_PROMPT,
   tourStops,
@@ -779,6 +780,8 @@ function AppShell() {
 
       {/* Right column: header + workspace — one continuous surface (ChatGPT style) */}
       <div className="flex min-w-0 flex-1 flex-col bg-background">
+        <AnnouncementsOutlet />
+
         {/* Top bar — seamless: no border, same bg as chat, sticky at top */}
         <header
           role="banner"

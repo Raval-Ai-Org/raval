@@ -20,11 +20,16 @@ import {
 } from "@/lib/admin/permissions";
 import { AdminShell } from "./AdminShell";
 import {
+  LAB_ANNOUNCEMENTS,
+  LAB_FLAGS,
+  LAB_HEALTH,
   LAB_OVERVIEW,
+  LAB_USAGE,
   labAudit,
   labEntitlements,
   labMe,
   labSecurity,
+  labSwitches,
   labTeam,
   labUserDetail,
   labUsers,
@@ -32,10 +37,15 @@ import {
   labWorkspaces,
 } from "./AdminLab.fixtures";
 import { AuditScreen } from "./AuditScreen";
+import { AnnouncementsScreen } from "./AnnouncementsScreen";
+import { EmergencyScreen } from "./EmergencyScreen";
+import { FlagsScreen } from "./FlagsScreen";
+import { HealthScreen } from "./HealthScreen";
 import { OverviewScreen } from "./OverviewScreen";
 import { PlansScreen } from "./PlansScreen";
 import { SecurityScreen } from "./SecurityScreen";
 import { TeamScreen } from "./TeamScreen";
+import { UsageScreen } from "./UsageScreen";
 import { UserDetailScreen } from "./UserDetailScreen";
 import { UsersScreen } from "./UsersScreen";
 import { WorkspaceDetailScreen } from "./WorkspaceDetailScreen";
@@ -61,6 +71,11 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/audit": "audit.read",
   "/api/admin/security": "security.read",
   "/api/admin/team": "admins.read",
+  "/api/admin/health": "health.read",
+  "/api/admin/usage": "usage.read",
+  "/api/admin/switches": "health.read",
+  "/api/admin/flags": "flags.read",
+  "/api/admin/announcements": "announcements.manage",
 };
 
 function install(role: AdminRoleKey): () => void {
@@ -107,6 +122,16 @@ function install(role: AdminRoleKey): () => void {
         return json(labSecurity(pii));
       case "/api/admin/team":
         return post ? json({ ok: true, userId: USER_ID }) : json(labTeam(pii));
+      case "/api/admin/health":
+        return json(LAB_HEALTH);
+      case "/api/admin/usage":
+        return json(LAB_USAGE);
+      case "/api/admin/switches":
+        return post ? json({ key: "ai_text", engaged: true }) : json(labSwitches(pii));
+      case "/api/admin/flags":
+        return post ? json({ key: "lab" }) : json(LAB_FLAGS);
+      case "/api/admin/announcements":
+        return post ? json({ id: "lab" }) : json(LAB_ANNOUNCEMENTS);
       default:
         // Every other route here is a change: pretend it worked.
         return json({ ok: true, id: "lab", suspended: true, sessionsEnded: 2 });
@@ -160,6 +185,21 @@ export function AdminLab() {
       break;
     case "plans":
       screen = <PlansScreen />;
+      break;
+    case "health":
+      screen = <HealthScreen />;
+      break;
+    case "usage":
+      screen = <UsageScreen />;
+      break;
+    case "flags":
+      screen = <FlagsScreen />;
+      break;
+    case "announcements":
+      screen = <AnnouncementsScreen />;
+      break;
+    case "emergency":
+      screen = <EmergencyScreen />;
       break;
     default:
       screen = <OverviewScreen />;

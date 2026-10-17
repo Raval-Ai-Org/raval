@@ -25,6 +25,17 @@ export const PERMISSIONS = [
   "entitlements.override",
   "audit.read",
   "security.read",
+  /** Cron jobs, queues and recent failures. */
+  "health.read",
+  /** AI calls, cost and errors by model, route and workspace. */
+  "usage.read",
+  /** Stop or restart a paid area of the platform (text, images, video, search). */
+  "emergency.manage",
+  "flags.read",
+  /** Create, change or switch off a feature flag. */
+  "flags.manage",
+  /** Write, schedule and end the messages shown to signed-in people. */
+  "announcements.manage",
   "admins.read",
   "admins.manage",
 ] as const;
@@ -69,6 +80,12 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "entitlements.override",
       "audit.read",
       "security.read",
+      "health.read",
+      "usage.read",
+      "emergency.manage",
+      "flags.read",
+      "flags.manage",
+      "announcements.manage",
     ],
   },
   support: {
@@ -81,6 +98,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "users.notes.write",
       "workspaces.read",
       "entitlements.read",
+      "health.read",
+      "flags.read",
     ],
   },
   finance: {
@@ -92,6 +111,7 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "workspaces.read",
       "entitlements.read",
       "audit.read",
+      "usage.read",
     ],
   },
   engineering: {
@@ -104,12 +124,25 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "entitlements.read",
       "audit.read",
       "security.read",
+      "health.read",
+      "usage.read",
+      "emergency.manage",
+      "flags.read",
+      "flags.manage",
     ],
   },
   analyst: {
     label: "Read-only analyst",
     description: "Sees masked accounts and platform numbers. Changes nothing.",
-    permissions: ["overview.read", "users.read", "workspaces.read", "entitlements.read"],
+    permissions: [
+      "overview.read",
+      "users.read",
+      "workspaces.read",
+      "entitlements.read",
+      "health.read",
+      "usage.read",
+      "flags.read",
+    ],
   },
 };
 

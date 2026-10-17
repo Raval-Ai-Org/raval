@@ -51,6 +51,13 @@ export function actionLabel(action: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/** "$12.40", "$0.0031": small amounts keep their precision. */
+export function fmtUsd(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  const digits = value !== 0 && Math.abs(value) < 1 ? 4 : 2;
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: digits })}`;
+}
+
 export function pageCount(total: number, pageSize: number): number {
   return Math.max(1, Math.ceil(total / pageSize));
 }
