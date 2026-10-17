@@ -315,3 +315,41 @@ export type AdminAnnouncement = {
   /** Worked out on the server: live now, scheduled, ended or switched off. */
   status: "live" | "scheduled" | "ended" | "off";
 };
+
+/* ───────────────── analytics, integrations, lookup, credits ───────────────── */
+
+export type AdminAnalytics = {
+  generatedAt: string;
+  days: number;
+  signupsByDay: Array<{ day: string; signups: number }>;
+  /** People who used an AI feature in the last day / week / month. */
+  aiActive: { day: number; week: number; month: number };
+  /** People whose last sign-in was within the last day / week / month. */
+  signedIn: { day: number; week: number; month: number };
+  /** Accounts created in the period, and how far each got. */
+  funnel: { signedUp: number; hasWorkspace: number; usedAi: number; paying: number };
+  plans: Array<{ planId: string; status: string; accounts: number }>;
+  adoption: Array<{ kind: string; workspaces: number; users: number }>;
+};
+
+export type AdminIntegrations = {
+  generatedAt: string;
+  social: Array<{ platform: string; status: string; accounts: number }>;
+  connections: Array<{ provider: string; status: string; connections: number }>;
+  problems: Array<{
+    source: "social" | "connection";
+    provider: string;
+    status: string;
+    workspaceId: string;
+    message: string;
+    at: string;
+  }>;
+};
+
+export type AdminLookup = {
+  users: Array<{ id: string; email: string | null; name: string | null; createdAt: string }>;
+  workspaces: Array<{ id: string; name: string; domain: string | null; createdAt: string }>;
+  jobs: Array<{ id: string; type: string; status: string; workspaceId: string; updatedAt: string }>;
+};
+
+export type AdminCreditGrantResult = { replayed: boolean };

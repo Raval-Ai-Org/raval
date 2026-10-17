@@ -36,6 +36,14 @@ export const PERMISSIONS = [
   "flags.manage",
   /** Write, schedule and end the messages shown to signed-in people. */
   "announcements.manage",
+  /** Signups, activity, funnel and adoption, from stored rows. */
+  "analytics.read",
+  /** Connection state of social accounts and website connectors (never tokens). */
+  "integrations.read",
+  /** Find a user, workspace or job from one search box. */
+  "lookup.read",
+  /** Add a goodwill credit or video adjustment to an account. */
+  "credits.grant",
   "admins.read",
   "admins.manage",
 ] as const;
@@ -86,6 +94,10 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "flags.read",
       "flags.manage",
       "announcements.manage",
+      "analytics.read",
+      "integrations.read",
+      "lookup.read",
+      "credits.grant",
     ],
   },
   support: {
@@ -100,6 +112,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "entitlements.read",
       "health.read",
       "flags.read",
+      "integrations.read",
+      "lookup.read",
     ],
   },
   finance: {
@@ -112,6 +126,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "entitlements.read",
       "audit.read",
       "usage.read",
+      "analytics.read",
+      "credits.grant",
     ],
   },
   engineering: {
@@ -129,6 +145,9 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "emergency.manage",
       "flags.read",
       "flags.manage",
+      "analytics.read",
+      "integrations.read",
+      "lookup.read",
     ],
   },
   analyst: {
@@ -142,6 +161,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "health.read",
       "usage.read",
       "flags.read",
+      "analytics.read",
+      "integrations.read",
     ],
   },
 };

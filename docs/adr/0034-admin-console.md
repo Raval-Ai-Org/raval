@@ -79,11 +79,28 @@ only together with the pricing workbook process.
 - `src/integrations/supabase/types.ts` is not regenerated yet: run `npm run db:types`
   after the migrations are applied.
 
+## Phases 4, 5 and 7 (read side) and credit adjustments
+
+- **Analytics** (`/admin/analytics`), **Integrations** (`/admin/integrations`) and
+  **Support** lookup (`/admin/support`) are read-only functions over stored rows.
+  The platform keeps no page-view history, so "active" is only ever "used an AI
+  feature" or "signed in", and each figure is labelled with what it counts.
+  Integration views name their columns and never read a token.
+- **Lookup never confirms an email by guessing:** matching on email is only
+  enabled for admins with `users.pii.read`.
+- **Credit adjustments** (`credits.grant`, a danger route) call `grantMeter` with
+  source `adjustment`, AI-only, bounded per adjustment and keyed by an operation
+  id so a double click replays. The grant is the billing module's own RPC, so the
+  audit row is written right after it succeeds (and a failed attempt is audited
+  as a failure) rather than in the same transaction.
+
 ## Not built yet (on purpose)
 
 Workspace suspension and read-only mode (they need a check in the shared
-request path), impersonation, editable plan definitions, credit adjustments,
-AI model routing overrides, analytics, abuse detection. Each has a phase in the plan.
+request path), impersonation (it needs a read-only viewing token and a banner
+in the app), editable plan definitions, AI model routing overrides and spend
+caps (they touch `task-models.ts` and `budget.ts`), a jobs console with
+retry/cancel, content tools, abuse detection, data export. Each has a phase in the plan.
 
 ## Consequences
 

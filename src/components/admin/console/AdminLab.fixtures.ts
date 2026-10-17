@@ -11,7 +11,10 @@ import {
   type AdminRoleKey,
 } from "@/lib/admin/permissions";
 import type {
+  AdminAnalytics,
   AdminAnnouncement,
+  AdminIntegrations,
+  AdminLookup,
   AdminFlag,
   AdminHealth,
   AdminSwitch,
@@ -646,3 +649,72 @@ export const LAB_ANNOUNCEMENTS: AdminAnnouncement[] = [
     status: "live",
   },
 ];
+
+export const LAB_ANALYTICS: AdminAnalytics = {
+  generatedAt: minutesAgo(0),
+  days: 30,
+  signupsByDay: [
+    { day: "2026-10-14", signups: 6 },
+    { day: "2026-10-15", signups: 11 },
+    { day: "2026-10-16", signups: 4 },
+    { day: "2026-10-17", signups: 9 },
+  ],
+  aiActive: { day: 48, week: 210, month: 530 },
+  signedIn: { day: 61, week: 260, month: 640 },
+  funnel: { signedUp: 220, hasWorkspace: 198, usedAi: 140, paying: 17 },
+  plans: [
+    { planId: "free", status: "free", accounts: 610 },
+    { planId: "growth", status: "active", accounts: 14 },
+    { planId: "starter", status: "trialing", accounts: 6 },
+  ],
+  adoption: [
+    { kind: "text", workspaces: 240, users: 300 },
+    { kind: "image", workspaces: 95, users: 120 },
+    { kind: "video", workspaces: 8, users: 9 },
+  ],
+};
+
+export const LAB_INTEGRATIONS: AdminIntegrations = {
+  generatedAt: minutesAgo(0),
+  social: [
+    { platform: "instagram", status: "active", accounts: 120 },
+    { platform: "linkedin", status: "active", accounts: 64 },
+    { platform: "instagram", status: "reconnect_required", accounts: 7 },
+  ],
+  connections: [
+    { provider: "github", status: "active", connections: 33 },
+    { provider: "wordpress", status: "active", connections: 12 },
+  ],
+  problems: [
+    {
+      source: "social",
+      provider: "instagram",
+      status: "reconnect_required",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      message: "The access was revoked by the account owner.",
+      at: minutesAgo(180),
+    },
+  ],
+};
+
+export function labLookup(pii: boolean): AdminLookup {
+  return {
+    users: [
+      {
+        id: "10000001-0000-4000-8000-000000000001",
+        email: pii ? "ada@northwind.example" : "a•••@northwind.example",
+        name: "Ada Lovelace",
+        createdAt: minutesAgo(60 * 24 * 40),
+      },
+    ],
+    workspaces: [
+      {
+        id: "20000001-0000-4000-8000-000000000001",
+        name: "Northwind Coffee",
+        domain: "northwind.example",
+        createdAt: minutesAgo(60 * 24 * 39),
+      },
+    ],
+    jobs: [],
+  };
+}

@@ -20,7 +20,10 @@ import {
 } from "@/lib/admin/permissions";
 import { AdminShell } from "./AdminShell";
 import {
+  LAB_ANALYTICS,
   LAB_ANNOUNCEMENTS,
+  LAB_INTEGRATIONS,
+  labLookup,
   LAB_FLAGS,
   LAB_HEALTH,
   LAB_OVERVIEW,
@@ -37,14 +40,17 @@ import {
   labWorkspaces,
 } from "./AdminLab.fixtures";
 import { AuditScreen } from "./AuditScreen";
+import { AnalyticsScreen } from "./AnalyticsScreen";
 import { AnnouncementsScreen } from "./AnnouncementsScreen";
 import { EmergencyScreen } from "./EmergencyScreen";
 import { FlagsScreen } from "./FlagsScreen";
 import { HealthScreen } from "./HealthScreen";
+import { IntegrationsScreen } from "./IntegrationsScreen";
 import { OverviewScreen } from "./OverviewScreen";
 import { PlansScreen } from "./PlansScreen";
 import { SecurityScreen } from "./SecurityScreen";
 import { TeamScreen } from "./TeamScreen";
+import { SupportScreen } from "./SupportScreen";
 import { UsageScreen } from "./UsageScreen";
 import { UserDetailScreen } from "./UserDetailScreen";
 import { UsersScreen } from "./UsersScreen";
@@ -75,6 +81,10 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/usage": "usage.read",
   "/api/admin/switches": "health.read",
   "/api/admin/flags": "flags.read",
+  "/api/admin/analytics": "analytics.read",
+  "/api/admin/integrations": "integrations.read",
+  "/api/admin/lookup": "lookup.read",
+  "/api/admin/credits": "credits.grant",
   "/api/admin/announcements": "announcements.manage",
 };
 
@@ -128,6 +138,14 @@ function install(role: AdminRoleKey): () => void {
         return json(LAB_USAGE);
       case "/api/admin/switches":
         return post ? json({ key: "ai_text", engaged: true }) : json(labSwitches(pii));
+      case "/api/admin/analytics":
+        return json(LAB_ANALYTICS);
+      case "/api/admin/integrations":
+        return json(LAB_INTEGRATIONS);
+      case "/api/admin/lookup":
+        return json(labLookup(pii));
+      case "/api/admin/credits":
+        return json({ replayed: false });
       case "/api/admin/flags":
         return post ? json({ key: "lab" }) : json(LAB_FLAGS);
       case "/api/admin/announcements":
@@ -191,6 +209,15 @@ export function AdminLab() {
       break;
     case "usage":
       screen = <UsageScreen />;
+      break;
+    case "analytics":
+      screen = <AnalyticsScreen />;
+      break;
+    case "integrations":
+      screen = <IntegrationsScreen />;
+      break;
+    case "support":
+      screen = <SupportScreen />;
       break;
     case "flags":
       screen = <FlagsScreen />;

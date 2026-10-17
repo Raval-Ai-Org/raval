@@ -18,6 +18,9 @@ import {
   Building2,
   Cpu,
   Gauge,
+  LineChart,
+  Plug,
+  Search,
   Bookmark as FlagIcon,
   Megaphone,
   Layers,
@@ -40,6 +43,9 @@ type NavId =
   | "flags"
   | "announcements"
   | "usage"
+  | "analytics"
+  | "integrations"
+  | "support"
   | "health"
   | "emergency"
   | "audit"
@@ -86,6 +92,27 @@ const NAV: NavDef[] = [
     href: "/admin/announcements",
     icon: Megaphone,
     permission: "announcements.manage",
+  },
+  {
+    id: "support",
+    label: "Support",
+    href: "/admin/support",
+    icon: Search,
+    permission: "lookup.read",
+  },
+  {
+    id: "analytics",
+    label: "Analytics",
+    href: "/admin/analytics",
+    icon: LineChart,
+    permission: "analytics.read",
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    href: "/admin/integrations",
+    icon: Plug,
+    permission: "integrations.read",
   },
   {
     id: "usage",

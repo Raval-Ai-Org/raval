@@ -5,7 +5,7 @@
 > in that list is still planned. **Phase 2 built:** entitlement overrides (per
 > account or workspace, audited, self-expiring) and a read-only Plans page; plan
 > definitions stay in code (ADR-0034). **Phase 3 (partly) built:** System health, Usage & cost
-> (read-only) and Emergency switches for AI text/image/video/search. **Phase 6 built:** DB-backed flags and announcements. Credit
+> (read-only) and Emergency switches for AI text/image/video/search. **Also built:** Analytics, Integrations (state only), Support lookup and goodwill credit adjustments. **Phase 6 built:** DB-backed flags and announcements. Credit
 > adjustments, model routing overrides and spend caps are still planned.
 
 Source: `Mellox_AI_Admin_Panel_Complete_Product_Engineering_Roadmap.pdf` (28 sections,
