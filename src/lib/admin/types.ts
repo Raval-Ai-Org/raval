@@ -410,3 +410,47 @@ export type AdminSupportView = {
   section: AdminSupportViewSection;
   data: Record<string, unknown>;
 };
+
+/* ───────────────────────── jobs and abuse signals ───────────────────────── */
+
+export type AdminJobSource = "studio" | "geo_scan" | "experiment" | "autopilot";
+
+export type AdminJobRow = {
+  source: AdminJobSource;
+  id: string;
+  workspaceId: string;
+  kind: string;
+  status: string;
+  attempts: number | null;
+  maxAttempts: number | null;
+  createdAt: string;
+  updatedAt: string;
+  error: string;
+  /** In flight but not touched for 30 minutes. */
+  stuck: boolean;
+  /** An admin action exists for it (Studio jobs in flight). */
+  canAct: boolean;
+};
+
+export type AdminJobs = {
+  generatedAt: string;
+  counts: Array<{ source: AdminJobSource; active: number; stuck: number; failed24h: number }>;
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: AdminJobRow[];
+};
+
+export type AdminAbuseSignals = {
+  generatedAt: string;
+  signupBursts: Array<{ domain: string; hour: string; accounts: number }>;
+  costSpikes: Array<{
+    workspaceId: string;
+    name: string | null;
+    cost24hUsd: number;
+    avgDaily7dUsd: number;
+  }>;
+  failingUsers: Array<{ userId: string; calls: number; badCalls: number }>;
+  heavyUsers: Array<{ userId: string; hour: string; calls: number }>;
+  failingWorkspaces: Array<{ workspaceId: string; name: string | null; failed: number }>;
+};

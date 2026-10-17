@@ -54,6 +54,12 @@ export const PERMISSIONS = [
   "ai.routing.manage",
   /** Set a platform-wide or per-workspace AI spend cap. */
   "ai.caps.manage",
+  /** Background jobs across Studio, scans, experiments and Autopilot. */
+  "jobs.read",
+  /** Cancel or nudge a Studio job (the owning feature's own code runs). */
+  "jobs.manage",
+  /** Heuristic abuse candidates: signup bursts, cost spikes, failing users. */
+  "abuse.read",
   "admins.read",
   "admins.manage",
 ] as const;
@@ -112,6 +118,9 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "credits.grant",
       "ai.read",
       "ai.caps.manage",
+      "jobs.read",
+      "jobs.manage",
+      "abuse.read",
     ],
   },
   support: {
@@ -129,6 +138,7 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "flags.read",
       "integrations.read",
       "lookup.read",
+      "jobs.read",
     ],
   },
   finance: {
@@ -145,6 +155,7 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "credits.grant",
       "ai.read",
       "ai.caps.manage",
+      "abuse.read",
     ],
   },
   engineering: {
@@ -168,6 +179,9 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "ai.read",
       "ai.routing.manage",
       "ai.caps.manage",
+      "jobs.read",
+      "jobs.manage",
+      "abuse.read",
     ],
   },
   analyst: {
@@ -184,6 +198,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "analytics.read",
       "integrations.read",
       "ai.read",
+      "jobs.read",
+      "abuse.read",
     ],
   },
 };

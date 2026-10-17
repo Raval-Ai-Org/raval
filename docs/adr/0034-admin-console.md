@@ -138,11 +138,31 @@ only together with the pricing workbook process.
   masking. An in-app "you are being viewed" banner and an acting-as session were
   not built.
 
+## Jobs console and abuse signals
+
+- **Jobs** (`/admin/jobs`, `admin_jobs`) is one read-only list over Studio jobs, GEO
+  scans, experiment jobs and Autopilot actions from the last 30 days, filterable by
+  source and by state (in flight, stuck, failed). "Stuck" means queued or running with
+  no change for 30 minutes. The experiment `attempts / max_attempts` column shows a job
+  that ran out of tries (a dead letter).
+- **Actions exist for Studio jobs in flight only**, and both call the owner's own
+  code, the same as the customer's own click: *Cancel* is `cancelStudioJob` +
+  `settleStudioBilling` (so the credit hold is released), *Nudge* is one
+  `advanceStudioJob` poll step + settlement. Each is audited with its reason, success
+  or failure. **There is no admin retry** on purpose: retrying spends credits as the
+  customer (Autopilot's retry even needs the customer's role and billing feature), so it
+  stays the customer's action, and no admin action can loop.
+- **Abuse signals** (`/admin/abuse`, `admin_abuse_signals`) are fixed rules over stored
+  rows, with their thresholds printed on the page: signup bursts from one company
+  email domain, AI cost spikes, people whose AI calls mostly fail or are blocked, very
+  heavy hours, and workspaces with many failed jobs. **They only list.** Nothing blocks
+  or suspends automatically; an admin who agrees acts from the user or workspace page.
+
 ## Not built yet (on purpose)
 
 Impersonation as the customer (a support view exists; acting as them does not),
-editable plan definitions, a jobs console with
-retry/cancel, content tools, abuse detection, data export. Each has a phase in the plan.
+editable plan definitions, retry of failed jobs, jobs actions for scans, experiments and
+Autopilot, content tools, automatic abuse responses, data export. Each has a phase in the plan.
 
 ## Consequences
 

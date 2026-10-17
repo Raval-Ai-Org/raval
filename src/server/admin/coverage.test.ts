@@ -85,6 +85,8 @@ describe("admin API structure", () => {
       "admin.workspaces.access",
       "admin.view.start",
       "admin.view.end",
+      "admin.jobs.cancel",
+      "admin.jobs.nudge",
       "admin.announcements.save",
     ]) {
       expect(byName.get(name)?.write, name).toBe(true);

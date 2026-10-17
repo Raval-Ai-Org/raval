@@ -18,6 +18,7 @@ import {
   Building2,
   Cpu,
   Bot,
+  CalendarClock,
   Gauge,
   LineChart,
   Plug,
@@ -30,6 +31,7 @@ import {
   ShieldCheck,
   Users,
   Wallet,
+  ZapOff,
 } from "@/components/icons";
 import { hasPermission, type Permission } from "@/lib/admin/permissions";
 import type { AdminMe } from "@/lib/admin/types";
@@ -45,6 +47,8 @@ type NavId =
   | "announcements"
   | "usage"
   | "ai"
+  | "jobs"
+  | "abuse"
   | "analytics"
   | "integrations"
   | "support"
@@ -131,6 +135,20 @@ const NAV: NavDef[] = [
     permission: "usage.read",
   },
   { id: "billing", label: "Billing", href: "/admin/billing", icon: Wallet },
+  {
+    id: "jobs",
+    label: "Jobs",
+    href: "/admin/jobs",
+    icon: CalendarClock,
+    permission: "jobs.read",
+  },
+  {
+    id: "abuse",
+    label: "Abuse signals",
+    href: "/admin/abuse",
+    icon: ZapOff,
+    permission: "abuse.read",
+  },
   {
     id: "health",
     label: "System health",

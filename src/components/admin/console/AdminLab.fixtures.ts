@@ -11,6 +11,8 @@ import {
   type AdminRoleKey,
 } from "@/lib/admin/permissions";
 import type {
+  AdminAbuseSignals,
+  AdminJobs,
   AdminAiControls,
   AdminSupportView,
   AdminAnalytics,
@@ -851,3 +853,90 @@ export function labSupportView(section: string): AdminSupportView {
             };
   return { workspaceId, expiresAt, section: section as AdminSupportView["section"], data };
 }
+
+export const LAB_JOBS: AdminJobs = {
+  generatedAt: minutesAgo(0),
+  counts: [
+    { source: "studio", active: 3, stuck: 1, failed24h: 2 },
+    { source: "geo_scan", active: 1, stuck: 0, failed24h: 0 },
+    { source: "experiment", active: 0, stuck: 0, failed24h: 1 },
+    { source: "autopilot", active: 2, stuck: 0, failed24h: 0 },
+  ],
+  total: 4,
+  page: 1,
+  pageSize: 25,
+  rows: [
+    {
+      source: "studio",
+      id: "50000001-0000-4000-8000-000000000001",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      kind: "video",
+      status: "running",
+      attempts: 1,
+      maxAttempts: null,
+      createdAt: minutesAgo(95),
+      updatedAt: minutesAgo(62),
+      error: "",
+      stuck: true,
+      canAct: true,
+    },
+    {
+      source: "studio",
+      id: "50000001-0000-4000-8000-000000000002",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      kind: "carousel",
+      status: "failed",
+      attempts: 1,
+      maxAttempts: null,
+      createdAt: minutesAgo(200),
+      updatedAt: minutesAgo(190),
+      error: "The image provider is briefly unavailable.",
+      stuck: false,
+      canAct: false,
+    },
+    {
+      source: "experiment",
+      id: "50000001-0000-4000-8000-000000000003",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      kind: "live_check",
+      status: "failed",
+      attempts: 5,
+      maxAttempts: 5,
+      createdAt: minutesAgo(900),
+      updatedAt: minutesAgo(300),
+      error: "The page could not be fetched.",
+      stuck: false,
+      canAct: false,
+    },
+    {
+      source: "autopilot",
+      id: "50000001-0000-4000-8000-000000000004",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      kind: "content",
+      status: "generating",
+      attempts: 1,
+      maxAttempts: null,
+      createdAt: minutesAgo(20),
+      updatedAt: minutesAgo(8),
+      error: "",
+      stuck: false,
+      canAct: false,
+    },
+  ],
+};
+
+export const LAB_ABUSE: AdminAbuseSignals = {
+  generatedAt: minutesAgo(0),
+  signupBursts: [{ domain: "tempbox.example", hour: minutesAgo(180), accounts: 9 }],
+  costSpikes: [
+    {
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      name: "Northwind Coffee",
+      cost24hUsd: 38.2,
+      avgDaily7dUsd: 4.1,
+    },
+  ],
+  failingUsers: [{ userId: "10000001-0000-4000-8000-000000000001", calls: 120, badCalls: 97 }],
+  heavyUsers: [],
+  failingWorkspaces: [],
+};

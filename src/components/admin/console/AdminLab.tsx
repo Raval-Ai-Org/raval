@@ -20,6 +20,8 @@ import {
 } from "@/lib/admin/permissions";
 import { AdminShell } from "./AdminShell";
 import {
+  LAB_ABUSE,
+  LAB_JOBS,
   LAB_AI,
   labSupportView,
   LAB_ANALYTICS,
@@ -42,6 +44,7 @@ import {
   labWorkspaces,
 } from "./AdminLab.fixtures";
 import { AuditScreen } from "./AuditScreen";
+import { AbuseScreen } from "./AbuseScreen";
 import { AiControlsScreen } from "./AiControlsScreen";
 import { AnalyticsScreen } from "./AnalyticsScreen";
 import { AnnouncementsScreen } from "./AnnouncementsScreen";
@@ -49,6 +52,7 @@ import { EmergencyScreen } from "./EmergencyScreen";
 import { FlagsScreen } from "./FlagsScreen";
 import { HealthScreen } from "./HealthScreen";
 import { IntegrationsScreen } from "./IntegrationsScreen";
+import { JobsScreen } from "./JobsScreen";
 import { OverviewScreen } from "./OverviewScreen";
 import { PlansScreen } from "./PlansScreen";
 import { SecurityScreen } from "./SecurityScreen";
@@ -87,6 +91,10 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/flags": "flags.read",
   "/api/admin/analytics": "analytics.read",
   "/api/admin/ai": "ai.read",
+  "/api/admin/jobs": "jobs.read",
+  "/api/admin/jobs/cancel": "jobs.manage",
+  "/api/admin/jobs/nudge": "jobs.manage",
+  "/api/admin/abuse": "abuse.read",
   "/api/admin/view": "support.impersonate",
   "/api/admin/view/start": "support.impersonate",
   "/api/admin/view/end": "support.impersonate",
@@ -151,6 +159,10 @@ function install(role: AdminRoleKey): () => void {
         return post ? json({ key: "ai_text", engaged: true }) : json(labSwitches(pii));
       case "/api/admin/ai":
         return json(LAB_AI);
+      case "/api/admin/jobs":
+        return json(LAB_JOBS);
+      case "/api/admin/abuse":
+        return json(LAB_ABUSE);
       case "/api/admin/view":
         return json(labSupportView(url.searchParams.get("section") ?? "overview"));
       case "/api/admin/view/start":
@@ -233,6 +245,12 @@ export function AdminLab() {
       break;
     case "view":
       screen = <SupportViewScreen sessionId={USER_ID} />;
+      break;
+    case "jobs":
+      screen = <JobsScreen />;
+      break;
+    case "abuse":
+      screen = <AbuseScreen />;
       break;
     case "ai":
       screen = <AiControlsScreen />;
