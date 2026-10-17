@@ -11,9 +11,11 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity } from "@/components/icons";
 import type { AdminAuditRow, Paged } from "@/lib/admin/types";
-import { adminApi, query } from "./api";
+import { adminApi, query, useAdminMe } from "./api";
 import { LoadError } from "./LoadError";
+import { AuditExportPanel } from "./AuditExportPanel";
 import { AuditList } from "./AuditList";
+import { hasPermission } from "@/lib/admin/permissions";
 import { Pager, SearchField } from "./parts";
 
 const AREAS = [
@@ -29,6 +31,8 @@ export function AuditScreen() {
   const [failed, setFailed] = useState<"all" | "failed">("all");
   const [target, setTarget] = useState("");
   const [page, setPage] = useState(1);
+  const me = useAdminMe();
+  const canExport = me.data ? hasPermission(me.data.permissions, "data.export") : false;
 
   const audit = useQuery({
     queryKey: ["admin", "audit", { area, failed, target, page }],
@@ -61,6 +65,15 @@ export function AuditScreen() {
         />
       }
     >
+      {canExport && (
+        <AuditExportPanel
+          filter={{
+            action: area || undefined,
+            targetId: target || undefined,
+            failedOnly: failed === "failed",
+          }}
+        />
+      )}
       <div className="mb-4 flex flex-wrap gap-3 overflow-x-auto">
         <SegmentedControl
           label="Area"

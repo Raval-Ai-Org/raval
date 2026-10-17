@@ -85,6 +85,7 @@ describe("admin API structure", () => {
       "admin.workspaces.access",
       "admin.view.start",
       "admin.view.end",
+      "admin.audit.export",
       "admin.jobs.cancel",
       "admin.jobs.nudge",
       "admin.announcements.save",

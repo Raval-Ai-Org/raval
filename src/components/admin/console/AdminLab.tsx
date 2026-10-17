@@ -83,6 +83,7 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/entitlements/overrides": "entitlements.override",
   "/api/admin/entitlements/overrides/revoke": "entitlements.override",
   "/api/admin/audit": "audit.read",
+  "/api/admin/audit/export": "data.export",
   "/api/admin/security": "security.read",
   "/api/admin/team": "admins.read",
   "/api/admin/health": "health.read",

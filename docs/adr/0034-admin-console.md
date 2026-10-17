@@ -146,8 +146,8 @@ only together with the pricing workbook process.
   no change for 30 minutes. The experiment `attempts / max_attempts` column shows a job
   that ran out of tries (a dead letter).
 - **Actions exist for Studio jobs in flight only**, and both call the owner's own
-  code, the same as the customer's own click: *Cancel* is `cancelStudioJob` +
-  `settleStudioBilling` (so the credit hold is released), *Nudge* is one
+  code, the same as the customer's own click: _Cancel_ is `cancelStudioJob` +
+  `settleStudioBilling` (so the credit hold is released), _Nudge_ is one
   `advanceStudioJob` poll step + settlement. Each is audited with its reason, success
   or failure. **There is no admin retry** on purpose: retrying spends credits as the
   customer (Autopilot's retry even needs the customer's role and billing feature), so it
@@ -158,11 +158,20 @@ only together with the pricing workbook process.
   heavy hours, and workspaces with many failed jobs. **They only list.** Nothing blocks
   or suspends automatically; an admin who agrees acts from the user or workspace page.
 
+## Audit export
+
+An export copies sensitive history out of the console, so it is its own permission
+(`data.export`), a `danger` route (fresh second factor), needs a reason, is capped at
+5,000 rows (newest first, and the screen says when more matched) and is itself audited
+(`audit.exported`: who, filter, rows). Masking applies to the file too, and a cell that
+starts with `=`, `+`, `-` or `@` is neutralised so a typed reason can't run as a
+spreadsheet formula. Operations: [RUNBOOK.md](../admin/RUNBOOK.md).
+
 ## Not built yet (on purpose)
 
 Impersonation as the customer (a support view exists; acting as them does not),
 editable plan definitions, retry of failed jobs, jobs actions for scans, experiments and
-Autopilot, content tools, automatic abuse responses, data export. Each has a phase in the plan.
+Autopilot, content tools, automatic abuse responses, exports other than the audit log. Each has a phase in the plan.
 
 ## Consequences
 
