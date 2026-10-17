@@ -7,6 +7,7 @@ import {
   createUserClient,
   type UserSupabaseClient,
 } from "@/integrations/supabase/client.user.server";
+import { accessRefusal, workspaceAccessMode } from "@/server/platform/workspace-access.server";
 
 export function jsonError(status: number, message: string) {
   return new Response(JSON.stringify({ error: message }), {
@@ -146,6 +147,21 @@ export async function checkWorkspaceMembership(
     return {
       ok: false,
       response: jsonError(403, `This action needs the ${opts.minRole} role or higher`),
+    };
+  }
+  // An admin may have suspended this workspace or put it in read-only mode. Checked
+  // after membership so a non-member never learns a workspace's state.
+  const refusal = accessRefusal(
+    await workspaceAccessMode(workspaceId),
+    Boolean(opts.minRole && roleAtLeast(opts.minRole, "editor")),
+  );
+  if (refusal) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: refusal.message, code: refusal.code },
+        { status: refusal.status, headers: { "Cache-Control": "no-store" } },
+      ),
     };
   }
   return { ok: true, workspaceId, role };

@@ -1,8 +1,8 @@
 "use client";
 
-// One workspace, read-only: owner, members, plan, recent studio activity and
-// what the admin team did to it. Suspension and read-only mode arrive with the
-// phase that adds the matching check to the shared request path.
+// One workspace: owner, members, plan, recent studio activity, what the admin
+// team did to it, and (for those allowed) access controls and a read-only
+// support view.
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import { LoadError } from "./LoadError";
 import { AuditList } from "./AuditList";
 import { fmtDate } from "./format";
 import { Chip, Fact } from "./parts";
+import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceEntitlements } from "./WorkspaceEntitlements";
 
 export function WorkspaceDetailScreen({ id }: { id: string }) {
@@ -40,7 +41,7 @@ export function WorkspaceDetailScreen({ id }: { id: string }) {
     );
   }
 
-  const { workspace, members, billing, studioJobs7d, audit } = detail.data;
+  const { workspace, members, billing, studioJobs7d, access, audit } = detail.data;
   const canSeeEntitlements = me.data
     ? hasPermission(me.data.permissions, "entitlements.read")
     : false;
@@ -66,6 +67,11 @@ export function WorkspaceDetailScreen({ id }: { id: string }) {
           {workspace.billingPlan ?? workspace.plan ?? "free"}
         </Chip>
         {workspace.frozen && <Chip tone="warning">Frozen</Chip>}
+        {access.mode !== "active" && (
+          <Chip tone={access.mode === "suspended" ? "danger" : "warning"}>
+            {access.mode === "suspended" ? "Suspended" : "Read-only"}
+          </Chip>
+        )}
       </div>
 
       <Tile>
@@ -87,6 +93,8 @@ export function WorkspaceDetailScreen({ id }: { id: string }) {
           {workspace.frozen && <Fact label="Frozen because">{workspace.frozenReason ?? "—"}</Fact>}
         </dl>
       </Tile>
+
+      <WorkspaceAccessPanel workspaceId={workspace.id} access={access} />
 
       <GroupLabel>Billing account</GroupLabel>
       {billing ? (

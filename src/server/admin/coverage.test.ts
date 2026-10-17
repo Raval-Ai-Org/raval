@@ -82,6 +82,9 @@ describe("admin API structure", () => {
       "admin.credits.grant",
       "admin.ai.routing.set",
       "admin.ai.caps.set",
+      "admin.workspaces.access",
+      "admin.view.start",
+      "admin.view.end",
       "admin.announcements.save",
     ]) {
       expect(byName.get(name)?.write, name).toBe(true);

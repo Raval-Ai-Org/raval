@@ -110,7 +110,17 @@ export type AdminWorkspaceDetail = {
   members: Array<{ userId: string; email: string | null; role: string; joinedAt: string }>;
   billing: AdminBillingSummary | null;
   studioJobs7d: Record<string, number>;
+  /** Set by an admin: read-only or suspended. Active when absent. */
+  access: AdminWorkspaceAccess;
   audit: AdminAuditRow[];
+};
+
+export type AdminWorkspaceAccessMode = "active" | "read_only" | "suspended";
+
+export type AdminWorkspaceAccess = {
+  mode: AdminWorkspaceAccessMode;
+  reason: string | null;
+  changedAt: string | null;
 };
 
 export type AdminTeamMember = {
@@ -386,4 +396,17 @@ export type AdminAiControls = {
   caps: AdminSpendCap[];
   /** Estimated platform spend so far this UTC day and month; null when it can't be read. */
   spend: { todayUsd: number; monthUsd: number } | null;
+};
+
+/* ───────────────────────────── support views ───────────────────────────── */
+
+export type AdminSupportViewStart = { sessionId: string; workspaceId: string; expiresAt: string };
+
+export type AdminSupportViewSection = "overview" | "content" | "accounts" | "jobs";
+
+export type AdminSupportView = {
+  workspaceId: string;
+  expiresAt: string;
+  section: AdminSupportViewSection;
+  data: Record<string, unknown>;
 };

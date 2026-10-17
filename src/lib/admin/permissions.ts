@@ -20,6 +20,10 @@ export const PERMISSIONS = [
   "users.sessions.revoke",
   "users.notes.write",
   "workspaces.read",
+  /** Put a workspace in read-only mode, suspend it, or restore it. */
+  "workspaces.suspend",
+  /** Open a short, audited, read-only support view of one workspace. */
+  "support.impersonate",
   "entitlements.read",
   /** Grant or remove a feature, or change a limit, for one account or workspace. */
   "entitlements.override",
@@ -90,6 +94,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "users.sessions.revoke",
       "users.notes.write",
       "workspaces.read",
+      "workspaces.suspend",
+      "support.impersonate",
       "entitlements.read",
       "entitlements.override",
       "audit.read",
@@ -117,6 +123,7 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "users.pii.read",
       "users.notes.write",
       "workspaces.read",
+      "support.impersonate",
       "entitlements.read",
       "health.read",
       "flags.read",

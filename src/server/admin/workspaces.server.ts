@@ -1,6 +1,5 @@
 // Workspaces (one brand = one workspace), as the admin console sees them.
-// Read-only in this phase: suspension and read-only mode need a hook in the
-// shared request path and arrive with their own phase.
+// Reads only; suspension and read-only mode are set in access-control.server.ts.
 import "server-only";
 import type {
   AdminBillingSummary,
@@ -87,7 +86,7 @@ export async function getWorkspaceDetail(
   }
 
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [extra, members, billingRow, jobs, audit] = await Promise.all([
+  const [extra, members, billingRow, jobs, audit, accessRow] = await Promise.all([
     adminDb
       .from("workspaces")
       .select("industry, website_url, onboarded_at, billing_account_id")
@@ -111,7 +110,13 @@ export async function getWorkspaceDetail(
       .gte("created_at", since)
       .limit(2000),
     includeAudit ? auditForTarget("workspace", id, pii) : Promise.resolve([]),
+    adminDb
+      .from("workspace_access_state")
+      .select("mode,reason,changed_at")
+      .eq("workspace_id", id)
+      .maybeSingle(),
   ]);
+  if (accessRow.error) throw httpErrorFromPg(accessRow.error, "Could not load access state.");
   if (extra.error) throw httpErrorFromPg(extra.error, "Could not load the workspace.");
   if (billingRow.error) throw httpErrorFromPg(billingRow.error, "Could not load billing.");
   if (jobs.error) throw httpErrorFromPg(jobs.error, "Could not load jobs.");
@@ -163,6 +168,12 @@ export async function getWorkspaceDetail(
     })),
     billing,
     studioJobs7d,
+    access: {
+      mode: ((accessRow.data as { mode?: string } | null)?.mode ?? "active") as
+        "active" | "read_only" | "suspended",
+      reason: (accessRow.data as { reason?: string | null } | null)?.reason ?? null,
+      changedAt: (accessRow.data as { changed_at?: string | null } | null)?.changed_at ?? null,
+    },
     audit,
   };
 }

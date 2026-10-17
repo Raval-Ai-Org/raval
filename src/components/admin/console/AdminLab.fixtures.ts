@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin/permissions";
 import type {
   AdminAiControls,
+  AdminSupportView,
   AdminAnalytics,
   AdminAnnouncement,
   AdminIntegrations,
@@ -221,6 +222,7 @@ export function labWorkspaceDetail(pii: boolean): AdminWorkspaceDetail {
       comped: false,
     },
     studioJobs7d: { succeeded: 41, failed: 3, running: 1 },
+    access: { mode: "read_only", reason: "Chargeback under review", changedAt: minutesAgo(90) },
     audit: labAudit(pii).rows.slice(1, 3),
   };
 }
@@ -777,3 +779,75 @@ export const LAB_AI: AdminAiControls = {
     },
   ],
 };
+
+export function labSupportView(section: string): AdminSupportView {
+  const expiresAt = new Date(NOW + 27 * 60_000).toISOString();
+  const workspaceId = "20000001-0000-4000-8000-000000000001";
+  const data: Record<string, unknown> =
+    section === "content"
+      ? {
+          items: [
+            {
+              id: "c1",
+              kind: "post",
+              channel: "instagram",
+              status: "approved",
+              title: "Autumn menu is here",
+              created_at: minutesAgo(300),
+              scheduled_at: null,
+            },
+          ],
+        }
+      : section === "accounts"
+        ? {
+            social: [
+              {
+                platform: "instagram",
+                status: "reconnect_required",
+                username: "northwind.coffee",
+                connected_at: minutesAgo(60 * 24 * 30),
+                last_synced_at: minutesAgo(60 * 20),
+                reconnect_reason: "The access was revoked by the account owner.",
+              },
+            ],
+            connections: [],
+          }
+        : section === "jobs"
+          ? {
+              jobs: [
+                {
+                  id: "j1",
+                  type: "carousel",
+                  stage: "render",
+                  status: "failed",
+                  created_at: minutesAgo(80),
+                  updated_at: minutesAgo(75),
+                  error: "The image provider is briefly unavailable.",
+                },
+              ],
+            }
+          : {
+              workspace: {
+                name: "Northwind Coffee",
+                domain: "northwind.example",
+                industry: "Food and drink",
+                plan: "growth",
+                created_at: minutesAgo(60 * 24 * 39),
+                onboarded_at: minutesAgo(60 * 24 * 38),
+                frozen_at: null,
+              },
+              access_mode: "read_only",
+              members: [
+                {
+                  email: "a•••@northwind.example",
+                  role: "owner",
+                  joined_at: minutesAgo(60 * 24 * 39),
+                },
+              ],
+              content_by_status: { approved: 12, draft: 4 },
+              accounts_by_status: { active: 2, reconnect_required: 1 },
+              jobs_7d_by_status: { succeeded: 41, failed: 3 },
+              ai_30d: { calls: 1900, cost_usd: 22.4 },
+            };
+  return { workspaceId, expiresAt, section: section as AdminSupportView["section"], data };
+}

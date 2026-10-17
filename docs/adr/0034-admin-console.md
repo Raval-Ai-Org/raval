@@ -113,11 +113,35 @@ only together with the pricing workbook process.
 - Both are `danger` routes (fresh second factor) with their audit row written in the
   same transaction by `admin_route_override_set` / `admin_spend_cap_set`.
 
+## Workspace suspension, read-only mode and support views
+
+- **Access state** is `workspace_access_state` (one row per restricted workspace,
+  none means active). It is deliberately NOT a column on `workspaces`: an owner can
+  update their own workspace row and must never be able to lift a suspension. The
+  table is service-role only.
+- **Enforced in one place**, `checkWorkspaceMembership` (`src/server/api-auth.ts`),
+  which `defineRoute` and server functions (`requireWorkspaceRole`) both use, and
+  only after membership is proven, so a non-member never learns a workspace's state.
+  `suspended` refuses every request; `read_only` refuses a request whose `minRole`
+  is editor or higher. That relies on the existing convention that side-effecting
+  routes declare `minRole: "editor"`: a route that writes without declaring it is
+  not stopped by read-only mode, so keep following the convention. Fails open (an
+  unreadable table means active) and is cached about ten seconds per process.
+  Pages still load for a suspended workspace; its data calls answer 403 with a clear
+  message and a `code`.
+- **A support view is not impersonation in the login sense.** No token is minted and
+  nothing can act as the customer. `admin_view_start` opens a 30-minute session for
+  one admin (one at a time, reason required, fresh second factor); `admin_view_read`
+  checks it and returns an allow-listed snapshot. **Every read is audited.** The
+  snapshot never contains post or message text, Brand DNA, credentials, tokens, or
+  payment/billing detail beyond the plan name, and member emails follow the usual
+  masking. An in-app "you are being viewed" banner and an acting-as session were
+  not built.
+
 ## Not built yet (on purpose)
 
-Workspace suspension and read-only mode (they need a check in the shared
-request path), impersonation (it needs a read-only viewing token and a banner
-in the app), editable plan definitions, a jobs console with
+Impersonation as the customer (a support view exists; acting as them does not),
+editable plan definitions, a jobs console with
 retry/cancel, content tools, abuse detection, data export. Each has a phase in the plan.
 
 ## Consequences

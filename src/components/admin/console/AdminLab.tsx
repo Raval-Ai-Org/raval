@@ -21,6 +21,7 @@ import {
 import { AdminShell } from "./AdminShell";
 import {
   LAB_AI,
+  labSupportView,
   LAB_ANALYTICS,
   LAB_ANNOUNCEMENTS,
   LAB_INTEGRATIONS,
@@ -52,6 +53,7 @@ import { OverviewScreen } from "./OverviewScreen";
 import { PlansScreen } from "./PlansScreen";
 import { SecurityScreen } from "./SecurityScreen";
 import { TeamScreen } from "./TeamScreen";
+import { SupportViewScreen } from "./SupportViewScreen";
 import { SupportScreen } from "./SupportScreen";
 import { UsageScreen } from "./UsageScreen";
 import { UserDetailScreen } from "./UserDetailScreen";
@@ -85,6 +87,10 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/flags": "flags.read",
   "/api/admin/analytics": "analytics.read",
   "/api/admin/ai": "ai.read",
+  "/api/admin/view": "support.impersonate",
+  "/api/admin/view/start": "support.impersonate",
+  "/api/admin/view/end": "support.impersonate",
+  "/api/admin/workspaces/access": "workspaces.suspend",
   "/api/admin/ai/routing": "ai.routing.manage",
   "/api/admin/ai/caps": "ai.caps.manage",
   "/api/admin/integrations": "integrations.read",
@@ -145,6 +151,14 @@ function install(role: AdminRoleKey): () => void {
         return post ? json({ key: "ai_text", engaged: true }) : json(labSwitches(pii));
       case "/api/admin/ai":
         return json(LAB_AI);
+      case "/api/admin/view":
+        return json(labSupportView(url.searchParams.get("section") ?? "overview"));
+      case "/api/admin/view/start":
+        return json({
+          sessionId: USER_ID,
+          workspaceId: WORKSPACE_ID,
+          expiresAt: new Date(Date.now() + 1_800_000).toISOString(),
+        });
       case "/api/admin/analytics":
         return json(LAB_ANALYTICS);
       case "/api/admin/integrations":
@@ -216,6 +230,9 @@ export function AdminLab() {
       break;
     case "usage":
       screen = <UsageScreen />;
+      break;
+    case "view":
+      screen = <SupportViewScreen sessionId={USER_ID} />;
       break;
     case "ai":
       screen = <AiControlsScreen />;
