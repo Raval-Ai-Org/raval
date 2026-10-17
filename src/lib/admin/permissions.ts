@@ -44,6 +44,12 @@ export const PERMISSIONS = [
   "lookup.read",
   /** Add a goodwill credit or video adjustment to an account. */
   "credits.grant",
+  /** See which model answers each feature, and the spend caps. */
+  "ai.read",
+  /** Override the model or reasoning effort of a feature. */
+  "ai.routing.manage",
+  /** Set a platform-wide or per-workspace AI spend cap. */
+  "ai.caps.manage",
   "admins.read",
   "admins.manage",
 ] as const;
@@ -98,6 +104,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "integrations.read",
       "lookup.read",
       "credits.grant",
+      "ai.read",
+      "ai.caps.manage",
     ],
   },
   support: {
@@ -128,6 +136,8 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "usage.read",
       "analytics.read",
       "credits.grant",
+      "ai.read",
+      "ai.caps.manage",
     ],
   },
   engineering: {
@@ -148,6 +158,9 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "analytics.read",
       "integrations.read",
       "lookup.read",
+      "ai.read",
+      "ai.routing.manage",
+      "ai.caps.manage",
     ],
   },
   analyst: {
@@ -163,6 +176,7 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "flags.read",
       "analytics.read",
       "integrations.read",
+      "ai.read",
     ],
   },
 };

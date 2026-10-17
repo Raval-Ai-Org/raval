@@ -17,6 +17,7 @@ import {
   BarChart,
   Building2,
   Cpu,
+  Bot,
   Gauge,
   LineChart,
   Plug,
@@ -43,6 +44,7 @@ type NavId =
   | "flags"
   | "announcements"
   | "usage"
+  | "ai"
   | "analytics"
   | "integrations"
   | "support"
@@ -113,6 +115,13 @@ const NAV: NavDef[] = [
     href: "/admin/integrations",
     icon: Plug,
     permission: "integrations.read",
+  },
+  {
+    id: "ai",
+    label: "AI controls",
+    href: "/admin/ai",
+    icon: Bot,
+    permission: "ai.read",
   },
   {
     id: "usage",

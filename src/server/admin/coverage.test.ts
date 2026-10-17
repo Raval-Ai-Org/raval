@@ -80,6 +80,8 @@ describe("admin API structure", () => {
       "admin.switches.set",
       "admin.flags.save",
       "admin.credits.grant",
+      "admin.ai.routing.set",
+      "admin.ai.caps.set",
       "admin.announcements.save",
     ]) {
       expect(byName.get(name)?.write, name).toBe(true);

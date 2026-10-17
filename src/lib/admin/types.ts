@@ -353,3 +353,37 @@ export type AdminLookup = {
 };
 
 export type AdminCreditGrantResult = { replayed: boolean };
+
+/* ───────────────────────────── AI controls ───────────────────────────── */
+
+type AdminEffort = "low" | "medium" | "high";
+
+export type AdminAiRoute = {
+  route: string;
+  /** Where the answer comes from today: an environment variable, an admin override, or the built-in plan. */
+  source: "environment" | "override" | "default";
+  models: string[];
+  effort: AdminEffort | null;
+  defaultModels: string[];
+  defaultEffort: AdminEffort | null;
+  override: { models: string[] | null; effort: AdminEffort | null } | null;
+};
+
+export type AdminSpendCap = {
+  scope: "global" | "workspace";
+  workspaceId: string | null;
+  workspaceName: string | null;
+  dailyUsd: number | null;
+  monthlyUsd: number | null;
+  updatedAt: string;
+};
+
+export type AdminAiControls = {
+  generatedAt: string;
+  routes: AdminAiRoute[];
+  /** The only models an override may choose: the ones the built-in plans already use. */
+  models: string[];
+  caps: AdminSpendCap[];
+  /** Estimated platform spend so far this UTC day and month; null when it can't be read. */
+  spend: { todayUsd: number; monthUsd: number } | null;
+};

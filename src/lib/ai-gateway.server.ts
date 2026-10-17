@@ -21,6 +21,7 @@ import {
 } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
 import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
+import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.server";
 import { recordUsage } from "@/server/ai/metering";
 import { estimateTextCost, round6 } from "@/server/ai/pricing";
 import {
@@ -560,6 +561,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
   if (budget.mode === "block") {
     throw new BudgetExceededError("text", budget.reason ?? "AI writing is paused.");
   }
+  await refreshRoutingOverrides();
   const degraded = budget.mode === "degrade";
   const plan = effectivePlan(resolvePlan(opts), degraded);
   const primary = plan.models[0];
@@ -805,6 +807,7 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
   if (budget.mode === "block") {
     throw new BudgetExceededError("text", budget.reason ?? "AI writing is paused.");
   }
+  await refreshRoutingOverrides();
   const degraded = budget.mode === "degrade";
   const plan = effectivePlan(resolvePlan(opts), degraded);
   const primary = plan.models[0];

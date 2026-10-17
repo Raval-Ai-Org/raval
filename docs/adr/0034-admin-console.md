@@ -94,12 +94,30 @@ only together with the pricing workbook process.
   audit row is written right after it succeeds (and a failed attempt is audited
   as a failure) rather than in the same transaction.
 
+## AI controls: routing overrides and spend caps
+
+- **Routing** (`model_route_overrides`, `/admin/ai`): an admin can override the
+  models or reasoning effort of a route. `task-models.ts` stays the baseline.
+  Precedence is env var `AI_MODEL_<ROUTE>` > override > registry. An override may
+  only name a model the registry already uses (`knownModels`), checked on save and
+  again at read time. `planFor` stays synchronous: the overrides live in a
+  process-wide snapshot (`routing-overrides.server.ts`) that the gateways refresh
+  (15 s cache) before building a request; an unreadable table keeps the last
+  snapshot. Never name a model at a call site still holds.
+- **Spend caps** (`spend_caps`, global and per workspace, daily and/or monthly USD)
+  are checked inside `checkBudget`, so every paid gateway honours them. A platform
+  cap blocks all paid calls; a workspace cap degrades text to the economy model and
+  blocks images, video and search. They fail open like the rest of metering. Platform
+  spend is the estimated cost in `ai_usage_events` since the UTC day/month start
+  (`platform_spend_since`, cached 60 s).
+- Both are `danger` routes (fresh second factor) with their audit row written in the
+  same transaction by `admin_route_override_set` / `admin_spend_cap_set`.
+
 ## Not built yet (on purpose)
 
 Workspace suspension and read-only mode (they need a check in the shared
 request path), impersonation (it needs a read-only viewing token and a banner
-in the app), editable plan definitions, AI model routing overrides and spend
-caps (they touch `task-models.ts` and `budget.ts`), a jobs console with
+in the app), editable plan definitions, a jobs console with
 retry/cancel, content tools, abuse detection, data export. Each has a phase in the plan.
 
 ## Consequences

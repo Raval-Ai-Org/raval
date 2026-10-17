@@ -15,6 +15,7 @@
 //     reasoning is never logged or surfaced.
 import "server-only";
 import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
+import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.server";
 import { recordUsage } from "@/server/ai/metering";
 import { planFor, type Effort } from "@/server/ai/task-models";
 import {
@@ -210,6 +211,7 @@ function parseArguments(raw: string): unknown {
  * message.
  */
 export async function llmToolLoop(opts: LlmToolLoopOpts): Promise<LlmToolLoopResult> {
+  await refreshRoutingOverrides();
   const plan = planFor(opts.route);
   const effort = opts.effort ?? plan.effort;
   const maxTokens = Math.max(

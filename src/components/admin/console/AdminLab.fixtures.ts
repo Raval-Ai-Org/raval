@@ -11,6 +11,7 @@ import {
   type AdminRoleKey,
 } from "@/lib/admin/permissions";
 import type {
+  AdminAiControls,
   AdminAnalytics,
   AdminAnnouncement,
   AdminIntegrations,
@@ -718,3 +719,61 @@ export function labLookup(pii: boolean): AdminLookup {
     jobs: [],
   };
 }
+
+export const LAB_AI: AdminAiControls = {
+  generatedAt: minutesAgo(0),
+  models: [
+    "anthropic/claude-opus-5.5",
+    "google/gemini-3.8-flash",
+    "google/gemini-3.1-flash-lite",
+    "openai/gpt-5.6-terra",
+  ],
+  spend: { todayUsd: 18.4, monthUsd: 142.39 },
+  caps: [
+    {
+      scope: "global",
+      workspaceId: null,
+      workspaceName: null,
+      dailyUsd: 250,
+      monthlyUsd: 4000,
+      updatedAt: minutesAgo(60 * 24 * 3),
+    },
+    {
+      scope: "workspace",
+      workspaceId: "20000001-0000-4000-8000-000000000001",
+      workspaceName: "Northwind Coffee",
+      dailyUsd: 20,
+      monthlyUsd: null,
+      updatedAt: minutesAgo(60 * 5),
+    },
+  ],
+  routes: [
+    {
+      route: "brand-extract",
+      source: "default",
+      models: ["anthropic/claude-opus-5.5", "google/gemini-3.8-flash"],
+      effort: "medium",
+      defaultModels: ["anthropic/claude-opus-5.5", "google/gemini-3.8-flash"],
+      defaultEffort: "medium",
+      override: null,
+    },
+    {
+      route: "memory-extract",
+      source: "override",
+      models: ["google/gemini-3.1-flash-lite"],
+      effort: "low",
+      defaultModels: ["google/gemini-3.8-flash", "openai/gpt-5.6-terra"],
+      defaultEffort: "medium",
+      override: { models: ["google/gemini-3.1-flash-lite"], effort: "low" },
+    },
+    {
+      route: "file-extract",
+      source: "environment",
+      models: ["google/gemini-3.8-flash"],
+      effort: "medium",
+      defaultModels: ["google/gemini-3.1-flash-lite"],
+      defaultEffort: "low",
+      override: null,
+    },
+  ],
+};

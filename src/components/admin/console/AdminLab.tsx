@@ -20,6 +20,7 @@ import {
 } from "@/lib/admin/permissions";
 import { AdminShell } from "./AdminShell";
 import {
+  LAB_AI,
   LAB_ANALYTICS,
   LAB_ANNOUNCEMENTS,
   LAB_INTEGRATIONS,
@@ -40,6 +41,7 @@ import {
   labWorkspaces,
 } from "./AdminLab.fixtures";
 import { AuditScreen } from "./AuditScreen";
+import { AiControlsScreen } from "./AiControlsScreen";
 import { AnalyticsScreen } from "./AnalyticsScreen";
 import { AnnouncementsScreen } from "./AnnouncementsScreen";
 import { EmergencyScreen } from "./EmergencyScreen";
@@ -82,6 +84,9 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/switches": "health.read",
   "/api/admin/flags": "flags.read",
   "/api/admin/analytics": "analytics.read",
+  "/api/admin/ai": "ai.read",
+  "/api/admin/ai/routing": "ai.routing.manage",
+  "/api/admin/ai/caps": "ai.caps.manage",
   "/api/admin/integrations": "integrations.read",
   "/api/admin/lookup": "lookup.read",
   "/api/admin/credits": "credits.grant",
@@ -138,6 +143,8 @@ function install(role: AdminRoleKey): () => void {
         return json(LAB_USAGE);
       case "/api/admin/switches":
         return post ? json({ key: "ai_text", engaged: true }) : json(labSwitches(pii));
+      case "/api/admin/ai":
+        return json(LAB_AI);
       case "/api/admin/analytics":
         return json(LAB_ANALYTICS);
       case "/api/admin/integrations":
@@ -209,6 +216,9 @@ export function AdminLab() {
       break;
     case "usage":
       screen = <UsageScreen />;
+      break;
+    case "ai":
+      screen = <AiControlsScreen />;
       break;
     case "analytics":
       screen = <AnalyticsScreen />;
