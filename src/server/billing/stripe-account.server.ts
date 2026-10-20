@@ -25,6 +25,7 @@ import {
   grantAddonWindow,
   grantAddonUpgrade,
 } from "./grants.server";
+import { windowAfterCancel } from "@/lib/billing/cancel-window";
 import { grantMeter, clawbackMeter } from "./meters.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
@@ -306,7 +307,7 @@ function ensureNoPendingSchedule(subscription: Stripe.Subscription): void {
   if (subscription.schedule) {
     throw new HttpError(
       409,
-      "A billing change is already scheduled. Manage it in Stripe before scheduling another.",
+      "You already have a plan change scheduled for the end of this billing period. It will take effect then, or you can review it under Manage billing.",
     );
   }
 }
@@ -623,6 +624,11 @@ export async function changeAddon(args: {
 
 export async function cancelAccountPlan(userId: string): Promise<{ endsAt: string }> {
   const { subscription, details } = await ownedSubscription(userId);
+  // A scheduled downgrade or pause owns the subscription's end date, and Stripe refuses
+  // a direct cancellation while its schedule exists. Cancelling supersedes whatever was
+  // scheduled, so release the schedule first (the subscription keeps its current terms).
+  const scheduleId = subscriptionId(subscription.schedule);
+  if (scheduleId) await stripe().subscriptionSchedules.release(scheduleId);
   await stripe().subscriptions.update(subscription.id, { cancel_at_period_end: true });
   await syncSubscription(subscription.id);
   return { endsAt: details.end };
@@ -635,6 +641,9 @@ export async function pauseAccountPlan(
     throw new HttpError(503, "Stripe billing is not ready for plan changes.");
   const { account, subscription, details } = await ownedSubscription(userId);
   if (details.plan === "pause") throw new HttpError(400, "This account is already paused.");
+  // Before anything is written: Stripe refuses to change a subscription that a schedule
+  // manages, and a refused pause must not leave a resume plan behind.
+  ensureNoPendingSchedule(subscription);
   const pausePriceId = await pausePrice();
   const { error } = await admin
     .from("billing_accounts")
@@ -642,12 +651,9 @@ export async function pauseAccountPlan(
     .eq("id", account.id);
   if (error) throw new Error("Could not save the resume plan.");
   if (details.interval === "year") {
-    ensureNoPendingSchedule(subscription);
-    const scheduleId = subscription.schedule
-      ? typeof subscription.schedule === "string"
-        ? subscription.schedule
-        : subscription.schedule.id
-      : (await stripe().subscriptionSchedules.create({ from_subscription: subscription.id })).id;
+    const scheduleId = (
+      await stripe().subscriptionSchedules.create({ from_subscription: subscription.id })
+    ).id;
     await stripe().subscriptionSchedules.update(scheduleId, {
       end_behavior: "cancel",
       proration_behavior: "none",
@@ -984,6 +990,7 @@ async function syncSubscription(
     paidInvoiceId = latestId;
   }
   const now = new Date();
+  const afterCancel = windowAfterCancel(account, now);
   const nextGrant =
     details.interval === "year"
       ? account.current_period_start === details.start &&
@@ -1002,21 +1009,19 @@ async function syncSubscription(
     current_period_start: details.start,
     current_period_end: details.end,
     grant_anchor: details.start,
-    next_grant_at: canceled
-      ? account.status === "canceled" && account.next_grant_at
-        ? account.next_grant_at
-        : now.toISOString()
-      : nextGrant,
+    next_grant_at: canceled ? afterCancel.nextGrantAt : nextGrant,
     cancel_at: subscription.cancel_at
       ? new Date(subscription.cancel_at * 1000).toISOString()
       : null,
     updated_at: now.toISOString(),
   };
-  if (canceled) {
-    changes.grant_anchor =
-      account.status === "canceled" && account.grant_anchor
-        ? account.grant_anchor
-        : now.toISOString();
+  // See windowAfterCancel: an account on a comped plan keeps its own monthly cadence.
+  if (canceled) changes.grant_anchor = afterCancel.grantAnchor;
+  // A scheduled downgrade is recorded when it is scheduled. Once the schedule is gone
+  // (it took effect, or was released) the marker must not outlive it.
+  if (!subscription.schedule) {
+    changes.downgrade_to = null;
+    changes.downgrade_at = null;
   }
   if (trialing) {
     changes.trial_used = true;
@@ -1191,13 +1196,32 @@ async function syncSubscription(
   await reconcileBillingCapacity({ ownerUserId: account.owner_user_id });
 }
 
+/**
+ * Stripe can deliver a refund or dispute within a second of the payment itself, before the
+ * payment event has been processed and recorded. Wait a few seconds for the record rather
+ * than failing the delivery; if it still isn't there, the caller throws, Stripe retries
+ * the delivery, and the replay job picks it up.
+ */
+export const PAYMENT_RECORD_WAIT = { attempts: 4, delayMs: 1500 };
+
+async function loadPaymentRecord(paymentId: string) {
+  for (let attempt = 1; attempt <= PAYMENT_RECORD_WAIT.attempts; attempt++) {
+    const { data, error } = await admin
+      .from("billing_payment_records")
+      .select("*")
+      .eq("provider_payment_id", paymentId)
+      .maybeSingle();
+    if (error) throw new Error("Could not load Stripe payment record.");
+    if (data) return data;
+    if (attempt < PAYMENT_RECORD_WAIT.attempts) {
+      await new Promise((resolve) => setTimeout(resolve, PAYMENT_RECORD_WAIT.delayMs));
+    }
+  }
+  return null;
+}
+
 async function clawbackPayment(paymentId: string, refundedCents: number): Promise<void> {
-  const { data, error } = await admin
-    .from("billing_payment_records")
-    .select("*")
-    .eq("provider_payment_id", paymentId)
-    .maybeSingle();
-  if (error) throw new Error("Could not load Stripe payment record.");
+  const data = await loadPaymentRecord(paymentId);
   if (!data) throw new Error("Stripe payment has not been recorded yet.");
   if (refundedCents <= Number(data.refunded_cents)) return;
   const total = Number(data.amount_cents);

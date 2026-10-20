@@ -110,7 +110,9 @@ for (const item of entries) {
     ? await stripe.products.retrieve(existing.provider_product_id)
     : await stripe.products.create(
         { name: item.name, metadata: { mellox_catalog_key: item.key } },
-        { idempotencyKey: `mellox-product:${item.key}` },
+        // The product name carries the interval ("... monthly" / "... annual"), so the
+        // key must too, or Stripe rejects the second interval's different request.
+        { idempotencyKey: `mellox-product:${item.key}:${item.interval}` },
       );
   const price = await stripe.prices.create(
     {
