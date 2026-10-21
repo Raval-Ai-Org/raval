@@ -20,7 +20,8 @@ import {
   type TransportFailure,
 } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
-import { checkBudget } from "@/server/ai/budget";
+import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
+import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.server";
 import { recordUsage } from "@/server/ai/metering";
 import { estimateTextCost, round6 } from "@/server/ai/pricing";
 import {
@@ -556,6 +557,11 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
   const route = opts.route;
 
   const budget = await checkBudget("text");
+  // Text is never blocked by an allowance (it degrades), so a block here is an admin's emergency switch.
+  if (budget.mode === "block") {
+    throw new BudgetExceededError("text", budget.reason ?? "AI writing is paused.");
+  }
+  await refreshRoutingOverrides();
   const degraded = budget.mode === "degrade";
   const plan = effectivePlan(resolvePlan(opts), degraded);
   const primary = plan.models[0];
@@ -797,6 +803,11 @@ export function meterSseStream(
 export async function chatCompletionStream(opts: ChatOptions): Promise<Response> {
   const key = getOpenRouterKey();
   const budget = await checkBudget("text");
+  // Text is never blocked by an allowance (it degrades), so a block here is an admin's emergency switch.
+  if (budget.mode === "block") {
+    throw new BudgetExceededError("text", budget.reason ?? "AI writing is paused.");
+  }
+  await refreshRoutingOverrides();
   const degraded = budget.mode === "degrade";
   const plan = effectivePlan(resolvePlan(opts), degraded);
   const primary = plan.models[0];

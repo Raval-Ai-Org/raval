@@ -49,6 +49,170 @@ export type Database = {
           },
         ];
       };
+      admin_audit_log: {
+        Row: {
+          action: string;
+          actor_role: string | null;
+          actor_user_id: string | null;
+          after_state: Json | null;
+          before_state: Json | null;
+          created_at: string;
+          error: string | null;
+          id: string;
+          impersonating: string | null;
+          ip: string | null;
+          reason: string | null;
+          request_id: string | null;
+          success: boolean;
+          target_id: string | null;
+          target_type: string | null;
+          user_agent: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          action: string;
+          actor_role?: string | null;
+          actor_user_id?: string | null;
+          after_state?: Json | null;
+          before_state?: Json | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          impersonating?: string | null;
+          ip?: string | null;
+          reason?: string | null;
+          request_id?: string | null;
+          success?: boolean;
+          target_id?: string | null;
+          target_type?: string | null;
+          user_agent?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          action?: string;
+          actor_role?: string | null;
+          actor_user_id?: string | null;
+          after_state?: Json | null;
+          before_state?: Json | null;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          impersonating?: string | null;
+          ip?: string | null;
+          reason?: string | null;
+          request_id?: string | null;
+          success?: boolean;
+          target_id?: string | null;
+          target_type?: string | null;
+          user_agent?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [];
+      };
+      admin_user_notes: {
+        Row: {
+          author_id: string;
+          body: string;
+          created_at: string;
+          id: string;
+          user_id: string;
+        };
+        Insert: {
+          author_id: string;
+          body: string;
+          created_at?: string;
+          id?: string;
+          user_id: string;
+        };
+        Update: {
+          author_id?: string;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      admin_users: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          denied_permissions: string[];
+          disabled_at: string | null;
+          extra_permissions: string[];
+          last_seen_at: string | null;
+          note: string | null;
+          role: string;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          denied_permissions?: string[];
+          disabled_at?: string | null;
+          extra_permissions?: string[];
+          last_seen_at?: string | null;
+          note?: string | null;
+          role: string;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          denied_permissions?: string[];
+          disabled_at?: string | null;
+          extra_permissions?: string[];
+          last_seen_at?: string | null;
+          note?: string | null;
+          role?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      admin_view_sessions: {
+        Row: {
+          admin_user_id: string;
+          ended_at: string | null;
+          expires_at: string;
+          id: string;
+          reason: string;
+          started_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          admin_user_id: string;
+          ended_at?: string | null;
+          expires_at: string;
+          id?: string;
+          reason: string;
+          started_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          admin_user_id?: string;
+          ended_at?: string | null;
+          expires_at?: string;
+          id?: string;
+          reason?: string;
+          started_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_view_sessions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       agent_action_requests: {
         Row: {
           affected_records: Json;
@@ -4811,6 +4975,75 @@ export type Database = {
         };
         Relationships: [];
       };
+      entitlement_overrides: {
+        Row: {
+          account_id: string;
+          allowed: boolean | null;
+          created_at: string;
+          created_by: string;
+          expires_at: string | null;
+          id: string;
+          key: string;
+          kind: string;
+          limit_value: number | null;
+          reason: string;
+          revoke_reason: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          starts_at: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          allowed?: boolean | null;
+          created_at?: string;
+          created_by: string;
+          expires_at?: string | null;
+          id?: string;
+          key: string;
+          kind: string;
+          limit_value?: number | null;
+          reason: string;
+          revoke_reason?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          starts_at?: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          allowed?: boolean | null;
+          created_at?: string;
+          created_by?: string;
+          expires_at?: string | null;
+          id?: string;
+          key?: string;
+          kind?: string;
+          limit_value?: number | null;
+          reason?: string;
+          revoke_reason?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          starts_at?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "entitlement_overrides_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entitlement_overrides_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       experiment_assignments: {
         Row: {
           active: boolean;
@@ -7732,6 +7965,33 @@ export type Database = {
           },
         ];
       };
+      model_route_overrides: {
+        Row: {
+          effort: string | null;
+          models: string[] | null;
+          reason: string | null;
+          route_key: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          effort?: string | null;
+          models?: string[] | null;
+          reason?: string | null;
+          route_key: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          effort?: string | null;
+          models?: string[] | null;
+          reason?: string | null;
+          route_key?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       notion_content_mappings: {
         Row: {
           content_item_id: string;
@@ -7860,6 +8120,111 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      platform_announcements: {
+        Row: {
+          active: boolean;
+          body: string;
+          created_at: string;
+          created_by: string | null;
+          dismissible: boolean;
+          ends_at: string | null;
+          id: string;
+          link_url: string | null;
+          starts_at: string;
+          title: string;
+          tone: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          body?: string;
+          created_at?: string;
+          created_by?: string | null;
+          dismissible?: boolean;
+          ends_at?: string | null;
+          id?: string;
+          link_url?: string | null;
+          starts_at?: string;
+          title: string;
+          tone?: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          body?: string;
+          created_at?: string;
+          created_by?: string | null;
+          dismissible?: boolean;
+          ends_at?: string | null;
+          id?: string;
+          link_url?: string | null;
+          starts_at?: string;
+          title?: string;
+          tone?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      platform_flags: {
+        Row: {
+          created_at: string;
+          description: string;
+          enabled: boolean;
+          expires_at: string | null;
+          key: string;
+          rollout_percent: number;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_ids: string[];
+        };
+        Insert: {
+          created_at?: string;
+          description?: string;
+          enabled?: boolean;
+          expires_at?: string | null;
+          key: string;
+          rollout_percent?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_ids?: string[];
+        };
+        Update: {
+          created_at?: string;
+          description?: string;
+          enabled?: boolean;
+          expires_at?: string | null;
+          key?: string;
+          rollout_percent?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_ids?: string[];
+        };
+        Relationships: [];
+      };
+      platform_switches: {
+        Row: {
+          changed_at: string;
+          changed_by: string | null;
+          engaged: boolean;
+          key: string;
+          reason: string | null;
+        };
+        Insert: {
+          changed_at?: string;
+          changed_by?: string | null;
+          engaged?: boolean;
+          key: string;
+          reason?: string | null;
+        };
+        Update: {
+          changed_at?: string;
+          changed_by?: string | null;
+          engaged?: boolean;
+          key?: string;
+          reason?: string | null;
+        };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -9077,6 +9442,47 @@ export type Database = {
           },
         ];
       };
+      spend_caps: {
+        Row: {
+          daily_usd: number | null;
+          id: string;
+          monthly_usd: number | null;
+          reason: string | null;
+          scope: string;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string | null;
+        };
+        Insert: {
+          daily_usd?: number | null;
+          id?: string;
+          monthly_usd?: number | null;
+          reason?: string | null;
+          scope: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string | null;
+        };
+        Update: {
+          daily_usd?: number | null;
+          id?: string;
+          monthly_usd?: number | null;
+          reason?: string | null;
+          scope?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "spend_caps_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       stripe_events: {
         Row: {
           error: string | null;
@@ -9764,6 +10170,38 @@ export type Database = {
             foreignKeyName: "wordpress_sites_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_access_state: {
+        Row: {
+          changed_at: string;
+          changed_by: string | null;
+          mode: string;
+          reason: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          changed_at?: string;
+          changed_by?: string | null;
+          mode: string;
+          reason?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          changed_at?: string;
+          changed_by?: string | null;
+          mode?: string;
+          reason?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_access_state_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
@@ -10742,6 +11180,246 @@ export type Database = {
         Args: { p_workspace: string; p_profile: string; p_expected: string };
         Returns: undefined;
       };
+      admin_abuse_signals: { Args: never; Returns: Json };
+      admin_analytics: { Args: { p_days: number }; Returns: Json };
+      admin_announcement_save: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_id: string;
+          p_title: string;
+          p_body: string;
+          p_tone: string;
+          p_link_url: string;
+          p_dismissible: boolean;
+          p_active: boolean;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_emails_for: { Args: { p_ids: string[] }; Returns: { id: string; email: string }[] };
+      admin_flag_save: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_key: string;
+          p_description: string;
+          p_enabled: boolean;
+          p_rollout: number;
+          p_workspaces: string[];
+          p_expires_at: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_health: { Args: never; Returns: Json };
+      admin_integrations: { Args: never; Returns: Json };
+      admin_jobs: {
+        Args: { p_source: string; p_state: string; p_limit: number; p_offset: number };
+        Returns: Json;
+      };
+      admin_lookup: { Args: { p_query: string; p_match_email: boolean }; Returns: Json };
+      admin_override_create: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_account: string;
+          p_workspace: string;
+          p_kind: string;
+          p_key: string;
+          p_allowed: boolean;
+          p_limit_value: number;
+          p_starts_at: string;
+          p_expires_at: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_override_revoke: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_id: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_overview: { Args: never; Returns: Json };
+      admin_route_override_set: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_route: string;
+          p_models: string[];
+          p_effort: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_spend_cap_set: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_scope: string;
+          p_workspace: string;
+          p_daily: number;
+          p_monthly: number;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_switch_set: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_key: string;
+          p_engaged: boolean;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_team_save: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_user: string;
+          p_role: string;
+          p_status: string;
+          p_extra: string[];
+          p_denied: string[];
+          p_note: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_usage: { Args: { p_days: number }; Returns: Json };
+      admin_user_add_note: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_user: string;
+          p_body: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_user_directory: {
+        Args: {
+          p_search: string;
+          p_filter: string;
+          p_sort: string;
+          p_limit: number;
+          p_offset: number;
+        };
+        Returns: Json;
+      };
+      admin_user_revoke_sessions: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_user: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_user_set_suspended: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_user: string;
+          p_suspend: boolean;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_user_stats: { Args: { p_user: string }; Returns: Json };
+      admin_view_end: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_session: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_view_read: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_session: string;
+          p_section: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_view_start: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_workspace: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
+      admin_workspace_directory: {
+        Args: { p_search: string; p_filter: string; p_limit: number; p_offset: number };
+        Returns: Json;
+      };
+      admin_workspace_members: { Args: { p_workspace: string }; Returns: Json };
+      admin_workspace_set_access: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_workspace: string;
+          p_mode: string;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
       ai_usage_summary: {
         Args: { p_scope_key: string };
         Returns: {
@@ -10944,6 +11622,7 @@ export type Database = {
       meter_release_expired_holds: { Args: never; Returns: number };
       meter_rollover: { Args: { p: Json }; Returns: Json };
       my_workspace_role: { Args: { _workspace_id: string }; Returns: string };
+      platform_spend_since: { Args: { p_since: string }; Returns: number };
       prune_geo_agent_runs: { Args: never; Returns: Json };
       prune_operational_logs: { Args: never; Returns: Json };
       quarantine_provider_lock: {

@@ -16,6 +16,8 @@
 // outage must not take the product down.
 import "server-only";
 import { cache } from "@/server/cache/store";
+import { capDecision } from "@/server/platform/spend-caps.server";
+import { switchBlockFor } from "@/server/platform/switches.server";
 import { getRequestScope, setRequestScope } from "@/server/request-context";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import { PLANS } from "@/lib/billing/catalog";
@@ -192,9 +194,20 @@ export async function checkBudget(
   kind: BudgetKind,
   opts: { workspaceId?: string | null; userId?: string | null } = {},
 ): Promise<BudgetDecision> {
+  // An admin's emergency switch outranks every plan and allowance.
+  const stopped = await switchBlockFor(kind);
+  if (stopped) return { mode: "block", scope: "none", reason: stopped };
+
   const scope = getRequestScope();
   const workspaceId = opts.workspaceId !== undefined ? opts.workspaceId : scope.workspaceId;
   const userId = opts.userId !== undefined ? opts.userId : scope.userId;
+
+  // Spend caps set by an admin (platform-wide, or for this workspace).
+  const capped = await capDecision(kind, workspaceId, async (id) => {
+    const summary = await cachedSummary(`ws:${id}`);
+    return summary ? { todayUsd: summary.todayCostUsd, monthUsd: summary.monthCostUsd } : null;
+  });
+  if (capped) return { mode: capped.mode, scope: "none", reason: capped.reason };
 
   try {
     if (workspaceId) {

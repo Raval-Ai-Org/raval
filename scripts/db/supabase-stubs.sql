@@ -33,6 +33,23 @@ CREATE TABLE IF NOT EXISTS auth.users (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- Columns and tables the real Supabase Auth has, used by the admin console's
+-- directory and security functions (20261018090000_admin_foundation.sql).
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS last_sign_in_at timestamptz;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS banned_until timestamptz;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email_confirmed_at timestamptz;
+CREATE TABLE IF NOT EXISTS auth.sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  not_after timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS auth.mfa_factors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  factor_type text NOT NULL DEFAULT 'totp',
+  status text NOT NULL DEFAULT 'unverified'
+);
 
 CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb
 LANGUAGE sql STABLE AS $$

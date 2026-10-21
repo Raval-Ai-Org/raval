@@ -9,12 +9,16 @@
 // Change a model without a deploy:
 //   AI_MODEL_<ROUTE_KEY>=model-a,model-b   (primary first, then fallbacks)
 //   AI_EFFORT_<ROUTE_KEY>=low|medium|high
+// or, from the admin console (AI controls), a routing override stored in the
+// database. Precedence: env var > admin override > this registry. An override
+// may only name a model this file already uses (knownModels).
 // ROUTE_KEY is the route upper-cased with non-alphanumerics as "_", e.g.
 // AI_MODEL_BRAND_EXTRACT, AI_EFFORT_GEO_FIX_PROPOSE.
 //
 // Decision record: docs/adr/0026-openrouter-only-models.md. A test
 // (task-models.test.ts) fails when a `route:` label in src/ has no entry here.
 import "server-only";
+import { routingOverrideFor } from "@/server/platform/routing-overrides.server";
 
 /* ─────────────────────────── tiers (one-line swaps) ─────────────────────────── */
 
@@ -259,6 +263,18 @@ export function routeEnvKey(route: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+/** The registry key a label resolves to (exact, or the longest ".*" prefix). */
+function lookupKey(route: string): string | undefined {
+  if (REGISTRY[route]) return route;
+  let best: string | undefined;
+  for (const key of Object.keys(REGISTRY)) {
+    if (!key.endsWith(".*")) continue;
+    const prefix = key.slice(0, -1);
+    if (route.startsWith(prefix) && (!best || prefix.length > best.length - 1)) best = key;
+  }
+  return best;
+}
+
 function lookup(route: string): TaskPlan | undefined {
   if (REGISTRY[route]) return REGISTRY[route];
   let best: { prefix: string; plan: TaskPlan } | undefined;
@@ -312,8 +328,13 @@ export function planFor(route: string): TaskPlan {
     base = UNKNOWN_ROUTE_PLAN;
   }
   const key = routeEnvKey(route);
-  const models = parseModels(process.env[`AI_MODEL_${key}`]);
-  const effort = parseEffort(process.env[`AI_EFFORT_${key}`]);
+  const override = routingOverrideFor(lookupKey(route) ?? route);
+  const allowed = knownModels();
+  const overrideModels = override?.models?.filter((m) => allowed.has(m));
+  const models =
+    parseModels(process.env[`AI_MODEL_${key}`]) ??
+    (overrideModels?.length ? overrideModels : undefined);
+  const effort = parseEffort(process.env[`AI_EFFORT_${key}`]) ?? override?.effort;
   if (!models && !effort) return base;
   return {
     ...base,
@@ -367,6 +388,28 @@ export const DEFAULT_GEO_PROBE_MODELS = [
 
 export function geoProbeModels(): string[] {
   return parseModels(process.env.GEO_PROBE_MODELS) ?? [...DEFAULT_GEO_PROBE_MODELS];
+}
+
+/** Every model the registry uses, which is all an admin override may choose from. */
+export function knownModels(): Set<string> {
+  const out = new Set<string>([PREMIUM, WORKHORSE, ECONOMY]);
+  for (const list of Object.values(FALLBACKS)) for (const model of list) out.add(model);
+  for (const plan of Object.values(REGISTRY)) {
+    for (const model of plan.models) out.add(model);
+    for (const model of plan.escalate?.models ?? []) out.add(model);
+    for (const model of plan.degraded?.models ?? []) out.add(model);
+  }
+  return out;
+}
+
+/** The registry key a label resolves to, for admin overrides. */
+export function registryKeyFor(route: string): string | undefined {
+  return lookupKey(route);
+}
+
+/** The registry plan for a key, with no override or env applied. */
+export function registryPlan(key: string): TaskPlan | undefined {
+  return REGISTRY[key];
 }
 
 /** Every label with an entry (tests, docs). */

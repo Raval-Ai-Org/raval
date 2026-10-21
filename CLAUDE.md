@@ -876,6 +876,49 @@ originally generated content) and both off only if explicitly disabled.
   gateway-backed model, and metadata finalization is legitimate EXIF/XMP
   hygiene with provenance left untouched by design.
 
+## Admin console (Mellox staff)
+
+Plan [docs/admin/ADMIN-PANEL-PLAN.md](docs/admin/ADMIN-PANEL-PLAN.md), decision
+record [ADR-0034](docs/adr/0034-admin-console.md). Pages `src/app/admin/(console)/`,
+UI `src/components/admin/console/`, API `src/app/api/admin/**` (except the older
+`billing/`), server `src/server/admin/`, pure rules `src/lib/admin/`.
+
+- **Every admin route is `defineAdminRoute`** with exactly one `permission`
+  (`src/lib/admin/permissions.ts`). A non-admin gets 404; a refusal is audited.
+  `write` and `danger` pick the rate-limit tier; `danger` also needs a TOTP code
+  from the last ten minutes. A test enforces this for every route file.
+- **The browser never decides.** The rail hides what a role can't open, the
+  server checks the permission on every request. Fields that hold personal data
+  are masked server-side unless the admin has `users.pii.read`.
+- **Changes live in database functions** (`admin_*`, service role only) that
+  write the audit row in the same transaction. Don't write `admin_*` tables or
+  `auth.users` from TypeScript; add a function to a new migration.
+- **`admin_audit_log` and `admin_user_notes` are append-only**, even for the
+  service role. Nothing edits or deletes them.
+- **Only `db.server.ts` imports the service client** under `src/server/admin`.
+  Never select a credential column (a test greps for it).
+- **Access:** `admin_users` rows, plus `BILLING_ADMIN_USER_IDS` as super admin
+  (the way back in). Nobody edits their own access; the last active super admin
+  can't be removed. `ADMIN_REQUIRE_MFA` (default on in production).
+- **Entitlement overrides** (`entitlement_overrides`, pure rules in
+  `src/lib/billing/overrides.ts`, loader `src/server/billing/overrides.server.ts`):
+  staff allow/deny a sold feature or set a numeric limit for an account or one
+  workspace, with a reason and an optional end. They are applied in exactly one
+  place, right after the plan is resolved in `getEntitlements`; read the result
+  from there, never re-derive a plan's rules (`planAllows` is for upgrade copy).
+  The catalog stays the baseline: no rows, flag off (`FEATURE_FLAG_ENTITLEMENT_OVERRIDES_ENABLED`)
+  or a failed read means exactly the plan. **Brands and seats can't be overridden**
+  (lowering them freezes brands on the next capacity reconcile). An override ends
+  by itself (it is judged when read; no cron). Admin reads of entitlements must
+  pass `skipCapacityReconcile`.
+- The billing console is `/admin/billing` and has its own checks; leave it alone
+  unless a billing task says otherwise.
+- `/admin-lab` (development only, never served in production) renders the real
+  screens in the real shell with sample data from `AdminLab.fixtures.ts`, typed
+  against `src/lib/admin/types.ts`; `?s=<section>&role=<role>` shows any role. Use it
+  for visual checks (no sign-in needed); add sample data there when you add a screen.
+- DB checks: `tests/db/admin-foundation.test.ts`, `tests/db/admin-entitlement-overrides.test.ts`.
+
 ## Verifying work
 
 Unit tests, typecheck and build are necessary but not sufficient. When
