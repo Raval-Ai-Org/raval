@@ -30,7 +30,7 @@ import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { studioChargeFor } from "@/lib/studio/billing";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
-import { STUDIO_VIDEO_UNITS } from "@/lib/billing/catalog";
+import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
 import { PLATFORMS } from "@/lib/social-platforms";
@@ -851,7 +851,10 @@ function StudioPrice({ session }: { session: StudioSession }) {
     regenerate: Boolean(session.lastGood),
   });
   return charge === "studio_video" ? (
-    <CostChip videoUnits={STUDIO_VIDEO_UNITS} className="ml-auto shrink-0" />
+    <CostChip
+      videoUnits={studioVideoUnits(session.controls.durationSec)}
+      className="ml-auto shrink-0"
+    />
   ) : (
     <CostChip action={charge} className="ml-auto shrink-0" />
   );

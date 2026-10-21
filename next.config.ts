@@ -116,6 +116,13 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       // API responses carry user data: never cache in shared caches.
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
+      {
+        source: "/auth/confirm",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "private, no-store" },
+        ],
+      },
     ];
   },
 };

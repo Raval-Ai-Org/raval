@@ -449,7 +449,7 @@ function session(
       slideCount: 5,
       ...(type === "story" ? { storyMode: "frames" as const, frameCount: 3 } : {}),
       length: "standard",
-      durationSec: type === "video" ? 6 : 30,
+      durationSec: type === "video" ? 10 : 30,
     },
     job,
     lastGood: step === "review" ? job : null,

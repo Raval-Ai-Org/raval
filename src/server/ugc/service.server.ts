@@ -43,6 +43,7 @@ import { getAppUrl } from "@/server/env";
 import { HttpError } from "@/server/http-error";
 import { getPlanLimits } from "@/server/plans";
 import { getEntitlements } from "@/server/billing/entitlements.server";
+import { videoFeatureFor, type VideoResolution } from "@/lib/billing/catalog";
 import { settleUgcBilling } from "@/server/billing/ugc-async.server";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { createRenderEngine } from "./engine.server";
@@ -593,6 +594,27 @@ export async function startRender(
     throw new HttpError(400, "Choose a concept and finish the script before generating.");
   const refs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
   const requestedModel = isUgcModelKey(input.model) ? input.model : "auto";
+  const entitlements = await getEntitlements({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    role: "editor",
+  });
+  const candidates = enabledModels().filter(
+    (candidate) =>
+      requestedModel !== "auto" ||
+      (candidate.aspectRatios.includes(
+        input.aspectRatio as (typeof candidate.aspectRatios)[number],
+      ) &&
+        candidate.resolutions.includes(
+          input.resolution as (typeof candidate.resolutions)[number],
+        ) &&
+        (entitlements.enforcement !== "on" ||
+          entitlements.features[
+            videoFeatureFor(candidate.key as UgcModelKey, input.resolution as VideoResolution)
+          ].allowed)),
+  );
+  if (!candidates.length)
+    throw new HttpError(400, "No video model supports these settings on your plan.");
   const route = routeVideo(
     {
       product: ctx.product,
@@ -604,7 +626,7 @@ export async function startRender(
       brand: ctx.brand,
       requestedModel,
     },
-    enabledModels().map((candidate) => candidate.key as UgcModelKey),
+    candidates.map((candidate) => candidate.key as UgcModelKey),
   );
   if (!isModelEnabled(route.model))
     throw new HttpError(400, "No suitable video model is available.");
@@ -621,12 +643,7 @@ export async function startRender(
   const problems = checkRenderSettings(model, settings);
   if (problems.length) throw new HttpError(400, problems[0].message);
 
-  const estimate = estimateRender(model, settings.resolution, settings.durationSec);
-  const entitlements = await getEntitlements({
-    workspaceId: input.workspaceId,
-    userId: input.userId,
-    role: "editor",
-  });
+  const estimate = estimateRender(model, settings.resolution, settings.durationSec, imageCount);
   const enforcing = entitlements.enforcement === "on";
   const limits = enforcing ? null : await workspacePlan(input.workspaceId);
   const configuredCap = Number(process.env.UGC_MAX_CONCURRENT_RENDERS);

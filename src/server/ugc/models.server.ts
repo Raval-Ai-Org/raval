@@ -29,6 +29,7 @@ import {
   type VideoProviderId,
 } from "@/lib/ugc/models";
 import type { ModelView } from "@/lib/ugc/schemas";
+import { outputDurations, planVideoSegments } from "@/lib/ugc/duration";
 
 const envKey = (id: string) => id.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
 
@@ -129,14 +130,19 @@ export function estimateRender(
   model: UgcModel,
   resolution: UgcResolution,
   durationSec: number,
+  imageCount = 0,
 ): RenderEstimate {
   const pricing = effectivePricing(model);
-  const amount = renderPrice(pricing, resolution, durationSec);
+  const segments = planVideoSegments(durationSec, durationsFor(model, imageCount > 0));
+  const prices = segments.map((clip) => renderPrice(pricing, resolution, clip.renderSeconds));
+  const amount = prices.some((price) => price == null)
+    ? null
+    : prices.reduce<number>((sum, price) => sum + (price ?? 0), 0);
   if (amount == null) throw new Error(`No price configured for ${model.key} at ${resolution}`);
   return {
     credits: pricing.currency === "credits" ? amount : null,
     usd: toUsd(pricing, amount),
-    units: videoUnits(model),
+    units: videoUnits(model) * segments.length,
   };
 }
 
@@ -146,8 +152,10 @@ export function toModelView(model: UgcModel): ModelView {
     displayName: model.displayName,
     tier: model.tier,
     description: model.description,
-    durations: model.durations,
-    imageDurations: model.images ? durationsFor(model, true) : null,
+    durations: outputDurations(model.durations),
+    imageDurations: model.images ? outputDurations(durationsFor(model, true)) : null,
+    nativeDurations: model.durations,
+    nativeImageDurations: model.images ? durationsFor(model, true) : null,
     aspectRatios: model.aspectRatios,
     resolutions: model.resolutions,
     defaultResolution: model.defaultResolution,

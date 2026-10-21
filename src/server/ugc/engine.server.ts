@@ -71,7 +71,10 @@ export function createRenderEngine(deps: EngineDeps) {
     if (!isKnownUgcModelKey(row.model_key))
       return fail(row, "model_unavailable", "This model is no longer available.");
     // A legacy key resolves to its current equivalent; the provider adapts it.
-    const model = resolveUgcModel(row.model_key);
+    const model = resolveUgcModel(
+      row.model_key,
+      row.provider === "openrouter" ? "openrouter" : "kie",
+    );
     if (row.submit_attempts >= MAX_SUBMIT_ATTEMPTS) {
       return fail(
         row,

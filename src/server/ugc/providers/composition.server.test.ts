@@ -1,0 +1,161 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  withVideoComposition,
+  type CompositionRow,
+  type CompositionStore,
+} from "./composition.server";
+import type { VideoProvider, VideoRenderRequest } from "./types";
+import { UGC_MODELS } from "@/lib/ugc/models";
+
+function fixture() {
+  let row: CompositionRow | null = null;
+  const store: CompositionStore = {
+    async create(value) {
+      row = structuredClone(value);
+    },
+    async get() {
+      return structuredClone(row);
+    },
+    async save(value, lease_until) {
+      if (!row || row.revision !== value.revision) return null;
+      row = structuredClone({ ...value, revision: value.revision + 1, lease_until });
+      return structuredClone(row);
+    },
+  };
+  let count = 0;
+  const base: VideoProvider = {
+    id: "fake",
+    generationType: () => "TEXT",
+    submit: vi.fn<VideoProvider["submit"]>(async (request) => ({
+      ok: true,
+      taskId: `clip-${++count}`,
+      provider: "kie",
+      providerModel: request.model.providerModel,
+      request: {},
+    })),
+    check: vi.fn<VideoProvider["check"]>(async (id) => ({
+      state: "success",
+      providerState: "done",
+      videoUrl: `https://videos.example/${id}.mp4`,
+      costUsd: 0.5,
+      meta: {},
+    })),
+    download: vi.fn(async () => ({ dataUrl: "data:video/mp4;base64,YQ==", bytes: 1 })),
+  };
+  const assemble = vi.fn(async () => ({ dataUrl: "data:video/mp4;base64,YWI=", bytes: 2 }));
+  const request: VideoRenderRequest = {
+    model: UGC_MODELS.premium,
+    durationSec: 40,
+    prompt: "A product demonstration",
+    aspectRatio: "9:16",
+    resolution: "720p",
+    imageUrls: [],
+  };
+  return {
+    store,
+    base,
+    assemble,
+    request,
+    current: () => row!,
+    provider: withVideoComposition(base, { store, assemble }),
+  };
+}
+
+describe("durable video composition", () => {
+  it("leaves native ten-second generation on its existing path", async () => {
+    const f = fixture();
+    const result = await f.provider.submit({ ...f.request, durationSec: 10 });
+    expect(result).toMatchObject({ ok: true, taskId: "clip-1" });
+    expect(f.current()).toBeNull();
+  });
+
+  it("survives a new worker, records every clip, sums cost and assembles one output", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    expect(f.base.submit).not.toHaveBeenCalled();
+    const otherWorker = withVideoComposition(f.base, { store: f.store, assemble: f.assemble });
+    const result = await otherWorker.check(submitted.taskId);
+    expect(result).toMatchObject({
+      state: "success",
+      videoUrl: submitted.taskId,
+      costUsd: 2,
+      meta: { clips: 4, duration: 40 },
+    });
+    expect(f.base.submit).toHaveBeenCalledTimes(4);
+    await otherWorker.check(submitted.taskId);
+    expect(f.base.submit).toHaveBeenCalledTimes(4);
+    expect(await otherWorker.download!(submitted.taskId)).toMatchObject({ bytes: 2 });
+    expect(f.assemble).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ seconds: 10 })]),
+      true,
+    );
+    expect(f.current().state.clips.every((clip) => clip.taskId && clip.videoUrl)).toBe(true);
+  });
+
+  it("does not duplicate provider submissions when two polls race", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    await Promise.all([f.provider.check(submitted.taskId), f.provider.check(submitted.taskId)]);
+    expect(f.base.submit).toHaveBeenCalledTimes(4);
+  });
+
+  it("never resubmits an interrupted or uncertain provider submission", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    vi.mocked(f.base.submit).mockRejectedValueOnce(new Error("Connection dropped"));
+    await expect(f.provider.check(submitted.taskId)).rejects.toThrow("Connection dropped");
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({
+      state: "failed",
+      message: expect.stringContaining("interrupted"),
+    });
+    expect(f.base.submit).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains accepted clips when a later submission is definitely rate limited", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    vi.mocked(f.base.submit)
+      .mockResolvedValueOnce({
+        ok: true,
+        taskId: "first",
+        provider: "kie",
+        providerModel: "model",
+        request: {},
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        code: "rate_limit",
+        message: "Wait",
+        retryable: true,
+        definite: true,
+      });
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "pending" });
+    expect(f.current().state.clips[0].taskId).toBe("first");
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "success" });
+    expect(f.base.submit).toHaveBeenCalledTimes(5);
+  });
+
+  it("propagates a failed clip and prevents downloading an incomplete video", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    vi.mocked(f.base.check).mockResolvedValueOnce({
+      state: "failed",
+      providerState: "failed",
+      code: "refusal",
+      message: "Clip failed",
+      retryable: false,
+      meta: {},
+    });
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({
+      state: "failed",
+      message: "Clip failed",
+    });
+    await expect(f.provider.download!(submitted.taskId)).rejects.toThrow("not ready");
+    expect(f.assemble).not.toHaveBeenCalled();
+  });
+});

@@ -31,6 +31,7 @@ import { videoFallbackProvider, videoProvider } from "../models.server";
 import { kieVideoProvider } from "./kie.server";
 import { openRouterVideoProvider } from "./openrouter.server";
 import type { ProviderCheck, SubmitResult, VideoProvider, VideoRenderRequest } from "./types";
+import { withVideoComposition } from "./composition.server";
 
 /** The only refusals that move a job to the fallback provider. */
 const FALLBACK_CODES = new Set([
@@ -66,6 +67,7 @@ function requestFor(req: VideoRenderRequest, provider: VideoProviderId): VideoRe
     resolution: req.resolution,
     imageCount: req.imageUrls.length,
   });
+  if (settings.durationSec < (req.minimumDurationSec ?? 0)) return null;
   return {
     ...req,
     model,
@@ -212,4 +214,4 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
   };
 }
 
-export const routedVideoProvider = createRoutedVideoProvider();
+export const routedVideoProvider = withVideoComposition(createRoutedVideoProvider());

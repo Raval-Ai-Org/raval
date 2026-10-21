@@ -252,14 +252,14 @@ function defaultControls(type: StudioType, platforms?: PlatformId[]): StudioCont
       ratio: "9:16",
       storyMode: "frames",
       frameCount: 3,
-      durationSec: 6,
+      durationSec: 10,
       videoResolution: "720P",
       audio: true,
     });
   if (type === "article") controls.length = "standard";
   if (type === "script") controls.durationSec = 30;
   if (type === "video")
-    Object.assign(controls, { durationSec: 6, videoResolution: "720P", audio: true });
+    Object.assign(controls, { durationSec: 10, videoResolution: "720P", audio: true });
   return controls;
 }
 

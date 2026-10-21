@@ -1,0 +1,24 @@
+{
+  "ffmpeg_version": "7.1-essentials_build-www.gyan.dev built with gcc 14.2.0 (Rev1, Built by MSYS2 project)",
+  "codec": "h264",
+  "pix_fmt": "yuv420p(tv, bt709, progressive)",
+  "audio_codec": "aac",
+  "fps": 30.0,
+  "source_size": [
+    1920,
+    1080
+  ],
+  "size": [
+    1920,
+    1080
+  ],
+  "rotate": 0,
+  "duration": 40.84,
+  "source": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\ref.mp4",
+  "ffmpeg": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\tools\\imageio_ffmpeg\\binaries\\ffmpeg-win-x86_64-v7.1.exe",
+  "review_fps": 4,
+  "frame_timestamp_formula": "(frame_number - 1) / review_fps",
+  "review_precision_note": "Output timestamps are 250 ms apart; selected native source frames are on or before each output timestamp. Use frame-index.csv source_seconds for actual source-image time.",
+  "review_rounding": "up",
+  "review_sampling_round": "up"
+}

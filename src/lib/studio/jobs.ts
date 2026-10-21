@@ -139,26 +139,39 @@ export type StudioRefine = z.infer<typeof RefineSchema>;
 /** Brand DNA sent by the client (it lives in the browser). Loosely typed, size-capped. */
 export const BrandPayloadSchema = z.record(z.string(), z.unknown()).nullable().optional();
 
-export const CreateJobSchema = z.object({
-  workspaceId: z.string().uuid(),
-  type: StudioTypeSchema,
-  idempotencyKey: z.string().min(8).max(120),
-  intent: IntentSchema,
-  controls: ControlsSchema,
-  brand: BrandPayloadSchema,
-  /**
-   * Brand Kit Style: a style id, "none" for Brand DNA only, or absent for the
-   * workspace default. Checked on the server against the job's workspace.
-   */
-  parentJobId: z.string().uuid().optional(),
-  refine: RefineSchema.optional(),
-  /** Regenerate: same brief, a new take. */
-  regenerate: z.boolean().optional(),
-  /** The user already approved the draft this comes from: land the result in Ready. */
-  approve: z.boolean().optional(),
-  /** A text draft being turned into this post; retired once the post is ready. */
-  fromContentId: z.string().uuid().optional(),
-});
+export const CreateJobSchema = z
+  .object({
+    workspaceId: z.string().uuid(),
+    type: StudioTypeSchema,
+    idempotencyKey: z.string().min(8).max(120),
+    intent: IntentSchema,
+    controls: ControlsSchema,
+    brand: BrandPayloadSchema,
+    /**
+     * Brand Kit Style: a style id, "none" for Brand DNA only, or absent for the
+     * workspace default. Checked on the server against the job's workspace.
+     */
+    parentJobId: z.string().uuid().optional(),
+    refine: RefineSchema.optional(),
+    /** Regenerate: same brief, a new take. */
+    regenerate: z.boolean().optional(),
+    /** The user already approved the draft this comes from: land the result in Ready. */
+    approve: z.boolean().optional(),
+    /** A text draft being turned into this post; retired once the post is ready. */
+    fromContentId: z.string().uuid().optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (
+      (input.type === "video" ||
+        (input.type === "story" && input.controls.storyMode === "video")) &&
+      (input.controls.durationSec ?? 10) > 60
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "durationSec"],
+        message: "Videos can be up to 60 seconds long.",
+      });
+  });
 
 export type CreateJobInput = z.infer<typeof CreateJobSchema>;
 

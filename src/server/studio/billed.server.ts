@@ -3,6 +3,7 @@
 // and Autopilot (the worker, acting as a stored member). Same price either way.
 import "server-only";
 import { studioChargeFor } from "@/lib/studio/billing";
+import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { createStudioJob } from "@/server/studio/runner.server";
@@ -11,12 +12,7 @@ import {
   runMetered,
   type MeteredAction,
 } from "@/server/billing/metered.server";
-import {
-  CREDIT_ACTIONS,
-  STUDIO_VIDEO_UNITS,
-  creditsFor,
-  type CreditAction,
-} from "@/lib/billing/catalog";
+import { CREDIT_ACTIONS, creditsFor, type CreditAction } from "@/lib/billing/catalog";
 import { saveStudioBillingLink } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
 import type { WorkspaceRole } from "@/server/api-auth";
@@ -73,7 +69,9 @@ export async function createBilledStudioJob(args: {
       ? "video"
       : BILLING_ROUTE[input.type];
   const video = action === "studio_video";
-  const amount = video ? STUDIO_VIDEO_UNITS : creditsFor(action as CreditAction);
+  const amount = video
+    ? studioVideoUnits(input.controls.durationSec)
+    : creditsFor(action as CreditAction);
   const price = { meter: video ? ("video" as const) : ("credits" as const), amount };
 
   if (studioJobRenders(input)) {

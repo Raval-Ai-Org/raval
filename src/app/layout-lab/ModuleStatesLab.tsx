@@ -98,6 +98,8 @@ export function ModuleStatesLab({ scene }: { scene: string }) {
             product={product}
             hasConcepts
             busy={false}
+            durationSec={10}
+            onDurationChange={() => {}}
             onBack={() => {}}
             onGenerate={() => {}}
             onSkipToConcepts={() => {}}

@@ -58,6 +58,33 @@ const request = (over: Partial<VideoRenderRequest> = {}): VideoRenderRequest => 
 });
 
 describe("video provider fallback", () => {
+  it("never falls back to a shorter clip when assembling a longer video", async () => {
+    const kie = fake("kie", [
+      {
+        ok: false,
+        code: "provider_credits",
+        message: "No credits",
+        retryable: false,
+        definite: true,
+      },
+    ]);
+    const or = fake("openrouter", []);
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider, openrouter: or.provider },
+      primary: () => "kie",
+      fallback: () => "openrouter",
+    });
+    const result = await routed.submit(
+      request({
+        model: UGC_MODELS.variation,
+        durationSec: 10,
+        minimumDurationSec: 10,
+        imageUrls: ["https://owned.test/product.png"],
+      }),
+    );
+    expect(result).toMatchObject({ ok: false, code: "provider_credits" });
+    expect(or.submits).toHaveLength(0);
+  });
   it("retains legacy reference truncation and fallback without optional taste restrictions", async () => {
     const kie = fake("kie", [
       {

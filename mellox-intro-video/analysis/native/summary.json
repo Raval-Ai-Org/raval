@@ -1,0 +1,8 @@
+{
+  "native_fps": 30.0,
+  "frame_count": 1223,
+  "candidate_count": 91,
+  "candidate_end_seconds": 25.8,
+  "frame_numbering": "source_frame_0based/fps gives seconds; filenames use zero-based source indexes",
+  "note": "Exact native-frame timestamps; candidate identity and first-visible text must be verified visually."
+}

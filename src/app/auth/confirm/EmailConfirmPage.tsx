@@ -4,13 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@/lib/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { consumeStoredNextPath } from "@/lib/auth";
-import { emailConfirmationDestination, readEmailConfirmation } from "@/lib/email-confirmation";
+import {
+  captureEmailConfirmation,
+  emailConfirmationDestination,
+  saveEmailConfirmation,
+  type PendingEmailConfirmation,
+} from "@/lib/email-confirmation";
+import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
 import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
 import { useServerFn } from "@/lib/use-server-fn";
 import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/button";
-
-type Confirmation = NonNullable<ReturnType<typeof readEmailConfirmation>>;
 
 export default function EmailConfirmPage() {
   const navigate = useNavigate();
@@ -19,7 +23,10 @@ export default function EmailConfirmPage() {
   const verified = useRef(false);
   const busy = useRef(false);
   const mounted = useRef(false);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const pending = useRef<PendingEmailConfirmation | null>(null);
+  const [confirmation, setConfirmation] = useState<PendingEmailConfirmation["confirmation"] | null>(
+    null,
+  );
   const [status, setStatus] = useState<"ready" | "loading" | "success" | "error">("ready");
   const [message, setMessage] = useState("");
 
@@ -31,17 +38,29 @@ export default function EmailConfirmPage() {
   }, []);
 
   useEffect(() => {
-    if (captured.current) return;
-    captured.current = true;
-    // The hash never reaches the server or a referrer. Remove it before loading
-    // the Supabase client or making any network request in this page.
-    const parsed = readEmailConfirmation(window.location.hash);
-    window.history.replaceState(window.history.state, document.title, "/auth/confirm");
-    setConfirmation(parsed);
-    if (!parsed)
+    function capture() {
+      // Templates use fragments so credentials never reach server logs/referrers.
+      // Also accept older query links, but scrub both before any auth request.
+      const capturedLink = captureEmailConfirmation(window.location.hash || window.location.search);
+      pending.current = capturedLink;
+      verified.current = false;
+      const parsed = capturedLink?.confirmation ?? null;
+      window.history.replaceState(window.history.state, document.title, "/auth/confirm");
+      setConfirmation(parsed);
+      setStatus("ready");
       setMessage(
-        "This link is invalid or has already been opened. Request a new email to continue.",
+        parsed
+          ? ""
+          : "This email link is missing or invalid. Reopen the complete link from your email, or request a new confirmation below.",
       );
+    }
+    if (!captured.current) {
+      captured.current = true;
+      capture();
+    }
+    // Mobile browsers may reuse this document when the newest email is opened.
+    window.addEventListener("hashchange", capture);
+    return () => window.removeEventListener("hashchange", capture);
   }, []);
 
   async function confirm() {
@@ -49,41 +68,66 @@ export default function EmailConfirmPage() {
     busy.current = true;
     setStatus("loading");
     setMessage("");
+    const activeLink = pending.current;
     try {
+      if (pending.current?.verifiedUserId) {
+        const { data } = await supabase.auth.getSession();
+        if (pending.current !== activeLink) return;
+        verified.current = data.session?.user.id === pending.current.verifiedUserId;
+      }
       if (!verified.current) {
-        const { error } = await supabase.auth.verifyOtp(confirmation);
+        const { data, error } = await supabase.auth.verifyOtp(confirmation);
+        if (pending.current !== activeLink) return;
         if (error) throw error;
+        if (!data.session && confirmation.type !== "email_change") {
+          throw new Error("Verification did not establish a session");
+        }
         // The token is single-use. A later workspace failure must retry setup,
         // rather than submit the already-consumed token to Supabase again.
         verified.current = true;
+        if (data.session && pending.current) {
+          pending.current.verifiedUserId = data.session.user.id;
+          saveEmailConfirmation(pending.current);
+        }
+        if (confirmation.type === "email_change" && !data.session) {
+          saveEmailConfirmation(null);
+          setStatus("success");
+          setMessage(
+            "Email change confirmation received. If confirmation is required at both addresses, open the other email too. Then sign in with your confirmed address.",
+          );
+          return;
+        }
       }
       if (!mounted.current) return;
       // Email changes can be confirmed without issuing a fresh session.
       const { data, error } = await supabase.auth.getSession();
+      if (pending.current !== activeLink) return;
       if (error) throw error;
       if (!mounted.current) return;
       if (!data.session) {
-        setStatus("ready");
-        navigate({ to: "/login", replace: true });
-        return;
+        throw new Error("No session was established");
       }
       if (confirmation.type !== "recovery") {
         await ensureWorkspace();
       }
+      if (pending.current !== activeLink) return;
       if (!mounted.current) return;
       setStatus("success");
+      saveEmailConfirmation(null);
       const destination =
         confirmation.type === "recovery"
           ? emailConfirmationDestination(confirmation.type)
           : consumeStoredNextPath(emailConfirmationDestination(confirmation.type));
       navigate({ to: destination, replace: true });
-    } catch {
-      if (mounted.current) {
+    } catch (error) {
+      if (mounted.current && pending.current === activeLink) {
         setStatus("error");
         setMessage(
           verified.current
             ? "Your email is confirmed, but we couldn't finish opening your account. Please retry."
-            : "This link could not be confirmed. Check your connection or request a new email and try again.",
+            : error && typeof error === "object" && "code" in error && error.code === "otp_expired"
+              ? "This link has expired or was already used. Sign in if you already confirmed, or request a new email below. Use the newest email after resending."
+              : "This link could not be confirmed. Check your connection or request a new email and try again.",
         );
       }
     } finally {
@@ -131,6 +175,26 @@ export default function EmailConfirmPage() {
             <Link to="/login">Back to login</Link>
           </Button>
         ) : null}
+        {status === "success" && confirmation?.type === "email_change" ? (
+          <Button asChild className="mt-7 w-full">
+            <Link to="/login">Continue to login</Link>
+          </Button>
+        ) : null}
+        {(!confirmation ||
+          (status === "error" &&
+            !verified.current &&
+            ["email", "signup", "recovery"].includes(confirmation.type))) && (
+          <div className="mt-6">
+            <ResendConfirmation recovery={confirmation?.type === "recovery"} />
+          </div>
+        )}
+        {status === "error" && confirmation && (
+          <p className="mt-5 text-sm">
+            <Link to="/login" className="underline">
+              Back to login
+            </Link>
+          </p>
+        )}
       </section>
     </main>
   );
