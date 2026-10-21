@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mellox AI · Motion preview</title><link rel="stylesheet" href="/styles.css"></head>
+<body>
+<main>
+  <header><a class="brand" href="/">mellox<span>AI</span></a><span class="studio">MOTION STUDIO</span><span class="badge">1080P <i></i> 60 FPS</span></header>
+  <div class="intro"><div><p class="eyebrow">THE MELLOX BRAND FILM</p><h1>Your brand. Built to grow.</h1></div><p class="meta">Black. White. Ultra Moss.<br>Built around Mellox.</p></div>
+  <div class="stage"><canvas id="film" width="1920" height="1080" aria-label="Mellox AI promo film"></canvas><button id="stagePlay" aria-label="Play film">▶</button></div>
+  <div class="transport"><button id="toggle">Play</button><button id="restart" aria-label="Restart film">↺</button><output id="time">00:00.000</output><input id="scrubber" type="range" min="0" max="40.85" step="0.0166666667" value="0" aria-label="Film time"><span class="duration">00:40.850</span><button id="mute" aria-label="Mute audio">Sound on</button></div>
+  <nav class="chapters" aria-label="Chapters"><button data-time="1.6"><small>01</small> The brand</button><button data-time="10.5"><small>02</small> Brand DNA</button><button data-time="20"><small>03</small> Content</button><button data-time="33.5"><small>04</small> Autopilot</button><button data-time="38.5"><small>05</small> Mellox AI</button></nav>
+  <footer><span id="status">Loading Mellox fonts and identity…</span><span>Copy + timing: <code>config.json</code> · saves reload live</span></footer>
+</main>
+<audio id="master" src="/assets/ref_audio.mp3" preload="auto"></audio>
+<script type="module" src="/app.mjs"></script>
+</body></html>

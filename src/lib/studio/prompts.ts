@@ -762,9 +762,14 @@ export function buildVisualBriefPrompt(
         : "You are Mellox, a creative director concepting one on-brand social visual.",
       [
         video
-          ? `\`concept\` is a shot plan for a ${args.controls.durationSec ?? 6}-second clip: opening frame (the hook), camera movement, the key product/service moment, and the closing frame. Concrete and filmable; no dialogue.`
+          ? `\`concept\` is a shot plan for a ${args.controls.durationSec ?? 10}-second clip: opening frame (the hook), camera movement, the key product/service moment, and the closing frame. Concrete and filmable; no dialogue.`
           : "`concept` describes one strong visual idea: subject, setting, composition, lighting, mood, and how it reinforces the brief. Concrete, something a photographer or illustrator could execute.",
         "Ground the visual in the brand's actual product, audience and identity. Choose a recognizable focal subject and a distinct visual treatment; avoid generic stock imagery or fabricated product details.",
+        ...(video
+          ? [
+              `Write one shot per line as [start–ends] followed by the visual direction, covering the entire ${args.controls.durationSec ?? 10} seconds. Keep the same subjects, product, clothing, location and lighting across connected shots.`,
+            ]
+          : []),
         "`onImageText` is at most a 2-6 word phrase worth showing, or an empty string. `altText` describes the result for accessibility.",
       ],
       `{"title": string, "concept": string, "onImageText": string, "altText": string}`,

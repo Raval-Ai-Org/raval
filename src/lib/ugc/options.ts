@@ -32,7 +32,7 @@ export const PLATFORMS: readonly PlatformPreset[] = [
     label: "TikTok",
     hint: "Vertical, fast, creator-first",
     aspectRatio: "9:16",
-    durationSec: 8,
+    durationSec: 10,
     native:
       "native TikTok creator video: talking straight to the phone camera, quick pattern-interrupt in the first second, casual jump-cut energy",
   },
@@ -41,7 +41,7 @@ export const PLATFORMS: readonly PlatformPreset[] = [
     label: "Instagram Reels",
     hint: "Vertical, polished-casual",
     aspectRatio: "9:16",
-    durationSec: 8,
+    durationSec: 10,
     native:
       "Instagram Reels creator video: vertical, bright and aesthetically clean but still handheld and personal",
   },
@@ -50,7 +50,7 @@ export const PLATFORMS: readonly PlatformPreset[] = [
     label: "YouTube Shorts",
     hint: "Vertical, clear value fast",
     aspectRatio: "9:16",
-    durationSec: 8,
+    durationSec: 10,
     native:
       "YouTube Shorts creator video: vertical, gets to the value immediately, clear demonstration",
   },
@@ -59,7 +59,7 @@ export const PLATFORMS: readonly PlatformPreset[] = [
     label: "Facebook",
     hint: "Feed video, sound-optional",
     aspectRatio: "1:1",
-    durationSec: 8,
+    durationSec: 10,
     native:
       "Facebook feed video from a real customer: the product and its benefit are understandable even with the sound off",
   },

@@ -449,7 +449,7 @@ function ProjectEditor({
 
   // Initial render settings once the model catalog and project are known.
   useEffect(() => {
-    if (!catalog || settings) return;
+    if (!catalog || settings || (projectId && !project)) return;
     const model = catalog.models.find((m) => m.key === catalog.defaultModel) ?? catalog.models[0];
     if (!model) return;
     const preset = platformPreset(project?.brief.platform ?? "tiktok");
@@ -458,7 +458,7 @@ function ProjectEditor({
         model,
         {
           model: model.key,
-          durationSec: preset.durationSec,
+          durationSec: project?.brief.durationSec ?? preset.durationSec,
           aspectRatio: preset.aspectRatio,
           resolution: model.defaultResolution,
           referenceIds: project?.references.map((r) => r.assetId) ?? [],
@@ -467,13 +467,13 @@ function ProjectEditor({
       ),
       model: "auto",
     });
-  }, [catalog, project, settings]);
+  }, [catalog, project, projectId, settings]);
 
   const model =
     catalog?.models.find((m) => m.key === settings?.model) ??
-    catalog?.models.find((m) => m.key === "standard") ??
+    catalog?.models.find((m) => m.key === catalog.defaultModel) ??
     catalog?.models[0];
-  const durationSec = settings?.durationSec ?? 8;
+  const durationSec = settings?.durationSec ?? 10;
 
   const guard = async <T,>(
     kind: NonNullable<typeof busy>,
@@ -518,9 +518,7 @@ function ProjectEditor({
   const applyBriefToSettings = (brief: Brief) => {
     if (!model || !settings) return;
     const preset = platformPreset(brief.platform);
-    setSettings(
-      coerceSettings(model, { ...settings, durationSec: preset.durationSec }, preset.aspectRatio),
-    );
+    setSettings({ ...coerceSettings(model, settings, preset.aspectRatio), model: settings.model });
   };
 
   const generateConcepts = (brief: Brief) =>
@@ -529,7 +527,7 @@ function ProjectEditor({
       applyBriefToSettings(brief);
       setStep("concepts");
       try {
-        await ugcApi.updateProject(workspaceId, project.id, { brief });
+        await ugcApi.updateProject(workspaceId, project.id, { brief: { ...brief, durationSec } });
         const { project: next } = await ugcApi.generateConcepts(
           workspaceId,
           project.id,
@@ -548,7 +546,9 @@ function ProjectEditor({
     guard("saving", "Couldn't save the details.", async () => {
       if (!project) return;
       applyBriefToSettings(brief);
-      setProject(await ugcApi.updateProject(workspaceId, project.id, { brief }));
+      setProject(
+        await ugcApi.updateProject(workspaceId, project.id, { brief: { ...brief, durationSec } }),
+      );
       setStep("concepts");
     });
 
@@ -588,6 +588,12 @@ function ProjectEditor({
   const startRender = () =>
     guard("render", "Couldn't start the video.", async () => {
       if (!project || !settings) return;
+      if (project.brief.durationSec !== settings.durationSec) {
+        const updated = await ugcApi.updateProject(workspaceId, project.id, {
+          brief: { ...project.brief, durationSec: settings.durationSec },
+        });
+        setProject(updated);
+      }
       const { render } = await ugcApi.startRender(workspaceId, {
         projectId: project.id,
         idempotencyKey: crypto.randomUUID(),
@@ -699,6 +705,10 @@ function ProjectEditor({
               product={project.product}
               hasConcepts={project.concepts.length > 0}
               busy={busy === "concepts" || busy === "saving"}
+              durationSec={durationSec}
+              onDurationChange={(seconds) =>
+                setSettings((s) => (s ? { ...s, durationSec: seconds } : s))
+              }
               onBack={() => setStep("product")}
               onGenerate={(brief) => void generateConcepts(brief)}
               onSkipToConcepts={(brief) => void keepConcepts(brief)}
@@ -766,12 +776,16 @@ function ProjectEditor({
               />
             ) : (
               <GenerateStep
+                defaultModel={catalog?.defaultModel}
                 models={catalog?.models ?? []}
                 allowance={catalog?.allowance ?? null}
                 loadingModels={!catalog}
                 settings={settings}
                 references={project.references}
                 hook={project.script?.hook ?? ""}
+                scriptDurationSec={Math.max(
+                  ...(project.script?.scenes.map((scene) => scene.end) ?? [durationSec]),
+                )}
                 generating={busy === "render"}
                 onChange={setSettings}
                 onBack={() => setStep("script")}

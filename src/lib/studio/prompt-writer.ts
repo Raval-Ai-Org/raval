@@ -103,7 +103,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
       "Caption idea",
     ],
     guidance:
-      "A short AI-generated video brief (4–8 seconds of footage). 'Scene by scene' lists 2–4 shots on their own lines as 'Shot N (0–2s): what we see and what moves'. Describe real, filmable visuals: subject, action, setting, textures. 'Camera movement' names the moves (push-in, orbit, slow pan, handheld). 'Sound' suggests music or ambient sound. No on-screen text inside the footage. 'Caption idea' is the post caption angle and first line.",
+      "An AI-generated video brief matching the selected length (10–60 seconds by default). 'Scene by scene' lists enough shots to cover the full selected duration on their own lines as 'Shot N (0–2s): what we see and what moves'. Describe real, filmable visuals: subject, action, setting, textures. 'Camera movement' names the moves (push-in, orbit, slow pan, handheld). 'Sound' suggests music or ambient sound. No on-screen text inside the footage. 'Caption idea' is the post caption angle and first line.",
   },
   script: {
     sections: [
@@ -263,8 +263,10 @@ export function describeSettings(
   const parts: string[] = [];
   if (c.platforms?.length) parts.push(`Platforms: ${c.platforms.join(", ")}`);
   if (c.ratio) parts.push(`Size: ${c.ratio}`);
-  if (type === "video" || type === "script")
-    parts.push(`Length: ${c.durationSec ?? (type === "video" ? 6 : 30)} seconds`);
+  if (type === "video" || type === "script" || (type === "story" && c.storyMode === "video"))
+    parts.push(
+      `Length: ${c.durationSec ?? (type === "video" || (type === "story" && c.storyMode === "video") ? 10 : 30)} seconds`,
+    );
   if (type === "carousel") parts.push(`Slides: ${c.slideCount ?? 6}`);
   if (type === "article") parts.push(`Length: ${c.length ?? "standard"}`);
   if (c.includeImage) parts.push("Include an image");

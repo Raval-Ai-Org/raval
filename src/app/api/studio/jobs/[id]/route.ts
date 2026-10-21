@@ -6,7 +6,7 @@ import { settleStudioBilling, studioBillingLink } from "@/server/billing/studio-
 import { runWithScope } from "@/server/request-context";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 300;
 
 function jobIdFrom(request: Request): string | null {
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);

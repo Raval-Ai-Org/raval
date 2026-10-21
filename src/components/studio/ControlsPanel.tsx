@@ -26,14 +26,14 @@ export function describeControls(session: StudioSession): string {
   if (session.type === "script") parts.push(`${c.durationSec ?? 30} seconds`);
   if (session.type === "video")
     parts.push(
-      `${c.durationSec ?? 6} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
+      `${c.durationSec ?? 10} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
     );
   if (session.type === "carousel")
     parts.push(`${c.slideCount ?? 6} ${c.seamless ? "connected slides" : "slides"}`);
   if (session.type === "story") {
     parts.push(
       c.storyMode === "video"
-        ? `Video · ${c.durationSec ?? 6} seconds`
+        ? `Video · ${c.durationSec ?? 10} seconds`
         : `${c.frameCount ?? 3} ${(c.frameCount ?? 3) === 1 ? "frame" : "frames"}`,
     );
     const theme = getStoryTheme(c.storyTheme);
@@ -128,22 +128,6 @@ export function ControlsPanel({
         </label>
       ) : null}
 
-      {session.type === "carousel" ? (
-        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
-          <span>
-            <span className="block text-sm font-medium text-foreground">Connected slides</span>
-            <span className="block text-xs text-muted-foreground">
-              One long picture that runs from slide to slide and loops back to the start
-            </span>
-          </span>
-          <Switch
-            checked={!!c.seamless}
-            onCheckedChange={(v) => set({ seamless: v, ...(v ? { includeImage: false } : {}) })}
-            aria-label="Connected slides"
-          />
-        </label>
-      ) : null}
-
       <div className="rounded-xl border border-border bg-surface-3">
         <button
           type="button"
@@ -196,6 +180,7 @@ export function ControlsPanel({
                 <FieldLabel>Length</FieldLabel>
                 <Segmented
                   label="Length"
+                  className="max-w-full flex-wrap"
                   value={c.length ?? "standard"}
                   onChange={(length) => set({ length })}
                   options={[
@@ -210,18 +195,24 @@ export function ControlsPanel({
             {session.type === "script" || session.type === "video" ? (
               <div>
                 <FieldLabel
-                  hint={session.type === "video" ? "Longer videos take longer" : undefined}
+                  hint={
+                    session.type === "video"
+                      ? "Up to 1 minute · longer videos use more credits"
+                      : undefined
+                  }
                 >
                   Length
                 </FieldLabel>
                 <Segmented
                   label="Length"
-                  value={c.durationSec ?? (session.type === "video" ? 6 : 30)}
+                  value={c.durationSec ?? (session.type === "video" ? 10 : 30)}
                   onChange={(durationSec) => set({ durationSec })}
-                  options={(session.type === "video" ? [4, 6, 8] : [15, 30, 60]).map((v) => ({
-                    value: v,
-                    label: `${v}s`,
-                  }))}
+                  options={(session.type === "video" ? [10, 15, 20, 30, 40, 60] : [15, 30, 60]).map(
+                    (v) => ({
+                      value: v,
+                      label: `${v}s`,
+                    }),
+                  )}
                 />
               </div>
             ) : null}
@@ -353,9 +344,10 @@ function StoryControls({
           <FieldLabel>Length</FieldLabel>
           <Segmented
             label="Length"
-            value={c.durationSec ?? 6}
+            className="max-w-full flex-wrap"
+            value={c.durationSec ?? 10}
             onChange={(durationSec) => set({ durationSec })}
-            options={[4, 6, 8].map((v) => ({ value: v, label: `${v}s` }))}
+            options={[10, 15, 20, 30, 40, 60].map((v) => ({ value: v, label: `${v}s` }))}
           />
         </div>
       ) : (

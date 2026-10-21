@@ -54,6 +54,7 @@ import {
   type PlatformId,
 } from "@/lib/ugc/options";
 import { ugcApi } from "@/lib/ugc/client";
+import { VIDEO_DURATION_OPTIONS } from "@/lib/ugc/duration";
 import type { Brief, Product } from "@/lib/ugc/schemas";
 import { cn } from "@/lib/utils";
 import {
@@ -112,6 +113,8 @@ export function BriefStep({
   product,
   hasConcepts,
   busy,
+  durationSec,
+  onDurationChange,
   onBack,
   onGenerate,
   onSkipToConcepts,
@@ -122,6 +125,8 @@ export function BriefStep({
   product: Product;
   hasConcepts: boolean;
   busy: boolean;
+  durationSec: number;
+  onDurationChange: (seconds: number) => void;
   onBack: () => void;
   onGenerate: (brief: Brief) => void;
   onSkipToConcepts: (brief: Brief) => void;
@@ -166,6 +171,22 @@ export function BriefStep({
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
+          <div className="space-y-2.5">
+            <SectionLabel icon={Video}>Video length</SectionLabel>
+            <ChipGroup
+              label="Video length"
+              options={VIDEO_DURATION_OPTIONS.map((seconds) => ({
+                id: String(seconds),
+                label: seconds === 60 ? "1 min" : `${seconds}s`,
+              }))}
+              value={String(durationSec)}
+              onChange={(value) => onDurationChange(Number(value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Ideas and dialogue are written to fit your selected length. Longer videos take more
+              time and video credits.
+            </p>
+          </div>
           <div className="space-y-2.5">
             <SectionLabel icon={Video}>Where</SectionLabel>
             <div role="radiogroup" aria-label="Platform" className="grid grid-cols-4 gap-2">

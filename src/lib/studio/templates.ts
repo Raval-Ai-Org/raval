@@ -464,7 +464,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: open on tight close-ups of textures and details that hint at the product, use a slow camera move (push-in or orbit), then reveal the full product in a clean, well-lit final shot with the brand colours in the background. Smooth, cinematic motion; no on-screen text in the video. Captions tease in the first line, then name the product and its main benefit.",
     goal: "launch",
-    controls: { durationSec: 6 },
+    controls: { durationSec: 10 },
     thumb: "play",
   },
   {
@@ -477,7 +477,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: raw materials in soft light, then hands at work with close, tactile detail and steady motion, then the finished result presented proudly. Keep movement smooth and satisfying, with a warm, natural colour grade. Captions highlight the care and craft involved, in plain words.",
     goal: "awareness",
-    controls: { durationSec: 8 },
+    controls: { durationSec: 10 },
     thumb: "steps",
   },
   {
@@ -490,7 +490,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: a clear, slightly dull 'before' state, a smooth transition (wipe, whip-pan or morph), and a bright, striking 'after' from the same camera angle so the change is obvious. Captions state the change in concrete terms and invite viewers to get the same result.",
     goal: "leads",
-    controls: { durationSec: 6 },
+    controls: { durationSec: 10 },
     thumb: "split",
   },
   {
@@ -503,7 +503,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: slow, atmospheric footage — wide establishing view, then rich close details (light, texture, movement), ending on a subtle brand moment such as the product or logo colour in frame. Evoke a feeling rather than explain. Captions carry the message the visuals suggest in one or two poetic but clear lines.",
     goal: "awareness",
-    controls: { durationSec: 8 },
+    controls: { durationSec: 10 },
     thumb: "story",
   },
   {
@@ -516,7 +516,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: a relatable everyday setting, a person naturally using the product with clear hand and product close-ups, then the satisfying result or reaction. Natural lighting and believable motion. Captions describe the benefit the viewer just saw and give a simple next step.",
     goal: "leads",
-    controls: { durationSec: 8 },
+    controls: { durationSec: 10 },
     thumb: "play",
   },
   {
@@ -529,7 +529,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: an energetic opening with bold colour and quick motion, the product shown clearly in two or three dynamic angles, finishing on a clean frame that leaves room for offer text added later. Upbeat pacing. Captions state the offer, the real deadline and one action.",
     goal: "offer",
-    controls: { durationSec: 6 },
+    controls: { durationSec: 10 },
     thumb: "countdown",
   },
   {
@@ -542,7 +542,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: a smooth walk-in from the entrance, a gentle glide through the space showing its character and people (if appropriate), and a final lingering shot on the best spot or signature detail. Warm, inviting light. Captions invite people to visit and include opening details only if provided.",
     goal: "awareness",
-    controls: { durationSec: 8 },
+    controls: { durationSec: 10 },
     thumb: "story",
   },
   {
@@ -555,7 +555,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     directive:
       "Shot plan: the closed package on a clean surface, hands opening it with satisfying close-up detail, then items revealed one by one and a final overhead shot of everything laid out. Crisp lighting, steady camera. Captions build anticipation and name what's inside only as provided.",
     goal: "launch",
-    controls: { durationSec: 8 },
+    controls: { durationSec: 10 },
     thumb: "grid",
   },
 

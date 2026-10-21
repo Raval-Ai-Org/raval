@@ -1,0 +1,4 @@
+tools/
+downloader/
+temp/
+__pycache__/

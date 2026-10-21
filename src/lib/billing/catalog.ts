@@ -1078,10 +1078,10 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
 ];
 
 /**
- * Studio "Generate video" (/api/generate-video, 6s on the premium key). Deliberately
- * gated by "ugc" (all paid plans): a 6s clip costs ~$0.82, covered by 1 VC.
+ * Studio's default 10-second premium video. Longer outputs scale this quote.
+ * Gated by "ugc" (all paid plans).
  */
-export const STUDIO_VIDEO_UNITS = 100;
+export const STUDIO_VIDEO_UNITS = 200;
 
 /** Studio clip provider. */
 export const STUDIO_VIDEO_PROVIDER: VideoProviderId = "openrouter";

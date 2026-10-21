@@ -402,7 +402,7 @@ export function PreviewSkeleton({
         shots={session.type === "video" && (blueprint || reached("brief"))}
         idle={blueprint}
         concept={out.concept ?? out.visualConcept}
-        seconds={session.type === "video" ? (session.controls.durationSec ?? 6) : undefined}
+        seconds={session.type === "video" ? (session.controls.durationSec ?? 10) : undefined}
       />
     ) : null;
     const text = (

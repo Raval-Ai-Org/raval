@@ -996,9 +996,8 @@ async function startMedia(args: {
         },
       ];
     }
-    const seconds = [4, 6, 8].includes(input.controls.durationSec ?? 0)
-      ? input.controls.durationSec!
-      : 8;
+    const seconds = input.controls.durationSec ?? 10;
+    if (seconds > 60) throw new StudioJobError(400, "Videos can be up to 60 seconds long.");
     // The shot plan written in the brief stage drives the render; the user's
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
@@ -2077,7 +2076,8 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       if (slot >= 0) media[slot] = { ...media[slot], ...patch };
     };
     try {
-      if (now - task.startedAt > RENDER_TIMEOUT_MS) {
+      const timeout = task.taskId.startsWith("composition:") ? 30 * 60_000 : RENDER_TIMEOUT_MS;
+      if (now - task.startedAt > timeout) {
         task.state = "failed";
         setMedia({ status: "failed", error: "The render took too long. Try again." });
         continue;

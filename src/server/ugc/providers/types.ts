@@ -11,6 +11,8 @@ export type VideoRenderRequest = {
   model: UgcModel;
   prompt: string;
   durationSec: number;
+  /** A composed clip cannot fall back to a shorter provider duration. */
+  minimumDurationSec?: number;
   aspectRatio: UgcAspectRatio;
   resolution: UgcResolution;
   /** Generate sound (for models that can). Default: the model's native audio. */
