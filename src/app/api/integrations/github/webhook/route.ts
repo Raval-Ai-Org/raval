@@ -6,6 +6,7 @@
 // deliveries claim X-GitHub-Delivery in sdr_webhook_events (provider =
 // 'github'), which is both the receipt log and the deduplication key.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { readWebhookBody } from "@/server/request-body";
 import type { Json } from "@/integrations/supabase/types";
 import { forgetInstallationToken } from "@/server/connectors/github/api.server";
 import {
@@ -37,10 +38,8 @@ async function connectionIds(installationId: string): Promise<string[]> {
 }
 
 export async function POST(request: Request) {
-  const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_WEBHOOK_BYTES)
-    return Response.json({ ok: false, error: "Payload too large" }, { status: 413 });
-  const rawBody = await request.text();
+  const rawBody = await readWebhookBody(request, MAX_WEBHOOK_BYTES);
+  if (rawBody instanceof Response) return rawBody;
 
   const out = await handleGitHubWebhook(
     {

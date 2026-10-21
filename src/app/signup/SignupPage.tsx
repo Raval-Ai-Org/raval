@@ -13,10 +13,12 @@ import { ensureAuthWorkspace } from "@/lib/workspaces.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { AuthCaptcha, useAuthCaptcha } from "@/components/auth/AuthCaptcha";
 import { AuthShell, authRow } from "@/components/auth/AuthShell";
 import { toast } from "@/lib/toast";
 
 function SignupPage() {
+  const captcha = useAuthCaptcha();
   const navigate = useNavigate();
   const ensureWorkspace = useServerFn(ensureAuthWorkspace);
   const nextPath = useMemo(() => {
@@ -50,12 +52,14 @@ function SignupPage() {
     event.preventDefault();
     setEmailLoading(true);
     try {
+      const captchaToken = captcha.take();
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           data: { name: name.trim(), full_name: name.trim() },
           emailRedirectTo: authCallbackUrl(nextPath),
+          ...(captchaToken ? { captchaToken } : {}),
         },
       });
       if (error) {
@@ -73,6 +77,7 @@ function SignupPage() {
       toast.error("Could not create account", { description: friendlyAuthError(error) });
     } finally {
       setEmailLoading(false);
+      captcha.reset();
     }
   };
 
@@ -84,10 +89,14 @@ function SignupPage() {
     }
     setResendLoading(true);
     try {
+      const captchaToken = captcha.take();
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: address,
-        options: { emailRedirectTo: authCallbackUrl(nextPath) },
+        options: {
+          emailRedirectTo: authCallbackUrl(nextPath),
+          ...(captchaToken ? { captchaToken } : {}),
+        },
       });
       if (error) {
         toast.error("Could not resend confirmation", { description: friendlyAuthError(error) });
@@ -101,6 +110,7 @@ function SignupPage() {
       toast.error("Could not resend confirmation", { description: friendlyAuthError(error) });
     } finally {
       setResendLoading(false);
+      captcha.reset();
     }
   };
 
@@ -132,9 +142,11 @@ function SignupPage() {
         </p>
       }
     >
+      <AuthCaptcha state={captcha} />
       <motion.div variants={authRow}>
         <GoogleSignInButton
-          disabled={emailLoading || googleLoading}
+          disabled={emailLoading || googleLoading || resendLoading || !captcha.ready}
+          captcha={captcha}
           onBusyChange={setGoogleLoading}
           onSuccess={onGoogleSuccess}
           onError={(error) =>
@@ -212,7 +224,7 @@ function SignupPage() {
             size="xl"
             className="group relative w-full overflow-hidden rounded-2xl text-base font-semibold transition-transform hover:-translate-y-[1px]"
             loading={emailLoading}
-            disabled={emailLoading || googleLoading}
+            disabled={emailLoading || googleLoading || resendLoading || !captcha.ready}
           >
             <span className="relative z-10 inline-flex items-center gap-2">
               Create account
@@ -238,7 +250,7 @@ function SignupPage() {
           <button
             type="button"
             onClick={onResendConfirmation}
-            disabled={resendLoading || emailLoading}
+            disabled={resendLoading || emailLoading || googleLoading || !captcha.ready}
             className="mt-3 text-xs font-semibold text-primary underline-offset-4 hover:underline disabled:opacity-50"
           >
             {resendLoading ? (

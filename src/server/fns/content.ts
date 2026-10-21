@@ -76,6 +76,24 @@ const KindEnum = z.enum([
 ]);
 const AgentEnum = z.enum(["scout", "spark", "echo"]);
 const StatusEnum = z.enum(CONTENT_STATUSES);
+// Delivery state belongs to the publishing adapters, never an editorial patch.
+const EditorialStatusEnum = z.enum(["draft", "pending", "approved", "rejected"]);
+
+function assertEditable(status: string, nextStatus?: string) {
+  if (status === "scheduled" || status === "publishing") {
+    throw new HttpError(409, "Cancel the schedule or wait for delivery before editing this post.");
+  }
+  if (status === "published" && nextStatus !== "draft") {
+    throw new HttpError(409, "Return this post to draft before editing it.");
+  }
+}
+
+function contentWriteError(error: { code?: string; message: string } | null, row: unknown) {
+  if (!row && (!error || error.code === "PGRST116")) {
+    throw new HttpError(409, "This post changed while you were saving. Reload it and try again.");
+  }
+  if (error) throw new Error(error.message);
+}
 
 const CONTENT_COLS =
   "id, workspace_id, agent, kind, channel, title, body, hashtags, media_url, status, scheduled_at, metrics, meta, created_by, created_at, updated_at";
@@ -253,7 +271,7 @@ export async function reviewContentFromConnector(
 ) {
   const { data: current, error: readError } = await db
     .from("content_items")
-    .select("id,status,meta")
+    .select("id,status,meta,updated_at")
     .eq("workspace_id", workspaceId)
     .eq("id", itemId)
     .maybeSingle();
@@ -275,6 +293,7 @@ export async function reviewContentFromConnector(
     .eq("workspace_id", workspaceId)
     .eq("id", itemId)
     .eq("status", "pending")
+    .eq("updated_at", current.updated_at)
     .select("id");
   if (error || !data?.length) throw new HttpError(409, "This content was already reviewed");
   return target;
@@ -293,7 +312,7 @@ const UpdateSchema = z.object({
       hashtags: z.array(z.string().max(60)).max(30).optional(),
       channel: ChannelEnum.optional().nullable(),
       media_url: z.string().url().max(2048).optional().nullable(),
-      status: StatusEnum.optional(),
+      status: EditorialStatusEnum.optional(),
       scheduled_at: z.string().datetime().nullable().optional(),
       meta: z.record(z.string(), z.any()).optional(),
     })
@@ -317,7 +336,7 @@ export async function updateImportedContentItem(
   const parsed = UpdateSchema.parse({ id: itemId, patch: { ...input, status: "draft" } });
   const { data: current, error: readError } = await supabase
     .from("content_items")
-    .select("status")
+    .select("status, updated_at")
     .eq("workspace_id", workspaceId)
     .eq("id", itemId)
     .single();
@@ -332,64 +351,75 @@ export async function updateImportedContentItem(
     .update(parsed.patch)
     .eq("workspace_id", workspaceId)
     .eq("id", itemId)
+    .eq("status", current.status)
+    .eq("updated_at", current.updated_at)
     .select(CONTENT_COLS)
     .single();
-  if (error || !data) throw new Error("Could not update imported content");
+  contentWriteError(error, data);
   return data as ContentItem;
+}
+
+async function updateEditorialContent(
+  data: z.infer<typeof UpdateSchema>,
+  context: ServerFnContext,
+) {
+  const { data: current, error: readError } = await context.supabase
+    .from("content_items")
+    .select("workspace_id, status, body, meta, updated_at")
+    .eq("id", data.id)
+    .single();
+  if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
+  await requireWorkspaceRole(context, current.workspace_id, "editor");
+
+  const patch = { ...data.patch } as Record<string, unknown>;
+  const currentStatus = current.status as ContentStatus;
+  const requestedStatus = patch.status as string | undefined;
+  assertEditable(current.status, requestedStatus);
+
+  // `meta` is shared bookkeeping (platform, asset link, SDR job ids). Merge
+  // instead of replacing so one writer never erases another's keys; a `null`
+  // value removes a key.
+  if (data.patch.meta) patch.meta = mergeMeta(current.meta, data.patch.meta);
+
+  if (hasMeaningfulContentChange(patch) && !requestedStatus) {
+    const existingMeta = mergeMeta(current.meta, {});
+    const editMeta: Record<string, unknown> = {
+      edited_at: new Date().toISOString(),
+      edited_by: context.userId,
+    };
+    if (!("original_content" in existingMeta) && typeof current.body === "string") {
+      editMeta.original_content = current.body;
+    }
+    patch.meta = mergeMeta(patch.meta ?? current.meta, editMeta);
+  }
+
+  if (
+    currentStatus === "approved" &&
+    hasMeaningfulContentChange(patch) &&
+    (!requestedStatus || requestedStatus === currentStatus)
+  ) {
+    // Editing approved work invalidates its approval and requires review again.
+    patch.status = "draft";
+  } else if (requestedStatus) {
+    assertContentTransition(currentStatus, requestedStatus);
+  }
+
+  const { data: row, error } = await context.supabase
+    .from("content_items")
+    .update(patch as never)
+    .eq("id", data.id)
+    .eq("status", current.status)
+    .eq("updated_at", current.updated_at)
+    .select(CONTENT_COLS)
+    .single();
+  contentWriteError(error, row);
+  return row as ContentItem;
 }
 
 export const updateContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => UpdateSchema.parse(data))
-  .handler(async ({ data, context }) => {
-    const { data: current, error: readError } = await context.supabase
-      .from("content_items")
-      .select("status, body, meta")
-      .eq("id", data.id)
-      .single();
-    if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
-
-    const patch = { ...data.patch } as Record<string, unknown>;
-    const currentStatus = current.status as ContentStatus;
-    const requestedStatus = patch.status as string | undefined;
-
-    // `meta` is shared bookkeeping (platform, asset link, SDR job ids). Merge
-    // instead of replacing so one writer never erases another's keys; a `null`
-    // value removes a key.
-    if (data.patch.meta) patch.meta = mergeMeta(current.meta, data.patch.meta);
-
-    if (hasMeaningfulContentChange(patch) && !requestedStatus) {
-      const existingMeta = mergeMeta(current.meta, {});
-      const editMeta: Record<string, unknown> = {
-        edited_at: new Date().toISOString(),
-        edited_by: context.userId,
-      };
-      if (!("original_content" in existingMeta) && typeof current.body === "string") {
-        editMeta.original_content = current.body;
-      }
-      patch.meta = mergeMeta(patch.meta ?? current.meta, editMeta);
-    }
-
-    if (
-      currentStatus === "approved" &&
-      hasMeaningfulContentChange(patch) &&
-      (!requestedStatus || requestedStatus === currentStatus)
-    ) {
-      // Editing approved work invalidates its approval and requires review again.
-      patch.status = "draft";
-    } else if (requestedStatus) {
-      assertContentTransition(currentStatus, requestedStatus);
-    }
-
-    const { data: row, error } = await context.supabase
-      .from("content_items")
-      .update(patch as never)
-      .eq("id", data.id)
-      .select(CONTENT_COLS)
-      .single();
-    if (error || !row) throw new Error(error?.message ?? "Update failed");
-    return row as ContentItem;
-  });
+  .handler(({ data, context }) => updateEditorialContent(data, context));
 
 /* ------------------------------------------------------------ */
 /* Delete                                                        */
@@ -398,8 +428,32 @@ export const deleteContentItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: uuid }).parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("content_items").delete().eq("id", data.id);
+    const { data: current, error: readError } = await context.supabase
+      .from("content_items")
+      .select("workspace_id,status,updated_at")
+      .eq("id", data.id)
+      .single();
+    if (readError || !current) throw new HttpError(404, "Post not found");
+    await requireWorkspaceRole(context, current.workspace_id, "editor");
+    if (current.status === "scheduled" || current.status === "publishing") {
+      throw new HttpError(
+        409,
+        "Cancel the schedule or wait for delivery before deleting this post.",
+      );
+    }
+    const { data: removed, error } = await context.supabase
+      .from("content_items")
+      .delete()
+      .eq("id", data.id)
+      .eq("status", current.status)
+      .eq("updated_at", current.updated_at)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!removed?.length)
+      throw new HttpError(
+        409,
+        "This post changed while you were deleting it. Reload it and try again.",
+      );
     return { ok: true };
   });
 
@@ -417,29 +471,10 @@ export const rescheduleContentItem = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    const patch: Record<string, unknown> = { scheduled_at: data.scheduled_at };
-    if (data.channel !== undefined) patch.channel = data.channel;
-    const { data: current, error: readError } = await context.supabase
-      .from("content_items")
-      .select("status")
-      .eq("id", data.id)
-      .single();
-    if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
-    if (data.scheduled_at) {
-      assertContentTransition(current.status, "scheduled");
-      patch.status = "scheduled";
-    } else if (current.status === "scheduled") {
-      patch.status = "approved";
-    }
-    const { data: row, error } = await context.supabase
-      .from("content_items")
-      .update(patch as never)
-      .eq("id", data.id)
-      .select(CONTENT_COLS)
-      .single();
-    if (error || !row) throw new Error(error?.message ?? "Reschedule failed");
-    return row as ContentItem;
+  .handler(async () => {
+    // Kept as a compatibility endpoint, but this old shortcut never contacted
+    // a provider. Delivery times must go through the publishing scheduler.
+    throw new HttpError(409, "Use the publishing scheduler to change or cancel delivery times.");
   });
 
 /* ------------------------------------------------------------ */
@@ -484,6 +519,7 @@ export async function regenerateContentForConnector(args: {
     .eq("id", itemId)
     .single();
   if (readErr || !existing) throw new Error("Item not found");
+  assertEditable(existing.status);
   const { runMetered } = await import("@/server/billing/metered.server");
   const { result } = await runMetered(
     {
@@ -550,9 +586,10 @@ export async function regenerateContentForConnector(args: {
         .eq("workspace_id", workspaceId)
         .eq("id", itemId)
         .eq("status", existing.status)
+        .eq("updated_at", existing.updated_at)
         .select(CONTENT_COLS)
         .single();
-      if (error || !row) throw new Error(error?.message ?? "Content changed while regenerating");
+      contentWriteError(error, row);
       invalidateStudioContext(workspaceId);
       return row as ContentItem;
     },
@@ -1053,7 +1090,7 @@ export const setContentPlanDate = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: current, error: readError } = await context.supabase
       .from("content_items")
-      .select("workspace_id, status, meta")
+      .select("workspace_id, status, meta, updated_at")
       .eq("id", data.id)
       .single();
     if (readError || !current) throw new HttpError(404, "Post not found");
@@ -1071,9 +1108,11 @@ export const setContentPlanDate = createServerFn({ method: "POST" })
       .from("content_items")
       .update({ meta: meta as Json })
       .eq("id", data.id)
+      .eq("status", current.status)
+      .eq("updated_at", current.updated_at)
       .select(CONTENT_COLS)
       .single();
-    if (error || !row) throw new Error(error?.message ?? "Update failed");
+    contentWriteError(error, row);
     return row as ContentItem;
   });
 
@@ -1082,24 +1121,10 @@ export const setContentPlanDate = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------ */
 export const setContentItemStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => z.object({ id: uuid, status: StatusEnum }).parse(data))
-  .handler(async ({ data, context }) => {
-    const { data: current, error: readError } = await context.supabase
-      .from("content_items")
-      .select("status")
-      .eq("id", data.id)
-      .single();
-    if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
-    assertContentTransition(current.status, data.status);
-    const { data: row, error } = await context.supabase
-      .from("content_items")
-      .update({ status: data.status })
-      .eq("id", data.id)
-      .select(CONTENT_COLS)
-      .single();
-    if (error || !row) throw new Error(error?.message ?? "Update failed");
-    return row as ContentItem;
-  });
+  .inputValidator((data) => z.object({ id: uuid, status: EditorialStatusEnum }).parse(data))
+  .handler(({ data, context }) =>
+    updateEditorialContent({ id: data.id, patch: { status: data.status } }, context),
+  );
 
 /* ------------------------------------------------------------ */
 /* Agency HQ aggregate                                           */

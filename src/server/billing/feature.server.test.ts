@@ -30,6 +30,16 @@ beforeEach(() => {
 });
 
 describe("included billing feature check", () => {
+  it.each(["off", "shadow", "on"])(
+    "keeps viewer permissions enforced in %s mode",
+    async (enforcement) => {
+      getEntitlements.mockResolvedValueOnce({ enforcement, role: "viewer" });
+      await expect(requireBillingFeature(args)).rejects.toMatchObject({
+        code: "spend_not_allowed",
+      });
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
   it("returns a structured upgrade error when locked", async () => {
     await expect(requireBillingFeature(args)).rejects.toMatchObject({ code: "upgrade_required" });
   });

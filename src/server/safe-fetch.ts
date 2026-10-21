@@ -27,7 +27,10 @@ for (const [net, prefix] of [
   ["172.16.0.0", 12], // RFC1918
   ["192.0.0.0", 24], // IETF protocol assignments
   ["192.168.0.0", 16], // RFC1918
+  ["192.0.2.0", 24], // documentation
   ["198.18.0.0", 15], // benchmarking
+  ["198.51.100.0", 24], // documentation
+  ["203.0.113.0", 24], // documentation
   ["224.0.0.0", 4], // multicast
   ["240.0.0.0", 4], // reserved + broadcast
 ] as const) {
@@ -37,8 +40,14 @@ for (const [net, prefix] of [
   ["::", 128], // unspecified
   ["::1", 128], // loopback
   ["64:ff9b::", 96], // NAT64
+  ["64:ff9b:1::", 48], // local-use NAT64
+  ["100::", 64], // discard-only
+  ["2001::", 32], // Teredo tunneling
+  ["2001:db8::", 32], // documentation
+  ["2002::", 16], // deprecated 6to4 tunneling
   ["fc00::", 7], // unique local
   ["fe80::", 10], // link-local
+  ["fec0::", 10], // deprecated site-local
   ["ff00::", 8], // multicast
 ] as const) {
   blockedV6.addSubnet(net, prefix, "ipv6");
@@ -174,6 +183,22 @@ export type SafeFetchDeps = {
 };
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+// On a different origin only ordinary download/crawl headers may follow.
+// An allowlist also covers custom credential headers that we cannot enumerate.
+const REDIRECT_SAFE_HEADERS = new Set([
+  "accept",
+  "accept-encoding",
+  "accept-language",
+  "user-agent",
+  "range",
+  "if-match",
+  "if-none-match",
+  "if-modified-since",
+  "if-unmodified-since",
+  "if-range",
+  "cache-control",
+  "pragma",
+]);
 
 async function readCapped(
   body: ReadableStream<Uint8Array> | null,
@@ -225,12 +250,13 @@ export function createSafeFetch(deps: SafeFetchDeps = {}) {
     const maxRedirects = opts.maxRedirects ?? 5;
     const signal = AbortSignal.timeout(opts.timeoutMs ?? 10_000);
     let url = assertPublicUrl(typeof input === "string" ? input : new URL(input.toString()));
+    let requestHeaders = opts.headers;
 
     for (let hop = 0; ; hop++) {
       if (opts.validateUrl && !opts.validateUrl(url)) throw new SsrfBlockedError();
       const res = await undiciFetch(url, {
         method: opts.method ?? "GET",
-        headers: opts.headers,
+        headers: requestHeaders,
         redirect: "manual",
         signal,
         dispatcher,
@@ -241,7 +267,15 @@ export function createSafeFetch(deps: SafeFetchDeps = {}) {
         await res.body?.cancel().catch(() => {});
         if (!location) throw new Error(`Redirect ${res.status} without a Location header`);
         if (hop >= maxRedirects) throw new Error(`Too many redirects (> ${maxRedirects})`);
-        url = assertPublicUrl(new URL(location, url));
+        const next = assertPublicUrl(new URL(location, url));
+        if (next.origin !== url.origin && requestHeaders) {
+          requestHeaders = Object.fromEntries(
+            Object.entries(requestHeaders).filter(([name]) =>
+              REDIRECT_SAFE_HEADERS.has(name.toLowerCase()),
+            ),
+          );
+        }
+        url = next;
         continue;
       }
 

@@ -7,6 +7,19 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: { auth } }));
 afterEach(() => vi.resetAllMocks());
 
 describe("Google ID token sign-in", () => {
+  it("passes a single-use CAPTCHA response to Supabase when protection is configured", async () => {
+    auth.signInWithIdToken.mockResolvedValue({
+      data: { user: { id: "id" }, session: { access_token: "session" } },
+      error: null,
+    });
+    await signInWithGoogle("google-jwt", "raw-nonce", "synthetic-captcha-response");
+    expect(auth.signInWithIdToken).toHaveBeenCalledWith({
+      provider: "google",
+      token: "google-jwt",
+      nonce: "raw-nonce",
+      options: { captchaToken: "synthetic-captcha-response" },
+    });
+  });
   it("creates independent 256-bit nonces and sends their SHA-256 hex digest to Google", async () => {
     const a = await createGoogleNonce();
     const b = await createGoogleNonce();

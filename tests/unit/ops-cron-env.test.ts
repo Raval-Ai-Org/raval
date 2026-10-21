@@ -25,6 +25,53 @@ afterEach(() => {
 });
 
 describe("checkEnv", () => {
+  it.each([
+    ["NEXT_PUBLIC_TURNSTILE_SECRET_KEY", "synthetic-private-value"],
+    ["NEXT_PUBLIC_CUSTOM_KEY", "sb_secret_fixture"],
+    ["NEXT_PUBLIC_CUSTOM_PAYMENT_KEY", "sk_live_fixture"],
+    ["NEXT_PUBLIC_OPENROUTER_API_KEY", "synthetic-provider-value"],
+  ])("refuses private credentials in %s without echoing them", (name, value) => {
+    const report = checkEnv({ ...PROD_OK, [name]: value });
+    expect(report.ok).toBe(false);
+    expect(report.errors.some((error) => error.startsWith(name))).toBe(true);
+    expect(report.errors.join(" ")).not.toContain(value);
+  });
+
+  it("refuses a service-role JWT masquerading as a public Supabase key", () => {
+    const key = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.synthetic-signature`;
+    const report = checkEnv({
+      ...PROD_OK,
+      SUPABASE_PUBLISHABLE_KEY: key,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: key,
+    });
+    expect(report.ok).toBe(false);
+    expect(report.errors.some((error) => error.startsWith("SUPABASE_PUBLISHABLE_KEY"))).toBe(true);
+    expect(
+      report.errors.some((error) => error.startsWith("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")),
+    ).toBe(true);
+    expect(report.errors.join(" ")).not.toContain(key);
+  });
+
+  it("preserves public Supabase and payment keys and warns when CAPTCHA is not activated", () => {
+    const report = checkEnv({ ...PROD_OK, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_fixture" });
+    expect(report.ok).toBe(true);
+    expect(
+      report.warnings.some((warning) => warning.startsWith("NEXT_PUBLIC_TURNSTILE_SITE_KEY")),
+    ).toBe(true);
+  });
+
+  it("refuses CAPTCHA testing keys in production but allows local fixture testing", () => {
+    const configured = { ...PROD_OK, NEXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" };
+    expect(checkEnv(configured).errors.some((error) => error.includes("testing key"))).toBe(true);
+    expect(checkEnv({ ...configured, NODE_ENV: "development" }).ok).toBe(true);
+  });
+
+  it.each(["http://app.example.com", "https://user:pass@app.example.com"])(
+    "refuses an insecure production origin",
+    (APP_URL) => {
+      expect(checkEnv({ ...PROD_OK, APP_URL }).ok).toBe(false);
+    },
+  );
   it("accepts a complete production config", () => {
     expect(checkEnv(PROD_OK).ok).toBe(true);
   });

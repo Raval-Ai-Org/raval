@@ -141,10 +141,11 @@ type ClaimedJob = {
  */
 export function isMissingRpc(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
-  return (
-    error.code === "PGRST202" ||
-    error.code === "42883" ||
-    /claim_due_scheduled_jobs|could not find the function/i.test(error.message ?? "")
+  // A permission or transport failure mentioning the RPC must never switch to
+  // an unlocked query, which could run the same paid job more than once.
+  if (error.code) return error.code === "PGRST202" || error.code === "42883";
+  return /could not find the function\s+(?:public\.)?claim_due_scheduled_jobs\b|function\s+(?:public\.)?claim_due_scheduled_jobs\b.*does not exist/i.test(
+    error.message ?? "",
   );
 }
 

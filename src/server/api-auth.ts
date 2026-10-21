@@ -3,6 +3,7 @@
 // few routes that still authenticate by hand.
 import "server-only";
 import type { JwtPayload } from "@supabase/supabase-js";
+import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import {
   createUserClient,
   type UserSupabaseClient,
@@ -10,10 +11,13 @@ import {
 import { accessRefusal, workspaceAccessMode } from "@/server/platform/workspace-access.server";
 
 export function jsonError(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ error: userSafeMessage(message, messageForStatus(status)) }),
+    {
+      status,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    },
+  );
 }
 
 export type VerifiedUser = {
@@ -53,6 +57,11 @@ export async function verifyBearer(
     const { data, error } = await supabase.auth.getClaims(token);
     if (error || !data?.claims?.sub) {
       return { ok: false, status: 401, message: "Invalid session" };
+    }
+    // Anonymous Auth accounts must never reach signup grants or paid providers.
+    // Supported email and Google sign-ins issue registered accounts.
+    if (data.claims.is_anonymous === true) {
+      return { ok: false, status: 401, message: "Please sign in with a registered account" };
     }
     // A token issued to an OAuth client (an AI assistant, ADR-0029) is only
     // good for /api/mcp, where the workspace's MCP switch is enforced. Without

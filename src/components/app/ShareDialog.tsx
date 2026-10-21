@@ -291,7 +291,8 @@ export function ShareDialog({
           {/* Invite */}
           <div className="space-y-2.5">
             <form
-              className="flex flex-wrap items-stretch gap-2"
+              data-no-rhythm
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_112px_auto]"
               onSubmit={(e) => {
                 e.preventDefault();
                 void invite();
@@ -305,14 +306,14 @@ export function ShareDialog({
                 disabled={!canInvite || inviting}
                 aria-label="Teammate's email"
                 autoComplete="off"
-                className="h-10 min-w-[180px] flex-1"
+                className="col-span-2 h-10 min-w-0 sm:col-span-1"
               />
               <Select
                 value={role}
                 onValueChange={(v) => setRole(v as Role)}
                 disabled={!canInvite || inviting}
               >
-                <SelectTrigger className="h-10 w-[112px]" aria-label="Role">
+                <SelectTrigger className="h-10 min-w-0 sm:w-[112px]" aria-label="Role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -323,7 +324,7 @@ export function ShareDialog({
               </Select>
               <Button
                 type="submit"
-                className="h-10"
+                className="h-10 whitespace-nowrap max-sm:h-10"
                 loading={inviting}
                 disabled={!email.trim() || !canInvite}
               >
@@ -387,8 +388,11 @@ export function ShareDialog({
                 {members.map((m) => {
                   const editable = isOwner && !m.isYou && m.role !== "owner";
                   return (
-                    <li key={m.user_id} className="flex items-center gap-3 px-3 py-2.5">
-                      <Avatar className="size-8">
+                    <li
+                      key={m.user_id}
+                      className="grid grid-cols-[32px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:flex"
+                    >
+                      <Avatar className="size-8 shrink-0">
                         {m.avatar_url && <AvatarImage src={m.avatar_url} alt="" />}
                         <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-foreground">
                           {initials(m.name, m.email)}
@@ -406,14 +410,14 @@ export function ShareDialog({
                         )}
                       </div>
                       {editable ? (
-                        <>
+                        <div className="col-start-2 flex shrink-0 items-center justify-end gap-2">
                           <Select
                             value={m.role}
                             disabled={!!pendingId}
                             onValueChange={(v) => changeRole(m, v as Role)}
                           >
                             <SelectTrigger
-                              className="h-8 w-[100px] text-[12px]"
+                              className="h-8 w-[100px] shrink-0 text-[12px]"
                               aria-label={`Role for ${m.name ?? m.email ?? "member"}`}
                             >
                               <SelectValue />
@@ -434,9 +438,9 @@ export function ShareDialog({
                           >
                             <X className="size-4" />
                           </button>
-                        </>
+                        </div>
                       ) : (
-                        <span className="text-[12px] capitalize text-muted-foreground">
+                        <span className="col-start-2 shrink-0 text-[12px] capitalize text-muted-foreground">
                           {m.role}
                         </span>
                       )}
@@ -461,7 +465,10 @@ export function ShareDialog({
               <div className="ds-label mb-2">Waiting to join · {inviteTotal}</div>
               <ul className="ds-tile divide-y divide-border/50 overflow-hidden">
                 {invites.map((row) => (
-                  <li key={row.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <li
+                    key={row.id}
+                    className="grid grid-cols-[32px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:flex"
+                  >
                     <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground">
                       <Mail className="size-3.5" />
                     </span>
@@ -469,24 +476,26 @@ export function ShareDialog({
                       <p className="truncate text-[13px] font-medium">{row.email}</p>
                       <p className="text-[12px] capitalize text-muted-foreground">{row.role}</p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => copy(inviteLink(row.token), row.id)}
-                    >
-                      <LinkIcon />
-                      {copied === row.id ? "Copied" : "Copy link"}
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => cancelInvite(row)}
-                      disabled={!!pendingId}
-                      className={cn(dsIconBtn, "hover:text-destructive")}
-                      title="Cancel invite"
-                      aria-label={`Cancel invite for ${row.email}`}
-                    >
-                      <X className="size-4" />
-                    </button>
+                    <div className="col-start-2 flex shrink-0 items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => copy(inviteLink(row.token), row.id)}
+                      >
+                        <LinkIcon />
+                        {copied === row.id ? "Copied" : "Copy link"}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => cancelInvite(row)}
+                        disabled={!!pendingId}
+                        className={cn(dsIconBtn, "hover:text-destructive")}
+                        title="Cancel invite"
+                        aria-label={`Cancel invite for ${row.email}`}
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -518,7 +527,7 @@ function Pager({
   onPage: (page: number) => void;
 }) {
   return (
-    <div className="mt-2.5 flex items-center justify-end gap-2 text-[12px] text-muted-foreground">
+    <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2 text-[12px] text-muted-foreground">
       <Button
         variant="outline"
         size="sm"
@@ -527,7 +536,7 @@ function Pager({
       >
         Previous
       </Button>
-      <span aria-live="polite" className="tabular-nums">
+      <span aria-live="polite" className="shrink-0 whitespace-nowrap tabular-nums">
         {page} of {pages}
       </span>
       <Button

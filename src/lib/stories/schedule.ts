@@ -77,7 +77,14 @@ export type HourScore = { hour: number; avg: number; count: number };
 export function bestHours(samples: { hour: number; reach: number }[]): HourScore[] {
   const groups = new Map<number, number[]>();
   for (const s of samples) {
-    if (!Number.isInteger(s.hour) || s.hour < 0 || s.hour > 23 || !(s.reach >= 0)) continue;
+    if (
+      !Number.isInteger(s.hour) ||
+      s.hour < 0 ||
+      s.hour > 23 ||
+      !Number.isFinite(s.reach) ||
+      s.reach < 0
+    )
+      continue;
     groups.set(s.hour, [...(groups.get(s.hour) ?? []), s.reach]);
   }
   return [...groups.entries()]
@@ -125,7 +132,16 @@ export function storyTimes(args: {
     const m = start + Math.round(((i % n) + 0.5) * ((end - start) / n)) + Math.floor(i / n) * 7;
     if (fits(m)) picked.push(m);
   }
-  while (picked.length < n) picked.push(start + picked.length);
+  if (picked.length < n) {
+    // A preferred peak can block every remaining slot in a narrow window.
+    // Replace that partial selection with a complete, evenly spaced schedule.
+    return {
+      times: Array.from({ length: n }, (_, i) =>
+        fromMinutes(start + Math.round((i * (end - start)) / (n - 1))),
+      ),
+      source: "even",
+    };
+  }
   return { times: picked.sort((a, b) => a - b).map(fromMinutes), source };
 }
 

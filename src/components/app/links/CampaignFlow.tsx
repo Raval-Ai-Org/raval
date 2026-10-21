@@ -6,7 +6,8 @@
 // before it shows the total, the balance after, and what happens next — because
 // that is the moment the decision is actually made.
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 
 import { AlertCircle, ArrowLeft, Check, Search, Sparkles, Spinner } from "@/components/icons";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -51,7 +52,7 @@ export function CampaignFlow({
   onCancel: () => void;
   onTopUp: () => void;
 }) {
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotionSafe();
   const [step, setStep] = useState(0);
 
   const [targetUrl, setTargetUrl] = useState(siteHost ? `https://${siteHost}` : "");

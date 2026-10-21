@@ -3724,9 +3724,9 @@ svg [data-series="bar"]:hover rect:not(:hover) {
     padding: var(--pad-row);
   }
 
-  /* Consistent form-field rhythm */
-  form:not([data-no-rhythm]) > * + *,
-  fieldset:not([data-no-rhythm]) > * + * {
+  /* Flex/grid forms own their gaps: stacked margins offset row controls. */
+  form:not([data-no-rhythm]):not(:where(.flex, .inline-flex, .grid, .inline-grid)) > * + *,
+  fieldset:not([data-no-rhythm]):not(:where(.flex, .inline-flex, .grid, .inline-grid)) > * + * {
     margin-top: var(--gap-stack);
   }
   label + :where(input, textarea, select, [role="combobox"], [role="listbox"]) {
@@ -3801,7 +3801,7 @@ pre {
     overflow-wrap: anywhere;
   }
 
-  :where([class~="whitespace-nowrap"]) {
+  :where([class~="whitespace-nowrap"]):not([data-slot="cost-chip"]) {
     white-space: normal;
   }
 

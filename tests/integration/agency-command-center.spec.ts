@@ -100,6 +100,27 @@ const contentItems = [
     scheduled_at: null,
     created_at: recent,
   },
+  ...[
+    { id: "33333333-3333-4333-8333-333333333333", workspaceId: WS_A, title: "Scheduled Acme post" },
+    {
+      id: "44444444-4444-4444-8444-444444444444",
+      workspaceId: WS_B,
+      title: "Scheduled Northwind post",
+    },
+  ].map((item) => ({
+    id: item.id,
+    workspace_id: item.workspaceId,
+    agent: "spark",
+    kind: "post",
+    channel: "linkedin",
+    title: item.title,
+    body: "Scheduled content",
+    hashtags: [],
+    media_url: null,
+    status: "scheduled",
+    scheduled_at: new Date(Date.now() + 86_400_000).toISOString(),
+    created_at: recent,
+  })),
 ];
 
 async function stubBackend(page: Page) {
@@ -140,19 +161,44 @@ async function stubBackend(page: Page) {
       },
     );
 
-  await page.context().route("**/api/rpc/**", (route) => {
+  await page.context().route("**/api/**", (route) => {
     const url = route.request().url();
-    const result = url.includes("workspaces/listWorkspaces") ? workspaces : null;
+    if (!url.includes("/api/rpc/")) return route.fulfill({ json: {} });
+    const result = url.includes("workspaces/listWorkspaces")
+      ? workspaces
+      : url.includes("getAgencyAutopilot")
+        ? [
+            {
+              workspaceId: WS_A,
+              programId: "program-a",
+              status: "running",
+              mode: "autopilot",
+              needsApproval: 125,
+              failures: 3,
+              newOpportunities: 2,
+              performanceWarnings: 1,
+              missed: 0,
+              planWaiting: 0,
+              nextActionAt: null,
+              nextActionTitle: null,
+              pauseReason: null,
+              endsOn: null,
+            },
+          ]
+        : null;
     return route.fulfill({ status: 200, headers: JSON_HEADERS, body: JSON.stringify({ result }) });
   });
-  await page
-    .context()
-    .route("**/api/**", (route) =>
-      route.fulfill({ status: 200, headers: JSON_HEADERS, body: "{}" }),
-    );
 }
 
 async function seedSession(page: Page) {
+  await page.context().addCookies([
+    {
+      name: STORAGE_KEY,
+      value: `base64-${Buffer.from(JSON.stringify(fakeSession())).toString("base64url")}`,
+      url: test.info().project.use.baseURL!,
+      sameSite: "Lax",
+    },
+  ]);
   await page.addInitScript(
     ({ storageKey, sess }) => {
       try {
@@ -174,7 +220,7 @@ async function seedSession(page: Page) {
 }
 
 async function gotoAgency(page: Page, search = "") {
-  await page.goto(`/agency${search}`, { waitUntil: "domcontentloaded" });
+  await page.goto(`/command-center-lab${search}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText(/Command Center/).first()).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/Acme Coffee/).first()).toBeVisible({ timeout: 20_000 });
 }
@@ -246,5 +292,107 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByText("Report copied")).toBeVisible({ timeout: 5_000 });
       expect(errors, errors.join(" | ")).toHaveLength(0);
     });
+
+    test("view, queue and client survive refresh and browser history", async ({ page }) => {
+      await gotoAgency(page, `?view=review&client=${WS_A}&keep=1#report`);
+      const nav = page.getByRole("navigation", { name: "Command Center" });
+      await expect(page.getByText("Northwind sunrise flow")).toHaveCount(0);
+      await nav.getByRole("button", { name: "Schedule", exact: true }).click();
+      await expect(page.getByLabel("Client", { exact: true })).toHaveValue(WS_A);
+      await expect(page.getByText("Scheduled Acme post", { exact: true })).toBeVisible();
+      await expect(page.getByText("Scheduled Northwind post", { exact: true })).toHaveCount(0);
+      await page.getByLabel("Client", { exact: true }).selectOption("all");
+      await expect(page.getByText("Scheduled Northwind post", { exact: true })).toBeVisible();
+      await expect(page).not.toHaveURL(/client=/);
+      await page.goBack();
+      await expect(page.getByLabel("Client", { exact: true })).toHaveValue(WS_A);
+      await page.goBack();
+      await expect(nav.getByRole("button", { name: /Review/ })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await expect(page.getByText("Acme launch teaser").first()).toBeVisible();
+      await expect(page.getByText("Northwind sunrise flow")).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByText("Acme launch teaser").first()).toBeVisible();
+      await expect(page).toHaveURL(/keep=1.*#report$/);
+      await page.goForward();
+      await expect(page.getByLabel("Client", { exact: true })).toHaveValue(WS_A);
+    });
+
+    test("all views fit the viewport with Autopilot and large badges", async ({
+      page,
+    }, testInfo) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await gotoAgency(page);
+      const nav = page.getByRole("navigation", { name: "Command Center" });
+      await expect(nav.getByRole("button", { name: /Autopilot/ })).toBeAttached();
+      for (const label of [
+        "Overview",
+        "Review",
+        "Clients",
+        "Schedule",
+        "Performance",
+        "Autopilot",
+      ]) {
+        const button = nav.getByRole("button", { name: new RegExp(`^${label}`) });
+        await button.click();
+        await expect(button).toHaveAttribute("aria-current", "page");
+        const geometry = await page.evaluate(() => {
+          const nav = document.querySelector('nav[aria-label="Command Center"]')!;
+          const active = nav.querySelector('[aria-current="page"]')!.getBoundingClientRect();
+          const search = document
+            .querySelector('header button[aria-label="Search"]')!
+            .getBoundingClientRect();
+          const report = document
+            .querySelector('header button[aria-label="Report"]')!
+            .getBoundingClientRect();
+          return {
+            pageOverflow: document.documentElement.scrollWidth - innerWidth,
+            activeVisible: active.left >= 0 && active.right <= innerWidth,
+            actionsOverlap:
+              search.right > report.left ||
+              (search.top < active.bottom && search.bottom > active.top),
+          };
+        });
+        expect(geometry, label).toEqual({
+          pageOverflow: 0,
+          activeVisible: true,
+          actionsOverlap: false,
+        });
+      }
+      await page.screenshot({
+        path: testInfo.outputPath("command-center-autopilot.png"),
+        fullPage: true,
+      });
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+for (const width of [320, 667, 1024, 1280]) {
+  test(`header controls remain separate at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await stubBackend(page);
+    await seedSession(page);
+    await gotoAgency(page, "?view=autopilot");
+    await expect(page.getByRole("heading", { name: "Autopilot", exact: true })).toBeVisible();
+    const problems = await page.evaluate(() => {
+      const header = document.querySelector("header")!;
+      const controls = [...header.querySelectorAll("button, a")]
+        .map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.width && rect.height);
+      return (
+        controls.some((a, i) =>
+          controls
+            .slice(i + 1)
+            .some(
+              (b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top,
+            ),
+        ) || document.documentElement.scrollWidth > innerWidth
+      );
+    });
+    expect(problems).toBe(false);
   });
 }

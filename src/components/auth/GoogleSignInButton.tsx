@@ -10,15 +10,17 @@ export function GoogleSignInButton({
   onSuccess,
   onBusyChange,
   onError,
+  captcha,
 }: {
   disabled: boolean;
   onSuccess: () => Promise<void>;
   onBusyChange: (busy: boolean) => void;
   onError: (error: unknown) => void;
+  captcha?: { take(): string | undefined; reset(): void };
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const handlers = useRef({ disabled, onSuccess, onBusyChange, onError });
-  handlers.current = { disabled, onSuccess, onBusyChange, onError };
+  const handlers = useRef({ disabled, onSuccess, onBusyChange, onError, captcha });
+  handlers.current = { disabled, onSuccess, onBusyChange, onError, captcha };
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "busy" | "error">("loading");
   const [loadError, setLoadError] = useState("");
@@ -55,7 +57,7 @@ export function GoogleSignInButton({
               if (Date.now() - createdAt > 10 * 60 * 1000) {
                 throw new Error("Google sign-in attempt expired");
               }
-              await signInWithGoogle(credential ?? "", nonce);
+              await signInWithGoogle(credential ?? "", nonce, handlers.current.captcha?.take());
               if (active) await handlers.current.onSuccess();
             } catch (error) {
               if (active) {
@@ -63,6 +65,7 @@ export function GoogleSignInButton({
                 setAttempt((value) => value + 1);
               }
             } finally {
+              if (active) handlers.current.captcha?.reset();
               if (active) handlers.current.onBusyChange(false);
             }
           },

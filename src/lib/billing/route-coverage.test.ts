@@ -11,6 +11,11 @@ describe("billing route coverage", () => {
     expect(CREDIT_ACTIONS.ideas.routes).toContain("studio.upload-captions");
   });
 
+  it("attributes visual rescans to their existing meter and includes image identity reviews", () => {
+    expect(CREDIT_ACTIONS.brand_dna_rescan.routes).toContain("brand-visuals.analyze");
+    expect(INCLUDED_ROUTES).toContain("brand-visuals.review");
+  });
+
   it("maps every model route to a paid action or included work", () => {
     const paid = Object.values(CREDIT_ACTIONS).flatMap((action) => action.routes);
     const unmapped = registeredRoutes().filter(

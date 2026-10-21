@@ -71,6 +71,8 @@ export async function beginDeferredMetered(args: {
     throw new HttpError(400, "Invalid deferred charge.");
   }
   const entitlements = await getEntitlements(args);
+  // Workspace permissions apply even during billing maintenance/shadow mode.
+  if (entitlements.role === "viewer") throw new SpendNotAllowedError();
   const mode = entitlements.enforcement;
   const feature = args.feature ?? null;
   const would = decision(entitlements, feature, args.meter, args.amount);
@@ -86,7 +88,6 @@ export async function beginDeferredMetered(args: {
   }
   if (mode === "on") {
     if (entitlements.frozen) throw new BrandFrozenError();
-    if (entitlements.role === "viewer") throw new SpendNotAllowedError();
     if (feature && !entitlements.features[feature].allowed) {
       throw new UpgradeRequiredError({
         feature,
@@ -112,18 +113,34 @@ export async function beginDeferredMetered(args: {
   if (held?.replayed) throw new HttpError(409, "This action is already running or completed.");
   const chargeId = held?.id ? crypto.randomUUID() : null;
   let settled = false;
-  const release = async () => {
-    if (settled) return;
-    if (held?.id) {
-      await releaseMeter({
-        accountId: entitlements.accountId,
-        holdId: held.id,
-        idempotencyKey: `${key}:failed`,
-        reason: "Stream failed or was cancelled",
+  let captureStarted = false;
+  let inFlight: Promise<void> | null = null;
+  const settle = (kind: "capture" | "release", run: () => Promise<void>): Promise<void> => {
+    if (settled) return Promise.resolve();
+    if (inFlight) return inFlight;
+    // A capture with an ambiguous response may already have charged. A client
+    // cancellation must never undo it; the same capture key remains retryable.
+    if (kind === "release" && captureStarted) return Promise.resolve();
+    if (kind === "capture") captureStarted = true;
+    inFlight = run()
+      .then(() => {
+        settled = true;
+      })
+      .finally(() => {
+        inFlight = null;
       });
-    }
-    settled = true;
+    return inFlight;
   };
+  const release = () =>
+    settle("release", async () => {
+      if (held?.id)
+        await releaseMeter({
+          accountId: entitlements.accountId,
+          holdId: held.id,
+          idempotencyKey: `${key}:failed`,
+          reason: "Stream failed or was cancelled",
+        });
+    });
   return {
     accountId: entitlements.accountId,
     chargeId,
@@ -136,20 +153,21 @@ export async function beginDeferredMetered(args: {
         throw new HttpError(400, "Invalid captured amount.");
       }
       if (amount === 0) return release();
-      if (held?.id) {
-        await captureMeter({
-          accountId: entitlements.accountId,
-          holdId: held.id,
-          amount,
-          idempotencyKey: key,
-          route: args.route,
-          chargeId: chargeId ?? undefined,
-        });
-        lowBalanceSoon(entitlements.accountId);
-      } else if (mode === "shadow" && would.code === "would_charge") {
-        await logShadow({ ...shadowArgs, amount, code: "would_charge", reason: null });
-      }
-      settled = true;
+      return settle("capture", async () => {
+        if (held?.id) {
+          await captureMeter({
+            accountId: entitlements.accountId,
+            holdId: held.id,
+            amount,
+            idempotencyKey: key,
+            route: args.route,
+            chargeId: chargeId ?? undefined,
+          });
+          lowBalanceSoon(entitlements.accountId);
+        } else if (mode === "shadow" && would.code === "would_charge") {
+          await logShadow({ ...shadowArgs, amount, code: "would_charge", reason: null });
+        }
+      });
     },
     release,
   };
@@ -249,13 +267,16 @@ export async function runMetered<T>(
     throw new HttpError(400, "Invalid charge quantity or idempotency key.");
   }
   const priced = price(args.action, quantity);
-  if (priced.amount <= 0) throw new HttpError(500, "Catalog action has no price.");
+  if (!Number.isSafeInteger(priced.amount) || priced.amount <= 0) {
+    throw new HttpError(400, "Invalid charge amount.");
+  }
   const entitlements = await getEntitlements({
     workspaceId: args.workspaceId,
     userId: args.userId,
     role: args.role,
   });
   const mode = entitlements.enforcement;
+  if (entitlements.role === "viewer") throw new SpendNotAllowedError();
   const would = decision(entitlements, priced.feature, priced.meter, priced.amount);
   if (mode === "shadow" && would.code !== "would_charge") {
     await logShadow({
@@ -270,7 +291,6 @@ export async function runMetered<T>(
   }
   if (mode === "on") {
     if (entitlements.frozen) throw new BrandFrozenError();
-    if (entitlements.role === "viewer") throw new SpendNotAllowedError();
     if (priced.feature && !entitlements.features[priced.feature].allowed) {
       throw new UpgradeRequiredError({
         feature: priced.feature,

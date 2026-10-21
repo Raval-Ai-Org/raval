@@ -4,7 +4,6 @@ import { emitAppEvent } from "@/lib/app-events";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { useNavigate } from "@/lib/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,7 +74,6 @@ export function AccountMenu({
 }) {
   const user = useCurrentUser();
   const { theme, toggle } = useTheme();
-  const navigate = useNavigate();
 
   const name = user?.name || "Loading…";
   const email = user?.email || "";
@@ -210,7 +208,6 @@ export function AccountMenu({
         <DropdownMenuItem
           onSelect={async () => {
             await signOutAndRedirect();
-            navigate({ to: "/login" });
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px] text-destructive focus:text-destructive"
         >
@@ -225,7 +222,6 @@ export function AccountMenu({
 export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const user = useCurrentUser();
   const { theme, toggle } = useTheme();
-  const navigate = useNavigate();
   const name = user?.name || "Account";
   const email = user?.email || "";
   const initials = initialsFrom(name, email);
@@ -323,7 +319,6 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
         <DropdownMenuItem
           onSelect={async () => {
             await signOutAndRedirect();
-            navigate({ to: "/login" });
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px] text-destructive focus:text-destructive"
         >

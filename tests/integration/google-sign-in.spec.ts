@@ -198,6 +198,8 @@ test("runtime configuration failure can retry without disabling email auth or lo
 test("email signup still sends confirmation instead of Google authentication", async ({ page }) => {
   const state = await mockAuth(page);
   await page.goto("/signup");
+  // Wait for client hydration before filling controlled inputs.
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.getByPlaceholder("Name", { exact: true }).fill("Email Tester");
   await page.getByPlaceholder("Email", { exact: true }).fill("email@example.com");
   await page
@@ -215,6 +217,7 @@ test("email login still persists a session and preserves its destination", async
 }) => {
   const state = await mockAuth(page);
   await page.goto(`/login?next=${encodeURIComponent("/reset-password?email=success")}`);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await page.getByPlaceholder("Email", { exact: true }).fill("email@example.com");
   await page.getByPlaceholder("Password", { exact: true }).fill("safe-test-password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

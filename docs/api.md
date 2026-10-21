@@ -65,22 +65,44 @@ Typical errors: `400` invalid input or blocked URL, `401` missing/invalid auth,
 status, and generic `500` for unknown failures. JSON errors intentionally avoid
 provider secrets and internal stack traces.
 
+Content edits, calendar planning, imports, connector reviews and AI rewrites
+compare the stored status and `updated_at` when writing. If the row changes
+between the server's read and write, the function returns `409` rather than
+overwriting the newer version. Reload the post before retrying a conflict.
+These checks do not replace the workspace role and RLS boundaries.
+
+`content/updateContentItem` and `content/setContentItemStatus` accept editorial
+statuses only: `draft`, `pending`, `approved`, and `rejected`. Scheduled or
+publishing posts must finish delivery or have their schedule cancelled before
+editing. Published posts must return to draft. Delivery changes use
+`/api/sdr/schedule`, `/api/sdr/publish`, and `/api/sdr/cancel`; the legacy
+`content/rescheduleContentItem` shortcut returns `409` because it never
+contacted a publishing provider.
+
+`content/deleteContentItem` also rejects scheduled and publishing posts. Cancel
+delivery first. Deletion compares the saved revision and returns `409` if an edit
+or schedule starts while it is being processed.
+
+`publish/getPublishQueue` can include `unavailableSources` alongside the four
+queue groups when optional website reads fail. Clients must indicate that the
+list is incomplete instead of treating those failed reads as an empty source.
+
 ## Route index
 
-| Area | Routes |
-| --- | --- |
-| Core AI | `/api/chat`, `/api/clarify`, `/api/ai-generate`, `/api/brand-extract`, `/api/file-extract`, `/api/memory-extract` |
-| Market | `/api/market/intelligence`, `/api/market/latest`, `/api/market/trends` |
-| GEO | `/api/geo/scans`, `/api/geo/scans/:id`, `/api/geo/scans/:id/cancel` |
-| Agents | `/api/agents/actions`, `/api/agents/findings`, `/api/agents/run`, `/api/agents/runs`, `/api/agents/settings`, `/api/agent-tasks` |
-| Studio/media | `/api/studio/ideas`, `/api/studio/jobs`, `/api/studio/jobs/:id`, `/api/studio/jobs/:id/cancel`, `/api/studio/prompt`, `/api/generate-image`, `/api/generate-video`, `/api/pexels/video`, `/api/unsplash/random` |
-| UGC | `/api/ugc/models`, `/api/ugc/products/extract`, `/api/ugc/projects`, `/api/ugc/projects/:id`, `/api/ugc/projects/:id/concepts`, `/api/ugc/projects/:id/notes`, `/api/ugc/references/import`, `/api/ugc/references/upload`, `/api/ugc/renders`, `/api/ugc/renders/:id`, `/api/ugc/renders/:id/cancel`, `/api/ugc/renders/:id/download`, `/api/ugc/renders/:id/post-draft` |
-| Distribution | `/api/sdr/accounts`, `/api/sdr/cancel`, `/api/sdr/disconnect`, `/api/sdr/oauth/start`, `/api/sdr/publications`, `/api/sdr/publish`, `/api/sdr/schedule`, `/api/sdr/status`, `/api/social-multi`, `/api/social/analytics`, `/api/social/connect/*`, `/api/social/creator-info`, `/api/social/metrics/sync`, `/api/social/retry` |
-| Assets/shares | `/api/assets/library`, `/api/assets/persist`, `/api/shares`, `/api/public/share/:slug` |
-| Platform integrations | `/api/integrations/github/callback`, `/api/integrations/github/webhook`, `/api/integrations/google/callback` |
-| Operations | `/api/health`, `/api/health/ready`, `/api/usage`, `/api/client-errors` |
-| Public hooks | `/api/public/hooks/agents-tick`, `analytics-sync`, `competitor-watch`, `geo-agents`, `geo-scans`, `kie`, `ops-watch`, `run-schedules`, `sdr`, `sdr-reconcile`, `socialapi`, `ugc-renders` |
-| Server functions | `/api/rpc/[...fn]` |
+| Area                  | Routes                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Core AI               | `/api/chat`, `/api/clarify`, `/api/ai-generate`, `/api/brand-extract`, `/api/file-extract`, `/api/memory-extract`                                                                                                                                                                                                                                                        |
+| Market                | `/api/market/intelligence`, `/api/market/latest`, `/api/market/trends`                                                                                                                                                                                                                                                                                                   |
+| GEO                   | `/api/geo/scans`, `/api/geo/scans/:id`, `/api/geo/scans/:id/cancel`                                                                                                                                                                                                                                                                                                      |
+| Agents                | `/api/agents/actions`, `/api/agents/findings`, `/api/agents/run`, `/api/agents/runs`, `/api/agents/settings`, `/api/agent-tasks`                                                                                                                                                                                                                                         |
+| Studio/media          | `/api/studio/ideas`, `/api/studio/jobs`, `/api/studio/jobs/:id`, `/api/studio/jobs/:id/cancel`, `/api/studio/prompt`, `/api/generate-image`, `/api/generate-video`, `/api/pexels/video`, `/api/unsplash/random`                                                                                                                                                          |
+| UGC                   | `/api/ugc/models`, `/api/ugc/products/extract`, `/api/ugc/projects`, `/api/ugc/projects/:id`, `/api/ugc/projects/:id/concepts`, `/api/ugc/projects/:id/notes`, `/api/ugc/references/import`, `/api/ugc/references/upload`, `/api/ugc/renders`, `/api/ugc/renders/:id`, `/api/ugc/renders/:id/cancel`, `/api/ugc/renders/:id/download`, `/api/ugc/renders/:id/post-draft` |
+| Distribution          | `/api/sdr/accounts`, `/api/sdr/cancel`, `/api/sdr/disconnect`, `/api/sdr/oauth/start`, `/api/sdr/publications`, `/api/sdr/publish`, `/api/sdr/schedule`, `/api/sdr/status`, `/api/social-multi`, `/api/social/analytics`, `/api/social/connect/*`, `/api/social/creator-info`, `/api/social/metrics/sync`, `/api/social/retry`                                           |
+| Assets/shares         | `/api/assets/library`, `/api/assets/persist`, `/api/shares`, `/api/public/share/:slug`                                                                                                                                                                                                                                                                                   |
+| Platform integrations | `/api/integrations/github/callback`, `/api/integrations/github/webhook`, `/api/integrations/google/callback`                                                                                                                                                                                                                                                             |
+| Operations            | `/api/health`, `/api/health/ready`, `/api/usage`, `/api/client-errors`                                                                                                                                                                                                                                                                                                   |
+| Public hooks          | `/api/public/hooks/agents-tick`, `analytics-sync`, `competitor-watch`, `geo-agents`, `geo-scans`, `kie`, `ops-watch`, `run-schedules`, `sdr`, `sdr-reconcile`, `socialapi`, `ugc-renders`                                                                                                                                                                                |
+| Server functions      | `/api/rpc/[...fn]`                                                                                                                                                                                                                                                                                                                                                       |
 
 ## Examples
 

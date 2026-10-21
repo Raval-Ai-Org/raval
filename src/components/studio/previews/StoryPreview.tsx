@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useReducedMotion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Eye, EyeOff, Pause, Play, Send } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { ensureGoogleFonts } from "@/lib/brand-look/fonts";
@@ -61,7 +61,7 @@ export function StoryPreview({
   editing?: boolean;
   onFrameChange?: (index: number, frame: StoryFrame) => void;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const isVideo = !!video;
   const count = isVideo ? 1 : frames.length;
   const [index, setIndex] = useState(0);
@@ -75,8 +75,8 @@ export function StoryPreview({
     if (index > count - 1) setIndex(Math.max(0, count - 1));
   }, [count, index]);
   useEffect(() => {
-    if (editing) setPaused(true);
-  }, [editing]);
+    if (editing || reduce) setPaused(true);
+  }, [editing, reduce]);
 
   const look = useMemo(() => {
     const design = safeDesign(spec?.design);

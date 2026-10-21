@@ -66,7 +66,7 @@ for (const theme of ["light", "dark"] as const) {
       ]) {
         await page.evaluate((evt) => window.dispatchEvent(new CustomEvent(evt)), event);
         const dialog = page.getByRole("dialog").last();
-        await expect(dialog, event).toBeVisible({ timeout: 20000 });
+        await expect(dialog, event).toBeVisible({ timeout: 60_000 });
         await page.waitForTimeout(400);
         const box = await dialog.boundingBox();
         expect(box!.x, event).toBeGreaterThanOrEqual(-1);

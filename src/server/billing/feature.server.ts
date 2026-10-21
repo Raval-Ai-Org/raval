@@ -18,6 +18,7 @@ export async function requireBillingFeature(args: {
   spending?: boolean;
 }): Promise<void> {
   const entitlements = await getEntitlements(args);
+  if (args.spending && entitlements.role === "viewer") throw new SpendNotAllowedError();
   if (entitlements.enforcement === "off") return;
   if (entitlements.enforcement === "shadow") {
     const decision = entitlements.frozen

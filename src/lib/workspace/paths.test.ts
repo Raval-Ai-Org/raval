@@ -14,6 +14,24 @@ const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
 
 describe("canonical workspace routes", () => {
+  it.each(["%", "%zz", "%E0%A4%A"])(
+    "handles malformed chat encoding without crashing: %s",
+    (segment) => {
+      expect(conversationIdFromPath(`/w/${A}/app/chat/${segment}`)).toBeNull();
+      expect(resolveLegacyAppLink(`/app/chat/${segment}`, `?workspace=${A}`)).toEqual({
+        kind: "home",
+        href: WORKSPACES_HOME,
+      });
+      expect(resolveLegacyAppLink(`/app/chat/${segment}`, "")).toEqual({
+        kind: "home",
+        href: WORKSPACES_HOME,
+      });
+    },
+  );
+
+  it("keeps valid encoded conversation identifiers intact", () => {
+    expect(conversationIdFromPath(`/w/${A}/app/chat/a%20b`)).toBe("a b");
+  });
   it("builds workspace, sub-page and conversation paths", () => {
     expect(workspacePath(A)).toBe(`/w/${A}/app`);
     expect(workspacePath(A, "", { tab: "social", empty: "", off: false })).toBe(

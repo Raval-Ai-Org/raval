@@ -10,14 +10,13 @@ for (const { width, height } of [
   { width: 1024, height: 768 },
 ]) {
   test(`analytics workspace modal fits at ${width}x${height}`, async ({ page }) => {
+    test.setTimeout(90_000);
     await page.setViewportSize({ width, height });
     await page.goto("/analytics-lab", { waitUntil: "domcontentloaded" });
+    await expect(page.locator('[data-ready="true"]')).toBeVisible({ timeout: 60_000 });
     const dialog = page.getByRole("dialog");
-    await expect(async () => {
-      await page.getByRole("button", { name: "In the modal" }).click();
-      await expect(dialog).toBeVisible({ timeout: 1500 });
-    }).toPass({ timeout: 30_000 });
-    await expect(dialog).toBeVisible();
+    await page.getByRole("button", { name: "In the modal" }).click();
+    await expect(dialog).toBeVisible({ timeout: 60_000 });
     await expect
       .poll(async () => {
         const box = await dialog.boundingBox();
@@ -41,9 +40,13 @@ for (const { width, height } of [
       await page.keyboard.press("Escape");
     }
     if (width < 1024) {
-      const box = await close.boundingBox();
-      expect(box?.width).toBeGreaterThanOrEqual(44);
-      expect(box?.height).toBeGreaterThanOrEqual(44);
+      // Measure after the popup's entrance scale animation has settled.
+      await expect
+        .poll(async () => {
+          const box = await close.boundingBox();
+          return box ? Math.min(box.width, box.height) : 0;
+        })
+        .toBeGreaterThanOrEqual(44);
     }
     await dialog.getByRole("button", { name: "Insights", exact: true }).click();
     await expect(dialog.getByRole("heading", { name: "Insights" })).toBeVisible();

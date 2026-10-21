@@ -244,7 +244,11 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
               if (signingOut) return;
               setSigningOut(true);
               setOpen(false);
-              await signOutAndRedirect(queryClient);
+              try {
+                await signOutAndRedirect(queryClient);
+              } finally {
+                setSigningOut(false);
+              }
             }}
             disabled={signingOut}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground disabled:opacity-60"

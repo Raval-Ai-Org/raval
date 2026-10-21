@@ -32,6 +32,13 @@ The active social flow generally follows this path:
 5. UI status is refreshed from the platform’s persisted state, not from raw
    provider payloads.
 
+Editorial writes cannot assign delivery statuses. In-flight posts are locked
+against editorial changes, and rewrites refuse them before starting generation.
+Content writes compare the version read by the server so edits or approvals
+that race another write return a conflict. The Publish list keeps readable
+results when optional website sources fail, labels the list incomplete, and
+ignores responses from older requests or another workspace.
+
 This keeps publishing auditable and reduces the chance of OAuth or credential
 leaks through the browser.
 

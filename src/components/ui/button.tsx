@@ -43,6 +43,7 @@ const buttonVariants = cva(
       variant: {
         default: [
           "bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)]",
+          "[&_[data-slot=cost-chip]]:bg-primary-foreground/15 [&_[data-slot=cost-chip]]:text-primary-foreground",
           "hover:bg-[color-mix(in_oklab,hsl(var(--primary))_88%,hsl(var(--foreground)))] hover:text-primary-foreground",
           "hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] active:shadow-none",
         ].join(" "),
@@ -65,13 +66,13 @@ const buttonVariants = cva(
         link: "h-auto p-0 text-primary underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-8 px-3 text-xs max-sm:h-auto max-sm:min-h-8 max-sm:py-1.5 [&_svg]:size-4",
-        default: "h-9 px-4 text-sm max-sm:h-auto max-sm:min-h-9 max-sm:py-2 [&_svg]:size-4",
-        lg: "h-10 px-5 text-sm max-sm:h-auto max-sm:min-h-10 max-sm:py-2 [&_svg]:size-[18px]",
-        xl: "h-12 px-6 text-base max-sm:h-auto max-sm:min-h-12 max-sm:py-3 [&_svg]:size-5",
-        icon: "size-9 [&_svg]:size-4",
-        "icon-sm": "size-8 [&_svg]:size-4",
-        "icon-lg": "size-10 [&_svg]:size-[18px]",
+        sm: "h-auto min-h-8 px-3 py-1.5 text-xs [&_svg]:size-4",
+        default: "h-auto min-h-9 px-4 py-2 text-sm [&_svg]:size-4",
+        lg: "h-auto min-h-10 px-5 py-2 text-sm [&_svg]:size-[18px]",
+        xl: "h-auto min-h-12 px-6 py-3 text-base [&_svg]:size-5",
+        icon: "size-9 shrink-0 [&_svg]:size-4",
+        "icon-sm": "size-8 shrink-0 [&_svg]:size-4",
+        "icon-lg": "size-10 shrink-0 [&_svg]:size-[18px]",
       },
     },
     defaultVariants: {

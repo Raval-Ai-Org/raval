@@ -43,6 +43,10 @@ function createSupabaseClient() {
   }
 
   const client = createBrowserClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    // Callback and recovery pages capture, scrub and exchange credentials once.
+    // Automatic URL detection would race those explicit exchanges and consume
+    // their one-time codes before the page can verify its result.
+    auth: { detectSessionInUrl: false },
     global: {
       fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
     },

@@ -22,7 +22,10 @@ export type PublishEntry = {
   place?: "visibility" | "experiments";
 };
 
-export type PublishQueue = Record<PublishGroup, PublishEntry[]>;
+export type PublishQueue = Record<PublishGroup, PublishEntry[]> & {
+  /** These sources failed to load; an empty list must not be presented as complete. */
+  unavailableSources?: string[];
+};
 
 export type ContentRow = {
   id: string;

@@ -29,8 +29,8 @@ export const ECONOMY = "google/gemini-3.1-flash-lite";
 /** What each tier falls back to when its providers fail (OpenRouter `models`). */
 const FALLBACKS: Record<string, string[]> = {
   [PREMIUM]: [WORKHORSE],
-  [WORKHORSE]: ["openai/gpt-5.6-terra"],
-  [ECONOMY]: ["openai/gpt-5.6-luna"],
+  [WORKHORSE]: ["openai/gpt-6.1-sol"],
+  [ECONOMY]: ["openai/gpt-6-luna"],
 };
 
 /** Past a workspace's spend ceiling each tier steps down one. */
@@ -382,7 +382,7 @@ export function primaryModel(route: string): string {
  */
 export const DEFAULT_GEO_PROBE_MODELS = [
   "perplexity/sonar",
-  "openai/gpt-5.6-luna",
+  "openai/gpt-6-luna",
   "google/gemini-3.8-flash",
 ] as const;
 

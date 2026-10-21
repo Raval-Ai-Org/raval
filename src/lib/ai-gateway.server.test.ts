@@ -60,6 +60,30 @@ const msgs = [
 ];
 
 describe("chatCompletion request body", () => {
+  it.each([
+    { route: "chat", primary: WORKHORSE, fallback: "openai/gpt-6.1-sol" },
+    { route: "competitors.updates", primary: ECONOMY, fallback: "openai/gpt-6-luna" },
+  ])("sends and meters the upgraded fallback for $route", async ({ route, primary, fallback }) => {
+    const s = scripted([{ content: "{}", model: fallback }]);
+    restore = s.restore;
+    const json = await chatCompletion({
+      route,
+      messages: msgs,
+      noCache: true,
+      temperature: 0.2,
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "x", strict: true, schema: { type: "object" } },
+      },
+    });
+    expect(s.bodies[0].models).toEqual([primary, fallback]);
+    expect(s.bodies[0]).not.toHaveProperty("temperature");
+    expect(s.bodies[0].reasoning).toEqual({ effort: "low", exclude: true });
+    expect(s.bodies[0].provider).toEqual({ data_collection: "deny", require_parameters: true });
+    expect(json._model).toBe(fallback);
+    expect(usage.rows[0]).toMatchObject({ model: fallback, route, estCostUsd: 0.0042 });
+  });
+
   it("sends the plan's models as a fallback array, its effort and the privacy setting", async () => {
     const s = scripted([{ content: "hello" }]);
     restore = s.restore;

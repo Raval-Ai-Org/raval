@@ -12,7 +12,8 @@
 //     out of the copy.
 //   * Numbers are tabular so columns of prices line up.
 import { useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 
 import { Check } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -302,7 +303,7 @@ export function Meta({ children, className }: { children: React.ReactNode; class
 
 /** Counts up to a number, or simply shows it when motion is reduced. */
 export function CountUp({ value, className }: { value: number; className?: string }) {
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotionSafe();
   const [shown, setShown] = useState(reduced ? value : 0);
   const frame = useRef<number>(0);
   const from = useRef(0);
@@ -310,6 +311,7 @@ export function CountUp({ value, className }: { value: number; className?: strin
   useEffect(() => {
     if (reduced) {
       setShown(value);
+      from.current = value;
       return;
     }
     const start = performance.now();
@@ -319,8 +321,8 @@ export function CountUp({ value, className }: { value: number; className?: strin
       const eased = 1 - Math.pow(1 - progress, 3);
       const next = Math.round(origin + (value - origin) * eased);
       setShown(next);
+      from.current = next;
       if (progress < 1) frame.current = requestAnimationFrame(step);
-      else from.current = value;
     };
     frame.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame.current);
@@ -341,7 +343,7 @@ export function Rise({
   className?: string;
   children: React.ReactNode;
 }) {
-  const reduced = useReducedMotion();
+  const reduced = useReducedMotionSafe();
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 6 }}

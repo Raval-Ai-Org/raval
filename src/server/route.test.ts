@@ -89,6 +89,18 @@ describe("defineRoute", () => {
     expect(handler.mock.calls[0][0]).toMatchObject({ userId: "user-1", supabase });
   });
 
+  it("disables caching for explicit handler responses containing user data", async () => {
+    const explicit = defineRoute({
+      name: "private-response",
+      auth: "user",
+      handler: () =>
+        Response.json({ private: true }, { headers: { "Cache-Control": "public, max-age=3600" } }),
+    });
+    const response = await explicit(post(null));
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ private: true });
+  });
+
   it("passes Response results through untouched (streams)", async () => {
     const stream = defineRoute({
       name: "stream",

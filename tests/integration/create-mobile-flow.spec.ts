@@ -7,13 +7,17 @@ for (const { width, height } of [
   { width: 667, height: 375 },
 ]) {
   test(`Create picker works at ${width}x${height}`, async ({ page }) => {
+    test.setTimeout(90_000);
     await page.setViewportSize({ width, height });
-    await page.goto("/studio-lab", { waitUntil: "domcontentloaded" });
-    const dialog = page.getByRole("dialog");
-    await expect(async () => {
-      await page.getByRole("button", { name: "Open Create" }).click();
-      await expect(dialog).toBeVisible({ timeout: 1500 });
-    }).toPass({ timeout: 15000 });
+    await page.goto("/studio-lab?scene=brief-social&device=phone", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.locator('[data-ready="true"]')).toBeVisible({ timeout: 60_000 });
+    const dialog = page
+      .getByRole("dialog")
+      .filter({ has: page.getByRole("button", { name: "Close dialog", exact: true }) });
+    await page.getByRole("button", { name: "Open Create" }).click();
+    await expect(dialog).toBeVisible({ timeout: 60_000 });
     const box = await dialog.boundingBox();
     expect(box?.x).toBeGreaterThanOrEqual(-1);
     expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width + 1);

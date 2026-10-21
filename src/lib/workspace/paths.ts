@@ -83,7 +83,15 @@ export function workspaceIdFromPath(pathname: string): string | null {
 /** The conversation id in a canonical chat path, or null. */
 export function conversationIdFromPath(pathname: string): string | null {
   const m = pathname.match(/^\/w\/[^/]+\/app\/chat\/([^/?#]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
+  return m ? decodeConversationId(m[1]) : null;
+}
+
+function decodeConversationId(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
 
 const LEGACY_TABS: Record<string, string> = {
@@ -111,7 +119,8 @@ export function resolveLegacyAppLink(pathname: string, search: string): LegacyTa
 
   const chat = pathname.match(/^\/app\/chat\/([^/?#]+)/);
   if (chat) {
-    const conversationId = decodeURIComponent(chat[1]);
+    const conversationId = decodeConversationId(chat[1]);
+    if (conversationId === null) return { kind: "home", href: WORKSPACES_HOME };
     if (isWorkspaceId(explicit)) {
       const qs = params.toString();
       return {

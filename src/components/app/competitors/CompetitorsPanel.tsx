@@ -144,14 +144,20 @@ function Panel({ workspaceId }: { workspaceId: string }) {
           if (data.researchAvailable) discover.mutate();
         }}
         disabled={discover.isPending || bootstrapping || !data.researchAvailable}
-        className={cn(primaryBtn, "h-11 px-4 text-[13px] lg:h-10", full && "w-full")}
-      >
-        {discover.isPending ? (
-          <Spinner className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Search className="h-3.5 w-3.5" />
+        className={cn(
+          primaryBtn,
+          "min-h-11 flex-wrap px-4 py-2 text-[13px]",
+          full && "w-full flex-col gap-1.5 px-2.5 py-2.5",
         )}
-        {discover.isPending ? "Looking" : "Find competitors"}
+      >
+        <span className="inline-flex items-center justify-center gap-1.5">
+          {discover.isPending ? (
+            <Spinner className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Search className="h-3.5 w-3.5" />
+          )}
+          {discover.isPending ? "Looking" : "Find competitors"}
+        </span>
         {!discover.isPending && <CostChip action="competitor_discovery" />}
       </button>
     </FeatureGate>

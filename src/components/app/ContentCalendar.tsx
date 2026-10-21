@@ -39,6 +39,7 @@ import {
   type ContentItem,
 } from "@/lib/content.functions";
 import { ServerFnError } from "@/lib/rpc-client";
+import { AutosaveQueue } from "@/lib/calendar/autosave";
 import { cancelScheduled, getSdrStatus, scheduleContentItems } from "@/lib/sdr.functions";
 import { momentsBetween, type MarketingMoment } from "@/lib/studio/moments";
 import {
@@ -139,31 +140,59 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
   const [publishPlatforms, setPublishPlatforms] = useState<Set<string>>(new Set());
 
   // Text edits wait here until they are saved; a reload must not undo them.
-  const pending = useRef(new Map<string, EntryPatch>());
-  const saving = useRef(new Map<string, EntryPatch>());
+  const edits = useRef(new AutosaveQueue<EntryPatch>());
   const timers = useRef(new Map<string, number>());
   const skipReload = useRef(false);
+  const loadGeneration = useRef(0);
+  const activeWorkspace = useRef(workspaceId);
+  activeWorkspace.current = workspaceId;
+
+  useEffect(() => {
+    setEntries([]);
+    setSelectedId(null);
+    setSelectedDate(null);
+    setLoadError(false);
+    setLoading(true);
+  }, [workspaceId]);
 
   /* ───────────────────────── loading ───────────────────────── */
 
   const load = useCallback(
     async (quiet = false) => {
       if (!workspaceId) return;
+      const generation = ++loadGeneration.current;
+      const version = edits.current.version;
       if (!quiet) setLoading(true);
       try {
         const items = await listItems({ data: { workspaceId, limit: 500 } });
+        if (generation !== loadGeneration.current || workspaceId !== activeWorkspace.current)
+          return;
+        // A read started before an edit/save must not put the earlier text back.
+        if (version !== edits.current.version) return;
         setEntries(
           items.map((item) => {
             const entry = entryFromContent(item);
-            const unsaved = { ...saving.current.get(entry.id), ...pending.current.get(entry.id) };
-            return Object.keys(unsaved).length ? { ...entry, ...unsaved } : entry;
+            const unsaved = edits.current.peek(entry.id);
+            return Object.keys(unsaved).length
+              ? {
+                  ...entry,
+                  ...unsaved,
+                  ...(entry.status === "approved" ? { status: "draft" as const } : {}),
+                }
+              : entry;
           }),
         );
         setLoadError(false);
       } catch {
-        if (!quiet) setLoadError(true);
+        if (
+          !quiet &&
+          generation === loadGeneration.current &&
+          workspaceId === activeWorkspace.current
+        )
+          setLoadError(true);
       } finally {
-        if (!quiet) setLoading(false);
+        if (generation === loadGeneration.current && workspaceId === activeWorkspace.current)
+          setLoading(false);
       }
     },
     [workspaceId, listItems],
@@ -421,12 +450,8 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     async (id: string) => {
       window.clearTimeout(timers.current.get(id));
       timers.current.delete(id);
-      const patch = pending.current.get(id);
-      if (!patch) return;
-      pending.current.delete(id);
-      saving.current.set(id, { ...saving.current.get(id), ...patch });
-      try {
-        await updateItem({
+      await edits.current.flush(id, async (patch) => {
+        const result = await updateItem({
           data: {
             id,
             patch: {
@@ -437,13 +462,20 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
             },
           },
         });
-      } catch (e) {
-        toast.error("Couldn't save your changes", { description: errorText(e) });
-      } finally {
-        saving.current.delete(id);
-      }
+        announce();
+        return result;
+      });
     },
-    [updateItem],
+    [updateItem, announce],
+  );
+
+  const backgroundFlush = useCallback(
+    (id: string) => {
+      void flush(id).catch((error) => {
+        toast.error("Couldn't save your changes", { description: errorText(error) });
+      });
+    },
+    [flush],
   );
 
   const editEntry = (id: string, patch: EntryPatch) => {
@@ -451,25 +483,25 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     if (!current || isLocked(current.status)) return;
     // Changing an approved post sends it back to draft (the server does the same).
     patchEntry(id, { ...patch, ...(current.status === "approved" ? { status: "draft" } : {}) });
-    pending.current.set(id, { ...pending.current.get(id), ...patch });
+    edits.current.enqueue(id, patch);
     window.clearTimeout(timers.current.get(id));
     timers.current.set(
       id,
-      window.setTimeout(() => void flush(id), SAVE_DELAY_MS),
+      window.setTimeout(() => backgroundFlush(id), SAVE_DELAY_MS),
     );
   };
 
   // Nothing typed may be lost when the calendar closes or unmounts.
   const flushAll = useCallback(() => {
-    for (const id of [...pending.current.keys()]) void flush(id);
-  }, [flush]);
+    for (const id of edits.current.pendingIds()) backgroundFlush(id);
+  }, [backgroundFlush]);
   useEffect(() => flushAll, [flushAll]);
   useEffect(() => {
     if (!open) flushAll();
   }, [open, flushAll]);
 
   const closeEditor = () => {
-    if (selectedId) void flush(selectedId);
+    if (selectedId) backgroundFlush(selectedId);
     setSelectedId(null);
   };
 
@@ -642,10 +674,10 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
     const current = entries.find((e) => e.id === id);
     if (!current) return;
     window.clearTimeout(timers.current.get(id));
-    pending.current.delete(id);
     setSelectedId(null);
     setEntries((list) => list.filter((e) => e.id !== id));
     try {
+      await edits.current.discard(id);
       await deleteItem({ data: { id } });
       announce();
     } catch (e) {

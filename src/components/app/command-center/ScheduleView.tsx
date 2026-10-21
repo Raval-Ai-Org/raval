@@ -23,10 +23,12 @@ import { ChannelMark, ClientTag, channelLabel, clientHref, timeOf } from "./ui";
 export function ScheduleView({
   cc,
   clientFilter,
+  onClientFilter,
   onGo,
 }: {
   cc: CommandCenter;
   clientFilter: string;
+  onClientFilter: (id: string) => void;
   onGo: (href: string) => void;
 }) {
   const [cancelling, setCancelling] = useState<ReviewItem | null>(null);
@@ -40,6 +42,24 @@ export function ScheduleView({
 
   return (
     <div className="ds-enter">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label htmlFor="schedule-client" className="text-[13px] font-medium">
+          Client
+        </label>
+        <select
+          id="schedule-client"
+          value={clientFilter}
+          onChange={(event) => onClientFilter(event.target.value)}
+          className="h-9 min-w-0 max-w-full rounded-xl border border-border bg-background px-3 text-[13px]"
+        >
+          <option value="all">All clients</option>
+          {cc.clients.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <p className="mb-4 text-[13px] text-muted-foreground">
         {total === 0
           ? "Nothing scheduled in the next 14 days."
@@ -92,7 +112,7 @@ export function ScheduleView({
                           <span className="block truncate text-[13.5px] font-medium">
                             {it.title}
                           </span>
-                          <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted-foreground">
                             <ClientTag name={it.clientName} />
                             {channelLabel(it.channel)}
                             {it.kind === "story" ? " · Story" : ""}

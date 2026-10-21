@@ -11,15 +11,15 @@
 // not an in-process Map, because the app can run more than one instance and
 // module state resets on deploy.
 //
-// FAIL-OPEN by design: if the limiter's own query fails, the request proceeds.
-// A database hiccup must not take down the product. The tradeoff is that a
-// database outage also suspends spend control — acceptable, because the outage
-// already breaks the features doing the spending.
+// If the shared query fails, a bounded per-process mirror keeps normal traffic
+// working within the same limits. It is emergency protection, not a replacement
+// for the shared store; account credit reservations remain database-backed.
 
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { jsonError } from "@/server/api-auth";
 import { createMiddleware } from "@/server/middleware";
+import { RateLimitFallback } from "./rate-limit-fallback";
 
 /**
  * Cost tiers, ordered roughly by what a single call bills upstream.
@@ -224,6 +224,8 @@ export type RateLimitResult = {
   resetAt: string | null;
 };
 
+const fallback = new RateLimitFallback();
+
 /**
  * Consume one unit from `subject`'s bucket for `tier`.
  *
@@ -236,30 +238,39 @@ export async function consumeRateLimit(
   opts: { cost?: number } = {},
 ): Promise<RateLimitResult> {
   const config = TIERS[tier];
-  const permissive: RateLimitResult = {
-    ok: true,
-    limit: config.limit,
-    remaining: config.limit,
-    retryAfterSeconds: 0,
-    resetAt: null,
-  };
+  const cost = opts.cost ?? 1;
+  if (!Number.isSafeInteger(cost) || cost < 1) throw new Error("Invalid rate limit cost");
+  const bucketKey = `${tier}:${subject}`;
+  // Count before awaiting so concurrent requests cannot race the fallback.
+  const emergency = fallback.consume(bucketKey, config.windowSeconds, config.limit, cost);
 
   try {
     const { data, error } = await supabaseAdmin.rpc("consume_rate_limit", {
-      p_bucket_key: `${tier}:${subject}`,
+      p_bucket_key: bucketKey,
       p_window_seconds: config.windowSeconds,
       p_limit: config.limit,
-      p_cost: opts.cost ?? 1,
+      p_cost: cost,
     });
 
     if (error) {
-      console.error(`[rate-limit] ${tier} query failed, failing open`, error.message);
-      return permissive;
+      console.error(`[rate-limit] ${tier} query failed, using local protection`, error.code);
+      return emergency;
     }
 
     // The RPC returns a single row; supabase-js surfaces it as a 1-element array.
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row || typeof row.allowed !== "boolean") return permissive;
+    const resetMs = Date.parse(row?.reset_at);
+    if (
+      !row ||
+      typeof row.allowed !== "boolean" ||
+      !Number.isSafeInteger(row.current_count) ||
+      row.current_count < cost ||
+      !Number.isFinite(resetMs)
+    ) {
+      console.error(`[rate-limit] ${tier} invalid response, using local protection`);
+      return emergency;
+    }
+    fallback.observe(bucketKey, row.current_count, resetMs, config.limit);
 
     const resetAt: string | null = row.reset_at ?? null;
     const retryAfterSeconds = resetAt
@@ -267,15 +278,18 @@ export async function consumeRateLimit(
       : config.windowSeconds;
 
     return {
-      ok: row.allowed,
+      ok: row.allowed && row.current_count <= config.limit,
       limit: config.limit,
       remaining: Math.max(0, config.limit - (row.current_count ?? 0)),
       retryAfterSeconds,
       resetAt,
     };
   } catch (e) {
-    console.error(`[rate-limit] ${tier} threw, failing open`, e);
-    return permissive;
+    console.error(
+      `[rate-limit] ${tier} query unavailable, using local protection`,
+      e instanceof Error ? e.name : "Unknown error",
+    );
+    return emergency;
   }
 }
 

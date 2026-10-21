@@ -180,7 +180,7 @@ export function AppModalShell({
                 transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
                 style={{ transformOrigin: "center" }}
                 className={cn(
-                  "ds-glow fixed inset-0 z-50 flex flex-col overflow-hidden bg-background outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
+                  "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden bg-background outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
                   maximized
                     ? "m-0 h-dvh w-screen max-w-none rounded-none"
                     : cn(
@@ -236,7 +236,7 @@ export function AppModalShell({
                   </div>
 
                   {headerAccessory && (
-                    <div className="order-last flex w-full min-w-0 flex-wrap items-center gap-1.5 pb-1 sm:order-none sm:w-auto sm:pb-0">
+                    <div className="order-last flex w-full min-w-0 flex-wrap items-center gap-1.5 pb-1 @min-[640px]/modal:order-none @min-[640px]/modal:w-auto @min-[640px]/modal:pb-0">
                       {headerAccessory}
                     </div>
                   )}
@@ -272,7 +272,7 @@ export function AppModalShell({
                 {/* Body */}
                 <div
                   className={cn(
-                    "relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin",
+                    "relative z-10 min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin",
                     bodyClassName,
                   )}
                 >

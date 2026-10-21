@@ -77,11 +77,11 @@ describe("task model registry", () => {
       effort: "medium",
       maxTokens: 12_000,
     });
-    expect(planFor("chat").models).toEqual([WORKHORSE, "openai/gpt-5.6-terra"]);
-    expect(planFor("competitors.updates").models).toEqual([ECONOMY, "openai/gpt-5.6-luna"]);
+    expect(planFor("chat").models).toEqual([WORKHORSE, "openai/gpt-6.1-sol"]);
+    expect(planFor("competitors.updates").models).toEqual([ECONOMY, "openai/gpt-6-luna"]);
     expect(planFor("ai-generate.caption").models[0]).toBe(WORKHORSE);
     expect(planFor("studio.upload-captions")).toMatchObject({
-      models: [WORKHORSE, "openai/gpt-5.6-terra"],
+      models: [WORKHORSE, "openai/gpt-6.1-sol"],
       effort: "medium",
     });
     expect(planFor("schedule.weekly").effort).toBe("medium");
@@ -121,6 +121,7 @@ describe("task model registry", () => {
   it("steps each tier down one past the spend ceiling", () => {
     expect(effectivePlan(planFor("brand-extract"), true).models[0]).toBe(WORKHORSE);
     expect(effectivePlan(planFor("chat"), true).models[0]).toBe(ECONOMY);
+    expect(effectivePlan(planFor("chat"), true).models).toEqual([ECONOMY, "openai/gpt-6-luna"]);
     expect(effectivePlan(planFor("competitors.updates"), true).models[0]).toBe(ECONOMY);
     expect(effectivePlan(planFor("geo.agent.investigate"), true).effort).toBe("medium");
     expect(effectivePlan(planFor("chat"), false)).toEqual(planFor("chat"));
@@ -129,6 +130,11 @@ describe("task model registry", () => {
   });
 
   it("asks each answer engine separately by default", () => {
+    expect(geoProbeModels()).toEqual([
+      "perplexity/sonar",
+      "openai/gpt-6-luna",
+      "google/gemini-3.8-flash",
+    ]);
     expect(geoProbeModels()).toEqual([...DEFAULT_GEO_PROBE_MODELS]);
     vi.stubEnv("GEO_PROBE_MODELS", "perplexity/sonar,x-ai/grok-4");
     expect(geoProbeModels()).toEqual(["perplexity/sonar", "x-ai/grok-4"]);

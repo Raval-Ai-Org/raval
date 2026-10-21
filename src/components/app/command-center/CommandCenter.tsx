@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MotionConfig, motion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import {
@@ -36,7 +36,7 @@ import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Logo } from "@/components/brand/Logo";
 import { dsGhostBtn, dsIconBtn } from "@/components/app/surface/buttons";
-import { Link, useNavigate } from "@/lib/navigation";
+import { Link, useNavigate, useSearchParams } from "@/lib/navigation";
 import { WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { cn } from "@/lib/utils";
 import { buildDigest, digestToCsv, digestToText } from "@/lib/agency/command-center";
@@ -64,9 +64,15 @@ export function CommandCenter() {
   const autopilotRows = (autopilot.data ?? []).filter((r) => cc.clientMap.has(r.workspaceId));
   const autopilotWaiting = autopilotRows.reduce((n, r) => n + needsYou(r), 0);
   const navigate = useNavigate();
-  const [view, setView] = useState<View>("overview");
-  const [queue, setQueue] = useState<QueueTab>("review");
-  const [clientFilter, setClientFilter] = useState("all");
+  const searchParams = useSearchParams();
+  const viewParam = searchParams.get("view");
+  const queueParam = searchParams.get("queue");
+  const view: View = VIEWS.includes(viewParam as View) ? (viewParam as View) : "overview";
+  const queue: QueueTab = QUEUES.includes(queueParam as QueueTab)
+    ? (queueParam as QueueTab)
+    : "review";
+  const clientFilter = searchParams.get("client") || "all";
+  const navRef = useRef<HTMLDivElement>(null);
   const [briefClient, setBriefClient] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
@@ -78,38 +84,57 @@ export function CommandCenter() {
     setGreeting(h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
   }, []);
 
-  // View state lives in the URL so a view can be linked and survives refresh.
+  // Read from the router and update atomically so deep links and Back/Forward
+  // restore the same view, queue and client without an initial effect race.
+  const updateLocation = useCallback(
+    (next: { view: View; queue: QueueTab; client: string }, replace = false) => {
+      const url = new URL(window.location.href);
+      const set = (k: string, v: string | null) =>
+        v ? url.searchParams.set(k, v) : url.searchParams.delete(k);
+      set("view", next.view === "overview" ? null : next.view);
+      set("queue", next.view === "review" && next.queue !== "review" ? next.queue : null);
+      set(
+        "client",
+        (next.view === "review" || next.view === "schedule") && next.client !== "all"
+          ? next.client
+          : null,
+      );
+      const href = `${url.pathname}${url.search}${url.hash}`;
+      if (href !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+        if (replace) window.history.replaceState(null, "", href);
+        else window.history.pushState(null, "", href);
+      }
+    },
+    [],
+  );
+  const setClientFilter = useCallback(
+    (client: string) => {
+      updateLocation({ view, queue, client });
+    },
+    [view, queue, updateLocation],
+  );
+
   useEffect(() => {
-    const p = new URL(window.location.href).searchParams;
-    const v = p.get("view");
-    const qv = p.get("queue");
-    const c = p.get("client");
-    if (v && (VIEWS as string[]).includes(v)) setView(v as View);
-    if (qv && (QUEUES as string[]).includes(qv)) setQueue(qv as QueueTab);
-    if (c) setClientFilter(c);
-  }, []);
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    const set = (k: string, v: string | null) =>
-      v ? url.searchParams.set(k, v) : url.searchParams.delete(k);
-    set("view", view === "overview" ? null : view);
-    set("queue", view === "review" && queue !== "review" ? queue : null);
-    set(
-      "client",
-      (view === "review" || view === "schedule") && clientFilter !== "all" ? clientFilter : null,
-    );
-    const next = `${url.pathname}${url.search}`;
-    if (next !== `${window.location.pathname}${window.location.search}`) {
-      window.history.replaceState(window.history.state, "", next);
+    const scroller = navRef.current;
+    const active = scroller?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (scroller && active) {
+      scroller.scrollTo({
+        left: active.offsetLeft - (scroller.clientWidth - active.offsetWidth) / 2,
+      });
     }
-  }, [view, queue, clientFilter]);
+  }, [view, autopilotRows.length]);
 
   // A filter pointing at a client the caller no longer has falls back to all.
   useEffect(() => {
-    if (clientFilter !== "all" && cc.clients.length && !cc.clientMap.has(clientFilter)) {
-      setClientFilter("all");
+    if (
+      clientFilter !== "all" &&
+      !cc.loading &&
+      !cc.workspacesError &&
+      !cc.clientMap.has(clientFilter)
+    ) {
+      updateLocation({ view, queue, client: "all" }, true);
     }
-  }, [clientFilter, cc.clients.length, cc.clientMap]);
+  }, [clientFilter, cc.loading, cc.workspacesError, cc.clientMap, view, queue, updateLocation]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -124,13 +149,11 @@ export function CommandCenter() {
 
   const go = useCallback((href: string) => navigate({ to: href }), [navigate]);
   const openQueue = (tab: QueueTab, clientId?: string) => {
-    setQueue(tab);
-    setClientFilter(clientId ?? "all");
-    setView("review");
+    updateLocation({ view: "review", queue: tab, client: clientId ?? "all" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const switchView = (v: View) => {
-    setView(v);
+    updateLocation({ view: v, queue, client: clientFilter });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const brief = (id: string) => {
@@ -208,7 +231,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
   };
 
   /* ---------------- Palette ---------------- */
-  const entries = useMemo<PaletteEntry[]>(() => {
+  const entries: PaletteEntry[] = (() => {
     const ic = "h-3.5 w-3.5";
     const base: PaletteEntry[] = [
       {
@@ -372,8 +395,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
       },
     ]);
     return [...base, ...perClient];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cc.clients, cc.review.length, cc.ready.length, cc.failed.length, autopilotRows.length]);
+  })();
 
   const nav: { id: View; label: string; icon: typeof Inbox; badge?: number; alert?: boolean }[] = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -387,7 +409,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
     { id: "clients", label: "Clients", icon: Users },
     { id: "schedule", label: "Schedule", icon: Calendar },
     { id: "performance", label: "Performance", icon: BarChart },
-    ...(autopilotRows.length
+    ...(autopilotRows.length || view === "autopilot"
       ? [
           {
             id: "autopilot" as const,
@@ -400,8 +422,8 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
       : []),
   ];
 
-  const renderNav = (id: string) => (
-    <nav className="ds-well flex rounded-full p-1" aria-label="Command Center">
+  const renderNav = () => (
+    <nav className="ds-well mx-auto flex w-max rounded-full p-1" aria-label="Command Center">
       {nav.map((n) => {
         const on = view === n.id;
         return (
@@ -416,7 +438,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
           >
             {on && (
               <motion.span
-                layoutId={`cc-nav-${id}`}
+                layoutId="cc-nav"
                 className="absolute inset-0 rounded-full bg-background shadow-sm ring-1 ring-border/60"
                 transition={{ type: "spring", stiffness: 420, damping: 34 }}
               />
@@ -458,7 +480,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
               <Link
                 to={WORKSPACES_HOME}
                 aria-label="Back to all clients"
-                className={cn(dsIconBtn, "h-9 w-9 border border-border/70 bg-card")}
+                className={cn(dsIconBtn, "h-9 w-9 shrink-0 border border-border/70 bg-card")}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Link>
@@ -470,13 +492,11 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
                 <Logo height={26} />
               </Link>
               <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
-              <span className="truncate text-[14px] font-semibold tracking-tight">
+              <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight">
                 Command Center
               </span>
 
-              <div className="mx-auto hidden lg:block">{renderNav("top")}</div>
-
-              <div className="ml-auto flex items-center gap-2 lg:ml-0">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <button
                   onClick={() => setPaletteOpen(true)}
                   aria-label="Search"
@@ -528,9 +548,11 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
                 </span>
               </div>
             </div>
-            {/* Nav on small screens */}
-            <div className="mx-auto w-full max-w-7xl overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] sm:px-6 lg:hidden [&::-webkit-scrollbar]:hidden">
-              <div className="inline-flex">{renderNav("bottom")}</div>
+            <div
+              ref={navRef}
+              className="relative mx-auto w-full max-w-7xl overflow-x-auto px-4 pb-2.5 [scrollbar-width:thin] sm:px-6"
+            >
+              {renderNav()}
             </div>
           </header>
 
@@ -572,7 +594,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
                   <ReviewView
                     cc={cc}
                     tab={queue}
-                    onTab={setQueue}
+                    onTab={(tab) => updateLocation({ view, queue: tab, client: clientFilter })}
                     clientFilter={clientFilter}
                     onClientFilter={setClientFilter}
                     onOpenClient={(id) => {
@@ -597,7 +619,12 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
                   />
                 )}
                 {view === "schedule" && (
-                  <ScheduleView cc={cc} clientFilter={clientFilter} onGo={go} />
+                  <ScheduleView
+                    cc={cc}
+                    clientFilter={clientFilter}
+                    onClientFilter={setClientFilter}
+                    onGo={go}
+                  />
                 )}
                 {view === "performance" && <PerformanceView cc={cc} onGo={go} />}
               </motion.div>

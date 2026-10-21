@@ -42,6 +42,33 @@ export function nextMonthlyWindow(anchor: string, after: string): string {
 }
 
 export async function ensureSignupGrant(account: BillingAccount): Promise<void> {
+  const expiresAt = new Date(
+    new Date(account.created_at).getTime() + SIGNUP_GRANT.expiresInDays * 86_400_000,
+  ).toISOString();
+  if (new Date(expiresAt).getTime() <= Date.now()) return;
+  // Only the Auth server's record qualifies for promotional credits. Browser
+  // metadata and JWT email claims cannot establish confirmation or account status.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      admin.auth.admin.getUserById(account.owner_user_id),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), 5000);
+      }),
+    ]);
+    if (!result || result.error || !result.data?.user) {
+      console.warn("[billing] signup eligibility temporarily unavailable");
+      return;
+    }
+    const user = result.data.user;
+    if (user.is_anonymous || (!user.email_confirmed_at && !user.phone_confirmed_at)) return;
+  } catch {
+    // Withhold the bonus for retry; existing paid balances remain usable.
+    console.warn("[billing] signup eligibility temporarily unavailable");
+    return;
+  } finally {
+    clearTimeout(timer);
+  }
   await grantMeter({
     accountId: account.id,
     meter: "credits",
@@ -49,9 +76,7 @@ export async function ensureSignupGrant(account: BillingAccount): Promise<void> 
     source: "signup",
     restriction: SIGNUP_GRANT.restriction,
     idempotencyKey: `signup:${account.id}`,
-    expiresAt: new Date(
-      new Date(account.created_at).getTime() + SIGNUP_GRANT.expiresInDays * 86_400_000,
-    ).toISOString(),
+    expiresAt,
   });
 }
 

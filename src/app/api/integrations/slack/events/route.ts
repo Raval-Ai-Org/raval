@@ -22,10 +22,12 @@ type SlackEventBody = {
   };
 };
 
+import { readWebhookBody } from "@/server/request-body";
+
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
-  const raw = await request.text();
-  if (raw.length > 1_000_000) return new Response("Too large", { status: 413 });
+  const raw = await readWebhookBody(request);
+  if (raw instanceof Response) return raw;
   let secret: string;
   try {
     secret = slackConfig().signingSecret;

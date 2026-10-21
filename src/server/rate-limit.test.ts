@@ -1,6 +1,5 @@
 // Rate limiter behaviour: allow under budget, 429 over it, and — critically —
-// fail OPEN when the store is unavailable, so a database hiccup degrades spend
-// control rather than taking the product down.
+// keep a bounded emergency allowance when the shared store is unavailable.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const rpc = vi.fn();
@@ -78,7 +77,7 @@ describe("consumeRateLimit", () => {
     expect(result.retryAfterSeconds).toBeGreaterThan(0);
   });
 
-  it("fails open when the store returns an error", async () => {
+  it("allows ordinary traffic through the fallback when the store returns an error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     rpc.mockResolvedValue({ data: null, error: { message: "connection refused" } });
 
@@ -87,7 +86,7 @@ describe("consumeRateLimit", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("fails open when the store throws", async () => {
+  it("uses the fallback when the store throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     rpc.mockRejectedValue(new Error("socket hang up"));
 
@@ -96,12 +95,41 @@ describe("consumeRateLimit", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("fails open on an unexpected response shape", async () => {
+  it("uses the fallback on an unexpected response shape", async () => {
     rpc.mockResolvedValue({ data: [{ unexpected: true }], error: null });
 
     const result = await consumeRateLimit("chat", "user-1");
 
     expect(result.ok).toBe(true);
+  });
+
+  it.each(["error", "throw", "invalid"])(
+    "bounds concurrent video calls during a store %s",
+    async (failure) => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      if (failure === "throw") rpc.mockRejectedValue(new Error("offline"));
+      else
+        rpc.mockResolvedValue(
+          failure === "error"
+            ? { data: null, error: { code: "offline" } }
+            : { data: [{ allowed: true }], error: null },
+        );
+      const limit = rateLimitTierConfig("video").limit;
+      const results = await Promise.all(
+        Array.from({ length: limit + 4 }, () => consumeRateLimit("video", `outage-${failure}`)),
+      );
+      expect(results.filter((result) => result.ok)).toHaveLength(limit);
+      expect(results.at(-1)?.remaining).toBe(0);
+    },
+  );
+
+  it("rejects non-positive or non-integer costs before calling the store", async () => {
+    for (const cost of [0, -1, 1.5, NaN, Infinity]) {
+      await expect(consumeRateLimit("video", "invalid-cost", { cost })).rejects.toThrow(
+        "Invalid rate limit cost",
+      );
+    }
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
 

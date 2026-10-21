@@ -2,6 +2,7 @@ import { emitAppEvent } from "@/lib/app-events";
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { safeNextPath } from "@/lib/redirects";
+import { toast } from "@/lib/toast";
 
 export { authNextPath, safeNextPath } from "@/lib/redirects";
 
@@ -12,6 +13,10 @@ const AUTH_NEXT_TTL_MS = 24 * 60 * 60 * 1000;
 function rememberNextPath(next: string) {
   try {
     window.sessionStorage.setItem(AUTH_NEXT_KEY, next);
+  } catch {
+    /* The other storage and the link can still carry the destination. */
+  }
+  try {
     if (next === "/projects") window.localStorage.removeItem(AUTH_NEXT_KEY);
     else window.localStorage.setItem(AUTH_NEXT_KEY, JSON.stringify({ next, at: Date.now() }));
   } catch {
@@ -20,15 +25,24 @@ function rememberNextPath(next: string) {
 }
 
 function takeRememberedNextPath(): string | null {
+  const take = (store: () => Storage): string | null => {
+    try {
+      const storage = store();
+      const value = storage.getItem(AUTH_NEXT_KEY);
+      storage.removeItem(AUTH_NEXT_KEY);
+      return value;
+    } catch {
+      return null;
+    }
+  };
+  const fromTab = take(() => window.sessionStorage);
+  const raw = take(() => window.localStorage);
+  if (fromTab) return fromTab;
   try {
-    const fromTab = window.sessionStorage.getItem(AUTH_NEXT_KEY);
-    const raw = window.localStorage.getItem(AUTH_NEXT_KEY);
-    window.sessionStorage.removeItem(AUTH_NEXT_KEY);
-    window.localStorage.removeItem(AUTH_NEXT_KEY);
-    if (fromTab) return fromTab;
     const saved = raw ? (JSON.parse(raw) as { next?: unknown; at?: unknown }) : null;
     if (typeof saved?.next !== "string" || typeof saved.at !== "number") return null;
-    return Date.now() - saved.at < AUTH_NEXT_TTL_MS ? saved.next : null;
+    const age = Date.now() - saved.at;
+    return Number.isFinite(age) && age >= 0 && age < AUTH_NEXT_TTL_MS ? saved.next : null;
   } catch {
     return null;
   }
@@ -91,25 +105,31 @@ function clearAccountData(store: Storage) {
  */
 export async function signOutAndRedirect(queryClient?: QueryClient) {
   try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  } catch {
+    toast.error("Could not sign out", { description: "Check your connection and try again." });
+    return false;
+  }
+  try {
     await queryClient?.cancelQueries();
   } catch {}
   try {
     queryClient?.clear();
   } catch {}
-  try {
-    await supabase.auth.signOut();
-  } catch {}
   if (typeof window !== "undefined") {
-    try {
-      for (const key of WORKSPACE_STORAGE_KEYS) window.localStorage.removeItem(key);
-      clearAccountData(window.localStorage);
-      clearAccountData(window.sessionStorage);
-      window.sessionStorage.removeItem(AUTH_NEXT_KEY);
-      window.localStorage.removeItem(AUTH_NEXT_KEY);
-    } catch {}
+    for (const getStore of [() => window.localStorage, () => window.sessionStorage]) {
+      try {
+        const storage = getStore();
+        for (const key of WORKSPACE_STORAGE_KEYS) storage.removeItem(key);
+        clearAccountData(storage);
+        storage.removeItem(AUTH_NEXT_KEY);
+      } catch {}
+    }
     emitAppEvent("workspace:changed", { id: null });
     window.location.replace("/");
   }
+  return true;
 }
 
 export function authCallbackUrl(nextPath = "/projects") {
@@ -132,6 +152,10 @@ export function passwordResetUrl() {
 export function friendlyAuthError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "Authentication failed");
   const lower = message.toLowerCase();
+
+  if (lower.includes("captcha") || lower.includes("security check")) {
+    return "Please complete the security check and try again.";
+  }
 
   if (lower.includes("invalid login credentials")) {
     return "Email or password is incorrect. Please check both and try again.";
@@ -193,7 +217,7 @@ export function friendlyAuthError(error: unknown) {
   return "Authentication could not be completed. Please try again.";
 }
 
-export async function signInWithGoogle(credential: string, nonce: string) {
+export async function signInWithGoogle(credential: string, nonce: string, captchaToken?: string) {
   if (!credential || !nonce) throw new Error("Missing Google sign-in credential");
   // Supabase validates Google's signature, audience, expiry and hashed nonce.
   // Reuse the existing SSR browser client so cookies and auth listeners agree.
@@ -201,6 +225,7 @@ export async function signInWithGoogle(credential: string, nonce: string) {
     provider: "google",
     token: credential,
     nonce,
+    ...(captchaToken ? { options: { captchaToken } } : {}),
   });
   if (error) throw error;
   if (!data.session || !data.user) throw new Error("Google sign-in returned no session");

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { friendlyAuthError, safeNextPath } from "@/lib/auth";
 
 describe("auth helpers", () => {
+  it("explains expired or failed security checks without exposing provider diagnostics", () => {
+    expect(friendlyAuthError(new Error("captcha verification failed: private diagnostics"))).toBe(
+      "Please complete the security check and try again.",
+    );
+  });
   it("accepts only safe relative next paths", () => {
     expect(safeNextPath("/projects")).toBe("/projects");
     expect(safeNextPath("//attacker.example")).toBe("/projects");

@@ -66,8 +66,8 @@ export function FreeSidebarCardView({
         className,
       )}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-semibold">Free plan</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+        <span className="shrink-0 text-[13px] font-semibold">Free plan</span>
         <span className="text-[11.5px] tabular-nums text-muted-foreground">
           {formatNumber(credits)} of {formatNumber(total)} credits
         </span>

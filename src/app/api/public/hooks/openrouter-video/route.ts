@@ -6,13 +6,15 @@
 // Idempotent: repeated deliveries (same X-OpenRouter-Idempotency-Key) find the
 // render already advanced.
 import { after } from "next/server";
+import { readWebhookBody } from "@/server/request-body";
 import { verifyOpenRouterCallback } from "@/server/ugc/webhook.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const rawBody = await request.text();
+  const rawBody = await readWebhookBody(request);
+  if (rawBody instanceof Response) return rawBody;
   const verdict = verifyOpenRouterCallback({
     rawBody,
     signature: request.headers.get("x-openrouter-signature"),

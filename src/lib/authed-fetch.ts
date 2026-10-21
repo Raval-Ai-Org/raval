@@ -36,9 +36,11 @@ export async function authedFetch(input: RequestInfo | URL, init: AuthedFetchIni
   // Captured before the first await so a navigation during token refresh
   // cannot change which workspace this request is attributed to.
   const workspaceId = explicit !== undefined ? explicit : getActiveWorkspaceId();
-  const { data } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
   const token = data.session?.access_token;
-  const headers = new Headers(rest.headers);
+  const headers = new Headers(input instanceof Request ? input.headers : undefined);
+  new Headers(rest.headers).forEach((value, key) => headers.set(key, value));
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
@@ -48,8 +50,14 @@ export async function authedFetch(input: RequestInfo | URL, init: AuthedFetchIni
   const response = await fetch(input, { ...rest, headers });
   // Credits were set aside, charged or returned: refresh the balance now.
   const balance = response.headers.get("X-Billing-Balance");
-  if (balance !== null) emitAppEvent("billing:changed", { balance: Number(balance) });
-  else if (response.headers.get("X-Billing-Changed")) emitAppEvent("billing:changed");
+  if (
+    balance !== null &&
+    balance.trim() &&
+    Number.isSafeInteger(Number(balance)) &&
+    Number(balance) >= 0
+  ) {
+    emitAppEvent("billing:changed", { balance: Number(balance) });
+  } else if (response.headers.get("X-Billing-Changed")) emitAppEvent("billing:changed");
   if (response.status === 402) {
     const payload = await response
       .clone()

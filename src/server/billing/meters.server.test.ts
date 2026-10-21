@@ -19,6 +19,18 @@ const hold = {
 beforeEach(() => rpc.mockReset());
 
 describe("holdMeter billing decisions", () => {
+  it.each([undefined, null, "", " ", 123])(
+    "refuses a success without a reservation id (%s)",
+    async (id) => {
+      rpc.mockResolvedValue({ data: { ok: true, id }, error: null });
+      await expect(holdMeter(hold)).rejects.toMatchObject({ status: 503 });
+    },
+  );
+
+  it("accepts a valid reservation", async () => {
+    rpc.mockResolvedValue({ data: { ok: true, id: "hold-1" }, error: null });
+    await expect(holdMeter(hold)).resolves.toMatchObject({ id: "hold-1" });
+  });
   it("returns a structured upgrade prompt for the brand spending cap", async () => {
     rpc.mockResolvedValue({
       data: { ok: false, code: "brand_cap", used: 95, max: 100 },

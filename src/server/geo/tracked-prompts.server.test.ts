@@ -7,11 +7,11 @@ import {
 } from "./tracked-prompts.server";
 
 describe("tracked prompts", () => {
-  const models = ["perplexity/sonar", "openai/gpt-5.6-luna", "google/gemini-3.8-flash"];
+  const models = ["perplexity/sonar", "openai/gpt-6-luna", "google/gemini-3.8-flash"];
 
   it("asks each plan engine its own configured model", () => {
     expect(modelForEngine("perplexity", models)).toBe("perplexity/sonar");
-    expect(modelForEngine("chatgpt", models)).toBe("openai/gpt-5.6-luna");
+    expect(modelForEngine("chatgpt", models)).toBe("openai/gpt-6-luna");
     expect(modelForEngine("gemini", models)).toBe("google/gemini-3.8-flash");
     expect(modelForEngine("google_aio", models)).toBeNull();
     expect(modelForEngine("chatgpt", ["perplexity/sonar"])).toBeNull();
