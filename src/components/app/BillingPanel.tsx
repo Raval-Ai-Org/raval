@@ -124,7 +124,7 @@ function BillingDeepLink() {
       );
       if (!response.ok) throw new Error("Checkout status is unavailable.");
       return response.json() as Promise<{
-        state: "active" | "processing" | "open" | "expired";
+        state: "active" | "processing" | "open" | "expired" | "failed";
         kind: "plan" | "credit_pack" | "video_pack";
       }>;
     }
@@ -145,32 +145,46 @@ function BillingDeepLink() {
         duration: Infinity,
       });
       try {
-        for (let attempt = 0; attempt < 12 && !stopped; attempt++) {
-          const result = await checkoutStatus();
-          if (result?.state === "active") {
-            await queryClient.invalidateQueries({ queryKey: ["billing"] });
-            emitAppEvent("billing:changed");
-            toast.success(result.kind === "plan" ? "Your plan is active" : "Credits added", {
-              id: toastId,
-              description: "Your purchase is ready to use.",
-              duration: 6_000,
-            });
-            return;
-          }
-          if (result?.state === "expired") {
-            toast.error("Checkout expired", {
-              id: toastId,
-              description: "No payment was completed. You can start checkout again.",
-            });
-            return;
+        for (let attempt = 0; attempt < 24 && !stopped; attempt++) {
+          try {
+            const result = await checkoutStatus();
+            if (result?.state === "active") {
+              await queryClient.invalidateQueries({ queryKey: ["billing"] });
+              emitAppEvent("billing:changed");
+              toast.success(result.kind === "plan" ? "Your plan is active" : "Credits added", {
+                id: toastId,
+                description: "Your purchase is ready to use.",
+                duration: 6_000,
+              });
+              return;
+            }
+            if (result?.state === "expired") {
+              toast.error("Checkout expired", {
+                id: toastId,
+                description: "No payment was completed. You can start checkout again.",
+              });
+              return;
+            }
+            if (result?.state === "failed") {
+              toast.error("Payment was not completed", {
+                id: toastId,
+                description:
+                  "Your plan was not activated. Any temporary bank authorization will be released automatically.",
+              });
+              return;
+            }
+          } catch {
+            // A transient Stripe or database error should not end confirmation.
+            // The next poll also repairs fulfillment from Stripe's paid state.
           }
           await new Promise((resolve) => window.setTimeout(resolve, 1_250));
         }
         if (!stopped) {
           await queryClient.invalidateQueries({ queryKey: ["billing"] });
-          toast.info("Payment received", {
+          toast.info("Payment confirmation is taking longer", {
             id: toastId,
-            description: "Activation is still processing. Your plan will refresh automatically.",
+            description:
+              "Keep this page open. Stripe retries automatically and your plan will activate as soon as payment is confirmed.",
             duration: 10_000,
           });
         }
