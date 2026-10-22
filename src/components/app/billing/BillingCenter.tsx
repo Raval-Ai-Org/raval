@@ -14,14 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Crown, Lock, Wallet } from "@/components/icons";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
-import {
-  CREDIT_PACKS,
-  FEATURES,
-  PLANS,
-  SIGNUP_GRANT,
-  VIDEO_PACKS,
-  type PlanId,
-} from "@/lib/billing/catalog";
+import { FEATURES, PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
 import {
   asPlan,
   formatMeter,
@@ -112,14 +105,6 @@ export function BillingCenter() {
   );
 }
 
-type PurchaseRequestRow = {
-  id: string;
-  kind: string;
-  catalogKey: string;
-  interval: string | null;
-  status: string;
-};
-
 type TeamRequest = {
   id: string;
   brand: string;
@@ -128,15 +113,24 @@ type TeamRequest = {
   requiredPlan: string | null;
 };
 
-function requestLabel(row: PurchaseRequestRow) {
-  if (row.kind === "plan" && row.catalogKey in PLANS) {
-    return `${PLANS[row.catalogKey as PlanId].label} plan`;
-  }
-  const credit = CREDIT_PACKS.find((pack) => pack.key === row.catalogKey);
-  if (credit) return `${formatMeter("credits", credit.credits + credit.bonusCredits)} pack`;
-  const video = VIDEO_PACKS.find((pack) => pack.key === row.catalogKey);
-  if (video) return `${formatMeter("video", video.videoUnits)} pack`;
-  return "Your request";
+type PaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+function cardBrand(value: string): string {
+  const names: Record<string, string> = {
+    amex: "American Express",
+    diners: "Diners Club",
+    discover: "Discover",
+    jcb: "JCB",
+    mastercard: "Mastercard",
+    unionpay: "UnionPay",
+    visa: "Visa",
+  };
+  return names[value.toLowerCase()] ?? value.replaceAll("_", " ");
 }
 
 function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
@@ -147,11 +141,6 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
-  const requests = useQuery({
-    queryKey: ["billing", "requests", data.accountId ?? "member"],
-    queryFn: () => getJson<{ requests: PurchaseRequestRow[] }>("/api/billing/requests"),
-    enabled: data.isOwner,
-  });
   const team = useQuery({
     queryKey: ["billing", "team-requests", data.accountId ?? "member"],
     queryFn: () => getJson<{ requests: TeamRequest[] }>("/api/billing/upgrade-requests"),
@@ -165,13 +154,17 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       ),
     enabled: data.isOwner,
   });
-  const pending = (requests.data?.requests ?? []).filter((row) => row.status === "pending");
   const paused = (brands.data?.brands ?? []).filter((brand) => brand.frozen_at);
   const cardSubscriber =
     data.isOwner &&
-    data.checkoutMode === "card" &&
     !data.manual &&
     ["active", "past_due", "trialing", "paused"].includes(data.status);
+  const payment = useQuery({
+    queryKey: ["billing", "payment-method", data.accountId ?? "owner"],
+    queryFn: () => getJson<{ paymentMethod: PaymentMethod | null }>("/api/billing/payment-method"),
+    enabled: data.isOwner && !data.manual,
+    staleTime: 60_000,
+  });
 
   async function run(key: string, work: () => Promise<void>) {
     setBusy(key);
@@ -183,6 +176,16 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       setBusy(null);
     }
   }
+
+  const openPortal = (action: "manage" | "payment_method_update") =>
+    run(action, async () => {
+      const result = await send("/api/billing/portal", {
+        action,
+        returnPath: window.location.pathname,
+      });
+      if (typeof result.url !== "string") throw new Error("Stripe billing did not open.");
+      window.location.assign(result.url);
+    });
 
   const openUpgrade = (credits = false) => {
     onDone();
@@ -219,16 +222,8 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         {data.isOwner && (
           <div className="flex flex-wrap gap-2">
             {cardSubscriber && (
-              <GhostButton
-                disabled={busy !== null}
-                onClick={() =>
-                  void run("portal", async () => {
-                    const result = await send("/api/billing/portal");
-                    if (typeof result.url === "string") window.location.assign(result.url);
-                  })
-                }
-              >
-                {data.status === "past_due" ? "Update card" : "Manage billing"}
+              <GhostButton disabled={busy !== null} onClick={() => void openPortal("manage")}>
+                Manage billing
               </GhostButton>
             )}
             {upgradeTo ? (
@@ -246,30 +241,50 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         </p>
       )}
 
-      {pending.map((row) => (
-        <div
-          key={row.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--ds-radius-tile)] bg-primary/10 px-4 py-3 text-[13px]"
-        >
-          <span className="flex items-center gap-2">
-            <Check className="h-4 w-4 text-primary" strokeWidth={2.6} />
-            {requestLabel(row)} requested. We'll email you to finish payment.
-          </span>
-          <button
-            type="button"
-            className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            disabled={busy !== null}
-            onClick={() =>
-              void run(row.id, async () => {
-                await send(`/api/billing/requests?id=${row.id}`, undefined, "DELETE");
-                await queryClient.invalidateQueries({ queryKey: ["billing", "requests"] });
-              })
-            }
-          >
-            Cancel
-          </button>
-        </div>
-      ))}
+      {data.isOwner && !data.manual && (cardSubscriber || payment.data?.paymentMethod) && (
+        <section className="space-y-2">
+          <h3 className="ds-label">Payment method</h3>
+          <div className="ds-tile flex flex-wrap items-center justify-between gap-4 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Wallet className="h-4.5 w-4.5" />
+              </span>
+              {payment.isLoading ? (
+                <Skeleton className="h-10 w-40 rounded-lg" />
+              ) : payment.data?.paymentMethod ? (
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold">
+                    {cardBrand(payment.data.paymentMethod.brand)} ••••{" "}
+                    {payment.data.paymentMethod.last4}
+                  </p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    Expires {String(payment.data.paymentMethod.expMonth).padStart(2, "0")}/
+                    {String(payment.data.paymentMethod.expYear).slice(-2)} · Secured by Stripe
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[14px] font-semibold">Card details</p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    View or update your payment method securely in Stripe.
+                  </p>
+                </div>
+              )}
+            </div>
+            <GhostButton
+              className="h-9"
+              disabled={busy !== null}
+              onClick={() => void openPortal("payment_method_update")}
+            >
+              {busy === "payment_method_update" ? "Opening…" : "Update card"}
+            </GhostButton>
+          </div>
+          <p className="px-1 text-[11.5px] text-muted-foreground">
+            Mellox stores only the card brand, last four digits and expiry. Stripe protects the full
+            card number and CVC.
+          </p>
+        </section>
+      )}
 
       {/* What's left this month */}
       <section className="space-y-4">

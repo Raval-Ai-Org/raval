@@ -12,7 +12,7 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { FreeCreditStripView, FreeSidebarCardView, LockedFeaturesView } from "./FreePlanPushes";
-import { UpgradeWindow, type UpgradeChoice, type UpgradeView } from "./UpgradeScreen";
+import { UpgradeWindow, type UpgradeView } from "./UpgradeScreen";
 
 const SCENES = [
   "plans",
@@ -37,20 +37,10 @@ const BLOCKS: Partial<Record<Scene, BillingBlock>> = {
   empty: { code: "insufficient_balance", meter: "credits", needed: 12, available: 0 },
 };
 
-const CHOICE: UpgradeChoice = {
-  kind: "plan",
-  key: "growth",
-  label: "Growth plan",
-  price: "$1,490 a year",
-};
-
 export function UpgradeLab() {
   const [scene, setScene] = useState<Scene | null>(null);
   const [view, setView] = useState<UpgradeView>("plans");
   const [interval, setBillingInterval] = useState<BillingInterval>("year");
-  const [pending, setPending] = useState<UpgradeChoice | null>(null);
-  const [sent, setSent] = useState<UpgradeChoice | null>(null);
-  const [contact, setContact] = useState("");
   const [last, setLast] = useState("");
 
   useEffect(() => {
@@ -58,8 +48,6 @@ export function UpgradeLab() {
     const next = fromUrl && SCENES.includes(fromUrl) ? fromUrl : "plans";
     setScene(next);
     setView(next === "credits" ? "credits" : "plans");
-    setPending(next === "confirm" ? CHOICE : null);
-    setSent(next === "sent" ? CHOICE : null);
   }, []);
 
   const block = (scene && BLOCKS[scene]) ?? null;
@@ -114,15 +102,6 @@ export function UpgradeLab() {
         <UpgradeWindow
           open
           onOpenChange={() => setLast("close")}
-          pending={pending}
-          sent={sent}
-          contact={contact}
-          onContactChange={setContact}
-          onBack={() => setPending(null)}
-          onSend={() => {
-            setSent(pending);
-            setPending(null);
-          }}
           screen={
             scene === "loading"
               ? null
@@ -135,13 +114,13 @@ export function UpgradeLab() {
                   interval,
                   onIntervalChange: setBillingInterval,
                   canBuy: scene !== "member",
+                  paymentsAvailable: scene !== "confirm",
                   busy: null,
                   askSent: last.startsWith("ask:"),
                   balance: scene === "empty" ? 0 : 35,
                   showVideoPacks: current !== "free",
                   onChoose: (item) => {
                     setLast(`choose:${item.kind}:${item.key}:${item.price}`);
-                    setPending(item);
                   },
                   onAskOwner: (plan) => setLast(`ask:${plan ?? ""}`),
                 }

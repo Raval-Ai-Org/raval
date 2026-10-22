@@ -32,12 +32,13 @@ export const GET = defineRoute({
     }
     const { stripeAccountReady } = await import("@/server/billing/stripe-account.server");
     const { isBillingAdmin } = await import("@/server/billing/admin.server");
-    // Card checkout when Stripe is connected; otherwise "Upgrade now" sends a
-    // request that Mellox activates from the admin console.
+    // Owners pay in Stripe Checkout. If the provider has not passed its
+    // readiness checks, purchasing stays visibly unavailable instead of
+    // creating a manual fulfillment request.
     const purchasesAvailable = entitlements.isOwner && (await stripeAccountReady());
     const extras = {
       purchasesAvailable,
-      checkoutMode: purchasesAvailable ? ("card" as const) : ("request" as const),
+      checkoutMode: purchasesAvailable ? ("card" as const) : ("unavailable" as const),
       isBillingAdmin: isBillingAdmin(userId),
     };
     return entitlements.isOwner

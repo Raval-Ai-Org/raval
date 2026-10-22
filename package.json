@@ -20,6 +20,7 @@
     "db:baseline": "node scripts/db-baseline.mjs --write",
     "db:types": "node scripts/db/gen-types.mjs && prettier --write src/integrations/supabase/types.ts",
     "billing:stripe-sync": "node --experimental-strip-types scripts/billing/stripe-sync.mjs",
+    "billing:stripe-readiness": "node --experimental-strip-types scripts/billing/stripe-readiness.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:visual": "playwright test",

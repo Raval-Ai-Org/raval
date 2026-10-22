@@ -1,5 +1,5 @@
 -- Durable multi-clip jobs shared by Studio, UGC and the video API.
-CREATE TABLE public.video_compositions (
+CREATE TABLE IF NOT EXISTS public.video_compositions (
   id uuid PRIMARY KEY,
   revision integer NOT NULL DEFAULT 0,
   lease_until timestamptz,

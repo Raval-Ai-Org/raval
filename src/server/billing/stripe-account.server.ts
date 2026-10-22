@@ -246,45 +246,242 @@ export async function createAccountCheckout(args: {
   const origin = getAppUrl();
   const returnPath = args.returnPath ?? "/projects";
   const mode = args.kind === "plan" ? "subscription" : "payment";
-  const session = await stripe().checkout.sessions.create(
-    {
-      mode,
-      customer,
-      client_reference_id: intentId,
-      metadata: { mellox_checkout_intent: intentId },
-      ...(mode === "subscription"
-        ? {
-            subscription_data: {
-              metadata: { mellox_checkout_intent: intentId },
-              ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
-            },
-          }
-        : {}),
-      line_items: [{ price: priceId, quantity: args.quantity }],
-      expires_at: Math.floor(expiresAt.getTime() / 1000),
-      success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=return`,
-      cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel`,
-    },
-    { idempotencyKey: `mellox-checkout:${intentId}` },
-  );
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe().checkout.sessions.create(
+      {
+        mode,
+        customer,
+        client_reference_id: intentId,
+        metadata: { mellox_checkout_intent: intentId },
+        ...(mode === "subscription"
+          ? {
+              subscription_data: {
+                metadata: { mellox_checkout_intent: intentId },
+                ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
+              },
+            }
+          : {}),
+        line_items: [{ price: priceId, quantity: args.quantity }],
+        expires_at: Math.floor(expiresAt.getTime() / 1000),
+        billing_address_collection: "auto",
+        customer_update: { address: "auto", name: "auto" },
+        custom_text: {
+          submit: {
+            message:
+              mode === "subscription"
+                ? "Your Mellox plan activates automatically after payment."
+                : "Your credits are added automatically after payment.",
+          },
+        },
+        ...(mode === "subscription"
+          ? { payment_method_collection: "always" as const }
+          : { saved_payment_method_options: { payment_method_save: "enabled" as const } }),
+        success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=success&checkout_session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel&checkout_session_id={CHECKOUT_SESSION_ID}`,
+      },
+      { idempotencyKey: `mellox-checkout:${intentId}` },
+    );
+  } catch {
+    await admin
+      .from("checkout_intents")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", intentId)
+      .is("consumed_at", null);
+    throw new HttpError(502, "Secure checkout could not be opened. Please try again.");
+  }
   if (!session.url) throw new HttpError(502, "Stripe did not return a checkout URL.");
   const { error: linkError } = await admin
     .from("checkout_intents")
     .update({ provider_session_id: session.id })
     .eq("id", intentId);
-  if (linkError) throw new HttpError(503, "Could not finish checkout setup.");
+  if (linkError) {
+    if (session.status === "open")
+      await stripe()
+        .checkout.sessions.expire(session.id)
+        .catch(() => null);
+    await admin
+      .from("checkout_intents")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", intentId)
+      .is("consumed_at", null);
+    throw new HttpError(503, "Could not finish checkout setup.");
+  }
   return { url: session.url };
 }
 
-export async function createAccountBillingPortal(userId: string): Promise<{ url: string }> {
+export type AccountCheckoutStatus = {
+  state: "active" | "processing" | "open" | "expired";
+  kind: PurchaseKind;
+  catalogKey: string;
+};
+
+async function checkoutIntentForUser(userId: string, sessionId: string) {
+  const account = await accountForUser(userId);
+  const { data, error } = await admin
+    .from("checkout_intents")
+    .select("id,kind,catalog_key,consumed_at,provider_session_id")
+    .eq("account_id", account.id)
+    .eq("created_by", userId)
+    .eq("provider_session_id", sessionId)
+    .maybeSingle();
+  if (error) throw new HttpError(503, "Could not check checkout.");
+  if (!data) throw new HttpError(404, "Checkout not found.");
+  return data;
+}
+
+/** Read-only status used by the return page while the signed webhook activates a purchase. */
+export async function getAccountCheckoutStatus(
+  userId: string,
+  sessionId: string,
+): Promise<AccountCheckoutStatus> {
+  const intent = await checkoutIntentForUser(userId, sessionId);
+  const kind = intent.kind as PurchaseKind;
+  const base = { kind, catalogKey: String(intent.catalog_key) };
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  if (
+    session.id !== intent.provider_session_id ||
+    session.metadata?.mellox_checkout_intent !== intent.id ||
+    session.client_reference_id !== intent.id
+  ) {
+    throw new HttpError(409, "Checkout could not be verified.");
+  }
+  if (session.status === "expired") return { ...base, state: "expired" };
+  if (intent.consumed_at) return { ...base, state: "active" };
+  if (session.status === "open") return { ...base, state: "open" };
+  return { ...base, state: "processing" };
+}
+
+/** Release a plan reservation when its owner returns through Stripe's cancel URL. */
+export async function cancelAccountCheckout(
+  userId: string,
+  sessionId: string,
+): Promise<{ canceled: boolean; completed: boolean }> {
+  const intent = await checkoutIntentForUser(userId, sessionId);
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  if (
+    session.id !== intent.provider_session_id ||
+    session.metadata?.mellox_checkout_intent !== intent.id ||
+    session.client_reference_id !== intent.id
+  ) {
+    throw new HttpError(409, "Checkout could not be verified.");
+  }
+  if (session.status === "expired") return { canceled: true, completed: false };
+  if (intent.consumed_at) return { canceled: false, completed: true };
+  if (session.status === "complete") return { canceled: false, completed: true };
+  if (session.status === "open") await stripe().checkout.sessions.expire(sessionId);
+  const { error } = await admin
+    .from("checkout_intents")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", intent.id)
+    .is("consumed_at", null);
+  if (error) throw new HttpError(503, "Could not close checkout.");
+  return { canceled: true, completed: false };
+}
+
+export type AccountPaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+async function paymentMethodFrom(
+  value: string | Stripe.PaymentMethod | null,
+  customerId: string,
+): Promise<Stripe.PaymentMethod | null> {
+  if (!value) return null;
+  const method = typeof value === "string" ? await stripe().paymentMethods.retrieve(value) : value;
+  const owner = subscriptionId(method.customer);
+  return owner && owner !== customerId ? null : method;
+}
+
+export async function getAccountPaymentMethod(userId: string): Promise<{
+  paymentMethod: AccountPaymentMethod | null;
+}> {
+  const account = await accountForUser(userId);
+  if (account.provider !== "stripe" || !account.provider_customer_id) {
+    return { paymentMethod: null };
+  }
+  const customerId = account.provider_customer_id;
+  let method: Stripe.PaymentMethod | null = null;
+  if (account.provider_subscription_id) {
+    const subscription = await stripe().subscriptions.retrieve(account.provider_subscription_id, {
+      expand: ["default_payment_method"],
+    });
+    if (subscriptionId(subscription.customer) !== customerId) {
+      throw new Error("Stripe customer mismatch.");
+    }
+    method = await paymentMethodFrom(subscription.default_payment_method, customerId);
+  }
+  if (!method) {
+    const customer = await stripe().customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    if (!customer.deleted) {
+      method = await paymentMethodFrom(
+        customer.invoice_settings.default_payment_method,
+        customerId,
+      );
+    }
+  }
+  if (!method) {
+    const methods = await stripe().paymentMethods.list({
+      customer: customerId,
+      type: "card",
+      limit: 1,
+    });
+    method = methods.data[0] ?? null;
+  }
+  if (method?.type !== "card" || !method.card) return { paymentMethod: null };
+  return {
+    paymentMethod: {
+      brand: method.card.display_brand ?? method.card.brand,
+      last4: method.card.last4,
+      expMonth: method.card.exp_month,
+      expYear: method.card.exp_year,
+    },
+  };
+}
+
+export async function createAccountBillingPortal(
+  userId: string,
+  options: { action?: "manage" | "payment_method_update"; returnPath?: string } = {},
+): Promise<{ url: string }> {
   const account = await accountForUser(userId);
   if (account.provider !== "stripe" || !account.provider_customer_id) {
     throw new HttpError(409, "There is no Stripe billing account to manage yet.");
   }
-  const session = await stripe().billingPortal.sessions.create({
+  const origin = getAppUrl();
+  const returnPath = options.returnPath ?? "/projects";
+  const returnUrl = `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=manage`;
+  const params: Stripe.BillingPortal.SessionCreateParams = {
     customer: account.provider_customer_id,
-    return_url: `${getAppUrl()}/projects`,
-  });
+    return_url: returnUrl,
+    ...(options.action === "payment_method_update"
+      ? {
+          flow_data: {
+            type: "payment_method_update" as const,
+            after_completion: {
+              type: "redirect" as const,
+              redirect: { return_url: returnUrl },
+            },
+          },
+        }
+      : {}),
+  };
+  let session: Stripe.BillingPortal.Session;
+  try {
+    session = await stripe().billingPortal.sessions.create(params);
+  } catch (error) {
+    if (options.action !== "payment_method_update") throw error;
+    // Some Stripe accounts do not enable the direct update flow in their
+    // portal configuration. The full portal still lets the customer manage it.
+    session = await stripe().billingPortal.sessions.create({
+      customer: account.provider_customer_id,
+      return_url: returnUrl,
+    });
+  }
   return { url: session.url };
 }
 
