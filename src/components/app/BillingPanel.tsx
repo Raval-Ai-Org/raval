@@ -5,8 +5,10 @@
 // a server "402" into a toast with a button (never an automatic pop-up).
 
 import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
+import { authedFetch } from "@/lib/authed-fetch";
 import { asPlan, freeNudge, isBillingMessage } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { BillingCenter } from "./billing/BillingCenter";
@@ -103,20 +105,124 @@ function FreeNudges() {
 
 /** Email links such as /projects?billing=topup open Plan & billing on that tab. */
 function BillingDeepLink() {
+  const queryClient = useQueryClient();
   useEffect(() => {
     const url = new URL(window.location.href);
     const tab = url.searchParams.get("billing");
     if (!tab) return;
+    const sessionId = url.searchParams.get("checkout_session_id");
     url.searchParams.delete("billing");
+    url.searchParams.delete("checkout_session_id");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    // A short delay lets the billing windows mount their listeners first.
-    window.setTimeout(() => {
-      if (tab === "plans") emitAppEvent("open:upgrade", undefined);
-      else if (tab === "topup")
-        emitAppEvent("open:upgrade", { code: "insufficient_balance", meter: "credits" });
-      else emitAppEvent("open:usage");
-    }, 300);
-  }, []);
+    let stopped = false;
+    const later = (work: () => void) => window.setTimeout(work, 300);
+
+    async function checkoutStatus() {
+      if (!sessionId) return null;
+      const response = await authedFetch(
+        `/api/billing/checkout/status?sessionId=${encodeURIComponent(sessionId)}`,
+      );
+      if (!response.ok) throw new Error("Checkout status is unavailable.");
+      return response.json() as Promise<{
+        state: "active" | "processing" | "open" | "expired";
+        kind: "plan" | "credit_pack" | "video_pack";
+      }>;
+    }
+
+    async function confirmPayment() {
+      later(() => emitAppEvent("open:usage"));
+      if (!sessionId) {
+        toast.info("Payment submitted", {
+          description: "Your plan and balance will refresh as soon as Stripe confirms it.",
+        });
+        await queryClient.invalidateQueries({ queryKey: ["billing"] });
+        return;
+      }
+      const toastId = "billing-checkout-return";
+      toast.loading("Confirming your payment…", {
+        id: toastId,
+        description: "Keep this page open while Stripe activates your purchase.",
+        duration: Infinity,
+      });
+      try {
+        for (let attempt = 0; attempt < 12 && !stopped; attempt++) {
+          const result = await checkoutStatus();
+          if (result?.state === "active") {
+            await queryClient.invalidateQueries({ queryKey: ["billing"] });
+            emitAppEvent("billing:changed");
+            toast.success(result.kind === "plan" ? "Your plan is active" : "Credits added", {
+              id: toastId,
+              description: "Your purchase is ready to use.",
+              duration: 6_000,
+            });
+            return;
+          }
+          if (result?.state === "expired") {
+            toast.error("Checkout expired", {
+              id: toastId,
+              description: "No payment was completed. You can start checkout again.",
+            });
+            return;
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 1_250));
+        }
+        if (!stopped) {
+          await queryClient.invalidateQueries({ queryKey: ["billing"] });
+          toast.info("Payment received", {
+            id: toastId,
+            description: "Activation is still processing. Your plan will refresh automatically.",
+            duration: 10_000,
+          });
+        }
+      } catch {
+        if (!stopped) {
+          toast.info("Payment submitted", {
+            id: toastId,
+            description: "Your plan will refresh as soon as Stripe confirms it.",
+            duration: 10_000,
+          });
+        }
+      }
+    }
+
+    async function cancelCheckout() {
+      if (sessionId) {
+        try {
+          const response = await authedFetch("/api/billing/checkout/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId }),
+          });
+          const result = (await response.json().catch(() => null)) as {
+            completed?: boolean;
+          } | null;
+          if (response.ok && result?.completed) {
+            await confirmPayment();
+            return;
+          }
+        } catch {
+          // The checkout page was still canceled; a later retry can close an
+          // open reservation after it expires.
+        }
+      }
+      toast.info("Checkout canceled", { description: "No charge was made." });
+      later(() => emitAppEvent("open:upgrade", undefined));
+    }
+
+    if (tab === "success" || tab === "return") void confirmPayment();
+    else if (tab === "cancel") void cancelCheckout();
+    else
+      later(() => {
+        if (tab === "plans") emitAppEvent("open:upgrade", undefined);
+        else if (tab === "topup")
+          emitAppEvent("open:upgrade", { code: "insufficient_balance", meter: "credits" });
+        else emitAppEvent("open:usage");
+      });
+
+    return () => {
+      stopped = true;
+    };
+  }, [queryClient]);
   return null;
 }
 

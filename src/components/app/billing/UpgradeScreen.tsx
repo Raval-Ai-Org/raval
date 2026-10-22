@@ -58,7 +58,7 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
-import { DoneNote, GhostButton, IntervalToggle, PrimaryButton } from "./billing-ui";
+import { GhostButton, IntervalToggle, PrimaryButton } from "./billing-ui";
 import type { PurchaseKind } from "./use-billing-actions";
 
 export type UpgradeView = "plans" | "credits";
@@ -101,6 +101,8 @@ export type UpgradeScreenProps = {
   onIntervalChange: (interval: BillingInterval) => void;
   /** Only the account owner buys; everyone else can ask the owner. */
   canBuy: boolean;
+  /** Stripe Checkout has passed the server-side readiness checks. */
+  paymentsAvailable: boolean;
   busy: string | null;
   askSent: boolean;
   /** Credits left right now. */
@@ -140,6 +142,8 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
       </div>
 
       <Hero {...props} feature={feature} />
+
+      {props.canBuy && <CheckoutNotice available={props.paymentsAvailable} />}
 
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <Segmented
@@ -203,6 +207,38 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function CheckoutNotice({ available }: { available: boolean }) {
+  return (
+    <div
+      className={cn(
+        "relative flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[12.5px]",
+        available
+          ? "border-primary/20 bg-primary/[0.055] text-muted-foreground"
+          : "border-warning/25 bg-warning/[0.07] text-foreground",
+      )}
+      role={available ? undefined : "status"}
+    >
+      <ShieldCheck
+        className={cn("mt-0.5 h-4 w-4 shrink-0", available ? "text-primary" : "text-warning")}
+        strokeWidth={2.3}
+      />
+      <span>
+        {available ? (
+          <>
+            <span className="font-semibold text-foreground">Secure checkout by Stripe.</span> Pay
+            with a card or an available wallet. Your purchase activates automatically.
+          </>
+        ) : (
+          <>
+            <span className="font-semibold">Payments are temporarily unavailable.</span> Please try
+            again shortly. You will not be charged.
+          </>
+        )}
+      </span>
     </div>
   );
 }
@@ -341,6 +377,7 @@ function BuyButton({
   current,
   interval,
   canBuy,
+  paymentsAvailable,
   busy,
   askSent,
   onChoose,
@@ -371,7 +408,7 @@ function BuyButton({
   return (
     <Button
       className={className}
-      disabled={busy !== null}
+      disabled={busy !== null || !paymentsAvailable}
       onClick={() =>
         onChoose({
           kind: "plan",
@@ -381,8 +418,12 @@ function BuyButton({
         })
       }
     >
-      {busy === plan ? "One moment…" : `Upgrade to ${def.label}`}
-      {busy !== plan && featured && <ArrowRight className="h-4 w-4" />}
+      {busy === plan
+        ? "Opening secure checkout…"
+        : paymentsAvailable
+          ? `Upgrade to ${def.label}`
+          : "Payments unavailable"}
+      {busy !== plan && paymentsAvailable && featured && <ArrowRight className="h-4 w-4" />}
     </Button>
   );
 }
@@ -721,6 +762,7 @@ function PackGrid({
 function PackAction({
   row,
   canBuy,
+  paymentsAvailable,
   busy,
   askSent,
   onChoose,
@@ -733,14 +775,18 @@ function PackAction({
     <div className="flex flex-col gap-2.5">
       <PrimaryButton
         className="h-12 w-full text-[15px]"
-        disabled={busy !== null}
+        disabled={busy !== null || !paymentsAvailable}
         onClick={() =>
           onChoose({ kind: row.kind, key: row.key, label: row.label, price: row.price })
         }
       >
-        {busy === row.key ? "One moment…" : `Buy ${row.title} · ${row.price}`}
+        {busy === row.key
+          ? "Opening secure checkout…"
+          : paymentsAvailable
+            ? `Buy ${row.title} · ${row.price}`
+            : "Payments unavailable"}
       </PrimaryButton>
-      <Promises items={["One-time payment", "Never expires"]} />
+      <Promises items={["One-time payment", "Never expires", "Secure Stripe checkout"]} />
     </div>
   );
 }
@@ -752,35 +798,17 @@ export type UpgradeWindowProps = {
   onOpenChange: (open: boolean) => void;
   /** Null while the plan is loading. */
   screen: UpgradeScreenProps | null;
-  /** The request step, used until card payment is connected. */
-  pending: UpgradeChoice | null;
-  sent: UpgradeChoice | null;
-  contact: string;
-  onContactChange: (value: string) => void;
-  onBack: () => void;
-  onSend: () => void;
 };
 
-export function UpgradeWindow({
-  open,
-  onOpenChange,
-  screen,
-  pending,
-  sent,
-  contact,
-  onContactChange,
-  onBack,
-  onSend,
-}: UpgradeWindowProps) {
-  const small = Boolean(screen && (pending || sent));
+export function UpgradeWindow({ open, onOpenChange, screen }: UpgradeWindowProps) {
   return (
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      title={sent ? "Request sent" : screen?.view === "credits" ? "Get credits" : "Upgrade"}
+      title={screen?.view === "credits" ? "Get credits" : "Upgrade"}
       srDescription="Choose a plan or a credit pack."
       Icon={screen?.view === "credits" ? Wallet : Crown}
-      size={small ? "sm" : "xl"}
+      size="xl"
       allowMaximize={false}
       // Fit the content instead of the tall fixed window.
       contentClassName="sm:h-fit sm:max-h-[92dvh]"
@@ -796,56 +824,7 @@ export function UpgradeWindow({
         </div>
       )}
 
-      {screen && sent && (
-        <div className="space-y-4 px-5 pb-6 pt-4 sm:px-6">
-          <DoneNote title={`We got your request for the ${sent.label}`}>
-            We'll email you to finish payment.{" "}
-            {sent.kind === "plan" ? "Your plan switches on" : "It's added"} as soon as it's paid.
-          </DoneNote>
-          <PrimaryButton className="w-full" onClick={() => onOpenChange(false)}>
-            Done
-          </PrimaryButton>
-        </div>
-      )}
-
-      {screen && pending && !sent && (
-        <div className="space-y-4 px-5 pb-6 pt-4 sm:px-6">
-          <div className="ds-tile flex items-center justify-between gap-3 border-primary/40 bg-primary/[0.07] p-4">
-            <p className="text-[15px] font-semibold">{pending.label}</p>
-            <p className="text-[15px] font-semibold tabular-nums">{pending.price}</p>
-          </div>
-          <ol className="grid grid-cols-3 gap-2 text-[12.5px]">
-            {[
-              "Send your request",
-              "We email you to pay",
-              pending.kind === "plan" ? "Your plan switches on" : "Your pack is added",
-            ].map((step, index) => (
-              <li key={step} className="ds-well flex flex-col gap-1.5 p-3">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-                  {index + 1}
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-          <input
-            value={contact}
-            onChange={(event) => onContactChange(event.target.value)}
-            maxLength={120}
-            placeholder="Phone or WhatsApp (optional)"
-            aria-label="Phone or WhatsApp (optional)"
-            className="h-10 w-full rounded-full bg-[var(--ds-well-bg)] px-4 text-[13.5px] outline-none ring-primary/40 placeholder:text-muted-foreground focus-visible:ring-2"
-          />
-          <div className="flex gap-2">
-            <GhostButton onClick={onBack}>Back</GhostButton>
-            <PrimaryButton className="flex-1" disabled={screen.busy !== null} onClick={onSend}>
-              {screen.busy ? "Sending…" : "Send request"}
-            </PrimaryButton>
-          </div>
-        </div>
-      )}
-
-      {screen && !pending && !sent && (
+      {screen && (
         // A new reason or plan starts from that reason's own pick.
         <UpgradeScreen
           key={`${screen.block?.code ?? ""}:${screen.block?.feature ?? ""}:${screen.current}`}

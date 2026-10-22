@@ -4,9 +4,6 @@
 // person's click (the Upgrade button, a lock, or the button on an "out of
 // credits" toast). What it looks like is `UpgradeScreen`.
 //
-// Until card payment is connected, choosing a plan or pack shows a short
-// confirm step and sends a request; Mellox activates it after payment.
-
 import { useEffect, useState } from "react";
 import { onAppEvent } from "@/lib/app-events";
 import { PLANS, planRank, type BillingInterval } from "@/lib/billing/catalog";
@@ -20,9 +17,6 @@ export function UpgradeDialog() {
   const [block, setBlock] = useState<BillingBlock | null>(null);
   const [view, setView] = useState<UpgradeView>("plans");
   const [interval, setBillingInterval] = useState<BillingInterval>("year");
-  const [pending, setPending] = useState<UpgradeChoice | null>(null);
-  const [contact, setContact] = useState("");
-  const [sent, setSent] = useState<UpgradeChoice | null>(null);
   const [packsAsked, setPacksAsked] = useState(false);
   const { data } = useEntitlements({ enabled: open });
   const actions = useBillingActions(data);
@@ -39,8 +33,6 @@ export function UpgradeDialog() {
         const next = event.detail ?? null;
         setBlock(next);
         setView(next?.code === "insufficient_balance" ? "credits" : "plans");
-        setPending(null);
-        setSent(null);
         setPacksAsked(false);
         setOpen(true);
       }),
@@ -54,41 +46,16 @@ export function UpgradeDialog() {
     : planRank("growth") > planRank(current)
       ? "growth"
       : nextPlan(current);
-  const requestMode = data?.checkoutMode !== "card";
   const intervalFor = (item: UpgradeChoice) => (item.kind === "plan" ? interval : undefined);
 
   async function choose(item: UpgradeChoice) {
-    if (requestMode) {
-      setPending(item);
-      return;
-    }
     await actions.purchase({ kind: item.kind, key: item.key, interval: intervalFor(item) });
-  }
-
-  async function sendRequest() {
-    if (!pending) return;
-    const outcome = await actions.purchase({
-      kind: pending.kind,
-      key: pending.key,
-      interval: intervalFor(pending),
-      contact,
-    });
-    if (outcome === "requested") {
-      setSent(pending);
-      setPending(null);
-    }
   }
 
   return (
     <UpgradeWindow
       open={open}
       onOpenChange={setOpen}
-      pending={pending}
-      sent={sent}
-      contact={contact}
-      onContactChange={setContact}
-      onBack={() => setPending(null)}
-      onSend={() => void sendRequest()}
       screen={
         data
           ? {
@@ -103,6 +70,7 @@ export function UpgradeDialog() {
               interval,
               onIntervalChange: setBillingInterval,
               canBuy: Boolean(data.isOwner),
+              paymentsAvailable: data.checkoutMode === "card",
               busy: actions.busy,
               askSent: actions.sent.has("ask-owner"),
               balance: data.meters.credits.available,

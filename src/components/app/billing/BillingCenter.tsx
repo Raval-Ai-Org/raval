@@ -14,14 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Crown, Lock, Wallet } from "@/components/icons";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
-import {
-  CREDIT_PACKS,
-  FEATURES,
-  PLANS,
-  SIGNUP_GRANT,
-  VIDEO_PACKS,
-  type PlanId,
-} from "@/lib/billing/catalog";
+import { FEATURES, PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
 import {
   asPlan,
   formatMeter,
@@ -112,14 +105,6 @@ export function BillingCenter() {
   );
 }
 
-type PurchaseRequestRow = {
-  id: string;
-  kind: string;
-  catalogKey: string;
-  interval: string | null;
-  status: string;
-};
-
 type TeamRequest = {
   id: string;
   brand: string;
@@ -127,17 +112,6 @@ type TeamRequest = {
   feature: string;
   requiredPlan: string | null;
 };
-
-function requestLabel(row: PurchaseRequestRow) {
-  if (row.kind === "plan" && row.catalogKey in PLANS) {
-    return `${PLANS[row.catalogKey as PlanId].label} plan`;
-  }
-  const credit = CREDIT_PACKS.find((pack) => pack.key === row.catalogKey);
-  if (credit) return `${formatMeter("credits", credit.credits + credit.bonusCredits)} pack`;
-  const video = VIDEO_PACKS.find((pack) => pack.key === row.catalogKey);
-  if (video) return `${formatMeter("video", video.videoUnits)} pack`;
-  return "Your request";
-}
 
 function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -147,11 +121,6 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
-  const requests = useQuery({
-    queryKey: ["billing", "requests", data.accountId ?? "member"],
-    queryFn: () => getJson<{ requests: PurchaseRequestRow[] }>("/api/billing/requests"),
-    enabled: data.isOwner,
-  });
   const team = useQuery({
     queryKey: ["billing", "team-requests", data.accountId ?? "member"],
     queryFn: () => getJson<{ requests: TeamRequest[] }>("/api/billing/upgrade-requests"),
@@ -165,11 +134,9 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       ),
     enabled: data.isOwner,
   });
-  const pending = (requests.data?.requests ?? []).filter((row) => row.status === "pending");
   const paused = (brands.data?.brands ?? []).filter((brand) => brand.frozen_at);
   const cardSubscriber =
     data.isOwner &&
-    data.checkoutMode === "card" &&
     !data.manual &&
     ["active", "past_due", "trialing", "paused"].includes(data.status);
 
@@ -245,31 +212,6 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           This brand uses its owner's plan. Only the owner can change it.
         </p>
       )}
-
-      {pending.map((row) => (
-        <div
-          key={row.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--ds-radius-tile)] bg-primary/10 px-4 py-3 text-[13px]"
-        >
-          <span className="flex items-center gap-2">
-            <Check className="h-4 w-4 text-primary" strokeWidth={2.6} />
-            {requestLabel(row)} requested. We'll email you to finish payment.
-          </span>
-          <button
-            type="button"
-            className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            disabled={busy !== null}
-            onClick={() =>
-              void run(row.id, async () => {
-                await send(`/api/billing/requests?id=${row.id}`, undefined, "DELETE");
-                await queryClient.invalidateQueries({ queryKey: ["billing", "requests"] });
-              })
-            }
-          >
-            Cancel
-          </button>
-        </div>
-      ))}
 
       {/* What's left this month */}
       <section className="space-y-4">

@@ -1,8 +1,7 @@
 "use client";
 
 // One place for every billing button: Upgrade now, buy a pack, ask the owner.
-// With Stripe connected ("card") the buttons open checkout; until then
-// ("request") they send a request that Mellox activates from /admin.
+// Owners pay through Stripe Checkout; teammates can still ask their owner.
 
 import { useCallback, useState } from "react";
 import { toast } from "@/lib/toast";
@@ -30,7 +29,7 @@ async function post(path: string, body: unknown, method = "POST") {
 export function useBillingActions(data: BillingView | undefined) {
   const workspaceId = useOptionalWorkspaceId();
   const [busy, setBusy] = useState<string | null>(null);
-  /** Keys of items a request was just sent for (shown as "Request sent"). */
+  /** Keys of team upgrade requests just sent (shown as "Sent to the owner"). */
   const [sent, setSent] = useState<Set<string>>(new Set());
 
   const markSent = (key: string) => setSent((prev) => new Set(prev).add(key));
@@ -41,44 +40,36 @@ export function useBillingActions(data: BillingView | undefined) {
       key: string;
       interval?: BillingInterval;
       trial?: boolean;
-      contact?: string;
-    }): Promise<"redirected" | "requested" | "changed" | "failed"> => {
+    }): Promise<"redirected" | "changed" | "failed"> => {
       if (!data?.isOwner) return "failed";
+      if (data.checkoutMode !== "card") {
+        toast.warning("Payments are temporarily unavailable. Please try again shortly.");
+        return "failed";
+      }
       setBusy(args.key);
       try {
-        if (data.checkoutMode === "card") {
-          const subscribed = ["active", "past_due", "paused", "trialing"].includes(data.status);
-          if (args.kind === "plan" && subscribed && !args.trial) {
-            // Existing subscribers change plan in place (prorated by Stripe).
-            await post("/api/billing/subscription/change", {
-              plan: args.key as PaidPlanId,
-              interval: args.interval ?? "month",
-            });
-            toast.success("Plan updated.");
-            emitAppEvent("billing:changed");
-            return "changed";
-          }
-          const result = await post("/api/billing/checkout", {
-            kind: args.kind,
-            key: args.key,
-            quantity: 1,
-            interval: args.interval,
-            trial: args.trial,
-            returnPath: window.location.pathname,
+        const subscribed = ["active", "past_due", "paused", "trialing"].includes(data.status);
+        if (args.kind === "plan" && subscribed && !args.trial) {
+          // Existing subscribers change plan in place (prorated by Stripe).
+          await post("/api/billing/subscription/change", {
+            plan: args.key as PaidPlanId,
+            interval: args.interval ?? "month",
           });
-          if (typeof result.url !== "string") throw new Error("Checkout did not open. Try again.");
-          window.location.assign(result.url);
-          return "redirected";
+          toast.success("Plan updated.");
+          emitAppEvent("billing:changed");
+          return "changed";
         }
-        await post("/api/billing/requests", {
+        const result = await post("/api/billing/checkout", {
           kind: args.kind,
           key: args.key,
+          quantity: 1,
           interval: args.interval,
-          contact: args.contact || undefined,
+          trial: args.trial,
+          returnPath: window.location.pathname,
         });
-        markSent(args.key);
-        emitAppEvent("billing:changed");
-        return "requested";
+        if (typeof result.url !== "string") throw new Error("Checkout did not open. Try again.");
+        window.location.assign(result.url);
+        return "redirected";
       } catch (cause) {
         toast.error(cause instanceof Error ? cause.message : "Something went wrong. Try again.");
         return "failed";

@@ -57,11 +57,7 @@ test.describe("Upgrade lab — laptop", () => {
     await expect(page.getByTestId("plan-agency")).toContainText("Save $898 with yearly");
     await page.getByRole("button", { name: "Upgrade to Agency" }).click();
     await expect(last(page)).toHaveAttribute("data-last", "choose:plan:agency:$449 a month");
-
-    // The request step, then the thank-you.
-    await expect(page.getByText("We email you to pay")).toBeVisible();
-    await page.getByRole("button", { name: "Send request" }).click();
-    await expect(page.getByText("We got your request for the Agency plan")).toBeVisible();
+    await expect(page.getByText("Secure checkout by Stripe.")).toBeVisible();
   });
 
   test("out of free credits shows plans first, with packs one tab away", async ({ page }) => {
@@ -99,6 +95,12 @@ test.describe("Upgrade lab — laptop", () => {
     await page.getByTestId("plan-growth").getByRole("button", { name: "Ask the owner" }).click();
     await expect(last(page)).toHaveAttribute("data-last", "ask:growth");
     await expect(page.getByText("Sent to the owner").first()).toBeVisible();
+  });
+
+  test("payments stay disabled when Stripe is temporarily unavailable", async ({ page }) => {
+    await openScene(page, "confirm");
+    await expect(page.getByText("Payments are temporarily unavailable.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Payments unavailable" }).first()).toBeDisabled();
   });
 });
 

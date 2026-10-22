@@ -246,34 +246,125 @@ export async function createAccountCheckout(args: {
   const origin = getAppUrl();
   const returnPath = args.returnPath ?? "/projects";
   const mode = args.kind === "plan" ? "subscription" : "payment";
-  const session = await stripe().checkout.sessions.create(
-    {
-      mode,
-      customer,
-      client_reference_id: intentId,
-      metadata: { mellox_checkout_intent: intentId },
-      ...(mode === "subscription"
-        ? {
-            subscription_data: {
-              metadata: { mellox_checkout_intent: intentId },
-              ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
-            },
-          }
-        : {}),
-      line_items: [{ price: priceId, quantity: args.quantity }],
-      expires_at: Math.floor(expiresAt.getTime() / 1000),
-      success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=return`,
-      cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel`,
-    },
-    { idempotencyKey: `mellox-checkout:${intentId}` },
-  );
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe().checkout.sessions.create(
+      {
+        mode,
+        customer,
+        client_reference_id: intentId,
+        metadata: { mellox_checkout_intent: intentId },
+        ...(mode === "subscription"
+          ? {
+              subscription_data: {
+                metadata: { mellox_checkout_intent: intentId },
+                ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
+              },
+            }
+          : {}),
+        line_items: [{ price: priceId, quantity: args.quantity }],
+        expires_at: Math.floor(expiresAt.getTime() / 1000),
+        billing_address_collection: "auto",
+        success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=success&checkout_session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel&checkout_session_id={CHECKOUT_SESSION_ID}`,
+      },
+      { idempotencyKey: `mellox-checkout:${intentId}` },
+    );
+  } catch {
+    await admin
+      .from("checkout_intents")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", intentId)
+      .is("consumed_at", null);
+    throw new HttpError(502, "Secure checkout could not be opened. Please try again.");
+  }
   if (!session.url) throw new HttpError(502, "Stripe did not return a checkout URL.");
   const { error: linkError } = await admin
     .from("checkout_intents")
     .update({ provider_session_id: session.id })
     .eq("id", intentId);
-  if (linkError) throw new HttpError(503, "Could not finish checkout setup.");
+  if (linkError) {
+    if (session.status === "open")
+      await stripe()
+        .checkout.sessions.expire(session.id)
+        .catch(() => null);
+    await admin
+      .from("checkout_intents")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", intentId)
+      .is("consumed_at", null);
+    throw new HttpError(503, "Could not finish checkout setup.");
+  }
   return { url: session.url };
+}
+
+export type AccountCheckoutStatus = {
+  state: "active" | "processing" | "open" | "expired";
+  kind: PurchaseKind;
+  catalogKey: string;
+};
+
+async function checkoutIntentForUser(userId: string, sessionId: string) {
+  const account = await accountForUser(userId);
+  const { data, error } = await admin
+    .from("checkout_intents")
+    .select("id,kind,catalog_key,consumed_at,provider_session_id")
+    .eq("account_id", account.id)
+    .eq("created_by", userId)
+    .eq("provider_session_id", sessionId)
+    .maybeSingle();
+  if (error) throw new HttpError(503, "Could not check checkout.");
+  if (!data) throw new HttpError(404, "Checkout not found.");
+  return data;
+}
+
+/** Read-only status used by the return page while the signed webhook activates a purchase. */
+export async function getAccountCheckoutStatus(
+  userId: string,
+  sessionId: string,
+): Promise<AccountCheckoutStatus> {
+  const intent = await checkoutIntentForUser(userId, sessionId);
+  const kind = intent.kind as PurchaseKind;
+  const base = { kind, catalogKey: String(intent.catalog_key) };
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  if (
+    session.id !== intent.provider_session_id ||
+    session.metadata?.mellox_checkout_intent !== intent.id ||
+    session.client_reference_id !== intent.id
+  ) {
+    throw new HttpError(409, "Checkout could not be verified.");
+  }
+  if (session.status === "expired") return { ...base, state: "expired" };
+  if (intent.consumed_at) return { ...base, state: "active" };
+  if (session.status === "open") return { ...base, state: "open" };
+  return { ...base, state: "processing" };
+}
+
+/** Release a plan reservation when its owner returns through Stripe's cancel URL. */
+export async function cancelAccountCheckout(
+  userId: string,
+  sessionId: string,
+): Promise<{ canceled: boolean; completed: boolean }> {
+  const intent = await checkoutIntentForUser(userId, sessionId);
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  if (
+    session.id !== intent.provider_session_id ||
+    session.metadata?.mellox_checkout_intent !== intent.id ||
+    session.client_reference_id !== intent.id
+  ) {
+    throw new HttpError(409, "Checkout could not be verified.");
+  }
+  if (session.status === "expired") return { canceled: true, completed: false };
+  if (intent.consumed_at) return { canceled: false, completed: true };
+  if (session.status === "complete") return { canceled: false, completed: true };
+  if (session.status === "open") await stripe().checkout.sessions.expire(sessionId);
+  const { error } = await admin
+    .from("checkout_intents")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", intent.id)
+    .is("consumed_at", null);
+  if (error) throw new HttpError(503, "Could not close checkout.");
+  return { canceled: true, completed: false };
 }
 
 export async function createAccountBillingPortal(userId: string): Promise<{ url: string }> {
