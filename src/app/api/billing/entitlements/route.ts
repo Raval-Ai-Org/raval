@@ -31,7 +31,7 @@ export const GET = defineRoute({
       throw new HttpError(503, "Plan & billing is being set up. Upgrades are unavailable for now.");
     }
     const { stripeAccountReady } = await import("@/server/billing/stripe-account.server");
-    const { isBillingAdmin } = await import("@/server/billing/admin.server");
+    const { hasBillingAdminAccess } = await import("@/server/billing/admin.server");
     // Owners pay in Stripe Checkout. If the provider has not passed its
     // readiness checks, purchasing stays visibly unavailable instead of
     // creating a manual fulfillment request.
@@ -39,7 +39,7 @@ export const GET = defineRoute({
     const extras = {
       purchasesAvailable,
       checkoutMode: purchasesAvailable ? ("card" as const) : ("unavailable" as const),
-      isBillingAdmin: isBillingAdmin(userId),
+      isBillingAdmin: await hasBillingAdminAccess(userId),
     };
     return entitlements.isOwner
       ? { ...entitlements, ...extras }

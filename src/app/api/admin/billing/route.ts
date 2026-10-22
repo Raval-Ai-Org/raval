@@ -30,7 +30,7 @@ export const GET = defineRoute({
   auth: "user",
   rateLimit: "billing-admin",
   handler: async ({ userId }) => {
-    requireBillingAdmin(userId);
+    await requireBillingAdmin(userId);
     const [report, margin, failed, health, pendingCapacity] = await Promise.all([
       admin.rpc("billing_rollout_report"),
       admin.rpc("billing_margin_report"),
@@ -69,7 +69,7 @@ export const POST = defineRoute({
   body: Adjustment,
   rateLimit: "billing-admin",
   handler: async ({ userId, body }) => {
-    requireBillingAdmin(userId);
+    await requireBillingAdmin(userId);
     const { data: account, error: accountError } = await admin
       .from("billing_accounts")
       .select("id")

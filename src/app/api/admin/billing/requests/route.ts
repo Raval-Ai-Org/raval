@@ -30,7 +30,7 @@ export const GET = defineRoute({
   }),
   rateLimit: "billing-admin",
   handler: async ({ userId, query }) => {
-    requireBillingAdmin(userId);
+    await requireBillingAdmin(userId);
     let rows = admin
       .from("billing_purchase_requests")
       .select(

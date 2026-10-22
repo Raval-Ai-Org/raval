@@ -50,7 +50,7 @@ export const POST = defineRoute({
   body: Body,
   rateLimit: "billing-admin",
   handler: async ({ userId, body }) => {
-    requireBillingAdmin(userId);
+    await requireBillingAdmin(userId);
     const manual = await import("@/server/billing/manual.server");
     let result: Record<string, unknown>;
     switch (body.op) {
