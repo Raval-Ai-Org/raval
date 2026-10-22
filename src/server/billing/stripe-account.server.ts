@@ -177,6 +177,100 @@ async function customerFor(account: BillingAccount, email: string | null): Promi
   return String(winner.provider_customer_id);
 }
 
+type OpenPlanCheckout = {
+  id: string;
+  created_by: string;
+  catalog_key: string;
+  interval: string | null;
+  provider_session_id: string | null;
+  expires_at: string;
+};
+
+async function releaseCheckoutIntent(intentId: string): Promise<void> {
+  const { error } = await admin
+    .from("checkout_intents")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", intentId)
+    .is("consumed_at", null);
+  if (error) throw new HttpError(503, "Could not close the previous checkout.");
+}
+
+/**
+ * Reuse an identical open Checkout Session. If the owner selected another
+ * plan, close the abandoned session first so the unique reservation can be
+ * replaced without making them wait 35 minutes.
+ */
+async function resumeOrReplacePlanCheckout(args: {
+  accountId: string;
+  userId: string;
+  key: string;
+  interval: BillingInterval | null;
+  trial: boolean;
+}): Promise<{ url: string } | null> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data, error } = await admin
+      .from("checkout_intents")
+      .select("id,created_by,catalog_key,interval,provider_session_id,expires_at")
+      .eq("account_id", args.accountId)
+      .eq("kind", "plan")
+      .is("consumed_at", null)
+      .maybeSingle();
+    if (error) throw new HttpError(503, "Could not check open plan checkout.");
+    if (!data) return null;
+    const intent = data as OpenPlanCheckout;
+
+    if (new Date(intent.expires_at).getTime() <= Date.now()) {
+      await releaseCheckoutIntent(intent.id);
+      return null;
+    }
+    if (intent.created_by !== args.userId) {
+      throw new HttpError(409, "Another account owner already opened plan checkout.");
+    }
+    // A second click can reach this row while the first request is still
+    // creating its Stripe session. Give that request a brief chance to link it.
+    if (!intent.provider_session_id) {
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      throw new HttpError(409, "Secure checkout is still opening. Try again in a moment.");
+    }
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe().checkout.sessions.retrieve(intent.provider_session_id);
+    } catch {
+      await releaseCheckoutIntent(intent.id);
+      return null;
+    }
+    if (
+      session.metadata?.mellox_checkout_intent !== intent.id ||
+      session.client_reference_id !== intent.id
+    ) {
+      throw new HttpError(409, "The previous checkout could not be verified.");
+    }
+    if (session.status === "complete") {
+      throw new HttpError(409, "Your payment is being confirmed. Refresh Plan & billing shortly.");
+    }
+    if (session.status === "expired") {
+      await releaseCheckoutIntent(intent.id);
+      return null;
+    }
+
+    // Sessions created before this marker existed were regular checkouts.
+    const recordedTrial = session.metadata?.mellox_checkout_trial ?? "false";
+    const trialMatches = recordedTrial === String(args.trial);
+    const selectionMatches =
+      intent.catalog_key === args.key && intent.interval === args.interval && trialMatches;
+    if (selectionMatches && session.url) return { url: session.url };
+
+    await stripe().checkout.sessions.expire(session.id);
+    await releaseCheckoutIntent(intent.id);
+    return null;
+  }
+  return null;
+}
+
 export async function createAccountCheckout(args: {
   userId: string;
   email: string | null;
@@ -223,9 +317,17 @@ export async function createAccountCheckout(args: {
       .is("consumed_at", null)
       .lte("expires_at", new Date().toISOString());
     if (expireError) throw new HttpError(503, "Could not check open plan checkout.");
+    const existing = await resumeOrReplacePlanCheckout({
+      accountId: account.id,
+      userId: args.userId,
+      key: args.key,
+      interval,
+      trial: Boolean(args.trial),
+    });
+    if (existing) return existing;
   }
   const expiresAt = new Date(Date.now() + 35 * 60_000);
-  const { data: intent, error } = await admin
+  let insertResult = await admin
     .from("checkout_intents")
     .insert({
       account_id: account.id,
@@ -239,8 +341,32 @@ export async function createAccountCheckout(args: {
     })
     .select("id")
     .single();
-  if (error?.code === "23505")
-    throw new HttpError(409, "A plan checkout is already open. Finish or wait for it to expire.");
+  if (insertResult.error?.code === "23505" && args.kind === "plan") {
+    const existing = await resumeOrReplacePlanCheckout({
+      accountId: account.id,
+      userId: args.userId,
+      key: args.key,
+      interval,
+      trial: Boolean(args.trial),
+    });
+    if (existing) return existing;
+    // The competing reservation was stale and has now been released.
+    insertResult = await admin
+      .from("checkout_intents")
+      .insert({
+        account_id: account.id,
+        created_by: args.userId,
+        kind: args.kind,
+        catalog_key: args.key,
+        interval,
+        quantity: args.quantity,
+        provider_price_id: priceId,
+        expires_at: expiresAt.toISOString(),
+      })
+      .select("id")
+      .single();
+  }
+  const { data: intent, error } = insertResult;
   if (error || !intent) throw new HttpError(503, "Could not begin checkout.");
   const intentId = String(intent.id);
   const origin = getAppUrl();
@@ -253,7 +379,10 @@ export async function createAccountCheckout(args: {
         mode,
         customer,
         client_reference_id: intentId,
-        metadata: { mellox_checkout_intent: intentId },
+        metadata: {
+          mellox_checkout_intent: intentId,
+          mellox_checkout_trial: String(Boolean(args.trial)),
+        },
         ...(mode === "subscription"
           ? {
               subscription_data: {

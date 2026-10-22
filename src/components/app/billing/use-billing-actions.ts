@@ -13,6 +13,17 @@ import type { BillingView } from "@/lib/billing/use-entitlements";
 
 export type PurchaseKind = "plan" | "credit_pack" | "video_pack";
 
+function prepareCheckoutTab(): Window | null {
+  const tab = window.open("about:blank", "_blank");
+  if (!tab) return null;
+  tab.opener = null;
+  tab.document.title = "Opening secure checkout...";
+  tab.document.body.style.cssText =
+    "margin:0;min-height:100vh;display:grid;place-items:center;background:#09090b;color:#fafafa;font:500 15px system-ui,sans-serif";
+  tab.document.body.textContent = "Opening secure Stripe checkout...";
+  return tab;
+}
+
 async function post(path: string, body: unknown, method = "POST") {
   const response = await authedFetch(path, {
     method,
@@ -59,17 +70,31 @@ export function useBillingActions(data: BillingView | undefined) {
           emitAppEvent("billing:changed");
           return "changed";
         }
-        const result = await post("/api/billing/checkout", {
-          kind: args.kind,
-          key: args.key,
-          quantity: 1,
-          interval: args.interval,
-          trial: args.trial,
-          returnPath: window.location.pathname,
-        });
-        if (typeof result.url !== "string") throw new Error("Checkout did not open. Try again.");
-        window.location.assign(result.url);
-        return "redirected";
+        // Reserve the tab during the click event. Opening it after the API
+        // request resolves would be blocked as a popup by some browsers.
+        const checkoutTab = prepareCheckoutTab();
+        if (!checkoutTab) {
+          toast.warning("Allow pop-ups for Mellox to open secure Stripe checkout in a new tab.");
+          return "failed";
+        }
+        try {
+          const result = await post("/api/billing/checkout", {
+            kind: args.kind,
+            key: args.key,
+            quantity: 1,
+            interval: args.interval,
+            trial: args.trial,
+            returnPath: window.location.pathname,
+          });
+          if (typeof result.url !== "string") throw new Error("Checkout did not open. Try again.");
+          checkoutTab.location.href = result.url;
+          checkoutTab.focus();
+          toast.success("Secure checkout opened in a new tab.");
+          return "redirected";
+        } catch (cause) {
+          checkoutTab.close();
+          throw cause;
+        }
       } catch (cause) {
         toast.error(cause instanceof Error ? cause.message : "Something went wrong. Try again.");
         return "failed";
