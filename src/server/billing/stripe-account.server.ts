@@ -265,6 +265,18 @@ export async function createAccountCheckout(args: {
         line_items: [{ price: priceId, quantity: args.quantity }],
         expires_at: Math.floor(expiresAt.getTime() / 1000),
         billing_address_collection: "auto",
+        customer_update: { address: "auto", name: "auto" },
+        custom_text: {
+          submit: {
+            message:
+              mode === "subscription"
+                ? "Your Mellox plan activates automatically after payment."
+                : "Your credits are added automatically after payment.",
+          },
+        },
+        ...(mode === "subscription"
+          ? { payment_method_collection: "always" as const }
+          : { saved_payment_method_options: { payment_method_save: "enabled" as const } }),
         success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=success&checkout_session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel&checkout_session_id={CHECKOUT_SESSION_ID}`,
       },
@@ -367,15 +379,109 @@ export async function cancelAccountCheckout(
   return { canceled: true, completed: false };
 }
 
-export async function createAccountBillingPortal(userId: string): Promise<{ url: string }> {
+export type AccountPaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+async function paymentMethodFrom(
+  value: string | Stripe.PaymentMethod | null,
+  customerId: string,
+): Promise<Stripe.PaymentMethod | null> {
+  if (!value) return null;
+  const method = typeof value === "string" ? await stripe().paymentMethods.retrieve(value) : value;
+  const owner = subscriptionId(method.customer);
+  return owner && owner !== customerId ? null : method;
+}
+
+export async function getAccountPaymentMethod(userId: string): Promise<{
+  paymentMethod: AccountPaymentMethod | null;
+}> {
+  const account = await accountForUser(userId);
+  if (account.provider !== "stripe" || !account.provider_customer_id) {
+    return { paymentMethod: null };
+  }
+  const customerId = account.provider_customer_id;
+  let method: Stripe.PaymentMethod | null = null;
+  if (account.provider_subscription_id) {
+    const subscription = await stripe().subscriptions.retrieve(account.provider_subscription_id, {
+      expand: ["default_payment_method"],
+    });
+    if (subscriptionId(subscription.customer) !== customerId) {
+      throw new Error("Stripe customer mismatch.");
+    }
+    method = await paymentMethodFrom(subscription.default_payment_method, customerId);
+  }
+  if (!method) {
+    const customer = await stripe().customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    if (!customer.deleted) {
+      method = await paymentMethodFrom(
+        customer.invoice_settings.default_payment_method,
+        customerId,
+      );
+    }
+  }
+  if (!method) {
+    const methods = await stripe().paymentMethods.list({
+      customer: customerId,
+      type: "card",
+      limit: 1,
+    });
+    method = methods.data[0] ?? null;
+  }
+  if (method?.type !== "card" || !method.card) return { paymentMethod: null };
+  return {
+    paymentMethod: {
+      brand: method.card.display_brand ?? method.card.brand,
+      last4: method.card.last4,
+      expMonth: method.card.exp_month,
+      expYear: method.card.exp_year,
+    },
+  };
+}
+
+export async function createAccountBillingPortal(
+  userId: string,
+  options: { action?: "manage" | "payment_method_update"; returnPath?: string } = {},
+): Promise<{ url: string }> {
   const account = await accountForUser(userId);
   if (account.provider !== "stripe" || !account.provider_customer_id) {
     throw new HttpError(409, "There is no Stripe billing account to manage yet.");
   }
-  const session = await stripe().billingPortal.sessions.create({
+  const origin = getAppUrl();
+  const returnPath = options.returnPath ?? "/projects";
+  const returnUrl = `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=manage`;
+  const params: Stripe.BillingPortal.SessionCreateParams = {
     customer: account.provider_customer_id,
-    return_url: `${getAppUrl()}/projects`,
-  });
+    return_url: returnUrl,
+    ...(options.action === "payment_method_update"
+      ? {
+          flow_data: {
+            type: "payment_method_update" as const,
+            after_completion: {
+              type: "redirect" as const,
+              redirect: { return_url: returnUrl },
+            },
+          },
+        }
+      : {}),
+  };
+  let session: Stripe.BillingPortal.Session;
+  try {
+    session = await stripe().billingPortal.sessions.create(params);
+  } catch (error) {
+    if (options.action !== "payment_method_update") throw error;
+    // Some Stripe accounts do not enable the direct update flow in their
+    // portal configuration. The full portal still lets the customer manage it.
+    session = await stripe().billingPortal.sessions.create({
+      customer: account.provider_customer_id,
+      return_url: returnUrl,
+    });
+  }
   return { url: session.url };
 }
 

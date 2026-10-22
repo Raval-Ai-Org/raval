@@ -113,6 +113,26 @@ type TeamRequest = {
   requiredPlan: string | null;
 };
 
+type PaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+function cardBrand(value: string): string {
+  const names: Record<string, string> = {
+    amex: "American Express",
+    diners: "Diners Club",
+    discover: "Discover",
+    jcb: "JCB",
+    mastercard: "Mastercard",
+    unionpay: "UnionPay",
+    visa: "Visa",
+  };
+  return names[value.toLowerCase()] ?? value.replaceAll("_", " ");
+}
+
 function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   const queryClient = useQueryClient();
   const current = asPlan(data.entitledPlan);
@@ -139,6 +159,12 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
     data.isOwner &&
     !data.manual &&
     ["active", "past_due", "trialing", "paused"].includes(data.status);
+  const payment = useQuery({
+    queryKey: ["billing", "payment-method", data.accountId ?? "owner"],
+    queryFn: () => getJson<{ paymentMethod: PaymentMethod | null }>("/api/billing/payment-method"),
+    enabled: data.isOwner && !data.manual,
+    staleTime: 60_000,
+  });
 
   async function run(key: string, work: () => Promise<void>) {
     setBusy(key);
@@ -150,6 +176,16 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       setBusy(null);
     }
   }
+
+  const openPortal = (action: "manage" | "payment_method_update") =>
+    run(action, async () => {
+      const result = await send("/api/billing/portal", {
+        action,
+        returnPath: window.location.pathname,
+      });
+      if (typeof result.url !== "string") throw new Error("Stripe billing did not open.");
+      window.location.assign(result.url);
+    });
 
   const openUpgrade = (credits = false) => {
     onDone();
@@ -186,16 +222,8 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         {data.isOwner && (
           <div className="flex flex-wrap gap-2">
             {cardSubscriber && (
-              <GhostButton
-                disabled={busy !== null}
-                onClick={() =>
-                  void run("portal", async () => {
-                    const result = await send("/api/billing/portal");
-                    if (typeof result.url === "string") window.location.assign(result.url);
-                  })
-                }
-              >
-                {data.status === "past_due" ? "Update card" : "Manage billing"}
+              <GhostButton disabled={busy !== null} onClick={() => void openPortal("manage")}>
+                Manage billing
               </GhostButton>
             )}
             {upgradeTo ? (
@@ -211,6 +239,51 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         <p className="text-[13px] text-muted-foreground">
           This brand uses its owner's plan. Only the owner can change it.
         </p>
+      )}
+
+      {data.isOwner && !data.manual && (cardSubscriber || payment.data?.paymentMethod) && (
+        <section className="space-y-2">
+          <h3 className="ds-label">Payment method</h3>
+          <div className="ds-tile flex flex-wrap items-center justify-between gap-4 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Wallet className="h-4.5 w-4.5" />
+              </span>
+              {payment.isLoading ? (
+                <Skeleton className="h-10 w-40 rounded-lg" />
+              ) : payment.data?.paymentMethod ? (
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold">
+                    {cardBrand(payment.data.paymentMethod.brand)} ••••{" "}
+                    {payment.data.paymentMethod.last4}
+                  </p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    Expires {String(payment.data.paymentMethod.expMonth).padStart(2, "0")}/
+                    {String(payment.data.paymentMethod.expYear).slice(-2)} · Secured by Stripe
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[14px] font-semibold">Card details</p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    View or update your payment method securely in Stripe.
+                  </p>
+                </div>
+              )}
+            </div>
+            <GhostButton
+              className="h-9"
+              disabled={busy !== null}
+              onClick={() => void openPortal("payment_method_update")}
+            >
+              {busy === "payment_method_update" ? "Opening…" : "Update card"}
+            </GhostButton>
+          </div>
+          <p className="px-1 text-[11.5px] text-muted-foreground">
+            Mellox stores only the card brand, last four digits and expiry. Stripe protects the full
+            card number and CVC.
+          </p>
+        </section>
       )}
 
       {/* What's left this month */}
