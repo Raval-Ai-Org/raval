@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-21",
+  "commit": "055c90977c2ccf15237e985b8a333e4b146e30be",
+  "volumes": [
+    {
+      "file": "01-Mellox-AI-Product-Blueprint.pdf",
+      "sha256": "f70cd29bd29deabd0e3474fa9c63ee0458866cda36b1e97e10583de99d68fc2b",
+      "pages": 14
+    },
+    {
+      "file": "02-Mellox-AI-Architecture-Engineering.pdf",
+      "sha256": "2437dc01d25c1be1f2d83c4e46ea0ae34de895a9ca003bb626434fd428152032",
+      "pages": 33
+    },
+    {
+      "file": "03-Mellox-AI-AI-Models-Generation.pdf",
+      "sha256": "58c9d30b3537d0e0dca3446b4e87a953b94919e6a81177ecb72c6cc6b81ed3be",
+      "pages": 22
+    },
+    {
+      "file": "04-Mellox-AI-Pricing-Billing-Economics.pdf",
+      "sha256": "a1dc3c51cbc29607c1ad97a5e039a7ece0e0f972284b632fe727594910c47166",
+      "pages": 21
+    },
+    {
+      "file": "05-Mellox-AI-Deployment-Security-Operations.pdf",
+      "sha256": "e878987dec559ace9dc3adb5e6b391bc2d95c6fd2ba33fd9f0637c15652e3304",
+      "pages": 22
+    },
+    {
+      "file": "06-Mellox-AI-Rebuild-Data-Reference.pdf",
+      "sha256": "e7e72dbf6b7ad0776a0299642529c67946feaa8b28e9b9df32ef37853ed5853e",
+      "pages": 51
+    }
+  ],
+  "counts": {
+    "apis": 159,
+    "pages": 107,
+    "tables": 179,
+    "dbfunctions": 107,
+    "tasks": 76,
+    "migrations": 175,
+    "sqlOnlyCurrentTableAdditions": 1
+  },
+  "scope": "Static source analysis; owner confirms Railway; production/account state not inspected.",
+  "totalPages": 163,
+  "totalWords": 37623
+}
