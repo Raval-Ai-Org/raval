@@ -17,18 +17,28 @@ import { dsGhostBtn } from "@/components/app/surface/buttons";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Activity,
+  AlertTriangle,
   ArrowDown,
   Building2,
+  CheckCircle2,
   CircleDot,
+  ExternalLink,
+  Gauge,
   Inbox,
   LineChart,
   RefreshCw,
   ShieldCheck,
   TrendingDown,
   Users,
+  Video,
   Wallet,
 } from "@/components/icons";
-import type { AdminFinanceMoney, AdminFinanceOverview, AdminOverview } from "@/lib/admin/types";
+import type {
+  AdminFinanceMoney,
+  AdminFinanceOverview,
+  AdminFundingOverview,
+  AdminOverview,
+} from "@/lib/admin/types";
 import { cn } from "@/lib/utils";
 import { adminApi, useAdminMe } from "./api";
 import { LoadError } from "./LoadError";
@@ -99,6 +109,378 @@ function FinanceSkeleton() {
       </div>
       <Skeleton className="h-72 rounded-2xl" />
     </div>
+  );
+}
+
+function fundingTone(state: AdminFundingOverview["status"]): "success" | "warning" | "danger" {
+  if (state === "healthy") return "success";
+  if (state === "action_needed") return "danger";
+  return "warning";
+}
+
+function formatVideoCredits(units: number): string {
+  return (units / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function FundingDashboard({ data }: { data: AdminFundingOverview }) {
+  const needsTopUp = data.providers.filter((item) => (item.shortfallUsd ?? 0) > 0);
+  const accountsWithDebt = data.accounts.filter((account) =>
+    Object.values(account.meters).some((meter) => meter.debt > 0),
+  ).length;
+  const statusCopy =
+    data.status === "healthy"
+      ? "Provider reserves cover every account"
+      : data.status === "action_needed"
+        ? `Add ${fmtUsd(data.calculation.verifiedTopUpUsd)} in provider credits now`
+        : "Provider balance verification needed";
+
+  return (
+    <>
+      <GroupLabel>Provider funding</GroupLabel>
+      <Tile
+        className={cn(
+          "mb-3 overflow-hidden border",
+          data.status === "healthy" && "border-success/25 bg-success/[0.045]",
+          data.status === "action_needed" && "border-destructive/30 bg-destructive/[0.045]",
+          data.status === "unverified" && "border-warning/30 bg-warning/[0.05]",
+        )}
+      >
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              className={cn(
+                "grid size-10 shrink-0 place-items-center rounded-full",
+                data.status === "healthy"
+                  ? "bg-success/12 text-success"
+                  : data.status === "action_needed"
+                    ? "bg-destructive/12 text-destructive"
+                    : "bg-warning/12 text-warning",
+              )}
+            >
+              {data.status === "healthy" ? (
+                <CheckCircle2 className="size-5" />
+              ) : (
+                <AlertTriangle className="size-5" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[15px] font-semibold">{statusCopy}</h3>
+                <Chip tone={fundingTone(data.status)}>{data.status.replaceAll("_", " ")}</Chip>
+              </div>
+              <p className="mt-1 max-w-3xl text-[12.5px] leading-relaxed text-muted-foreground">
+                Safe reserve target: {fmtUsd(data.calculation.totalReserveUsd)} across{" "}
+                {fmtNumber(data.accounts.length)} billing accounts. {data.calculation.policy}.
+                {data.calculation.unverifiedProviders > 0
+                  ? ` ${fmtNumber(data.calculation.unverifiedProviders)} provider balance cannot be verified, so the known top-up is not the final total.`
+                  : ` Every top-up amount below uses the live provider balance. Estimated checkout cash is ${fmtUsd(data.calculation.estimatedCashRequiredUsd)}, including OpenRouter's standard purchase fee.`}
+              </p>
+            </div>
+          </div>
+          {needsTopUp.length > 0 && (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {needsTopUp.map((item) => (
+                <a
+                  key={item.id}
+                  href={item.topUpUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(
+                    dsGhostBtn,
+                    "h-9 border-destructive/25 px-3 text-[12px] text-destructive",
+                  )}
+                >
+                  Add{" "}
+                  {item.id === "kie" && item.shortfallCredits !== null
+                    ? `${fmtNumber(item.shortfallCredits)} credits`
+                    : fmtUsd(item.shortfallUsd ?? 0)}
+                  <ExternalLink className="size-3.5" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </Tile>
+
+      <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Stat
+          label="Safe reserve target"
+          value={fmtUsd(data.calculation.totalReserveUsd)}
+          icon={Gauge}
+          hint={`${fmtNumber(data.accounts.length)} funded accounts`}
+        />
+        <Stat
+          label="Provider credits to add"
+          value={fmtUsd(data.calculation.verifiedTopUpUsd)}
+          icon={Wallet}
+          tone={data.calculation.verifiedTopUpUsd > 0 ? "destructive" : "success"}
+          hint={
+            data.calculation.unverifiedProviders > 0
+              ? "Known minimum; verify unavailable balances"
+              : "Exact from current live balances"
+          }
+        />
+        <Stat
+          label="Estimated checkout cash"
+          value={fmtUsd(data.calculation.estimatedCashRequiredUsd)}
+          icon={Wallet}
+          tone={data.calculation.estimatedCashRequiredUsd > 0 ? "warning" : "success"}
+          hint="Includes OpenRouter's standard 5.5% fee ($0.80 minimum)"
+        />
+        <Stat
+          label="Balances verified"
+          value={`${data.providers.length - data.calculation.unverifiedProviders}/${data.providers.length}`}
+          icon={ShieldCheck}
+          tone={data.calculation.unverifiedProviders > 0 ? "warning" : "success"}
+          hint="Credit-backed AI providers"
+        />
+        <Stat
+          label="Customer wallet debt"
+          value={fmtNumber(accountsWithDebt)}
+          icon={AlertTriangle}
+          tone={accountsWithDebt > 0 ? "warning" : "success"}
+          hint="Accounts with any meter debt"
+        />
+      </div>
+
+      <div className="mb-3 grid gap-3 lg:grid-cols-2">
+        {data.providers.map((item) => {
+          const short = (item.shortfallUsd ?? 0) > 0;
+          const verified = item.balanceUsd !== null;
+          const progress = Math.min(100, item.coveragePercent ?? 0);
+          return (
+            <Tile key={item.id} className="p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-[14px] font-semibold">{item.label}</h4>
+                    <Chip tone={!verified ? "warning" : short ? "danger" : "success"}>
+                      {!verified ? "unverified" : short ? "top up" : "funded"}
+                    </Chip>
+                  </div>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{item.message}</p>
+                </div>
+                <a
+                  href={item.topUpUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
+                >
+                  Top up <ExternalLink className="size-3" />
+                </a>
+              </div>
+              <div className="mt-5 grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Balance
+                  </p>
+                  <p className="mt-1 text-[18px] font-semibold tabular-nums">
+                    {item.balanceUsd === null ? "—" : fmtUsd(item.balanceUsd)}
+                  </p>
+                  {item.balanceCredits !== null && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {fmtNumber(item.balanceCredits)} credits
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Target
+                  </p>
+                  <p className="mt-1 text-[18px] font-semibold tabular-nums">
+                    {fmtUsd(item.reserveUsd)}
+                  </p>
+                  {item.reserveCredits !== null && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {fmtNumber(item.reserveCredits)} credits
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Add now
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1 text-[18px] font-semibold tabular-nums",
+                      short && "text-destructive",
+                    )}
+                  >
+                    {item.shortfallUsd === null ? "Verify" : fmtUsd(item.shortfallUsd)}
+                  </p>
+                  {item.shortfallCredits !== null && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {fmtNumber(item.shortfallCredits)} credits
+                    </p>
+                  )}
+                  {item.cashRequiredUsd !== null && item.cashRequiredUsd !== item.shortfallUsd && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {fmtUsd(item.cashRequiredUsd)} at checkout incl.{" "}
+                      {fmtUsd(item.purchaseFeeUsd ?? 0)} fee
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-foreground/[0.07]">
+                <div
+                  className={cn("h-full rounded-full", short ? "bg-destructive" : "bg-success")}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+                <span>
+                  {verified
+                    ? `${fmtNumber(item.coveragePercent ?? 0)}% covered`
+                    : "Coverage unknown"}
+                </span>
+                <span>
+                  {item.balanceState} · checked {ago(item.checkedAt)}
+                </span>
+              </div>
+            </Tile>
+          );
+        })}
+      </div>
+
+      <TableFrame label="Funding requirement by Mellox plan">
+        <thead>
+          <tr>
+            <th className={th}>Plan</th>
+            <th className={`${th} text-right`}>Accounts</th>
+            <th className={`${th} text-right`}>OpenRouter</th>
+            <th className={`${th} text-right`}>KIE</th>
+            <th className={`${th} text-right`}>Combined reserve</th>
+            <th className={`${th} text-right`}>Credits remaining</th>
+            <th className={`${th} text-right`}>Video remaining</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.plans.map((plan) => (
+            <tr key={plan.planId} className={rowClass}>
+              <td className={`${td} font-medium`}>{plan.planLabel}</td>
+              <td className={`${td} text-right tabular-nums`}>{fmtNumber(plan.accounts)}</td>
+              <td className={`${td} text-right tabular-nums`}>
+                {fmtUsd(plan.openRouterReserveUsd)}
+              </td>
+              <td className={`${td} text-right tabular-nums`}>{fmtUsd(plan.kieReserveUsd)}</td>
+              <td className={`${td} text-right font-semibold tabular-nums`}>
+                {fmtUsd(plan.totalReserveUsd)}
+              </td>
+              <td className={`${td} text-right tabular-nums`}>
+                {fmtNumber(plan.remaining.credits)}
+              </td>
+              <td className={`${td} text-right tabular-nums`}>
+                {formatVideoCredits(plan.remaining.video)} VC
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </TableFrame>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {data.dependencies.map((item) => (
+          <Tile key={item.id} className="flex items-start gap-3 p-4">
+            <span
+              className={cn(
+                "mt-0.5 size-2.5 shrink-0 rounded-full",
+                item.configured ? "bg-success" : "bg-warning",
+              )}
+            />
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[13px] font-semibold">{item.label}</p>
+                <Chip tone={item.configured ? "success" : "warning"}>
+                  {item.configured ? "configured" : "not configured"}
+                </Chip>
+              </div>
+              <p className="mt-1 text-[11.5px] text-muted-foreground">
+                {item.billingModel} · {item.message}
+              </p>
+            </div>
+          </Tile>
+        ))}
+      </div>
+
+      <details className="mt-3 group" open={data.accounts.length <= 25}>
+        <summary className="cursor-pointer list-none rounded-xl border border-border/60 bg-foreground/[0.025] px-4 py-3 text-[13px] font-semibold hover:bg-foreground/[0.045]">
+          Customer credit ledger · {fmtNumber(data.accounts.length)} accounts
+          <span className="ml-2 font-normal text-muted-foreground">
+            General, video, Pro and Flash balances
+          </span>
+        </summary>
+        <div className="mt-2">
+          <TableFrame label="Customer balances and provider reserve contribution">
+            <thead>
+              <tr>
+                <th className={th}>Account owner</th>
+                <th className={th}>Plan</th>
+                <th className={`${th} text-right`}>General</th>
+                <th className={`${th} text-right`}>Video</th>
+                <th className={`${th} text-right`}>Pro</th>
+                <th className={`${th} text-right`}>Flash</th>
+                <th className={`${th} text-right`}>Provider reserve</th>
+                <th className={`${th} text-right`}>Next grant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.accounts.map((account) => {
+                const debt = Object.values(account.meters).reduce(
+                  (sum, meter) => sum + meter.debt,
+                  0,
+                );
+                return (
+                  <tr key={account.accountId} className={rowClass}>
+                    <td className={td}>
+                      <Link
+                        href={`/admin/billing?account=${encodeURIComponent(account.accountId)}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {account.ownerEmail ?? `${account.accountId.slice(0, 8)}…`}
+                      </Link>
+                      <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">
+                        {account.accountId.slice(0, 13)}…
+                      </p>
+                    </td>
+                    <td className={td}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium">{account.planLabel}</span>
+                        <Chip
+                          tone={account.reserveEligible ? statusTone(account.status) : "neutral"}
+                        >
+                          {account.status}
+                        </Chip>
+                        {debt > 0 && <Chip tone="danger">debt {fmtNumber(debt)}</Chip>}
+                      </div>
+                    </td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {fmtNumber(account.meters.credits.available)}
+                    </td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <Video className="size-3 text-muted-foreground" />
+                        {formatVideoCredits(account.meters.video.available)} VC
+                      </span>
+                    </td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {fmtNumber(account.meters.proMessages.available)}
+                    </td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {fmtNumber(account.meters.flashMessages.available)}
+                    </td>
+                    <td className={`${td} text-right font-medium tabular-nums`}>
+                      {fmtUsd(account.reserve.totalUsd)}
+                    </td>
+                    <td className={`${td} whitespace-nowrap text-right text-muted-foreground`}>
+                      {fmtDateTime(account.nextGrantAt)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </TableFrame>
+        </div>
+      </details>
+    </>
   );
 }
 
@@ -977,6 +1359,8 @@ export function OverviewScreen() {
         </button>
       }
     >
+      {data?.funding && <FundingDashboard data={data.funding} />}
+
       {me.data?.billing && finance.isLoading && <FinanceSkeleton />}
       {me.data?.billing && finance.error && (
         <LoadError error={finance.error} onRetry={() => void finance.refetch()} />

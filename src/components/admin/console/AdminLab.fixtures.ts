@@ -4,6 +4,7 @@
 
 import { FEATURES, PLANS, type FeatureKey } from "@/lib/billing/catalog";
 import { OVERRIDE_LIMIT_KEYS } from "@/lib/billing/overrides";
+import { calculateFunding } from "@/lib/admin/funding";
 import {
   ROLE_PRESETS,
   effectivePermissions,
@@ -459,6 +460,79 @@ export const LAB_OVERVIEW: AdminOverview = {
   billing: { payingAccounts: 58, trialingAccounts: 9, pendingRequests: 2 },
   jobs: { studioFailed24h: 4, studioRunning: 7 },
   admins: { active: 3 },
+  funding: calculateFunding({
+    accounts: [
+      {
+        accountId: U(20),
+        ownerUserId: U(1),
+        ownerEmail: "founder@northstar.example",
+        planId: "starter",
+        status: "active",
+        interval: "month",
+        currentPeriodEnd: ahead(18),
+        nextGrantAt: ahead(18),
+        meters: {
+          credits: { available: 1_420, held: 30, debt: 0 },
+          video: { available: 300, held: 0, debt: 0 },
+          pro_messages: { available: 22, held: 0, debt: 0 },
+          flash_messages: { available: 614, held: 0, debt: 0 },
+        },
+      },
+      {
+        accountId: U(21),
+        ownerUserId: U(2),
+        ownerEmail: "ops@aster.example",
+        planId: "growth",
+        status: "active",
+        interval: "year",
+        currentPeriodEnd: ahead(120),
+        nextGrantAt: ahead(12),
+        meters: {
+          credits: { available: 4_800, held: 100, debt: 0 },
+          video: { available: 900, held: 100, debt: 0 },
+          pro_messages: { available: 130, held: 0, debt: 0 },
+          flash_messages: { available: 1_760, held: 0, debt: 0 },
+        },
+      },
+    ],
+    openRouter: {
+      configured: true,
+      state: "live",
+      balance: 74,
+      checkedAt: new Date().toISOString(),
+      message: "Live balance from OpenRouter.",
+    },
+    kie: {
+      configured: true,
+      state: "live",
+      balance: 2_800,
+      checkedAt: new Date().toISOString(),
+      message: "Live credit balance from KIE.",
+    },
+    dependencies: [
+      {
+        id: "tavily",
+        label: "Tavily",
+        configured: true,
+        billingModel: "External plan / usage",
+        message: "Search account connected.",
+      },
+      {
+        id: "firecrawl",
+        label: "Firecrawl",
+        configured: true,
+        billingModel: "Self-hosted",
+        message: "Crawler connected.",
+      },
+      {
+        id: "post_for_me",
+        label: "Post for Me",
+        configured: true,
+        billingModel: "External plan",
+        message: "Publishing connected.",
+      },
+    ],
+  }),
 };
 
 export const LAB_FINANCE: AdminFinanceOverview = {

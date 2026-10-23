@@ -152,6 +152,83 @@ export type AdminOverview = {
   billing: { payingAccounts: number; trialingAccounts: number; pendingRequests: number };
   jobs: { studioFailed24h: number; studioRunning: number };
   admins: { active: number };
+  funding: AdminFundingOverview;
+};
+
+export type AdminFundingMeterBalance = {
+  available: number;
+  held: number;
+  debt: number;
+};
+
+export type AdminFundingAccount = {
+  accountId: string;
+  ownerUserId: string;
+  ownerEmail: string | null;
+  planId: string;
+  planLabel: string;
+  status: string;
+  interval: "month" | "year" | null;
+  currentPeriodEnd: string | null;
+  nextGrantAt: string | null;
+  reserveEligible: boolean;
+  reserve: { openRouterUsd: number; kieUsd: number; totalUsd: number };
+  meters: {
+    credits: AdminFundingMeterBalance;
+    video: AdminFundingMeterBalance;
+    proMessages: AdminFundingMeterBalance;
+    flashMessages: AdminFundingMeterBalance;
+  };
+};
+
+export type AdminFundingProvider = {
+  id: "openrouter" | "kie";
+  label: string;
+  configured: boolean;
+  balanceState: "live" | "manual" | "unavailable" | "not_configured";
+  balanceUsd: number | null;
+  balanceCredits: number | null;
+  reserveUsd: number;
+  reserveCredits: number | null;
+  shortfallUsd: number | null;
+  shortfallCredits: number | null;
+  purchaseFeeUsd: number | null;
+  cashRequiredUsd: number | null;
+  coveragePercent: number | null;
+  topUpUrl: string;
+  checkedAt: string;
+  message: string;
+};
+
+export type AdminFundingOverview = {
+  generatedAt: string;
+  status: "healthy" | "action_needed" | "unverified";
+  calculation: {
+    policy: string;
+    kieCreditUsd: number;
+    totalReserveUsd: number;
+    verifiedTopUpUsd: number;
+    estimatedCashRequiredUsd: number;
+    unverifiedProviders: number;
+  };
+  providers: AdminFundingProvider[];
+  dependencies: Array<{
+    id: string;
+    label: string;
+    configured: boolean;
+    billingModel: string;
+    message: string;
+  }>;
+  plans: Array<{
+    planId: string;
+    planLabel: string;
+    accounts: number;
+    openRouterReserveUsd: number;
+    kieReserveUsd: number;
+    totalReserveUsd: number;
+    remaining: { credits: number; video: number; proMessages: number; flashMessages: number };
+  }>;
+  accounts: AdminFundingAccount[];
 };
 
 export type AdminFinanceMoney = {

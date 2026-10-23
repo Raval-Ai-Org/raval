@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 export const GET = defineAdminRoute({
   name: "admin.overview",
   permission: "overview.read",
-  handler: () => getOverview(),
+  handler: ({ can }) => getOverview(can("users.pii.read")),
 });
