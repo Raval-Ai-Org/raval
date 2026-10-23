@@ -152,6 +152,27 @@ export type AdminOverview = {
   billing: { payingAccounts: number; trialingAccounts: number; pendingRequests: number };
   jobs: { studioFailed24h: number; studioRunning: number };
   admins: { active: number };
+  activity: {
+    windowDays: number;
+    todayCount: number;
+    items: Array<{
+      id: string;
+      kind:
+        | "subscription"
+        | "purchase"
+        | "signup"
+        | "workspace"
+        | "upgrade_request"
+        | "announcement"
+        | "job_failed";
+      title: string;
+      detail: string;
+      occurredAt: string;
+      href: string | null;
+      amountUsd: number | null;
+      tone: "success" | "primary" | "warning" | "danger" | "neutral";
+    }>;
+  };
   funding: AdminFundingOverview;
 };
 

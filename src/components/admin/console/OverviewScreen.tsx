@@ -19,12 +19,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Activity,
   AlertTriangle,
+  Bell,
+  Building2,
   CheckCircle2,
   ExternalLink,
   Gauge,
   LineChart,
+  Megaphone,
   RefreshCw,
   ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  UserPlus,
   Users,
   Wallet,
 } from "@/components/icons";
@@ -164,8 +170,8 @@ function CompanyPulse({
   return (
     <section id="business-health" className="scroll-mt-24">
       <GroupLabel>Business at a glance</GroupLabel>
-      <div className="grid gap-3 xl:grid-cols-[1.45fr_1fr]">
-        <Tile className="relative overflow-hidden border-primary/15 bg-gradient-to-br from-primary/[0.075] via-card to-card p-5 sm:p-6">
+      <div className="grid items-stretch gap-3 xl:grid-cols-[1.45fr_1fr]">
+        <Tile className="relative h-full overflow-hidden border-primary/15 bg-gradient-to-br from-primary/[0.075] via-card to-card p-5 sm:p-6">
           <div className="absolute -right-20 -top-24 size-64 rounded-full bg-primary/[0.07] blur-3xl" />
           <div className="relative">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -237,7 +243,7 @@ function CompanyPulse({
           </div>
         </Tile>
 
-        <Tile className="p-5">
+        <Tile className="h-full p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="text-[14px] font-semibold">Audience journey</h3>
@@ -398,13 +404,13 @@ function ActionCenter({
               key={action.id}
               href={action.href}
               className={cn(
-                "group rounded-2xl border bg-card p-4 shadow-[var(--ds-shadow)] transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "group flex h-full rounded-2xl border bg-card p-4 shadow-[var(--ds-shadow)] transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 action.tone === "danger" && "border-destructive/25",
                 action.tone === "warning" && "border-warning/25",
                 action.tone === "primary" && "border-primary/20",
               )}
             >
-              <div className="flex items-start gap-3">
+              <div className="flex h-full w-full items-start gap-3">
                 <span
                   className={cn(
                     "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
@@ -415,12 +421,14 @@ function ActionCenter({
                 >
                   <AlertTriangle className="size-3.5" />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className="flex min-h-full min-w-0 flex-1 flex-col">
                   <h3 className="text-[13px] font-semibold">{action.title}</h3>
                   <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
                     {action.detail}
                   </p>
-                  <p className="mt-3 text-[11.5px] font-medium text-primary">Review now →</p>
+                  <p className="mt-auto pt-3 text-[11.5px] font-medium text-primary">
+                    Review now →
+                  </p>
                 </div>
               </div>
             </Link>
@@ -449,6 +457,7 @@ function ActionCenter({
 function OverviewJumpNav({ showFinancials }: { showFinancials: boolean }) {
   const links = [
     { href: "#business-health", label: "Business health" },
+    { href: "#whats-new", label: "What's new" },
     { href: "#provider-funding", label: "Provider funding" },
     ...(showFinancials
       ? [
@@ -461,7 +470,7 @@ function OverviewJumpNav({ showFinancials }: { showFinancials: boolean }) {
   return (
     <nav
       aria-label="Overview sections"
-      className="mt-3 flex gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card p-1.5 shadow-[var(--ds-shadow)]"
+      className="flex gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card p-1.5 shadow-[var(--ds-shadow)]"
     >
       {links.map((link) => (
         <Link
@@ -473,6 +482,234 @@ function OverviewJumpNav({ showFinancials }: { showFinancials: boolean }) {
         </Link>
       ))}
     </nav>
+  );
+}
+
+function activityDayLabel(value: string): string {
+  const date = new Date(value);
+  const now = new Date();
+  const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const difference = Math.round((today - day) / (24 * 60 * 60 * 1_000));
+  if (difference === 0) return "Today";
+  if (difference === 1) return "Yesterday";
+  return date.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function activityDayKey(value: string): string {
+  return value.slice(0, 10);
+}
+
+function WhatsNew({ activity }: { activity: AdminOverview["activity"] }) {
+  const groups = new Map<string, AdminOverview["activity"]["items"]>();
+  for (const item of activity.items) {
+    const key = activityDayKey(item.occurredAt);
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  }
+  const purchases = activity.items.filter(
+    (item) => item.kind === "subscription" || item.kind === "purchase",
+  ).length;
+  const signups = activity.items.filter((item) => item.kind === "signup").length;
+  const workspaces = activity.items.filter((item) => item.kind === "workspace").length;
+  const updates = activity.items.filter(
+    (item) => item.kind === "announcement" || item.kind === "upgrade_request",
+  ).length;
+
+  return (
+    <section id="whats-new" className="scroll-mt-24">
+      <GroupLabel
+        action={
+          <div className="flex items-center gap-2">
+            <span className="relative flex size-2 rounded-full bg-success">
+              <span className="absolute inset-0 animate-ping rounded-full bg-success opacity-30 motion-reduce:hidden" />
+            </span>
+            <span className="text-[11.5px] text-muted-foreground">Updates every minute</span>
+          </div>
+        }
+      >
+        What&apos;s New
+      </GroupLabel>
+      <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(250px,0.75fr)]">
+        <Tile className="overflow-hidden p-0">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.07] via-primary/[0.025] to-transparent px-4 py-4 sm:px-5">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <Sparkles className="size-4.5" />
+              </span>
+              <div>
+                <h3 className="text-[14px] font-semibold">Daily Mellox activity</h3>
+                <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                  Purchases, new customers, workspaces and important updates from the last{" "}
+                  {activity.windowDays} days.
+                </p>
+              </div>
+            </div>
+            <Chip tone={activity.todayCount > 0 ? "primary" : "neutral"}>
+              {fmtNumber(activity.todayCount)} today
+            </Chip>
+          </div>
+
+          {activity.items.length > 0 ? (
+            <div className="max-h-[560px] overflow-y-auto">
+              {[...groups.entries()].map(([day, items]) => (
+                <div key={day}>
+                  <div className="sticky top-0 z-10 border-b border-border/50 bg-card/95 px-4 py-2 backdrop-blur sm:px-5">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+                      {activityDayLabel(items[0].occurredAt)}
+                    </p>
+                  </div>
+                  <div className="divide-y divide-border/50">
+                    {items.map((item) => {
+                      const ItemIcon =
+                        item.kind === "subscription" || item.kind === "purchase"
+                          ? ShoppingBag
+                          : item.kind === "signup"
+                            ? UserPlus
+                            : item.kind === "workspace"
+                              ? Building2
+                              : item.kind === "announcement"
+                                ? Megaphone
+                                : item.kind === "job_failed"
+                                  ? AlertTriangle
+                                  : Bell;
+                      const body = (
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          <span
+                            className={cn(
+                              "mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl",
+                              item.tone === "success" && "bg-success/10 text-success",
+                              item.tone === "primary" && "bg-primary/10 text-primary",
+                              item.tone === "warning" && "bg-warning/10 text-warning",
+                              item.tone === "danger" && "bg-destructive/10 text-destructive",
+                              item.tone === "neutral" &&
+                                "bg-foreground/[0.06] text-muted-foreground",
+                            )}
+                          >
+                            <ItemIcon className="size-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                              <p className="min-w-0 text-[12.5px] font-medium leading-relaxed text-foreground">
+                                {item.title}
+                              </p>
+                              <div className="flex shrink-0 items-center gap-2">
+                                {item.amountUsd !== null && (
+                                  <span className="text-[12px] font-semibold tabular-nums text-success">
+                                    +{fmtUsd(item.amountUsd)}
+                                  </span>
+                                )}
+                                <span className="text-[10.5px] text-muted-foreground">
+                                  {ago(item.occurredAt)}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="mt-0.5 text-[11px] capitalize leading-relaxed text-muted-foreground">
+                              {item.detail}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                      return item.href ? (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          className="block px-4 py-3.5 transition-colors hover:bg-[var(--ds-well-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
+                        >
+                          {body}
+                        </Link>
+                      ) : (
+                        <div key={item.id} className="px-4 py-3.5 sm:px-5">
+                          {body}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid min-h-52 place-items-center px-5 py-10 text-center">
+              <div>
+                <Bell className="mx-auto size-5 text-muted-foreground" />
+                <p className="mt-3 text-[13px] font-medium">No new activity yet</p>
+                <p className="mt-1 max-w-sm text-[11.5px] text-muted-foreground">
+                  New purchases, signups, workspaces and announcements will appear here
+                  automatically.
+                </p>
+              </div>
+            </div>
+          )}
+        </Tile>
+
+        <Tile className="flex h-full flex-col p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-[14px] font-semibold">7-day digest</h3>
+              <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                A quick count of recent changes
+              </p>
+            </div>
+            <Bell className="size-4 text-muted-foreground" />
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2.5 xl:grid-cols-1">
+            {[
+              {
+                label: "Purchases",
+                value: purchases,
+                icon: ShoppingBag,
+                tone: "text-success bg-success/10",
+              },
+              {
+                label: "New users",
+                value: signups,
+                icon: UserPlus,
+                tone: "text-primary bg-primary/10",
+              },
+              {
+                label: "Workspaces",
+                value: workspaces,
+                icon: Building2,
+                tone: "text-primary bg-primary/10",
+              },
+              {
+                label: "Updates",
+                value: updates,
+                icon: Megaphone,
+                tone: "text-warning bg-warning/10",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="flex items-center gap-3 rounded-2xl bg-[var(--ds-well-bg)] p-3"
+              >
+                <span
+                  className={cn("grid size-8 shrink-0 place-items-center rounded-xl", item.tone)}
+                >
+                  <item.icon className="size-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[16px] font-semibold tabular-nums">{fmtNumber(item.value)}</p>
+                  <p className="text-[10.5px] text-muted-foreground">{item.label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-auto border-t border-border/60 pt-4">
+            <p className="text-[10.5px] leading-relaxed text-muted-foreground">
+              The feed refreshes with the Overview and keeps the newest 30 events from the last{" "}
+              {activity.windowDays} days.
+            </p>
+          </div>
+        </Tile>
+      </div>
+    </section>
   );
 }
 
@@ -593,7 +830,7 @@ function FundingDashboard({ data }: { data: AdminFundingOverview }) {
             const short = (item.shortfallUsd ?? 0) > 0;
             const verified = item.balanceUsd !== null;
             return (
-              <Tile key={item.id} className="p-4">
+              <Tile key={item.id} className="flex h-full flex-col p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
@@ -661,7 +898,7 @@ function FundingDashboard({ data }: { data: AdminFundingOverview }) {
                     )}
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-auto pt-4">
                   <div className="mb-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
                     <span>Provider coverage</span>
                     <span className="font-medium tabular-nums text-foreground">
@@ -1842,6 +2079,7 @@ export function OverviewScreen() {
             finance={financial?.configured === true ? financial : undefined}
             canOpenBilling={me.data?.billing === true}
           />
+          <WhatsNew activity={data.activity} />
         </>
       )}
 
