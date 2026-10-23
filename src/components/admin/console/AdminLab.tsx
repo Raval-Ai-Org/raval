@@ -29,6 +29,7 @@ import {
   LAB_INTEGRATIONS,
   labLookup,
   LAB_FLAGS,
+  LAB_FINANCE,
   LAB_HEALTH,
   LAB_OVERVIEW,
   LAB_USAGE,
@@ -72,6 +73,7 @@ const WORKSPACE_ID = "20000001-0000-4000-8000-000000000001";
 const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/me": "any",
   "/api/admin/overview": "overview.read",
+  "/api/admin/finance": "any",
   "/api/admin/users": "users.read",
   "/api/admin/users/detail": "users.read",
   "/api/admin/users/suspend": "users.suspend",
@@ -136,6 +138,10 @@ function install(role: AdminRoleKey): () => void {
         return json(me);
       case "/api/admin/overview":
         return json(LAB_OVERVIEW);
+      case "/api/admin/finance":
+        return me.billing
+          ? json(LAB_FINANCE)
+          : json({ error: "Billing administrator access required." }, 403);
       case "/api/admin/users":
         return json(labUsers(pii));
       case "/api/admin/users/detail":

@@ -154,6 +154,201 @@ export type AdminOverview = {
   admins: { active: number };
 };
 
+export type AdminFinanceMoney = {
+  currency: string;
+  amountCents: number;
+};
+
+export type AdminFinanceOverview =
+  | {
+      configured: false;
+      generatedAt: string;
+    }
+  | {
+      configured: true;
+      generatedAt: string;
+      livemode: boolean;
+      currency: string;
+      account: {
+        businessName: string | null;
+        country: string | null;
+        defaultCurrency: string;
+        chargesEnabled: boolean;
+        payoutsEnabled: boolean;
+        detailsSubmitted: boolean;
+        requirements: {
+          currentlyDue: string[];
+          eventuallyDue: string[];
+          pastDue: string[];
+          pendingVerification: string[];
+        };
+      };
+      balance: {
+        available: AdminFinanceMoney[];
+        pending: AdminFinanceMoney[];
+        instantAvailable: AdminFinanceMoney[];
+        connectReserved: AdminFinanceMoney[];
+        refundPrefundingAvailable: AdminFinanceMoney[];
+        refundPrefundingPending: AdminFinanceMoney[];
+      };
+      periods: Array<{
+        key: "today" | "last7Days" | "monthToDate" | "last30Days" | "yearToDate";
+        label: string;
+        startsAt: string;
+        receivedCents: number;
+        refundsCents: number;
+        feesCents: number;
+        disputesCents: number;
+        netRevenueCents: number;
+        sales: number;
+      }>;
+      last30Days: {
+        startsAt: string;
+        receivedCents: number;
+        refundsCents: number;
+        feesCents: number;
+        disputesCents: number;
+        netRevenueCents: number;
+        paidOutCents: number;
+        sales: number;
+        estimatedAiCostUsd: number | null;
+        estimatedProfitCents: number | null;
+        marginPercent: number | null;
+      };
+      recurring: {
+        mrrCents: number;
+        arrCents: number;
+        active: number;
+        trialing: number;
+        pastDue: number;
+        canceling: number;
+        incomplete: number;
+        unpaid: number;
+        paused: number;
+        new30d: number;
+        canceled30d: number;
+        churnPercent: number | null;
+        plans: Array<{
+          name: string;
+          subscriptions: number;
+          mrrCents: number;
+          revenue30dCents: number;
+        }>;
+      };
+      customers: {
+        total: number;
+        new30d: number;
+        repeatBuyers30d: number;
+        top30d: Array<{
+          id: string;
+          name: string;
+          payments: number;
+          receivedCents: number;
+          currency: string;
+        }>;
+      };
+      payments: {
+        succeeded30d: number;
+        failed30d: number;
+        successRatePercent: number | null;
+        averageOrderCents: number;
+        largestOrderCents: number;
+        methods: Array<{ method: string; payments: number; sharePercent: number }>;
+        currencies: Array<{
+          currency: string;
+          payments: number;
+          receivedCents: number;
+        }>;
+        recentFailures: Array<{
+          id: string;
+          customer: string;
+          amountCents: number;
+          currency: string;
+          failedAt: string;
+          reason: string;
+        }>;
+      };
+      invoices: {
+        paid30d: number;
+        open: number;
+        overdue: number;
+        uncollectible: number;
+        draft: number;
+        void: number;
+        outstandingCents: number;
+        collectionRatePercent: number | null;
+        nextCollectionAt: string | null;
+        recentOpen: Array<{
+          id: string;
+          customer: string;
+          amountCents: number;
+          currency: string;
+          status: string;
+          dueAt: string | null;
+          nextAttemptAt: string | null;
+        }>;
+      };
+      payoutPipeline: {
+        pendingCents: number;
+        inTransitCents: number;
+        failedCents30d: number;
+        nextArrivalAt: string | null;
+      };
+      health: {
+        failedInvoices30d: number;
+        refundedTransactions30d: number;
+        openDisputes: number;
+        failedPayouts30d: number;
+      };
+      monthly: Array<{
+        month: string;
+        receivedCents: number;
+        netRevenueCents: number;
+        refundsCents: number;
+        feesCents: number;
+        sales: number;
+      }>;
+      recentSales: Array<{
+        id: string;
+        customer: string;
+        item: string;
+        amountCents: number;
+        currency: string;
+        paidAt: string;
+        kind: string;
+      }>;
+      recentPayouts: Array<{
+        id: string;
+        amountCents: number;
+        currency: string;
+        status: string;
+        createdAt: string;
+        arrivalAt: string;
+        method: string;
+      }>;
+      recentRefunds: Array<{
+        id: string;
+        amountCents: number;
+        currency: string;
+        status: string;
+        reason: string;
+        createdAt: string;
+      }>;
+      recentDisputes: Array<{
+        id: string;
+        amountCents: number;
+        currency: string;
+        status: string;
+        reason: string;
+        createdAt: string;
+        evidenceDueAt: string | null;
+      }>;
+      coverage: {
+        truncated: string[];
+        unavailable: string[];
+      };
+    };
+
 export type AdminSecurity = {
   mfaRequired: boolean;
   admins: Array<{
