@@ -3,6 +3,7 @@ import "server-only";
 import type { AdminFundingOverview } from "@/lib/admin/types";
 import {
   calculateFunding,
+  countsForFundingReserve,
   type FundingAccountInput,
   type ProviderBalanceInput,
 } from "@/lib/admin/funding";
@@ -15,6 +16,7 @@ import { adminDb, httpErrorFromPg } from "./db.server";
 const PAGE_SIZE = 1_000;
 const BALANCE_CHUNK = 200;
 const EMAIL_CHUNK = 100;
+const DEFAULT_FUNDING_RESERVE_START_AT = "2026-10-23T19:30:00.000Z";
 
 type BalanceRow = {
   account_id: string;
@@ -22,6 +24,13 @@ type BalanceRow = {
   available: number | string;
   held: number | string;
   debt: number | string;
+};
+
+type SubscriptionPaymentRow = {
+  account_id: string;
+  amount_cents: number | string;
+  refunded_cents: number | string;
+  created_at: string;
 };
 
 const emptyMeters = (): FundingAccountInput["meters"] => ({
@@ -52,6 +61,33 @@ async function loadAccounts(): Promise<BillingAccount[]> {
     const page = (data ?? []) as BillingAccount[];
     rows.push(...page);
     if (page.length < PAGE_SIZE) return rows;
+  }
+}
+
+function fundingReserveStartAt(): string {
+  const configured = process.env.FUNDING_RESERVE_START_AT?.trim();
+  if (!configured) return DEFAULT_FUNDING_RESERVE_START_AT;
+  const parsed = new Date(configured);
+  return Number.isNaN(parsed.getTime()) ? DEFAULT_FUNDING_RESERVE_START_AT : parsed.toISOString();
+}
+
+async function loadPaidSubscriptionPurchases(startAt: string): Promise<Map<string, string>> {
+  const purchases = new Map<string, string>();
+  for (let start = 0; ; start += PAGE_SIZE) {
+    const { data, error } = await adminDb
+      .from("billing_payment_records")
+      .select("account_id,amount_cents,refunded_cents,created_at")
+      .eq("kind", "subscription")
+      .gte("created_at", startAt)
+      .order("created_at", { ascending: false })
+      .range(start, start + PAGE_SIZE - 1);
+    if (error) throw httpErrorFromPg(error, "Could not load paid-plan purchases.");
+    const page = (data ?? []) as SubscriptionPaymentRow[];
+    for (const payment of page) {
+      if (Number(payment.amount_cents) <= Number(payment.refunded_cents)) continue;
+      if (!purchases.has(payment.account_id)) purchases.set(payment.account_id, payment.created_at);
+    }
+    if (page.length < PAGE_SIZE) return purchases;
   }
 }
 
@@ -248,11 +284,21 @@ function dependencies(): AdminFundingOverview["dependencies"] {
 
 export async function getFundingOverview(pii: boolean): Promise<AdminFundingOverview> {
   const generatedAt = new Date().toISOString();
-  const [accounts, openRouter, kie] = await Promise.all([
+  const countingFrom = fundingReserveStartAt();
+  const [allAccounts, purchases, openRouter, kie] = await Promise.all([
     loadAccounts(),
+    loadPaidSubscriptionPurchases(countingFrom),
     openRouterBalance(),
     kieBalance(),
   ]);
+  const accounts = allAccounts.filter((account) => {
+    return countsForFundingReserve({
+      planId: entitledPlanFor(account),
+      status: account.status,
+      purchaseRecordedAt: purchases.get(account.id),
+      countingFrom,
+    });
+  });
   const [balances, emails] = await Promise.all([
     loadBalances(accounts.map((account) => account.id)),
     loadEmails(
@@ -262,6 +308,7 @@ export async function getFundingOverview(pii: boolean): Promise<AdminFundingOver
   ]);
   return calculateFunding({
     generatedAt,
+    countingFrom,
     openRouter,
     kie,
     dependencies: dependencies(),
@@ -274,6 +321,7 @@ export async function getFundingOverview(pii: boolean): Promise<AdminFundingOver
       interval: account.billing_interval,
       currentPeriodEnd: account.current_period_end,
       nextGrantAt: account.next_grant_at,
+      purchaseRecordedAt: purchases.get(account.id)!,
       meters: balances.get(account.id) ?? emptyMeters(),
     })),
   });

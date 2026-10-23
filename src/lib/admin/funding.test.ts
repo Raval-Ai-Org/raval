@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateFunding, type FundingAccountInput } from "./funding";
+import { calculateFunding, countsForFundingReserve, type FundingAccountInput } from "./funding";
 
 function account(
   planId: FundingAccountInput["planId"],
@@ -14,6 +14,7 @@ function account(
     interval: "month",
     currentPeriodEnd: null,
     nextGrantAt: null,
+    purchaseRecordedAt: "2026-10-24T00:00:00.000Z",
     meters: {
       credits: { available: 100, held: 2, debt: 0 },
       video: { available: 200, held: 0, debt: 0 },
@@ -122,5 +123,47 @@ describe("calculateFunding", () => {
     expect(result.providers[0]?.shortfallUsd).toBeNull();
     expect(result.calculation.unverifiedProviders).toBe(1);
     expect(result.status).toBe("unverified");
+  });
+});
+
+describe("countsForFundingReserve", () => {
+  const countingFrom = "2026-10-23T19:30:00.000Z";
+
+  it("ignores existing accounts, Free plans, and accounts without a paid subscription record", () => {
+    expect(
+      countsForFundingReserve({
+        planId: "agency",
+        status: "active",
+        purchaseRecordedAt: "2026-10-23T19:29:59.999Z",
+        countingFrom,
+      }),
+    ).toBe(false);
+    expect(
+      countsForFundingReserve({
+        planId: "free",
+        status: "free",
+        purchaseRecordedAt: "2026-10-24T00:00:00.000Z",
+        countingFrom,
+      }),
+    ).toBe(false);
+    expect(
+      countsForFundingReserve({
+        planId: "growth",
+        status: "trialing",
+        purchaseRecordedAt: null,
+        countingFrom,
+      }),
+    ).toBe(false);
+  });
+
+  it("counts a paid plan only after the baseline", () => {
+    expect(
+      countsForFundingReserve({
+        planId: "starter",
+        status: "active",
+        purchaseRecordedAt: "2026-10-23T19:30:00.000Z",
+        countingFrom,
+      }),
+    ).toBe(true);
   });
 });

@@ -461,6 +461,7 @@ export const LAB_OVERVIEW: AdminOverview = {
   jobs: { studioFailed24h: 4, studioRunning: 7 },
   admins: { active: 3 },
   funding: calculateFunding({
+    countingFrom: ago(24),
     accounts: [
       {
         accountId: U(20),
@@ -471,6 +472,7 @@ export const LAB_OVERVIEW: AdminOverview = {
         interval: "month",
         currentPeriodEnd: ahead(18),
         nextGrantAt: ahead(18),
+        purchaseRecordedAt: ago(2),
         meters: {
           credits: { available: 1_420, held: 30, debt: 0 },
           video: { available: 300, held: 0, debt: 0 },
@@ -487,6 +489,7 @@ export const LAB_OVERVIEW: AdminOverview = {
         interval: "year",
         currentPeriodEnd: ahead(120),
         nextGrantAt: ahead(12),
+        purchaseRecordedAt: ago(4),
         meters: {
           credits: { available: 4_800, held: 100, debt: 0 },
           video: { available: 900, held: 100, debt: 0 },

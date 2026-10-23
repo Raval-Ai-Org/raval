@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -18,19 +19,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Activity,
   AlertTriangle,
-  ArrowDown,
-  Building2,
   CheckCircle2,
-  CircleDot,
   ExternalLink,
   Gauge,
-  Inbox,
   LineChart,
   RefreshCw,
   ShieldCheck,
-  TrendingDown,
   Users,
-  Video,
   Wallet,
 } from "@/components/icons";
 import type {
@@ -78,13 +73,6 @@ function amountFor(rows: AdminFinanceMoney[], currency: string): number {
   return rows.find((row) => row.currency === currency)?.amountCents ?? 0;
 }
 
-function otherBalances(rows: AdminFinanceMoney[], currency: string): string | undefined {
-  const other = rows.filter((row) => row.currency !== currency && row.amountCents !== 0);
-  return other.length
-    ? other.map((row) => money(row.amountCents, row.currency)).join(" · ")
-    : undefined;
-}
-
 function monthLabel(value: string): string {
   return new Date(`${value}-01T00:00:00Z`).toLocaleDateString(undefined, {
     month: "short",
@@ -112,375 +100,653 @@ function FinanceSkeleton() {
   );
 }
 
-function fundingTone(state: AdminFundingOverview["status"]): "success" | "warning" | "danger" {
-  if (state === "healthy") return "success";
-  if (state === "action_needed") return "danger";
-  return "warning";
-}
-
 function formatVideoCredits(units: number): string {
   return (units / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function FundingDashboard({ data }: { data: AdminFundingOverview }) {
-  const needsTopUp = data.providers.filter((item) => (item.shortfallUsd ?? 0) > 0);
-  const accountsWithDebt = data.accounts.filter((account) =>
-    Object.values(account.meters).some((meter) => meter.debt > 0),
-  ).length;
-  const statusCopy =
-    data.status === "healthy"
-      ? "Provider reserves cover every account"
-      : data.status === "action_needed"
-        ? `Add ${fmtUsd(data.calculation.verifiedTopUpUsd)} in provider credits now`
-        : "Provider balance verification needed";
+function percent(value: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, (value / total) * 100));
+}
+
+function SignalBar({
+  label,
+  value,
+  detail,
+  width,
+  tone = "primary",
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  width: number;
+  tone?: "primary" | "success" | "warning" | "danger";
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[12.5px] font-medium">{label}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{detail}</p>
+        </div>
+        <p className="shrink-0 text-[14px] font-semibold tabular-nums">{value}</p>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-foreground/[0.06]">
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width] duration-500",
+            tone === "primary" && "bg-primary",
+            tone === "success" && "bg-success",
+            tone === "warning" && "bg-warning",
+            tone === "danger" && "bg-destructive",
+          )}
+          style={{ width: `${Math.max(width > 0 ? 3 : 0, Math.min(100, width))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CompanyPulse({
+  data,
+  canOpenBilling,
+  onOpenBilling,
+}: {
+  data: AdminOverview;
+  canOpenBilling: boolean;
+  onOpenBilling: () => void;
+}) {
+  const attention = data.users.suspended + data.workspaces.frozen + data.jobs.studioFailed24h;
+  const activePercent = percent(data.users.active7d, data.users.total);
+  const paidPercent = percent(data.billing.payingAccounts, data.users.total);
+  const workspacePercent = percent(data.workspaces.total, data.users.total);
 
   return (
-    <>
-      <GroupLabel>Provider funding</GroupLabel>
-      <Tile
-        className={cn(
-          "mb-3 overflow-hidden border",
-          data.status === "healthy" && "border-success/25 bg-success/[0.045]",
-          data.status === "action_needed" && "border-destructive/30 bg-destructive/[0.045]",
-          data.status === "unverified" && "border-warning/30 bg-warning/[0.05]",
-        )}
+    <section id="business-health" className="scroll-mt-24">
+      <GroupLabel>Business at a glance</GroupLabel>
+      <div className="grid gap-3 xl:grid-cols-[1.45fr_1fr]">
+        <Tile className="relative overflow-hidden border-primary/15 bg-gradient-to-br from-primary/[0.075] via-card to-card p-5 sm:p-6">
+          <div className="absolute -right-20 -top-24 size-64 rounded-full bg-primary/[0.07] blur-3xl" />
+          <div className="relative">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <Chip tone={attention > 0 ? "warning" : "success"}>
+                    {attention > 0
+                      ? `${fmtNumber(attention)} need attention`
+                      : "Operations healthy"}
+                  </Chip>
+                  <span className="text-[11.5px] text-muted-foreground">
+                    {fmtNumber(data.jobs.studioRunning)} Studio jobs live
+                  </span>
+                </div>
+                <h2 className="max-w-xl text-[22px] font-semibold leading-tight tracking-[-0.025em] sm:text-[26px]">
+                  {fmtNumber(data.users.total)} people across {fmtNumber(data.workspaces.total)}{" "}
+                  workspaces
+                </h2>
+                <p className="mt-2 max-w-2xl text-[12.5px] leading-relaxed text-muted-foreground">
+                  {fmtNumber(data.users.new7d)} joined this week and{" "}
+                  {fmtNumber(data.users.active7d)} signed in during the last 7 days.
+                </p>
+              </div>
+              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <Activity className="size-5" />
+              </span>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-primary/10 pt-5 sm:grid-cols-4">
+              <div>
+                <p className="text-[11px] text-muted-foreground">New this month</p>
+                <p className="mt-1 text-[19px] font-semibold tabular-nums">
+                  {fmtNumber(data.users.new30d)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">Paying accounts</p>
+                <p className="mt-1 text-[19px] font-semibold tabular-nums">
+                  {fmtNumber(data.billing.payingAccounts)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">Trials</p>
+                <p className="mt-1 text-[19px] font-semibold tabular-nums">
+                  {fmtNumber(data.billing.trialingAccounts)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={cn(
+                  "text-left",
+                  canOpenBilling &&
+                    "rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                )}
+                onClick={canOpenBilling ? onOpenBilling : undefined}
+                disabled={!canOpenBilling}
+              >
+                <p className="text-[11px] text-muted-foreground">Upgrade requests</p>
+                <p
+                  className={cn(
+                    "mt-1 text-[19px] font-semibold tabular-nums",
+                    data.billing.pendingRequests > 0 && "text-primary",
+                  )}
+                >
+                  {fmtNumber(data.billing.pendingRequests)}
+                </p>
+              </button>
+            </div>
+          </div>
+        </Tile>
+
+        <Tile className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-[14px] font-semibold">Audience journey</h3>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                From registered users to active customers
+              </p>
+            </div>
+            <Gauge className="size-4 text-muted-foreground" />
+          </div>
+          <div className="mt-5 space-y-5">
+            <SignalBar
+              label="Registered"
+              value={fmtNumber(data.users.total)}
+              detail="All user accounts"
+              width={100}
+            />
+            <SignalBar
+              label="Active this week"
+              value={`${activePercent.toFixed(1)}%`}
+              detail={`${fmtNumber(data.users.active7d)} signed in`}
+              width={activePercent}
+              tone="success"
+            />
+            <SignalBar
+              label="Workspace adoption"
+              value={`${workspacePercent.toFixed(1)}%`}
+              detail={`${fmtNumber(data.workspaces.total)} workspaces`}
+              width={workspacePercent}
+            />
+            <SignalBar
+              label="Paid conversion"
+              value={`${paidPercent.toFixed(1)}%`}
+              detail={`${fmtNumber(data.billing.payingAccounts)} paying accounts`}
+              width={paidPercent}
+              tone={paidPercent > 0 ? "success" : "warning"}
+            />
+          </div>
+        </Tile>
+      </div>
+    </section>
+  );
+}
+
+type OverviewAction = {
+  id: string;
+  title: string;
+  detail: string;
+  href: string;
+  tone: "danger" | "warning" | "primary";
+};
+
+function ActionCenter({
+  data,
+  finance,
+  canOpenBilling,
+}: {
+  data: AdminOverview;
+  finance: Extract<AdminFinanceOverview, { configured: true }> | undefined;
+  canOpenBilling: boolean;
+}) {
+  const actions: OverviewAction[] = [];
+  const funding = data.funding;
+  const failedJobs = data.jobs.studioFailed24h;
+  const restrictedAccounts = data.users.suspended + data.workspaces.frozen;
+
+  if (funding.calculation.verifiedTopUpUsd > 0) {
+    actions.push({
+      id: "funding",
+      title: `Add ${fmtUsd(funding.calculation.verifiedTopUpUsd)} provider credit`,
+      detail: `${funding.providers.filter((provider) => (provider.shortfallUsd ?? 0) > 0).length} provider balance${funding.providers.filter((provider) => (provider.shortfallUsd ?? 0) > 0).length === 1 ? "" : "s"} below target`,
+      href: "#provider-funding",
+      tone: "danger",
+    });
+  } else if (funding.calculation.unverifiedProviders > 0 && funding.accounts.length > 0) {
+    actions.push({
+      id: "funding-unverified",
+      title: "Verify provider balances",
+      detail: `${funding.calculation.unverifiedProviders} balance${funding.calculation.unverifiedProviders === 1 ? " is" : "s are"} unavailable`,
+      href: "#provider-funding",
+      tone: "warning",
+    });
+  }
+
+  if (canOpenBilling && data.billing.pendingRequests > 0) {
+    actions.push({
+      id: "upgrades",
+      title: `${fmtNumber(data.billing.pendingRequests)} upgrade request${data.billing.pendingRequests === 1 ? "" : "s"} waiting`,
+      detail: "Review and approve customer plan requests",
+      href: "/admin/billing",
+      tone: "primary",
+    });
+  }
+
+  if (failedJobs > 0) {
+    actions.push({
+      id: "jobs",
+      title: `${fmtNumber(failedJobs)} Studio job${failedJobs === 1 ? "" : "s"} failed`,
+      detail: "Failures recorded during the last 24 hours",
+      href: "/admin/jobs",
+      tone: "warning",
+    });
+  }
+
+  if (restrictedAccounts > 0) {
+    actions.push({
+      id: "restrictions",
+      title: `${fmtNumber(restrictedAccounts)} account restriction${restrictedAccounts === 1 ? "" : "s"}`,
+      detail: `${fmtNumber(data.users.suspended)} suspended users, ${fmtNumber(data.workspaces.frozen)} frozen workspaces`,
+      href: data.users.suspended > 0 ? "/admin/users" : "/admin/workspaces",
+      tone: "warning",
+    });
+  }
+
+  if (finance) {
+    const stripeRequirements =
+      finance.account.requirements.pastDue.length +
+      finance.account.requirements.currentlyDue.length;
+    const financeIssues =
+      finance.health.failedInvoices30d +
+      finance.health.openDisputes +
+      finance.health.failedPayouts30d +
+      finance.payments.failed30d;
+
+    if (stripeRequirements > 0) {
+      actions.push({
+        id: "stripe-requirements",
+        title: "Stripe account information required",
+        detail: `${fmtNumber(stripeRequirements)} requirement${stripeRequirements === 1 ? "" : "s"} currently due`,
+        href: "#finance-operations",
+        tone: "danger",
+      });
+    } else if (financeIssues > 0) {
+      actions.push({
+        id: "finance",
+        title: `${fmtNumber(financeIssues)} finance signal${financeIssues === 1 ? "" : "s"} to review`,
+        detail: "Failed payments, invoices, disputes or payouts",
+        href: "#finance-operations",
+        tone: "warning",
+      });
+    }
+  }
+
+  return (
+    <section aria-label="What needs attention" className="scroll-mt-24">
+      <GroupLabel
+        action={
+          <Chip tone={actions.length > 0 ? "warning" : "success"}>
+            {actions.length > 0 ? `${actions.length} open` : "All clear"}
+          </Chip>
+        }
       >
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="flex min-w-0 items-start gap-3">
-            <span
+        What needs attention
+      </GroupLabel>
+      {actions.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {actions.map((action) => (
+            <Link
+              key={action.id}
+              href={action.href}
               className={cn(
-                "grid size-10 shrink-0 place-items-center rounded-full",
-                data.status === "healthy"
-                  ? "bg-success/12 text-success"
-                  : data.status === "action_needed"
-                    ? "bg-destructive/12 text-destructive"
-                    : "bg-warning/12 text-warning",
+                "group rounded-2xl border bg-card p-4 shadow-[var(--ds-shadow)] transition-colors hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                action.tone === "danger" && "border-destructive/25",
+                action.tone === "warning" && "border-warning/25",
+                action.tone === "primary" && "border-primary/20",
               )}
             >
-              {data.status === "healthy" ? (
-                <CheckCircle2 className="size-5" />
-              ) : (
-                <AlertTriangle className="size-5" />
-              )}
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-[15px] font-semibold">{statusCopy}</h3>
-                <Chip tone={fundingTone(data.status)}>{data.status.replaceAll("_", " ")}</Chip>
+              <div className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
+                    action.tone === "danger" && "bg-destructive/10 text-destructive",
+                    action.tone === "warning" && "bg-warning/10 text-warning",
+                    action.tone === "primary" && "bg-primary/10 text-primary",
+                  )}
+                >
+                  <AlertTriangle className="size-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[13px] font-semibold">{action.title}</h3>
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                    {action.detail}
+                  </p>
+                  <p className="mt-3 text-[11.5px] font-medium text-primary">Review now →</p>
+                </div>
               </div>
-              <p className="mt-1 max-w-3xl text-[12.5px] leading-relaxed text-muted-foreground">
-                Safe reserve target: {fmtUsd(data.calculation.totalReserveUsd)} across{" "}
-                {fmtNumber(data.accounts.length)} billing accounts. {data.calculation.policy}.
-                {data.calculation.unverifiedProviders > 0
-                  ? ` ${fmtNumber(data.calculation.unverifiedProviders)} provider balance cannot be verified, so the known top-up is not the final total.`
-                  : ` Every top-up amount below uses the live provider balance. Estimated checkout cash is ${fmtUsd(data.calculation.estimatedCashRequiredUsd)}, including OpenRouter's standard purchase fee.`}
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <Tile className="flex flex-wrap items-center justify-between gap-3 border-success/20 bg-success/[0.035] p-4">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 place-items-center rounded-full bg-success/10 text-success">
+              <CheckCircle2 className="size-4" />
+            </span>
+            <div>
+              <h3 className="text-[13px] font-semibold">No immediate action required</h3>
+              <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                Funding, billing, jobs and account health are within their current targets.
               </p>
             </div>
           </div>
-          {needsTopUp.length > 0 && (
-            <div className="flex shrink-0 flex-wrap gap-2">
-              {needsTopUp.map((item) => (
-                <a
-                  key={item.id}
-                  href={item.topUpUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={cn(
-                    dsGhostBtn,
-                    "h-9 border-destructive/25 px-3 text-[12px] text-destructive",
-                  )}
-                >
-                  Add{" "}
-                  {item.id === "kie" && item.shortfallCredits !== null
-                    ? `${fmtNumber(item.shortfallCredits)} credits`
-                    : fmtUsd(item.shortfallUsd ?? 0)}
-                  <ExternalLink className="size-3.5" />
-                </a>
-              ))}
-            </div>
-          )}
+          <Chip tone="success">Healthy</Chip>
+        </Tile>
+      )}
+    </section>
+  );
+}
+
+function OverviewJumpNav({ showFinancials }: { showFinancials: boolean }) {
+  const links = [
+    { href: "#business-health", label: "Business health" },
+    { href: "#provider-funding", label: "Provider funding" },
+    ...(showFinancials
+      ? [
+          { href: "#financials", label: "Financials" },
+          { href: "#finance-operations", label: "Operations" },
+        ]
+      : []),
+  ];
+
+  return (
+    <nav
+      aria-label="Overview sections"
+      className="mt-3 flex gap-1 overflow-x-auto rounded-2xl border border-border/60 bg-card p-1.5 shadow-[var(--ds-shadow)]"
+    >
+      {links.map((link) => (
+        <Link
+          key={link.href}
+          href={link.href}
+          className="shrink-0 rounded-xl px-3 py-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {link.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+function DetailDisclosure({
+  title,
+  detail,
+  count,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  detail: string;
+  count?: number;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details
+      className="group overflow-hidden rounded-2xl border border-border/70 bg-card shadow-[var(--ds-shadow)]"
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3.5 outline-none transition-colors hover:bg-[var(--ds-well-bg)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <div>
+          <p className="text-[13px] font-semibold">{title}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{detail}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {count !== undefined && <Chip tone="neutral">{fmtNumber(count)}</Chip>}
+          <span className="text-[16px] text-muted-foreground transition-transform group-open:rotate-45">
+            +
+          </span>
+        </div>
+      </summary>
+      <div className="border-t border-border/60 p-2 sm:p-3">{children}</div>
+    </details>
+  );
+}
+
+function FundingDashboard({ data }: { data: AdminFundingOverview }) {
+  const nothingToFund = data.accounts.length === 0;
+  const statusCopy = nothingToFund
+    ? "Nothing to fund yet"
+    : data.status === "action_needed"
+      ? `Add ${fmtUsd(data.calculation.verifiedTopUpUsd)} now`
+      : data.status === "unverified"
+        ? "Check provider balances"
+        : "New paid plans are fully covered";
+
+  return (
+    <section id="provider-funding" className="scroll-mt-24">
+      <GroupLabel>Credits to add</GroupLabel>
+      <Tile
+        className={cn(
+          "mb-3 border p-4 sm:p-5",
+          (nothingToFund || data.status === "healthy") && "border-success/25 bg-success/[0.045]",
+          !nothingToFund &&
+            data.status === "action_needed" &&
+            "border-destructive/30 bg-destructive/[0.045]",
+          !nothingToFund && data.status === "unverified" && "border-warning/30 bg-warning/[0.05]",
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className={cn(
+              "grid size-10 shrink-0 place-items-center rounded-full",
+              nothingToFund || data.status === "healthy"
+                ? "bg-success/12 text-success"
+                : data.status === "action_needed"
+                  ? "bg-destructive/12 text-destructive"
+                  : "bg-warning/12 text-warning",
+            )}
+          >
+            {nothingToFund || data.status === "healthy" ? (
+              <CheckCircle2 className="size-5" />
+            ) : (
+              <AlertTriangle className="size-5" />
+            )}
+          </span>
+          <div>
+            <h3 className="text-[16px] font-semibold">{statusCopy}</h3>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+              Existing accounts and Free plans count as $0. Only successful paid-plan purchases or
+              renewals recorded after {fmtDateTime(data.calculation.countingFrom)} are included.
+            </p>
+          </div>
         </div>
       </Tile>
 
-      <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-3 grid gap-3 sm:grid-cols-3">
         <Stat
-          label="Safe reserve target"
-          value={fmtUsd(data.calculation.totalReserveUsd)}
-          icon={Gauge}
-          hint={`${fmtNumber(data.accounts.length)} funded accounts`}
+          label="New paid plans counted"
+          value={fmtNumber(data.accounts.length)}
+          icon={Users}
+          hint="Existing and Free accounts excluded"
         />
         <Stat
-          label="Provider credits to add"
+          label="Credits required"
+          value={fmtUsd(data.calculation.totalReserveUsd)}
+          icon={Gauge}
+          hint="OpenRouter and KIE reserve"
+        />
+        <Stat
+          label="Add now"
           value={fmtUsd(data.calculation.verifiedTopUpUsd)}
           icon={Wallet}
           tone={data.calculation.verifiedTopUpUsd > 0 ? "destructive" : "success"}
           hint={
-            data.calculation.unverifiedProviders > 0
-              ? "Known minimum; verify unavailable balances"
-              : "Exact from current live balances"
+            data.calculation.unverifiedProviders
+              ? "Verify unavailable balance"
+              : "After provider balances"
           }
         />
-        <Stat
-          label="Estimated checkout cash"
-          value={fmtUsd(data.calculation.estimatedCashRequiredUsd)}
-          icon={Wallet}
-          tone={data.calculation.estimatedCashRequiredUsd > 0 ? "warning" : "success"}
-          hint="Includes OpenRouter's standard 5.5% fee ($0.80 minimum)"
-        />
-        <Stat
-          label="Balances verified"
-          value={`${data.providers.length - data.calculation.unverifiedProviders}/${data.providers.length}`}
-          icon={ShieldCheck}
-          tone={data.calculation.unverifiedProviders > 0 ? "warning" : "success"}
-          hint="Credit-backed AI providers"
-        />
-        <Stat
-          label="Customer wallet debt"
-          value={fmtNumber(accountsWithDebt)}
-          icon={AlertTriangle}
-          tone={accountsWithDebt > 0 ? "warning" : "success"}
-          hint="Accounts with any meter debt"
-        />
       </div>
 
-      <div className="mb-3 grid gap-3 lg:grid-cols-2">
-        {data.providers.map((item) => {
-          const short = (item.shortfallUsd ?? 0) > 0;
-          const verified = item.balanceUsd !== null;
-          const progress = Math.min(100, item.coveragePercent ?? 0);
-          return (
-            <Tile key={item.id} className="p-4 sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-[14px] font-semibold">{item.label}</h4>
-                    <Chip tone={!verified ? "warning" : short ? "danger" : "success"}>
-                      {!verified ? "unverified" : short ? "top up" : "funded"}
-                    </Chip>
+      {data.accounts.length > 0 && (
+        <div className="mb-3 grid gap-3 lg:grid-cols-2">
+          {data.providers.map((item) => {
+            const short = (item.shortfallUsd ?? 0) > 0;
+            const verified = item.balanceUsd !== null;
+            return (
+              <Tile key={item.id} className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-[14px] font-semibold">{item.label}</h4>
+                      <Chip tone={!verified ? "warning" : short ? "danger" : "success"}>
+                        {!verified ? "unverified" : short ? "top up" : "funded"}
+                      </Chip>
+                    </div>
+                    <p className="mt-1 text-[11.5px] text-muted-foreground">{item.message}</p>
                   </div>
-                  <p className="mt-1 text-[12px] text-muted-foreground">{item.message}</p>
-                </div>
-                <a
-                  href={item.topUpUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
-                >
-                  Top up <ExternalLink className="size-3" />
-                </a>
-              </div>
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Balance
-                  </p>
-                  <p className="mt-1 text-[18px] font-semibold tabular-nums">
-                    {item.balanceUsd === null ? "—" : fmtUsd(item.balanceUsd)}
-                  </p>
-                  {item.balanceCredits !== null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtNumber(item.balanceCredits)} credits
-                    </p>
+                  {(short || !verified) && (
+                    <a
+                      href={item.topUpUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={cn(dsGhostBtn, "h-8 px-3 text-[12px]")}
+                    >
+                      {short ? "Add credits" : "Open provider"} <ExternalLink className="size-3" />
+                    </a>
                   )}
                 </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Target
-                  </p>
-                  <p className="mt-1 text-[18px] font-semibold tabular-nums">
-                    {fmtUsd(item.reserveUsd)}
-                  </p>
-                  {item.reserveCredits !== null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtNumber(item.reserveCredits)} credits
+                <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border/50 pt-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Balance
                     </p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Add now
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-1 text-[18px] font-semibold tabular-nums",
-                      short && "text-destructive",
+                    <p className="mt-1 text-[18px] font-semibold tabular-nums">
+                      {item.balanceUsd === null ? "—" : fmtUsd(item.balanceUsd)}
+                    </p>
+                    {item.balanceCredits !== null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {fmtNumber(item.balanceCredits)} credits
+                      </p>
                     )}
-                  >
-                    {item.shortfallUsd === null ? "Verify" : fmtUsd(item.shortfallUsd)}
-                  </p>
-                  {item.shortfallCredits !== null && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtNumber(item.shortfallCredits)} credits
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Target
                     </p>
-                  )}
-                  {item.cashRequiredUsd !== null && item.cashRequiredUsd !== item.shortfallUsd && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {fmtUsd(item.cashRequiredUsd)} at checkout incl.{" "}
-                      {fmtUsd(item.purchaseFeeUsd ?? 0)} fee
+                    <p className="mt-1 text-[18px] font-semibold tabular-nums">
+                      {fmtUsd(item.reserveUsd)}
                     </p>
-                  )}
+                    {item.reserveCredits !== null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {fmtNumber(item.reserveCredits)} credits
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Add now
+                    </p>
+                    <p
+                      className={cn(
+                        "mt-1 text-[18px] font-semibold tabular-nums",
+                        short && "text-destructive",
+                      )}
+                    >
+                      {item.shortfallUsd === null ? "Verify" : fmtUsd(item.shortfallUsd)}
+                    </p>
+                    {item.shortfallCredits !== null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {fmtNumber(item.shortfallCredits)} credits
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-foreground/[0.07]">
-                <div
-                  className={cn("h-full rounded-full", short ? "bg-destructive" : "bg-success")}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
-                <span>
-                  {verified
-                    ? `${fmtNumber(item.coveragePercent ?? 0)}% covered`
-                    : "Coverage unknown"}
-                </span>
-                <span>
-                  {item.balanceState} · checked {ago(item.checkedAt)}
-                </span>
-              </div>
-            </Tile>
-          );
-        })}
-      </div>
+                <div className="mt-4">
+                  <div className="mb-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Provider coverage</span>
+                    <span className="font-medium tabular-nums text-foreground">
+                      {item.coveragePercent === null
+                        ? "Balance unavailable"
+                        : `${Math.min(100, item.coveragePercent).toFixed(0)}%`}
+                    </span>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-foreground/[0.06]">
+                    <div
+                      className={cn(
+                        "h-full rounded-full",
+                        !verified ? "bg-warning" : short ? "bg-destructive" : "bg-success",
+                      )}
+                      style={{
+                        width: `${item.coveragePercent === null ? 0 : Math.min(100, item.coveragePercent)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </Tile>
+            );
+          })}
+        </div>
+      )}
 
-      <TableFrame label="Funding requirement by Mellox plan">
-        <thead>
-          <tr>
-            <th className={th}>Plan</th>
-            <th className={`${th} text-right`}>Accounts</th>
-            <th className={`${th} text-right`}>OpenRouter</th>
-            <th className={`${th} text-right`}>KIE</th>
-            <th className={`${th} text-right`}>Combined reserve</th>
-            <th className={`${th} text-right`}>Credits remaining</th>
-            <th className={`${th} text-right`}>Video remaining</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.plans.map((plan) => (
-            <tr key={plan.planId} className={rowClass}>
-              <td className={`${td} font-medium`}>{plan.planLabel}</td>
-              <td className={`${td} text-right tabular-nums`}>{fmtNumber(plan.accounts)}</td>
-              <td className={`${td} text-right tabular-nums`}>
-                {fmtUsd(plan.openRouterReserveUsd)}
-              </td>
-              <td className={`${td} text-right tabular-nums`}>{fmtUsd(plan.kieReserveUsd)}</td>
-              <td className={`${td} text-right font-semibold tabular-nums`}>
-                {fmtUsd(plan.totalReserveUsd)}
-              </td>
-              <td className={`${td} text-right tabular-nums`}>
-                {fmtNumber(plan.remaining.credits)}
-              </td>
-              <td className={`${td} text-right tabular-nums`}>
-                {formatVideoCredits(plan.remaining.video)} VC
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </TableFrame>
-
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        {data.dependencies.map((item) => (
-          <Tile key={item.id} className="flex items-start gap-3 p-4">
-            <span
-              className={cn(
-                "mt-0.5 size-2.5 shrink-0 rounded-full",
-                item.configured ? "bg-success" : "bg-warning",
-              )}
-            />
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[13px] font-semibold">{item.label}</p>
-                <Chip tone={item.configured ? "success" : "warning"}>
-                  {item.configured ? "configured" : "not configured"}
-                </Chip>
-              </div>
-              <p className="mt-1 text-[11.5px] text-muted-foreground">
-                {item.billingModel} · {item.message}
-              </p>
-            </div>
-          </Tile>
-        ))}
-      </div>
-
-      <details className="mt-3 group" open={data.accounts.length <= 25}>
-        <summary className="cursor-pointer list-none rounded-xl border border-border/60 bg-foreground/[0.025] px-4 py-3 text-[13px] font-semibold hover:bg-foreground/[0.045]">
-          Customer credit ledger · {fmtNumber(data.accounts.length)} accounts
-          <span className="ml-2 font-normal text-muted-foreground">
-            General, video, Pro and Flash balances
-          </span>
-        </summary>
-        <div className="mt-2">
-          <TableFrame label="Customer balances and provider reserve contribution">
+      {data.accounts.length > 0 && (
+        <DetailDisclosure
+          title="Customers included in the reserve"
+          detail="Inspect each new paid plan and its remaining credits"
+          count={data.accounts.length}
+        >
+          <TableFrame label="Paid plans counted for provider funding">
             <thead>
               <tr>
-                <th className={th}>Account owner</th>
+                <th className={th}>Customer</th>
+                <th className={th}>Purchased</th>
                 <th className={th}>Plan</th>
-                <th className={`${th} text-right`}>General</th>
-                <th className={`${th} text-right`}>Video</th>
-                <th className={`${th} text-right`}>Pro</th>
-                <th className={`${th} text-right`}>Flash</th>
-                <th className={`${th} text-right`}>Provider reserve</th>
-                <th className={`${th} text-right`}>Next grant</th>
+                <th className={th}>Credits remaining</th>
+                <th className={`${th} text-right`}>Reserve</th>
               </tr>
             </thead>
             <tbody>
-              {data.accounts.map((account) => {
-                const debt = Object.values(account.meters).reduce(
-                  (sum, meter) => sum + meter.debt,
-                  0,
-                );
-                return (
-                  <tr key={account.accountId} className={rowClass}>
-                    <td className={td}>
-                      <Link
-                        href={`/admin/billing?account=${encodeURIComponent(account.accountId)}`}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {account.ownerEmail ?? `${account.accountId.slice(0, 8)}…`}
-                      </Link>
-                      <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">
-                        {account.accountId.slice(0, 13)}…
-                      </p>
-                    </td>
-                    <td className={td}>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-medium">{account.planLabel}</span>
-                        <Chip
-                          tone={account.reserveEligible ? statusTone(account.status) : "neutral"}
-                        >
-                          {account.status}
-                        </Chip>
-                        {debt > 0 && <Chip tone="danger">debt {fmtNumber(debt)}</Chip>}
-                      </div>
-                    </td>
-                    <td className={`${td} text-right tabular-nums`}>
+              {data.accounts.map((account) => (
+                <tr key={account.accountId} className={rowClass}>
+                  <td className={td}>
+                    <Link
+                      href={`/admin/billing?account=${encodeURIComponent(account.accountId)}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {account.ownerEmail ?? `${account.accountId.slice(0, 8)}…`}
+                    </Link>
+                  </td>
+                  <td className={`${td} whitespace-nowrap text-muted-foreground`}>
+                    {fmtDateTime(account.purchaseRecordedAt)}
+                  </td>
+                  <td className={`${td} font-medium`}>{account.planLabel}</td>
+                  <td className={`${td} text-[12px] text-muted-foreground`}>
+                    <span className="text-foreground">
                       {fmtNumber(account.meters.credits.available)}
-                    </td>
-                    <td className={`${td} text-right tabular-nums`}>
-                      <span className="inline-flex items-center justify-end gap-1">
-                        <Video className="size-3 text-muted-foreground" />
-                        {formatVideoCredits(account.meters.video.available)} VC
-                      </span>
-                    </td>
-                    <td className={`${td} text-right tabular-nums`}>
+                    </span>{" "}
+                    general ·{" "}
+                    <span className="text-foreground">
+                      {formatVideoCredits(account.meters.video.available)}
+                    </span>{" "}
+                    VC ·{" "}
+                    <span className="text-foreground">
                       {fmtNumber(account.meters.proMessages.available)}
-                    </td>
-                    <td className={`${td} text-right tabular-nums`}>
+                    </span>{" "}
+                    Pro ·{" "}
+                    <span className="text-foreground">
                       {fmtNumber(account.meters.flashMessages.available)}
-                    </td>
-                    <td className={`${td} text-right font-medium tabular-nums`}>
-                      {fmtUsd(account.reserve.totalUsd)}
-                    </td>
-                    <td className={`${td} whitespace-nowrap text-right text-muted-foreground`}>
-                      {fmtDateTime(account.nextGrantAt)}
-                    </td>
-                  </tr>
-                );
-              })}
+                    </span>{" "}
+                    Flash
+                  </td>
+                  <td className={`${td} text-right font-semibold tabular-nums`}>
+                    {fmtUsd(account.reserve.totalUsd)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </TableFrame>
-        </div>
-      </details>
-    </>
+        </DetailDisclosure>
+      )}
+    </section>
   );
 }
 
@@ -489,8 +755,16 @@ function RevenueChart({ data }: { data: Extract<AdminFinanceOverview, { configur
     month: row.month,
     received: row.receivedCents / 100,
     net: row.netRevenueCents / 100,
+    sales: row.sales,
   }));
   const hasRevenue = rows.some((row) => row.received !== 0 || row.net !== 0);
+  const totalReceived = data.monthly.reduce((total, row) => total + row.receivedCents, 0);
+  const totalNet = data.monthly.reduce((total, row) => total + row.netRevenueCents, 0);
+  const totalSales = data.monthly.reduce((total, row) => total + row.sales, 0);
+  const strongestMonth = data.monthly.reduce<(typeof data.monthly)[number] | null>(
+    (best, row) => (!best || row.receivedCents > best.receivedCents ? row : best),
+    null,
+  );
 
   return (
     <Tile className="p-4 sm:p-5">
@@ -511,73 +785,98 @@ function RevenueChart({ data }: { data: Extract<AdminFinanceOverview, { configur
         </div>
       </div>
       {hasRevenue ? (
-        <div className="h-60" aria-label="Revenue over the last 12 months">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={rows} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-              <defs>
-                <linearGradient id="admin-revenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.26} />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                stroke="hsl(var(--border))"
-                strokeDasharray="3 3"
-                vertical={false}
-                opacity={0.5}
-              />
-              <XAxis
-                dataKey="month"
-                tickFormatter={monthLabel}
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={10.5}
-                tickLine={false}
-                axisLine={false}
-                minTickGap={18}
-              />
-              <YAxis
-                tickFormatter={(value) => compactMoney(Number(value), data.currency)}
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={10.5}
-                tickLine={false}
-                axisLine={false}
-                width={44}
-              />
-              <Tooltip
-                labelFormatter={(value) => monthLabel(String(value))}
-                formatter={(value, name) => [
-                  money(Math.round(Number(value ?? 0) * 100), data.currency),
-                  name === "received" ? "Received" : "Net revenue",
-                ]}
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: 12,
-                  fontSize: 12,
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="received"
-                stroke="hsl(var(--primary))"
-                strokeWidth={2.25}
-                fill="url(#admin-revenue)"
-                dot={false}
-                isAnimationActive={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="net"
-                stroke="hsl(var(--foreground))"
-                strokeOpacity={0.62}
-                strokeWidth={1.75}
-                fill="none"
-                dot={false}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          <div className="h-60" aria-label="Revenue over the last 12 months">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={rows} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="admin-revenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.26} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  stroke="hsl(var(--border))"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  opacity={0.5}
+                />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={monthLabel}
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={10.5}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={18}
+                />
+                <YAxis
+                  tickFormatter={(value) => compactMoney(Number(value), data.currency)}
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={10.5}
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                />
+                <Tooltip
+                  labelFormatter={(value) => monthLabel(String(value))}
+                  formatter={(value, name) => [
+                    money(Math.round(Number(value ?? 0) * 100), data.currency),
+                    name === "received" ? "Received" : "Net revenue",
+                  ]}
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 12,
+                    fontSize: 12,
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="received"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2.25}
+                  fill="url(#admin-revenue)"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="net"
+                  stroke="hsl(var(--foreground))"
+                  strokeOpacity={0.62}
+                  strokeWidth={1.75}
+                  fill="none"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border/60 pt-4">
+            <div>
+              <p className="text-[10.5px] text-muted-foreground">12-month gross</p>
+              <p className="mt-1 text-[13px] font-semibold tabular-nums">
+                {money(totalReceived, data.currency)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10.5px] text-muted-foreground">Net retained</p>
+              <p className="mt-1 text-[13px] font-semibold tabular-nums">
+                {totalReceived > 0 ? `${((totalNet / totalReceived) * 100).toFixed(1)}%` : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10.5px] text-muted-foreground">Best month</p>
+              <p className="mt-1 text-[13px] font-semibold tabular-nums">
+                {strongestMonth ? monthLabel(strongestMonth.month) : "—"}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {fmtNumber(totalSales)} total sales
+              </p>
+            </div>
+          </div>
+        </>
       ) : (
         <div className="grid h-60 place-items-center rounded-2xl bg-[var(--ds-well-bg)] text-center">
           <div>
@@ -860,15 +1159,247 @@ function RiskActivity({ data }: { data: Extract<AdminFinanceOverview, { configur
   );
 }
 
-function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { configured: true }> }) {
+function CashPositionVisual({
+  data,
+}: {
+  data: Extract<AdminFinanceOverview, { configured: true }>;
+}) {
   const available = amountFor(data.balance.available, data.currency);
   const pending = amountFor(data.balance.pending, data.currency);
-  const instant = amountFor(data.balance.instantAvailable, data.currency);
+  const inTransit = data.payoutPipeline.inTransitCents;
+  const total = Math.max(0, available) + Math.max(0, pending) + Math.max(0, inTransit);
+  const rows = [
+    { label: "Available now", value: available, tone: "success" as const },
+    { label: "Pending in Stripe", value: pending, tone: "primary" as const },
+    { label: "Payouts in transit", value: inTransit, tone: "warning" as const },
+  ];
+
+  return (
+    <Tile className="h-full p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-[14px] font-semibold">Cash movement</h4>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Where accessible cash is right now
+          </p>
+        </div>
+        <Wallet className="size-4 text-muted-foreground" />
+      </div>
+      <div className="mt-5 rounded-2xl bg-[var(--ds-well-bg)] p-4">
+        <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          Tracked cash
+        </p>
+        <p className="mt-1.5 text-[25px] font-semibold tracking-[-0.025em] tabular-nums">
+          {money(total, data.currency)}
+        </p>
+        <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-foreground/[0.06]">
+          {rows.map((row) => (
+            <span
+              key={row.label}
+              className={cn(
+                "h-full first:rounded-l-full last:rounded-r-full",
+                row.tone === "success" && "bg-success",
+                row.tone === "primary" && "bg-primary",
+                row.tone === "warning" && "bg-warning",
+              )}
+              style={{ width: `${percent(Math.max(0, row.value), total)}%` }}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-3 text-[12px]">
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <span
+                className={cn(
+                  "size-2 rounded-full",
+                  row.tone === "success" && "bg-success",
+                  row.tone === "primary" && "bg-primary",
+                  row.tone === "warning" && "bg-warning",
+                )}
+              />
+              {row.label}
+            </span>
+            <span className="font-medium tabular-nums">{money(row.value, data.currency)}</span>
+          </div>
+        ))}
+      </div>
+    </Tile>
+  );
+}
+
+function ProfitVisual({ data }: { data: Extract<AdminFinanceOverview, { configured: true }> }) {
+  const gross = data.last30Days.receivedCents;
+  const stripeCosts =
+    data.last30Days.feesCents + data.last30Days.refundsCents + data.last30Days.disputesCents;
+  const aiCostCents =
+    data.last30Days.estimatedAiCostUsd === null
+      ? null
+      : Math.round(data.last30Days.estimatedAiCostUsd * 100);
+  const max = Math.max(1, gross, data.last30Days.netRevenueCents, aiCostCents ?? 0);
+
+  return (
+    <Tile className="h-full p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-[14px] font-semibold">30-day profitability</h4>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Revenue after Stripe and measured AI usage
+          </p>
+        </div>
+        <Chip
+          tone={
+            data.last30Days.marginPercent === null
+              ? "neutral"
+              : data.last30Days.marginPercent >= 60
+                ? "success"
+                : data.last30Days.marginPercent >= 0
+                  ? "warning"
+                  : "danger"
+          }
+        >
+          {data.last30Days.marginPercent === null
+            ? "Margin unavailable"
+            : `${data.last30Days.marginPercent.toFixed(1)}% margin`}
+        </Chip>
+      </div>
+      <div className="mt-5 space-y-4">
+        <SignalBar
+          label="Gross received"
+          value={money(gross, data.currency)}
+          detail={`${fmtNumber(data.last30Days.sales)} successful payments`}
+          width={percent(gross, max)}
+        />
+        <SignalBar
+          label="Stripe deductions"
+          value={money(stripeCosts, data.currency)}
+          detail="Fees, refunds and disputes"
+          width={percent(stripeCosts, max)}
+          tone={stripeCosts > 0 ? "warning" : "success"}
+        />
+        <SignalBar
+          label="Net revenue"
+          value={money(data.last30Days.netRevenueCents, data.currency)}
+          detail="After Stripe activity"
+          width={percent(data.last30Days.netRevenueCents, max)}
+          tone="success"
+        />
+        <SignalBar
+          label="Measured AI cost"
+          value={aiCostCents === null ? "Unavailable" : money(aiCostCents, data.currency)}
+          detail="OpenRouter and KIE usage"
+          width={aiCostCents === null ? 0 : percent(aiCostCents, max)}
+          tone="warning"
+        />
+      </div>
+      <div className="mt-5 flex items-end justify-between gap-4 border-t border-border/60 pt-4">
+        <div>
+          <p className="text-[11px] text-muted-foreground">Estimated contribution profit</p>
+          <p
+            className={cn(
+              "mt-1 text-[22px] font-semibold tabular-nums",
+              (data.last30Days.estimatedProfitCents ?? 0) < 0 && "text-destructive",
+            )}
+          >
+            {data.last30Days.estimatedProfitCents === null
+              ? "—"
+              : money(data.last30Days.estimatedProfitCents, data.currency)}
+          </p>
+        </div>
+        <p className="max-w-48 text-right text-[10.5px] leading-relaxed text-muted-foreground">
+          Before payroll, marketing, tax and other overhead.
+        </p>
+      </div>
+    </Tile>
+  );
+}
+
+function GrowthVisual({ data }: { data: Extract<AdminFinanceOverview, { configured: true }> }) {
+  const lifecycleTotal = Math.max(
+    1,
+    data.recurring.active +
+      data.recurring.trialing +
+      data.recurring.pastDue +
+      data.recurring.canceling,
+  );
+  return (
+    <Tile className="h-full p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="text-[14px] font-semibold">Subscription momentum</h4>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Growth and retention over the last 30 days
+          </p>
+        </div>
+        <Chip
+          tone={
+            data.recurring.churnPercent !== null && data.recurring.churnPercent > 7
+              ? "warning"
+              : "success"
+          }
+        >
+          {data.recurring.churnPercent === null
+            ? "No churn data"
+            : `${data.recurring.churnPercent.toFixed(1)}% churn`}
+        </Chip>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-primary/[0.055] p-4">
+          <p className="text-[11px] text-muted-foreground">MRR</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+            {money(data.recurring.mrrCents, data.currency)}
+          </p>
+          <p className="mt-1 text-[10.5px] text-muted-foreground">
+            {money(data.recurring.arrCents, data.currency)} ARR
+          </p>
+        </div>
+        <div className="rounded-2xl bg-success/[0.055] p-4">
+          <p className="text-[11px] text-muted-foreground">Net adds</p>
+          <p className="mt-1 text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+            {fmtNumber(data.recurring.new30d - data.recurring.canceled30d)}
+          </p>
+          <p className="mt-1 text-[10.5px] text-muted-foreground">
+            {fmtNumber(data.recurring.new30d)} new, {fmtNumber(data.recurring.canceled30d)} canceled
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 space-y-4">
+        <SignalBar
+          label="Active"
+          value={fmtNumber(data.recurring.active)}
+          detail="Paying subscriptions"
+          width={percent(data.recurring.active, lifecycleTotal)}
+          tone="success"
+        />
+        <SignalBar
+          label="Trialing"
+          value={fmtNumber(data.recurring.trialing)}
+          detail="Potential conversions"
+          width={percent(data.recurring.trialing, lifecycleTotal)}
+        />
+        <SignalBar
+          label="At risk"
+          value={fmtNumber(
+            data.recurring.pastDue +
+              data.recurring.canceling +
+              data.recurring.unpaid +
+              data.recurring.incomplete,
+          )}
+          detail={`${fmtNumber(data.recurring.pastDue)} past due, ${fmtNumber(data.recurring.canceling)} canceling`}
+          width={percent(data.recurring.pastDue + data.recurring.canceling, lifecycleTotal)}
+          tone="warning"
+        />
+      </div>
+    </Tile>
+  );
+}
+
+function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { configured: true }> }) {
   const reserved = amountFor(data.balance.connectReserved, data.currency);
   const refundReserve =
     amountFor(data.balance.refundPrefundingAvailable, data.currency) +
     amountFor(data.balance.refundPrefundingPending, data.currency);
-  const profit = data.last30Days.estimatedProfitCents;
   const issues =
     data.health.failedInvoices30d +
     data.health.openDisputes +
@@ -881,7 +1412,7 @@ function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { conf
   const coverageMessages = [...data.coverage.unavailable, ...data.coverage.truncated];
 
   return (
-    <>
+    <section id="financials" className="scroll-mt-24">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[var(--ds-well-bg)] px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5 text-[12.5px]">
           <span
@@ -940,179 +1471,77 @@ function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { conf
         </div>
       )}
 
-      <GroupLabel>Cash position</GroupLabel>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="Available to withdraw"
-          value={money(available, data.currency)}
-          icon={Wallet}
-          tone="primary"
-          hint={
-            otherBalances(data.balance.available, data.currency) ||
-            (instant > 0 ? `${money(instant, data.currency)} instant` : "Stripe balance now")
-          }
-        />
-        <Stat
-          label="Pending balance"
-          value={money(pending, data.currency)}
-          icon={CircleDot}
-          hint={otherBalances(data.balance.pending, data.currency) || "On the way to available"}
-        />
-        <Stat
-          label="Received · 30 days"
-          value={money(data.last30Days.receivedCents, data.currency)}
-          icon={Activity}
-          tone="success"
-          hint={`${fmtNumber(data.last30Days.sales)} successful payments`}
-        />
-        <Stat
-          label="Withdrawn · 30 days"
-          value={money(data.last30Days.paidOutCents, data.currency)}
-          icon={ArrowDown}
-          hint={`${fmtNumber(data.recentPayouts.filter((payout) => payout.status === "paid").length)} paid payouts shown below`}
-        />
+      <GroupLabel>Financial command center</GroupLabel>
+      <div className="grid gap-3 xl:grid-cols-[1.65fr_1fr]">
+        <RevenueChart data={data} />
+        <CashPositionVisual data={data} />
       </div>
 
       <GroupLabel>Revenue pulse</GroupLabel>
       <PeriodSnapshot data={data} />
 
-      <GroupLabel>Revenue, cost & profit · last 30 days</GroupLabel>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat
-          label="Net revenue after Stripe"
-          value={money(data.last30Days.netRevenueCents, data.currency)}
-          icon={LineChart}
-          tone={data.last30Days.netRevenueCents >= 0 ? "success" : "destructive"}
-          hint="After refunds, disputes and Stripe fees"
-        />
-        <Stat
-          label="Stripe fees"
-          value={money(data.last30Days.feesCents, data.currency)}
-          hint="Taken from Stripe balance transactions"
-        />
-        <Stat
-          label="Refunds"
-          value={money(data.last30Days.refundsCents, data.currency)}
-          icon={TrendingDown}
-          tone={data.last30Days.refundsCents > 0 ? "warning" : "default"}
-          hint={`${fmtNumber(data.health.refundedTransactions30d)} refund transactions`}
-        />
-        <Stat
-          label="Estimated AI cost"
-          value={
-            data.last30Days.estimatedAiCostUsd === null
-              ? "—"
-              : fmtUsd(data.last30Days.estimatedAiCostUsd)
-          }
-          hint="Provider-reported Mellox usage"
-        />
-        <Stat
-          label="Est. contribution profit"
-          value={profit === null ? "—" : money(profit, data.currency)}
-          icon={Wallet}
-          tone={profit === null ? "default" : profit >= 0 ? "success" : "destructive"}
-          hint="Net revenue minus measured AI cost"
-        />
-        <Stat
-          label="Est. contribution margin"
-          value={
-            data.last30Days.marginPercent === null
-              ? "—"
-              : `${data.last30Days.marginPercent.toFixed(1)}%`
-          }
-          tone={
-            data.last30Days.marginPercent === null
-              ? "default"
-              : data.last30Days.marginPercent >= 60
-                ? "success"
-                : data.last30Days.marginPercent >= 0
-                  ? "warning"
-                  : "destructive"
-          }
-          hint="Excludes payroll, marketing, tax and other overhead"
-        />
+      <GroupLabel>Profitability & recurring growth</GroupLabel>
+      <div className="grid gap-3 xl:grid-cols-2">
+        <ProfitVisual data={data} />
+        <GrowthVisual data={data} />
       </div>
 
-      <GroupLabel>Performance</GroupLabel>
-      <RevenueChart data={data} />
-
-      <GroupLabel>Growth & retention · last 30 days</GroupLabel>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="New subscriptions"
-          value={fmtNumber(data.recurring.new30d)}
-          icon={Activity}
-          tone="success"
-          hint={`${fmtNumber(data.recurring.canceled30d)} canceled`}
-        />
-        <Stat
-          label="Subscriber churn"
-          value={
-            data.recurring.churnPercent === null
-              ? "—"
-              : `${data.recurring.churnPercent.toFixed(1)}%`
-          }
-          tone={
-            data.recurring.churnPercent === null
-              ? "default"
-              : data.recurring.churnPercent <= 3
-                ? "success"
-                : data.recurring.churnPercent <= 7
-                  ? "warning"
-                  : "destructive"
-          }
-          hint="Canceled ÷ active plus canceled"
-        />
-        <Stat
-          label="Stripe customers"
-          value={fmtNumber(data.customers.total)}
-          icon={Users}
-          hint={`${fmtNumber(data.customers.new30d)} new in 30 days`}
-        />
-        <Stat
-          label="Repeat buyers"
-          value={fmtNumber(data.customers.repeatBuyers30d)}
-          hint="Customers with 2+ paid invoices in 30 days"
-        />
-      </div>
-
-      <GroupLabel>Recurring business</GroupLabel>
-      <div className="grid gap-3 lg:grid-cols-[1fr_1.35fr]">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-          <Stat
-            label="MRR"
-            value={money(data.recurring.mrrCents, data.currency)}
-            icon={LineChart}
-            tone="primary"
-            hint="Active list-price subscriptions"
-          />
-          <Stat
-            label="ARR run rate"
-            value={money(data.recurring.arrCents, data.currency)}
-            hint="MRR × 12"
-          />
-          <Stat
-            label="Trials"
-            value={fmtNumber(data.recurring.trialing)}
-            hint="Current Stripe trials"
-          />
-          <Stat
-            label="At risk"
-            value={fmtNumber(
-              data.recurring.pastDue +
-                data.recurring.canceling +
-                data.recurring.unpaid +
-                data.recurring.incomplete,
-            )}
-            tone={
-              data.recurring.pastDue + data.recurring.canceling + data.recurring.unpaid > 0
-                ? "warning"
-                : "success"
-            }
-            hint={`${fmtNumber(data.recurring.pastDue)} past due · ${fmtNumber(data.recurring.canceling)} canceling · ${fmtNumber(data.recurring.paused)} paused`}
-          />
-        </div>
+      <GroupLabel>Customers & plan mix</GroupLabel>
+      <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr]">
         <PlanMix data={data} />
+        <Tile className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-[14px] font-semibold">Customer picture</h4>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                Acquisition, loyalty and billing risk
+              </p>
+            </div>
+            <Users className="size-4 text-muted-foreground" />
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-[var(--ds-well-bg)] p-4">
+              <p className="text-[11px] text-muted-foreground">Stripe customers</p>
+              <p className="mt-1 text-[21px] font-semibold tabular-nums">
+                {fmtNumber(data.customers.total)}
+              </p>
+              <p className="mt-1 text-[10.5px] text-muted-foreground">
+                +{fmtNumber(data.customers.new30d)} in 30 days
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[var(--ds-well-bg)] p-4">
+              <p className="text-[11px] text-muted-foreground">Repeat buyers</p>
+              <p className="mt-1 text-[21px] font-semibold tabular-nums">
+                {fmtNumber(data.customers.repeatBuyers30d)}
+              </p>
+              <p className="mt-1 text-[10.5px] text-muted-foreground">2+ paid invoices</p>
+            </div>
+          </div>
+          <div className="mt-5 space-y-4">
+            <SignalBar
+              label="Payment success"
+              value={
+                data.payments.successRatePercent === null
+                  ? "No attempts"
+                  : `${data.payments.successRatePercent.toFixed(1)}%`
+              }
+              detail={`${fmtNumber(data.payments.succeeded30d)} succeeded, ${fmtNumber(data.payments.failed30d)} failed`}
+              width={data.payments.successRatePercent ?? 0}
+              tone={(data.payments.successRatePercent ?? 100) >= 90 ? "success" : "warning"}
+            />
+            <SignalBar
+              label="Invoice collection"
+              value={
+                data.invoices.collectionRatePercent === null
+                  ? "No invoices"
+                  : `${data.invoices.collectionRatePercent.toFixed(1)}%`
+              }
+              detail={`${fmtNumber(data.invoices.paid30d)} paid, ${fmtNumber(data.invoices.overdue)} overdue`}
+              width={data.invoices.collectionRatePercent ?? 0}
+              tone={data.invoices.overdue > 0 ? "warning" : "success"}
+            />
+          </div>
+        </Tile>
       </div>
 
       <GroupLabel
@@ -1122,43 +1551,86 @@ function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { conf
           </Link>
         }
       >
-        Recent Stripe plan sales
+        Detailed financial records
       </GroupLabel>
-      {data.recentSales.length ? (
-        <TableFrame label="Recent Stripe plan sales">
-          <thead>
-            <tr>
-              <th className={th}>Customer</th>
-              <th className={th}>Plan or item</th>
-              <th className={th}>Type</th>
-              <th className={`${th} text-right`}>Received</th>
-              <th className={`${th} text-right`}>Paid</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.recentSales.map((sale) => (
-              <tr key={sale.id} className={rowClass}>
-                <td className={`${td} max-w-48 truncate font-medium`}>{sale.customer}</td>
-                <td className={`${td} max-w-64 truncate`}>{sale.item}</td>
-                <td className={td}>
-                  <Chip tone="success">{sale.kind}</Chip>
-                </td>
-                <td className={`${td} text-right font-medium tabular-nums`}>
-                  {money(sale.amountCents, sale.currency)}
-                </td>
-                <td className={`${td} whitespace-nowrap text-right text-muted-foreground`}>
-                  {fmtDateTime(sale.paidAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </TableFrame>
-      ) : (
-        <Tile className="text-[13px] text-muted-foreground">No paid Stripe invoices yet.</Tile>
-      )}
+      <div className="space-y-3">
+        <DetailDisclosure
+          title="Recent plan sales"
+          detail="Customers, plans and received amounts"
+          count={data.recentSales.length}
+        >
+          {data.recentSales.length ? (
+            <TableFrame label="Recent Stripe plan sales">
+              <thead>
+                <tr>
+                  <th className={th}>Customer</th>
+                  <th className={th}>Plan or item</th>
+                  <th className={th}>Type</th>
+                  <th className={`${th} text-right`}>Received</th>
+                  <th className={`${th} text-right`}>Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentSales.map((sale) => (
+                  <tr key={sale.id} className={rowClass}>
+                    <td className={`${td} max-w-48 truncate font-medium`}>{sale.customer}</td>
+                    <td className={`${td} max-w-64 truncate`}>{sale.item}</td>
+                    <td className={td}>
+                      <Chip tone="success">{sale.kind}</Chip>
+                    </td>
+                    <td className={`${td} text-right font-medium tabular-nums`}>
+                      {money(sale.amountCents, sale.currency)}
+                    </td>
+                    <td className={`${td} whitespace-nowrap text-right text-muted-foreground`}>
+                      {fmtDateTime(sale.paidAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableFrame>
+          ) : (
+            <p className="px-3 py-4 text-[12px] text-muted-foreground">
+              No paid Stripe invoices yet.
+            </p>
+          )}
+        </DetailDisclosure>
 
-      <GroupLabel>Payments & collections</GroupLabel>
-      <PaymentIntelligence data={data} />
+        {data.customers.top30d.length > 0 && (
+          <DetailDisclosure
+            title="Top customers"
+            detail="Highest collected revenue in the last 30 days"
+            count={data.customers.top30d.length}
+          >
+            <TableFrame label="Top Stripe customers">
+              <thead>
+                <tr>
+                  <th className={th}>Customer</th>
+                  <th className={`${th} text-right`}>Payments</th>
+                  <th className={`${th} text-right`}>Collected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.customers.top30d.map((customer) => (
+                  <tr key={customer.id} className={rowClass}>
+                    <td className={`${td} max-w-96 truncate font-medium`}>{customer.name}</td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {fmtNumber(customer.payments)}
+                    </td>
+                    <td className={`${td} text-right font-medium tabular-nums`}>
+                      {money(customer.receivedCents, customer.currency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableFrame>
+          </DetailDisclosure>
+        )}
+      </div>
+
+      <div id="finance-operations" className="scroll-mt-24">
+        <GroupLabel>Payments & collections</GroupLabel>
+        <PaymentIntelligence data={data} />
+      </div>
 
       {data.invoices.recentOpen.length > 0 && (
         <>
@@ -1190,34 +1662,6 @@ function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { conf
                       : invoice.dueAt
                         ? fmtDateTime(invoice.dueAt)
                         : "Not scheduled"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </TableFrame>
-        </>
-      )}
-
-      {data.customers.top30d.length > 0 && (
-        <>
-          <GroupLabel>Top customers · last 30 days</GroupLabel>
-          <TableFrame label="Top Stripe customers">
-            <thead>
-              <tr>
-                <th className={th}>Customer</th>
-                <th className={`${th} text-right`}>Payments</th>
-                <th className={`${th} text-right`}>Collected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.customers.top30d.map((customer) => (
-                <tr key={customer.id} className={rowClass}>
-                  <td className={`${td} max-w-96 truncate font-medium`}>{customer.name}</td>
-                  <td className={`${td} text-right tabular-nums`}>
-                    {fmtNumber(customer.payments)}
-                  </td>
-                  <td className={`${td} text-right font-medium tabular-nums`}>
-                    {money(customer.receivedCents, customer.currency)}
                   </td>
                 </tr>
               ))}
@@ -1277,42 +1721,52 @@ function FinanceDashboard({ data }: { data: Extract<AdminFinanceOverview, { conf
           hint="Available plus pending reserve"
         />
       </div>
-      {data.recentPayouts.length ? (
-        <TableFrame label="Recent Stripe payouts">
-          <thead>
-            <tr>
-              <th className={th}>Payout</th>
-              <th className={th}>Status</th>
-              <th className={th}>Method</th>
-              <th className={`${th} text-right`}>Amount</th>
-              <th className={`${th} text-right`}>Arrival</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.recentPayouts.map((payout) => (
-              <tr key={payout.id} className={rowClass}>
-                <td className={`${td} font-mono text-[12px]`}>{payout.id}</td>
-                <td className={td}>
-                  <Chip tone={statusTone(payout.status)}>{payout.status.replaceAll("_", " ")}</Chip>
-                </td>
-                <td className={`${td} capitalize`}>{payout.method}</td>
-                <td className={`${td} text-right font-medium tabular-nums`}>
-                  {money(payout.amountCents, payout.currency)}
-                </td>
-                <td className={`${td} whitespace-nowrap text-right text-muted-foreground`}>
-                  {fmtDateTime(payout.arrivalAt)}
-                </td>
+      <DetailDisclosure
+        title="Recent payouts"
+        detail="Stripe payout status, method and expected arrival"
+        count={data.recentPayouts.length}
+      >
+        {data.recentPayouts.length ? (
+          <TableFrame label="Recent Stripe payouts">
+            <thead>
+              <tr>
+                <th className={th}>Payout</th>
+                <th className={th}>Status</th>
+                <th className={th}>Method</th>
+                <th className={`${th} text-right`}>Amount</th>
+                <th className={`${th} text-right`}>Arrival</th>
               </tr>
-            ))}
-          </tbody>
-        </TableFrame>
-      ) : (
-        <Tile className="text-[13px] text-muted-foreground">No Stripe payouts in 30 days.</Tile>
-      )}
+            </thead>
+            <tbody>
+              {data.recentPayouts.map((payout) => (
+                <tr key={payout.id} className={rowClass}>
+                  <td className={`${td} font-mono text-[12px]`}>{payout.id}</td>
+                  <td className={td}>
+                    <Chip tone={statusTone(payout.status)}>
+                      {payout.status.replaceAll("_", " ")}
+                    </Chip>
+                  </td>
+                  <td className={`${td} capitalize`}>{payout.method}</td>
+                  <td className={`${td} text-right font-medium tabular-nums`}>
+                    {money(payout.amountCents, payout.currency)}
+                  </td>
+                  <td className={`${td} whitespace-nowrap text-right text-muted-foreground`}>
+                    {fmtDateTime(payout.arrivalAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </TableFrame>
+        ) : (
+          <p className="px-3 py-4 text-[12px] text-muted-foreground">
+            No Stripe payouts in 30 days.
+          </p>
+        )}
+      </DetailDisclosure>
 
       <GroupLabel>Exceptions requiring attention</GroupLabel>
       <RiskActivity data={data} />
-    </>
+    </section>
   );
 }
 
@@ -1343,6 +1797,9 @@ export function OverviewScreen() {
         <button
           type="button"
           className={cn(dsGhostBtn, "h-9 px-3 text-[12.5px]")}
+          aria-label={
+            overview.isFetching || finance.isFetching ? "Refreshing overview" : "Refresh overview"
+          }
           onClick={() => {
             void overview.refetch();
             if (me.data?.billing) void finance.refetch();
@@ -1355,10 +1812,39 @@ export function OverviewScreen() {
               (overview.isFetching || finance.isFetching) && "animate-spin",
             )}
           />
-          Refresh
+          {overview.isFetching || finance.isFetching ? "Refreshing…" : "Refresh"}
         </button>
       }
     >
+      {overview.isLoading && (
+        <div className="space-y-3">
+          <Skeleton className="h-64 rounded-2xl" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }, (_, index) => (
+              <Skeleton key={index} className="h-24 rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      )}
+      {overview.error && (
+        <LoadError error={overview.error} onRetry={() => void overview.refetch()} />
+      )}
+      {data && (
+        <>
+          <OverviewJumpNav showFinancials={financial?.configured === true} />
+          <CompanyPulse
+            data={data}
+            canOpenBilling={me.data?.billing === true}
+            onOpenBilling={() => router.push("/admin/billing")}
+          />
+          <ActionCenter
+            data={data}
+            finance={financial?.configured === true ? financial : undefined}
+            canOpenBilling={me.data?.billing === true}
+          />
+        </>
+      )}
+
       {data?.funding && <FundingDashboard data={data.funding} />}
 
       {me.data?.billing && finance.isLoading && <FinanceSkeleton />}
@@ -1380,69 +1866,6 @@ export function OverviewScreen() {
         </Tile>
       )}
       {financial?.configured === true && <FinanceDashboard data={financial} />}
-
-      <GroupLabel>Company activity</GroupLabel>
-      {overview.isLoading && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="h-24 rounded-2xl" />
-          ))}
-        </div>
-      )}
-      {overview.error && (
-        <LoadError error={overview.error} onRetry={() => void overview.refetch()} />
-      )}
-      {data && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Stat
-              label="Users"
-              value={fmtNumber(data.users.total)}
-              icon={Users}
-              hint={`${fmtNumber(data.users.new7d)} new this week`}
-            />
-            <Stat
-              label="Signed in this week"
-              value={fmtNumber(data.users.active7d)}
-              icon={Activity}
-              hint={`${fmtNumber(data.users.new30d)} new in 30 days`}
-            />
-            <Stat
-              label="Workspaces"
-              value={fmtNumber(data.workspaces.total)}
-              icon={Building2}
-              hint={`${fmtNumber(data.workspaces.new7d)} new this week`}
-            />
-            <Stat
-              label="Paying accounts"
-              value={fmtNumber(data.billing.payingAccounts)}
-              icon={Wallet}
-              hint={`${fmtNumber(data.billing.trialingAccounts)} on trial`}
-            />
-            <Stat
-              label="Upgrade requests waiting"
-              value={fmtNumber(data.billing.pendingRequests)}
-              icon={Inbox}
-              tone={data.billing.pendingRequests > 0 ? "primary" : "default"}
-              hint={me.data?.billing ? "Open the billing console" : undefined}
-              onClick={me.data?.billing ? () => router.push("/admin/billing") : undefined}
-            />
-            <Stat
-              label="Platform attention"
-              value={fmtNumber(
-                data.users.suspended + data.workspaces.frozen + data.jobs.studioFailed24h,
-              )}
-              icon={ShieldCheck}
-              tone={
-                data.users.suspended + data.workspaces.frozen + data.jobs.studioFailed24h > 0
-                  ? "warning"
-                  : "success"
-              }
-              hint={`${fmtNumber(data.jobs.studioRunning)} Studio jobs running`}
-            />
-          </div>
-        </>
-      )}
     </SurfacePage>
   );
 }

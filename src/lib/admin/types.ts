@@ -171,6 +171,7 @@ export type AdminFundingAccount = {
   interval: "month" | "year" | null;
   currentPeriodEnd: string | null;
   nextGrantAt: string | null;
+  purchaseRecordedAt: string;
   reserveEligible: boolean;
   reserve: { openRouterUsd: number; kieUsd: number; totalUsd: number };
   meters: {
@@ -205,6 +206,7 @@ export type AdminFundingOverview = {
   status: "healthy" | "action_needed" | "unverified";
   calculation: {
     policy: string;
+    countingFrom: string;
     kieCreditUsd: number;
     totalReserveUsd: number;
     verifiedTopUpUsd: number;

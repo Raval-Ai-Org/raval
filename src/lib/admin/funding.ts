@@ -26,6 +26,7 @@ export type FundingAccountInput = {
   interval: "month" | "year" | null;
   currentPeriodEnd: string | null;
   nextGrantAt: string | null;
+  purchaseRecordedAt: string;
   meters: Record<Meter, { available: number; held: number; debt: number }>;
 };
 
@@ -40,6 +41,18 @@ export type ProviderBalanceInput = {
 const centsUp = (value: number) =>
   value <= 0 ? 0 : Math.ceil(Math.max(0, value) * 100 - 1e-9) / 100;
 const emptyRemaining = () => ({ credits: 0, video: 0, proMessages: 0, flashMessages: 0 });
+
+export function countsForFundingReserve(args: {
+  planId: PlanId;
+  status: string;
+  purchaseRecordedAt: string | null | undefined;
+  countingFrom: string;
+}): boolean {
+  if (!args.purchaseRecordedAt || args.planId === "free" || args.status === "paused") return false;
+  const purchase = new Date(args.purchaseRecordedAt).getTime();
+  const cutoff = new Date(args.countingFrom).getTime();
+  return Number.isFinite(purchase) && Number.isFinite(cutoff) && purchase >= cutoff;
+}
 
 function provider(args: {
   id: AdminFundingProvider["id"];
@@ -109,6 +122,7 @@ export function calculateFunding(args: {
   openRouter: ProviderBalanceInput;
   kie: ProviderBalanceInput;
   dependencies: AdminFundingOverview["dependencies"];
+  countingFrom?: string;
   generatedAt?: string;
 }): AdminFundingOverview {
   const planRows = new Map<PlanId, AdminFundingOverview["plans"][number]>();
@@ -132,6 +146,7 @@ export function calculateFunding(args: {
       interval: account.interval,
       currentPeriodEnd: account.currentPeriodEnd,
       nextGrantAt: account.nextGrantAt,
+      purchaseRecordedAt: account.purchaseRecordedAt,
       reserveEligible,
       reserve,
       meters: {
@@ -206,7 +221,8 @@ export function calculateFunding(args: {
         ? "unverified"
         : "healthy",
     calculation: {
-      policy: "Full monthly plan safety caps plus the KIE launch operating reserve",
+      policy: "Only paid subscription purchases recorded after the funding baseline",
+      countingFrom: args.countingFrom ?? args.generatedAt ?? new Date().toISOString(),
       kieCreditUsd: KIE_CREDIT_USD,
       totalReserveUsd: centsUp(openRouterReserve + kieReserve),
       verifiedTopUpUsd,
