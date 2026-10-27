@@ -7,6 +7,7 @@ import { ConceptsStep } from "@/components/app/ugc/ConceptsStep";
 import { ScriptStep } from "@/components/app/ugc/ScriptStep";
 import { GenerateStep, type RenderSettingsState } from "@/components/app/ugc/GenerateStep";
 import { RenderPanel } from "@/components/app/ugc/RenderPanel";
+import { UgcStudio } from "@/components/app/ugc/UgcStudio";
 import { ScanBar } from "@/components/app/geo/ScanControls";
 import type { GeoScanMode } from "@/lib/geo/contracts";
 import { AgentManageDialog } from "@/components/agents/AgentManageDialog";
@@ -72,6 +73,34 @@ export function ModuleStatesLab({ scene }: { scene: string }) {
   return (
     <WorkspaceProvider workspaceId={WORKSPACE}>
       <div data-testid="module-states" className="mx-auto w-full max-w-[1100px] space-y-5 p-4">
+        {scene === "ugc-script-video" && (
+          <UgcStudio
+            workspaceId={WORKSPACE}
+            source={{
+              workspaceId: WORKSPACE,
+              platforms: ["instagram"],
+              script: {
+                title: "A simpler daily routine",
+                hook: "Keep your routine simple.",
+                beats: [
+                  {
+                    time: "0–5s",
+                    visual: "Hold the product beside the creator",
+                    voiceover: "Keep your routine simple.",
+                  },
+                  {
+                    time: "5–10s",
+                    visual: "Show the product in use",
+                    voiceover: "See the moisturiser today.",
+                  },
+                ],
+                cta: "See the moisturiser today.",
+                caption: "Your daily routine.",
+                durationSec: 10,
+              },
+            }}
+          />
+        )}
         {scene === "ugc-product" && (
           <ProductStep
             workspaceId={WORKSPACE}

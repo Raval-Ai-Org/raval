@@ -32,6 +32,7 @@ export const POST = defineRoute({
         title: body.title,
         product: body.product,
         brief: body.brief,
+        script: body.script,
         referenceAssetIds: body.referenceAssetIds,
       }),
     };

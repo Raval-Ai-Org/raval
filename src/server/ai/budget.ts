@@ -23,6 +23,8 @@ import { logGuardrailEvent } from "@/server/guardrails/events";
 import { PLANS } from "@/lib/billing/catalog";
 import { accountForUser, accountForWorkspace } from "@/server/billing/accounts.server";
 import { enforcementFor, entitledPlanFor } from "@/server/billing/entitlements.server";
+import { creationPolicyFor } from "@/server/billing/creation.server";
+import { creationProviderLimits } from "@/lib/billing/creation-economics";
 import {
   getPlanLimits,
   SOFT_LIMIT_RATIO,
@@ -214,9 +216,11 @@ export async function checkBudget(
       const linked = await accountForWorkspace(workspaceId).catch(() => null);
       if (linked && enforcementFor(linked.account) === "on") {
         const plan = entitledPlanFor(linked.account);
-        const safety = PLANS[plan].safety;
+        const safety = await creationPolicyFor(linked.account.id) ? creationProviderLimits(plan, linked.account.billing_interval) : PLANS[plan].safety;
         const scopeKey = `acct:${linked.account.id}`;
-        const summary = (await cachedSummary(scopeKey)) ?? emptySummary();
+        const loaded = await cachedSummary(scopeKey);
+        if (scope.billingMeter === "creation" && !loaded) return { mode: "block", scope: "account", reason: "Provider usage is temporarily unavailable. Your creation allowance has not been spent. Try again shortly." };
+        const summary = loaded ?? emptySummary();
         const limits = {
           dailyUsd: safety.dailyUsd,
           monthlyUsd: safety.monthlyUsd,
@@ -224,6 +228,7 @@ export async function checkBudget(
           monthlyVideos: Number.MAX_SAFE_INTEGER,
         };
         const verdict = decide(kind, summary, limits);
+        if (scope.billingMeter === "creation" && verdict.mode === "degrade") return { mode: "block", scope: "account", reason: "Generation is temporarily paused while we check this account's provider spending. Your creation points are returned." };
         await noteBudgetEvent(scopeKey, verdict.mode, kind, verdict.reason);
         if (verdict.mode === "warn" && verdict.reason)
           setRequestScope({ usageWarning: verdict.reason });
@@ -255,7 +260,7 @@ export async function checkBudget(
       const account = await accountForUser(userId).catch(() => null);
       if (account && enforcementFor(account) === "on") {
         const plan = entitledPlanFor(account);
-        const safety = PLANS[plan].safety;
+        const safety = await creationPolicyFor(account.id) ? creationProviderLimits(plan, account.billing_interval) : PLANS[plan].safety;
         const scopeKey = `acct:${account.id}`;
         const summary = (await cachedSummary(scopeKey)) ?? emptySummary();
         const limits = {
@@ -288,6 +293,7 @@ export async function checkBudget(
     }
     return { mode: "ok", scope: "none" };
   } catch (error) {
+    if (scope.billingMeter === "creation") return { mode: "block", scope: "none", reason: "We could not verify provider usage. Your creation allowance has not been spent. Try again shortly." };
     console.error(
       "[budget] check failed, failing open",
       error instanceof Error ? error.message : error,

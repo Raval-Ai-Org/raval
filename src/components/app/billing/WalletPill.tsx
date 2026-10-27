@@ -17,6 +17,8 @@ export function WalletPill({ className }: { className?: string }) {
   if (!data) return null;
   const plan = asPlan(data.entitledPlan);
   const credits = data.meters.credits.available;
+  const points = data.creation?.active ? data.meters.creation.available : null;
+  const reserved = data.meters.credits.held;
   const allowance = plan === "free" ? SIGNUP_GRANT.credits : PLANS[plan].allowances.credits;
   const tone =
     credits <= 0
@@ -31,12 +33,19 @@ export function WalletPill({ className }: { className?: string }) {
       <button
         type="button"
         onClick={() => emitAppEvent("open:usage")}
-        title="Credits left. Open Plan & billing"
-        aria-label={`${formatNumber(credits)} credits left. Open Plan & billing`}
+        title={`${points === null ? "" : `${formatNumber(points)} creation points · `}${formatNumber(credits)} wallet credits available${reserved > 0 ? ` · ${formatNumber(reserved)} reserved for pending work` : ""}. Open Plan & billing`}
+        aria-label={`${points === null ? "" : `${formatNumber(points)} creation points, `}${formatNumber(credits)} wallet credits available, ${formatNumber(reserved)} reserved. Open Plan & billing`}
         className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 bg-card/80 px-3 text-[12.5px] font-medium tabular-nums transition-colors hover:bg-secondary"
       >
         <Bolt className="h-3.5 w-3.5 text-primary" aria-hidden />
-        <span className={tone}>{formatNumber(credits)}</span>
+        <span className={points === null ? tone : points <= 0 ? "text-warning" : "text-foreground"}>
+          {points === null ? formatNumber(credits) : `${formatNumber(points)} points`}
+        </span>
+        {reserved > 0 && (
+          <span className="text-[11px] text-muted-foreground">
+            + {formatNumber(reserved)} reserved
+          </span>
+        )}
         {free && (
           <span className="hidden text-muted-foreground lg:inline">
             {credits === 1 ? "free credit" : "free credits"}

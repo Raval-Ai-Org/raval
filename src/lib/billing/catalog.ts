@@ -2,6 +2,8 @@
 //
 // Mellox pricing catalog v2. The single source of truth for plans, features,
 // credit prices, video credits, packs, add-ons and offers.
+// Legacy grant amounts remain here for replay and grandfathered windows.
+// New monthly creation/flex allocations are versioned in ./creation.ts.
 //
 // Source: CFO pricing review 2026-09-25 (docs/pricing/v2/Mellox_AI_Pricing_Model_v2.xlsx),
 // on the OpenRouter model stack in src/server/ai/task-models.ts.
@@ -33,7 +35,7 @@ export function planRank(plan: PlanId): number {
  *   pro_messages    1 unit = 1 Mellox Pro (Claude Opus 5.5) chat message
  *   flash_messages  1 unit = 1 Mellox Flash chat message (fair-use counter)
  */
-export type Meter = "credits" | "video" | "pro_messages" | "flash_messages";
+export type Meter = "credits" | "video" | "pro_messages" | "flash_messages" | "creation";
 export const VIDEO_UNITS_PER_VC = 100;
 
 export type ProbeEngine = "perplexity" | "chatgpt" | "gemini" | "google_aio";
@@ -638,7 +640,7 @@ export const CREDIT_ACTIONS = {
     unit: "per batch",
     feature: "studio",
     expectedCostUsd: 0.014,
-    routes: ["studio.ideas", "studio.prompt", "studio.upload-captions"],
+    routes: ["studio.prompt", "studio.upload-captions"],
   },
   // /api/ai-generate is priced by what it actually does: normal size = social_multi;
   // size "long" on WORKHORSE = article_standard; escalated to PREMIUM = article_premium
@@ -874,6 +876,9 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "clarify",
   "memory-extract",
   "studio.naturalize",
+  "studio.caption.edit",
+  // Suggestions are loaded automatically while browsing and saving; included in Studio.
+  "studio.ideas",
   "studio.research",
   // Shared social trends snapshot: collected for everyone, charged to no one.
   "studio.trends",
@@ -1117,7 +1122,13 @@ export function videoUnitsFor(args: {
   const floorUnits = Math.max(1, Math.ceil((cost / MAX_USD_PER_VC) * 4)) * 25;
   if (exact) return Math.max(exact.videoUnits, floorUnits);
   const proportional = Math.max(1, Math.ceil((cost / USD_PER_VC_REFERENCE) * 4)) * 25;
-  return Math.max(proportional, floorUnits);
+  const base = VIDEO_OPTIONS.filter((o) => o.ugcKey === args.ugcKey && o.resolution === band).sort(
+    (a, b) => a.seconds - b.seconds,
+  )[0];
+  const durationFloor = base
+    ? Math.ceil(((args.seconds / base.seconds) * base.videoUnits) / 25) * 25
+    : 0;
+  return Math.max(proportional, floorUnits, durationFloor);
 }
 
 /** The feature a render needs. The video router must receive the plan and never pick a locked option. */

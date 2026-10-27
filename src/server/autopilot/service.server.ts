@@ -903,11 +903,12 @@ export async function setPaused(caller: Caller, paused: boolean): Promise<void> 
       { status: "paused", pause_reason: "user" },
       "running",
     );
+    await cancelProgramGenerations(caller.workspaceId, program.id);
     if (ok) {
       await log(
         caller,
         "program_paused",
-        "Autopilot paused. Posts already scheduled will still go out.",
+        "Autopilot paused. Pending generations stopped and unused reservations released. Posts already scheduled will still go out.",
         {
           programId: program.id,
         },
@@ -933,6 +934,7 @@ export async function stopProgram(caller: Caller): Promise<void> {
     finished_at: new Date().toISOString(),
   });
   if (!stopped) return;
+  await cancelProgramGenerations(caller.workspaceId, program.id);
   const open = await store.listActions(caller.workspaceId, {
     statuses: [...CANCELLABLE_STATUSES],
     limit: 300,
@@ -949,6 +951,37 @@ export async function stopProgram(caller: Caller): Promise<void> {
     "Autopilot stopped. Drafts stay in your content; posts already scheduled will still go out.",
     { programId: program.id, data: { cancelled } },
   );
+}
+
+async function cancelProgramGenerations(workspaceId: string, programId: string): Promise<void> {
+  const [{ cancelStudioJob }, { settleStudioBilling }] = await Promise.all([
+    import("@/server/studio/runner.server"),
+    import("@/server/billing/studio-async.server"),
+  ]);
+  const actions = await store.listActions(workspaceId, { statuses: ["generating"], limit: 300 });
+  for (const action of actions.filter((action) => action.program_id === programId)) {
+    // Find by the stable creation key too: the pause may race the job's first response.
+    const job = action.studio_job_id
+      ? { id: action.studio_job_id }
+      : await realPorts.studio.findJob(
+          workspaceId,
+          `autopilot:${action.id}:${action.generation_attempt}`,
+        );
+    const stopped = job ? await cancelStudioJob(admin, workspaceId, job.id) : null;
+    if (stopped) await settleStudioBilling(stopped);
+    if (!stopped || stopped.status === "cancelled" || stopped.status === "failed") {
+      // Keep the piece in the paused plan, not visibly "generating". A future
+      // explicit Resume uses a new job key and the returned credit allowance.
+      await store.transition(action, "planned", {
+        studio_job_id: null,
+        content_item_ids: [],
+        credits_charged: 0,
+        generation_attempt: action.generation_attempt + 1,
+        next_attempt_at: new Date().toISOString(),
+        last_error: "Stopped while Autopilot is paused. It can be made when you resume.",
+      });
+    }
+  }
 }
 
 /** Assist mode: say yes to the plan, so the pieces in it get made. */

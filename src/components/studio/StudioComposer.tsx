@@ -25,9 +25,10 @@ import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { duration, ease, spring } from "@/lib/motion";
 import { isActiveJob } from "@/lib/studio/jobs";
-import { readBrandPayload } from "@/lib/studio/client";
+import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
-import { studioChargeFor } from "@/lib/studio/billing";
+import { studioChargeFor, studioPriceLabel } from "@/lib/studio/billing";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
 import { studioVideoUnits } from "@/lib/ugc/duration";
@@ -42,6 +43,7 @@ import {
   chooseType,
   closeSession,
   generate,
+  getSession,
   minimizeSession,
   toggleMaximize,
   updateSession,
@@ -54,6 +56,7 @@ import { IdeasPanel } from "./IdeasPanel";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
 import { PreviewSkeleton } from "./previews/PreviewSkeleton";
 import { usePromptWriter, WriteForMeButton, WritingOverlay, WrittenNote } from "./PromptWriter";
+import { ScriptPreview } from "./previews/ScriptPreview";
 import { BeatPills, TemplateGallery } from "./TemplateGallery";
 import { ChipButton, TypeGlyph } from "./studio-ui";
 import { TypePicker } from "./TypePicker";
@@ -75,6 +78,7 @@ export type ComposerFixtures = { ideas?: StudioIdea[]; rows?: ReviewRow[]; distr
  */
 export function StudioComposer() {
   const workspaceId = useOptionalWorkspaceId();
+  const { data: billing } = useEntitlements({ enabled: Boolean(workspaceId) });
   const session = useStudioStore(
     (s) =>
       s.sessions.find(
@@ -89,6 +93,26 @@ export function StudioComposer() {
   // Where the window goes when it leaves: into the dock (work continues) or away.
   const [exitTo, setExitTo] = useState<"dock" | "close">("close");
   const sessionId = session?.id;
+  useEffect(() => {
+    if (session && billing && !session.pendingKey && !session.job) {
+      const controls = { ...session.controls };
+      let changed = false;
+      if (!controls.paymentSourceExplicit && controls.paymentSource !== (billing.creation?.active ? "creation" : "credits")) {
+        controls.paymentSource = billing.creation?.active ? "creation" : "credits";
+        changed = true;
+      }
+      if (
+        (session.type === "video" ||
+          (session.type === "story" && controls.storyMode === "video")) &&
+        !controls.videoModelKey
+      ) {
+        controls.videoModelKey = "standard";
+        controls.videoQuote = undefined;
+        changed = true;
+      }
+      if (changed) updateSession(session.id, { controls });
+    }
+  }, [session, billing]);
   useEffect(() => {
     if (sessionId) setExitTo("close");
   }, [sessionId]);
@@ -600,7 +624,16 @@ export function IntentStep({
   const format = STUDIO_FORMATS[session.type];
   const textarea = useRef<HTMLTextAreaElement>(null);
   const ready = session.brief.trim().length >= 3;
-  const busy = !!session.pendingKey;
+  const busy =
+    !!session.pendingKey ||
+    Boolean(session.uploadingReference) ||
+    Boolean(
+      (session.type === "video" ||
+        (session.type === "story" && session.controls.storyMode === "video")) &&
+      !session.controls.videoPreview &&
+      session.controls.videoModelKey &&
+      !session.controls.videoQuote,
+    );
   const template = getTemplate(session.template);
   const blanks = countBlanks(session.brief);
   const hasBrand = useMemo(() => !!readBrandPayload(session.workspaceId), [session.workspaceId]);
@@ -631,190 +664,224 @@ export function IntentStep({
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto @5xl/composer:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] @5xl/composer:overflow-hidden">
         <div className="min-w-0 p-5 @3xl/composer:p-8 @5xl/composer:overflow-y-auto">
           <div className="studio-stagger mx-auto min-w-0 max-w-2xl space-y-7">
-            <div>
-              <label
-                htmlFor="studio-brief"
-                className="block text-xl font-semibold tracking-tight text-foreground"
-              >
-                Describe your{" "}
-                <span className={`studio-gradient-text studio-tone-${session.type}`}>
-                  {format.noun}
-                </span>
-              </label>
+            {session.sourceScript ? (
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight">Make your video</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your reviewed script is attached. Choose the video settings and check the price
+                  before generating.
+                </p>
+                <details className="mt-4 rounded-2xl border border-border bg-surface-3 p-4">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Script used in this video
+                  </summary>
+                  <ScriptPreview
+                    script={session.sourceScript}
+                    platform={session.controls.platforms[0]}
+                  />
+                </details>
+                {session.billing ? (
+                  <UpgradePrompt block={session.billing} className="mt-3" />
+                ) : session.error ? (
+                  <p role="alert" className="mt-2 text-sm text-danger">
+                    {session.error}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div>
+                <label
+                  htmlFor="studio-brief"
+                  className="block text-xl font-semibold tracking-tight text-foreground"
+                >
+                  Describe your{" "}
+                  <span className={`studio-gradient-text studio-tone-${session.type}`}>
+                    {format.noun}
+                  </span>
+                </label>
 
-              <div
-                className={cn(
-                  "relative mt-4 rounded-2xl border bg-surface-3 shadow-1 transition-[border-color,box-shadow]",
-                  "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_22px_50px_-22px_hsl(var(--primary)/0.5)]",
-                  session.error ? "border-danger-border" : "border-input",
-                )}
-              >
-                <WritingOverlay writer={writer} />
-                {template ? (
-                  <div
-                    className={`studio-tone-${session.type} flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground`}
-                  >
-                    <LayoutTemplate className="size-3.5 text-[var(--tone-ink)]" />
-                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                      {template.label}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate(session.id, null)}
-                      className="rounded px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
+                <div
+                  className={cn(
+                    "relative mt-4 rounded-2xl border bg-surface-3 shadow-1 transition-[border-color,box-shadow]",
+                    "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_22px_50px_-22px_hsl(var(--primary)/0.5)]",
+                    session.error ? "border-danger-border" : "border-input",
+                  )}
+                >
+                  <WritingOverlay writer={writer} />
+                  {template ? (
+                    <div
+                      className={`studio-tone-${session.type} flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground`}
                     >
-                      Remove
-                    </button>
+                      <LayoutTemplate className="size-3.5 text-[var(--tone-ink)]" />
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                        {template.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => applyTemplate(session.id, null)}
+                        className="rounded px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : session.ideaId ? (
+                    <div className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
+                      <Sparkles className="size-3.5 text-primary" />
+                      <span className="flex-1">From a suggested idea</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSession(session.id, {
+                            brief: "",
+                            ideaId: undefined,
+                            ideaSource: undefined,
+                          })
+                        }
+                        className="rounded px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ) : null}
+                  <textarea
+                    id="studio-brief"
+                    ref={textarea}
+                    value={session.brief}
+                    onChange={(e) =>
+                      updateSession(session.id, { brief: e.target.value, error: null })
+                    }
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        submit();
+                      }
+                    }}
+                    placeholder={format.placeholder}
+                    rows={isMobile ? 4 : 5}
+                    maxLength={4000}
+                    readOnly={writer.busy}
+                    aria-busy={writer.busy}
+                    aria-describedby={session.error ? "studio-brief-error" : undefined}
+                    className="block max-h-[28rem] min-h-[8.5rem] w-full resize-none overflow-y-auto !border-0 !bg-transparent px-3.5 pt-3 text-base leading-relaxed text-foreground !shadow-none outline-none [field-sizing:content] placeholder:text-muted-foreground focus-visible:!ring-0 @3xl/composer:text-[15px]"
+                  />
+                  {template ? (
+                    <div className={`studio-tone-${session.type} px-3.5 pb-1 pt-1`}>
+                      <BeatPills beats={template.beats} />
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-1.5 text-xs">
+                    <WriteForMeButton writer={writer} />
+                    {hasTemplates ? (
+                      <button
+                        type="button"
+                        onClick={() => setTemplatesPicked(!showTemplates)}
+                        aria-expanded={showTemplates}
+                        className={cn(
+                          "inline-flex items-center gap-1 font-medium transition-colors",
+                          showTemplates
+                            ? "text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <LayoutTemplate className="size-3.5" />
+                        {showTemplates ? "Hide templates" : "Templates"}
+                      </button>
+                    ) : null}
+                    {!hasBrand ? (
+                      <button
+                        type="button"
+                        onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
+                        className="inline-flex items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <Sparkles className="size-3.5 text-primary" />
+                        Add Brand DNA
+                      </button>
+                    ) : null}
+                    {blanks ? (
+                      <span
+                        className={`studio-tone-${session.type} ml-auto font-medium tabular-nums text-[var(--tone-ink)]`}
+                      >
+                        {blanks} to fill in
+                      </span>
+                    ) : null}
                   </div>
-                ) : session.ideaId ? (
-                  <div className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
-                    <Sparkles className="size-3.5 text-primary" />
-                    <span className="flex-1">From a suggested idea</span>
-                    <button
-                      type="button"
+                </div>
+                <WrittenNote writer={writer} />
+                {session.billing ? (
+                  <UpgradePrompt block={session.billing} className="mt-3" />
+                ) : session.error ? (
+                  <p id="studio-brief-error" role="alert" className="mt-2 text-sm text-danger">
+                    {session.error}
+                  </p>
+                ) : null}
+
+                {showTemplates ? (
+                  <TemplateGallery
+                    session={session}
+                    textareaRef={textarea}
+                    className="mt-5"
+                    onWriteOwn={() => {
+                      setTemplatesPicked(false);
+                      textarea.current?.focus();
+                    }}
+                  />
+                ) : null}
+              </div>
+            )}
+
+            {!session.sourceScript ? (
+              <div>
+                <p className="mb-2 text-xs font-medium text-foreground">Goal</p>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Goal">
+                  {GOALS.map((g) => (
+                    <ChipButton
+                      key={g.id}
+                      selected={session.goal === g.id}
                       onClick={() =>
                         updateSession(session.id, {
-                          brief: "",
-                          ideaId: undefined,
-                          ideaSource: undefined,
+                          goal: session.goal === g.id ? undefined : g.id,
                         })
                       }
-                      className="rounded px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
                     >
-                      Clear
-                    </button>
-                  </div>
-                ) : null}
-                <textarea
-                  id="studio-brief"
-                  ref={textarea}
-                  value={session.brief}
-                  onChange={(e) =>
-                    updateSession(session.id, { brief: e.target.value, error: null })
-                  }
-                  onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                      e.preventDefault();
-                      submit();
-                    }
-                  }}
-                  placeholder={format.placeholder}
-                  rows={isMobile ? 4 : 5}
-                  maxLength={4000}
-                  readOnly={writer.busy}
-                  aria-busy={writer.busy}
-                  aria-describedby={session.error ? "studio-brief-error" : undefined}
-                  className="block max-h-[28rem] min-h-[8.5rem] w-full resize-none overflow-y-auto !border-0 !bg-transparent px-3.5 pt-3 text-base leading-relaxed text-foreground !shadow-none outline-none [field-sizing:content] placeholder:text-muted-foreground focus-visible:!ring-0 @3xl/composer:text-[15px]"
-                />
-                {template ? (
-                  <div className={`studio-tone-${session.type} px-3.5 pb-1 pt-1`}>
-                    <BeatPills beats={template.beats} />
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-1.5 text-xs">
-                  <WriteForMeButton writer={writer} />
-                  {hasTemplates ? (
-                    <button
-                      type="button"
-                      onClick={() => setTemplatesPicked(!showTemplates)}
-                      aria-expanded={showTemplates}
-                      className={cn(
-                        "inline-flex items-center gap-1 font-medium transition-colors",
-                        showTemplates
-                          ? "text-foreground"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      <LayoutTemplate className="size-3.5" />
-                      {showTemplates ? "Hide templates" : "Templates"}
-                    </button>
-                  ) : null}
-                  {!hasBrand ? (
-                    <button
-                      type="button"
-                      onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
-                      className="inline-flex items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <Sparkles className="size-3.5 text-primary" />
-                      Add Brand DNA
-                    </button>
-                  ) : null}
-                  {blanks ? (
-                    <span
-                      className={`studio-tone-${session.type} ml-auto font-medium tabular-nums text-[var(--tone-ink)]`}
-                    >
-                      {blanks} to fill in
-                    </span>
-                  ) : null}
+                      {session.goal === g.id ? (
+                        <Check className="size-3 text-primary" strokeWidth={3} />
+                      ) : null}
+                      {g.label}
+                    </ChipButton>
+                  ))}
                 </div>
               </div>
-              <WrittenNote writer={writer} />
-              {session.billing ? (
-                <UpgradePrompt block={session.billing} className="mt-3" />
-              ) : session.error ? (
-                <p id="studio-brief-error" role="alert" className="mt-2 text-sm text-danger">
-                  {session.error}
-                </p>
-              ) : null}
-
-              {showTemplates ? (
-                <TemplateGallery
-                  session={session}
-                  textareaRef={textarea}
-                  className="mt-5"
-                  onWriteOwn={() => {
-                    setTemplatesPicked(false);
-                    textarea.current?.focus();
-                  }}
-                />
-              ) : null}
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-medium text-foreground">Goal</p>
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Goal">
-                {GOALS.map((g) => (
-                  <ChipButton
-                    key={g.id}
-                    selected={session.goal === g.id}
-                    onClick={() =>
-                      updateSession(session.id, { goal: session.goal === g.id ? undefined : g.id })
-                    }
-                  >
-                    {session.goal === g.id ? (
-                      <Check className="size-3 text-primary" strokeWidth={3} />
-                    ) : null}
-                    {g.label}
-                  </ChipButton>
-                ))}
-              </div>
-            </div>
+            ) : null}
 
             <ControlsPanel session={session} disabled={busy} />
 
-            <div className="@5xl/composer:hidden">
-              <IdeasPanel
-                workspaceId={session.workspaceId}
-                type={session.type}
-                selectedId={session.ideaId}
-                onPick={onPickIdea}
-                limit={3}
-                fixtureIdeas={fixtureIdeas}
-              />
-            </div>
+            {!session.sourceScript ? (
+              <div className="@5xl/composer:hidden">
+                <IdeasPanel
+                  workspaceId={session.workspaceId}
+                  type={session.type}
+                  selectedId={session.ideaId}
+                  onPick={onPickIdea}
+                  limit={3}
+                  fixtureIdeas={fixtureIdeas}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
         <aside className="studio-stagger hidden flex-col gap-6 border-l border-border/60 bg-surface-1 p-5 @5xl/composer:flex @5xl/composer:overflow-y-auto">
           <WhatYoullGet session={session} />
-          <IdeasPanel
-            workspaceId={session.workspaceId}
-            type={session.type}
-            selectedId={session.ideaId}
-            onPick={onPickIdea}
-            limit={4}
-            fixtureIdeas={fixtureIdeas}
-          />
+          {!session.sourceScript ? (
+            <IdeasPanel
+              workspaceId={session.workspaceId}
+              type={session.type}
+              selectedId={session.ideaId}
+              onPick={onPickIdea}
+              limit={4}
+              fixtureIdeas={fixtureIdeas}
+            />
+          ) : null}
         </aside>
       </div>
 
@@ -833,7 +900,13 @@ export function IntentStep({
           className="studio-cta"
         >
           {busy ? <Spinner className="animate-spin" aria-hidden /> : <Wand2 />}
-          {busy ? "Starting…" : session.lastGood ? "Generate again" : "Generate"}
+          {session.uploadingReference
+            ? "Uploading photo…"
+            : busy
+              ? "Starting…"
+              : session.lastGood
+                ? "Generate again"
+                : "Generate"}
         </Button>
       </footer>
     </div>
@@ -842,6 +915,61 @@ export function IntentStep({
 
 /** The price of the next Generate, from the same rule the server charges by. */
 function StudioPrice({ session }: { session: StudioSession }) {
+  const [quoteError, setQuoteError] = useState(false);
+  const quotedVideo = Boolean(
+    (session.type === "video" ||
+      (session.type === "story" && session.controls.storyMode === "video")) &&
+    !session.controls.videoPreview &&
+    session.controls.videoModelKey,
+  );
+  const quoteSignature = JSON.stringify([
+    session.controls.videoModelKey,
+    session.controls.durationSec,
+    session.controls.videoResolution,
+    session.controls.referenceAssetIds,
+  ]);
+  useEffect(() => {
+    if (!quotedVideo || session.controls.videoQuote) return;
+    let cancelled = false;
+    setQuoteError(false);
+    const timer = setTimeout(() => {
+      void studioApi
+        .videoQuote(session.workspaceId, session.controls)
+        .then((videoQuote) => {
+          const latest = getSession(session.id);
+          if (!cancelled && latest)
+            updateSession(session.id, { controls: { ...latest.controls, videoQuote } });
+        })
+        .catch(() => {
+          if (!cancelled) setQuoteError(true);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // The quote is invalidated only by settings that change the provider price.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id, quotedVideo, quoteSignature, session.controls.videoQuote?.hash]);
+  if (quotedVideo)
+    return (
+      <span data-slot="cost-chip" className="ml-auto text-xs text-muted-foreground">
+        {session.controls.videoQuote
+          ? `${studioPriceLabel({ type: session.type, controls: session.controls })} · ${session.controls.videoQuote.resolution ?? ""} ${session.controls.videoQuote.aspectRatio ?? ""}`
+          : quoteError
+            ? "Choose another video option"
+            : "Checking price…"}
+      </span>
+    );
+  if (session.controls.paymentSource === "creation")
+    return (
+      <span
+        data-slot="cost-chip"
+        className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground"
+      >
+        {studioPriceLabel({ type: session.type, controls: session.controls })}
+      </span>
+    );
   const charge = studioChargeFor({
     type: session.type,
     includeImage: session.controls.includeImage,
@@ -849,6 +977,9 @@ function StudioPrice({ session }: { session: StudioSession }) {
     storyMode: session.controls.storyMode,
     videoPreview: session.controls.videoPreview,
     regenerate: Boolean(session.lastGood),
+    referenceMode: session.controls.referenceMode,
+    referenceAssetIds: session.controls.referenceAssetIds,
+    articleQuality: session.controls.articleQuality,
   });
   return charge === "studio_video" ? (
     <CostChip

@@ -24,12 +24,15 @@ import { HttpError } from "@/server/http-error";
 import { accountBillableSeatCount } from "./seat-count.server";
 import { applyOverrides, type AppliedOverride } from "@/lib/billing/overrides";
 import { loadActiveOverrides } from "./overrides.server";
+import { CREATION_PLANS } from "@/lib/billing/creation";
+import { creationPolicyFor } from "./creation.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 type Role = "owner" | "admin" | "editor" | "viewer";
 type Addon = { catalog_key: string; quantity: number };
 
 export type Entitlements = {
+  creation?: { active: boolean; monthlyPoints: number; flexCredits: number };
   accountId: string;
   ownerUserId: string;
   isOwner: boolean;
@@ -120,6 +123,7 @@ export function limitsFor(plan: PlanId, addons: Addon[], paused = false): Entitl
 }
 
 const emptyMeters = (): Entitlements["meters"] => ({
+  creation: { available: 0, held: 0, debt: 0, nextExpiry: null },
   credits: { available: 0, held: 0, debt: 0, nextExpiry: null },
   video: { available: 0, held: 0, debt: 0, nextExpiry: null },
   pro_messages: { available: 0, held: 0, debt: 0, nextExpiry: null },
@@ -364,6 +368,16 @@ export async function getEntitlements(args: {
     },
     meters,
   });
+  const creationActive = await creationPolicyFor(account.id);
+  entitlements.creation = {
+    active:
+      creationActive &&
+      account.status !== "paused" &&
+      entitlements.entitledPlan !== "free" &&
+      !entitlements.trial.active,
+    monthlyPoints: CREATION_PLANS[entitlements.entitledPlan].points,
+    flexCredits: CREATION_PLANS[entitlements.entitledPlan].flexCredits,
+  };
   // Staff exceptions to the plan. With none in force, nothing here changes.
   if (overrideRows.length > 0) {
     const applied = applyOverrides(entitlements, overrideRows, { workspaceId: args.workspaceId });

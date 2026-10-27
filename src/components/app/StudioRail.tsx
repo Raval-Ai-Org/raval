@@ -43,6 +43,8 @@ import { useStudioSuggestions } from "@/hooks/use-studio-suggestions";
 import { Burst, DrawCheck, PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
 import { studioApi } from "@/lib/studio/client";
 import { createPostFromDraft } from "@/lib/studio/convert";
+import { StopStudioJobsButton } from "@/components/studio/StopStudioJobsButton";
+import { studioPriceLabel } from "@/lib/studio/billing";
 import {
   CONTENT_COLUMNS,
   PIPELINE_STATUSES,
@@ -677,6 +679,11 @@ export function PipelineSection({
       </div>
 
       {/* ── The pipeline: four connected stages ── */}
+      {activeJobs.length > 0 && !fixture && rowWorkspaceId && (
+        <div className="mb-3">
+          <StopStudioJobsButton workspaceId={rowWorkspaceId} />
+        </div>
+      )}
       <div role="tablist" aria-label="Pipeline stage" className="relative grid grid-cols-4">
         <span
           aria-hidden
@@ -997,6 +1004,10 @@ export function ApprovalCard({
   const media = thumb && group.mediaType ? group.mediaType : null;
   // Drafts from chat, agents or the calendar are text only: approving creates the real post.
   const needsPost = !!onCreate && !legacy && group.source !== "studio" && !media;
+  const createPrice =
+    group.type === "legacy"
+      ? ""
+      : studioPriceLabel({ type: group.type, controls: { platforms: [], includeImage: true } });
 
   const open = () => {
     if (group.jobId) return void openJob(group.jobId);
@@ -1271,10 +1282,10 @@ export function ApprovalCard({
               aria-label={
                 needsPost ? `Approve and create ${group.title}` : `Approve ${group.title}`
               }
-              title={needsPost ? "Approve and create the finished post" : undefined}
+              title={needsPost ? `Create the finished post · ${createPrice}` : undefined}
             >
               {needsPost ? <Wand2 /> : <Check />}
-              {needsPost ? "Approve & create" : "Approve"}
+              {needsPost ? `Create · ${createPrice}` : "Approve"}
             </Button>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { HttpError } from "@/server/http-error";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireBillingAdmin } from "@/server/billing/admin.server";
 import { clawbackMeter, grantMeter } from "@/server/billing/meters.server";
+import { creationCostReport } from "@/server/billing/creation-cost.server";
 import { globalBillingMode } from "@/server/billing/mode.server";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ const Adjustment = z.discriminatedUnion("operation", [
   z.object({
     ...Common,
     operation: z.literal("grant"),
-    meter: z.enum(["credits", "video", "pro_messages", "flash_messages"]),
+    meter: z.enum(["credits", "video", "pro_messages", "flash_messages", "creation"]),
   }),
   z.object({ ...Common, operation: z.literal("clawback"), grantId: z.string().uuid() }),
 ]);
@@ -51,6 +52,7 @@ export const GET = defineRoute({
       throw new HttpError(503, "Billing report is unavailable.");
     }
     return {
+      creationCost: await creationCostReport().catch(() => null),
       report: {
         ...report.data,
         capacityUnchecked: pendingCapacity.count ?? 0,
@@ -95,7 +97,7 @@ export const POST = defineRoute({
         throw new HttpError(409, "Adjustment key was already used for another operation.");
       return { ok: true, replayed: true };
     }
-    let meter: "credits" | "video" | "pro_messages" | "flash_messages";
+    let meter: "credits" | "video" | "pro_messages" | "flash_messages" | "creation";
     if (body.operation === "grant") {
       meter = body.meter;
       const result = await grantMeter({

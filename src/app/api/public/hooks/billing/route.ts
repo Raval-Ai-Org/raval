@@ -10,7 +10,8 @@ export const POST = defineCronRoute({
     const { issueDueGrants } = await import("@/server/billing/grants.server");
     const { replayFailedBillingEvents } = await import("@/server/billing/stripe-account.server");
     const { reconcilePendingBillingCapacity } = await import("@/server/billing/capacity.server");
-    const { advanceStudioBillingJobs } = await import("@/server/billing/studio-async.server");
+    const { advanceStudioBillingJobs, recoverStaleStudioJobs } =
+      await import("@/server/billing/studio-async.server");
     const { settleTerminalUgcBilling } = await import("@/server/billing/ugc-async.server");
     const { settleOpenAsyncCharges } = await import("@/server/billing/async-charges.server");
     const { notifyEndingComps, rewardReferrals } =
@@ -20,6 +21,7 @@ export const POST = defineCronRoute({
     const grants = await issueDueGrants();
     const stripeReplay = await replayFailedBillingEvents();
     const capacity = await reconcilePendingBillingCapacity();
+    const recoveredStudio = await recoverStaleStudioJobs();
     const studio = await advanceStudioBillingJobs();
     const ugc = await settleTerminalUgcBilling();
     // Background jobs settle before the expiry sweep, so a finished job is
@@ -33,6 +35,11 @@ export const POST = defineCronRoute({
     const referrals = await rewardReferrals().catch((cause) => {
       console.error("[billing] referral rewards failed", cause);
       return 0;
+    });
+    const { warnCreationCosts } = await import("@/server/billing/creation-cost.server");
+    const creationCostWarnings = await warnCreationCosts().catch(cause => {
+      console.error("[billing] provider-cost monitoring unavailable", cause);
+      return null;
     });
     const expired = await supabaseAdmin.rpc("meter_expire_due" as never);
     if (expired.error) throw new Error("Could not expire billing grants.");
@@ -49,10 +56,12 @@ export const POST = defineCronRoute({
       stripeReplay,
       capacity,
       studio,
+      recoveredStudio,
       ugc,
       background,
       endingPlans,
       referrals,
+      creationCostWarnings,
       expired: expired.data,
       releasedHolds: holds.data,
     };

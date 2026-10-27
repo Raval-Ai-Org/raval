@@ -45,7 +45,11 @@ import {
 import { detectChatActions, type ChatAction } from "@/lib/chat-actions";
 import type { ChatToolCall, ChatToolResult } from "@/lib/chat-tools";
 import { SuggestedActions } from "@/components/app/SuggestedActions";
-import { detectCreateIntent } from "@/lib/chat-intent";
+import {
+  attachedImageMode,
+  detectAttachedImageIntent,
+  detectCreateIntent,
+} from "@/lib/chat-intent";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import {
   getStudioState,
@@ -271,6 +275,28 @@ export function ChatPanel({
 
   const removeAttachment = (id: string) =>
     setAttachments((prev) => prev.filter((a) => a.id !== id));
+
+  const uploadStudioImages = async (images: Attachment[], limit: number): Promise<string[]> => {
+    return Promise.all(
+      images.slice(0, limit).map(async (attachment) => {
+        const params = new URLSearchParams({
+          workspaceId,
+          requestId: crypto.randomUUID(),
+          filename: attachment.name,
+        });
+        const response = await authedFetch(`/api/assets/upload?${params}`, {
+          method: "POST",
+          workspaceId,
+          headers: { "Content-Type": attachment.mime },
+          body: attachment.file,
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.asset?.id)
+          throw new Error(result?.error ?? `Could not upload ${attachment.name}.`);
+        return result.asset.id as string;
+      }),
+    );
+  };
 
   const navigate = useNavigate();
   const conversationRef = useRef<string | null>(conversationId);
@@ -1006,7 +1032,8 @@ export function ChatPanel({
 
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
-    const hasAttachments = attachments.length > 0;
+    const outgoingAttachments = attachments;
+    const hasAttachments = outgoingAttachments.length > 0;
     if ((!text && !hasAttachments) || streaming || clarifying) return;
     if (attachments.some((a) => a.status === "reading")) {
       toast.message("Still reading your files…");
@@ -1014,14 +1041,14 @@ export function ChatPanel({
     }
 
     // Compose the outgoing user content: attachment context first, then user text.
-    const ctx = attachmentsToContext(attachments);
+    const ctx = attachmentsToContext(outgoingAttachments);
     const visibleText =
       text ||
       (hasAttachments
         ? `Please analyze the attached ${attachments.length === 1 ? "file" : "files"}.`
         : "");
     const attachSummary = hasAttachments
-      ? `📎 ${attachments.length} file${attachments.length > 1 ? "s" : ""}: ${attachments.map((a) => a.name).join(", ")}`
+      ? `📎 ${outgoingAttachments.length} file${outgoingAttachments.length > 1 ? "s" : ""}: ${outgoingAttachments.map((a) => a.name).join(", ")}`
       : "";
     const displayContent = [attachSummary, visibleText].filter(Boolean).join("\n\n");
     const wireContent = [ctx, visibleText].filter(Boolean).join("\n\n");
@@ -1081,13 +1108,44 @@ export function ChatPanel({
     (userMsg as any)._wire = wireContent;
 
     // "Make me a …": start it in Studio now. No composer pop-up, no model round trip.
-    const intent = !hasAttachments ? detectCreateIntent(text) : null;
+    const imageAttachments = outgoingAttachments.filter(
+      (attachment) => attachment.kind === "image" && attachment.status === "ready",
+    );
+    const detectedIntent = imageAttachments.length
+      ? detectAttachedImageIntent(text)
+      : detectCreateIntent(text);
+    const intent =
+      detectedIntent && (!hasAttachments || imageAttachments.length) ? detectedIntent : null;
     if (intent) {
       const format = STUDIO_FORMATS[intent.type];
+      const referenceMode = imageAttachments.length ? attachedImageMode(text) : undefined;
+      let referenceAssetIds: string[] | undefined;
+      if (imageAttachments.length) {
+        try {
+          referenceAssetIds = await uploadStudioImages(
+            imageAttachments,
+            referenceMode === "preserve" ? 1 : 4,
+          );
+        } catch (error) {
+          toast.error("Couldn't use your attached image", {
+            description: error instanceof Error ? error.message : "Please attach it again.",
+          });
+        }
+      }
+      if (imageAttachments.length && !referenceAssetIds?.length) {
+        const history = [...priorMessages, userMsg]
+          .filter((m) => m.kind === "text")
+          .slice(-12)
+          .map((m) => ({ role: m.role, content: (m as any)._wire || m.content }));
+        await runChatStream(history, detectChatActions(text));
+        return;
+      }
       const sessionId = startInBackground({
         workspaceId,
         type: intent.type,
         brief: intent.brief,
+        referenceAssetIds,
+        referenceMode,
         origin: "chat",
       });
       if (sessionId) {
@@ -1095,7 +1153,13 @@ export function ChatPanel({
           id: crypto.randomUUID(),
           role: "assistant",
           kind: "text",
-          content: `On it — I'm making your ${format.noun} in Studio. ${format.estimate}, and you can keep chatting while it works.`,
+          content: imageAttachments.length
+            ? referenceMode === "preserve"
+              ? `On it — I'm making your ${format.noun} with your original photo kept intact. I’ll only add the text or layout your prompt asks for.`
+              : referenceMode === "edit"
+                ? `On it — I'm editing your photo for the ${format.noun}. Everything outside the requested changes should stay intact.`
+                : `On it — I'm making a new ${format.noun} inspired by your attached image.`
+            : `On it — I'm making your ${format.noun} in Studio. ${format.estimate}, and you can keep chatting while it works.`,
           live: true,
         };
         setMessages((m) => [...m, ack]);

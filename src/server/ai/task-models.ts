@@ -125,6 +125,7 @@ const REGISTRY: Record<string, TaskPlan> = {
 
   // Studio. Articles go live on customer sites and must pass the GEO gate.
   "studio.article": tier(PREMIUM, "medium"),
+  "studio.article.standard": tier(WORKHORSE, "medium", { maxTokens: 9000 }),
   "studio.social": tier(WORKHORSE, "medium"),
   "studio.carousel": tier(WORKHORSE, "medium"),
   "studio.story": tier(WORKHORSE, "medium"),
@@ -132,6 +133,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.ad": tier(WORKHORSE, "medium"),
   "studio.upload-captions": tier(WORKHORSE, "medium"),
   "studio.captions": tier(WORKHORSE, "medium"),
+  "studio.caption.edit": tier(ECONOMY, "low", { maxTokens: 1800 }),
   "studio.naturalize": tier(WORKHORSE, "low"),
   "studio.ideas": tier(WORKHORSE, "low", { temperature: 0.9 }),
   "studio.prompt": tier(WORKHORSE, "low"),

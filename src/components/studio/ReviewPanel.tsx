@@ -72,6 +72,8 @@ import { SocialPostPreview } from "./previews/SocialPostPreview";
 import { Burst, DrawCheck } from "./studio-ui";
 import { AudienceInspector, AudienceScoreChip } from "@/components/app/audience/AudienceInspector";
 import { useAudienceEnabled } from "@/components/app/audience/hooks";
+import { studioPriceLabel } from "@/lib/studio/billing";
+import { ScriptVideoActions } from "./ScriptVideoActions";
 
 export type ReviewRow = {
   id: string;
@@ -328,21 +330,42 @@ export function ReviewPanel({
     ? format.platforms.filter((platform) => !platforms.includes(platform))
     : [];
   const multi = platforms.length > 1;
-  const refineTarget = multi && scope === "one" && current ? current : "all";
+  const defaultTextTarget = ["social", "image", "video", "ad"].includes(session.type)
+    ? "captions"
+    : "all";
+  const refineTarget = multi && scope === "one" && current ? current : defaultTextTarget;
+  const revisionPrice = studioPriceLabel({
+    type: session.type,
+    controls: session.controls,
+    parentJobId: job.id,
+    refine: { instruction: "Improve text", target: refineTarget },
+    captionEditsRemaining: job.captionEditsRemaining,
+  });
+  const newTakePrice = studioPriceLabel({
+    type: session.type,
+    controls: session.controls,
+    regenerate: true,
+  });
+  const mediaPrice = studioPriceLabel({
+    type: session.type,
+    controls: session.controls,
+    parentJobId: job.id,
+    refine: { instruction: "Remake visual", target: "media" },
+  });
 
   const edit = (next: StudioJobOutput) => {
     setDraft(next);
     setDirty(true);
   };
 
+  const visualChanged =
+    (session.type === "carousel" &&
+      JSON.stringify(draft.slides) !== JSON.stringify(job.output.slides)) ||
+    (session.type === "story" &&
+      draft.story?.mode === "frames" &&
+      JSON.stringify(draft.story.frames) !== JSON.stringify(job.output.story?.frames));
   const save = async (): Promise<boolean> => {
     if (!dirty) return true;
-    const visualChanged =
-      (session.type === "carousel" &&
-        JSON.stringify(draft.slides) !== JSON.stringify(job.output.slides)) ||
-      (session.type === "story" &&
-        draft.story?.mode === "frames" &&
-        JSON.stringify(draft.story.frames) !== JSON.stringify(job.output.story?.frames));
     setBusy("save");
     try {
       for (const row of rows) {
@@ -426,6 +449,12 @@ export function ReviewPanel({
   const approve = async (selectedIds?: string[]) => {
     if (draft.storyboard?.status === "preview") {
       toast("Make the video from this frame before approving it.");
+      return false;
+    }
+    if (dirty && visualChanged) {
+      toast("Update the edited visuals before approving", {
+        description: `Use Update visuals (${mediaPrice}) to make the artwork match your changes.`,
+      });
       return false;
     }
     if (dirty && !(await save())) return false;
@@ -708,6 +737,13 @@ export function ReviewPanel({
 
   /* ── Status: one unmistakable statement of where this piece stands ── */
   const hero = (() => {
+    if (session.type === "script")
+      return {
+        tone: "ok" as Tone,
+        icon: <DrawCheck className="size-4" />,
+        title: "Your script is ready",
+        sub: "Review the lines, then choose how to make your video",
+      };
     const s = STATUS_COPY[groupStatus] ?? { label: groupStatus, tone: "muted" as Tone };
     const versions = multi ? `${platforms.length} platform versions` : format.label;
     switch (groupStatus) {
@@ -963,8 +999,21 @@ export function ReviewPanel({
             }}
           >
             <Sparkles />
-            Make video
+            Make video ·{" "}
+            {studioPriceLabel({
+              type: session.type,
+              controls: { ...session.controls, videoPreview: false },
+            })}
           </Button>
+        </motion.div>
+      ) : session.type === "script" && draft.script ? (
+        <motion.div key="script-video" {...fadeSwap} className="flex w-full flex-col gap-2">
+          <ScriptVideoActions
+            session={session}
+            script={draft.script}
+            disabled={revising || dirty || editing || busy !== null}
+            onCopy={copyText}
+          />
         </motion.div>
       ) : approvable && confirmDiscard ? (
         <motion.div key="confirm" {...fadeSwap} className="grid w-full min-w-0 grid-cols-2 gap-2">
@@ -1195,10 +1244,10 @@ export function ReviewPanel({
                   className={TOOL}
                   onClick={() => void generate(session.id, { kind: "regenerate" })}
                   disabled={revising || locked}
-                  title="Same description, a new version"
+                  title={`Same description, a new version · ${newTakePrice}`}
                 >
                   <RefreshCw />
-                  <span className="hidden sm:inline">New take</span>
+                  <span className="hidden sm:inline">New take · {newTakePrice}</span>
                 </button>
                 <span aria-hidden className="mx-1 h-4 w-px bg-border" />
                 <button
@@ -1377,10 +1426,10 @@ export function ReviewPanel({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: duration.medium, ease: ease.emphasized }}
-              className="sticky bottom-4 z-20 mx-auto -mt-16 mb-4 shrink-0 flex w-fit items-center gap-2 rounded-full bg-surface-4 py-1.5 pl-4 pr-1.5 shadow-4 ring-1 ring-border"
+              className="sticky bottom-4 z-20 mx-auto -mt-16 mb-4 flex w-[calc(100%-1rem)] max-w-[600px] shrink-0 flex-wrap items-center justify-end gap-2 rounded-2xl bg-surface-4 px-3 py-2 shadow-4 ring-1 ring-border"
             >
               <span className={cn("size-1.5 rounded-full", dirty ? "bg-warning" : "bg-primary")} />
-              <span className="mr-2 text-sm text-foreground">
+              <span className="mr-auto text-xs text-foreground">
                 {dirty
                   ? "Unsaved changes"
                   : `Editing${multi && current ? ` ${PLATFORMS[current].label}` : ""}`}
@@ -1390,13 +1439,13 @@ export function ReviewPanel({
               </Button>
               <Button
                 size="sm"
-                className="rounded-full"
+                className="h-auto min-h-9 min-w-0 whitespace-normal rounded-full py-2 text-center"
                 onClick={() => void save()}
                 disabled={!dirty}
                 loading={busy === "save"}
               >
                 <Check />
-                Save changes
+                {visualChanged ? `Update visuals · ${mediaPrice}` : "Save changes (free)"}
               </Button>
             </motion.div>
           ) : revising ? (
@@ -1654,7 +1703,7 @@ export function ReviewPanel({
                 dirty={dirty}
                 locked={locked}
                 onImprove={(instruction) =>
-                  refine(instruction, multi && current ? current : "all", "audience")
+                  refine(instruction, multi && current ? current : defaultTextTarget, "audience")
                 }
                 onUseVersion={
                   variant
@@ -1678,7 +1727,7 @@ export function ReviewPanel({
 
           {!locked ? (
             <InspectorSection
-              title="Improve"
+              title={`Improve · ${revisionPrice}`}
               aside={
                 multi ? (
                   <div
@@ -1765,7 +1814,7 @@ export function ReviewPanel({
                     className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2/70 px-3 text-xs font-medium text-foreground ring-1 ring-transparent transition-[background-color,box-shadow,translate] duration-[--motion-duration-fast] hover:-translate-y-px hover:bg-primary-surface hover:shadow-1 hover:ring-primary-border disabled:opacity-45"
                   >
                     <RefreshCw className="size-3" />
-                    Retake visual
+                    Retake visual · {mediaPrice}
                   </button>
                 ) : null}
               </div>

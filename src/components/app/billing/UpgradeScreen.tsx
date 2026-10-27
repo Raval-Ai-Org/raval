@@ -34,7 +34,6 @@ import {
   type LucideIcon,
 } from "@/components/icons";
 import {
-  CREDIT_ACTIONS,
   CREDIT_PACKS,
   FEATURES,
   PLANS,
@@ -58,6 +57,7 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 import { GhostButton, IntervalToggle, PrimaryButton } from "./billing-ui";
 import type { PurchaseKind } from "./use-billing-actions";
 
@@ -81,13 +81,6 @@ function featureIcon(feature: FeatureKey): LucideIcon {
   if (feature === "autopilot") return Rocket;
   if (feature === "backlinks") return Link;
   return MODULE_ICON[FEATURES[feature].module];
-}
-
-/** Roughly how many posts a month of credits makes, rounded down. */
-function postsFrom(credits: number): number {
-  const posts = Math.floor(credits / CREDIT_ACTIONS.post_set.credits);
-  const step = 10 ** Math.max(0, String(posts).length - 2);
-  return Math.floor(posts / step) * step;
 }
 
 export type UpgradeScreenProps = {
@@ -274,7 +267,7 @@ function Hero({
   let tag: string | null = null;
   let title = free ? "Do more with Mellox" : "Get more room to grow";
   let text = free
-    ? `Free gives you ${formatNumber(SIGNUP_GRANT.credits)} credits once. A plan gives you ${formatNumber(PLANS.starter.allowances.credits)} or more every month, plus the tools that do the work for you.`
+    ? `Free gives you ${formatNumber(SIGNUP_GRANT.credits)} credits once. Paid plans start with ${CREATION_PLANS.starter.points} monthly creation points plus wallet credits for extras.`
     : "More brands, more credits and more of the tools that do the work for you.";
 
   const empty = block?.code === "insufficient_balance";
@@ -283,7 +276,7 @@ function Hero({
     empty && block?.needed
       ? `This needs ${formatMeter(meter, block.needed)}. You have ${formatMeter(meter, block.available ?? 0)} left. `
       : "";
-  const outOf = meter === "video" ? "You're out of videos" : "You're out of credits";
+  const outOf = meter === "creation" ? "Your creation points are used" : meter === "video" ? "You're out of Video Credits" : "You're out of credits";
 
   if (view === "credits") {
     Icon = Wallet;
@@ -292,7 +285,7 @@ function Hero({
   } else if (empty) {
     Icon = Bolt;
     title = free && meter === "credits" ? "You've used your free credits" : outOf;
-    text = `${need}A plan refills your credits every month, so you never have to stop.`;
+    text = `${need}${meter === "creation" ? "Points refill at renewal. Choose Wallet credits in Studio to review an extra generation's price, or upgrade for more monthly points." : "Your plan allowance refills monthly. Packs add wallet credits for extra work."}`;
   } else if (feature) {
     const min = FEATURES[feature].minPlan;
     Icon = featureIcon(feature);
@@ -356,8 +349,13 @@ function planNumbers(plan: PlanId): Array<{ Icon: LucideIcon; main: string; note
   return [
     {
       Icon: Bolt,
-      main: `${formatNumber(def.allowances.credits)} credits a month`,
-      note: `about ${formatNumber(postsFrom(def.allowances.credits))} posts`,
+      main: `${formatNumber(CREATION_PLANS[plan].points)} creation points a month`,
+      note: `up to ${formatNumber(Math.floor(CREATION_PLANS[plan].points / 2))} standard image posts, or a mix. Three caption edits per creation included.`,
+    },
+    {
+      Icon: Wallet,
+      main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras`,
+      note: "Existing wallet balances keep their value. New allocation begins at renewal.",
     },
     {
       Icon: Video,
@@ -556,7 +554,7 @@ function PlanStrip(props: UpgradeScreenProps & { plan: PaidPlanId }) {
           <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">{def.fit}</span>
         </p>
         <p className="text-[12.5px] text-muted-foreground">
-          {formatNumber(def.brands)} brands · {formatNumber(def.allowances.credits)} credits and{" "}
+          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[def.id].points)} creation points and{" "}
           {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account manager
         </p>
       </div>

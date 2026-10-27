@@ -13,7 +13,8 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AllowanceView, ModelView, ReferenceImageView } from "@/lib/ugc/schemas";
+import type { AllowanceView, ModelView, ReferenceImageView, Script } from "@/lib/ugc/schemas";
+import { dialogueWordBudget, scriptWordCount } from "@/lib/ugc/prompt";
 import { cn } from "@/lib/utils";
 import { planVideoSegments } from "@/lib/ugc/duration";
 import {
@@ -90,6 +91,7 @@ export function GenerateStep({
   settings,
   references,
   hook,
+  script,
   scriptDurationSec,
   generating,
   onChange,
@@ -103,6 +105,7 @@ export function GenerateStep({
   settings: RenderSettingsState;
   references: ReferenceImageView[];
   hook?: string;
+  script?: Script | null;
   scriptDurationSec?: number;
   generating: boolean;
   onChange: (next: RenderSettingsState) => void;
@@ -162,6 +165,24 @@ export function GenerateStep({
 
   return (
     <div className="space-y-5">
+      {script ? (
+        <Disclosure label="Script used in this video" badge={`${script.scenes.length} scenes`}>
+          <div className="space-y-3 text-sm">
+            {script.scenes.map((scene) => (
+              <div key={scene.id}>
+                <p className="text-xs text-muted-foreground">{scene.action}</p>
+                <p>{scene.dialogue}</p>
+              </div>
+            ))}
+          </div>
+          {scriptWordCount(script) > dialogueWordBudget(settings.durationSec) ? (
+            <p className="mt-3 text-xs text-warning">
+              The spoken lines may feel rushed at {settings.durationSec}s. Choose a longer video or
+              edit the script.
+            </p>
+          ) : null}
+        </Disclosure>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
         {/* Preview + summary */}
         <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">

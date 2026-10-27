@@ -2,20 +2,28 @@
 // credit or video hold, shared by the jobs route (a person pressing Generate)
 // and Autopilot (the worker, acting as a stored member). Same price either way.
 import "server-only";
-import { studioChargeFor } from "@/lib/studio/billing";
+import { studioChargeFor, studioJobRenders, studioTextOnlyRevision } from "@/lib/studio/billing";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
-import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { createStudioJob } from "@/server/studio/runner.server";
-import {
-  beginDeferredMetered,
-  runMetered,
-  type MeteredAction,
-} from "@/server/billing/metered.server";
+import { beginDeferredMetered, type MeteredAction } from "@/server/billing/metered.server";
 import { CREDIT_ACTIONS, creditsFor, type CreditAction } from "@/lib/billing/catalog";
-import { saveStudioBillingLink } from "@/server/billing/studio-async.server";
+import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
 import type { WorkspaceRole } from "@/server/api-auth";
+import { resolveStudioReferences } from "./references.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { creationPointsFor, isCaptionRevision } from "@/lib/billing/creation";
+import { getEntitlements } from "@/server/billing/entitlements.server";
+import { requireBillingFeature } from "@/server/billing/feature.server";
+import {
+  captionEditsRemaining,
+  linkCaptionEdit,
+  reserveCaptionEdit,
+  settleCaptionEdit,
+} from "@/server/billing/creation.server";
+import { HttpError } from "@/server/http-error";
+import { quoteStudioVideo } from "./video-quote.server";
 
 const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   social: "studio.social",
@@ -28,23 +36,14 @@ const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   ad: "studio.ad",
 };
 
-/** Whether this request starts an image or video render (charged when it finishes). */
-export function studioJobRenders(input: Pick<CreateJobInput, "type" | "controls">): boolean {
-  if (input.type === "carousel" || input.type === "story") return true;
-  const media = STUDIO_FORMATS[input.type].media;
-  return (
-    media === "video" ||
-    media === "image" ||
-    (media === "optional-image" && Boolean(input.controls.includeImage))
-  );
-}
+export { studioJobRenders } from "@/lib/studio/billing";
 
 export type BilledStudioJob = {
   job: StudioJob;
-  /** Wallet balance after a synchronous charge; null when nothing was debited yet. */
+  /** Refreshed from the wallet so held and spent credits stay distinct. */
   balance: number | null;
   /** What the job is priced at: credits, or video units for a video. */
-  charge: { meter: "credits" | "video"; amount: number };
+  charge: { meter: "credits" | "video" | "creation"; amount: number };
 };
 
 export async function createBilledStudioJob(args: {
@@ -56,6 +55,13 @@ export async function createBilledStudioJob(args: {
   input: CreateJobInput;
 }): Promise<BilledStudioJob> {
   const { client, workspaceId, userId, role, input } = args;
+  // Reject foreign/deleted references before reserving credits or starting work.
+  if (!studioTextOnlyRevision(input))
+    await resolveStudioReferences(
+      client as SupabaseClient,
+      workspaceId,
+      input.controls.referenceAssetIds,
+    );
   const action: MeteredAction = studioChargeFor({
     type: input.type,
     includeImage: input.controls.includeImage,
@@ -63,85 +69,161 @@ export async function createBilledStudioJob(args: {
     regenerate: Boolean(input.regenerate || input.parentJobId),
     storyMode: input.controls.storyMode,
     videoPreview: input.controls.videoPreview,
+    textOnly: studioTextOnlyRevision(input),
+    referenceMode: input.controls.referenceMode,
+    referenceAssetIds: input.controls.referenceAssetIds,
+    articleQuality: input.controls.articleQuality,
   });
   const billingRoute =
-    input.type === "story" && input.controls.storyMode === "video"
-      ? "video"
-      : BILLING_ROUTE[input.type];
+    studioTextOnlyRevision(input) && ["video", "image", "social"].includes(input.type)
+      ? "studio.captions"
+      : input.type === "story" && input.controls.storyMode === "video"
+        ? "video"
+        : BILLING_ROUTE[input.type];
   const video = action === "studio_video";
-  const amount = video
-    ? studioVideoUnits(input.controls.durationSec)
-    : creditsFor(action as CreditAction);
-  const price = { meter: video ? ("video" as const) : ("credits" as const), amount };
+  const videoQuote =
+    video && input.controls.videoModelKey ? quoteStudioVideo(input.controls) : null;
+  if (
+    videoQuote &&
+    (input.controls.videoQuote?.hash !== videoQuote.hash ||
+      input.controls.videoQuote.units !== videoQuote.units)
+  )
+    throw new HttpError(
+      409,
+      "Video settings or prices changed. Refresh the quote before generating.",
+    );
+  if (videoQuote) input.controls.videoQuote = { hash: videoQuote.hash, units: videoQuote.units, resolution: videoQuote.resolution, aspectRatio: videoQuote.aspectRatio };
+  const useCreation = input.controls.paymentSource === "creation" && !video;
+  const entitlements = useCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
+  if (useCreation && !entitlements?.creation?.active)
+    throw new HttpError(
+      409,
+      "Your creation allowance starts with your next plan renewal. Use wallet credits for this request.",
+    );
+  const points = useCreation ? creationPointsFor(input) : null;
+  let captionEditId: string | null = null;
+  let captionCostChargeId: string | null = null;
+  if (useCreation && input.includedCaptionEdit) {
+    if (entitlements?.enforcement === "on" && Object.values(entitlements.meters).some(wallet => wallet.debt > 0))
+      throw new HttpError(402, "Resolve the outstanding wallet balance before requesting another included edit.");
+    if (!isCaptionRevision(input))
+      throw new HttpError(400, "Included edits cover captions, not new artwork or full rewrites.");
+    await requireBillingFeature({ workspaceId, userId, role, feature: "studio", spending: true });
+    if (entitlements?.enforcement === "on")
+      {
+      const claim = await reserveCaptionEdit({
+        accountId: entitlements.accountId,
+        workspaceId,
+        userId,
+        requestKey: input.idempotencyKey,
+        parentJobId: input.parentJobId!,
+      });
+      captionEditId = claim?.id ?? null;
+      captionCostChargeId = claim?.chargeId ?? null;
+      }
+    if (!captionEditId && entitlements?.enforcement === "on")
+      throw new HttpError(
+        409,
+        "The included caption edits have been used. Refresh this creation to see the next edit's price.",
+      );
+  }
+  const amount = captionEditId
+    ? 0
+    : (points ??
+      (video
+        ? (videoQuote?.units ?? studioVideoUnits(input.controls.durationSec))
+        : creditsFor(action as CreditAction)));
+  const meter = useCreation
+    ? ("creation" as const)
+    : video
+      ? ("video" as const)
+      : ("credits" as const);
+  const price = { meter, amount };
+  const actionName = captionEditId
+    ? "studio_caption_included"
+    : useCreation
+      ? `creation:${action}`
+      : (action as string);
 
-  if (studioJobRenders(input)) {
-    const charge = await beginDeferredMetered({
-      workspaceId,
-      userId,
-      role,
-      actionName: action as string,
-      meter: price.meter,
-      amount,
-      feature: video ? "ugc" : CREDIT_ACTIONS[action as CreditAction].feature,
-      idempotencyKey: input.idempotencyKey,
-      route: billingRoute,
-      expiresAt: new Date(Date.now() + 3 * 60 * 60_000).toISOString(),
-    });
+  // All jobs have a durable billing link, including inline text work. This
+  // makes cancellation, crash recovery and settlement use the same hold.
+  {
+    const charge = captionEditId
+      ? {
+          accountId: entitlements!.accountId,
+          chargeId: captionCostChargeId,
+          holdId: null,
+          mode: "on" as const,
+          shadowDecision: "included",
+          release: () => settleCaptionEdit(captionEditId!, "released"),
+        }
+      : await beginDeferredMetered({
+          workspaceId,
+          userId,
+          role,
+          actionName,
+          meter: price.meter,
+          amount,
+          feature: video
+            ? (videoQuote?.feature ?? "ugc")
+            : CREDIT_ACTIONS[action as CreditAction].feature,
+          idempotencyKey: input.idempotencyKey,
+          route: billingRoute,
+          expiresAt: new Date(
+            Date.now() + (studioJobRenders(input) ? 3 * 60 * 60_000 : 15 * 60_000),
+          ).toISOString(),
+        });
     let job: StudioJob;
+    let createdHere = false;
+    let billingLinked = false;
     try {
       job = await runWithScope(
-        { billingAccountId: charge.accountId, billingChargeId: charge.chargeId ?? undefined },
+        { billingAccountId: charge.accountId, billingChargeId: charge.chargeId ?? undefined, billingMeter: price.meter, workspaceId, userId },
         () =>
           createStudioJob({
             client,
             workspaceId,
             userId,
             input,
-            onCreated: async (created) =>
-              charge.mode === "off"
-                ? undefined
-                : saveStudioBillingLink({
-                    job_id: created.id,
-                    account_id: charge.accountId,
-                    workspace_id: workspaceId,
-                    hold_id: charge.holdId,
-                    charge_id: charge.chargeId,
-                    charge_key: `${userId}:${action}:${input.idempotencyKey}`,
-                    action: action as string,
-                    meter: price.meter,
-                    amount,
-                    route: billingRoute,
-                    mode: charge.mode,
-                    shadow_decision: charge.shadowDecision,
-                  }),
+            onCreated: async (created) => {
+              createdHere = true;
+              if (captionEditId) await linkCaptionEdit(captionEditId, created.id);
+              if (charge.mode !== "off")
+                await saveStudioBillingLink({
+                  job_id: created.id,
+                  account_id: charge.accountId,
+                  workspace_id: workspaceId,
+                  hold_id: charge.holdId,
+                  charge_id: charge.chargeId,
+                  charge_key: `${userId}:${actionName}:${input.idempotencyKey}`,
+                  action: actionName,
+                  meter: price.meter,
+                  amount,
+                  route: billingRoute,
+                  mode: charge.mode,
+                  shadow_decision: charge.shadowDecision,
+                  ...(captionEditId ? { caption_edit_id: captionEditId } : {}),
+                });
+              billingLinked = charge.mode !== "off";
+            },
           }),
       );
     } catch (error) {
       await charge.release();
       throw error;
     }
-    if (job.status === "succeeded") {
-      await charge.capture();
-    } else if (job.status !== "running" && job.status !== "queued") {
+    if (!createdHere || (charge.mode !== "off" && !billingLinked)) {
+      // A replayed job belongs to the original reservation.
       await charge.release();
+    } else if (charge.mode !== "off") {
+      await settleStudioBilling(job);
+      if (
+        job.status === "succeeded" &&
+        useCreation &&
+        ["social", "image", "video", "ad"].includes(job.type)
+      )
+        job.captionEditsRemaining = await captionEditsRemaining(workspaceId, job.group_id);
     }
     return { job, balance: null, charge: price };
   }
-
-  const metered = await runMetered(
-    {
-      workspaceId,
-      userId,
-      role,
-      action,
-      idempotencyKey: input.idempotencyKey,
-      route: billingRoute,
-    },
-    async (charge) => {
-      const job = await createStudioJob({ client, workspaceId, userId, input });
-      if (job.status !== "succeeded") charge.setCapturedAmount(0);
-      return job;
-    },
-  );
-  return { job: metered.result, balance: metered.balance, charge: price };
 }

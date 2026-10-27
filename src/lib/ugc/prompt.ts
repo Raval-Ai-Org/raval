@@ -183,6 +183,11 @@ export function buildVideoPrompt(input: PromptInput): string {
     lines.push(`TRUE PRODUCT FACTS (only these may be claimed): ${facts.join("; ")}.`);
   if (input.brandVoice) lines.push(`BRAND VOICE: ${truncate(input.brandVoice, 200)}.`);
   if (input.styleNotes) lines.push(`BRAND LOOK: ${truncate(input.styleNotes, 400)}.`);
+  if (brief.scriptSource === "studio") {
+    lines.push(
+      `REVIEWED SCRIPT INTENT: Opening: ${input.script.hook}. Closing call to action: ${input.script.cta}. Preserve this intent using only the quoted beat-sheet dialogue; do not repeat the opening or ending as extra speech.`,
+    );
+  }
   lines.push("");
 
   lines.push("BEAT SHEET:");
@@ -208,7 +213,7 @@ export function buildVideoPrompt(input: PromptInput): string {
 
   if (model.spokenDialogue) {
     lines.push(
-      `AUDIO: The creator speaks only the quoted lines, in ${language}, word for word, in a natural conversational voice with accurate lip sync — not a voice-over, not robotic, not announcer-style. Light natural room sound. No background music, no sound effects over the speech.`,
+      `AUDIO: The creator speaks only the quoted lines, in ${brief.scriptSource === "studio" ? "their original language (do not translate)" : language}, word for word, in a natural conversational voice with accurate lip sync — not a voice-over, not robotic, not announcer-style. Light natural room sound. No background music, no sound effects over the speech.`,
     );
   }
   const restrictions = [
@@ -221,7 +226,7 @@ export function buildVideoPrompt(input: PromptInput): string {
   if (brief.instructions) lines.push(`CREATIVE NOTES: ${truncate(brief.instructions, 400)}`);
   lines.push(`DO NOT INCLUDE: ${restrictions.join("; ")}.`);
 
-  return lines.join("\n").slice(0, 8000);
+  return lines.join("\n");
 }
 
 function fmt(n: number) {

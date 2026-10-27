@@ -19,6 +19,7 @@ import {
   type PaidPlanId,
   type PlanId,
 } from "./catalog";
+import { CREATION_PLANS } from "./creation";
 
 /**
  * The plain words the server sends with a 402. The browser shows an Upgrade /
@@ -78,6 +79,7 @@ export function asFeature(value: unknown): FeatureKey | null {
 }
 
 export const METER_LABEL: Record<Meter, string> = {
+  creation: "Creation points",
   credits: "Credits",
   video: "Videos",
   pro_messages: "Pro messages",
@@ -86,9 +88,11 @@ export const METER_LABEL: Record<Meter, string> = {
 
 /** One meter amount in plain words: "1,200 credits", "3.5 videos". */
 export function formatMeter(meter: Meter | string, amount: number): string {
+  if (meter === "creation")
+    return `${formatNumber(amount)} creation ${amount === 1 ? "point" : "points"}`;
   if (meter === "video") {
     const text = formatVideos(amount);
-    return `${text} ${text === "1" ? "video" : "videos"}`;
+    return `${text} video ${text === "1" ? "credit" : "credits"}`;
   }
   const n = formatNumber(amount);
   if (meter === "pro_messages") return `${n} Pro ${amount === 1 ? "message" : "messages"}`;
@@ -169,13 +173,15 @@ export function planForMeter(current: PlanId, meter: string, needed: number): Pa
   for (const plan of PLAN_ORDER.slice(planRank(current) + 1)) {
     const a = PLANS[plan].allowances;
     const monthly =
-      meter === "video"
-        ? a.videoUnits
-        : meter === "pro_messages"
-          ? a.proMessages
-          : meter === "flash_messages"
-            ? a.flashMessages
-            : a.credits;
+      meter === "creation"
+        ? CREATION_PLANS[plan].points
+        : meter === "video"
+          ? a.videoUnits
+          : meter === "pro_messages"
+            ? a.proMessages
+            : meter === "flash_messages"
+              ? a.flashMessages
+              : a.credits;
     if (monthly >= needed) return plan as PaidPlanId;
   }
   return null;
@@ -246,12 +252,12 @@ export function freeNudge(args: {
   nextExpiry: string | null;
   now?: Date;
 }): FreeNudge | null {
-  const monthly = formatNumber(PLANS.starter.allowances.credits);
+  const monthly = formatNumber(CREATION_PLANS.starter.points);
   if (args.credits <= 0) {
     return {
       id: "empty",
       title: "You've used your free credits",
-      text: `A plan gives you ${monthly} credits every month.`,
+      text: `A plan starts with ${monthly} creation points every month, plus wallet credits for extras.`,
     };
   }
   if (args.credits <= SIGNUP_GRANT.credits * (1 - SOFT_LIMIT_RATIO)) {
@@ -314,7 +320,7 @@ export function blockHeadline(block: BillingBlock): string {
         : `This needs the ${PLANS[plan].label} plan`;
     }
     case "insufficient_balance":
-      return `Not enough ${block.meter === "video" ? "videos" : block.meter === "pro_messages" ? "Pro messages" : "credits"} left`;
+      return `Not enough ${block.meter === "creation" ? "creation points" : block.meter === "video" ? "Video Credits" : block.meter === "pro_messages" ? "Pro messages" : "credits"} left`;
     case "limit_reached":
       return `You've reached your ${LIMIT_LABEL[block.limit ?? ""] ?? "plan"} limit`;
     case "brand_frozen":

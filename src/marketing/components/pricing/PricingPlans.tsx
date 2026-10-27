@@ -16,26 +16,19 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import {
-  CREDIT_ACTIONS,
   PLANS,
   type BillingInterval,
   type PaidPlanId,
 } from "@/lib/billing/catalog";
 import { formatMeter, formatNumber, formatUsd, planPrice } from "@/lib/billing/present";
 import { PAID_PLANS } from "@/marketing/lib/pricing";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 import SectionHead from "./SectionHead";
 
 const APP_URL = "/signup";
 const CARDS = PAID_PLANS.slice(0, 3);
 const STRIP = PAID_PLANS[3];
 const FEATURED: PaidPlanId = "growth";
-
-/** Roughly how many posts a month of credits makes, rounded down (the product's own sum). */
-function postsFrom(credits: number): number {
-  const posts = Math.floor(credits / CREDIT_ACTIONS.post_set.credits);
-  const step = 10 ** Math.max(0, String(posts).length - 2);
-  return Math.floor(posts / step) * step;
-}
 
 /** A year's price as a daily figure: "$4.08". */
 const perDay = (yearUsd: number) => `$${(yearUsd / 365).toFixed(2)}`;
@@ -46,9 +39,10 @@ function planNumbers(plan: PaidPlanId): { Icon: LucideIcon; main: string; note?:
   return [
     {
       Icon: Zap,
-      main: `${formatNumber(def.allowances.credits)} credits a month`,
-      note: `about ${formatNumber(postsFrom(def.allowances.credits))} posts`,
+      main: `${formatNumber(CREATION_PLANS[plan].points)} creation points a month`,
+      note: `up to ${formatNumber(Math.floor(CREATION_PLANS[plan].points / 2))} standard image posts, or a mix. Three short caption edits per paid social creation.`,
     },
+    { Icon: Zap, main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras` },
     { Icon: Video, main: `${formatMeter("video", def.allowances.videoUnits)} a month` },
     {
       Icon: Building2,
@@ -153,7 +147,7 @@ function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInte
           <span>{def.fit}</span>
         </h3>
         <p>
-          {formatNumber(def.brands)} brands · {formatNumber(def.allowances.credits)} credits and{" "}
+          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[plan].points)} creation points and{" "}
           {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account manager
         </p>
       </div>

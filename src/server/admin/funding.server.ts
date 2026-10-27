@@ -34,6 +34,7 @@ type SubscriptionPaymentRow = {
 };
 
 const emptyMeters = (): FundingAccountInput["meters"] => ({
+  creation: { available: 0, held: 0, debt: 0 },
   credits: { available: 0, held: 0, debt: 0 },
   video: { available: 0, held: 0, debt: 0 },
   pro_messages: { available: 0, held: 0, debt: 0 },

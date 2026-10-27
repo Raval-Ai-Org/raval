@@ -56,6 +56,18 @@ async function call<T>(path: string, init?: AuthedFetchInit): Promise<T> {
 }
 
 export const studioApi = {
+  videoQuote(workspaceId: string, controls: StudioControls) {
+    return call<NonNullable<StudioControls["videoQuote"]>>("/api/studio/video-quote", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, controls }),
+      workspaceId,
+    });
+  },
+  paymentSource(workspaceId: string) {
+    return call<{ creation?: { active: boolean } }>(
+      `/api/billing/entitlements?workspaceId=${encodeURIComponent(workspaceId)}`,
+    ).then((result) => (result.creation?.active ? ("creation" as const) : ("credits" as const)));
+  },
   createJob(input: CreateJobInput) {
     return call<{ job: StudioJob }>("/api/studio/jobs", {
       method: "POST",
@@ -73,6 +85,11 @@ export const studioApi = {
     return call<{ jobs: StudioJob[] }>(
       `/api/studio/jobs?workspaceId=${encodeURIComponent(workspaceId)}`,
     ).then((r) => r.jobs);
+  },
+  findJob(workspaceId: string, requestKey: string) {
+    return call<{ jobs: StudioJob[] }>(
+      `/api/studio/jobs?workspaceId=${encodeURIComponent(workspaceId)}&requestKey=${encodeURIComponent(requestKey)}`,
+    ).then((result) => result.jobs[0] ?? null);
   },
   cancelJob(workspaceId: string, id: string) {
     return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/cancel`, {

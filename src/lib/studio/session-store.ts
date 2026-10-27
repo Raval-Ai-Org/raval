@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from "react";
 import { toast } from "@/lib/toast";
 import { emitAppEvent } from "@/lib/app-events";
+import { isCaptionRevision } from "@/lib/billing/creation";
 import { userSafeMessage } from "@/lib/user-errors";
 import { getActiveWorkspaceId } from "@/lib/authed-fetch";
 import type { PlatformId } from "@/lib/social-platforms";
@@ -23,6 +24,7 @@ import {
   type StudioControls,
   type StudioJob,
   type StudioRefine,
+  type ScriptOutput,
 } from "./jobs";
 
 export type ComposerWindow = "open" | "maximized" | "minimized";
@@ -42,6 +44,7 @@ export type StudioSession = {
   template?: string;
   /** Repurposing: the content item this piece is made from. */
   sourceContentId?: string;
+  sourceScript?: ScriptOutput;
   controls: StudioControls;
   /** Current job (latest generate / regenerate / refine). */
   job: StudioJob | null;
@@ -50,6 +53,10 @@ export type StudioSession = {
   /** Idempotency key of a create request that hasn't returned yet. */
   pendingKey: string | null;
   pendingKind: "generate" | "regenerate" | "refine" | null;
+  /** An uncertain network response must retry the same billed request. */
+  retryKey?: string | null;
+  retrySignature?: string | null;
+  uploadingReference?: boolean;
   error: string | null;
   /** The plan or balance stopped the last Generate: show an upgrade option, not an error. */
   billing?: { code: string; feature?: string; requiredPlan?: string; meter?: string } | null;
@@ -121,6 +128,7 @@ function hydrate() {
         ...state,
         sessions: sessions.map((s) => ({
           ...s,
+          uploadingReference: false,
           // Sessions saved on the retired start screen resume on the description.
           step: (s.step as string) === "start" ? "intent" : s.step,
           window: s.window === "minimized" ? "minimized" : "minimized",
@@ -303,6 +311,10 @@ export function openComposer(
     template?: string;
     platforms?: PlatformId[];
     sourceContentId?: string;
+    sourceScript?: ScriptOutput;
+    referenceAssetIds?: string[];
+    referenceMode?: StudioControls["referenceMode"];
+    durationSec?: number;
   } = {},
 ): string | null {
   hydrate();
@@ -337,6 +349,7 @@ export function openComposer(
         ideaSource: opts.ideaSource,
         template: opts.template,
         sourceContentId: opts.sourceContentId,
+        sourceScript: opts.sourceScript,
         type,
         controls:
           opts.platforms || reusable.type !== type
@@ -357,6 +370,7 @@ export function openComposer(
         ideaSource: opts.ideaSource,
         template: opts.template,
         sourceContentId: opts.sourceContentId,
+        sourceScript: opts.sourceScript,
         controls: defaultControls(type, opts.platforms),
         job: null,
         lastGood: null,
@@ -367,6 +381,18 @@ export function openComposer(
         createdAt: now,
         updatedAt: now,
       };
+  if (opts.referenceAssetIds)
+    session.controls = {
+      ...session.controls,
+      referenceAssetIds: opts.referenceAssetIds,
+      referenceMode: opts.referenceMode ?? "preserve",
+      ...(type === "social" ? { includeImage: true } : {}),
+    };
+  if (opts.durationSec)
+    session.controls = {
+      ...session.controls,
+      durationSec: Math.min(60, Math.max(4, opts.durationSec)),
+    };
   const others = state.sessions
     .filter((s) => s.id !== session.id)
     .map((s) => (s.window === "minimized" ? s : { ...s, window: "minimized" as const }));
@@ -386,6 +412,8 @@ export function startInBackground(opts: {
   brief: string;
   goal?: GoalId;
   platforms?: PlatformId[];
+  referenceAssetIds?: string[];
+  referenceMode?: StudioControls["referenceMode"];
   origin?: StudioSession["origin"];
 }): string | null {
   hydrate();
@@ -399,7 +427,16 @@ export function startInBackground(opts: {
     step: "intent",
     brief,
     goal: opts.goal,
-    controls: defaultControls(opts.type, opts.platforms),
+    controls: {
+      ...defaultControls(opts.type, opts.platforms),
+      ...(opts.referenceAssetIds?.length
+        ? {
+            referenceAssetIds: opts.referenceAssetIds,
+            referenceMode: opts.referenceMode ?? "preserve",
+            ...(opts.type === "social" ? { includeImage: true } : {}),
+          }
+        : {}),
+    },
     job: null,
     lastGood: null,
     pendingKey: null,
@@ -411,7 +448,19 @@ export function startInBackground(opts: {
     updatedAt: now,
   };
   setState({ sessions: [session, ...state.sessions].slice(0, MAX_SESSIONS) });
-  void generate(session.id, { kind: "generate" });
+  void studioApi
+    .paymentSource(session.workspaceId)
+    .then((paymentSource) => {
+      const latest = getSession(session.id);
+      if (!latest || latest.pendingKey || latest.job) return;
+      updateSession(session.id, { controls: { ...latest.controls, paymentSource } });
+      return generate(session.id, { kind: "generate" });
+    })
+    .catch(() =>
+      patchSession(session.id, {
+        error: "Could not load the generation price. Open this brief and try again.",
+      }),
+    );
   return session.id;
 }
 
@@ -444,6 +493,8 @@ export async function openJob(jobId: string, workspaceId?: string | null): Promi
             : "intent",
       brief: job.input?.intent?.brief ?? "",
       goal: job.input?.intent?.goal,
+      sourceContentId: job.input?.intent?.sourceContentId,
+      sourceScript: job.input?.intent?.sourceScript,
       controls: job.input?.controls ?? defaultControls(job.type),
       job,
       lastGood: job.status === "succeeded" ? job : null,
@@ -475,7 +526,15 @@ export function updateSession(
   patch: Partial<
     Pick<
       StudioSession,
-      "brief" | "goal" | "ideaId" | "ideaSource" | "template" | "controls" | "type" | "error"
+      | "brief"
+      | "goal"
+      | "ideaId"
+      | "ideaSource"
+      | "template"
+      | "controls"
+      | "type"
+      | "error"
+      | "uploadingReference"
     >
   >,
 ) {
@@ -486,6 +545,7 @@ export function updateSession(
         controls: defaultControls(patch.type, s.controls.platforms),
         ideaId: undefined,
         ideaSource: undefined,
+        sourceScript: patch.type === "video" ? s.sourceScript : undefined,
         template: patch.template ?? (templateFits(s.template, patch.type) ? s.template : undefined),
       };
     }
@@ -570,6 +630,7 @@ export function chooseType(
   patchSession(id, (s) => ({
     type,
     step: "intent",
+    sourceScript: type === "video" ? s.sourceScript : undefined,
     controls: {
       ...defaultControls(
         type,
@@ -630,12 +691,45 @@ export function restoreTemplateState(id: string, prev: TemplateState) {
 
 /* ───────────────────────── generation ───────────────────────── */
 
+function requestSignature(
+  session: StudioSession,
+  kind: StudioSession["pendingKind"],
+  parentJobId?: string,
+  refine?: StudioRefine,
+) {
+  return JSON.stringify({
+    type: session.type,
+    brief: session.brief.trim(),
+    controls: session.controls,
+    source: session.sourceContentId,
+    sourceScript: session.sourceScript,
+    kind,
+    parentJobId,
+    refine,
+  });
+}
+
 export async function generate(
   id: string,
   opts: { kind?: "generate" | "regenerate" | "refine"; refine?: StudioRefine } = {},
 ) {
   const s = getSession(id);
   if (!s) return;
+  if (s.uploadingReference) {
+    toast.error("Wait for your reference photo to finish uploading.");
+    return;
+  }
+  if (
+    (s.type === "video" || (s.type === "story" && s.controls.storyMode === "video")) &&
+    !s.controls.videoPreview &&
+    s.controls.videoModelKey &&
+    !s.controls.videoQuote
+  ) {
+    toast.error(
+      "Wait for the video price before generating. If it cannot be quoted, choose another option.",
+    );
+    return;
+  }
   if (s.pendingKey || (s.job && isActiveJob(s.job))) return; // never double-submit
   const kind = opts.kind ?? "generate";
   const brief = s.brief.trim();
@@ -645,13 +739,16 @@ export async function generate(
   }
   if (kind === "generate") rememberControls(s.type, s.controls);
   const parent = kind === "generate" ? null : (s.lastGood ?? s.job);
-  const key = newIdempotencyKey();
+  const signature = requestSignature(s, kind, parent?.id, opts.refine);
+  const key = s.retrySignature === signature && s.retryKey ? s.retryKey : newIdempotencyKey();
   patchSession(id, {
     pendingKey: key,
     pendingKind: kind,
     step: kind === "generate" ? "generating" : s.step === "intent" ? "generating" : s.step,
     error: null,
     billing: null,
+    retryKey: null,
+    retrySignature: null,
   });
   await submit(id, key, kind, parent?.id, opts.refine);
 }
@@ -670,6 +767,11 @@ async function submit(
       workspaceId: s.workspaceId,
       type: s.type,
       idempotencyKey: key,
+      includedCaptionEdit: Boolean(
+        isCaptionRevision({ type: s.type, parentJobId, refine }) &&
+        (s.lastGood ?? s.job)?.captionEditsRemaining &&
+        s.controls.paymentSource === "creation",
+      ),
       intent: {
         brief: s.brief.trim(),
         goal: s.goal,
@@ -677,6 +779,7 @@ async function submit(
         ideaSource: s.ideaSource,
         template: s.template,
         ...(s.sourceContentId ? { sourceContentId: s.sourceContentId } : {}),
+        ...(s.sourceScript ? { sourceScript: s.sourceScript } : {}),
       },
       controls: s.controls,
       brand: readBrandPayload(s.workspaceId),
@@ -686,6 +789,20 @@ async function submit(
     });
     applyJob(id, job, { fromCreate: true });
   } catch (error) {
+    const uncertain =
+      error instanceof StudioApiError &&
+      (error.status === 0 || error.status >= 500 || error.status === 409);
+    if (uncertain) {
+      try {
+        const existing = await studioApi.findJob(s.workspaceId, key);
+        if (existing) {
+          applyJob(id, existing, { fromCreate: true });
+          return;
+        }
+      } catch {
+        /* Retain the request key until the network is available again. */
+      }
+    }
     const message = userSafeMessage(
       error instanceof Error ? error.message : null,
       "Generation failed. Please try again.",
@@ -702,6 +819,11 @@ async function submit(
       step: current.lastGood ? "review" : "intent",
       error: billing ? null : message,
       billing,
+      retryKey: uncertain ? key : null,
+      retrySignature: uncertain ? requestSignature(s, kind, parentJobId, refine) : null,
+      ...(error instanceof StudioApiError && error.status === 409 && s.controls.videoModelKey
+        ? { controls: { ...current.controls, videoQuote: undefined } }
+        : {}),
     });
     if (error instanceof StudioApiError && error.status === 409) void refreshSessionJob(id);
   } finally {
@@ -718,6 +840,8 @@ function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolea
     job,
     pendingKey: opts.fromCreate || !active ? null : s.pendingKey,
     pendingKind: active ? s.pendingKind : null,
+    retryKey: null,
+    retrySignature: null,
   };
   if (active) {
     patch.step = s.lastGood && s.step === "review" ? "review" : "generating";
@@ -733,6 +857,7 @@ function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolea
   }
   patchSession(sessionId, patch);
   upsertJobs([job]);
+  if (opts.fromCreate || (wasActive && !active)) emitAppEvent("billing:changed");
 
   if (wasActive && !active) {
     emitAppEvent("content:changed");
@@ -830,10 +955,10 @@ export async function refreshWorkspaceJobs(workspaceId?: string | null) {
     // Adopt server progress into sessions whose create request is still open.
     for (const s of state.sessions) {
       if (s.workspaceId !== ws) continue;
-      const match = s.pendingKey ? jobs.find((j) => j.idempotency_key === s.pendingKey) : null;
-      if (match && (!s.job || s.job.id !== match.id)) {
-        patchSession(s.id, { job: match, step: s.step === "intent" ? "generating" : s.step });
-      }
+      const match = s.pendingKey
+        ? jobs.find((j) => j.idempotency_key === s.pendingKey)
+        : jobs.find((j) => j.id === s.job?.id);
+      if (match) applyJob(s.id, match, { fromCreate: Boolean(s.pendingKey) });
     }
   } catch {
     /* transient */

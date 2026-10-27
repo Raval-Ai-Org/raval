@@ -65,6 +65,8 @@ export const BriefSchema = z.object({
     })
     .default({}),
   instructions: text(1000).default(""),
+  /** Imported scripts skip concept generation, including when reopened. */
+  scriptSource: z.literal("studio").optional(),
   /** Brand Kit Style: a style id, "none", or absent for the workspace default. */
 });
 export type Brief = z.infer<typeof BriefSchema>;
@@ -85,10 +87,10 @@ export type Scene = z.infer<typeof SceneSchema>;
 
 export const ScriptSchema = z.object({
   hook: text(200).min(1),
-  scenes: z.array(SceneSchema).min(1).max(6),
-  cta: text(120).default(""),
+  scenes: z.array(SceneSchema).min(1).max(12),
+  cta: text(160).default(""),
   /** Post caption and hashtags for publishing alongside the video. */
-  postCaption: text(600).default(""),
+  postCaption: text(10000).default(""),
   hashtags: z.array(text(40)).max(10).default([]),
   factIds: z.array(z.string().max(32)).max(40).default([]),
 });
@@ -119,6 +121,7 @@ export const CreateProjectBody = z.object({
   title: text(200).optional(),
   product: ProductSchema,
   brief: BriefSchema.default({}),
+  script: ScriptSchema.optional(),
   referenceAssetIds: z.array(uuid).max(9).default([]),
 });
 

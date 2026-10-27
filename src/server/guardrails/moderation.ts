@@ -37,9 +37,12 @@ const POLICY = [
   'Answer ONLY with JSON: {"safe": boolean, "categories": string[], "reason": string}. Categories use short snake_case names.',
 ].join("\n");
 
-export type ModerationClassifier = (imageUrl: string) => Promise<unknown>;
+export type ModerationClassifier = (
+  imageUrl: string,
+  opts?: { adjudication?: boolean },
+) => Promise<unknown>;
 
-const defaultClassifier: ModerationClassifier = async (imageUrl) => {
+const defaultClassifier: ModerationClassifier = async (imageUrl, opts) => {
   const { chatCompletion } = await import("@/lib/ai-gateway.server");
   const json = await chatCompletion({
     task: "generate",
@@ -53,7 +56,12 @@ const defaultClassifier: ModerationClassifier = async (imageUrl) => {
       {
         role: "user",
         content: [
-          { type: "text", text: "Review this image." },
+          {
+            type: "text",
+            text: opts?.adjudication
+              ? "Independently adjudicate this image after an earlier possible false positive. Apply only the listed policy. Ordinary clothed people, skin, fashion, beauty, food, products and lawful marketing are safe. Do not preserve an earlier verdict; return your own JSON decision."
+              : "Review this image.",
+          },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
       },
@@ -75,23 +83,48 @@ export async function moderateImage(imageUrl: string): Promise<ModerationResult>
   }
   const scope = getRequestScope();
   // Recheck verdicts saved before benign marketing labels were normalized.
-  const key = `moderation:v3:${await digest(`${scope.workspaceId ?? scope.userId ?? "anonymous"}|${imageUrl}`)}`;
+  const key = `moderation:v4:${await digest(`${scope.workspaceId ?? scope.userId ?? "anonymous"}|${imageUrl}`)}`;
   // A remote URL can be overwritten without changing its address. Re-review it
   // on every use; only immutable, content-addressed inline images are cached.
   const cacheable = /^data:image\//i.test(imageUrl);
   const cached = cacheable ? await cache.get<ModerationResult>(key) : null;
   if (cached) return cached;
 
-  let result: ModerationResult;
-  try {
-    const parsed = ResultSchema.safeParse(await classifier(imageUrl));
-    if (!parsed.success) throw new Error("moderation returned an unusable verdict");
-    const violations = mediaViolationCategories(parsed.data.safe, parsed.data.categories);
-    result =
-      parsed.data.safe && violations.length === 0
+  const classify = async (adjudication = false): Promise<ModerationResult | null> => {
+    try {
+      const parsed = ResultSchema.safeParse(await classifier(imageUrl, { adjudication }));
+      if (!parsed.success) return null;
+      const violations = mediaViolationCategories(parsed.data.safe, parsed.data.categories);
+      return parsed.data.safe && violations.length === 0
         ? { verdict: "safe", categories: [] }
         : { verdict: "flagged", categories: violations, reason: parsed.data.reason };
-  } catch {
+    } catch {
+      return null;
+    }
+  };
+
+  let result = await classify();
+  // A second and third independent read are only paid for when the first read
+  // would block a customer's finished image. Two reviewers must confirm a
+  // refusal; two safe reads clear an isolated false positive.
+  if (result?.verdict === "flagged") {
+    const reviews = [result, ...(await Promise.all([classify(true), classify(true)]))].filter(
+      (review): review is ModerationResult => !!review,
+    );
+    const flagged = reviews.filter((review) => review.verdict === "flagged");
+    const safe = reviews.filter((review) => review.verdict === "safe");
+    result =
+      flagged.length >= 2
+        ? {
+            verdict: "flagged",
+            categories: [...new Set(flagged.flatMap((review) => review.categories))],
+            reason: flagged.find((review) => review.reason)?.reason,
+          }
+        : safe.length >= 2
+          ? { verdict: "safe", categories: [] }
+          : null;
+  }
+  if (!result) {
     logGuardrailEvent({
       kind: "moderation_unverified",
       severity: "warn",

@@ -4,7 +4,11 @@ const mocked = vi.hoisted(() => ({
   workspace: vi.fn(),
   enforcement: vi.fn(),
   summary: vi.fn(),
+  creation: vi.fn(),
 }));
+vi.mock("@/server/billing/creation.server", () => ({ creationPolicyFor: mocked.creation }));
+vi.mock("@/server/platform/spend-caps.server", () => ({ capDecision: async () => null }));
+vi.mock("@/server/platform/switches.server", () => ({ switchBlockFor: async () => null }));
 
 vi.mock("@/server/billing/accounts.server", () => ({
   accountForWorkspace: mocked.workspace,
@@ -20,9 +24,11 @@ vi.mock("@/server/cache/store", () => ({
 vi.mock("@/server/guardrails/events", () => ({ logGuardrailEvent: vi.fn() }));
 
 import { checkBudget, setBudgetDeps } from "./budget";
+import { runWithScope } from "@/server/request-context";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocked.creation.mockResolvedValue(false);
   mocked.workspace.mockResolvedValue({ account: { id: "acct-1" } });
   mocked.summary.mockResolvedValue({
     todayCostUsd: 0,
@@ -39,6 +45,17 @@ beforeEach(() => {
 afterEach(() => setBudgetDeps(null));
 
 describe("account safety budget", () => {
+  it("uses monthly-equivalent annual revenue for new creation-window accounts", async () => {
+    mocked.enforcement.mockReturnValue("on"); mocked.creation.mockResolvedValue(true);
+    mocked.workspace.mockResolvedValue({ account: { id: "acct-1", billing_interval: "year" } });
+    const result = await checkBudget("image", { workspaceId: "workspace-1" });
+    expect(result.limits?.monthlyUsd).toBe(74.5);
+  });
+  it("withholds new creation spending when provider usage is unavailable", async () => {
+    mocked.enforcement.mockReturnValue("on"); mocked.creation.mockResolvedValue(true);
+    mocked.summary.mockResolvedValue(null);
+    expect((await runWithScope({ billingMeter: "creation" }, () => checkBudget("image", { workspaceId: "workspace-1" }))).mode).toBe("block");
+  });
   it("uses the owner account scope and removes image quantity quotas in on mode", async () => {
     mocked.enforcement.mockReturnValue("on");
     const result = await checkBudget("image", { workspaceId: "workspace-1" });

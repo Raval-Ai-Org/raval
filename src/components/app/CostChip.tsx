@@ -39,7 +39,7 @@ export function CostChip({
         title="Uses your video balance. Charged only if it works."
       >
         <Video className="h-3 w-3 shrink-0" aria-hidden />
-        {text} {text === "1" ? "video" : "videos"}
+        {text} video {text === "1" ? "credit" : "credits"}
       </span>
     );
   }

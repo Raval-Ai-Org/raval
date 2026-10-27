@@ -32,7 +32,7 @@ export const GET = defineRoute({
     const billing = await studioBillingLink(row.id);
     const advanced = billing
       ? await runWithScope(
-          { billingAccountId: billing.account_id, billingChargeId: billing.charge_id ?? undefined },
+          { billingAccountId: billing.account_id, billingChargeId: billing.charge_id ?? undefined, billingMeter: billing.meter },
           () => advanceStudioJob(supabase, row),
         )
       : await advanceStudioJob(supabase, row);

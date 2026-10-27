@@ -17,6 +17,7 @@ import {
 } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 import { GhostButton, PrimaryButton } from "./billing-ui";
 
 /** "Plans start at $41 a month": the lowest price the upgrade screen shows. */
@@ -38,10 +39,17 @@ export function upgradeCopy(
   const plan = PLANS[asPlan(block.requiredPlan)];
   switch (block.code) {
     case "insufficient_balance":
+      if (block.meter === "creation")
+        return {
+          title: "Your creation points are used",
+          text: "They refill at your next renewal. In Studio, choose Wallet credits to see its price before continuing, or upgrade for more monthly points.",
+          action: "See plans",
+          Icon: Bolt,
+        };
       if (current === "free" && block.meter !== "video" && block.meter !== "pro_messages") {
         return {
           title: "You've used your free credits",
-          text: `Get ${formatNumber(PLANS.starter.allowances.credits)} credits every month. ${plansFrom()}`,
+          text: `Get ${CREATION_PLANS.starter.points} creation points a month, plus wallet credits for extras. ${plansFrom()}`,
           action: "See plans",
           Icon: Bolt,
         };

@@ -22,6 +22,7 @@ export type RequestScope = {
   billingAccountId?: string;
   /** Preallocated charge id, shared by provider usage rows and the capture. */
   billingChargeId?: string;
+  billingMeter?: "credits" | "creation" | "video" | "pro_messages" | "flash_messages";
   /** Correlation id echoed in logs. */
   requestId?: string;
   /** Soft-limit notice set by the budget module; the /api kernel returns it as X-Usage-Warning. */

@@ -207,7 +207,10 @@ export async function getOverviewActivity(
       title: subscription
         ? `${person(owner, "A customer")} bought the ${catalogLabel(payment.catalog_key)}`
         : `${person(owner, "A customer")} bought ${catalogLabel(payment.catalog_key)}`,
-      detail: subscription ? "New paid subscription recorded" : "Additional purchase recorded",
+      detail: [
+        subscription ? "New paid subscription recorded" : "Additional purchase recorded",
+        showEmail(owner ? people.emails.get(owner) : null, pii) ?? `Account ${payment.account_id}`,
+      ].join(" · "),
       occurredAt: payment.created_at,
       href: `/admin/billing?account=${encodeURIComponent(payment.account_id)}`,
       amountUsd: netCents / 100,

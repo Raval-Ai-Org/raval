@@ -42,6 +42,10 @@ export const GOALS = [
 export type GoalId = (typeof GOALS)[number]["id"];
 
 export const ControlsSchema = z.object({
+  paymentSource: z.enum(["creation", "credits"]).optional(),
+  paymentSourceExplicit: z.boolean().optional(),
+  articleQuality: z.enum(["standard", "premium"]).optional(),
+  artworkMode: z.enum(["template", "full"]).optional(),
   platforms: z.array(PlatformIdSchema).max(7).default([]),
   ratio: AspectRatioSchema.optional(),
   tone: z.string().max(80).optional(),
@@ -51,6 +55,13 @@ export const ControlsSchema = z.object({
   seamless: z.boolean().optional(),
   durationSec: z.number().int().min(4).max(90).optional(),
   videoResolution: z.enum(["480P", "720P", "1080P"]).optional(),
+  videoModelKey: z
+    .enum(["standard", "draft", "premium", "long", "cinematic", "variation"])
+    .optional(),
+  videoQuote: z
+    .object({ hash: z.string().length(64), units: z.number().int().positive(),
+      resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(), aspectRatio: AspectRatioSchema.optional() })
+    .optional(),
   audio: z.boolean().optional(),
   includeImage: z.boolean().optional(),
   cta: z.string().max(140).optional(),
@@ -65,15 +76,41 @@ export const ControlsSchema = z.object({
   /** Build a still storyboard before spending video credits. */
   videoPreview: z.boolean().optional(),
   campaign: z.string().trim().max(120).optional(),
+  /** Explicit source photos selected for this generation, checked against this workspace. */
+  referenceAssetIds: z.array(z.string().uuid()).max(4).optional(),
+  /** Whether source photos stay intact, receive a targeted edit, or only inspire a new image. */
+  referenceMode: z.enum(["preserve", "edit", "inspire"]).optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;
+
+/** Snapshot of the reviewed script, independent of brief and content-row limits. */
+export const SourceScriptSchema = z.object({
+  title: z.string().max(120),
+  hook: z.string().max(200),
+  beats: z
+    .array(
+      z.object({
+        time: z.string().max(20),
+        visual: z.string().max(240),
+        voiceover: z.string().max(320),
+        onScreen: z.string().max(90).optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+  cta: z.string().max(160),
+  caption: z.string().max(10000),
+  durationSec: z.number().int().min(4).max(60),
+});
 
 export const IntentSchema = z.object({
   brief: z.string().trim().min(3).max(4000),
   goal: z.enum(["awareness", "engagement", "leads", "launch", "education", "offer"]).optional(),
   ideaId: z.string().max(80).optional(),
   ideaSource: z.string().max(40).optional(),
+  /** A running Autopilot program must still be active before each paid step. */
+  autopilotProgramId: z.string().uuid().optional(),
   /** A StudioTemplate id; the prompt follows its structure. */
   template: z.string().max(40).optional(),
   /**
@@ -88,6 +125,7 @@ export const IntentSchema = z.object({
    * into a Story). Read on the server through the job's own workspace.
    */
   sourceContentId: z.string().uuid().optional(),
+  sourceScript: SourceScriptSchema.optional(),
 });
 
 export type StudioIntent = z.infer<typeof IntentSchema>;
@@ -144,6 +182,7 @@ export const CreateJobSchema = z
     workspaceId: z.string().uuid(),
     type: StudioTypeSchema,
     idempotencyKey: z.string().min(8).max(120),
+    includedCaptionEdit: z.boolean().optional(),
     intent: IntentSchema,
     controls: ControlsSchema,
     brand: BrandPayloadSchema,
@@ -161,6 +200,20 @@ export const CreateJobSchema = z
     fromContentId: z.string().uuid().optional(),
   })
   .superRefine((input, ctx) => {
+    if (input.controls.paymentSource === "creation" && input.controls.platforms.length > 3)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["controls", "platforms"], message: "Choose up to three platform versions for one creation." });
+    if (
+      ["social", "image", "ad"].includes(input.type) &&
+      (input.controls.referenceMode ?? "preserve") === "preserve" &&
+      (input.controls.referenceAssetIds?.length ?? 0) > 1
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message:
+          "Choose one photo to keep unchanged, or switch to Edit or Inspire for multiple references.",
+      });
+    }
     if (
       (input.type === "video" ||
         (input.type === "story" && input.controls.storyMode === "video")) &&
@@ -305,6 +358,8 @@ export type StudioJobOutput = {
   ads?: AdVariant[];
   /** Image/video: the visual concept the render was built from. */
   concept?: string;
+  /** Exact short copy selected for an image layer, kept separate from art direction. */
+  onImageText?: string;
   altText?: string;
   /** Ad: the shared visual direction. */
   visualConcept?: string;
@@ -317,6 +372,7 @@ export type StudioJobOutput = {
 export type StudioJobError = { category: string; message: string; retryable: boolean };
 
 export type StudioJob = {
+  captionEditsRemaining?: number;
   id: string;
   workspace_id: string;
   type: StudioType;

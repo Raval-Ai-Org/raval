@@ -72,6 +72,21 @@ describe("Studio async settlement", () => {
     expect(mocked.capture).not.toHaveBeenCalled();
   });
 
+  it("returns the full reservation on cancellation", async () => {
+    await settleStudioBilling(job("cancelled"));
+    expect(mocked.release).toHaveBeenCalledWith(expect.objectContaining({ holdId: "hold-1" }));
+    expect(mocked.capture).not.toHaveBeenCalled();
+  });
+
+  it("captures just the text price after an optional image fails", async () => {
+    await settleStudioBilling({
+      ...job("succeeded"),
+      type: "social",
+      output: { partial: [{ target: "media", error: "Provider failed" }] },
+    });
+    expect(mocked.capture).toHaveBeenCalledWith(expect.objectContaining({ amount: 12 }));
+  });
+
   it("does not mark an uncertain capture as settled", async () => {
     mocked.capture.mockRejectedValue(new Error("database timeout"));
     await expect(settleStudioBilling(job("succeeded"))).rejects.toThrow("database timeout");

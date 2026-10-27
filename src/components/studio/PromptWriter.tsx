@@ -1,5 +1,7 @@
 "use client";
 
+import { creditsFor } from "@/lib/billing/catalog";
+
 // "Write it for me" on the Studio description box. Writes a long, detailed,
 // timely description for the current format (or expands what the person
 // wrote), reveals it into the box, and remembers what it gave so the next
@@ -203,7 +205,9 @@ export function WriteForMeButton({
         />
       ) : null}
       <Icon className={cn("relative size-3.5", writer.busy && "animate-spin")} />
-      <span className="relative">{writer.label}</span>
+      <span className="relative">
+        {writer.label} · {creditsFor("ideas")} credits
+      </span>
     </motion.button>
   );
 }

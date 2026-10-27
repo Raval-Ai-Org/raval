@@ -11,6 +11,9 @@ import { cleanMentions } from "@/lib/stories/placement";
 import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
+import { ReferencePhotos } from "./ReferencePhotos";
+import { studioPriceLabel } from "@/lib/studio/billing";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
 
 const INPUT =
   "h-9 w-full rounded-lg border border-input bg-surface-3 px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55";
@@ -65,6 +68,7 @@ export function ControlsPanel({
   const format = STUDIO_FORMATS[session.type];
   const c = session.controls;
   const [open, setOpen] = useState(false);
+  const { data: billing } = useEntitlements();
   const [ratioPinned, setRatioPinned] = useState(false);
 
   useEffect(() => {
@@ -73,7 +77,17 @@ export function ControlsPanel({
   }, [session.type]);
 
   const set = (patch: Partial<StudioControls>) =>
-    updateSession(session.id, { controls: { ...c, ...patch } });
+    updateSession(session.id, {
+      controls: {
+        ...c,
+        ...patch,
+        ...(["videoModelKey", "videoResolution", "durationSec", "referenceAssetIds"].some(
+          (key) => key in patch,
+        )
+          ? { videoQuote: undefined }
+          : {}),
+      },
+    });
   const mediaKind = session.type === "video" ? "video" : "image";
   const recommended = format.ratios.length
     ? session.type === "carousel"
@@ -88,10 +102,80 @@ export function ControlsPanel({
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
+      {billing?.creation?.active && ((session.type !== "video" && !storyVideo) || c.videoPreview) && (
+        <div>
+          <FieldLabel>Pay for this creation with</FieldLabel>
+          <Segmented
+            label="Payment source"
+            className="flex w-full flex-wrap"
+            value={c.paymentSource ?? "creation"}
+            onChange={(paymentSource) => set({ paymentSource, paymentSourceExplicit: true })}
+            options={[
+              { value: "creation", label: "Creation points" },
+              { value: "credits", label: "Wallet credits" },
+            ]}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            {billing.meters.creation?.available ?? 0} creation points available. Wallet credits are
+            used only when you choose them.
+          </p>
+        </div>
+      )}
+      {session.type === "carousel" && c.paymentSource === "creation" && (
+        <div>
+          <FieldLabel>Artwork</FieldLabel>
+          <Segmented
+            label="Artwork"
+            className="flex w-full flex-wrap"
+            value={c.artworkMode ?? "template"}
+            onChange={(artworkMode) => set({ artworkMode })}
+            options={[
+              { value: "template", label: "Designed template", hint: "One shared background" },
+              { value: "full", label: "Individual artwork", hint: "Each slide is priced" },
+            ]}
+          />
+        </div>
+      )}
+      {session.type === "article" && (
+        <div>
+          <FieldLabel>Writing quality</FieldLabel>
+          <Segmented
+            label="Writing quality"
+            className="flex w-full flex-wrap"
+            value={c.articleQuality ?? "standard"}
+            onChange={(articleQuality) => set({ articleQuality })}
+            options={[
+              { value: "standard", label: "Standard" },
+              { value: "premium", label: "Premium" },
+            ]}
+          />
+        </div>
+      )}
+      {(session.type === "video" || storyVideo) && (
+        <div>
+          <FieldLabel>Video option</FieldLabel>
+          <Segmented
+            label="Video option"
+            className="flex w-full flex-wrap"
+            value={c.videoModelKey ?? "standard"}
+            onChange={(videoModelKey) => set({ videoModelKey, videoResolution: "720P" })}
+            options={[
+              { value: "draft", label: "Economy" },
+              { value: "standard", label: "Standard" },
+              { value: "premium", label: "Premium" },
+            ]}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            The exact Video Credit price is checked before Generate. Longer clips and higher quality
+            use more. Creation points stay available for posts.
+          </p>
+        </div>
+      )}
       {format.platforms.length ? (
         <div>
           <FieldLabel>{format.multiPlatform ? "Platforms" : "Platform"}</FieldLabel>
           <PlatformPicker
+            maxSelections={c.paymentSource === "creation" ? 3 : undefined}
             platforms={format.platforms}
             value={c.platforms}
             multi={format.multiPlatform}
@@ -103,6 +187,7 @@ export function ControlsPanel({
               set(next);
             }}
           />
+          {c.paymentSource === "creation" && <p className="mt-2 text-xs text-muted-foreground">Up to three platform versions per creation.</p>}
         </div>
       ) : null}
 
@@ -118,7 +203,10 @@ export function ControlsPanel({
                   ? "Add a photo behind the first frame"
                   : "Add a generated visual"}
             </span>
-            <span className="block text-xs text-muted-foreground">Uses 1 image credit</span>
+            <span className="block text-xs text-muted-foreground">
+              {studioPriceLabel({ type: session.type, controls: { ...c, includeImage: true } })}{" "}
+              including copy
+            </span>
           </span>
           <Switch
             checked={!!c.includeImage}
@@ -127,6 +215,32 @@ export function ControlsPanel({
           />
         </label>
       ) : null}
+
+      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
+        <ReferencePhotos
+          key={session.workspaceId}
+          workspaceId={session.workspaceId}
+          value={c.referenceAssetIds ?? []}
+          mode={c.referenceMode ?? "preserve"}
+          onChange={(referenceAssetIds) =>
+            set({
+              referenceAssetIds,
+              referenceMode: referenceAssetIds.length ? (c.referenceMode ?? "preserve") : undefined,
+            })
+          }
+          onModeChange={(referenceMode) =>
+            set({
+              referenceMode,
+              referenceAssetIds:
+                referenceMode === "preserve"
+                  ? (c.referenceAssetIds ?? []).slice(0, 1)
+                  : c.referenceAssetIds,
+            })
+          }
+          onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
+          disabled={disabled}
+        />
+      )}
 
       <div className="rounded-xl border border-border bg-surface-3">
         <button
@@ -207,12 +321,13 @@ export function ControlsPanel({
                   label="Length"
                   value={c.durationSec ?? (session.type === "video" ? 10 : 30)}
                   onChange={(durationSec) => set({ durationSec })}
-                  options={(session.type === "video" ? [10, 15, 20, 30, 40, 60] : [15, 30, 60]).map(
-                    (v) => ({
-                      value: v,
-                      label: `${v}s`,
-                    }),
-                  )}
+                  options={(session.type === "video"
+                    ? [8, 10, 15, 20, 30, 40, 60]
+                    : [15, 30, 60]
+                  ).map((v) => ({
+                    value: v,
+                    label: `${v}s`,
+                  }))}
                 />
               </div>
             ) : null}
@@ -267,44 +382,46 @@ export function ControlsPanel({
               </div>
             ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="studio-tone" hint="Optional">
-                  Voice
-                </FieldLabel>
-                <input
-                  id="studio-tone"
-                  value={c.tone ?? ""}
-                  onChange={(e) => set({ tone: e.target.value.slice(0, 80) || undefined })}
-                  placeholder="e.g. Friendly and relaxed"
-                  className={INPUT}
-                />
+            {!session.sourceScript ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel htmlFor="studio-tone" hint="Optional">
+                    Voice
+                  </FieldLabel>
+                  <input
+                    id="studio-tone"
+                    value={c.tone ?? ""}
+                    onChange={(e) => set({ tone: e.target.value.slice(0, 80) || undefined })}
+                    placeholder="e.g. Friendly and relaxed"
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="studio-visual-campaign" hint="Optional">
+                    Campaign references
+                  </FieldLabel>
+                  <input
+                    id="studio-visual-campaign"
+                    value={c.campaign ?? ""}
+                    onChange={(e) => set({ campaign: e.target.value.slice(0, 120) || undefined })}
+                    placeholder="Campaign name"
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="studio-cta" hint="Optional">
+                    What should people do?
+                  </FieldLabel>
+                  <input
+                    id="studio-cta"
+                    value={c.cta ?? ""}
+                    onChange={(e) => set({ cta: e.target.value.slice(0, 140) || undefined })}
+                    placeholder="e.g. Book a free call"
+                    className={INPUT}
+                  />
+                </div>
               </div>
-              <div>
-                <FieldLabel htmlFor="studio-visual-campaign" hint="Optional">
-                  Campaign references
-                </FieldLabel>
-                <input
-                  id="studio-visual-campaign"
-                  value={c.campaign ?? ""}
-                  onChange={(e) => set({ campaign: e.target.value.slice(0, 120) || undefined })}
-                  placeholder="Campaign name"
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="studio-cta" hint="Optional">
-                  What should people do?
-                </FieldLabel>
-                <input
-                  id="studio-cta"
-                  value={c.cta ?? ""}
-                  onChange={(e) => set({ cta: e.target.value.slice(0, 140) || undefined })}
-                  placeholder="e.g. Book a free call"
-                  className={INPUT}
-                />
-              </div>
-            </div>
+            ) : null}
           </div>
         ) : null}
       </div>

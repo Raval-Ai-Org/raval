@@ -23,9 +23,10 @@ import {
 import { asPlan, formatNumber, freeNudge, type FreeNudge } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 import { PlanLock, PrimaryButton } from "./billing-ui";
 
-const MONTHLY = formatNumber(PLANS.starter.allowances.credits);
+const MONTHLY = formatNumber(CREATION_PLANS.starter.points);
 
 function openPlans(credits: number) {
   emitAppEvent(
@@ -84,7 +85,7 @@ export function FreeSidebarCardView({
         ) : (
           "Free credits come once. "
         )}
-        Get {MONTHLY} every month.
+        Get {MONTHLY} creation points every month with Starter.
       </p>
       <PrimaryButton className="h-8 w-full text-[12.5px]" onClick={onUpgrade}>
         <Crown className="h-3.5 w-3.5" aria-hidden />

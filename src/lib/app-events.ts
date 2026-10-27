@@ -109,7 +109,9 @@ export type AppEventMap = {
     | undefined;
   "open:ai-visibility": undefined;
   /** UGC Video Ads studio, optionally on one ad project. */
-  "open:ugc-studio": { projectId?: string } | undefined;
+  "open:ugc-studio":
+    | { projectId?: string; source?: import("@/lib/studio/script-video").ScriptVideoSource }
+    | undefined;
   /** The "Create" launcher: pick a category (Video/Picture/Text/Ads), then a format. */
   "open:create-launcher": undefined;
   "open:client-portal": undefined;

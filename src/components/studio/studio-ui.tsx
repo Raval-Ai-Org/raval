@@ -167,11 +167,13 @@ export function PlatformPicker({
   value,
   onChange,
   multi,
+  maxSelections,
 }: {
   platforms: PlatformId[];
   value: PlatformId[];
   onChange: (next: PlatformId[]) => void;
   multi: boolean;
+  maxSelections?: number;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -183,6 +185,7 @@ export function PlatformPicker({
           <ChipButton
             key={id}
             selected={selected}
+            disabled={!selected && maxSelections !== undefined && value.length >= maxSelections}
             onClick={() => {
               if (!multi) return onChange([id]);
               if (selected && value.length === 1) return; // keep at least one

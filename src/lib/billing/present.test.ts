@@ -35,7 +35,7 @@ describe("billing presentation helpers", () => {
     expect(formatVideos(400)).toBe("4");
     expect(formatVideos(350)).toBe("3.5");
     expect(formatVideos(125)).toBe("1.25");
-    expect(formatMeter("video", 100)).toBe("1 video");
+    expect(formatMeter("video", 100)).toBe("1 video credit");
     expect(formatMeter("credits", 2000)).toBe("2,000 credits");
   });
 
@@ -82,7 +82,7 @@ describe("billing presentation helpers", () => {
     );
     expect(ledgerLabel({ kind: "grant", action: null, meter: "credits" })).toBe("Added to balance");
     expect(blockHeadline({ code: "insufficient_balance", meter: "video" })).toBe(
-      "Not enough videos left",
+      "Not enough Video Credits left",
     );
   });
 });

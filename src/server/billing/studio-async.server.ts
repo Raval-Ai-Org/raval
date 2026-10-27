@@ -8,10 +8,39 @@ import { HttpError } from "@/server/http-error";
 import { captureMeter, releaseMeter } from "./meters.server";
 import { globalBillingMode } from "./mode.server";
 import { runWithScope } from "@/server/request-context";
+import { STUDIO_TEXT_TIMEOUT_MS, studioJobIsStale } from "@/lib/studio/recovery";
+import { studioCapturedAmount } from "@/lib/studio/billing";
+import { settleCaptionEdit } from "./creation.server";
+
+/** Recover abandoned inline requests as well as stalled media jobs. */
+export async function recoverStaleStudioJobs(workspaceId?: string): Promise<number> {
+  let query = admin
+    .from("studio_jobs")
+    .select("id,workspace_id,created_at,stage_at,status,provider_tasks")
+    .in("status", ["queued", "running"])
+    .lt("stage_at", new Date(Date.now() - STUDIO_TEXT_TIMEOUT_MS).toISOString())
+    .order("created_at")
+    .limit(100);
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data, error } = await query;
+  if (error) throw new Error("Could not check interrupted Studio jobs.");
+  const { advanceStudioJob, getJobRow } = await import("@/server/studio/runner.server");
+  let recovered = 0;
+  for (const candidate of data ?? []) {
+    if (!studioJobIsStale(candidate)) continue;
+    const row = await getJobRow(admin, candidate.workspace_id, candidate.id);
+    if (!row) continue;
+    const job = await advanceStudioJob(admin, row);
+    await settleStudioBilling(job);
+    if (job.status === "failed") recovered++;
+  }
+  return recovered;
+}
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
 type StudioBillingLink = {
+  caption_edit_id?: string | null;
   job_id: string;
   account_id: string;
   workspace_id: string;
@@ -35,7 +64,7 @@ export async function saveStudioBillingLink(
     // Called before provider work starts. The caller marks the job failed and
     // releases the hold; report a short error without exposing provider data.
     console.error("[billing] Studio job link failed", error.code);
-    throw new HttpError(503, "Could not record render billing.");
+    throw new HttpError(503, "Could not record generation billing.");
   }
 }
 
@@ -46,7 +75,7 @@ export async function studioBillingLink(jobId: string): Promise<StudioBillingLin
     .eq("job_id", jobId)
     .maybeSingle();
   if (error?.code === "PGRST205" && globalBillingMode() !== "on") return null;
-  if (error) throw new HttpError(503, "Could not load render billing.");
+  if (error) throw new HttpError(503, "Could not load generation billing.");
   return (data as StudioBillingLink | null) ?? null;
 }
 
@@ -55,11 +84,13 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
   const link = await studioBillingLink(job.id);
   if (!link || link.settled_at) return;
   const succeeded = job.status === "succeeded";
+  if (link.caption_edit_id)
+    await settleCaptionEdit(link.caption_edit_id, succeeded ? "captured" : "released", job.id);
   if (succeeded && link.hold_id) {
     await captureMeter({
       accountId: link.account_id,
       holdId: link.hold_id,
-      amount: Number(link.amount),
+      amount: studioCapturedAmount(job, Number(link.amount), link.meter),
       idempotencyKey: link.charge_key,
       route: link.route,
       chargeId: link.charge_id ?? undefined,
@@ -70,7 +101,7 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
       accountId: link.account_id,
       holdId: link.hold_id,
       idempotencyKey: `${link.charge_key}:failed`,
-      reason: "Studio render did not complete",
+      reason: "Studio generation did not complete",
     });
   } else if (succeeded && link.mode === "shadow" && link.shadow_decision === "would_charge") {
     const { error } = await admin.from("billing_shadow_events").insert({
@@ -78,7 +109,7 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
       workspace_id: link.workspace_id,
       action: link.action,
       meter: link.meter,
-      amount: link.amount,
+      amount: studioCapturedAmount(job, Number(link.amount), link.meter),
       decision: "would_charge",
       idempotency_key: `studio:${job.id}`,
     });
@@ -91,7 +122,7 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
     .update({ settled_at: new Date().toISOString() })
     .eq("job_id", job.id)
     .is("settled_at", null);
-  if (updateError) throw new HttpError(503, "Could not finalize render billing.");
+  if (updateError) throw new HttpError(503, "Could not finalize generation billing.");
 }
 
 /** Advance a small batch from the billing hook even when the user closes the tab. */
@@ -100,7 +131,7 @@ export async function advanceStudioBillingJobs(
 ): Promise<{ checked: number; settled: number }> {
   const { data, error } = await admin
     .from("billing_studio_jobs")
-    .select("job_id,workspace_id,account_id,charge_id")
+    .select("job_id,workspace_id,account_id,charge_id,meter")
     .is("settled_at", null)
     .order("created_at", { ascending: true })
     .limit(Math.min(20, Math.max(1, limit)));
@@ -116,6 +147,7 @@ export async function advanceStudioBillingJobs(
       const job = await runWithScope(
         {
           billingAccountId: String(link.account_id),
+          billingMeter: link.meter as Meter,
           billingChargeId: link.charge_id ? String(link.charge_id) : undefined,
           workspaceId: String(link.workspace_id),
           route: "studio/jobs:advance",

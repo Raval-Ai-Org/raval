@@ -15,6 +15,7 @@ import { Check, Crown, Lock, Wallet } from "@/components/icons";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
 import { FEATURES, PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 import {
   asPlan,
   formatMeter,
@@ -27,6 +28,7 @@ import { useEntitlements, type BillingView } from "@/lib/billing/use-entitlement
 import { cn } from "@/lib/utils";
 import { GhostButton, PrimaryButton, UsageBar } from "./billing-ui";
 import { LockedFeatures } from "./FreePlanPushes";
+import { StopStudioJobsButton } from "@/components/studio/StopStudioJobsButton";
 
 async function getJson<T>(path: string, workspaceId?: string | null): Promise<T> {
   const response = await authedFetch(path, workspaceId ? { workspaceId } : undefined);
@@ -134,6 +136,7 @@ function cardBrand(value: string): string {
 }
 
 function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
+  const workspaceId = useOptionalWorkspaceId();
   const queryClient = useQueryClient();
   const current = asPlan(data.entitledPlan);
   const plan = PLANS[current];
@@ -196,7 +199,12 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   };
 
   // Free credits are a one-time signup grant, so size the bar to it.
-  const creditTotal = current === "free" ? SIGNUP_GRANT.credits : plan.allowances.credits;
+  const creditTotal =
+    current === "free"
+      ? SIGNUP_GRANT.credits
+      : data.creation?.active
+        ? data.creation.flexCredits
+        : plan.allowances.credits;
   const resets = data.period.nextGrantAt ? `Resets ${day(data.period.nextGrantAt)}` : null;
 
   return (
@@ -295,8 +303,29 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           )}
         </div>
         <div className="ds-tile space-y-5 p-5">
+          {!data.creation?.active && current !== "free" && <p className="text-xs text-muted-foreground">Your current wallet balances keep their existing terms. At the next renewal, this plan receives {CREATION_PLANS[current].points} protected creation points and {CREATION_PLANS[current].flexCredits} wallet credits, with video and chat allowances kept separate.</p>}
+          {data.creation?.active && (
+            <div className="space-y-2">
+              <UsageBar
+                label="Creation points"
+                left={data.meters.creation.available}
+                total={Math.max(data.creation.monthlyPoints, data.meters.creation.available)}
+                note={`${formatNumber(data.meters.creation.available)} available of ${formatNumber(data.creation.monthlyPoints)} monthly points`}
+              />
+              <p className="text-xs text-muted-foreground">
+                One text post set uses 1 point. A standard AI image post uses 2. Three caption
+                improvements are included per paid creation. New artwork has its own price. Research
+                and chat cannot spend these points.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Up to {Math.floor(data.meters.creation.available / 2)} standard image posts
+                remaining, or a mix of formats. Creation points expire at the end of their grant
+                window.
+              </p>
+            </div>
+          )}
           <UsageBar
-            label="Credits"
+            label={data.creation?.active ? "Wallet credits for extras" : "Credits available"}
             left={data.meters.credits.available}
             total={Math.max(creditTotal, data.meters.credits.available)}
             note={ofTotal(
@@ -305,9 +334,23 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
               data.meters.credits.available <= creditTotal,
             )}
           />
+          {Object.values(data.meters).some((meter) => meter.held > 0) && (
+            <div className="space-y-2 rounded-lg bg-secondary/50 p-3 text-[13px]">
+              <p className="font-medium">Reserved for work in progress</p>
+              <p className="text-muted-foreground">
+                {Object.entries(data.meters)
+                  .filter(([, meter]) => meter.held > 0)
+                  .map(([name, meter]) => formatMeter(name, meter.held))
+                  .join(" · ")}
+                . These are set aside, not spent. Failed or cancelled work returns its unused
+                reservation.
+              </p>
+              {workspaceId && <StopStudioJobsButton workspaceId={workspaceId} />}
+            </div>
+          )}
           {(plan.allowances.videoUnits > 0 || data.meters.video.available > 0) && (
             <UsageBar
-              label="Videos"
+              label="Video Credits"
               left={data.meters.video.available}
               total={Math.max(plan.allowances.videoUnits, data.meters.video.available)}
               note={ofTotal(
@@ -470,6 +513,7 @@ type LedgerEntry = {
   heldDelta: number;
   action: string | null;
   at: string;
+  job?: { id: string; title: string | null; workspaceId: string } | null;
 };
 
 /**
@@ -478,7 +522,7 @@ type LedgerEntry = {
  * real charge.
  */
 function effectiveDelta(entry: LedgerEntry): number {
-  if (entry.kind === "hold" || entry.kind === "release") return 0;
+  if (entry.kind === "hold" || entry.kind === "release") return Number(entry.delta);
   if (entry.kind === "capture") return Number(entry.delta) + Number(entry.heldDelta ?? 0);
   return Number(entry.delta);
 }
@@ -511,7 +555,28 @@ function RecentActivity() {
           >
             <span className="min-w-0 truncate">
               {ledgerLabel(entry)}
-              <span className="text-muted-foreground"> · {day(entry.at)}</span>
+              {entry.kind === "capture" && (
+                <span className="text-muted-foreground"> · Charged</span>
+              )}
+              {entry.job?.title && (
+                <span className="text-muted-foreground"> · {entry.job.title}</span>
+              )}
+              {(entry.kind === "hold" || entry.kind === "release") && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {entry.kind === "hold" ? "Reserved, not charged" : "Reservation returned"}
+                </span>
+              )}
+              <span className="text-muted-foreground">
+                {" "}
+                ·{" "}
+                {new Date(entry.at).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
             </span>
             <span
               className={cn(
@@ -519,8 +584,13 @@ function RecentActivity() {
                 entry.amount > 0 ? "text-primary" : "text-foreground",
               )}
             >
-              {entry.amount > 0 ? "+" : "−"}
+              {entry.kind === "hold" ? "" : entry.amount > 0 ? "+" : "−"}
               {formatMeter(entry.meter, Math.abs(entry.amount))}
+              {entry.kind === "hold"
+                ? " reserved"
+                : entry.kind === "release"
+                  ? " available again"
+                  : ""}
             </span>
           </div>
         ))}

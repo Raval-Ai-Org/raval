@@ -1,4 +1,5 @@
 import "server-only";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 
 // Billing notices: stored in account_notifications (shown in Plan & billing)
 // and emailed once. The table's unique (account, user, kind, window_key) is
@@ -72,6 +73,7 @@ export async function notifyAdmins(message: Omit<EmailMessage, "to">): Promise<v
 
 /** This month's allowance for a meter (Free credits are the one-time signup grant). */
 export function monthlyAllowance(plan: keyof typeof PLANS, meter: Meter): number {
+  if (meter === "creation") return CREATION_PLANS[plan].points;
   const a = PLANS[plan].allowances;
   if (meter === "credits") return plan === "free" ? SIGNUP_GRANT.credits : a.credits;
   if (meter === "video") return a.videoUnits;
@@ -92,6 +94,7 @@ export function lowBalanceLevel(
 }
 
 const METER_WORDS: Record<Meter, string> = {
+  creation: "creation points",
   credits: "credits",
   video: "videos",
   pro_messages: "Pro messages",

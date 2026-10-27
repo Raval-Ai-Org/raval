@@ -201,11 +201,13 @@ export async function createProject(
     title?: string;
     product: unknown;
     brief: unknown;
+    script?: unknown;
     referenceAssetIds: string[];
   },
 ) {
   const product = ProductSchema.parse(input.product);
   const brief = BriefSchema.parse(input.brief ?? {});
+  const script = input.script ? ScriptSchema.parse(input.script) : null;
   const refs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
   const brand = await workspaceBrand(db, input.workspaceId);
   const { data, error } = await db
@@ -217,6 +219,7 @@ export async function createProject(
       product_url: product.url,
       product: product as unknown as Json,
       brief: brief as unknown as Json,
+      script: script as unknown as Json,
       brand_snapshot: brand as Json,
       reference_asset_ids: refs,
     })

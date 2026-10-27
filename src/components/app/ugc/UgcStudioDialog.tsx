@@ -6,6 +6,8 @@ import { AppModalShell } from "@/components/app/AppModalShell";
 import { Video } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addAppEventListener, removeAppEventListener, type AppEvent } from "@/lib/app-events";
+import type { ScriptVideoSource } from "@/lib/studio/script-video";
+import { getStudioState, minimizeSession } from "@/lib/studio/session-store";
 
 const UgcStudio = lazy(() => import("./UgcStudio").then((m) => ({ default: m.UgcStudio })));
 
@@ -19,6 +21,7 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
   const [open, setOpen] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [session, setSession] = useState(0);
+  const [source, setSource] = useState<ScriptVideoSource | null>(null);
   // On a plan without video, opening the studio shows the upgrade screen instead.
   const locked = useFeatureLocked("ugc");
   const lockedRef = useRef(locked);
@@ -26,11 +29,15 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
 
   useEffect(() => {
     const onOpen = (event: AppEvent<"open:ugc-studio">) => {
+      if (event.detail?.source && event.detail.source.workspaceId !== workspaceId) return;
       if (lockedRef.current) {
         openFeatureUpgrade("ugc");
         return;
       }
       setProjectId(event.detail?.projectId ?? null);
+      setSource(event.detail?.source ?? null);
+      const activeId = getStudioState().activeId;
+      if (event.detail?.source && activeId) minimizeSession(activeId);
       setSession((n) => n + 1);
       setOpen(true);
     };
@@ -51,7 +58,7 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
       removeAppEventListener("open:content-item", onClose);
       removeAppEventListener("open:library", onClose);
     };
-  }, []);
+  }, [workspaceId]);
 
   return (
     <AppModalShell
@@ -74,7 +81,12 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
           }
         >
           {workspaceId ? (
-            <UgcStudio key={session} workspaceId={workspaceId} initialProjectId={projectId} />
+            <UgcStudio
+              key={`${workspaceId}:${session}`}
+              workspaceId={workspaceId}
+              initialProjectId={projectId}
+              source={source?.workspaceId === workspaceId ? source : null}
+            />
           ) : (
             <div className="grid place-items-center py-24 text-sm text-muted-foreground">
               Select a workspace to create video ads.

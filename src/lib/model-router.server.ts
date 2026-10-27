@@ -115,6 +115,11 @@ function complexity(prompt: string): number {
   return score;
 }
 
+export function routeStandardImageModel(input: ImageRoutingInput): ImageModelPlan {
+  const models = catalog();
+  return routeImageModel({ ...input, availableModels: [models.defaultText, models.defaultEdit] });
+}
+
 export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
   const models = catalog();
   const score = complexity(input.prompt);

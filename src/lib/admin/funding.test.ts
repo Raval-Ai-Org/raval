@@ -16,6 +16,7 @@ function account(
     nextGrantAt: null,
     purchaseRecordedAt: "2026-10-24T00:00:00.000Z",
     meters: {
+      creation: { available: 0, held: 0, debt: 0 },
       credits: { available: 100, held: 2, debt: 0 },
       video: { available: 200, held: 0, debt: 0 },
       pro_messages: { available: 3, held: 0, debt: 0 },

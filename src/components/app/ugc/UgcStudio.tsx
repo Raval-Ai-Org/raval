@@ -25,6 +25,7 @@ import {
   type Script,
 } from "@/lib/ugc/schemas";
 import { cn } from "@/lib/utils";
+import { creatorBrief, toCreatorScript, type ScriptVideoSource } from "@/lib/studio/script-video";
 import { BriefStep } from "./BriefStep";
 import { applyHook, ConceptsStep, ConceptsWriting } from "./ConceptsStep";
 import { coerceSettings, GenerateStep, type RenderSettingsState } from "./GenerateStep";
@@ -52,12 +53,18 @@ function errorMessage(error: unknown, fallback: string) {
 export function UgcStudio({
   workspaceId,
   initialProjectId,
+  source,
 }: {
   workspaceId: string;
   initialProjectId?: string | null;
+  source?: ScriptVideoSource | null;
 }) {
   const [view, setView] = useState<View>(
-    initialProjectId ? { kind: "project", id: initialProjectId } : { kind: "home" },
+    initialProjectId
+      ? { kind: "project", id: initialProjectId }
+      : source
+        ? { kind: "new" }
+        : { kind: "home" },
   );
   const [catalog, setCatalog] = useState<{
     models: ModelView[];
@@ -110,6 +117,7 @@ export function UgcStudio({
       key={view.kind === "project" ? view.id : "new"}
       workspaceId={workspaceId}
       projectId={view.kind === "project" ? view.id : null}
+      source={view.kind === "new" ? source : null}
       catalog={catalog}
       refreshAllowance={loadCatalog}
       onCreated={(id) => setView({ kind: "project", id })}
@@ -400,7 +408,7 @@ function AdCard({
 
 function defaultStep(project: ProjectView): StepId {
   if (project.renders.length) return "generate";
-  if (project.script) return "script";
+  if (project.script) return project.brief.scriptSource === "studio" ? "generate" : "script";
   if (project.concepts.length) return "concepts";
   return "brief";
 }
@@ -412,6 +420,7 @@ function ProjectEditor({
   refreshAllowance,
   onCreated,
   onExit,
+  source,
 }: {
   workspaceId: string;
   projectId: string | null;
@@ -419,6 +428,7 @@ function ProjectEditor({
   refreshAllowance: () => void;
   onCreated: (id: string) => void;
   onExit: () => void;
+  source?: ScriptVideoSource | null;
 }) {
   const workspace = useWorkspace();
   const [project, setProject] = useState<ProjectView | null>(null);
@@ -458,7 +468,8 @@ function ProjectEditor({
         model,
         {
           model: model.key,
-          durationSec: project?.brief.durationSec ?? preset.durationSec,
+          durationSec:
+            project?.brief.durationSec ?? source?.script.durationSec ?? preset.durationSec,
           aspectRatio: preset.aspectRatio,
           resolution: model.defaultResolution,
           referenceIds: project?.references.map((r) => r.assetId) ?? [],
@@ -467,7 +478,7 @@ function ProjectEditor({
       ),
       model: "auto",
     });
-  }, [catalog, project, projectId, settings]);
+  }, [catalog, project, projectId, settings, source]);
 
   const model =
     catalog?.models.find((m) => m.key === settings?.model) ??
@@ -497,12 +508,16 @@ function ProjectEditor({
       if (!project) {
         const created = await ugcApi.createProject(workspaceId, {
           product,
-          brief: BriefSchema.parse({ audience: product.audienceHints[0] ?? "" }),
+          brief: source
+            ? creatorBrief(source)
+            : BriefSchema.parse({ audience: product.audienceHints[0] ?? "" }),
+          script: source ? toCreatorScript(source.script) : undefined,
+          title: source?.script.title,
           referenceAssetIds,
         });
         setProject(created);
         setSettings((s) => (s ? { ...s, referenceIds: referenceAssetIds } : s));
-        setStep("brief");
+        setStep(source ? "generate" : "brief");
         onCreated(created.id);
         return;
       }
@@ -512,7 +527,7 @@ function ProjectEditor({
       });
       setProject(updated);
       setSettings((s) => (s ? { ...s, referenceIds: referenceAssetIds } : s));
-      setStep("brief");
+      setStep(updated.brief.scriptSource === "studio" ? "generate" : "brief");
     });
 
   const applyBriefToSettings = (brief: Brief) => {
@@ -588,6 +603,7 @@ function ProjectEditor({
   const startRender = () =>
     guard("render", "Couldn't start the video.", async () => {
       if (!project || !settings) return;
+      if (busy) return;
       if (project.brief.durationSec !== settings.durationSec) {
         const updated = await ugcApi.updateProject(workspaceId, project.id, {
           brief: { ...project.brief, durationSec: settings.durationSec },
@@ -654,6 +670,7 @@ function ProjectEditor({
 
   const showRender = step === "generate" && activeRender;
   const cover = project?.references[0]?.url ?? project?.product.images[0]?.url ?? null;
+  const imported = !!source || project?.brief.scriptSource === "studio";
 
   return (
     <div className="space-y-5">
@@ -681,7 +698,13 @@ function ProjectEditor({
           {project?.title ?? "New video ad"}
         </h3>
       </div>
-      <Stepper current={step} reachable={reachable} onSelect={setStep} />
+      <Stepper current={step} reachable={reachable} onSelect={setStep} imported={imported} />
+      {imported && step === "product" ? (
+        <p className="text-sm text-muted-foreground">
+          Your script is carried over. Add the product to show in your video, then review the video
+          settings.
+        </p>
+      ) : null}
 
       <AnimatePresence mode="wait">
         {step === "product" ? (
@@ -751,7 +774,7 @@ function ProjectEditor({
               productImage={cover}
               rewriting={busy === "rewrite"}
               saving={busy === "saving"}
-              onBack={(script) => void saveScript(script, "concepts")}
+              onBack={(script) => void saveScript(script, imported ? "product" : "concepts")}
               onRewrite={(script, instruction) => void rewrite(script, instruction)}
               onContinue={(script) => void saveScript(script, "generate")}
             />
@@ -783,6 +806,7 @@ function ProjectEditor({
                 settings={settings}
                 references={project.references}
                 hook={project.script?.hook ?? ""}
+                script={project.script}
                 scriptDurationSec={Math.max(
                   ...(project.script?.scenes.map((scene) => scene.end) ?? [durationSec]),
                 )}

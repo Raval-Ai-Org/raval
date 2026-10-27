@@ -110,6 +110,8 @@ export async function beginDeferredMetered(args: {
           expiresAt: args.expiresAt,
         })
       : null;
+  if (held?.replayed && ["released", "expired"].includes(held.state ?? ""))
+    throw new HttpError(410, "The previous request stopped and its reservation was returned. Try again to start a new request.");
   if (held?.replayed) throw new HttpError(409, "This action is already running or completed.");
   const chargeId = held?.id ? crypto.randomUUID() : null;
   let settled = false;

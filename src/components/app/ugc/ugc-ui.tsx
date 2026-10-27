@@ -313,13 +313,16 @@ export function Stepper({
   current,
   reachable,
   onSelect,
+  imported = false,
 }: {
   current: StepId;
   reachable: (id: StepId) => boolean;
   onSelect: (id: StepId) => void;
+  imported?: boolean;
 }) {
-  const index = STEPS.findIndex((s) => s.id === current);
-  const pct = (index / (STEPS.length - 1)) * 100;
+  const steps = imported ? STEPS.filter((s) => s.id !== "concepts" && s.id !== "brief") : STEPS;
+  const index = steps.findIndex((s) => s.id === current);
+  const pct = (index / (steps.length - 1)) * 100;
   return (
     <nav aria-label="Ad steps" className="w-full">
       <ol className="relative flex items-start justify-between">
@@ -334,13 +337,13 @@ export function Stepper({
             transition={{ duration: duration.xslow, ease: ease.emphasized }}
           />
         </span>
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
           const done = i < index;
           const active = s.id === current;
           const enabled = reachable(s.id);
           const Icon = s.icon;
           return (
-            <li key={s.id} className="relative z-10 flex w-1/5 justify-center">
+            <li key={s.id} className="relative z-10 flex flex-1 justify-center">
               <button
                 type="button"
                 disabled={!enabled}

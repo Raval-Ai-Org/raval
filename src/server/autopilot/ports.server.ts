@@ -4,6 +4,7 @@
 // Market Brain and the competitor sweeps supply the signals. Nothing here
 // generates, publishes or searches the web on its own.
 import "server-only";
+import { getEntitlements } from "@/server/billing/entitlements.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
@@ -572,6 +573,7 @@ export const realPorts: AutopilotPorts = {
     },
 
     async create({ workspaceId, userId, role, idempotencyKey, action, platforms, story }) {
+      const entitlements = await getEntitlements({ workspaceId, userId, role });
       const type = (action.content_type ?? "social") as StudioType;
       // Instagram, TikTok and YouTube can't take words alone: the post gets a picture.
       const picture = withPicture(type, action.platform);
@@ -595,8 +597,10 @@ export const realPorts: AutopilotPorts = {
             typeof action.result.hook === "string" ? action.result.hook.slice(0, 24) : undefined,
           ideaId: action.opportunity_id ?? undefined,
           ideaSource: "autopilot",
+          autopilotProgramId: action.program_id ?? undefined,
         },
         controls: {
+          paymentSource: entitlements.creation?.active ? "creation" : "credits",
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
           ...(picture ? { includeImage: true } : {}),
           // Story frames are individually generated and reviewed by the image model.
@@ -614,11 +618,13 @@ export const realPorts: AutopilotPorts = {
       return {
         job: toJobLite(job),
         credits:
-          charged && charge.meter === "credits"
-            ? charge.amount
-            : charged
-              ? estimateCost(type, action.platform).credits
-              : 0,
+          charged && charge.meter === "creation"
+            ? charge.amount * 10
+            : charged && charge.meter === "credits"
+              ? charge.amount
+              : charged
+                ? estimateCost(type, action.platform).credits
+                : 0,
       };
     },
 
@@ -634,6 +640,7 @@ export const realPorts: AutopilotPorts = {
           ...(billing
             ? {
                 billingAccountId: billing.account_id,
+                billingMeter: billing.meter,
                 billingChargeId: billing.charge_id ?? undefined,
               }
             : {}),

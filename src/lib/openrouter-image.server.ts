@@ -36,7 +36,11 @@ import {
   OPENROUTER_BASE,
   openRouterHeaders,
 } from "./ai-gateway.server";
-import { routeImageModel, type ImageRoutingInput } from "./model-router.server";
+import {
+  routeImageModel,
+  routeStandardImageModel,
+  type ImageRoutingInput,
+} from "./model-router.server";
 
 /** Studio's image sizes, and the legacy /api/generate-image sizes. */
 export type ImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792";
@@ -216,7 +220,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
   const size = opts.size ?? "1024x1024";
   const references = usableReferences(opts.routing?.referenceAssets);
   await assertSafeMediaPrompt(opts.prompt);
-  await assertSafeMediaImages(references);
+  await assertSafeMediaImages(references, { stage: "source" });
   const requiresReference = Boolean(
     opts.routing?.hasReference ||
     opts.routing?.editing ||
@@ -259,7 +263,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     const hit = await cache.get<GeneratedImage>(key);
     recordCacheLookup("image", Boolean(hit));
     if (hit) {
-      await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`]);
+      await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`], { stage: "output" });
       recordUsage({
         provider: "openrouter",
         model,
@@ -290,7 +294,9 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               estCostUsd: image.costUsd,
               latencyMs: Date.now() - started,
             });
-            await assertSafeMediaImages([`data:${image.mimeType};base64,${image.b64}`]);
+            await assertSafeMediaImages([`data:${image.mimeType};base64,${image.b64}`], {
+              stage: "output",
+            });
             await cache.set(key, image, IMAGE_CACHE_TTL_SECONDS);
             return image;
           } catch (error) {
@@ -404,19 +410,20 @@ async function inBackground(work: () => Promise<void>): Promise<void> {
  * `model` restarts a failed task on that fallback (already budgeted).
  */
 export async function startImageTask(opts: {
+  costTier?: "standard";
   prompt: string;
   size: ImageSize;
   referenceAssets?: string[];
   model?: string;
 }): Promise<StartedImageTask> {
   const references = usableReferences(opts.referenceAssets);
-  const plan = routeImageModel({
+  const plan = (opts.costTier === "standard" ? routeStandardImageModel : routeImageModel)({
     prompt: opts.prompt,
     hasReference: references.length > 0,
     referenceAssets: references,
     editing: references.length > 0,
   });
-  if (!opts.model) await enforceBudget("image");
+  await enforceBudget("image");
   // Fail fast when the key is missing instead of parking a doomed task.
   getOpenRouterKey();
   const model = opts.model ?? plan.model;

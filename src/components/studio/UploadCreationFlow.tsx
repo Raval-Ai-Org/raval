@@ -24,6 +24,8 @@ import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { publishContentItems, scheduleContentItems } from "@/lib/sdr.functions";
 import { StudioPublishFlow } from "./StudioPublishFlow";
 import { ChipButton, FieldLabel, Segmented } from "./studio-ui";
+import { openComposer } from "@/lib/studio/session-store";
+import { creditsFor } from "@/lib/billing/catalog";
 
 type UploadKind = "photo" | "video" | "text";
 type CopyMode = "write" | "generate" | "both";
@@ -85,6 +87,7 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
   const [groupId, setGroupId] = useState(() => crypto.randomUUID());
   const [storedPath, setStoredPath] = useState<string | null>(null);
   const [storedUrl, setStoredUrl] = useState<string | null>(null);
+  const [storedAssetId, setStoredAssetId] = useState<string | null>(null);
   const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
   const [distributed, setDistributed] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
@@ -120,20 +123,24 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
     setGroupId(crypto.randomUUID());
     setStoredPath(null);
     setStoredUrl(null);
+    setStoredAssetId(null);
     setScheduleAt("");
     setDistributed(false);
   };
 
   const pickKind = (next: UploadKind) => {
+    if (busy) return;
     if (next === kind) return;
     setKind(next);
     setFile(null);
     setPlatforms((current) => current.filter((platform) => available(next, platform)));
     setStoredPath(null);
     setStoredUrl(null);
+    setStoredAssetId(null);
   };
 
   const chooseFile = (next: File | undefined) => {
+    if (busy) return;
     if (!next || !kind || kind === "text") return;
     if (!ACCEPT[kind].split(",").includes(next.type))
       return void toast.error("Choose a supported image or video file.");
@@ -145,6 +152,55 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
     setGroupId(crypto.randomUUID());
     setStoredPath(null);
     setStoredUrl(null);
+    setStoredAssetId(null);
+  };
+
+  const ensureUpload = async () => {
+    if (storedPath && storedUrl && storedAssetId)
+      return { path: storedPath, url: storedUrl, id: storedAssetId };
+    if (!workspaceId || !file || kind === "text") return null;
+    const params = new URLSearchParams({ workspaceId, requestId: groupId, filename: file.name });
+    const response = await authedFetch(`/api/assets/upload?${params}`, {
+      method: "POST",
+      workspaceId,
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    const result = await response.json();
+    if (
+      !response.ok ||
+      !result.asset?.storage_path ||
+      !result.asset?.public_url ||
+      !result.asset?.id
+    )
+      throw new Error("Could not upload media.");
+    setStoredPath(result.asset.storage_path);
+    setStoredUrl(result.asset.public_url);
+    setStoredAssetId(result.asset.id);
+    return {
+      path: result.asset.storage_path as string,
+      url: result.asset.public_url as string,
+      id: result.asset.id as string,
+    };
+  };
+
+  const openReferenceComposer = async () => {
+    if (busy || kind !== "photo") return;
+    setBusy("save");
+    try {
+      const asset = await ensureUpload();
+      if (!asset) throw new Error("Choose a photo first.");
+      openComposer({
+        type: "image",
+        brief: [title, description, direction].filter(Boolean).join("\n\n"),
+        referenceAssetIds: [asset.id],
+      });
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open this photo.");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const generate = async () => {
@@ -155,6 +211,9 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
       );
     setBusy("generate");
     try {
+      const asset = kind === "photo" ? await ensureUpload() : null;
+      if (kind === "photo" && !asset)
+        throw new Error("Add a photo before generating its captions.");
       const response = await authedFetch("/api/studio/upload-captions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
@@ -166,6 +225,7 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
           direction,
           platforms: selected,
           existing: captions,
+          ...(asset ? { assetId: asset.id } : {}),
         }),
       });
       const result = await response.json();
@@ -210,25 +270,11 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
     try {
       let path = storedPath;
       let url = storedUrl;
-      if (kind !== "text" && file && !path) {
-        const params = new URLSearchParams({
-          workspaceId,
-          requestId: groupId,
-          filename: file.name,
-        });
-        const response = await authedFetch(`/api/assets/upload?${params}`, {
-          method: "POST",
-          workspaceId,
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        const result = await response.json();
-        if (!response.ok || !result.asset?.storage_path || !result.asset?.public_url)
-          throw new Error(result.error ?? "Could not upload media.");
-        path = result.asset.storage_path;
-        url = result.asset.public_url;
-        setStoredPath(path);
-        setStoredUrl(url);
+      if (kind !== "text") {
+        const asset = await ensureUpload();
+        if (!asset) throw new Error("Add a photo or video first.");
+        path = asset.path;
+        url = asset.url;
       }
       const next = { ...saved };
       for (const platform of selected) {
@@ -524,8 +570,31 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
                 </div>
               </section>
 
+              {kind === "photo" && (file || storedPath) && (
+                <div className="space-y-2 rounded-xl border border-border p-3">
+                  <p className="text-sm font-medium">
+                    Want to create something new with this photo?
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Use it as source material in Studio. Uploading and choosing settings are free;
+                    the Generate button shows the price.
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={!!busy}
+                    onClick={() => void openReferenceComposer()}
+                  >
+                    Use as reference in Studio
+                  </Button>
+                </div>
+              )}
+
               <section data-no-rhythm className="space-y-3">
                 <FieldLabel>Captions</FieldLabel>
+                <p className="text-xs text-muted-foreground">
+                  Writing, uploading and saving are free. Generating captions costs{" "}
+                  {creditsFor("ideas")} credits.
+                </p>
                 <Segmented
                   label="Caption mode"
                   value={copyMode}

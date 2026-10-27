@@ -6,6 +6,8 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { invalidateBillingAccount, type BillingAccount } from "./accounts.server";
 import { entitledPlanFor } from "./entitlements.server";
 import { clawbackMeter, grantMeter, rolloverMeter } from "./meters.server";
+import { CREATION_PLANS, CREATION_POLICY } from "@/lib/billing/creation";
+import { creationPolicyFor } from "./creation.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
@@ -115,8 +117,18 @@ export async function grantPlanWindow(args: {
 }): Promise<number> {
   const { account, plan, windowStart, expiresAt } = args;
   const allowances = PLANS[plan].allowances;
+  let policy = "legacy";
+  if (plan !== "free") {
+    const { data, error } = await admin.rpc("creation_plan_window", {
+      p: { account_id: account.id, window_start: windowStart, expires_at: expiresAt },
+    });
+    if (error || !["legacy", CREATION_POLICY].includes(String(data))) throw new Error("Could not prepare monthly creation allowance.");
+    policy = String(data);
+  }
+  const creation = policy === CREATION_POLICY && plan !== "free";
   const amounts: Array<[Meter, number]> = [
-    ["credits", allowances.credits],
+    ["credits", creation ? CREATION_PLANS[plan].flexCredits : allowances.credits],
+    ["creation", creation ? CREATION_PLANS[plan].points : 0],
     ["video", allowances.videoUnits],
     ["pro_messages", allowances.proMessages],
     ["flash_messages", allowances.flashMessages],
@@ -124,7 +136,29 @@ export async function grantPlanWindow(args: {
   if (args.annualRollover) {
     for (const [meter, cap] of amounts) {
       if ((meter === "credits" || meter === "video") && cap > 0) {
-        await rolloverMeter({ accountId: account.id, meter, windowStart, cap, expiresAt });
+        let rolloverCap = cap;
+        if (creation && meter === "credits") {
+          const { data: old, error: oldError } = await admin
+            .from("meter_grants")
+            .select("id")
+            .eq("account_id", account.id)
+            .eq("source", "plan")
+            .eq("meter", "credits")
+            .gt("remaining", 0)
+            .gte("expires_at", windowStart)
+            .lt("period_start", windowStart)
+            .like("idempotency_key", "plan:%")
+            .limit(1);
+          if (oldError) throw new Error("Could not preserve previous rollover terms.");
+          if (old?.length) rolloverCap = allowances.credits;
+        }
+        await rolloverMeter({
+          accountId: account.id,
+          meter,
+          windowStart,
+          cap: rolloverCap,
+          expiresAt,
+        });
       }
     }
   }
@@ -139,7 +173,7 @@ export async function grantPlanWindow(args: {
       restriction: "ai_only",
       periodStart: windowStart,
       expiresAt,
-      idempotencyKey: `plan:${account.id}:${plan}:${meter}:${windowStart}`,
+      idempotencyKey: `${creation ? CREATION_POLICY : "plan"}:${account.id}:${plan}:${meter}:${windowStart}`,
       providerRef: args.providerRef,
     });
     if (!result.replayed) issued++;
@@ -164,8 +198,15 @@ export async function grantPlanUpgrade(args: {
   const fraction = Math.max(0, Math.min(1, (end - now.getTime()) / Math.max(1, end - start)));
   const old = PLANS[args.from].allowances;
   const next = PLANS[args.to].allowances;
+  const creation = await creationPolicyFor(args.account.id, now);
   for (const [meter, delta] of [
-    ["credits", next.credits - old.credits],
+    [
+      "credits",
+      creation
+        ? CREATION_PLANS[args.to].flexCredits - CREATION_PLANS[args.from].flexCredits
+        : next.credits - old.credits,
+    ],
+    ["creation", creation ? CREATION_PLANS[args.to].points - CREATION_PLANS[args.from].points : 0],
     ["video", next.videoUnits - old.videoUnits],
     ["pro_messages", next.proMessages - old.proMessages],
     ["flash_messages", next.flashMessages - old.flashMessages],

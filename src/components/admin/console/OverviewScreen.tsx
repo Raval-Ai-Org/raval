@@ -610,7 +610,7 @@ function WhatsNew({ activity }: { activity: AdminOverview["activity"] }) {
                                 </span>
                               </div>
                             </div>
-                            <p className="mt-0.5 text-[11px] capitalize leading-relaxed text-muted-foreground">
+                            <p className="mt-0.5 break-words text-[11px] leading-relaxed text-muted-foreground">
                               {item.detail}
                             </p>
                           </div>

@@ -10,6 +10,7 @@ import { detectStudioType } from "@/lib/studio/detect";
 import type { StudioType } from "@/lib/studio/formats";
 
 export type CreateIntent = { type: StudioType; brief: string };
+export type AttachedImageMode = "preserve" | "edit" | "inspire";
 
 // Imperative openers: "create …", "please write …", "can you make …", "I need a …".
 const LEAD = String.raw`^(?:(?:hey|hi|ok(?:ay)?|so|now|please|pls|mellox)[,!\s]+)*`;
@@ -43,6 +44,47 @@ export function detectCreateIntent(text: string): CreateIntent | null {
   const type = detectStudioType(t);
   if (!type) return null;
   return { type, brief: t };
+}
+
+/** Commands that only make sense because an image is attached ("remove the background"). */
+export function detectAttachedImageIntent(text: string): CreateIntent | null {
+  const regular = detectCreateIntent(text);
+  if (regular) return regular;
+  const prompt = text.replace(/\s+/g, " ").trim();
+  if (prompt.length < 3 || prompt.length > 4000 || ASKING_ABOUT.test(prompt)) return null;
+  if (
+    !/^(?:(?:please|pls|now)\s+)*(?:(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|i\s+(?:want|need|would\s+like)\s+(?:you\s+to\s+)?|help\s+me\s+))?(?:edit|modify|retouch|change|remove|replace|swap|recolou?r|adjust|extend|erase|transform|add|put|place|overlay)\b/i.test(
+      prompt,
+    )
+  )
+    return null;
+  return { type: "image", brief: prompt };
+}
+
+/**
+ * An attached customer photo is never treated as permission to redesign it.
+ * Only explicit transformation/style language opts into generative editing.
+ */
+export function attachedImageMode(text: string): AttachedImageMode {
+  const prompt = text.replace(/\s+/g, " ").trim().toLowerCase();
+  const overlayOnly =
+    /\b(?:add|put|place|overlay|write|include)\b.{0,50}\b(?:text|headline|title|caption|logo|badge)\b/.test(
+      prompt,
+    );
+  if (overlayOnly) return "preserve";
+  if (
+    /\b(?:inspired by|use (?:it|this|the image|the photo) as (?:a )?(?:style|inspiration|reference)|match (?:its|the) (?:style|look)|create (?:a )?new (?:image|design)|reimagine|redesign)\b/.test(
+      prompt,
+    )
+  )
+    return "inspire";
+  if (
+    /\b(?:edit|modify|retouch|change|remove|replace|swap|recolou?r|adjust|extend|erase|transform|add|put|place)\b/.test(
+      prompt,
+    )
+  )
+    return "edit";
+  return "preserve";
 }
 
 // Strategy and analysis turns get more reasoning on the premium chat model
