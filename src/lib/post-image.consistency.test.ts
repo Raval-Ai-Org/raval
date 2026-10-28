@@ -143,3 +143,67 @@ describe("supported image formats", () => {
     expect(IMAGE_FORMATS).toHaveLength(3);
   });
 });
+
+describe("creative knowledge in post image prompts", () => {
+  const coffee: BrandDnaLite = {
+    brandName: "Northbean",
+    industry: "coffee",
+    products: "cold brew coffee in cans",
+    voice: "bold, playful",
+  };
+
+  it("briefs the piece as a deliverable and sets the chosen line verbatim", () => {
+    const r = buildImagePromptDetailed({
+      postBody: "Summer sale: 20% off every can this weekend.",
+      brand: coffee,
+      size: "1024x1024",
+      seedKey: "post-1",
+      onImageText: "20% off all summer",
+    });
+    expect(r.deliverable.id).toBe("promo-offer");
+    expect(r.prompt).toContain("DELIVERABLE — Offer or sale graphic");
+    expect(r.prompt).toContain('Headline: "20% off all summer"');
+    expect(r.prompt).not.toContain("If any text appears");
+    expect(r.prompt).toContain("QUALITY CHECK BEFORE FINALIZING");
+    expect(r.prompt).toContain("silhouette");
+  });
+
+  it("keeps the word rule when the line is too long or words come later", () => {
+    const long = buildImagePromptDetailed({
+      postBody: "Morning ritual.",
+      brand: coffee,
+      size: "1024x1024",
+      seedKey: "post-2",
+      onImageText: "one two three four five six seven eight",
+    });
+    expect(long.prompt).toContain("If any text appears");
+    const later = buildImagePromptDetailed({
+      postBody: "Morning ritual.",
+      brand: coffee,
+      size: "1024x1024",
+      seedKey: "post-2",
+      noText: true,
+      onImageText: "Slow mornings",
+    });
+    expect(later.prompt).not.toContain("RENDER VERBATIM");
+    expect(later.prompt).toContain("No letters, numbers or logos anywhere");
+  });
+
+  it("does not stage a non-product brand on a product-only layout", () => {
+    for (let i = 0; i < 25; i++) {
+      const r = buildImagePromptDetailed({
+        postBody: "Close your books in half the time.",
+        brand,
+        size: "1024x1024",
+        seedKey: `saas-${i}`,
+      });
+      expect([
+        "hero-world",
+        "spotlight-noir",
+        "mirror-kaleidoscope",
+        "brand-miniature-store",
+      ]).not.toContain(r.artDirection?.id);
+      expect(r.prompt).not.toContain("silhouette, proportions, materials and label");
+    }
+  });
+});

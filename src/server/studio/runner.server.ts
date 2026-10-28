@@ -149,6 +149,7 @@ import {
 /** The media slot of a connected carousel's one background picture. */
 const BACKDROP_SLOT = "backdrop";
 import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
+import { archetypeById, type ArchetypeId } from "@/lib/studio/art-direction";
 
 type Db = SupabaseClient;
 
@@ -933,6 +934,9 @@ function imagePrompt(args: {
   variationKey?: string;
   extra?: string;
   style?: ImageStyleInput | null;
+  artDirection?: ArchetypeId | null;
+  noText?: boolean;
+  onImageText?: string | null;
 }): string {
   // The shared builder knows three canvases; 4:5 composes like square with a
   // taller safe area.
@@ -948,6 +952,9 @@ function imagePrompt(args: {
     seedKey: args.seed,
     variationKey: args.variationKey,
     style: args.style,
+    artDirection: args.artDirection,
+    noText: args.noText,
+    onImageText: args.onImageText,
   }).prompt;
   return [
     built,
@@ -1184,6 +1191,7 @@ async function startMedia(args: {
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
+          seed: `${seed}:${variationKey}`,
         });
         const started = await startImageTask({
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
@@ -1212,6 +1220,7 @@ async function startMedia(args: {
           index,
           frames: output.story!.frames,
           spec: output.story!.spec,
+          noText: !!ctx.visualTaste?.direction.composed,
           brandName: ctx.brandName,
           brandContext: ctx.visualBrandText ?? ctx.brandText,
           visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
@@ -1277,6 +1286,9 @@ async function startMedia(args: {
       .filter(Boolean)
       .join("\n\n"),
     style: ctx.style ? imageStyleInput(ctx.style) : null,
+    artDirection: archetypeById(output.artDirection)?.id ?? null,
+    noText: compose,
+    onImageText: job.type === "image" ? output.onImageText : null,
   });
   const started = await startImageTask({
     costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
@@ -2220,6 +2232,9 @@ async function shapeOutput(args: {
         variants: completeVariants(platforms, variants, input.intent.brief),
         ...({
           concept: visual,
+          ...(archetypeById(parsed.artDirection)
+            ? { artDirection: archetypeById(parsed.artDirection)!.id }
+            : {}),
           onImageText: String(parsed.onImageText ?? "").trim(),
           altText: String(parsed.altText ?? ""),
         } as object),

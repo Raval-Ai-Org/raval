@@ -368,6 +368,8 @@ export type StudioJobOutput = {
   ads?: AdVariant[];
   /** Image/video: the visual concept the render was built from. */
   concept?: string;
+  /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
+  artDirection?: string;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
   altText?: string;
