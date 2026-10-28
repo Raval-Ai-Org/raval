@@ -84,6 +84,8 @@ export const ControlsSchema = z.object({
   referenceAssetIds: z.array(z.string().uuid()).max(4).optional(),
   /** Whether source photos stay intact, receive a targeted edit, or only inspire a new image. */
   referenceMode: z.enum(["preserve", "edit", "inspire"]).optional(),
+  /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
+  productId: z.string().uuid().optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;
