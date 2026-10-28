@@ -693,6 +693,13 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   run-schedules hook via the one search path. Generators only read it: a brief
   never triggers a trends search. A trend is kept only if it cites a source the
   search returned (`groundTrends`). Flag `FEATURE_FLAG_SOCIAL_TRENDS_ENABLED`.
+- **Art direction is one library** (`src/lib/studio/art-direction.ts`, pure):
+  proven campaign layouts (oversized object, product in its own world,
+  exploded view, miniature diorama, giant word behind the subject, and so on),
+  written brand-neutral, plus the craft rules every picture gets. The image
+  brief picks a layout (`artDirection`), post images and carousel covers are
+  staged on it, and a brand style with its own layout or exact references
+  keeps that layout. Add a layout there; never name another brand in it.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style

@@ -15,6 +15,7 @@ import { consistencySection, memorySection, type HookStyle } from "./memory";
 import { playbookSection } from "./playbook";
 import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
 import { shareSection } from "./viral";
+import { ARCHETYPE_IDS, archetypeMenu } from "./art-direction";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import type {
   StudioControls,
@@ -492,7 +493,9 @@ export const AdSchema = z.object({
 
 export const VisualBriefSchema = z.object({
   title: Str(120),
-  concept: Str(900),
+  concept: Str(1400),
+  /** The campaign layout chosen from ARCHETYPES, or none (video). */
+  artDirection: z.enum(ARCHETYPE_IDS).optional().catch(undefined),
   /** A short phrase allowed to appear in the image, or empty for none. */
   onImageText: Str(60).default(""),
   altText: Str(240).default(""),
@@ -590,7 +593,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
         "`emphasis` is the 1 to 3 words of that slide's heading that carry its meaning, copied exactly from the heading. They are highlighted in the design.",
         "`role` is one of cover, context, point, proof, recap, cta, matching the slide order above.",
         "The image model typesets each complete slide. Keep every heading to 8 words or fewer and each body to 20 words or fewer so every word stays legible on a phone. No emoji, hashtags, markdown, or 'swipe' instructions.",
-        "`visual` is one line of art direction for that slide. Keep one visual idea running through every slide (the same setting, object or metaphor), never unrelated pictures. No text-in-image instructions.",
+        "`visual` is one line of art direction for that slide. Keep one visual idea running through every slide (the same setting, object or metaphor), never unrelated pictures. Slide 1's visual is a poster-grade hook: a concrete hero subject, a surprise of scale, material or pose, and the light. Later slides reuse that hero or motif from a new angle or closer crop. No text-in-image instructions.",
         "`caption` is the post caption: an opening line that names the topic in plain searchable words, 1-3 short lines of context, and a call to action. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
       ].filter(Boolean),
@@ -764,7 +767,12 @@ export function buildVisualBriefPrompt(
       [
         video
           ? `\`concept\` is a shot plan for a ${args.controls.durationSec ?? 10}-second clip: opening frame (the hook), camera movement, the key product/service moment, and the closing frame. Concrete and filmable. ${args.source?.kind === "script" && args.controls.audio !== false ? "Follow the supplied script in order, retaining its voiceover and dialogue verbatim alongside each shot. Fit its timing to the selected duration without inventing claims." : "No dialogue."}`
-          : "`concept` describes one strong visual idea: subject, setting, composition, lighting, mood, and how it reinforces the brief. Concrete, something a photographer or illustrator could execute.",
+          : "`concept` is art direction for one poster-grade visual, written the way the best campaign prompts are: name the hero subject and its scale, the set or backdrop, any person (always a fictional model) with pose, outfit and expression, where the headline sits relative to the subject (for example a giant word behind it, partly hidden), lens and camera angle, the light (key, rim, shadows, reflections), real materials and textures, a palette taken from the brand colours, and the finish. 5 to 8 concrete sentences a photographer, 3D artist or retoucher could execute.",
+        ...(video
+          ? []
+          : [
+              `\`artDirection\` is the id of the one campaign layout below that best fits this brand and message; build the concept on it and adapt it, never name other brands.\n${archetypeMenu()}`,
+            ]),
         "Ground the visual in the brand's actual product, audience and identity. Choose a recognizable focal subject and a distinct visual treatment; avoid generic stock imagery or fabricated product details.",
         ...(video
           ? [
@@ -773,7 +781,9 @@ export function buildVisualBriefPrompt(
           : []),
         "`onImageText` is at most a 2-6 word phrase worth showing, or an empty string. `altText` describes the result for accessibility.",
       ],
-      `{"title": string, "concept": string, "onImageText": string, "altText": string}`,
+      video
+        ? `{"title": string, "concept": string, "onImageText": string, "altText": string}`
+        : `{"title": string, "concept": string, "artDirection": string, "onImageText": string, "altText": string}`,
     ),
     user: sections([
       ...sharedUser(args, args.medium),
@@ -788,7 +798,7 @@ export function buildVisualBriefPrompt(
       ...refineSections(args.refine, args.current),
     ]),
     schema: VisualBriefSchema,
-    maxTokens: 900,
+    maxTokens: 1300,
     temperature: args.refine ? TEMPERATURE.refine : 0.85,
   };
 }

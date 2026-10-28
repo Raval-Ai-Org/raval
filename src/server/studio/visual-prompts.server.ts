@@ -2,6 +2,13 @@ import "server-only";
 import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { ImageStyleInput } from "@/lib/post-image";
+import {
+  archetypePromptLines,
+  carouselSeriesRules,
+  heroSubject,
+  pickArchetype,
+  sellsPhysicalProduct,
+} from "@/lib/studio/art-direction";
 
 type Common = {
   index: number;
@@ -13,6 +20,8 @@ type Common = {
   style: ImageStyleInput | null;
   revision?: string;
   novelty?: string;
+  /** Picks the cover's campaign layout; same seed, same layout. */
+  seed?: string;
 };
 
 function visualSystem(args: Common): string {
@@ -47,10 +56,14 @@ export function carouselSlidePrompt(
   args: Common & { slide: CarouselSlide; slides: CarouselSlide[] },
 ): string {
   const slide = args.slide;
+  const position =
+    args.index === 0 ? "cover" : args.index === args.slides.length - 1 ? "last" : "middle";
   return [
     visualSystem(args),
     `Carousel slide ${args.index + 1} of ${args.slides.length}. Render as one complete ${args.ratio ?? "4:5"} social post frame, with final typography inside the image.`,
     `This slide's job: ${slide.role ?? "point"}. ${args.index === 0 ? "This is the cover: create a striking hook." : args.index === args.slides.length - 1 ? "This is the closing slide: make the next action obvious." : "Advance the narrative with a fresh composition."}`,
+    carouselSeriesRules(position).join("\n"),
+    position === "cover" ? coverArtDirection(args, slide) : "",
     `Exact headline to typeset: ${JSON.stringify(slide.heading)}.`,
     slide.kicker ? `Exact small label: ${JSON.stringify(slide.kicker)}.` : "",
     slide.body ? `Exact supporting copy: ${JSON.stringify(slide.body)}.` : "",
@@ -60,6 +73,26 @@ export function carouselSlidePrompt(
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * The cover is staged on one proven campaign layout, unless the brand's own
+ * style already fixes the layout.
+ */
+function coverArtDirection(args: Common, slide: CarouselSlide): string {
+  if (args.style?.composition || args.style?.references?.strength === "exact") return "";
+  const physical = sellsPhysicalProduct(args.brandContext);
+  const archetype = pickArchetype({
+    brandText: args.brandContext,
+    physicalProduct: physical,
+    seed: args.seed ?? `${args.brandName}::${slide.heading}`,
+  });
+  return archetypePromptLines(archetype, {
+    hero: slide.visual
+      ? `the subject named in this slide's visual direction (${slide.visual.slice(0, 160)})`
+      : heroSubject({ products: null, physical }),
+    deferToStyle: !!args.style,
+  }).join("\n");
 }
 
 /**
