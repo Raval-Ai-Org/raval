@@ -200,7 +200,6 @@ export const PLANS: Record<PlanId, PlanDef> = {
       "Fix all website issues in one go",
       "Full-HD and premium video",
       "Campaigns, approvals and a client portal",
-      "Backlinks on real, relevant sites",
     ],
   },
   agency: {
@@ -469,6 +468,9 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     label: "Backlink marketplace",
     pitch: "Buy real placements on relevant sites, verified live on the page.",
     minPlan: "growth",
+    // Paused while it is reworked ("coming soon" in the app). Set back to
+    // "launch" and restore the Growth highlight and pricing row to sell it again.
+    availability: "later",
   },
   client_portal: {
     key: "client_portal",

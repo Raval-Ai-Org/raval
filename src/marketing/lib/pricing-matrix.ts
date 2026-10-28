@@ -341,16 +341,6 @@ export const MATRIX: MatrixGroup[] = [
         ]
       },
       {
-        "label": "Backlinks on real, relevant sites",
-        "values": [
-          false,
-          false,
-          true,
-          true,
-          true
-        ]
-      },
-      {
         "label": "Agency command center, white label",
         "values": [
           false,
