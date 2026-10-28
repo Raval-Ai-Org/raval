@@ -42,8 +42,26 @@ describe("media safety enforcement", () => {
       await expect(assertSafeMediaPrompt("A business marketing poster")).resolves.toBeUndefined();
     },
   );
+  it("pauses instead of refusing when no read names a prohibited policy", async () => {
+    setMediaSafetyClassifier(async () => ({ safe: false, categories: ["marketing_content"] }));
+    await expect(assertSafeMediaPrompt("Business poster")).rejects.toMatchObject({
+      code: "safety_unavailable",
+    });
+  });
+  it("allows a prompt the independent reviews clear after an unnamed first refusal", async () => {
+    const classifier = vi.fn(async (_prompt: string, opts?: { adjudication?: boolean }) =>
+      opts?.adjudication
+        ? { safe: true, categories: [] }
+        : { safe: false, categories: ["real_person"] },
+    );
+    setMediaSafetyClassifier(classifier);
+    await expect(
+      assertSafeMediaPrompt("Our founder holds the serum and talks to camera"),
+    ).resolves.toBeUndefined();
+    expect(classifier).toHaveBeenCalledTimes(3);
+  });
   it.each([
-    { safe: false, categories: ["marketing_content"] },
+    { safe: false, categories: ["deceptive_impersonation"] },
     { safe: true, categories: ["marketing_creative", "deceptive_impersonation"] },
   ])("retains enforcement for unsafe or contradictory decisions %j", async (decision) => {
     setMediaSafetyClassifier(async () => decision);

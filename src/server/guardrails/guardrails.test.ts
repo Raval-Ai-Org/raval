@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { detectInjection } from "./injection";
 import { neutralizeUntrusted, wrapUntrusted, wrapUntrustedDetailed } from "./untrusted";
 import { checkOutput, redactPii } from "./output-check";
-import { moderateImage, setModerationClassifier } from "./moderation";
+import { moderateImage, setModerationClassifier, setModerationImageLoader } from "./moderation";
 import { setGuardrailSink } from "./events";
 import { parseToolCalls } from "@/lib/chat-tools";
 
@@ -119,8 +119,62 @@ describe("image moderation", () => {
       });
     },
   );
+  it("never refuses an unsafe verdict that names no prohibited policy", async () => {
+    setModerationClassifier(async () => ({ safe: false, categories: ["marketing_content"] }));
+    expect((await moderateImage("https://cdn.example.com/contradictory.png")).verdict).toBe(
+      "unverified",
+    );
+  });
+  it.each([["real_person"], ["unable_to_view_image"], []])(
+    "clears a first read of safe=false %j when independent reviews find it safe",
+    async (...categories) => {
+      const classifier = vi.fn(async (_image: string, opts?: { adjudication?: boolean }) =>
+        opts?.adjudication ? { safe: true, categories: [] } : { safe: false, categories },
+      );
+      setModerationClassifier(classifier);
+      expect(
+        await moderateImage(`https://cdn.example.com/person-${categories.length}.png`),
+      ).toEqual({
+        verdict: "safe",
+        categories: [],
+      });
+      expect(classifier).toHaveBeenCalledTimes(3);
+    },
+  );
+  it("refuses when reviews confirm a prohibited policy under another name", async () => {
+    setModerationClassifier(async (_image, opts) =>
+      opts?.adjudication
+        ? { safe: false, categories: ["adult_content"] }
+        : { safe: false, categories: ["nudity"] },
+    );
+    expect(await moderateImage("https://cdn.example.com/adult.png")).toMatchObject({
+      verdict: "flagged",
+      categories: expect.arrayContaining(["nudity", "adult_content"]),
+    });
+  });
+  it("reviews the downloaded bytes, not an address the model may not open", async () => {
+    const seen: string[] = [];
+    setModerationClassifier(async (image) => {
+      seen.push(image);
+      return { safe: true, categories: [] };
+    });
+    const inline = "data:image/jpeg;base64,aW5saW5lLWJ5dGVz";
+    setModerationImageLoader(async () => inline);
+    expect((await moderateImage("https://storage.example.com/signed.png?t=1")).verdict).toBe(
+      "safe",
+    );
+    // Same bytes behind a new signed URL: the content-addressed verdict is reused.
+    expect((await moderateImage("https://storage.example.com/signed.png?t=2")).verdict).toBe(
+      "safe",
+    );
+    expect(seen).toEqual([inline]);
+    // A download that fails still reviews the address instead of refusing.
+    setModerationImageLoader(async () => null);
+    await moderateImage("https://storage.example.com/unreachable.png");
+    expect(seen.at(-1)).toBe("https://storage.example.com/unreachable.png");
+  });
   it.each([
-    { safe: false, categories: ["marketing_content"] },
+    { safe: false, categories: ["sexual_content"] },
     { safe: true, categories: ["marketing_creative", "sexual_content"] },
   ])("flags unsafe or contradictory image decisions %j", async (decision) => {
     setModerationClassifier(async () => decision);
