@@ -560,14 +560,6 @@ function AppShell() {
               setNavOpen(false);
             },
           })}
-          {sidebarAction({
-            icon: Link2,
-            label: "Backlinks",
-            hint: "SEO",
-            accent: "hsl(var(--brand-green))",
-            feature: "backlinks",
-            onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
-          })}
           {proofEngine?.enabled &&
             sidebarAction({
               icon: Trophy,
@@ -614,6 +606,19 @@ function AppShell() {
         </div>
 
         <FreeSidebarCard className="mx-1 mt-2" />
+
+        {/* Backlinks is paused while it is reworked: a quiet note, not a link. */}
+        <div
+          aria-disabled
+          title="Backlinks is coming soon"
+          className="mx-1 flex cursor-default select-none items-center gap-2 px-2.5 py-1 text-[11.5px] text-muted-foreground/50"
+        >
+          <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden />
+          <span className="flex-1 truncate">Backlinks</span>
+          <span className="rounded-full border border-border/50 px-1.5 py-px text-[9.5px] font-medium uppercase tracking-wide">
+            Soon
+          </span>
+        </div>
 
         <div data-tour="account" className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu

@@ -181,7 +181,6 @@ const SHOWCASE: FeatureKey[] = [
   "geo_apply_fixes",
   "pro_chat",
   "premium_articles",
-  "backlinks",
   "client_portal",
   "command_center",
   "white_label",

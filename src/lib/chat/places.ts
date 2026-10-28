@@ -120,7 +120,7 @@ export const PLACES: readonly Place[] = [
   place({
     id: "backlinks",
     label: "Backlinks",
-    hint: "Get links from other websites",
+    hint: "Coming soon",
     group: "Grow",
     keywords: ["links", "placements", "seo"],
     event: "open:backlinks",

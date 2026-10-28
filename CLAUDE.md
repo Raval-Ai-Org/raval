@@ -711,8 +711,12 @@ the placement through a fulfilment provider, then fetches the published page to
 prove the link is really there. The user never needs a provider account and
 never sees one.
 
-- Route `/w/<id>/app/backlinks` (renders `AppModalShell` over `AppShell`, which
-  owns the viewport); sidebar entry in **Intelligence**. UI in
+- **Paused in the UI ("coming soon").** The route `/w/<id>/app/backlinks`
+  (`BacklinksRoute`, an `AppModalShell` over `AppShell`) shows a coming-soon
+  state instead of `LinksPanel`; the sidebar has only a dimmed, unclickable
+  "Backlinks · Soon" note at the bottom, and it is not shown as an upgrade
+  perk. To bring it back, render `LinksPanel` in the route and restore the
+  **Intelligence** sidebar entry. UI in
   `src/components/app/links/`, RPC `src/server/fns/links.ts`, stubs
   `src/lib/links.functions.ts`.
 - **Mellox owns the provider credential** (`RIXOT_API_KEY`) — never ask a user
