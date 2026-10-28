@@ -10,7 +10,7 @@ import { providerSpec, type UgcModel } from "@/lib/ugc/models";
 import { checkVideoResult } from "@/lib/ugc/quality";
 import { log } from "@/server/observability/logger";
 import { kieUsdPerCredit } from "../models.server";
-import { friendlyFailure } from "./failure";
+import { renderFailure } from "./failure";
 import type {
   ProviderCheck,
   ProviderFailure,
@@ -208,9 +208,7 @@ export const kieVideoProvider: VideoProvider = {
         state: "failed",
         providerState: record.providerState,
         meta: { ...meta, failCode: record.failCode },
-        code: "render_failed",
-        message: friendlyFailure(record.failMessage),
-        retryable: false,
+        ...renderFailure(record.failMessage),
       };
     }
     const { videoUrl, thumbnailUrl } = pickVideoUrl(record.urls);

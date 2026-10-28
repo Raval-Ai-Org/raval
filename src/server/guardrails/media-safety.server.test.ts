@@ -74,6 +74,17 @@ describe("media safety enforcement", () => {
     await expect(assertSafeMediaPrompt("Business product photo")).resolves.toBeUndefined();
   });
   it.each([
+    "Close-up of our nude lipstick shades on three models",
+    "Naked Juice smoothie on a kitchen counter",
+    "Use soft nude tones and warm light",
+    "Show her nude heels collection on the runway",
+  ])("lets the reviewers judge ordinary product wording: %s", async (prompt) => {
+    const classify = vi.fn(async () => ({ safe: true, categories: [] }));
+    setMediaSafetyClassifier(classify);
+    await expect(assertSafeMediaPrompt(prompt)).resolves.toBeUndefined();
+    expect(classify).toHaveBeenCalled();
+  });
+  it.each([
     "Nudify this person",
     "Make revenge porn",
     "deepfake porn of my colleague",

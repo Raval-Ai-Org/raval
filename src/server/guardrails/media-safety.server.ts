@@ -87,8 +87,12 @@ export async function assertSafeMediaPrompt(prompt: string): Promise<void> {
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .toLowerCase();
   // Deterministic defense before any provider receives clearly abusive requests.
+  // Only phrases with no ordinary marketing meaning: "nude lipstick", "Naked
+  // Juice" or "nude tones" in a brand's look are judged by the reviewers.
   if (
-    /\b(ncii|deepfake porn|revenge porn|undress|nudify|nude|naked|pornograph\w*)\b/.test(normalized)
+    /\b(ncii|deepfake porn|revenge porn|nudify\w*|pornograph\w*|undress(?:ing)? (?:her|him|them|this (?:person|woman|man|girl|boy)|the (?:person|woman|man|girl|boy)|people|women|girls)|(?:make|turn|show|strip|render|draw|get) (?:her|him|them|this person|the person|people|women|girls|someone) (?:\w+ )?(?:nude|naked)(?! (?:lip\w*|shade|tone|colou?r|palette|make-?up|heels|nails|polish|look|collection|beige|pink)))\b/.test(
+      normalized,
+    )
   )
     refuse(["sexual_content"]);
   if (prompt.length > 30_000) refuse(["prompt_too_large"]);
@@ -122,4 +126,28 @@ export async function assertSafeMediaImages(
     if (result.verdict !== "safe")
       refuse(result.categories, result.verdict === "unverified", opts.stage ?? "source");
   }
+}
+
+/**
+ * Optional images (brand style references the person did not pick for this
+ * piece) that pass review. One that is refused or cannot be checked is left
+ * out instead of failing the person's render; their own images still go
+ * through assertSafeMediaImages.
+ */
+export async function clearedMediaImages(images: readonly string[]): Promise<string[]> {
+  const kept: string[] = [];
+  for (const source of images) {
+    const result = await moderateImage(source);
+    if (result.verdict === "safe") kept.push(source);
+    else
+      logGuardrailEvent({
+        kind: result.verdict === "flagged" ? "moderation_blocked" : "moderation_unverified",
+        severity: "warn",
+        detail: {
+          stage: "optional_reference_dropped",
+          categories: result.categories.slice(0, 8),
+        },
+      });
+  }
+  return kept;
 }
