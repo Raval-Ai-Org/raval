@@ -222,6 +222,12 @@ const CONTENT_TASK: Record<string, string> = {
     "Make the content easier to scan: split paragraphs longer than ~120 words at sentence boundaries and turn inline lists of three or more items into <ul> lists. Keep all text identical.",
   "content.internal_links":
     "Add up to 3 links to the site's own pages listed below, on phrases that already exist in the content and match those pages' topics. Don't add new sentences.",
+  "content.self_contained":
+    'Where a paragraph opens with "This", "It", "They" or "As mentioned above", replace that opening reference with the noun phrase it refers to, copied from the previous sentence or heading. Change only those opening words.',
+  "content.readability":
+    "Split sentences longer than about 30 words into two at an existing comma, semicolon or conjunction. Keep every word; only add sentence breaks.",
+  "tech.mixed_content":
+    "Change http:// to https:// in the src, srcset and href attributes of images, scripts, frames and media in this content. Change nothing else.",
 };
 
 async function contentEdits(

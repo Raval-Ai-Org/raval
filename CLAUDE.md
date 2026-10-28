@@ -334,6 +334,24 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
     (a test enforces it).
   - **Activity log:** `geo_agent_events` holds real tool/transition summaries
     only, never model reasoning.
+- **Score version 3** ([ADR-0035](docs/adr/0035-geo-engine-v3-http-citability-speed.md),
+  rules in `src/lib/geo/rules-v3.ts`): HTTP behaviour (`analysis.http`,
+  `site.http`), citability and hidden instructions to AI (`analysis.citability`,
+  `analysis.hygiene`), and speed (`site.performance`). Every v3 rule is N/A when
+  its evidence wasn't collected — keep it that way.
+  - **Speed** goes only through `src/server/geo/performance.server.ts`
+    (PageSpeed Insights + Chrome UX Report, Mellox's `GOOGLE_PAGESPEED_API_KEY`
+    in a header). The runner measures inside `crawling` after the frontier
+    empties, saving each result so a slice resumes; quick scans get real-user
+    data only, verification scans nothing. Flag `FEATURE_FLAG_GEO_PERFORMANCE_ENABLED`.
+  - `pageImportance` in `score.ts` orders findings; it never changes a score.
+  - Response-header fixes stay manual: `paths.ts` never lets Mellox write
+    hosting configuration. Don't loosen it to automate them.
+  - `PerformanceView` and `FixImpactView` are presentational; `/geo-lab`
+    renders them with sample data in development.
+  - The live check (`tests/live/geo-scan.live.ts`) drives 240-second slices: a
+    shorter slice expires the lease and the deployed worker's pg_cron finishes
+    the scan with production code.
 - Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
   rule summaries; every rule id must be mapped (a test enforces it).
 - WordPress / Webflow sites (migration `20260929090000_geo_site_connectors.sql`):

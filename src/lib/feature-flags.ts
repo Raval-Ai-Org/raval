@@ -87,6 +87,24 @@ export function isGeoProbesEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Speed measurement in AI Visibility scans: Lighthouse lab runs through Google's
+ * PageSpeed Insights API on a few route-sampled pages, plus Chrome UX Report
+ * real-user data. Free Google APIs under Mellox's own key
+ * (GOOGLE_PAGESPEED_API_KEY, falling back to GOOGLE_API_KEY); real-user data
+ * needs the key, lab runs work without one at a low quota. On unless
+ * FEATURE_FLAG_GEO_PERFORMANCE_ENABLED=false; _WS_<id> overrides per workspace.
+ */
+export function isGeoPerformanceEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_GEO_PERFORMANCE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_GEO_PERFORMANCE_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * Google Analytics 4 + Search Console connector. On whenever the OAuth client
  * id is set, unless FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED=false;
  * FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED_WS_<id> overrides per workspace.

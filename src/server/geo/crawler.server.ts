@@ -21,7 +21,13 @@ import {
   parseSitemap,
   validateLlmsTxt,
 } from "@/lib/geo/sitemap";
-import { SITEMAP_PATH_CAP, type SiteArtifacts } from "@/lib/geo/types";
+import { summarizeHttp } from "@/lib/geo/http";
+import {
+  SITEMAP_PATH_CAP,
+  type PageHttp,
+  type SiteArtifacts,
+  type SiteHttp,
+} from "@/lib/geo/types";
 
 /** Product token robots.txt groups can target to allow or block Mellox scans. */
 export const GEO_CRAWLER_TOKEN = "MelloxAI-Audit";
@@ -60,6 +66,8 @@ export type FetchOutcome = {
   error: string | null;
   /** The URL (or a redirect hop) resolved to a non-public address. */
   blocked: boolean;
+  /** Headers and redirect hops, summarised; null when there was no response. */
+  http: PageHttp | null;
 };
 
 const RETRY_STATUSES = new Set([429, 502, 503, 504]);
@@ -89,6 +97,8 @@ export async function fetchWithRetry(
           "user-agent": opts.userAgent ?? geoUserAgent(),
           accept: opts.accept ?? "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5",
           "accept-language": "en;q=0.9,*;q=0.5",
+          // Asked for explicitly so the compression check sees what crawlers get.
+          "accept-encoding": "gzip, deflate, br",
         },
         timeoutMs: opts.timeoutMs ?? 10_000,
         maxBytes: opts.maxBytes ?? 2 * 1024 * 1024,
@@ -108,6 +118,7 @@ export async function fetchWithRetry(
         ms: Date.now() - started,
         error: null,
         blocked: false,
+        http: summarizeHttp(res.headers, res.redirects ?? []),
       };
       if (!RETRY_STATUSES.has(res.status) || attempt === retries) return last;
       const waitMs = last.retryAfterSeconds
@@ -158,6 +169,7 @@ function failure(error: string, started: number, blocked: boolean): FetchOutcome
     ms: Date.now() - started,
     error,
     blocked,
+    http: null,
   };
 }
 
@@ -279,11 +291,70 @@ async function probeBotAccess(
   return { baselineStatus: baseline.status, checks };
 }
 
+/** A path no real site serves, so whatever answers it is the site's "not found" behaviour. */
+export function notFoundProbePath(): string {
+  return `/mellox-check-${Math.random().toString(36).slice(2, 10)}-not-a-page`;
+}
+
+/**
+ * How the site behaves at the HTTP level: whether plain http:// is sent to
+ * https://, and what a missing page returns (a 200 there is a "soft 404":
+ * engines can't tell real pages from missing ones).
+ */
+async function probeSiteHttp(
+  fetcher: Fetcher,
+  origin: string,
+  home: Pick<FetchOutcome, "ok" | "status" | "body" | "http">,
+): Promise<SiteHttp> {
+  const url = new URL(origin);
+  const missing = `${origin}${notFoundProbePath()}`;
+  const [plain, notFound] = await Promise.all([
+    url.protocol === "https:"
+      ? fetchWithRetry(fetcher, `http://${url.host}/`, {
+          timeoutMs: 8000,
+          maxBytes: 64 * 1024,
+          retries: 0,
+        })
+      : Promise.resolve(null),
+    fetchWithRetry(fetcher, missing, { timeoutMs: 8000, maxBytes: 256 * 1024, retries: 0 }),
+  ]);
+  const homeText = home.ok ? home.body.slice(0, 200_000) : "";
+  return {
+    home: home.http ?? null,
+    httpsRedirect: plain
+      ? {
+          status: plain.status,
+          finalUrl: plain.finalUrl,
+          redirected: Boolean(plain.finalUrl?.startsWith("https://")),
+        }
+      : null,
+    notFound:
+      notFound.status === null && notFound.error
+        ? null
+        : {
+            url: missing,
+            status: notFound.status,
+            // A soft 404 that just serves the homepage is the worst kind.
+            looksLikeHome:
+              notFound.ok && homeText.length > 0 && similarBodies(notFound.body, homeText),
+          },
+  };
+}
+
+/** Whether two HTML bodies are the same page (same title and roughly the same size). */
+function similarBodies(a: string, b: string): boolean {
+  const title = (s: string) => /<title[^>]*>([\s\S]*?)<\/title>/i.exec(s)?.[1]?.trim() ?? "";
+  const ta = title(a);
+  if (!ta || ta !== title(b)) return false;
+  const [x, y] = [a.length, b.length].sort((m, n) => m - n);
+  return y > 0 && x / y > 0.9;
+}
+
 export async function discoverSiteArtifacts(
   fetcher: Fetcher,
   origin: string,
   /** `home`: the homepage as already fetched; with it, crawler access is tested too. */
-  opts: { home?: Pick<FetchOutcome, "ok" | "status" | "body"> } = {},
+  opts: { home?: Pick<FetchOutcome, "ok" | "status" | "body" | "http"> } = {},
 ): Promise<{ site: SiteArtifacts; sitemapUrls: string[] }> {
   const url = new URL(origin);
   const host = siteHost(origin);
@@ -370,8 +441,8 @@ export async function discoverSiteArtifacts(
     }
   }
 
-  // Optional extras: neither may fail discovery.
-  const [botAccess, markdown] = await Promise.all([
+  // Optional extras: none may fail discovery.
+  const [botAccess, markdown, http] = await Promise.all([
     opts.home
       ? probeBotAccess(fetcher, origin, robotsText, opts.home).catch(() => undefined)
       : Promise.resolve(undefined),
@@ -385,6 +456,9 @@ export async function discoverSiteArtifacts(
           .then((r) => r.ok && /markdown/i.test(r.contentType ?? ""))
           .catch(() => false)
       : Promise.resolve(false),
+    opts.home
+      ? probeSiteHttp(fetcher, origin, opts.home).catch(() => undefined)
+      : Promise.resolve(undefined),
   ]);
 
   const site: SiteArtifacts = {
@@ -407,6 +481,7 @@ export async function discoverSiteArtifacts(
       paths,
     },
     ...(botAccess ? { botAccess } : {}),
+    ...(http ? { http } : {}),
     ...(opts.home
       ? { agent: { markdown, contentSignals: contentSignals(robotsText), llmsFull } }
       : {}),

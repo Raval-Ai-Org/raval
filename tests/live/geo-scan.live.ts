@@ -38,8 +38,11 @@ describeLive("AI visibility scan (live)", () => {
   async function runToCompletion(scanId: string) {
     const { driveScan } = await import("@/server/geo/service.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Slices as long as kickScan's: a short slice expires the lease between
+    // calls, and the deployed worker's pg_cron would resume the scan with
+    // whatever code production runs. A 500-page plan needs a few slices.
     for (let i = 0; i < 20; i++) {
-      const result = await driveScan(scanId, { budgetMs: 45_000 });
+      const result = await driveScan(scanId, { budgetMs: 240_000 });
       const { data } = await supabaseAdmin
         .from("geo_scans")
         .select("status")
@@ -102,6 +105,34 @@ describeLive("AI visibility scan (live)", () => {
       .eq("scan_id", full.id);
     expect(pages!.filter((p) => p.state === "fetched" && p.analysis).length).toBeGreaterThan(1);
     expect(pages!.filter((p) => p.state === "pending")).toHaveLength(0);
+
+    // Score version 3 evidence (ADR-0035): headers, markup hygiene, citability,
+    // site-level HTTP behaviour and speed were collected on the real crawl.
+    const analyzed = pages!
+      .map((p) => p.analysis as { http?: unknown; hygiene?: unknown; citability?: unknown } | null)
+      .filter(Boolean);
+    expect(analyzed.every((a) => a!.http && a!.hygiene && a!.citability)).toBe(true);
+    const site = scan!.site as {
+      http?: { notFound: { status: number | null } | null; home: unknown };
+      performance?: {
+        sample: string[];
+        lab: { ok: boolean; error?: string }[];
+        unavailable: string | null;
+      };
+    };
+    expect(site.http?.home).toBeTruthy();
+    expect(site.http?.notFound?.status).not.toBeUndefined();
+    expect((scan!.report as { scoreVersion?: number }).scoreVersion).toBe(3);
+    const { isGeoPerformanceEnabled } = await import("@/lib/feature-flags");
+    if (isGeoPerformanceEnabled(workspaceId)) {
+      expect(site.performance).toBeTruthy();
+      expect(site.performance!.lab.length).toBe(site.performance!.sample.length);
+      console.info(
+        `[live] speed: field=${site.performance!.unavailable ?? "ok"} lab=${site
+          .performance!.lab.map((r) => (r.ok ? "ok" : r.error))
+          .join(", ")}`,
+      );
+    }
 
     const { data: findings } = await supabaseAdmin
       .from("geo_findings")
@@ -170,7 +201,7 @@ describeLive("AI visibility scan (live)", () => {
     console.info(
       `[live] ${SITE} full score=${scan!.overall_score} pages=${report.counts.pagesCrawled} findings=${report.counts.findings} actions=${report.actions.length} · vs quick: ${diff.summary}`,
     );
-  }, 600_000);
+  }, 1_800_000);
 
   it("rejects private and metadata addresses before any row is created", async () => {
     const { createScan } = await import("@/server/geo/service.server");

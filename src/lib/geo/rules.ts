@@ -11,6 +11,7 @@
 // them. Add new rules; don't rename existing ones.
 
 import { AI_BOTS, blockedPathsFor, parseRobotsAllow } from "./robots";
+import { authorityV3, contentV3, performanceV3, technicalV3 } from "./rules-v3";
 import type {
   CrawledPage,
   Effort,
@@ -1832,10 +1833,14 @@ const performance: GeoRule[] = [
 export const GEO_RULES: readonly GeoRule[] = [
   ...aiAccess,
   ...technical,
+  ...technicalV3,
   ...structuredData,
   ...content,
+  ...contentV3,
   ...authority,
+  ...authorityV3,
   ...performance,
+  ...performanceV3,
 ];
 
 export const RULE_BY_ID: ReadonlyMap<string, GeoRule> = new Map(GEO_RULES.map((r) => [r.id, r]));
