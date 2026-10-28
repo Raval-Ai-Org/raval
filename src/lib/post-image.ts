@@ -26,6 +26,14 @@ import {
   sellsPhysicalProduct,
   type ArchetypeId,
 } from "@/lib/studio/art-direction";
+import {
+  TYPE_SYSTEM,
+  deliverablePromptLines,
+  detectDeliverable,
+  qualityCheckLines,
+  verbatimTextBlock,
+  type DeliverableId,
+} from "@/lib/studio/creative-knowledge";
 
 export type ImgSize = "1024x1024" | "1792x1024" | "1024x1792";
 
@@ -416,6 +424,8 @@ export type PromptInspection = {
   platformLine: string;
   /** The campaign layout the picture is staged on, if one was used. */
   artDirection: { id: ArchetypeId; name: string } | null;
+  /** The kind of asset the piece was briefed as (creative-knowledge.ts). */
+  deliverable: { id: DeliverableId; name: string };
   prompt: string;
 };
 
@@ -528,6 +538,8 @@ export function buildImagePromptDetailed(args: {
   artDirection?: ArchetypeId | null;
   /** Words are added afterward, so the picture carries none. */
   noText?: boolean;
+  /** The exact short line the brief chose for the picture, set verbatim. */
+  onImageText?: string | null;
 }): PromptInspection {
   const { postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize, style } =
     args;
@@ -639,6 +651,11 @@ export function buildImagePromptDetailed(args: {
   const allowPeople = !/\bno (people|faces|humans|models|person)\b/i.test(dontRules ?? "");
   const allowText = !args.noText && maxWords !== 0;
   const keepStyleLayout = !!style?.composition || style?.references?.strength === "exact";
+  const deliverable = detectDeliverable({
+    text: `${postTitle ?? ""}\n${body}`,
+    objective: creativeStrategy.objective,
+    physicalProduct: physical,
+  });
   const archetype = keepStyleLayout
     ? null
     : (archetypeById(args.artDirection) ??
@@ -650,7 +667,13 @@ export function buildImagePromptDetailed(args: {
         allowPeople,
         allowText,
         seed: `${brandName}::${args.variationKey ?? seedKey}`,
+        prefer: deliverable.prefer,
       }));
+  const exactText = (args.onImageText ?? "").replace(/\s+/g, " ").trim();
+  const verbatim =
+    allowText && exactText && exactText.split(" ").length <= Math.max(maxWords, 1)
+      ? verbatimTextBlock({ lines: [{ label: "Headline", text: exactText }] })
+      : [];
   const artDirectionLines = archetype
     ? archetypePromptLines(archetype, {
         hero: heroSubject({ products: offer, physical }),
@@ -748,6 +771,8 @@ export function buildImagePromptDetailed(args: {
       ? "• Keep the idea, but render it in the brand style above: its medium, layout and colours win over any format named here."
       : "",
     "",
+    ...deliverablePromptLines(deliverable),
+    "",
     ...artDirectionLines,
     "",
     `VISUAL SYSTEM (style anchor: ${styleSeed}) — LOCK these across every size and every regeneration of this post:`,
@@ -756,7 +781,9 @@ export function buildImagePromptDetailed(args: {
       : `• Palette (seeded fallback — no brand colors provided): ${vis.palette.promptDescription} Use bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`,
     brandFonts.length > 0
       ? `• EXACT brand fonts (or the closest visual equivalent): ${brandFonts.map((f) => `"${f}"`).join(", ")}. Match weight, tracking, and rhythm.`
-      : `• Typography (seeded fallback — no brand fonts provided): ${vis.typography.promptDescription}`,
+      : archetype && allowText
+        ? `• Typography (seeded fallback — no brand fonts provided): follow the treatment in ART DIRECTION above; for any support line, ${vis.typography.promptDescription}`
+        : `• Typography (seeded fallback — no brand fonts provided): ${vis.typography.promptDescription}`,
     `• Composition: ${styleComposition(style) ?? (archetype ? `the "${archetype.name}" layout set out in ART DIRECTION above` : vis.composition)}`,
     style?.mood
       ? `• Visual mood: ${style.mood}.`
@@ -772,8 +799,9 @@ export function buildImagePromptDetailed(args: {
       : "• Absolutely NOT: stock-photo, clip-art, AI-generic collage, cliché 3D blobs, generic gradient mesh, purple-pink SaaS gradient, off-palette colors, low-resolution textures.",
     "",
     "TEXT ON IMAGE:",
-    textRule(maxWords),
+    ...(verbatim.length ? verbatim : [textRule(maxWords)]),
     "• Type must sit in the brand palette. Kerning tight, hierarchy clear. Legible at thumbnail size.",
+    ...(allowText ? TYPE_SYSTEM.map((rule) => `• ${rule}`) : []),
     "",
     "GUARDRAILS:",
     "• No watermarks. No logos of other companies. No third-party brand marks.",
@@ -786,6 +814,8 @@ export function buildImagePromptDetailed(args: {
     ...validateCreativeBrief(creativeBrief).map((rule) => `• ${rule}`),
     aspectLine,
     platformLine,
+    "",
+    ...qualityCheckLines({ hasText: allowText, hasProduct: physical }),
   ]
     .filter(Boolean)
     .join("\n");
@@ -810,6 +840,7 @@ export function buildImagePromptDetailed(args: {
     aspectLine,
     platformLine,
     artDirection: archetype ? { id: archetype.id, name: archetype.name } : null,
+    deliverable: { id: deliverable.id, name: deliverable.name },
     prompt,
   };
 }

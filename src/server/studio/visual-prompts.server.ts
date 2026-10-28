@@ -9,6 +9,13 @@ import {
   pickArchetype,
   sellsPhysicalProduct,
 } from "@/lib/studio/art-direction";
+import {
+  TYPE_SYSTEM,
+  deliverablePromptLines,
+  detectDeliverable,
+  qualityCheckLines,
+  verbatimTextBlock,
+} from "@/lib/studio/creative-knowledge";
 
 type Common = {
   index: number;
@@ -22,6 +29,8 @@ type Common = {
   novelty?: string;
   /** Picks the cover's campaign layout; same seed, same layout. */
   seed?: string;
+  /** The words are drawn by Mellox afterward; the picture carries none. */
+  noText?: boolean;
 };
 
 function visualSystem(args: Common): string {
@@ -64,12 +73,22 @@ export function carouselSlidePrompt(
     `This slide's job: ${slide.role ?? "point"}. ${args.index === 0 ? "This is the cover: create a striking hook." : args.index === args.slides.length - 1 ? "This is the closing slide: make the next action obvious." : "Advance the narrative with a fresh composition."}`,
     carouselSeriesRules(position).join("\n"),
     position === "cover" ? coverArtDirection(args, slide) : "",
-    `Exact headline to typeset: ${JSON.stringify(slide.heading)}.`,
-    slide.kicker ? `Exact small label: ${JSON.stringify(slide.kicker)}.` : "",
-    slide.body ? `Exact supporting copy: ${JSON.stringify(slide.body)}.` : "",
+    verbatimTextBlock({
+      lines: [
+        { label: "Exact small label", text: slide.kicker ?? "" },
+        { label: "Exact headline to typeset", text: slide.heading },
+        { label: "Exact supporting copy", text: slide.body },
+      ],
+      emphasis: slide.emphasis,
+      emphasisSeed: args.brandName,
+    }).join("\n"),
+    TYPE_SYSTEM.join("\n"),
     slide.visual ? `Visual direction: ${slide.visual}` : "",
     `Whole series narrative for continuity: ${args.slides.map((s, i) => `${i + 1}. ${s.heading}`).join(" | ")}`,
     `Do not put any other words in the artwork beyond the exact supplied headline, label and supporting copy. If exact long copy cannot fit legibly, prioritize the headline and leave the supporting copy out rather than inventing or mangling text.`,
+    qualityCheckLines({ hasText: true, hasProduct: sellsPhysicalProduct(args.brandContext) }).join(
+      "\n",
+    ),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -82,17 +101,25 @@ export function carouselSlidePrompt(
 function coverArtDirection(args: Common, slide: CarouselSlide): string {
   if (args.style?.composition || args.style?.references?.strength === "exact") return "";
   const physical = sellsPhysicalProduct(args.brandContext);
+  const deliverable = detectDeliverable({
+    text: [slide.kicker, slide.heading, slide.body].filter(Boolean).join("\n"),
+    physicalProduct: physical,
+  });
   const archetype = pickArchetype({
     brandText: args.brandContext,
     physicalProduct: physical,
     seed: args.seed ?? `${args.brandName}::${slide.heading}`,
+    prefer: deliverable.prefer,
   });
-  return archetypePromptLines(archetype, {
-    hero: slide.visual
-      ? `the subject named in this slide's visual direction (${slide.visual.slice(0, 160)})`
-      : heroSubject({ products: null, physical }),
-    deferToStyle: !!args.style,
-  }).join("\n");
+  return [
+    ...(deliverable.id === "brand-moment" ? [] : deliverablePromptLines(deliverable)),
+    ...archetypePromptLines(archetype, {
+      hero: slide.visual
+        ? `the subject named in this slide's visual direction (${slide.visual.slice(0, 160)})`
+        : heroSubject({ products: null, physical }),
+      deferToStyle: !!args.style,
+    }),
+  ].join("\n");
 }
 
 /**
@@ -117,6 +144,7 @@ export function carouselBackdropPrompt(
     args.visualTasteRules,
     args.revision,
     args.novelty,
+    "Art-direct it like a premium campaign backdrop: a real material and real light (paper grain, frosted glass, soft fabric folds, light falling through haze, brushed metal), never a generic gradient mesh or bokeh wallpaper.",
     "Absolutely no text, letters, numbers, logos, watermarks, people, faces, hands, products, frames, borders or panels. Avoid generic AI marketing imagery, plastic 3D objects and stock-photo clichés.",
   ]
     .filter(Boolean)
@@ -131,15 +159,24 @@ export function storyFramePrompt(
     visualSystem(args),
     `Vertical Story frame ${args.index + 1} of ${args.frames.length}. Render as one complete 9:16 image with the final typography integrated in the image.`,
     "Leave the top 15% and bottom 20% clear for native Story controls. Keep all words within the center safe zone.",
-    `Frame role: ${frame.role}. Exact headline: ${JSON.stringify(frame.heading)}.`,
-    frame.kicker ? `Exact small label: ${JSON.stringify(frame.kicker)}.` : "",
-    frame.body ? `Exact supporting copy: ${JSON.stringify(frame.body)}.` : "",
+    `Frame role: ${frame.role}.`,
+    verbatimTextBlock({
+      lines: [
+        { label: "Exact small label", text: frame.kicker ?? "" },
+        { label: "Exact headline", text: frame.heading },
+        { label: "Exact supporting copy", text: frame.body },
+      ],
+      emphasis: frame.emphasis,
+      emphasisSeed: args.brandName,
+    }).join("\n"),
+    args.noText ? "" : TYPE_SYSTEM.join("\n"),
     frame.options?.length
       ? `Exact reply choices to typeset as clear visual options: ${frame.options.map((option) => JSON.stringify(option)).join(", ")}. These are prompts to reply, not interactive poll stickers.`
       : "",
     frame.visual ? `Visual direction: ${frame.visual}` : "",
     `Series narrative: ${args.frames.map((f, i) => `${i + 1}. ${f.heading}`).join(" | ")}`,
     "Do not draw simulated app controls, progress bars or reply boxes. Do not add any extra words.",
+    qualityCheckLines({ hasText: !args.noText }).join("\n"),
   ]
     .filter(Boolean)
     .join("\n\n");

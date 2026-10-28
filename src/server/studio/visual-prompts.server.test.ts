@@ -51,5 +51,44 @@ describe("complete model-generated series prompts", () => {
     expect(prompt).toContain("top 15% and bottom 20% clear");
     expect(prompt).toContain('Exact headline: "Morning starts here"');
     expect(prompt).toContain("Do not draw simulated app controls");
+    expect(prompt).toContain("QUALITY CHECK BEFORE FINALIZING");
+  });
+
+  it("sets slide copy as verbatim data with the brand's emphasis and a final check", () => {
+    const slides = [
+      { heading: "5 roasting myths", body: "", role: "cover" as const, emphasis: "myths" },
+      {
+        heading: "Darker is not stronger",
+        body: "Caffeine barely changes with roast.",
+        kicker: "Myth 1",
+        role: "point" as const,
+        emphasis: "not stronger",
+      },
+      { heading: "Taste before you buy", body: "", role: "cta" as const },
+    ];
+    const cover = carouselSlidePrompt({ ...common, style: null, slide: slides[0], slides });
+    const inside = carouselSlidePrompt({
+      ...common,
+      style: null,
+      index: 1,
+      slide: slides[1],
+      slides,
+    });
+    expect(cover).toContain("TEXT — RENDER VERBATIM");
+    expect(cover).toContain("DELIVERABLE — Tips or how-to cover");
+    expect(cover).toContain("ART DIRECTION");
+    expect(inside).not.toContain("ART DIRECTION");
+    expect(inside).toContain('Exact small label: "Myth 1"');
+    expect(inside).toContain("Use exactly these 3 lines");
+    expect(inside).toContain('Emphasis: the words "not stronger"');
+    expect(inside).toContain("Type scale");
+    expect(inside.trim().endsWith("Never fix it by adding.")).toBe(true);
+  });
+
+  it("asks a composed Story frame for no letters", () => {
+    const frame = { role: "hook" as const, heading: "Morning starts here", body: "" };
+    const prompt = storyFramePrompt({ ...common, frame, frames: [frame], noText: true });
+    expect(prompt).toContain("No letters, numbers or logos anywhere");
+    expect(prompt).not.toContain("Type scale");
   });
 });

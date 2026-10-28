@@ -935,6 +935,7 @@ function imagePrompt(args: {
   style?: ImageStyleInput | null;
   artDirection?: ArchetypeId | null;
   noText?: boolean;
+  onImageText?: string | null;
 }): string {
   // The shared builder knows three canvases; 4:5 composes like square with a
   // taller safe area.
@@ -952,6 +953,7 @@ function imagePrompt(args: {
     style: args.style,
     artDirection: args.artDirection,
     noText: args.noText,
+    onImageText: args.onImageText,
   }).prompt;
   return [
     built,
@@ -1217,6 +1219,7 @@ async function startMedia(args: {
           index,
           frames: output.story!.frames,
           spec: output.story!.spec,
+          noText: !!ctx.visualTaste?.direction.composed,
           brandName: ctx.brandName,
           brandContext: ctx.visualBrandText ?? ctx.brandText,
           visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
@@ -1284,6 +1287,7 @@ async function startMedia(args: {
     style: ctx.style ? imageStyleInput(ctx.style) : null,
     artDirection: archetypeById(output.artDirection)?.id ?? null,
     noText: compose,
+    onImageText: job.type === "image" ? output.onImageText : null,
   });
   const started = await startImageTask({
     costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,

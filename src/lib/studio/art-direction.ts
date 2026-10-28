@@ -2,7 +2,8 @@
 // that top social and print creatives keep coming back to, distilled from
 // real high-performing prompts and written brand-neutral. A layout says how to
 // stage the idea (scale, depth, where the headline sits, light, finish); the
-// brand still decides colours, fonts and what the picture says.
+// brand still decides colours, fonts and what the picture says. Sources and
+// licences: docs/studio/creative-knowledge.md.
 //
 // Pure and browser-safe: the post-image builder (browser and server), Studio's
 // carousel prompts and the image brief all read it.
@@ -23,7 +24,13 @@ export type ArchetypeId =
   | "material-swap"
   | "film-strip-cutout"
   | "clean-split"
-  | "number-monument";
+  | "number-monument"
+  | "spotlight-noir"
+  | "flat-lay-story"
+  | "callout-board"
+  | "material-lettering"
+  | "mirror-kaleidoscope"
+  | "brand-miniature-store";
 
 type Energy = "calm" | "bold" | "playful";
 
@@ -309,6 +316,111 @@ export const ARCHETYPES: readonly Archetype[] = [
     finish: "Editorial data design: confident, minimal, credible.",
     avoid: "invented numbers, extra charts, decimals the copy doesn't have",
   },
+  {
+    id: "spotlight-noir",
+    name: "Spotlight noir",
+    summary:
+      "the product alone on dark reflective glass under one precise spotlight, with a single natural prop and deep negative space",
+    formats: ["product-focused", "cinematic-campaign", "minimal-typography"],
+    energy: ["calm", "bold"],
+    person: "none",
+    physicalOnly: true,
+    scene: (hero) =>
+      `${cap(hero)} placed at a slight dynamic diagonal on black mirrored glass, one precise spotlight from above-left carving it out of a near-black background, a crisp reflection below. One small natural prop that hints at what it does or tastes like sits in a corner; everything else is darkness.`,
+    type: "A fine, widely spaced serif or slim sans headline in the brand's light colour, small, in the dark negative space; one tiny support line beneath.",
+    typeWithoutText: "Keep the dark negative space empty for type added later.",
+    light:
+      "Single hard-edged spotlight with a soft falloff, high contrast, specular highlights on the edges, 90–100mm macro lens, slight overhead angle.",
+    finish: "Luxe editorial product advertising: quiet, expensive, razor sharp.",
+    avoid: "a grey muddy background, several products, props crowding the hero",
+  },
+  {
+    id: "flat-lay-story",
+    name: "Flat-lay story",
+    summary:
+      "a top-down arrangement of the product and the few things that tell its story, on a textured surface with a clear headline band",
+    formats: ["educational-visual", "product-focused", "human-lifestyle", "storytelling"],
+    energy: ["calm", "playful"],
+    person: "none",
+    scene: (hero) =>
+      `Top-down 90-degree flat-lay: ${hero} as the anchor, with three to five carefully chosen objects that tell the story of the message, arranged on a deliberate grid with even breathing room, on a tactile surface (linen, paper, stone, wood or sand) that fits the brand.`,
+    type: "Headline on a clean band or a calm open area at the top, clear and friendly; small labels only if the copy supplies them.",
+    typeWithoutText: "Leave a clean band at the top for type added later.",
+    light:
+      "Soft directional daylight from the upper right, crisp short shadows, true colours, overhead camera perfectly square to the surface.",
+    finish: "Tidy, airy, organised styling with visible material texture.",
+    avoid: "a messy pile, more than six objects, tilted perspective",
+  },
+  {
+    id: "callout-board",
+    name: "Callout board",
+    summary:
+      "one accurate hero with two or three circular detail crops joined to it by thin leader lines, each labelled from the copy",
+    formats: ["product-focused", "educational-visual", "comparison"],
+    energy: ["calm", "bold"],
+    person: "none",
+    scene: (hero) =>
+      `${cap(hero)} large and accurate on a clean, brand-tinted studio backdrop, with two or three circular detail crops floating beside it, each joined by a thin leader line to the exact spot it magnifies.`,
+    type: "A clear headline at the top; each crop carries one short label taken from the supplied copy, in large readable type with restrained icons.",
+    typeWithoutText: "Leader lines and crops without labels; leave clean space beside each.",
+    light:
+      "Soft even studio light, identical in the hero and the crops, so they read as one object.",
+    finish: "Clean editorial commerce design, precise and trustworthy.",
+    avoid: "labels on the wrong part, invented features or numbers, heavy arrows",
+  },
+  {
+    id: "material-lettering",
+    name: "Material lettering",
+    summary:
+      "the headline physically built from a material that carries the message (neon, paper, cake, wood, ice, flowers) in a real set",
+    formats: ["minimal-typography", "abstract-metaphorical", "editorial"],
+    energy: ["playful", "bold", "calm"],
+    person: "none",
+    needsText: true,
+    scene: (hero) =>
+      `The exact headline is physically constructed from one material that says something about ${hero}, standing in a simple real set. Every letter stays readable while obeying the material's weight, joints, texture, gravity, shadows and wear.`,
+    type: "The material headline is the only large text; at most one small support line in a plain face.",
+    typeWithoutText: "Build a single material shape or symbol instead of letters; no letters.",
+    light:
+      "Light that shows the material honestly: grazing side light for texture, real contact shadows, consistent scale.",
+    finish: "Tactile, crafted, campaign-headline quality.",
+    avoid:
+      "letters replaced by unrelated objects, misspelled or repeated words, impossible floating forms",
+  },
+  {
+    id: "mirror-kaleidoscope",
+    name: "Mirror kaleidoscope",
+    summary:
+      "the product multiplied in an angled mirror arrangement into a clean geometric pattern, high-concept and hypnotic",
+    formats: ["product-focused", "abstract-metaphorical", "cinematic-campaign"],
+    energy: ["bold", "playful"],
+    person: "none",
+    physicalOnly: true,
+    scene: (hero) =>
+      `${cap(hero)} reflected in an angled mirror arrangement, multiplying into a clean kaleidoscopic geometric pattern around one sharp original in the centre.`,
+    type: "A short headline in a calm area of the pattern or on a clean band, high contrast.",
+    typeWithoutText: "Keep one calm band clear for type added later.",
+    light: "Precise studio light that makes every reflection crisp; no flare.",
+    finish: "Maximal minimalism: disorienting, elegant, high-concept advertising.",
+    avoid: "warped or melted copies, a muddy pattern with no centre",
+  },
+  {
+    id: "brand-miniature-store",
+    name: "Brand miniature store",
+    summary:
+      "a collectible miniature shop whose building is shaped like the brand's product, with tiny people, warm windows and a street",
+    formats: ["storytelling", "abstract-metaphorical", "product-focused"],
+    energy: ["playful"],
+    person: "none",
+    physicalOnly: true,
+    scene: (hero) =>
+      `A collectible-toy miniature concept store whose building is shaped like ${hero}, two floors with large glass windows showing a warm, finely decorated interior in the brand colours. Tiny figures stroll, sit and work along a small street with benches, lamps and plants.`,
+    type: "One friendly headline in the open sky area above the store.",
+    typeWithoutText: "Keep the sky above the store clear for type added later.",
+    light: "Soft late-afternoon light, warm interior glow, gentle tilt-shift depth.",
+    finish: "Blind-box toy craft, rich detail, cosy and charming.",
+    avoid: "real chain store signage, other brands, a cluttered street",
+  },
 ];
 
 const BY_ID = new Map(ARCHETYPES.map((a) => [a.id, a]));
@@ -323,7 +435,8 @@ function cap(s: string): string {
   return s ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
-function hash(str: string): number {
+/** Stable 32-bit hash: same seed, same pick, in any runtime. */
+export function hash(str: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
@@ -368,6 +481,8 @@ export type ArtDirectionInput = {
   /** Same seed, same layout: keeps every size and retry of one piece together. */
   seed: string;
   exclude?: ArchetypeId[];
+  /** Layouts that suit the deliverable (creative-knowledge.ts); they score higher. */
+  prefer?: readonly ArchetypeId[];
 };
 
 /** Pick the layout that fits this piece and brand; deterministic per seed. */
@@ -385,6 +500,7 @@ export function pickArchetype(input: ArtDirectionInput): Archetype {
       (allowText || !a.needsText),
   ).map((a) => {
     let score = 0;
+    if (input.prefer?.includes(a.id)) score += 3;
     if (input.format && a.formats.includes(input.format)) score += 3;
     if (energy && a.energy.includes(energy)) score += 2;
     if (physical && (a.physicalOnly || a.formats.includes("product-focused"))) score += 1;
@@ -429,7 +545,7 @@ export function archetypePromptLines(
     `• Scene: ${archetype.scene(opts.hero, people)}`,
     opts.allowText === false
       ? `• Typography: ${archetype.typeWithoutText}`
-      : `• Typography: ${archetype.type} Every word comes from the supplied copy and stays within the text limit; drop the smaller lines before inventing any.`,
+      : `• Typography: ${archetype.type} Set only the exact copy given for this picture: where this layout has room for more lines than the copy supplies, leave that space empty rather than inventing words.`,
     `• Light and camera: ${archetype.light}`,
     "• Product truth: keep any real product's true shape and proportions; where its exact look isn't supplied, keep the pack clean and unlabelled rather than inventing a label, logo or claim.",
     `• Finish: ${archetype.finish}`,

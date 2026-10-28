@@ -700,6 +700,14 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   brief picks a layout (`artDirection`), post images and carousel covers are
   staged on it, and a brand style with its own layout or exact references
   keeps that layout. Add a layout there; never name another brand in it.
+- **Creative knowledge is one module** (`src/lib/studio/creative-knowledge.ts`,
+  pure; sources and licences in [docs/studio/creative-knowledge.md](docs/studio/creative-knowledge.md)):
+  deliverables (offer, event, launch, quote, tips cover...) with reading order
+  and "never invent" rules, exact copy as verbatim data with one emphasis per
+  brand, the type system, the final quality check, and the writers' cover test
+  and self-review. Post images, carousel slides, Story frames and the briefs
+  read it; add a rule there, never in one prompt only. Keep the attribution
+  table current when a source changes.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style
