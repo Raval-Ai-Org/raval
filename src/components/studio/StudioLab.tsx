@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { studioProductKeys } from "./ProductAndFormat";
+import type { Product } from "@/lib/products/catalog";
 import { PipelineSection } from "@/components/app/StudioRail";
 import { groupRows, type ContentRow } from "@/lib/studio/content-groups";
 import { LibraryPage } from "@/components/app/LibraryPage";
@@ -29,6 +32,27 @@ function art(w: number, h: number, a: string, b: string, label: string) {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${a}'/><stop offset='1' stop-color='${b}'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/><circle cx='${w * 0.7}' cy='${h * 0.35}' r='${Math.min(w, h) * 0.22}' fill='rgba(255,255,255,0.18)'/><text x='50%' y='88%' font-family='system-ui' font-size='${Math.round(w / 18)}' fill='white' text-anchor='middle' opacity='0.85'>${label}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
+
+/** The brand's catalogue, as Brain → Brand → Products would list it. */
+const PRODUCTS: Product[] = [
+  ["Cold Brew Kit", "29.00", "#3b2a1e", "#c68a4a"],
+  ["Huila Single Origin", "18.50", "#1f3b2c", "#7fb069"],
+  ["Ceramic Pour-Over Dripper", "34.00", "#e8e2d6", "#9c8f7a"],
+].map(([name, price, a, b], i) => ({
+  id: `00000000-0000-4000-8000-00000000010${i}`,
+  kind: "product",
+  name,
+  description: "",
+  price,
+  url: `https://brewly.example/products/p${i}`,
+  category: "Coffee",
+  benefits: [],
+  images: [{ assetId: `p${i}`, url: art(600, 600, a, b, name) }],
+  primaryAssetId: `p${i}`,
+  source: "scan",
+  position: i,
+  status: "active",
+}));
 
 const IDEAS: StudioIdea[] = [
   {
@@ -519,6 +543,15 @@ const SCENES: Scene[] = [
   },
   { id: "brief-article", label: "Brief · Article", make: () => session("article", "intent") },
   {
+    id: "brief-ad",
+    label: "Brief · Ad with products",
+    make: () =>
+      session("ad", "intent", {
+        brief: "Spring offer on our cold brew kit for busy home brewers.",
+        goal: "offer",
+      }),
+  },
+  {
     id: "brief-script-video",
     label: "Brief · Video from reviewed script",
     make: () =>
@@ -598,6 +631,103 @@ const SCENES: Scene[] = [
     label: "Review · Social",
     make: () => session("social", "review"),
     fixtures: { rows: ROWS.social, distribution: true },
+  },
+  {
+    id: "review-versions",
+    label: "Review · Versions and edit chat",
+    make: () => {
+      const base = session("ad", "review");
+      const option = (i: number, a: string, b: string): MediaOutput => ({
+        slot: `option:${i}`,
+        kind: "image",
+        ratio: "4:5",
+        status: "ready",
+        url: art(800, 1000, a, b, `Version ${i + 2}`),
+        assetId: `a${i + 2}`,
+        storagePath: "x",
+      });
+      const job = {
+        ...base.job!,
+        id: "job-ad-v3",
+        parent_job_id: "job-ad-v2",
+        output: {
+          ...base.job!.output,
+          adFormat: "big-number",
+          adOnImage: {
+            headline: "Coffee that shows up",
+            support: "",
+            badge: "",
+            points: [],
+            cta: "Shop now",
+          },
+          media: [
+            ...(base.job!.output.media ?? []),
+            option(0, "#1f3d2b", "#7fb069"),
+            option(1, "#5b3a29", "#e9a23b"),
+            {
+              slot: "option:2",
+              kind: "image" as const,
+              ratio: "4:5" as const,
+              status: "failed" as const,
+            },
+          ],
+        },
+      };
+      return {
+        ...base,
+        job,
+        lastGood: job,
+        edits: [
+          {
+            id: "t1",
+            text: "Make the background warmer",
+            aim: "picture" as const,
+            fromJobId: "job-ad",
+            jobId: "job-ad-v2",
+            at: Date.now() - 60_000,
+          },
+          {
+            id: "t2",
+            text: "Show me 3 more versions",
+            aim: "versions" as const,
+            fromJobId: "job-ad-v2",
+            jobId: "job-ad-v3",
+            at: Date.now() - 20_000,
+          },
+        ],
+      };
+    },
+    fixtures: { rows: ROWS.ad, distribution: true },
+  },
+  {
+    id: "review-chat-working",
+    label: "Review · Edit chat working",
+    make: () => {
+      const base = session("image", "review");
+      return {
+        ...base,
+        pendingKey: "lab-pending",
+        pendingKind: "refine" as const,
+        edits: [
+          {
+            id: "t1",
+            text: "Shorter caption, friendlier",
+            aim: "words" as const,
+            fromJobId: "job-image-0",
+            jobId: "job-image",
+            at: Date.now() - 60_000,
+          },
+          {
+            id: "t2",
+            text: "Show the product bigger on a simpler background",
+            aim: "picture" as const,
+            fromJobId: "job-image",
+            at: Date.now() - 2_000,
+          },
+        ],
+      };
+    },
+    fixtures: { rows: ROWS.image, distribution: true },
   },
   {
     id: "review-image",
@@ -1035,6 +1165,9 @@ const FRAME: Record<Device, string> = {
 };
 
 export function StudioLab() {
+  // Seed the product catalogue so the product and ad layout pickers have data.
+  const queryClient = useQueryClient();
+  useState(() => queryClient.setQueryData(studioProductKeys.list(WS), PRODUCTS));
   const [scene, setScene] = useState(SCENES[0].id);
   const [device, setDevice] = useState<Device>("window");
   const [dark, setDark] = useState(false);

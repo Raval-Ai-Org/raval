@@ -18,6 +18,7 @@ import { shareSection } from "./viral";
 import { ARCHETYPE_IDS, archetypeMenu } from "./art-direction";
 import { CONCEPT_METHOD, COVER_TEST, SELF_REVIEW } from "./creative-knowledge";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
+import { adFormatDirective, type AdFormat } from "./ad-formats";
 import type {
   StudioControls,
   StudioIntent,
@@ -55,6 +56,8 @@ export type StudioContext = {
     /** Carousels: the story structure and the look it was given. */
     structure?: string | null;
     design?: { colorway?: string; motif?: string } | null;
+    /** Ads: the designed layout it used (ad-formats.ts), so the next one differs. */
+    adFormat?: string | null;
     /** Stories: the theme it followed, so the next one rotates. */
     storyTheme?: string | null;
     /** A longer passage of the copy, used only as a voice reference. */
@@ -475,9 +478,19 @@ export const ScriptSchema = z.object({
   hashtags: StrList(10, 60),
 });
 
+export const AdOnImageSchema = z.object({
+  headline: Str(90).default(""),
+  support: Str(120).default(""),
+  badge: Str(30).default(""),
+  points: StrList(4, 40),
+  cta: Str(24).default(""),
+});
+
 export const AdSchema = z.object({
   title: Str(120),
   visualConcept: Str(700),
+  /** The words typeset on the ad picture, written for its format (ad-formats.ts). */
+  onImage: AdOnImageSchema.optional().catch(undefined),
   variants: z
     .array(
       z.object({
@@ -528,6 +541,8 @@ type BuildArgs = {
   storyTheme?: StoryTheme;
   /** Repurposing: the piece this one is made from (already in this workspace). */
   source?: { title: string; body: string; kind: string } | null;
+  /** Ads: the designed layout the picture follows (ad-formats.ts). */
+  adFormat?: AdFormat | null;
 };
 
 function platformRubric(platforms: PlatformId[]): string {
@@ -744,11 +759,16 @@ export function buildAdPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof AdSch
           .map((p) => AD_LIMITS[p])
           .filter(Boolean)
           .join(" "),
-        "`visualConcept` describes one ad visual that works for all variants, written as art direction for a poster-grade key visual: the hero and its scale, the set, any person (always a fictional model) and pose, lens and angle, light, real materials, a palette from the brand colours, and a calm area for the platform's text. Leave space for the platform UI; no text in the image beyond a short product name if essential.",
+        args.adFormat
+          ? "`visualConcept` describes the ad picture for the layout below: the subject, setting, props, light and mood, in concrete words a photographer could shoot. Do not repeat the on-image words in it."
+          : "`visualConcept` describes one ad visual that works for all variants, written as art direction for a poster-grade key visual: the hero and its scale, the set, any person (always a fictional model) and pose, lens and angle, light, real materials, a palette from the brand colours, and a calm area for the platform's text. Leave space for the platform UI; no text in the image beyond a short product name if essential.",
+        args.adFormat ? adFormatDirective(args.adFormat) : "",
         ...CONCEPT_METHOD,
         args.controls.cta ? `Preferred CTA: ${args.controls.cta}` : "",
       ].filter(Boolean),
-      `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`,
+      args.adFormat
+        ? `{"title": string, "visualConcept": string, "onImage": {"headline": string, "support": string, "badge": string, "points": string[], "cta": string}, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`
+        : `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`,
     ),
     user: sections([...sharedUser(args, "ad"), ...refineSections(args.refine, args.current)]),
     schema: AdSchema,

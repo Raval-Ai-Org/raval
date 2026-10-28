@@ -141,10 +141,19 @@ import {
 } from "@/server/brand-visuals/service.server";
 import { applyVisualTaste } from "@/lib/brand-visuals/apply";
 import {
+  adImagePrompt,
   carouselBackdropPrompt,
   carouselSlidePrompt,
   storyFramePrompt,
 } from "./visual-prompts.server";
+import { getAdFormat, pickAdFormat, type AdFormat } from "@/lib/studio/ad-formats";
+import {
+  isOptionSlot,
+  isVariationsRequest,
+  optionSlot,
+  variationCount,
+  variationNote,
+} from "@/lib/studio/variations";
 
 /** The media slot of a connected carousel's one background picture. */
 const BACKDROP_SLOT = "backdrop";
@@ -1045,9 +1054,13 @@ async function startMedia(args: {
         "Visual reference images were unavailable. Saved brand guidance was still applied.",
       ]),
     ];
+  const withReferences = (lead: string[], rest: string[]) => ({
+    urls: [...new Set([...lead, ...rest])].slice(0, 4),
+  });
 
   if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
     if (input.controls.videoPreview) {
+      const refs = withReferences([], approvedReferences);
       const prompt = [
         `Create one polished first frame for this branded video: ${output.concept ?? input.intent.brief}`,
         ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
@@ -1060,7 +1073,7 @@ async function startMedia(args: {
         costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
         prompt,
         size: IMAGE_SIZE_BY_RATIO[ratio] as ImageSize,
-        referenceAssets: approvedReferences,
+        referenceAssets: refs.urls,
       });
       return [
         {
@@ -1079,6 +1092,10 @@ async function startMedia(args: {
     // The shot plan written in the brief stage drives the render; the user's
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
+    const videoRefs = withReferences(
+      args.referenceUrl ? [args.referenceUrl] : [],
+      approvedReferences,
+    );
     const full = videoPrompt(
       [
         input.intent.sourceScript
@@ -1098,10 +1115,7 @@ async function startMedia(args: {
       ratio,
       seconds,
     );
-    const videoImages = [
-      ...(args.referenceUrl ? [args.referenceUrl] : []),
-      ...approvedReferences,
-    ].slice(0, 4);
+    const videoImages = videoRefs.urls;
     const ownImages = new Set([
       ...(args.referenceUrl ? [args.referenceUrl] : []),
       ...suppliedReferences.map((reference) => reference.url),
@@ -1172,9 +1186,8 @@ async function startMedia(args: {
 
   const size = IMAGE_SIZE_BY_RATIO[ratio];
   if (!size) throw new StudioJobError(400, `${RATIOS[ratio].label} isn't available for images.`);
-  const referenceAssets = [
-    ...new Set([...(args.referenceUrl ? [args.referenceUrl] : []), ...approvedReferences]),
-  ].slice(0, 4);
+  const refs = withReferences(args.referenceUrl ? [args.referenceUrl] : [], approvedReferences);
+  const referenceAssets = refs.urls;
   const seriesReferences = referenceAssets;
   if (job.type === "carousel" && output.slides?.length) {
     return Promise.all(
@@ -1266,41 +1279,95 @@ async function startMedia(args: {
       : input.controls.referenceMode === "inspire" && suppliedReferences.length
         ? "The supplied images are visual inspiration for a new composition; do not copy their text or present the result as the original photo."
         : undefined;
-  const prompt = imagePrompt({
-    body,
-    title: output.title ?? input.intent.brief.slice(0, 80),
-    brand: styled,
-    ctx,
-    platform: platforms[0] ?? null,
-    ratio,
-    seed,
-    variationKey,
-    extra: [
-      refineNote,
-      noveltyNote,
-      sourceInstruction,
-      compose
-        ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
-        : undefined,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
-    style: ctx.style ? imageStyleInput(ctx.style) : null,
-    artDirection: archetypeById(output.artDirection)?.id ?? null,
-    noText: compose,
-    onImageText: job.type === "image" ? output.onImageText : null,
-  });
+  const look = ctx.style ? imageStyleInput(ctx.style) : null;
+  const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
+  const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
+  const logoAt = logoUrl ? (look?.logoCorner ?? logoCorner(builderSize)) : null;
+  // An ad with a layout is a finished, designed ad with its exact copy; a
+  // look that allows no words on pictures, or composed artwork, keeps the
+  // plain visual.
+  const adFormat = job.type === "ad" ? getAdFormat(output.adFormat) : null;
+  const designedAd =
+    adFormat && output.adOnImage && !compose && look?.maxWords !== 0 && !sourceInstruction;
+  const prompt = designedAd
+    ? adImagePrompt({
+        format: adFormat,
+        copy: {
+          ...output.adOnImage!,
+          cta: output.adOnImage!.cta || output.ads?.[0]?.cta || "",
+        },
+        scene: (output as StudioJobOutput & { visualConcept?: string }).visualConcept ?? body,
+        brandName: ctx.brandName,
+        brandContext: ctx.visualBrandText ?? ctx.brandText,
+        palette: look?.colors.length
+          ? look.colors
+          : (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+        fonts: look?.fonts.length ? look.fonts : (styled?.fonts ?? []).filter(Boolean),
+        ratio,
+        style: look,
+        visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+        logoCorner: logoAt,
+        revision: refineNote,
+        novelty: noveltyNote,
+      })
+    : imagePrompt({
+        body,
+        title: output.title ?? input.intent.brief.slice(0, 80),
+        brand: styled,
+        ctx,
+        platform: platforms[0] ?? null,
+        ratio,
+        seed,
+        variationKey,
+        extra: [
+          refineNote,
+          noveltyNote,
+          sourceInstruction,
+          compose
+            ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        style: look,
+        artDirection: archetypeById(output.artDirection)?.id ?? null,
+        noText: compose,
+        onImageText: job.type === "image" ? output.onImageText : null,
+      });
+  // More versions of the same piece: one task per version, each told how to
+  // differ. They are saved without touching the post until a person picks one.
+  if (isVariationsRequest(input)) {
+    const count = variationCount(input.controls);
+    return Promise.all(
+      Array.from({ length: count }, async (_, index) => {
+        const versionPrompt = `${prompt}\n\n${variationNote(index, count)}`;
+        const started = await startImageTask({
+          costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
+          prompt: versionPrompt,
+          size: size as ImageSize,
+          referenceAssets,
+        });
+        return {
+          slot: optionSlot(index),
+          compose,
+          kind: "image" as const,
+          ratio,
+          prompt: versionPrompt,
+          referenceAssets,
+          ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
+          startedAt: Date.now(),
+          state: "pending" as const,
+          ...started,
+        };
+      }),
+    );
+  }
   const started = await startImageTask({
     costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
     prompt,
     size: size as ImageSize,
     referenceAssets,
   });
-  // Same rule the prompt was built with: it told the model to leave this
-  // corner clean because the real logo goes there.
-  const look = ctx.style ? imageStyleInput(ctx.style) : null;
-  const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
-  const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   return [
     {
       slot: "main",
@@ -1309,9 +1376,7 @@ async function startMedia(args: {
       ratio,
       prompt,
       referenceAssets,
-      ...(logoUrl
-        ? { logo: { url: logoUrl, corner: look?.logoCorner ?? logoCorner(builderSize) } }
-        : {}),
+      ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
       startedAt: Date.now(),
       state: "pending",
       ...started,
@@ -1592,7 +1657,10 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     visualTaste.rules = `${visualTaste.rules.split("\n\nRequired resolved visual settings")[0]}\n\nRequired resolved visual settings (these override inferred observations):\n${visualStyleBlock(visualLook)}\n${videoStyleBlock(visualLook)}`;
   }
 
-  const mediaOnly = !!input.refine && input.refine.target === "media" && !!parent;
+  const variations = !!parent && isVariationsRequest({ ...input, parentJobId: parent.id });
+  if (variations && !parent.output?.media?.some((m) => m.slot === "main" && m.status === "ready"))
+    throw new StudioJobError(409, "Make the first picture before asking for more versions.");
+  const mediaOnly = !!parent && !!input.refine && (input.refine.target === "media" || variations);
   const addPlatforms = !!input.refine && input.refine.target === "platforms" && !!parent;
   const previousAngle = parent?.output?.angle ?? null;
   const angle: Angle = pickAngle(
@@ -1636,6 +1704,21 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
               : input.controls.storyTheme,
         })
       : undefined;
+  // An ad's designed layout. A revision keeps it, so an edit never swaps it.
+  // A product a person picked keeps its own photo unchanged (ADR-0035), so
+  // only layouts that don't redraw a product are picked.
+  const adFormat: AdFormat | null =
+    type !== "ad"
+      ? null
+      : input.refine && parent?.output?.adFormat
+        ? getAdFormat(parent.output.adFormat)
+        : pickAdFormat({
+            chosen: controls.adFormat,
+            goal: input.intent.goal,
+            hasProduct: false,
+            seed: input.idempotencyKey,
+            recent: ctx.recent.filter((r) => r.type === "ad").map((r) => r.adFormat),
+          });
   const source = input.intent.sourceScript
     ? {
         kind: "script",
@@ -1689,6 +1772,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       carouselStructure,
       storyTheme,
       source,
+      adFormat,
       refine: input.refine,
       current: parent?.output,
     };
@@ -1798,6 +1882,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     partial: partial.length ? partial : undefined,
   });
   if (visualTaste) output.visualTaste = visualTaste;
+  if (adFormat) output.adFormat = adFormat.id;
   if (visualTaste?.direction.composed && !["video", "carousel", "story"].includes(type))
     output.artwork = {
       headline: output.title ?? input.intent.brief.slice(0, 90),
@@ -1898,6 +1983,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         intent_goal: input.intent.goal ?? null,
         idea_id: input.intent.ideaId ?? null,
         template: input.intent.template ?? null,
+        ...(adFormat ? { ad_format: adFormat.id } : {}),
         // The job's headline, so every surface titles the piece consistently.
         job_title: title,
         brand_version: brandVersion(input.brand),
@@ -1928,6 +2014,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   const canKeepSourcePhoto =
     needsMedia(type, input) &&
     !addPlatforms &&
+    !variations &&
     (controls.referenceMode ?? "preserve") === "preserve" &&
     ["social", "image", "ad"].includes(type) &&
     !!studioReferences[0];
@@ -1992,7 +2079,12 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       currentMedia?.kind === "image"
         ? currentMedia.storagePath
         : parent?.output?.storyboard?.storagePath;
-    if (mediaOnly && savedFrame && isWorkspaceStoragePath(savedFrame, job.workspace_id)) {
+    if (
+      mediaOnly &&
+      !variations &&
+      savedFrame &&
+      isWorkspaceStoragePath(savedFrame, job.workspace_id)
+    ) {
       referenceUrl = await signAssetPath(savedFrame);
       referencePath = savedFrame;
     }
@@ -2018,8 +2110,10 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         ratio: t.ratio,
         status: "pending",
       }));
+      // Versions made for an earlier take are dropped; a variations job
+      // replaces them with its own.
       const keepOldMedia = (parent?.output?.media ?? []).filter(
-        (m) => !tasks.some((t) => t.slot === m.slot),
+        (m) => !tasks.some((t) => t.slot === m.slot) && !isOptionSlot(m.slot),
       );
       await patchJob(client, job.id, {
         provider_tasks: tasks,
@@ -2194,6 +2288,7 @@ async function shapeOutput(args: {
         title,
         ads: parsed.variants as StudioJobOutput["ads"],
         ...({ visualConcept: String(parsed.visualConcept ?? "") } as object),
+        ...(parsed.onImage ? { adOnImage: parsed.onImage as StudioJobOutput["adOnImage"] } : {}),
       };
     case "image":
     case "video": {
@@ -2609,7 +2704,8 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         workspaceId: row.workspace_id,
         idempotencyKey: `studio:${row.id}:${task.slot}:${task.taskId}`,
         ...(savedImage ? { dataUrl: savedImage } : { sourceUrl: check.url }),
-        contentItemIds: row.content_item_ids,
+        // A version waits for a person to choose it before it becomes the post's picture.
+        contentItemIds: isOptionSlot(task.slot) ? [] : row.content_item_ids,
         assetType: task.kind,
         filename: `mellox-${row.type}-${task.ratio.replace(":", "x")}-${row.id.slice(0, 8)}`,
         platform: null,
@@ -2673,7 +2769,48 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
     stage,
   };
 
-  if (done) {
+  const variationsJob =
+    !!row.parent_job_id &&
+    !!row.input &&
+    isVariationsRequest({ ...row.input, type: row.type, parentJobId: row.parent_job_id });
+  if (done && variationsJob) {
+    // The post keeps its picture either way; only the versions can fail.
+    const options = media.filter((m) => isOptionSlot(m.slot));
+    const ready = options.filter((m) => m.status === "ready").length;
+    const missed = options.length - ready;
+    Object.assign(
+      patch,
+      ready
+        ? {
+            status: "succeeded",
+            completed_at: new Date().toISOString(),
+            output: {
+              ...row.output,
+              media,
+              warnings: [
+                ...new Set([
+                  ...warnings,
+                  ...(missed
+                    ? [
+                        `${missed} of ${options.length} versions couldn't be made. You weren't charged for them.`,
+                      ]
+                    : []),
+                ]),
+              ],
+            },
+          }
+        : {
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            output: { ...row.output, media: media.filter((m) => !isOptionSlot(m.slot)) },
+            error: tasks.find((task) => task.failure)?.failure ?? {
+              category: "provider",
+              message: "No new versions could be made. Your picture is unchanged.",
+              retryable: true,
+            },
+          },
+    );
+  } else if (done) {
     const failed = media.filter((m) => m.status === "failed");
     const format = STUDIO_FORMATS[row.type];
     const mediaRequired =
@@ -2862,4 +2999,130 @@ export async function cancelStudioJob(
     if (drop.length) await c.from("content_items").delete().in("id", drop);
   }
   return presentJob(cancelled);
+}
+
+/* ───────────────────────── versions ───────────────────────── */
+
+const LOCKED_STATUSES = ["scheduled", "publishing", "published", "partial_failed"];
+
+async function assertPostEditable(client: Db, workspaceId: string, ids: string[]) {
+  if (!ids.length) return;
+  const { data } = await client
+    .from("content_items")
+    .select("status")
+    .in("id", ids)
+    .eq("workspace_id", workspaceId);
+  if ((data ?? []).some((row) => LOCKED_STATUSES.includes(String(row.status))))
+    throw new StudioJobError(
+      409,
+      "This post is already scheduled or published. Unschedule it before changing it.",
+    );
+}
+
+/**
+ * Make one of a job's versions (variations.ts) the post's picture. The old
+ * picture becomes a version, so a person can switch back. Free: nothing is
+ * rendered.
+ */
+export async function chooseStudioVariation(
+  client: unknown,
+  workspaceId: string,
+  id: string,
+  slot: string,
+): Promise<StudioJob> {
+  const c = db(client);
+  const row = await getJobRow(c, workspaceId, id);
+  if (!row) throw new StudioJobError(404, "Job not found");
+  if (row.status !== "succeeded") throw new StudioJobError(409, "This version isn't ready yet.");
+  const media = row.output?.media ?? [];
+  const option = media.find((m) => m.slot === slot && isOptionSlot(m.slot));
+  const main = media.find((m) => m.slot === "main");
+  if (
+    !option ||
+    option.status !== "ready" ||
+    !option.assetId ||
+    !isWorkspaceStoragePath(option.storagePath, workspaceId)
+  )
+    throw new StudioJobError(404, "That version is no longer available.");
+  await assertPostEditable(c, workspaceId, row.content_item_ids);
+  await linkAssetToContent(workspaceId, row.content_item_ids, {
+    id: option.assetId,
+    path: option.storagePath!,
+    assetType: option.kind,
+  });
+  const next = media.map((m) =>
+    m.slot === slot
+      ? { ...option, slot: "main" }
+      : m.slot === "main" && main
+        ? { ...main, slot }
+        : m,
+  );
+  const { data, error } = await studioJobWriter(c)
+    .from("studio_jobs")
+    .update({ output: { ...row.output, media: next.map(({ url: _url, ...m }) => m) } })
+    .eq("id", id)
+    .eq("workspace_id", workspaceId)
+    .eq("status", "succeeded")
+    .select(JOB_COLS)
+    .maybeSingle();
+  if (error || !data) throw new StudioJobError(503, "Couldn't switch the picture. Try again.");
+  invalidateStudioContext(workspaceId);
+  return presentJob(data as JobRow);
+}
+
+/** Pieces whose earlier version can be put back as it was. Series are drawn by code. */
+const RESTORABLE = new Set<StudioType>(["social", "image", "ad", "video", "script", "article"]);
+
+/**
+ * Undo an edit: put the post back to an earlier version of the same piece,
+ * with that version's words and picture. Free: nothing is generated.
+ */
+export async function restoreStudioVersion(
+  client: unknown,
+  workspaceId: string,
+  currentId: string,
+  targetId: string,
+): Promise<StudioJob> {
+  const c = db(client);
+  const [current, target] = await Promise.all([
+    getJobRow(c, workspaceId, currentId),
+    getJobRow(c, workspaceId, targetId),
+  ]);
+  if (!current || !target) throw new StudioJobError(404, "That version is no longer available.");
+  if (
+    current.group_id !== target.group_id ||
+    target.status !== "succeeded" ||
+    Date.parse(target.created_at) > Date.parse(current.created_at)
+  )
+    throw new StudioJobError(409, "Only an earlier version of this piece can be restored.");
+  if (["running", "queued"].includes(current.status))
+    throw new StudioJobError(409, "Wait for the current change to finish first.");
+  if (!RESTORABLE.has(target.type))
+    throw new StudioJobError(400, "Earlier versions of this format can't be restored yet.");
+  const ids = current.content_item_ids.length ? current.content_item_ids : target.content_item_ids;
+  await assertPostEditable(c, workspaceId, ids);
+  const platforms = platformsFor(target.type, target.input?.controls?.platforms ?? []);
+  const rows = draftRows(target.type, target.output, platforms);
+  const written = await writeDrafts(c, { ...target, content_item_ids: ids }, rows, {
+    restored_from_job: current.id,
+    job_title: (target.title ?? "").slice(0, 120),
+  });
+  const main = target.output?.media?.find((m) => m.slot === "main" && m.status === "ready");
+  if (main?.assetId && isWorkspaceStoragePath(main.storagePath, workspaceId))
+    await linkAssetToContent(workspaceId, written, {
+      id: main.assetId,
+      path: main.storagePath!,
+      assetType: main.kind,
+    });
+  // Later edits start from the restored version, so it points at today's rows.
+  if (written.join() !== target.content_item_ids.join()) {
+    const { error } = await studioJobWriter(c)
+      .from("studio_jobs")
+      .update({ content_item_ids: written })
+      .eq("id", target.id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new StudioJobError(503, "Couldn't restore this version. Try again.");
+  }
+  invalidateStudioContext(workspaceId);
+  return presentJob({ ...target, content_item_ids: written });
 }

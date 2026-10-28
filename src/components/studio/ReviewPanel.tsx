@@ -17,7 +17,6 @@ import {
   Send,
   Sparkles,
   Spinner,
-  Wand2,
   X,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -39,15 +38,11 @@ import { isDistributionPlatform, type DistributionPlatformId } from "@/lib/distr
 import { RATIOS } from "@/lib/studio/aspect";
 import { readBrandPayload } from "@/lib/studio/client";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
-import {
-  isActiveJob,
-  REFINE_PRESETS,
-  type StudioJob,
-  type StudioJobOutput,
-} from "@/lib/studio/jobs";
+import { isActiveJob, type StudioJob, type StudioJobOutput } from "@/lib/studio/jobs";
 import { scriptToMarkdown } from "@/lib/studio/prompts";
 import {
   cancelSession,
+  chooseVersion,
   discardSession,
   generate,
   openComposer,
@@ -74,6 +69,8 @@ import { AudienceInspector, AudienceScoreChip } from "@/components/app/audience/
 import { useAudienceEnabled } from "@/components/app/audience/hooks";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { ScriptVideoActions } from "./ScriptVideoActions";
+import { EditChat } from "./EditChat";
+import { VersionStrip } from "./VersionStrip";
 
 export type ReviewRow = {
   id: string;
@@ -235,7 +232,6 @@ export function ReviewPanel({
   );
   const [active, setActive] = useState<PlatformId | null>(null);
   const [scope, setScope] = useState<"one" | "all">("all");
-  const [custom, setCustom] = useState("");
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime);
   const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
   // Articles: each press of the main Publish button presses PublishToSite's own.
@@ -334,13 +330,6 @@ export function ReviewPanel({
     ? "captions"
     : "all";
   const refineTarget = multi && scope === "one" && current ? current : defaultTextTarget;
-  const revisionPrice = studioPriceLabel({
-    type: session.type,
-    controls: session.controls,
-    parentJobId: job.id,
-    refine: { instruction: "Improve text", target: refineTarget },
-    captionEditsRemaining: job.captionEditsRemaining,
-  });
   const newTakePrice = studioPriceLabel({
     type: session.type,
     controls: session.controls,
@@ -1385,7 +1374,7 @@ export function ReviewPanel({
         ) : null}
 
         {/* Stage */}
-        <div className="relative flex flex-1 justify-center px-4 pb-28 pt-4 @3xl/composer:px-10 @3xl/composer:pt-6">
+        <div className="relative flex flex-1 flex-col px-4 pb-28 pt-4 @3xl/composer:px-10 @3xl/composer:pt-6">
           <AnimatePresence>
             {justApproved && !reduce ? (
               <motion.span
@@ -1415,6 +1404,14 @@ export function ReviewPanel({
           >
             {preview}
           </motion.div>
+          {!locked && media?.kind === "image" ? (
+            <VersionStrip
+              media={draft.media}
+              ratio={ratio.replace(":", " / ")}
+              disabled={revising || editing}
+              onChoose={(slot) => chooseVersion(session.id, slot)}
+            />
+          ) : null}
         </div>
 
         {/* Bottom bars: editing and revising */}
@@ -1726,8 +1723,11 @@ export function ReviewPanel({
           ) : null}
 
           {!locked ? (
-            <InspectorSection
-              title={`Improve · ${revisionPrice}`}
+            <EditChat
+              session={session}
+              wordsTarget={refineTarget}
+              designedAd={session.type === "ad" && !!draft.adOnImage}
+              disabled={editing}
               aside={
                 multi ? (
                   <div
@@ -1759,66 +1759,7 @@ export function ReviewPanel({
                   </div>
                 ) : null
               }
-            >
-              <form
-                data-no-rhythm
-                className="flex items-center gap-1 rounded-xl bg-surface-2 p-1 pl-3 ring-1 ring-border transition-shadow focus-within:ring-2 focus-within:ring-primary"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (custom.trim().length < 2) return;
-                  refine(custom.trim());
-                  setCustom("");
-                }}
-              >
-                <Wand2 className="size-4 shrink-0 text-muted-foreground" />
-                <input
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  disabled={revising || editing}
-                  placeholder="Describe a change…"
-                  aria-label="Describe a change"
-                  className="h-8 min-w-0 flex-1 !border-0 !bg-transparent px-1.5 text-sm !shadow-none outline-none placeholder:text-muted-foreground focus-visible:!ring-0 disabled:opacity-50"
-                />
-                <Button
-                  type="submit"
-                  size="icon-sm"
-                  className="rounded-lg"
-                  disabled={custom.trim().length < 2 || revising}
-                  aria-label="Apply change"
-                >
-                  <Send />
-                </Button>
-              </form>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {REFINE_PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    disabled={revising || editing}
-                    onClick={() => refine(p.instruction, refineTarget, p.id)}
-                    className="inline-flex h-8 items-center rounded-full bg-surface-2/70 px-3 text-xs font-medium text-foreground ring-1 ring-transparent transition-[background-color,box-shadow,translate] duration-[--motion-duration-fast] hover:-translate-y-px hover:bg-primary-surface hover:shadow-1 hover:ring-primary-border disabled:opacity-45"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-                {hasMedia || media?.status === "failed" ? (
-                  <button
-                    type="button"
-                    disabled={revising || editing}
-                    onClick={() =>
-                      refine(
-                        "Create a fresh take on the visual with a different composition.",
-                        "media",
-                      )
-                    }
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2/70 px-3 text-xs font-medium text-foreground ring-1 ring-transparent transition-[background-color,box-shadow,translate] duration-[--motion-duration-fast] hover:-translate-y-px hover:bg-primary-surface hover:shadow-1 hover:ring-primary-border disabled:opacity-45"
-                  >
-                    <RefreshCw className="size-3" />
-                    Retake visual · {mediaPrice}
-                  </button>
-                ) : null}
-              </div>
-            </InspectorSection>
+            />
           ) : null}
 
           <InspectorSection title="Brief">

@@ -6,6 +6,7 @@ import type { AspectRatio } from "./aspect";
 import type { StageId, StudioType } from "./formats";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
+import type { AdOnImage } from "./ad-formats";
 
 export const PlatformIdSchema = z.enum([
   "linkedin",
@@ -86,6 +87,10 @@ export const ControlsSchema = z.object({
   referenceMode: z.enum(["preserve", "edit", "inspire"]).optional(),
   /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
   productId: z.string().uuid().optional(),
+  /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
+  adFormat: z.string().max(40).optional(),
+  /** Variations (src/lib/studio/variations.ts): how many more versions to make. */
+  variationCount: z.number().int().min(2).max(4).optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;
@@ -375,6 +380,9 @@ export type StudioJobOutput = {
   altText?: string;
   /** Ad: the shared visual direction. */
   visualConcept?: string;
+  /** Ad: the designed layout the picture follows, and the words typeset on it. */
+  adFormat?: string;
+  adOnImage?: AdOnImage;
   media?: MediaOutput[];
   /** Per-part failures that did not fail the whole job. */
   partial?: { target: string; error: string }[];

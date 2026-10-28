@@ -12,6 +12,7 @@ import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
 import { ReferencePhotos } from "./ReferencePhotos";
+import { AdFormatPicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 
@@ -220,6 +221,18 @@ export function ControlsPanel({
           />
         </label>
       ) : null}
+
+      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
+        <ProductPicker
+          workspaceId={session.workspaceId}
+          type={session.type}
+          value={c.productId}
+          onChange={(productId) => set({ productId })}
+        />
+      )}
+      {session.type === "ad" && (
+        <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
+      )}
 
       {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
         <ReferencePhotos

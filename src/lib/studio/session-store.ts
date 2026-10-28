@@ -17,6 +17,7 @@ import { recommendedRatio } from "./aspect";
 import { studioApi, readBrandPayload, StudioApiError } from "./client";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { getTemplate, templateFits } from "./templates";
+import { editTarget, planEdit, type EditAim, type EditTurn } from "./edit-chat";
 import {
   isActiveJob,
   newIdempotencyKey,
@@ -63,6 +64,8 @@ export type StudioSession = {
   window: ComposerWindow;
   /** Where the work started. Chat-started work shows in the chat and rail, not the dock. */
   origin?: "chat" | "studio";
+  /** The edit chat beside the finished piece (edit-chat.ts), oldest first. */
+  edits?: EditTurn[];
   createdAt: number;
   updatedAt: number;
 };
@@ -834,10 +837,17 @@ async function submit(
 function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolean } = {}) {
   const s = getSession(sessionId);
   if (!s) return;
+  // The edit that asked for this job learns which job made it.
+  const pendingEdit = [...(s.edits ?? [])].reverse().find((turn) => !turn.jobId && !turn.undone);
+  const edits =
+    pendingEdit && job.parent_job_id === pendingEdit.fromJobId
+      ? s.edits!.map((turn) => (turn === pendingEdit ? { ...turn, jobId: job.id } : turn))
+      : undefined;
   const wasActive = !!(s.job && isActiveJob(s.job)) || !!s.pendingKey;
   const active = isActiveJob(job);
   const patch: Partial<StudioSession> = {
     job,
+    ...(edits ? { edits } : {}),
     pendingKey: opts.fromCreate || !active ? null : s.pendingKey,
     pendingKind: active ? s.pendingKind : null,
     retryKey: null,
@@ -864,6 +874,101 @@ function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolea
     // No toast here: the dock card (Studio closed), the composer and the rail
     // already show that a creation finished or failed. A second notice would
     // only duplicate them.
+  }
+}
+
+/* ───────────────────────── edit chat ───────────────────────── */
+
+/**
+ * Send a message from the edit chat: decide what it changes (planEdit), keep
+ * the turn so Undo knows which version to put back, then run it as an
+ * ordinary revision (priced and approved like any other).
+ */
+export function sendEdit(
+  id: string,
+  text: string,
+  opts: { aim?: EditAim; wordsTarget?: string; designedAd?: boolean; preset?: string } = {},
+) {
+  const s = getSession(id);
+  const base = s?.lastGood;
+  if (!s || !base || s.pendingKey || (s.job && isActiveJob(s.job))) return;
+  const instruction = text.trim();
+  if (instruction.length < 2) return;
+  const hasPicture = !!base.output?.media?.some((m) => m.slot === "main" && m.status === "ready");
+  const plan = opts.aim
+    ? { aim: opts.aim }
+    : planEdit(instruction, { type: s.type, hasPicture, designedAd: opts.designedAd });
+  const target =
+    plan.aim === "words" && opts.wordsTarget ? opts.wordsTarget : editTarget(plan.aim, s.type);
+  const turn: EditTurn = {
+    id: crypto.randomUUID(),
+    text: instruction,
+    aim: plan.aim,
+    fromJobId: base.id,
+    at: Date.now(),
+  };
+  patchSession(id, {
+    edits: [...(s.edits ?? []), turn].slice(-30),
+    ...(plan.aim === "versions"
+      ? {
+          controls: {
+            ...s.controls,
+            variationCount: "count" in plan && plan.count ? plan.count : s.controls.variationCount,
+          },
+        }
+      : {}),
+  });
+  void generate(id, {
+    kind: "refine",
+    refine: { instruction, target, ...(opts.preset ? { preset: opts.preset } : {}) },
+  });
+}
+
+/** Undo an edit: put back the version it was made from. Free. */
+export async function undoEdit(id: string, turnId: string) {
+  const s = getSession(id);
+  const turn = s?.edits?.find((t) => t.id === turnId);
+  const current = s?.lastGood;
+  if (!s || !turn || !current || turn.undone) return;
+  if (s.pendingKey || (s.job && isActiveJob(s.job))) {
+    toast("Wait for the current change to finish first.");
+    return;
+  }
+  try {
+    const restored = await studioApi.restoreVersion(s.workspaceId, current.id, turn.fromJobId);
+    const latest = getSession(id);
+    patchSession(id, {
+      job: restored,
+      lastGood: restored,
+      error: null,
+      edits: (latest?.edits ?? []).map((t) =>
+        t.at >= turn.at && !t.undone ? { ...t, undone: true } : t,
+      ),
+    });
+    upsertJobs([restored]);
+    emitAppEvent("content:changed");
+    toast.success("Change undone", { description: "The earlier version is back." });
+  } catch (error) {
+    toast.error("Couldn't undo", {
+      description: error instanceof Error ? error.message : "Try again.",
+    });
+  }
+}
+
+/** Make one of the versions the post's picture. Free. */
+export async function chooseVersion(id: string, slot: string) {
+  const s = getSession(id);
+  const job = s?.lastGood;
+  if (!s || !job) return;
+  try {
+    const next = await studioApi.chooseVariation(s.workspaceId, job.id, slot);
+    patchSession(id, { lastGood: next, ...(s.job?.id === next.id ? { job: next } : {}) });
+    upsertJobs([next]);
+    emitAppEvent("content:changed");
+  } catch (error) {
+    toast.error("Couldn't use that version", {
+      description: error instanceof Error ? error.message : "Try again.",
+    });
   }
 }
 
