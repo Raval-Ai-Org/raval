@@ -1,18 +1,35 @@
 "use client";
 
 import { Spinner } from "@/components/icons";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import { Logo } from "@/components/brand/Logo";
 import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandReveal";
 import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";
 import { ScanStage, type ScanProgress, type ScanStatus } from "@/components/onboarding/ScanStage";
-import { SuccessMoment } from "@/components/onboarding/SuccessMoment";
+import { ScanStrip } from "@/components/onboarding/ScanStrip";
 import type { CompetitorResearchStatus } from "@/components/onboarding/CompetitorResearchPreview";
 import { AmbientCanvas } from "@/components/onboarding/ui";
 import { UrlStep } from "@/components/onboarding/UrlStep";
+import {
+  GoalStep,
+  emptyGoalDraft,
+  goalDraftToRaw,
+  type GoalDraft,
+} from "@/components/onboarding/GoalStep";
+import {
+  ManualBrandStep,
+  emptyManualBrand,
+  type ManualBrand,
+} from "@/components/onboarding/ManualBrandStep";
+import { ProductsStep } from "@/components/onboarding/ProductsStep";
+import { ChannelsStep } from "@/components/onboarding/ChannelsStep";
+import { FirstWinStep } from "@/components/onboarding/FirstWinStep";
+import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { normalizeUrl, validUrl } from "@/components/onboarding/url";
+import { useOnboardingProducts } from "@/components/onboarding/use-onboarding-products";
+import { useFirstPosts } from "@/components/onboarding/use-first-posts";
 import { emptyDna, flushBrandDnaFor, saveBrandDnaFor, type BrandDna } from "@/hooks/use-brand-dna";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
@@ -26,11 +43,27 @@ import {
   getCompetitorOverview,
   type CompetitorView,
 } from "@/lib/competitors.functions";
+import { getGoals, saveGoals } from "@/lib/goals.functions";
+import type { WorkspaceGoals } from "@/lib/goals/contracts";
+import { goalLine } from "@/lib/goals/decide";
+import {
+  blockedReason,
+  firstPostBriefs,
+  firstPostPlatform,
+  indicatorIndex,
+  indicatorSteps,
+  nextStep,
+  previousStep,
+  type FlowMode,
+  type FlowState,
+  type OnboardingStep,
+} from "@/lib/onboarding/flow";
+import { productsSummary } from "@/lib/products/catalog";
 import { readBrandExtractStream } from "@/lib/brand-extract-stream";
 import { duration, ease } from "@/lib/motion";
 import { useNavigate } from "@/lib/navigation";
 
-type Step = "website" | "scan" | "review" | "done";
+type Step = OnboardingStep;
 
 /** workspaces_owner_domain_unique: this owner already has the brand's domain. */
 function isDuplicateDomainError(error: { code?: string; message?: string } | null): boolean {
@@ -39,16 +72,15 @@ function isDuplicateDomainError(error: { code?: string; message?: string } | nul
   );
 }
 
-const STEPS: { id: Exclude<Step, "done">; label: string }[] = [
-  { id: "website", label: "Website" },
-  { id: "scan", label: "Scan" },
-  { id: "review", label: "Brand DNA" },
-];
-
 const STEP_WIDTH: Record<Step, string> = {
   website: "max-w-2xl",
+  manual: "max-w-xl",
+  goals: "max-w-3xl",
   scan: "max-w-[460px]",
   review: "max-w-6xl",
+  products: "max-w-5xl",
+  channels: "max-w-3xl",
+  first: "max-w-5xl",
   done: "max-w-xl",
 };
 
@@ -74,6 +106,19 @@ function buildBrandDna(
   return { ...base, ...cleanEdits, websiteUrl: url };
 }
 
+function draftFromGoals(goals: WorkspaceGoals): GoalDraft {
+  const t = goals.targets[0];
+  return {
+    focus: goals.focus,
+    target: t ? String(t.target) : "",
+    baseline: t?.baseline !== undefined ? String(t.baseline) : "",
+    platform: t?.platform ?? "",
+    timeframeWeeks: goals.timeframeWeeks,
+    postsPerWeek: goals.postsPerWeek,
+    channels: goals.channels,
+  };
+}
+
 function Onboarding() {
   const navigate = useNavigate();
   const reduce = useReducedMotionSafe();
@@ -81,10 +126,17 @@ function Onboarding() {
   // the last-selected or newest one.
   const workspace = useWorkspace();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>("website");
+  const [mode, setMode] = useState<FlowMode>("site");
+  const [step, setStepState] = useState<Step>("website");
+  const stepRef = useRef<Step>("website");
+  const setStep = useCallback((next: Step) => {
+    stepRef.current = next;
+    setStepState(next);
+  }, []);
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [result, setResult] = useState<BrandExtractResult | null>(null);
   const [edits, setEdits] = useState<BrandEdits>({});
+  const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
   const [discoveries, setDiscoveries] = useState<Discoveries>({});
   const [phase, setPhase] = useState(0);
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
@@ -93,6 +145,12 @@ function Onboarding() {
   const [competitors, setCompetitors] = useState<CompetitorView[]>([]);
   const [competitorResearchStatus, setCompetitorResearchStatus] =
     useState<CompetitorResearchStatus>("idle");
+  const [goalDraft, setGoalDraft] = useState<GoalDraft>(emptyGoalDraft);
+  const [goals, setGoals] = useState<WorkspaceGoals | null>(null);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalError, setGoalError] = useState<string | null>(null);
+  const [goalWarnings, setGoalWarnings] = useState<string[]>([]);
+  const [connected, setConnected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const scanFor = useRef<string | null>(null);
@@ -105,7 +163,28 @@ function Onboarding() {
   const firstStep = useRef(true);
 
   const urlKey = (id: string) => `onboarding:website:${id}`;
-  const brand: BrandExtractResult = { ...result, ...edits };
+  const brand: BrandExtractResult =
+    mode === "manual"
+      ? {
+          brandName: manual.brandName,
+          oneLiner: manual.oneLiner,
+          industry: manual.industry,
+        }
+      : { ...result, ...edits };
+  const brandName = brand.brandName?.trim() || workspace.name || "";
+
+  const catalogue = useOnboardingProducts(workspaceId);
+  const candidates = useMemo(
+    () => discoveries.products?.products ?? result?.productCandidates ?? [],
+    [discoveries.products, result?.productCandidates],
+  );
+
+  const flow: FlowState = {
+    mode,
+    scan: scanStatus,
+    goalsSaved: Boolean(goals),
+    activeProducts: catalogue.products.length,
+  };
 
   useEffect(() => {
     if (workspace.onboarded) {
@@ -122,8 +201,17 @@ function Onboarding() {
     recovered ||= workspace.websiteUrl ?? "";
     if (recovered) {
       setWebsiteUrl(recovered);
-      setStep("scan");
+      setStep("goals");
     }
+    // A goal set before a refresh is kept.
+    void getGoals({ data: { workspaceId: workspace.id } })
+      .then((view) => {
+        if (view.goals) {
+          setGoals(view.goals);
+          setGoalDraft(draftFromGoals(view.goals));
+        }
+      })
+      .catch(() => undefined);
     return () => {
       scanAbort.current?.abort();
     };
@@ -186,13 +274,14 @@ function Onboarding() {
     return () => window.clearInterval(timer);
   }, [workspaceId, competitorResearchStatus, competitors]);
 
+  /**
+   * Scan the site in the background. The person answers the goal questions
+   * meanwhile; the review opens when both are done.
+   */
   const runScan = async (rawUrl: string, attempt = 0) => {
     const url = normalizeUrl(rawUrl);
     if (!workspaceId || !validUrl(url) || (scanStatus === "loading" && attempt === 0)) return;
-    if (scanFor.current === url && scanStatus === "ok") {
-      setStep("review");
-      return;
-    }
+    if (scanFor.current === url && scanStatus === "ok") return;
 
     scanFor.current = url;
     const nextHost = new URL(url).hostname.replace(/^www\./, "");
@@ -207,8 +296,11 @@ function Onboarding() {
     const controller = new AbortController();
     scanAbort.current = controller;
     setWebsiteUrl(url);
-    localStorage.setItem(urlKey(workspaceId), url);
-    setStep("scan");
+    try {
+      localStorage.setItem(urlKey(workspaceId), url);
+    } catch {
+      /* storage unavailable */
+    }
     setScanStatus("loading");
     setScanError(null);
     if (attempt === 0) {
@@ -280,8 +372,10 @@ function Onboarding() {
       setProgress({ stage: "done", message: "Brand DNA is ready to review", pct: 100 });
       setPhase(SCAN_PHASES.length - 1);
       setScanStatus("ok");
-      if (!reduce) await new Promise((resolve) => window.setTimeout(resolve, COMPLETE_BEAT_MS));
-      if (!controller.signal.aborted) setStep("review");
+      if (stepRef.current === "scan") {
+        if (!reduce) await new Promise((resolve) => window.setTimeout(resolve, COMPLETE_BEAT_MS));
+        if (!controller.signal.aborted && stepRef.current === "scan") setStep("review");
+      }
     } catch (error) {
       if (controller.signal.aborted) return;
       if (attempt < 2) {
@@ -303,23 +397,115 @@ function Onboarding() {
     }
   };
 
+  // Recovery after a refresh: the persisted URL is scanned once.
   useEffect(() => {
-    if (step !== "scan" || !workspaceId || !websiteUrl || scanStatus !== "idle") return;
+    if (mode !== "site" || !workspaceId || !websiteUrl || scanStatus !== "idle") return;
+    if (step === "website") return;
     void runScan(websiteUrl);
     // The guarded status check makes refresh recovery run once for the persisted URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, workspaceId, websiteUrl, scanStatus]);
+  }, [step, workspaceId, websiteUrl, scanStatus, mode]);
 
   const rescan = () => {
     scanFor.current = null;
+    setStep("scan");
     void runScan(websiteUrl);
   };
 
-  const finish = async () => {
+  const go = (from: Step) => setStep(nextStep(from, flow));
+  const back = (from: Step) => {
+    const prev = previousStep(from, flow);
+    if (prev) setStep(prev);
+  };
+
+  const submitGoals = async () => {
+    if (!workspaceId || goalSaving) return;
+    setGoalSaving(true);
+    setGoalError(null);
+    try {
+      const saved = await saveGoals({
+        data: { workspaceId, goals: goalDraftToRaw(goalDraft) },
+      });
+      setGoals(saved.goals);
+      const warnings = saved.warnings.map((w) => w.message);
+      setGoalWarnings(warnings);
+      if (saved.goals) {
+        // A stretch is shown once on this step, then the person moves on.
+        if (warnings.length && goalWarnings.join() !== warnings.join()) {
+          toast.message("Goal saved", { description: warnings[0] });
+        }
+        setStep(nextStep("goals", { ...flow, goalsSaved: true }));
+      }
+    } catch (error) {
+      setGoalError(error instanceof Error ? error.message : "Couldn't save your goal. Try again.");
+    } finally {
+      setGoalSaving(false);
+    }
+  };
+
+  /** The Brand DNA as it stands: scan + review edits, or the manual answers. */
+  const siteUrl = (): string | null => {
+    const url = normalizeUrl(websiteUrl);
+    return url && validUrl(url) ? url : null;
+  };
+
+  const currentDna = (): BrandDna => {
+    const finalUrl = siteUrl();
+    const base =
+      mode === "manual"
+        ? {
+            ...emptyDna,
+            brandName: manual.brandName.trim(),
+            oneLiner: manual.oneLiner.trim(),
+            industry: manual.industry.trim(),
+            businessModel:
+              manual.sells === "services"
+                ? "Services"
+                : manual.sells === "both"
+                  ? "Products and services"
+                  : "Products",
+            websiteUrl: finalUrl,
+          }
+        : buildBrandDna(result, edits, finalUrl);
+    const summary = productsSummary(catalogue.products);
+    return {
+      ...base,
+      // The catalogue is what the brand sells; the scan's guess is only a fallback.
+      products: summary || base.products,
+      status: mode === "site" && scanStatus === "ok" ? "ok" : "idle",
+      extractedAt: mode === "site" && scanStatus === "ok" ? Date.now() : null,
+      updatedAt: Date.now(),
+    };
+  };
+
+  const saveDna = async (): Promise<boolean> => {
+    if (!workspaceId) return false;
+    saveBrandDnaFor(workspaceId, currentDna(), true);
+    try {
+      await flushBrandDnaFor(workspaceId);
+      return true;
+    } catch (saveError) {
+      toast.error("Couldn't save Brand DNA", {
+        description: saveError instanceof Error ? saveError.message : "Try again in a moment.",
+      });
+      return false;
+    }
+  };
+
+  const continueFromReview = async () => {
+    if (saving) return;
+    setSaving(true);
+    const ok = await saveDna();
+    setSaving(false);
+    if (ok) go("review");
+  };
+
+  /** The essentials are in: mark the workspace set up. Channels and first posts are extras. */
+  const finishSetup = async () => {
     if (!workspaceId || saving) return;
     setSaving(true);
-    const finalUrl = normalizeUrl(websiteUrl);
-    const dna = buildBrandDna(result, edits, finalUrl);
+    const dna = currentDna();
+    const finalUrl = siteUrl();
     const { error } = await supabase
       .from("workspaces")
       .update({
@@ -341,49 +527,40 @@ function Onboarding() {
       });
       return;
     }
-
-    const merged: BrandDna = {
-      ...dna,
-      status: scanStatus === "ok" ? "ok" : "idle",
-      extractedAt: scanStatus === "ok" ? Date.now() : null,
-      updatedAt: Date.now(),
-    };
-    saveBrandDnaFor(workspaceId, merged, true);
-    try {
-      await flushBrandDnaFor(workspaceId);
-    } catch (saveError) {
-      setSaving(false);
-      toast.error("Couldn't save Brand DNA", {
-        description: saveError instanceof Error ? saveError.message : "Try again in a moment.",
-      });
-      return;
-    }
-    localStorage.removeItem(urlKey(workspaceId));
+    const ok = await saveDna();
     setSaving(false);
+    if (!ok) return;
+    try {
+      localStorage.removeItem(urlKey(workspaceId));
+    } catch {
+      /* storage unavailable */
+    }
     // The early website search ran alongside the scan. Reconcile it with the
     // completed Brand DNA without adding another onboarding step.
-    void (async () => {
-      await competitorRun.current?.catch(() => undefined);
-      try {
-        const research = await bootstrapCompetitors({ data: { workspaceId } });
-        setCompetitors(research.competitors);
-        setCompetitorResearchStatus("ready");
-      } catch {
-        // Competitor research can continue from the main app.
-      }
-    })();
-    setStep("done");
+    if (mode === "site") {
+      void (async () => {
+        await competitorRun.current?.catch(() => undefined);
+        try {
+          const research = await bootstrapCompetitors({ data: { workspaceId } });
+          setCompetitors(research.competitors);
+          setCompetitorResearchStatus("ready");
+        } catch {
+          // Competitor research can continue from the main app.
+        }
+      })();
+    }
+    go("products");
   };
 
   const skip = async () => {
     if (!workspaceId || saving) return;
     scanAbort.current?.abort();
     setSaving(true);
-    const finalUrl = normalizeUrl(websiteUrl);
+    const finalUrl = siteUrl();
     const { error } = await supabase
       .from("workspaces")
       .update({
-        website_url: finalUrl || null,
+        website_url: finalUrl,
         onboarded_at: new Date().toISOString(),
       })
       .eq("id", workspaceId);
@@ -392,31 +569,58 @@ function Onboarding() {
       toast.error("Couldn't skip setup", { description: "Your URL is still saved. Try again." });
       return;
     }
-    const partial: BrandDna = {
-      ...buildBrandDna(result, edits, finalUrl || null),
-      status: "idle",
-      extractedAt: null,
-      updatedAt: Date.now(),
-    };
-    saveBrandDnaFor(workspaceId, partial, true);
-    localStorage.removeItem(urlKey(workspaceId));
+    saveBrandDnaFor(workspaceId, { ...currentDna(), status: "idle", extractedAt: null }, true);
+    try {
+      localStorage.removeItem(urlKey(workspaceId));
+    } catch {
+      /* storage unavailable */
+    }
     setSaving(false);
     navigate({ to: workspacePath(workspaceId) });
   };
 
-  const enterApp = () => {
+  const enterApp = (target = workspacePath(workspace.id)) => {
     if (leaving) return;
     setLeaving(true);
-    const target = workspacePath(workspace.id);
     window.setTimeout(() => navigate({ to: target }), reduce ? 0 : duration.slow * 1000);
   };
 
+  // ── First posts ──
+  const [firstProductId, setFirstProductId] = useState<string | null>(null);
+  const firstProduct =
+    catalogue.products.find((x) => x.id === firstProductId) ??
+    catalogue.products.find((x) => x.images.length) ??
+    catalogue.products[0] ??
+    null;
+  const platformChoices = useMemo(() => {
+    const wanted = goals?.channels.length ? goals.channels : ["instagram", "linkedin", "facebook"];
+    return [...new Set([...connected.filter((c) => wanted.includes(c)), ...wanted])].slice(0, 5);
+  }, [goals, connected]);
+  const [platformPick, setPlatformPick] = useState<string | null>(null);
+  const platform = (platformPick ?? firstPostPlatform(goals, connected)) as ReturnType<
+    typeof firstPostPlatform
+  >;
+  const briefs = useMemo(
+    () =>
+      workspaceId && firstProduct
+        ? firstPostBriefs({
+            workspaceId,
+            brandName,
+            goals,
+            product: firstProduct,
+            platform,
+          })
+        : [],
+    [workspaceId, firstProduct, brandName, goals, platform],
+  );
+  const firstPosts = useFirstPosts(workspaceId, briefs);
+
+  const centered = step === "website" || step === "scan" || step === "manual";
   const stepMotion = {
     initial: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
     animate: { opacity: 1, y: 0, transition: { duration: duration.xslow, ease: ease.emphasized } },
     exit: { opacity: 0, transition: { duration: duration.base, ease: ease.accelerate } },
   };
-  const centered = step !== "review";
 
   // Wait until the route's workspace and any saved scan URL are restored.
   // Otherwise the empty URL form flashes for a frame before recovery switches
@@ -427,12 +631,25 @@ function Onboarding() {
         <Logo markOnly height={34} />
         <span
           aria-label="Preparing your workspace"
-          className="h-4 w-4 rounded-full border-2 border-primary/25 border-t-primary animate-spin"
+          className="h-4 w-4 animate-spin rounded-full border-2 border-primary/25 border-t-primary"
         />
         <span className="sr-only">Preparing your workspace</span>
       </div>
     );
   }
+
+  const scanStrip =
+    mode === "site" && websiteUrl ? (
+      <ScanStrip
+        url={websiteUrl}
+        status={scanStatus}
+        progress={progress}
+        phase={phase}
+        discoveries={discoveries}
+        reduce={reduce}
+        onRetry={() => void runScan(websiteUrl)}
+      />
+    ) : undefined;
 
   return (
     <motion.div
@@ -449,14 +666,14 @@ function Onboarding() {
         <span className="hidden sm:block">
           <Logo height={30} />
         </span>
-        <StepIndicator step={step} />
+        <StepIndicator mode={mode} step={step} />
         <div className="justify-self-end">
-          {step !== "done" && (
+          {step !== "done" && step !== "channels" && step !== "first" && (
             <button
               type="button"
               onClick={() => void skip()}
               disabled={saving}
-              className="inline-flex h-8 items-center rounded-lg px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             >
               {saving ? (
                 <>
@@ -484,7 +701,46 @@ function Onboarding() {
                     reduce={reduce}
                     headingRef={headingRef}
                     onChange={setWebsiteUrl}
-                    onSubmit={() => void runScan(websiteUrl)}
+                    onSubmit={() => {
+                      setMode("site");
+                      setStep("goals");
+                      void runScan(websiteUrl);
+                    }}
+                    onNoWebsite={() => {
+                      scanAbort.current?.abort();
+                      setWebsiteUrl("");
+                      setMode("manual");
+                      setStep("manual");
+                    }}
+                  />
+                )}
+                {step === "manual" && (
+                  <ManualBrandStep
+                    value={manual}
+                    headingRef={headingRef}
+                    onChange={(patch) => setManual((m) => ({ ...m, ...patch }))}
+                    onBack={() => {
+                      setMode("site");
+                      setStep("website");
+                    }}
+                    onContinue={() => go("manual")}
+                  />
+                )}
+                {step === "goals" && (
+                  <GoalStep
+                    draft={goalDraft}
+                    saving={goalSaving}
+                    error={goalError}
+                    warnings={goalWarnings}
+                    reduce={reduce}
+                    headingRef={headingRef}
+                    scanStrip={scanStrip}
+                    onChange={(patch) => {
+                      setGoalError(null);
+                      setGoalDraft((d) => ({ ...d, ...patch }));
+                    }}
+                    onBack={() => back("goals")}
+                    onContinue={() => void submitGoals()}
                   />
                 )}
                 {step === "scan" && (
@@ -501,7 +757,12 @@ function Onboarding() {
                     headingRef={headingRef}
                     onRetry={() => void runScan(websiteUrl)}
                     onEdit={() => setStep("website")}
-                    onSkip={() => void skip()}
+                    onSkip={() => {
+                      // No usable scan: carry on by hand from the brand questions.
+                      scanAbort.current?.abort();
+                      setMode("manual");
+                      setStep("manual");
+                    }}
                   />
                 )}
                 {step === "review" && (
@@ -514,19 +775,68 @@ function Onboarding() {
                     reduce={reduce}
                     headingRef={headingRef}
                     onChange={(patch) => setEdits((current) => ({ ...current, ...patch }))}
-                    onContinue={() => void finish()}
+                    onContinue={() => void continueFromReview()}
                     onRescan={rescan}
                     onChangeUrl={() => setStep("website")}
                   />
                 )}
-                {step === "done" && (
-                  <SuccessMoment
-                    brand={brand}
-                    url={websiteUrl}
+                {step === "products" && (
+                  <ProductsStep
+                    key={candidates.map((c) => c.fingerprint).join("|")}
+                    brandName={brandName}
+                    candidates={catalogue.candidatesDismissed ? [] : catalogue.pending(candidates)}
+                    products={catalogue.products}
+                    loading={catalogue.loading}
+                    importing={catalogue.importing}
+                    busy={catalogue.busy}
+                    lowResolution={catalogue.lowResolution}
+                    adding={catalogue.adding}
+                    error={catalogue.error}
+                    blockedReason={saving ? "Saving…" : blockedReason("products", flow)}
                     reduce={reduce}
-                    leaving={leaving}
                     headingRef={headingRef}
-                    onEnter={enterApp}
+                    onImport={(picked) => void catalogue.importCandidates(picked)}
+                    onDismissCandidates={catalogue.dismissCandidates}
+                    onAdd={(d) => void catalogue.add(d)}
+                    onSave={(id, d) => void catalogue.save(id, d)}
+                    onArchive={(id) => void catalogue.archive(id)}
+                    onUpload={(id, file) => void catalogue.upload(id, file)}
+                    onPrimary={(id, assetId) => void catalogue.setPrimary(id, assetId)}
+                    onBack={() => back("products")}
+                    onContinue={() => void finishSetup()}
+                  />
+                )}
+                {step === "channels" && (
+                  <ChannelsStep
+                    connectedCount={connected.length}
+                    headingRef={headingRef}
+                    onBack={() => back("channels")}
+                    onContinue={() => go("channels")}
+                  >
+                    <SocialAccountsSection variant="onboarding" onConnectedChange={setConnected} />
+                  </ChannelsStep>
+                )}
+                {step === "first" && (
+                  <FirstWinStep
+                    brandName={brandName}
+                    goalLine={goals ? goalLine(goals) : null}
+                    briefs={briefs}
+                    products={catalogue.products}
+                    productId={firstProduct?.id ?? null}
+                    platform={platform}
+                    platforms={platformChoices}
+                    priceLabel={firstPosts.priceLabel}
+                    posts={firstPosts.posts}
+                    billing={firstPosts.billing}
+                    reduce={reduce}
+                    headingRef={headingRef}
+                    onProduct={setFirstProductId}
+                    onPlatform={setPlatformPick}
+                    onStart={() => void firstPosts.start()}
+                    onRetry={(n) => void firstPosts.retry(n)}
+                    onBack={() => back("first")}
+                    onLibrary={() => enterApp(workspacePath(workspace.id, "", { library: 1 }))}
+                    onEnter={() => enterApp()}
                   />
                 )}
               </motion.div>
@@ -538,11 +848,16 @@ function Onboarding() {
   );
 }
 
-function StepIndicator({ step }: { step: Step }) {
-  const current = step === "done" ? STEPS.length : STEPS.findIndex((s) => s.id === step);
+function StepIndicator({ mode, step }: { mode: FlowMode; step: Step }) {
+  const steps = indicatorSteps(mode);
+  const current = indicatorIndex(mode, step);
   return (
-    <ol aria-label="Setup progress" className="grid w-[132px] grid-cols-3 sm:w-[288px]">
-      {STEPS.map((item, index) => {
+    <ol
+      aria-label="Setup progress"
+      className="grid w-[168px] sm:w-[420px]"
+      style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+    >
+      {steps.map((item, index) => {
         const state = index < current ? "done" : index === current ? "active" : "pending";
         return (
           <li
