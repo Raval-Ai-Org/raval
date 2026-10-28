@@ -32,7 +32,7 @@ import type {
   VideoProvider,
   VideoRenderRequest,
 } from "./types";
-import { friendlyFailure } from "./failure";
+import { renderFailure } from "./failure";
 
 const SUBMIT_TIMEOUT_MS = 30_000;
 const POLL_TIMEOUT_MS = 20_000;
@@ -308,9 +308,8 @@ export const openRouterVideoProvider: VideoProvider = {
       state: "failed",
       providerState: status || "unknown",
       meta,
-      code: status === "expired" ? "timeout" : "render_failed",
-      message: friendlyFailure(typeof job?.error === "string" ? job.error : null),
-      retryable: false,
+      ...renderFailure(typeof job?.error === "string" ? job.error : null),
+      ...(status === "expired" ? { code: "timeout", retryable: true } : {}),
     };
   },
 

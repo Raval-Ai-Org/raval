@@ -993,8 +993,12 @@ async function startMedia(args: {
   style?: LoadedLook | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
-  const ratio = input.controls.videoModelKey && !input.controls.videoPreview && (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video"))
-    ? input.controls.videoQuote?.aspectRatio ?? mediaRatio(job.type, input, platforms) : mediaRatio(job.type, input, platforms);
+  const ratio =
+    input.controls.videoModelKey &&
+    !input.controls.videoPreview &&
+    (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video"))
+      ? (input.controls.videoQuote?.aspectRatio ?? mediaRatio(job.type, input, platforms))
+      : mediaRatio(job.type, input, platforms);
   const seed = job.group_id;
   const variationKey = `${job.attempt}:${job.idempotency_key}`;
   // The server's own Brand DNA; the browser copy is only a fallback for a
@@ -1087,6 +1091,14 @@ async function startMedia(args: {
       ratio,
       seconds,
     );
+    const videoImages = [
+      ...(args.referenceUrl ? [args.referenceUrl] : []),
+      ...approvedReferences,
+    ].slice(0, 4);
+    const ownImages = new Set([
+      ...(args.referenceUrl ? [args.referenceUrl] : []),
+      ...suppliedReferences.map((reference) => reference.url),
+    ]);
     const started = await startStudioVideo({
       modelKey: input.controls.videoModelKey,
       prompt: full,
@@ -1094,10 +1106,9 @@ async function startMedia(args: {
       durationSec: seconds,
       resolution: input.controls.videoQuote?.resolution ?? input.controls.videoResolution ?? "720P",
       audio: input.controls.audio ?? true,
-      imageUrls: [...(args.referenceUrl ? [args.referenceUrl] : []), ...approvedReferences].slice(
-        0,
-        4,
-      ),
+      imageUrls: videoImages,
+      // The brand's saved style references come after the person's own photos.
+      styleReferenceCount: videoImages.filter((url) => !ownImages.has(url)).length,
     });
     return [
       {
@@ -1656,12 +1667,14 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       refine: input.refine,
       current: parent?.output,
     };
-    const built = boundedCaption ? buildCreationCaptionEditPrompt(promptArgs) : captionOnly
-      ? buildCaptionPrompt({
-          ...promptArgs,
-          visual: parent!.output.concept ?? parent!.output.altText ?? input.intent.brief,
-        })
-      : buildTextPrompt(type, promptArgs);
+    const built = boundedCaption
+      ? buildCreationCaptionEditPrompt(promptArgs)
+      : captionOnly
+        ? buildCaptionPrompt({
+            ...promptArgs,
+            visual: parent!.output.concept ?? parent!.output.altText ?? input.intent.brief,
+          })
+        : buildTextPrompt(type, promptArgs);
     if (firstStage !== "writing" && format.stages.some((s) => s.id === "writing")) {
       await setStage(client, job.id, "writing");
     }
@@ -1779,12 +1792,14 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     await requireActiveJob(client, job);
     output = {
       ...output,
-      variants: boundedCaption ? output.variants : await naturalizeVariants(output.variants, {
-        brandName: ctx.brandName,
-        brandText: ctx.brandText,
-        styleText: ctx.style ? writingStyleBlock(ctx.style, "social") : undefined,
-        protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
-      }),
+      variants: boundedCaption
+        ? output.variants
+        : await naturalizeVariants(output.variants, {
+            brandName: ctx.brandName,
+            brandText: ctx.brandText,
+            styleText: ctx.style ? writingStyleBlock(ctx.style, "social") : undefined,
+            protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
+          }),
     };
     // A caption that uses a word the team asked Mellox to avoid (ADR-0033)
     // carries a warning: a person sees it, and fully automatic mode holds it.
@@ -2213,6 +2228,7 @@ async function startStudioVideo(opts: {
   resolution: UgcResolution | "480P" | "720P" | "1080P";
   audio: boolean;
   imageUrls: string[];
+  styleReferenceCount?: number;
 }): Promise<{
   taskId: string;
   model: string;
@@ -2231,6 +2247,7 @@ async function startStudioVideo(opts: {
     audio: opts.audio,
     imageUrls: opts.imageUrls,
     requireReferences: opts.imageUrls.length > 0,
+    styleReferenceCount: opts.styleReferenceCount,
   });
   if (!submitted.ok) throw new StudioJobError(submitted.retryable ? 503 : 502, submitted.message);
   return {

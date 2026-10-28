@@ -223,8 +223,15 @@ const REGISTRY: Record<string, TaskPlan> = {
   "ugc.concepts": tier(WORKHORSE, "medium"),
   "ugc.notes": tier(WORKHORSE, "low"),
 
-  "guardrails.image-moderation": tier(ECONOMY, "low"),
-  "guardrails.media-safety": tier(ECONOMY, "low"),
+  // Safety review: the economy read clears ordinary media; anything it would
+  // not clear is re-read by a stronger model, so one cheap mistake can never
+  // confirm itself.
+  "guardrails.image-moderation": tier(ECONOMY, "low", {
+    escalate: toTier("the first read did not clear the image", WORKHORSE, "low"),
+  }),
+  "guardrails.media-safety": tier(ECONOMY, "low", {
+    escalate: toTier("the first read did not clear the prompt", WORKHORSE, "low"),
+  }),
 };
 
 /**
