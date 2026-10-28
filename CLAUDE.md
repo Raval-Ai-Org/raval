@@ -693,6 +693,26 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   run-schedules hook via the one search path. Generators only read it: a brief
   never triggers a trends search. A trend is kept only if it cites a source the
   search returned (`groundTrends`). Flag `FEATURE_FLAG_SOCIAL_TRENDS_ENABLED`.
+- **The real product, never an invented one.** A brand's products live in
+  `workspace_products` (pure half `src/lib/products/catalog.ts`; server
+  `src/server/products/catalog.server.ts`; RPC `src/server/fns/products.ts`; UI
+  Brain → Brand → Products, `brain/brand/products/`). The Brand scan finds them
+  (Shopify's `/products.json`, else product pages from the homepage and
+  sitemap, all through `safeFetch`, no model) and stores one photo per product
+  as a workspace asset. A product a person removed is never brought back.
+  - Studio picks the product with the pure `pickProduct` (the person's choice,
+    "none", one the brief names, else the main product for an ad) and keeps it
+    on `output.product`. Its photo goes right after any image being edited in
+    the references, with `productFidelity` naming its position; retries re-sign
+    it (`ProviderTask.productReference`). The image review compares the render
+    with that photo. Never send a product photo without that instruction.
+- **An ad is a designed ad.** `src/lib/studio/ad-formats.ts` holds the proven
+  static layouts (ids stored on jobs: add, never rename). The ad prompt picks
+  one (`pickAdFormat`), the copy model writes `onImage` for it, and
+  `adImagePrompt` renders a finished ad with exactly those words. A look with
+  no words on pictures, composed artwork or a source-photo edit keeps the
+  plain visual. A format's copy rules never allow an invented quote, offer,
+  figure or competitor.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style

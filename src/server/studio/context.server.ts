@@ -192,6 +192,7 @@ async function loadWorkspaceSnapshot(
         storyTheme: str(story.theme),
         hookStyle: str(meta.hook_style),
         structure: str(record(meta.carousel).structure),
+        adFormat: str(meta.ad_format),
         design:
           meta.carousel || story.spec
             ? {

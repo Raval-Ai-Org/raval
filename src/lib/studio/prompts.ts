@@ -16,6 +16,8 @@ import { playbookSection } from "./playbook";
 import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
 import { shareSection } from "./viral";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
+import { productFacts, type JobProduct } from "@/lib/products/catalog";
+import { adFormatDirective, type AdFormat } from "./ad-formats";
 import type {
   StudioControls,
   StudioIntent,
@@ -53,6 +55,8 @@ export type StudioContext = {
     /** Carousels: the story structure and the look it was given. */
     structure?: string | null;
     design?: { colorway?: string; motif?: string } | null;
+    /** Ads: the designed layout it used (ad-formats.ts), so the next one differs. */
+    adFormat?: string | null;
     /** Stories: the theme it followed, so the next one rotates. */
     storyTheme?: string | null;
     /** A longer passage of the copy, used only as a voice reference. */
@@ -303,6 +307,7 @@ function sharedUser(
     angle: Angle;
     controls?: StudioControls;
     hook?: HookStyle;
+    product?: JobProduct | null;
     extra?: Section[];
   },
   format = "social",
@@ -332,6 +337,10 @@ function sharedUser(
         .join("\n"),
     },
     { label: "Brief", body: intent.brief },
+    {
+      label: "Featured product (show this exact product)",
+      body: args.product ? productFacts(args.product) : null,
+    },
     { label: "Template", body: templateDirective(intent.template) },
     {
       label: "Placeholders",
@@ -473,9 +482,19 @@ export const ScriptSchema = z.object({
   hashtags: StrList(10, 60),
 });
 
+export const AdOnImageSchema = z.object({
+  headline: Str(90).default(""),
+  support: Str(120).default(""),
+  badge: Str(30).default(""),
+  points: StrList(4, 40),
+  cta: Str(24).default(""),
+});
+
 export const AdSchema = z.object({
   title: Str(120),
   visualConcept: Str(700),
+  /** The words typeset on the ad picture, written for its format (ad-formats.ts). */
+  onImage: AdOnImageSchema.optional().catch(undefined),
   variants: z
     .array(
       z.object({
@@ -524,6 +543,10 @@ type BuildArgs = {
   storyTheme?: StoryTheme;
   /** Repurposing: the piece this one is made from (already in this workspace). */
   source?: { title: string; body: string; kind: string } | null;
+  /** The brand's real product this piece shows (src/lib/products/catalog.ts). */
+  product?: JobProduct | null;
+  /** Ads: the designed layout the picture follows (ad-formats.ts). */
+  adFormat?: AdFormat | null;
 };
 
 function platformRubric(platforms: PlatformId[]): string {
@@ -738,10 +761,18 @@ export function buildAdPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof AdSch
           .map((p) => AD_LIMITS[p])
           .filter(Boolean)
           .join(" "),
-        "`visualConcept` describes one ad visual that works for all variants: subject, setting, composition, mood. Leave space for the platform UI; no text in the image beyond a short product name if essential.",
+        args.adFormat
+          ? "`visualConcept` describes the ad picture for the layout below: the subject, setting, props, light and mood, in concrete words a photographer could shoot. It names the featured product when there is one. Do not repeat the on-image words in it."
+          : "`visualConcept` describes one ad visual that works for all variants: subject, setting, composition, mood. Leave space for the platform UI; no text in the image beyond a short product name if essential.",
+        args.adFormat ? adFormatDirective(args.adFormat) : "",
+        args.product
+          ? `The ad sells the featured product "${args.product.name}". Its photo is attached; describe it as it really looks.`
+          : "",
         args.controls.cta ? `Preferred CTA: ${args.controls.cta}` : "",
       ].filter(Boolean),
-      `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`,
+      args.adFormat
+        ? `{"title": string, "visualConcept": string, "onImage": {"headline": string, "support": string, "badge": string, "points": string[], "cta": string}, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`
+        : `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`,
     ),
     user: sections([...sharedUser(args, "ad"), ...refineSections(args.refine, args.current)]),
     schema: AdSchema,
@@ -766,6 +797,11 @@ export function buildVisualBriefPrompt(
           ? `\`concept\` is a shot plan for a ${args.controls.durationSec ?? 10}-second clip: opening frame (the hook), camera movement, the key product/service moment, and the closing frame. Concrete and filmable. ${args.source?.kind === "script" && args.controls.audio !== false ? "Follow the supplied script in order, retaining its voiceover and dialogue verbatim alongside each shot. Fit its timing to the selected duration without inventing claims." : "No dialogue."}`
           : "`concept` describes one strong visual idea: subject, setting, composition, lighting, mood, and how it reinforces the brief. Concrete, something a photographer or illustrator could execute.",
         "Ground the visual in the brand's actual product, audience and identity. Choose a recognizable focal subject and a distinct visual treatment; avoid generic stock imagery or fabricated product details.",
+        ...(args.product
+          ? [
+              `The featured product "${args.product.name}" is the hero of this ${video ? "video" : "picture"}; its photo is attached. Build the ${video ? "shots" : "scene"} around it and describe it as it really looks, never a different or redesigned item.`,
+            ]
+          : []),
         ...(video
           ? [
               `Write one shot per line as [start–ends] followed by the visual direction, covering the entire ${args.controls.durationSec ?? 10} seconds. Keep the same subjects, product, clothing, location and lighting across connected shots.`,

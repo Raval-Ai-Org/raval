@@ -2,6 +2,8 @@ import "server-only";
 import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { ImageStyleInput } from "@/lib/post-image";
+import { onImageCopyLines, type AdFormat, type AdOnImage } from "@/lib/studio/ad-formats";
+import { productFidelity } from "@/lib/products/catalog";
 
 type Common = {
   index: number;
@@ -13,6 +15,8 @@ type Common = {
   style: ImageStyleInput | null;
   revision?: string;
   novelty?: string;
+  /** The real product's fidelity rule (productFidelity), when a product is attached. */
+  productNote?: string;
 };
 
 function visualSystem(args: Common): string {
@@ -34,6 +38,9 @@ function visualSystem(args: Common): string {
       ? `Use the ${args.style.references.count} attached visual reference(s) with ${args.style.references.strength} fidelity to the visual language.`
       : "",
     args.brandContext ? `Verified brand context: ${args.brandContext.slice(0, 1100)}` : "",
+    args.productNote
+      ? `${args.productNote} Show it wherever this frame's visual direction involves the product, and always on the first frame; it must look identical in every frame where it appears.`
+      : "",
     args.visualTasteRules,
     args.revision,
     args.novelty,
@@ -107,6 +114,65 @@ export function storyFramePrompt(
     frame.visual ? `Visual direction: ${frame.visual}` : "",
     `Series narrative: ${args.frames.map((f, i) => `${i + 1}. ${f.heading}`).join(" | ")}`,
     "Do not draw simulated app controls, progress bars or reply boxes. Do not add any extra words.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
+ * A finished, designed static ad in one of the proven layouts (ad-formats.ts):
+ * the real product, the exact on-image copy, the brand's colours. Replaces the
+ * old text-free "ad visual", which read as a mood photo, not an ad.
+ */
+export function adImagePrompt(args: {
+  format: AdFormat;
+  copy: AdOnImage;
+  scene: string;
+  brandName: string;
+  brandContext: string;
+  palette: string[];
+  fonts: string[];
+  ratio: string;
+  style: ImageStyleInput | null;
+  visualTasteRules?: string;
+  /** Which attached image is the product, or none. */
+  product?: { name: string; position: number } | null;
+  /** The corner kept clear for the real logo, added afterward. */
+  logoCorner?: string | null;
+  revision?: string;
+  novelty?: string;
+}): string {
+  const vertical = args.ratio === "9:16";
+  const lines = onImageCopyLines(args.copy);
+  return [
+    `Create a finished, ready-to-run paid social ad for ${args.brandName}, ${args.ratio} format. It must look like a top-performing ad made by a professional performance creative team: one clear focal point, an obvious reading order (badge, headline, product, supporting line, button), strong contrast, and every word legible on a phone held at arm's length.`,
+    `Layout: ${args.format.layout}`,
+    args.scene ? `Scene and subject: ${args.scene}` : "",
+    args.product ? productFidelity(args.product.name, args.product.position) : "",
+    args.palette.length
+      ? `Brand colours, use these and close tints only: ${args.palette.slice(0, 5).join(", ")}. The first is the main colour; use the strongest contrasting one for the button and badge.`
+      : "",
+    args.fonts.length
+      ? `Typography: clean, confident type in the spirit of ${args.fonts.slice(0, 2).join(" and ")}; a heavy weight for the headline, regular for the rest. Never more than two typefaces.`
+      : "Typography: one clean, confident sans-serif; heavy weight for the headline, regular for the rest.",
+    args.style ? `Approved brand style: ${args.style.block.slice(0, 1600)}` : "",
+    args.style?.mood ? `Mood and finish: ${args.style.mood}` : "",
+    args.brandContext ? `Verified brand context: ${args.brandContext.slice(0, 900)}` : "",
+    args.visualTasteRules,
+    lines.length
+      ? [
+          "Typeset exactly these words, spelled exactly as given, and no other words anywhere in the ad:",
+          ...lines,
+          "If a line cannot fit cleanly, leave it out rather than shrinking it until it is unreadable or changing its words.",
+        ].join("\n")
+      : "No words in the image.",
+    `Keep all text at least 6% away from every edge${vertical ? ", and keep the top 14% and bottom 20% free of text for the platform's own buttons" : ""}.`,
+    args.logoCorner
+      ? `Leave the ${args.logoCorner} corner clear (about 16% of the width): the brand's real logo is placed there afterward. Do not draw any logo.`
+      : "Do not draw a logo.",
+    args.revision,
+    args.novelty,
+    "Never: invented claims, prices, discounts, ratings, reviews or people's names; another brand's logo or product; fake app screens, status bars or social media buttons; watermarks; gibberish text.",
   ]
     .filter(Boolean)
     .join("\n\n");

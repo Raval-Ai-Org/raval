@@ -140,10 +140,14 @@ import {
 } from "@/server/brand-visuals/service.server";
 import { applyVisualTaste } from "@/lib/brand-visuals/apply";
 import {
+  adImagePrompt,
   carouselBackdropPrompt,
   carouselSlidePrompt,
   storyFramePrompt,
 } from "./visual-prompts.server";
+import { productForJob, productImageUrl } from "@/server/products/catalog.server";
+import { productFidelity, type JobProduct } from "@/lib/products/catalog";
+import { getAdFormat, pickAdFormat, type AdFormat } from "@/lib/studio/ad-formats";
 
 /** The media slot of a connected carousel's one background picture. */
 const BACKDROP_SLOT = "backdrop";
@@ -169,6 +173,8 @@ type ProviderTask = {
   prompt: string;
   referenceAssets?: string[];
   referenceAssetPath?: string;
+  /** The signed product photo URL in `referenceAssets`, replaced by a fresh one on retry. */
+  productReference?: string;
   /** The workspace's real logo, drawn on by code once the image is finished. */
   logo?: { url: string; corner: LogoCorner };
   referenceWarning?: string;
@@ -917,6 +923,29 @@ async function loadSource(
 
 /* ───────────────────────── media ───────────────────────── */
 
+/** Formats that can show the brand's real product. */
+const PRODUCT_TYPES = new Set<StudioType>(["social", "image", "ad", "carousel", "story", "video"]);
+
+/** The product photo for the copy model to see. Optional: never fails a job. */
+async function productVisionImage(job: JobRow, product: JobProduct) {
+  const url = await productImageUrl(job.workspace_id, product);
+  if (!url || !product.storagePath) return [];
+  try {
+    return await studioReferenceImages([
+      {
+        id: product.id,
+        filename: "product",
+        mimeType: "image/jpeg",
+        storagePath: product.storagePath,
+        url,
+      },
+    ]);
+  } catch (error) {
+    console.warn("[studio] product photo unavailable for the brief", error);
+    return [];
+  }
+}
+
 function brandLite(brand: CreateJobInput["brand"]): BrandDnaLite | null {
   return (brand ?? null) as BrandDnaLite | null;
 }
@@ -1037,11 +1066,33 @@ async function startMedia(args: {
         "Visual reference images were unavailable. Saved brand guidance was still applied.",
       ]),
     ];
+  // The brand's real product comes right after any image being edited, so the
+  // model keeps it exact; its position is named in the prompt.
+  const productUrl = await productImageUrl(job.workspace_id, output.product);
+  if (output.product && !productUrl)
+    output.warnings = [
+      ...new Set([
+        ...(output.warnings ?? []),
+        "The product photo was unavailable, so this render may not show the exact product.",
+      ]),
+    ];
+  const productName = output.product?.name ?? "";
+  const withProduct = (lead: string[], rest: string[]) => {
+    const urls = [...new Set([...lead, ...(productUrl ? [productUrl] : []), ...rest])].slice(0, 4);
+    const position = productUrl ? urls.indexOf(productUrl) + 1 : 0;
+    return {
+      urls,
+      productNote: position ? productFidelity(productName, position) : undefined,
+      productReference: position ? productUrl! : undefined,
+    };
+  };
 
   if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
     if (input.controls.videoPreview) {
+      const refs = withProduct([], approvedReferences);
       const prompt = [
         `Create one polished first frame for this branded video: ${output.concept ?? input.intent.brief}`,
+        refs.productNote,
         ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
         ctx.style ? imageStyleInput(ctx.style)?.block : "",
         "No words, logos, caption boxes or fake interface. Preserve the supplied product identity.",
@@ -1052,7 +1103,7 @@ async function startMedia(args: {
         costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
         prompt,
         size: IMAGE_SIZE_BY_RATIO[ratio] as ImageSize,
-        referenceAssets: approvedReferences,
+        referenceAssets: refs.urls,
       });
       return [
         {
@@ -1060,6 +1111,9 @@ async function startMedia(args: {
           kind: "image",
           ratio,
           prompt,
+          ...(refs.productReference
+            ? { referenceAssets: refs.urls, productReference: refs.productReference }
+            : {}),
           startedAt: Date.now(),
           state: "pending",
           ...started,
@@ -1071,8 +1125,10 @@ async function startMedia(args: {
     // The shot plan written in the brief stage drives the render; the user's
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
+    const videoRefs = withProduct(args.referenceUrl ? [args.referenceUrl] : [], approvedReferences);
     const full = videoPrompt(
       [
+        videoRefs.productNote,
         input.intent.sourceScript
           ? sourceScriptDirection(
               input.intent.sourceScript,
@@ -1090,12 +1146,10 @@ async function startMedia(args: {
       ratio,
       seconds,
     );
-    const videoImages = [
-      ...(args.referenceUrl ? [args.referenceUrl] : []),
-      ...approvedReferences,
-    ].slice(0, 4);
+    const videoImages = videoRefs.urls;
     const ownImages = new Set([
       ...(args.referenceUrl ? [args.referenceUrl] : []),
+      ...(productUrl ? [productUrl] : []),
       ...suppliedReferences.map((reference) => reference.url),
     ]);
     const started = await startStudioVideo({
@@ -1164,10 +1218,10 @@ async function startMedia(args: {
 
   const size = IMAGE_SIZE_BY_RATIO[ratio];
   if (!size) throw new StudioJobError(400, `${RATIOS[ratio].label} isn't available for images.`);
-  const referenceAssets = [
-    ...new Set([...(args.referenceUrl ? [args.referenceUrl] : []), ...approvedReferences]),
-  ].slice(0, 4);
+  const refs = withProduct(args.referenceUrl ? [args.referenceUrl] : [], approvedReferences);
+  const referenceAssets = refs.urls;
   const seriesReferences = referenceAssets;
+  const productTask = refs.productReference ? { productReference: refs.productReference } : {};
   if (job.type === "carousel" && output.slides?.length) {
     return Promise.all(
       output.slides.map(async (slide, index) => {
@@ -1183,6 +1237,7 @@ async function startMedia(args: {
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
+          productNote: refs.productNote,
         });
         const started = await startImageTask({
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
@@ -1196,6 +1251,7 @@ async function startMedia(args: {
           ratio,
           prompt,
           referenceAssets: seriesReferences,
+          ...productTask,
           startedAt: Date.now(),
           state: "pending" as const,
           ...started,
@@ -1217,6 +1273,7 @@ async function startMedia(args: {
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
           novelty: noveltyNote,
+          productNote: refs.productNote,
         });
         const renderPrompt = ctx.visualTaste?.direction.composed
           ? `${prompt}\nRender only the supporting artwork with no words, labels or panels. Exact typography is drawn by Mellox afterward. The source copy describes the mood only.`
@@ -1233,6 +1290,7 @@ async function startMedia(args: {
           ratio,
           prompt: renderPrompt,
           referenceAssets: seriesReferences,
+          ...productTask,
           startedAt: Date.now(),
           state: "pending" as const,
           ...started,
@@ -1256,38 +1314,68 @@ async function startMedia(args: {
       : input.controls.referenceMode === "inspire" && suppliedReferences.length
         ? "The supplied images are visual inspiration for a new composition; do not copy their text or present the result as the original photo."
         : undefined;
-  const prompt = imagePrompt({
-    body,
-    title: output.title ?? input.intent.brief.slice(0, 80),
-    brand: styled,
-    ctx,
-    platform: platforms[0] ?? null,
-    ratio,
-    seed,
-    variationKey,
-    extra: [
-      refineNote,
-      noveltyNote,
-      sourceInstruction,
-      compose
-        ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
-        : undefined,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
-    style: ctx.style ? imageStyleInput(ctx.style) : null,
-  });
+  const look = ctx.style ? imageStyleInput(ctx.style) : null;
+  const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
+  const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
+  const logoAt = logoUrl ? (look?.logoCorner ?? logoCorner(builderSize)) : null;
+  // An ad with a layout is a finished, designed ad with its exact copy; a
+  // look that allows no words on pictures, or composed artwork, keeps the
+  // plain visual.
+  const adFormat = job.type === "ad" ? getAdFormat(output.adFormat) : null;
+  const designedAd =
+    adFormat && output.adOnImage && !compose && look?.maxWords !== 0 && !sourceInstruction;
+  const prompt = designedAd
+    ? adImagePrompt({
+        format: adFormat,
+        copy: {
+          ...output.adOnImage!,
+          cta: output.adOnImage!.cta || output.ads?.[0]?.cta || "",
+        },
+        scene: (output as StudioJobOutput & { visualConcept?: string }).visualConcept ?? body,
+        brandName: ctx.brandName,
+        brandContext: ctx.visualBrandText ?? ctx.brandText,
+        palette: look?.colors.length
+          ? look.colors
+          : (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+        fonts: look?.fonts.length ? look.fonts : (styled?.fonts ?? []).filter(Boolean),
+        ratio,
+        style: look,
+        visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+        product: refs.productNote
+          ? { name: productName, position: refs.urls.indexOf(productUrl!) + 1 }
+          : null,
+        logoCorner: logoAt,
+        revision: refineNote,
+        novelty: noveltyNote,
+      })
+    : imagePrompt({
+        body,
+        title: output.title ?? input.intent.brief.slice(0, 80),
+        brand: styled,
+        ctx,
+        platform: platforms[0] ?? null,
+        ratio,
+        seed,
+        variationKey,
+        extra: [
+          refs.productNote,
+          refineNote,
+          noveltyNote,
+          sourceInstruction,
+          compose
+            ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        style: look,
+      });
   const started = await startImageTask({
     costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
     prompt,
     size: size as ImageSize,
     referenceAssets,
   });
-  // Same rule the prompt was built with: it told the model to leave this
-  // corner clean because the real logo goes there.
-  const look = ctx.style ? imageStyleInput(ctx.style) : null;
-  const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
-  const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   return [
     {
       slot: "main",
@@ -1296,9 +1384,8 @@ async function startMedia(args: {
       ratio,
       prompt,
       referenceAssets,
-      ...(logoUrl
-        ? { logo: { url: logoUrl, corner: look?.logoCorner ?? logoCorner(builderSize) } }
-        : {}),
+      ...productTask,
+      ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
       startedAt: Date.now(),
       state: "pending",
       ...started,
@@ -1610,6 +1697,29 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
               : input.controls.storyTheme,
         })
       : undefined;
+  // The brand's real product this piece shows, and for an ad the designed
+  // layout it follows. A revision keeps both, so an edit never swaps them.
+  const product: JobProduct | null = !PRODUCT_TYPES.has(type)
+    ? null
+    : input.refine && parent?.output
+      ? (parent.output.product ?? null)
+      : await productForJob(job.workspace_id, {
+          chosen: controls.productId,
+          brief: input.intent.brief,
+          type,
+        });
+  const adFormat: AdFormat | null =
+    type !== "ad"
+      ? null
+      : input.refine && parent?.output?.adFormat
+        ? getAdFormat(parent.output.adFormat)
+        : pickAdFormat({
+            chosen: controls.adFormat,
+            goal: input.intent.goal,
+            hasProduct: !!product?.storagePath,
+            seed: input.idempotencyKey,
+            recent: ctx.recent.filter((r) => r.type === "ad").map((r) => r.adFormat),
+          });
   const source = input.intent.sourceScript
     ? {
         kind: "script",
@@ -1622,10 +1732,11 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     controls.referenceAssetIds?.length && !studioTextOnlyRevision(input)
       ? await resolveStudioReferences(client, job.workspace_id, controls.referenceAssetIds)
       : [];
-  const referenceImages =
-    !mediaOnly && !studioTextOnlyRevision(input)
-      ? await studioReferenceImages(studioReferences)
-      : undefined;
+  const textStageImages = !mediaOnly && !studioTextOnlyRevision(input);
+  const productPhoto = product && textStageImages ? await productVisionImage(job, product) : [];
+  const referenceImages = textStageImages
+    ? [...productPhoto, ...(await studioReferenceImages(studioReferences))]
+    : undefined;
 
   let output: StudioJobOutput = { ...(parent?.output ?? {}) };
   // Visual-only revisions must use edits saved on the content rows.
@@ -1663,6 +1774,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       carouselStructure,
       storyTheme,
       source,
+      product,
+      adFormat,
       refine: input.refine,
       current: parent?.output,
     };
@@ -1772,6 +1885,9 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     partial: partial.length ? partial : undefined,
   });
   if (visualTaste) output.visualTaste = visualTaste;
+  if (product) output.product = product;
+  else delete output.product;
+  if (adFormat) output.adFormat = adFormat.id;
   if (visualTaste?.direction.composed && !["video", "carousel", "story"].includes(type))
     output.artwork = {
       headline: output.title ?? input.intent.brief.slice(0, 90),
@@ -1872,6 +1988,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         intent_goal: input.intent.goal ?? null,
         idea_id: input.intent.ideaId ?? null,
         template: input.intent.template ?? null,
+        ...(adFormat ? { ad_format: adFormat.id } : {}),
+        ...(product ? { product_id: product.id } : {}),
         // The job's headline, so every surface titles the piece consistently.
         job_title: title,
         brand_version: brandVersion(input.brand),
@@ -2168,6 +2286,7 @@ async function shapeOutput(args: {
         title,
         ads: parsed.variants as StudioJobOutput["ads"],
         ...({ visualConcept: String(parsed.visualConcept ?? "") } as object),
+        ...(parsed.onImage ? { adOnImage: parsed.onImage as StudioJobOutput["adOnImage"] } : {}),
       };
     case "image":
     case "video": {
@@ -2314,9 +2433,24 @@ async function checkMediaTask(task: ProviderTask): Promise<MediaCheck> {
 
 /* ───────────────────────── poll / advance ───────────────────────── */
 
+/** The product a render was asked to show, for the review to compare against. */
+async function reviewProduct(row: JobRow, task: ProviderTask) {
+  if (!task.productReference || !row.output?.product) return undefined;
+  const url = await productImageUrl(row.workspace_id, row.output.product);
+  return url ? { name: row.output.product.name, url } : undefined;
+}
+
 async function retryReferenceUrls(client: Db, row: JobRow, task: ProviderTask) {
   const ids = row.input?.controls?.referenceAssetIds;
-  if (!ids?.length && !row.output?.visualTaste) return task.referenceAssets;
+  // Same order as the first attempt (startMedia), so "attached image N" still holds.
+  const product = task.productReference
+    ? await productImageUrl(row.workspace_id, row.output?.product)
+    : null;
+  if (!ids?.length && !row.output?.visualTaste && !product)
+    // A product photo that is gone since the first attempt is not resent.
+    return task.productReference
+      ? task.referenceAssets?.filter((url) => url !== task.productReference)
+      : task.referenceAssets;
   const supplied = await resolveStudioReferences(client, row.workspace_id, ids);
   const previous =
     task.referenceAssetPath && isWorkspaceStoragePath(task.referenceAssetPath, row.workspace_id)
@@ -2324,14 +2458,19 @@ async function retryReferenceUrls(client: Db, row: JobRow, task: ProviderTask) {
       : null;
   const style = row.output?.visualTaste
     ? await resolveVisualReferenceUrls(row.workspace_id, row.output.visualTaste)
-    : (task.referenceAssets ?? []);
-  return [
+    : (task.referenceAssets ?? []).filter(
+        (url) => url !== task.productReference && url !== previous,
+      );
+  const urls = [
     ...new Set([
       ...(previous ? [previous] : []),
+      ...(product ? [product] : []),
       ...supplied.map((reference) => reference.url),
       ...style,
     ]),
   ].slice(0, 4);
+  if (product) task.productReference = product;
+  return urls;
 }
 
 export async function advanceStudioJob(client: unknown, row: JobRow): Promise<JobRow> {
@@ -2537,6 +2676,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
                     ),
                   }
                 : undefined,
+              await reviewProduct(row, task),
             )
           : null;
       const artIssues =
