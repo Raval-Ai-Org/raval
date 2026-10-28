@@ -274,6 +274,33 @@ describe("UGC render engine", () => {
     expect(store.usageEvents).toHaveLength(0);
   });
 
+  it("submits again when the provider's render ends in an outage, never on a refusal", async () => {
+    const row = await start();
+    provider.checks = [
+      {
+        state: "failed",
+        providerState: "fail",
+        meta: {},
+        code: "render_failed",
+        message: "Internal server error, please try again",
+        retryable: true,
+      },
+      success,
+    ];
+    await tick(row.id, 0);
+    await tick(row.id);
+    let current = (await store.getRender(row.id))!;
+    expect(current).toMatchObject({ status: "submitting", provider_task_id: null });
+    expect([...store.holds.values()][0].state).not.toBe("released");
+    await tick(row.id);
+    expect(provider.submits).toHaveLength(2);
+    await tick(row.id);
+    await tick(row.id);
+    current = (await store.getRender(row.id))!;
+    expect(current.status).toBe("succeeded");
+    expect(store.usageEvents).toHaveLength(1);
+  });
+
   it("retries transient submit errors with backoff, then fails and releases", async () => {
     const row = await start();
     const transient: SubmitResult = {

@@ -17,6 +17,7 @@ import { assertSafeVideo } from "@/server/guardrails/video-safety.server";
 import {
   assertSafeMediaPrompt,
   assertSafeMediaImages,
+  clearedMediaImages,
   MediaSafetyError,
 } from "@/server/guardrails/media-safety.server";
 import {
@@ -78,6 +79,22 @@ function requestFor(req: VideoRenderRequest, provider: VideoProviderId): VideoRe
   };
 }
 
+/** The request without the style references that were left out. */
+function withImages(req: VideoRenderRequest, own: string[], style: string[]): VideoRenderRequest {
+  const imageUrls = [...own, ...style];
+  const required = Math.min(
+    req.requiredReferenceCount ?? (req.requireReferences ? 1 : 0),
+    imageUrls.length,
+  );
+  return {
+    ...req,
+    imageUrls,
+    styleReferenceCount: style.length,
+    requireReferences: Boolean(req.requireReferences && imageUrls.length),
+    requiredReferenceCount: required || undefined,
+  };
+}
+
 export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoProvider {
   const providers = { ...PROVIDERS, ...deps.providers };
   const primary = deps.primary ?? videoProvider;
@@ -94,10 +111,19 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
       return pick(model.provider).generationType(model, imageCount);
     },
 
-    async submit(req: VideoRenderRequest): Promise<SubmitResult> {
+    async submit(request: VideoRenderRequest): Promise<SubmitResult> {
+      let req = request;
       try {
         await assertSafeMediaPrompt(req.prompt);
-        await assertSafeMediaImages(req.imageUrls);
+        const style = Math.min(req.styleReferenceCount ?? 0, req.imageUrls.length);
+        const own = req.imageUrls.slice(0, req.imageUrls.length - style);
+        await assertSafeMediaImages(own);
+        if (style) {
+          // Brand style references the person did not pick: one that is not
+          // cleared is left out, never a reason to fail their render.
+          const kept = await clearedMediaImages(req.imageUrls.slice(own.length));
+          if (kept.length < style) req = withImages(req, own, kept);
+        }
       } catch (error) {
         if (!(error instanceof MediaSafetyError)) throw error;
         return {

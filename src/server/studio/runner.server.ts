@@ -1090,6 +1090,14 @@ async function startMedia(args: {
       ratio,
       seconds,
     );
+    const videoImages = [
+      ...(args.referenceUrl ? [args.referenceUrl] : []),
+      ...approvedReferences,
+    ].slice(0, 4);
+    const ownImages = new Set([
+      ...(args.referenceUrl ? [args.referenceUrl] : []),
+      ...suppliedReferences.map((reference) => reference.url),
+    ]);
     const started = await startStudioVideo({
       modelKey: input.controls.videoModelKey,
       prompt: full,
@@ -1097,10 +1105,9 @@ async function startMedia(args: {
       durationSec: seconds,
       resolution: input.controls.videoQuote?.resolution ?? input.controls.videoResolution ?? "720P",
       audio: input.controls.audio ?? true,
-      imageUrls: [...(args.referenceUrl ? [args.referenceUrl] : []), ...approvedReferences].slice(
-        0,
-        4,
-      ),
+      imageUrls: videoImages,
+      // The brand's saved style references come after the person's own photos.
+      styleReferenceCount: videoImages.filter((url) => !ownImages.has(url)).length,
     });
     return [
       {
@@ -2220,6 +2227,7 @@ async function startStudioVideo(opts: {
   resolution: UgcResolution | "480P" | "720P" | "1080P";
   audio: boolean;
   imageUrls: string[];
+  styleReferenceCount?: number;
 }): Promise<{
   taskId: string;
   model: string;
@@ -2238,6 +2246,7 @@ async function startStudioVideo(opts: {
     audio: opts.audio,
     imageUrls: opts.imageUrls,
     requireReferences: opts.imageUrls.length > 0,
+    styleReferenceCount: opts.styleReferenceCount,
   });
   if (!submitted.ok) throw new StudioJobError(submitted.retryable ? 503 : 502, submitted.message);
   return {

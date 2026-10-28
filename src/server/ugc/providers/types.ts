@@ -23,6 +23,12 @@ export type VideoRenderRequest = {
   requireReferences?: boolean;
   /** Leading identity images that cannot be omitted; style references may be limited. */
   requiredReferenceCount?: number;
+  /**
+   * The last N images are brand style references the person did not pick for
+   * this render. One that does not pass safety review is left out instead of
+   * failing the render.
+   */
+  styleReferenceCount?: number;
   /** KIE callback; OpenRouter computes its own (see openRouterVideoCallbackUrl). */
   callbackUrl?: string;
 };
