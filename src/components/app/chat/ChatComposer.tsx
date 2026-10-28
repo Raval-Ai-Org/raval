@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { niceSize, type Attachment } from "@/lib/file-extract";
+import { duration, ease } from "@/lib/motion";
 
 export const CHAT_MODELS: { id: string; label: string; shortLabel: string; hint: string }[] = [
   { id: "mellox-flash", label: "Mellox Flash", shortLabel: "Flash", hint: "Fast answers" },
@@ -168,7 +169,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
           key="cover"
           initial={{ opacity: 0, scale: 0.985 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: duration.slow, ease: ease.emphasized }}
           className="rounded-[inherit]"
         >
           {cover}
@@ -182,7 +183,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: duration.medium, ease: ease.emphasized }}
                 className="overflow-hidden"
               >
                 <div className="flex flex-wrap gap-2 px-3 pt-3">
@@ -388,7 +389,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
                       initial={{ scale: 0.4, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.4, opacity: 0 }}
-                      transition={{ duration: 0.16 }}
+                      transition={{ duration: duration.fast }}
                       className="block size-2.5 rounded-[3px] bg-current"
                     />
                   ) : (
@@ -397,7 +398,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
                       initial={{ y: 6, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
                       exit={{ y: -6, opacity: 0 }}
-                      transition={{ duration: 0.16 }}
+                      transition={{ duration: duration.fast }}
                       className="grid place-items-center"
                     >
                       <ArrowUp className="size-[18px]" strokeWidth={2.4} />
@@ -424,7 +425,7 @@ function ComposerBody({ children }: { children: React.ReactNode }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: duration.base }}
       className="flex flex-col"
     >
       {children}
@@ -447,7 +448,7 @@ function AttachmentChip({ a, onRemove }: { a: Attachment; onRemove: () => void }
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.18 }}
+      transition={{ duration: duration.base }}
       className={cn(
         "group/chip relative flex max-w-[220px] items-center gap-2 rounded-xl border py-1.5 pl-1.5 pr-2 text-[12px]",
         a.status === "error"

@@ -19,6 +19,7 @@ import {
   type StarterGroupId,
   type StarterSource,
 } from "@/lib/chat/starters";
+import { duration, ease, spring } from "@/lib/motion";
 
 export type Starter = {
   /** Sent as-is. */
@@ -60,13 +61,13 @@ export function ChatGreeting({
     <motion.div
       initial={reducedMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: duration.xslow, ease: ease.emphasized }}
       className="flex shrink-0 flex-col items-center px-4 text-center"
     >
       <motion.span
         initial={reducedMotion ? false : { scale: 0.6, rotate: -30, opacity: 0 }}
         animate={{ scale: 1, rotate: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 220, damping: 16, delay: 0.05 }}
+        transition={{ ...spring.control, delay: 0.05 }}
         className="mb-4 grid size-12 place-items-center [@media(max-height:500px)]:hidden"
       >
         <Logo height={40} markOnly />
