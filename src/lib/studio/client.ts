@@ -91,6 +91,20 @@ export const studioApi = {
       `/api/studio/jobs?workspaceId=${encodeURIComponent(workspaceId)}&requestKey=${encodeURIComponent(requestKey)}`,
     ).then((result) => result.jobs[0] ?? null);
   },
+  /** Make one of a job's versions the post's picture (free). */
+  chooseVariation(workspaceId: string, id: string, slot: string) {
+    return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/choose`, {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, slot }),
+    }).then((r) => r.job);
+  },
+  /** Undo: put the post back to an earlier version of the same piece (free). */
+  restoreVersion(workspaceId: string, id: string, versionJobId: string) {
+    return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, versionJobId }),
+    }).then((r) => r.job);
+  },
   cancelJob(workspaceId: string, id: string) {
     return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/cancel`, {
       method: "POST",

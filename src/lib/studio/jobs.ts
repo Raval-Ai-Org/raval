@@ -93,6 +93,8 @@ export const ControlsSchema = z.object({
   productId: z.union([z.string().uuid(), z.literal("none")]).optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
   adFormat: z.string().max(40).optional(),
+  /** Variations (src/lib/studio/variations.ts): how many more versions to make. */
+  variationCount: z.number().int().min(2).max(4).optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;

@@ -629,6 +629,103 @@ const SCENES: Scene[] = [
     fixtures: { rows: ROWS.social, distribution: true },
   },
   {
+    id: "review-versions",
+    label: "Review · Versions and edit chat",
+    make: () => {
+      const base = session("ad", "review");
+      const option = (i: number, a: string, b: string): MediaOutput => ({
+        slot: `option:${i}`,
+        kind: "image",
+        ratio: "4:5",
+        status: "ready",
+        url: art(800, 1000, a, b, `Version ${i + 2}`),
+        assetId: `a${i + 2}`,
+        storagePath: "x",
+      });
+      const job = {
+        ...base.job!,
+        id: "job-ad-v3",
+        parent_job_id: "job-ad-v2",
+        output: {
+          ...base.job!.output,
+          adFormat: "product-hero",
+          adOnImage: {
+            headline: "Coffee that shows up",
+            support: "",
+            badge: "",
+            points: [],
+            cta: "Shop now",
+          },
+          media: [
+            ...(base.job!.output.media ?? []),
+            option(0, "#1f3d2b", "#7fb069"),
+            option(1, "#5b3a29", "#e9a23b"),
+            {
+              slot: "option:2",
+              kind: "image" as const,
+              ratio: "4:5" as const,
+              status: "failed" as const,
+            },
+          ],
+        },
+      };
+      return {
+        ...base,
+        job,
+        lastGood: job,
+        edits: [
+          {
+            id: "t1",
+            text: "Make the background warmer",
+            aim: "picture" as const,
+            fromJobId: "job-ad",
+            jobId: "job-ad-v2",
+            at: Date.now() - 60_000,
+          },
+          {
+            id: "t2",
+            text: "Show me 3 more versions",
+            aim: "versions" as const,
+            fromJobId: "job-ad-v2",
+            jobId: "job-ad-v3",
+            at: Date.now() - 20_000,
+          },
+        ],
+      };
+    },
+    fixtures: { rows: ROWS.ad, distribution: true },
+  },
+  {
+    id: "review-chat-working",
+    label: "Review · Edit chat working",
+    make: () => {
+      const base = session("image", "review");
+      return {
+        ...base,
+        pendingKey: "lab-pending",
+        pendingKind: "refine" as const,
+        edits: [
+          {
+            id: "t1",
+            text: "Shorter caption, friendlier",
+            aim: "words" as const,
+            fromJobId: "job-image-0",
+            jobId: "job-image",
+            at: Date.now() - 60_000,
+          },
+          {
+            id: "t2",
+            text: "Show the product bigger on a simpler background",
+            aim: "picture" as const,
+            fromJobId: "job-image",
+            at: Date.now() - 2_000,
+          },
+        ],
+      };
+    },
+    fixtures: { rows: ROWS.image, distribution: true },
+  },
+  {
     id: "review-image",
     label: "Review · Image 9:16",
     make: () => session("image", "review"),

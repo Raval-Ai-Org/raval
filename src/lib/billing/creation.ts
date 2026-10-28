@@ -1,5 +1,6 @@
 // Versioned creation allowance. Existing credit grants and purchased credit values
 // keep their original terms; this policy applies to newly issued plan windows.
+import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
 import type { PlanId } from "./catalog";
 import type { CreateJobInput } from "@/lib/studio/jobs";
 
@@ -36,6 +37,8 @@ export function creationPointsFor(
   input: Pick<CreateJobInput, "type" | "controls" | "parentJobId" | "refine">,
 ): number | null {
   if (isCaptionRevision(input)) return 1;
+  // More versions of a picture: two points each, like any other picture.
+  if (isVariationsRequest(input)) return 2 * variationCount(input.controls);
   const c = input.controls;
   const kept = c.referenceAssetIds?.length && (c.referenceMode ?? "preserve") === "preserve";
   switch (input.type) {

@@ -713,6 +713,24 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   no words on pictures, composed artwork or a source-photo edit keeps the
   plain visual. A format's copy rules never allow an invented quote, offer,
   figure or competitor.
+- **Versions, the edit chat and the ideas deck** (review tools):
+  - Versions (`src/lib/studio/variations.ts`): a revision with target
+    `variations` renders 2-4 `option:N` slots for a single-picture piece,
+    saved without linking the post. Priced per picture from the catalog's
+    `image_standard` (2 creation points each); only finished versions are
+    captured. Choosing one is `POST /api/studio/jobs/[id]/choose` (free): it
+    links that picture and swaps it with `main`. Any other new render drops
+    old versions.
+  - The edit chat (`EditChat.tsx`, pure routing `src/lib/studio/edit-chat.ts`)
+    is the only change box in review: `planEdit` sends a message to the
+    picture (`media`, edited on the current render), the words, both (`all`)
+    or versions, and shows the price before it is sent. Every message is an
+    ordinary revision. Undo is `POST /api/studio/jobs/[id]/restore` (free),
+    which rewrites the post from the earlier job; not offered for carousels
+    or Stories.
+  - The ideas deck (`IdeaSwipeDeck.tsx`, pure `src/lib/studio/idea-deck.ts`)
+    keeps saved and skipped ideas per browser only. More ideas is always a
+    person's click.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style

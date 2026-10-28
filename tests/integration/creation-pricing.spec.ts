@@ -33,7 +33,7 @@ test("creation pricing and included edits fit a phone without starting paid work
   await expect(
     page.getByRole("button", { name: /Same description, a new version · 2 creation points/ }),
   ).toBeVisible();
-  await expect(page.getByText("Improve · Included caption edit", { exact: true })).toBeVisible();
+  await expect(page.getByText("Words · Included caption edit", { exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("included-edits-phone.png"), fullPage: true });
   await page.setViewportSize({ width: 280, height: 653 });
   await scene.selectOption("brief-creation");

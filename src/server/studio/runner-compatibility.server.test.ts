@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   events: [] as string[],
 }));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
+// Job writes go through the same authorized fixture the test passes in.
+vi.mock("./job-writer.server", () => ({ studioJobWriter: (client: unknown) => client }));
 vi.mock("@/lib/feature-flags", () => ({ isAudienceAutoScoreEnabled: () => false }));
 vi.mock("@/lib/openrouter-image.server", () => ({
   isImageTask: () => true,
@@ -183,4 +185,49 @@ it.each([
   });
   expect(mocks.start).not.toHaveBeenCalled();
   expect(mocks.save).not.toHaveBeenCalled();
+});
+
+it("saves new versions without touching the post, and a missed one is only a warning", async () => {
+  const { row, client } = fixture();
+  const task = row.provider_tasks[0];
+  Object.assign(row, {
+    parent_job_id: "parent",
+    input: {
+      controls: { variationCount: 2 },
+      refine: { instruction: "More versions", target: "variations" },
+    },
+    output: {
+      media: [
+        { slot: "main", kind: "image", ratio: "1:1", status: "ready", assetId: "kept" },
+        { slot: "option:0", kind: "image", ratio: "1:1", status: "pending" },
+        { slot: "option:1", kind: "image", ratio: "1:1", status: "pending" },
+      ],
+    },
+    provider_tasks: [
+      { ...task, slot: "option:0", taskId: "v0" },
+      { ...task, slot: "option:1", taskId: "v1", fallbacks: [] },
+    ],
+  });
+  mocks.review.mockResolvedValue({ status: "pass", issues: [] });
+  // The first version renders like any picture; the second fails.
+  const png = await sharp({ create: { width: 10, height: 10, channels: 3, background: "#123456" } })
+    .png()
+    .toBuffer();
+  mocks.check.mockReset();
+  mocks.check
+    .mockResolvedValueOnce({
+      state: "success",
+      dataUrl: `data:image/png;base64,${png.toString("base64")}`,
+    })
+    .mockResolvedValueOnce({ state: "failed", message: "Provider unavailable", retryable: false });
+  const result = await advanceStudioJob(client, row);
+  expect(result.status).toBe("succeeded");
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  expect(mocks.save.mock.calls[0][0].contentItemIds).toEqual([]);
+  const media = result.output?.media ?? [];
+  expect(media.find((m) => m.slot === "main")?.assetId).toBe("kept");
+  expect(media.find((m) => m.slot === "option:0")?.status).toBe("ready");
+  expect(result.output?.warnings).toContain(
+    "1 of 2 versions couldn't be made. You weren't charged for them.",
+  );
 });

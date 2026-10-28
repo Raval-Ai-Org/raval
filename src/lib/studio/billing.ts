@@ -5,6 +5,12 @@ import { STUDIO_FORMATS, type StudioType } from "./formats";
 import type { CreateJobInput, StudioJob } from "./jobs";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import { creationPriceLabel } from "@/lib/billing/creation";
+import {
+  VARIATION_TARGET,
+  isVariationsRequest,
+  variationCount,
+  variationsCaptured,
+} from "./variations";
 
 export type StudioCharge = CreditAction | "studio_video";
 
@@ -19,13 +25,15 @@ export function studioTextOnlyRevision(input: MediaRequest): boolean {
     input.parentJobId &&
     input.refine &&
     input.refine.target !== "media" &&
-    input.refine.target !== "all",
+    input.refine.target !== "all" &&
+    input.refine.target !== VARIATION_TARGET,
   );
 }
 
 /** Shared by billing, execution and the price shown before a user starts work. */
 export function studioJobRenders(input: MediaRequest): boolean {
   if (studioTextOnlyRevision(input)) return false;
+  if (isVariationsRequest(input)) return true;
   if (input.type === "carousel" || input.type === "story") return true;
   const media = STUDIO_FORMATS[input.type].media;
   return (
@@ -47,7 +55,10 @@ export function studioChargeFor(args: {
   referenceMode?: string;
   referenceAssetIds?: string[];
   articleQuality?: string;
+  /** More versions of a finished picture: priced per picture. */
+  variations?: boolean;
 }): StudioCharge {
+  if (args.variations) return "image_standard";
   if (args.textOnly) return "post_regenerate";
   // Keeping an uploaded photo uses the existing copy price, with no AI-image fee.
   if (
@@ -92,15 +103,17 @@ export function studioPriceLabel(
     const label = creationPriceLabel(input, input.captionEditsRemaining);
     if (label) return label;
   }
+  const variations = isVariationsRequest(input);
   const action = studioChargeFor({
     type: input.type,
     ...input.controls,
     regenerate: input.regenerate || Boolean(input.parentJobId),
     textOnly: studioTextOnlyRevision(input),
+    variations,
   });
   return action === "studio_video"
     ? `${(input.controls.videoQuote?.units ?? studioVideoUnits(input.controls.durationSec)) / VIDEO_UNITS_PER_VC} video credits`
-    : `${creditsFor(action)} credits`;
+    : `${creditsFor(action) * (variations ? variationCount(input.controls) : 1)} credits`;
 }
 
 /** A social post whose optional image failed must not cost the image bundle price. */
@@ -110,6 +123,15 @@ export function studioCapturedAmount(
   meter = "credits",
 ): number {
   if (job.status !== "succeeded") return 0;
+  if (
+    job.input &&
+    isVariationsRequest({
+      ...job.input,
+      type: job.type,
+      parentJobId: job.parent_job_id ?? undefined,
+    })
+  )
+    return variationsCaptured(job, quotedAmount);
   if (
     job.type === "social" &&
     job.output?.partial?.some((part) => part.target === "media") &&

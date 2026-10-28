@@ -13,7 +13,7 @@ test("Studio shows revision prices, source photos and the script-to-video handof
   const scenes = page.locator("select").first();
   await scenes.selectOption("review-image");
   await expect(page.getByRole("button", { name: /New take · 30 credits/ })).toBeVisible();
-  await expect(page.getByText("Improve · 4 credits", { exact: true })).toBeVisible();
+  await expect(page.getByText("Words · 4 credits", { exact: true })).toBeVisible();
   await scenes.selectOption("review-script");
   await expect(page.getByRole("button", { name: "Make video", exact: true })).toBeVisible();
   await expect(page.getByText("Your script is ready.", { exact: false }).first()).toBeVisible();

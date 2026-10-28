@@ -3,6 +3,7 @@
 // and Autopilot (the worker, acting as a stored member). Same price either way.
 import "server-only";
 import { studioChargeFor, studioJobRenders, studioTextOnlyRevision } from "@/lib/studio/billing";
+import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
 import { createStudioJob } from "@/server/studio/runner.server";
@@ -74,6 +75,7 @@ export async function createBilledStudioJob(args: {
     referenceMode: input.controls.referenceMode,
     referenceAssetIds: input.controls.referenceAssetIds,
     articleQuality: input.controls.articleQuality,
+    variations: isVariationsRequest(input),
   });
   const billingRoute =
     studioTextOnlyRevision(input) && ["video", "image", "social"].includes(input.type)
@@ -144,7 +146,8 @@ export async function createBilledStudioJob(args: {
     : (points ??
       (video
         ? (videoQuote?.units ?? studioVideoUnits(input.controls.durationSec))
-        : creditsFor(action as CreditAction)));
+        : creditsFor(action as CreditAction) *
+          (isVariationsRequest(input) ? variationCount(input.controls) : 1)));
   const meter = useCreation
     ? ("creation" as const)
     : video
