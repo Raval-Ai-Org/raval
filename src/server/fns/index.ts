@@ -21,6 +21,7 @@ import * as geo from "./geo";
 import * as geoAeoAudit from "./geo-aeo-audit";
 import * as geoAgent from "./geo-agent";
 import * as geoFixes from "./geo-fixes";
+import * as goals from "./goals";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as links from "./links";
@@ -62,6 +63,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "geo-aeo-audit": geoAeoAudit,
   "geo-agent": geoAgent,
   "geo-fixes": geoFixes,
+  goals,
   "google-analytics": googleAnalytics,
   insights,
   links,

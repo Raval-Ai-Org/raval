@@ -125,7 +125,7 @@ describe("a well-built site", () => {
       "no findings expected",
     ).toEqual([]);
     expect(scored.report.overall).toBe(100);
-    expect(scored.report.scoreVersion).toBe(2);
+    expect(scored.report.scoreVersion).toBe(3);
   });
 
   it("keeps 100 when the owner blocks training crawlers", () => {

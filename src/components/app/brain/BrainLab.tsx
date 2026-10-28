@@ -3,10 +3,10 @@
 // Development-only: the Brain screens with sample data, so layout, motion and
 // copy can be checked without a workspace or a sign-in. Mounted at /brain-lab.
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import type { CatalogProduct } from "@/lib/products/catalog";
 import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
 import { newsSince, type BrainOverview, type BrainSection } from "@/lib/brain/brain";
+import { decideGoals, goalLine } from "@/lib/goals/decide";
+import { goalProgress } from "@/lib/goals/progress";
 import type { MarketingStrategy, StrategyView } from "@/lib/strategy/contracts";
 import { cn } from "@/lib/utils";
 import { BrainHome } from "./BrainHome";
@@ -14,8 +14,6 @@ import { BrainIcon, BrainMark } from "./BrainMark";
 import { BrainPulseView } from "./BrainPulse";
 import { ScanSteps } from "./brand/ScanSteps";
 import { LookEditor } from "./brand/look/LookEditor";
-import { ProductCatalog, ProductsPreview } from "./brand/products/ProductCatalog";
-import { productKeys } from "./brand/products/hooks";
 import { NotesBoard } from "./home/NotesBoard";
 import { StrategyScreen, type StrategyHandlers } from "./strategy/StrategyScreen";
 
@@ -197,6 +195,31 @@ const overview: BrainOverview = {
       cta: "Pick",
     },
   ],
+  goal: (() => {
+    const set = decideGoals(
+      {
+        focus: "followers",
+        targets: [
+          { metric: "followers", platform: "instagram", target: 5000, baseline: 1200 },
+          { metric: "reach", target: 60_000 },
+        ],
+        timeframeWeeks: 12,
+        postsPerWeek: 4,
+        channels: ["instagram"],
+      },
+      new Date(Date.now() - 3 * 7 * 86_400_000),
+    );
+    return set.ok
+      ? {
+          line: goalLine(set.goals),
+          progress: goalProgress(
+            set.goals,
+            { postsPublished: 11, views: 18_400, connected: ["instagram"] },
+            new Date(),
+          ),
+        }
+      : null;
+  })(),
   generatedAt: new Date().toISOString(),
 };
 
@@ -274,8 +297,6 @@ const SCENES = [
   "strategy-writing",
   "pulse",
   "look",
-  "products",
-  "products-empty",
   "notes",
   "scan",
   "marks",
@@ -295,38 +316,7 @@ const sampleDna: BrandDna = {
   fonts: ["Fraunces", "Inter"],
 };
 
-const LAB_WS = "00000000-0000-4000-8000-0000000000ab";
-const EMPTY_WS = "00000000-0000-4000-8000-0000000000ac";
-
-function photo(a: string, b: string, label: string) {
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><rect width='600' height='600' fill='${b}'/><rect x='190' y='120' width='220' height='360' rx='36' fill='${a}'/><text x='300' y='540' font-family='system-ui' font-size='34' text-anchor='middle' fill='${a}'>${label}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-const sampleProducts: CatalogProduct[] = [
-  ["House Espresso Blend", "24.00", "#1f3d2b", "#f6f1e7", true],
-  ["Ethiopia Guji", "19.50", "#e9a23b", "#fbf4e6", false],
-  ["Decaf Colombia", "17.00", "#5b3a29", "#f3ece2", false],
-  ["Café Subscription Box", "89.00", "#1b1b1b", "#e7efe9", false],
-].map(([name, price, a, b, primary], i) => ({
-  id: `00000000-0000-4000-8000-00000000020${i}`,
-  name: name as string,
-  url: `https://northside.example/products/p${i}`,
-  price: `EUR ${price}`,
-  description: "",
-  category: "Coffee",
-  source: "scan",
-  isPrimary: primary as boolean,
-  imageUrl: photo(a as string, b as string, (name as string).split(" ")[0]),
-}));
-
 export function BrainLab() {
-  // Sample catalogues, so the Products tile and editor render without a sign-in.
-  const queryClient = useQueryClient();
-  useState(() => {
-    queryClient.setQueryData(productKeys.list(LAB_WS), sampleProducts);
-    queryClient.setQueryData(productKeys.list(EMPTY_WS), []);
-  });
   const [scene, setScene] = useState<Scene>("home");
   const [last, setLast] = useState<string>("");
   const [pulseOpen, setPulseOpen] = useState(true);
@@ -422,17 +412,6 @@ export function BrainLab() {
         {scene === "look" && (
           <div className="mx-auto max-w-[1100px] p-4 sm:p-7">
             <LookEditor dna={dna} save={(patch) => setDna((d) => ({ ...d, ...patch }))} />
-          </div>
-        )}
-        {(scene === "products" || scene === "products-empty") && (
-          <div className="mx-auto max-w-[1040px] space-y-6 p-4 sm:p-7">
-            <div className="ds-tile h-[170px] w-[280px] overflow-hidden">
-              <ProductsPreview workspaceId={scene === "products" ? LAB_WS : EMPTY_WS} />
-            </div>
-            <ProductCatalog
-              workspaceId={scene === "products" ? LAB_WS : EMPTY_WS}
-              websiteUrl="northside.example"
-            />
           </div>
         )}
         {scene === "notes" && (

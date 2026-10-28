@@ -2,6 +2,7 @@
 // (ADR-0032). This file is the pure half: what the brains are called, how
 // "ready" each one is, how their news is merged, and what is still missing.
 // Browser-safe; no data is invented here, only counted and ordered.
+import type { GoalProgress } from "@/lib/goals/progress";
 
 export const BRAINS = ["brand", "audience", "competitors", "market"] as const;
 export type BrainId = (typeof BRAINS)[number];
@@ -68,6 +69,8 @@ export type BrainOverview = {
   };
   updates: BrainUpdate[];
   needs: BrainNeed[];
+  /** The team's goal and its progress from stored rows only (ADR-0035). Null until set. */
+  goal?: { line: string; progress: GoalProgress } | null;
   generatedAt: string;
 };
 

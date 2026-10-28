@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { productKeys } from "@/components/app/brain/brand/products/hooks";
-import type { CatalogProduct } from "@/lib/products/catalog";
+import { studioProductKeys } from "./ProductAndFormat";
+import type { Product } from "@/lib/products/catalog";
 import { PipelineSection } from "@/components/app/StudioRail";
 import { groupRows, type ContentRow } from "@/lib/studio/content-groups";
 import { LibraryPage } from "@/components/app/LibraryPage";
@@ -34,20 +34,24 @@ function art(w: number, h: number, a: string, b: string, label: string) {
 }
 
 /** The brand's catalogue, as Brain → Brand → Products would list it. */
-const PRODUCTS: CatalogProduct[] = [
-  ["Cold Brew Kit", "29.00", "#3b2a1e", "#c68a4a", true],
-  ["Huila Single Origin", "18.50", "#1f3b2c", "#7fb069", false],
-  ["Ceramic Pour-Over Dripper", "34.00", "#e8e2d6", "#9c8f7a", false],
-].map(([name, price, a, b, primary], i) => ({
+const PRODUCTS: Product[] = [
+  ["Cold Brew Kit", "29.00", "#3b2a1e", "#c68a4a"],
+  ["Huila Single Origin", "18.50", "#1f3b2c", "#7fb069"],
+  ["Ceramic Pour-Over Dripper", "34.00", "#e8e2d6", "#9c8f7a"],
+].map(([name, price, a, b], i) => ({
   id: `00000000-0000-4000-8000-00000000010${i}`,
-  name: name as string,
-  url: `https://brewly.example/products/p${i}`,
-  price: price as string,
+  kind: "product",
+  name,
   description: "",
+  price,
+  url: `https://brewly.example/products/p${i}`,
   category: "Coffee",
+  benefits: [],
+  images: [{ assetId: `p${i}`, url: art(600, 600, a, b, name) }],
+  primaryAssetId: `p${i}`,
   source: "scan",
-  isPrimary: primary as boolean,
-  imageUrl: art(600, 600, a as string, b as string, name as string),
+  position: i,
+  status: "active",
 }));
 
 const IDEAS: StudioIdea[] = [
@@ -648,7 +652,7 @@ const SCENES: Scene[] = [
         parent_job_id: "job-ad-v2",
         output: {
           ...base.job!.output,
-          adFormat: "product-hero",
+          adFormat: "big-number",
           adOnImage: {
             headline: "Coffee that shows up",
             support: "",
@@ -1163,7 +1167,7 @@ const FRAME: Record<Device, string> = {
 export function StudioLab() {
   // Seed the product catalogue so the product and ad layout pickers have data.
   const queryClient = useQueryClient();
-  useState(() => queryClient.setQueryData(productKeys.list(WS), PRODUCTS));
+  useState(() => queryClient.setQueryData(studioProductKeys.list(WS), PRODUCTS));
   const [scene, setScene] = useState(SCENES[0].id);
   const [device, setDevice] = useState<Device>("window");
   const [dark, setDark] = useState(false);

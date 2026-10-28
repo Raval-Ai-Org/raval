@@ -231,11 +231,7 @@ export function ControlsPanel({
         />
       )}
       {session.type === "ad" && (
-        <AdFormatPicker
-          workspaceId={session.workspaceId}
-          value={c.adFormat}
-          onChange={(adFormat) => set({ adFormat })}
-        />
+        <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
       )}
 
       {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (

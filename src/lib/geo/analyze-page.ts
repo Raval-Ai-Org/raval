@@ -14,6 +14,8 @@ import {
   titleH1Alignment,
 } from "./analyze/content";
 import { analyzeClaims, analyzeSources, analyzeTrust } from "./analyze/trust";
+import { analyzeHygiene } from "./analyze/hygiene";
+import { analyzeCitability } from "./analyze/citability";
 import { clip, hostOf } from "./analyze/text";
 import type { LinkRef, PageAnalysis, PageType, SchemaSummary } from "./types";
 
@@ -204,6 +206,15 @@ export function analyzePage(
     schemaMismatches,
     quotes: raw.quotes,
     inlineScriptBytes: raw.inlineScriptBytes,
+    hygiene: analyzeHygiene(html, pageUrl),
+    citability: analyzeCitability({
+      paragraphs: raw.paragraphs,
+      title,
+      h1: firstH1,
+      lang: raw.lang,
+      bodyText: raw.bodyText,
+      tables: html.match(/<table[\s>]/gi)?.length ?? 0,
+    }),
   };
 }
 

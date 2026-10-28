@@ -79,7 +79,9 @@ export type RateLimitTier =
   | "chat-action"
   | "admin-read"
   | "admin-write"
-  | "admin-danger";
+  | "admin-danger"
+  | "setup-write"
+  | "product-import";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -205,6 +207,11 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Memory (ADR-0033): adding, editing and removing what a brand remembers.
   // Database work only; a person tidying a list makes a burst of these.
   "memory-write": { limit: 60, windowSeconds: 60, label: "memory change" },
+  // Goals and the product catalogue (ADR-0035): database writes from a
+  // person editing cards, so a burst is normal.
+  "setup-write": { limit: 60, windowSeconds: 60, label: "setup change" },
+  // Keeping discovered products downloads their photos through the SSRF guard.
+  "product-import": { limit: 10, windowSeconds: 600, label: "product import" },
   // A person clicking a button chat offered. The work it starts is held to
   // its own tier and billing as well.
   "chat-action": { limit: 30, windowSeconds: 60, label: "chat action" },

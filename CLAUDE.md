@@ -212,6 +212,45 @@ generators get no memory block. Chat tools off: chat is one plain reply.
   them with sample data in development (`tests/integration/memory-lab.spec.ts`).
 - Live check: `tests/live/memory.live.ts`.
 
+## Onboarding, goals and products
+
+Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
+[ADR-0035](docs/adr/0035-goals-and-product-catalog.md).
+
+- **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
+  website → goal (asked while the scan runs) → Brand DNA → products → channels
+  → first posts. "I don't have a website" swaps the scan for three questions.
+  New projects always start in onboarding. `/onboarding-lab` renders every new
+  step with sample data (`tests/integration/onboarding-lab.spec.ts`).
+- **Goals are the person's numbers** (`workspace_goals`).
+  - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the
+    RPC in `src/server/fns/goals.ts`.
+  - Save only through `decideGoals`. Never write an estimate into a goal.
+  - Progress (`goalProgress`, `GoalCard` on Brain home) counts only posts that
+    went out and their views. Followers, subscribers, leads and sales say "not
+    measured" until Mellox can really read them.
+  - Generators read the goal through `goalBlockFor`.
+  - The strategy follows it through `followGoals`, which pins the goal, the
+    first KPI and the weekly pace. Autopilot proposes its pace and channels.
+- **Products are rows; photos are assets** (`workspace_products`).
+  - Pure rules are in `src/lib/products/`, the server in `src/server/products/`.
+  - Discovery reads the site's own product data (Shopify feed, schema.org
+    Product) through `safeFetch`, with no model call, alongside the scan.
+  - Photos are `assets` rows checked against the workspace; never use a URL
+    or path from the browser. Upload through `POST /api/products/photos`.
+  - `BrandDna.products` is a summary of the catalogue. It is only rewritten
+    while it still says what Mellox wrote last.
+- **A product's photo is never redrawn.** `controls.productId` on a Studio job
+  keeps the product's main photo (`referenceMode: "preserve"`).
+  `createBilledStudioJob` decides this before pricing. The product's stored
+  facts lead the prompt (`productContextFor`), with the rule to claim nothing
+  else. Generators read the catalogue through `catalogBlockFor`.
+- **First posts are a person's click.** Three ordinary Studio jobs through the
+  metered route, with the price on the button. Keys are fixed per post
+  (`onboarding-first:<workspaceId>:<n>`), so nothing is made or charged twice.
+  A 402 never blocks finishing setup.
+- Editing after onboarding: Brain → Brand → **Products** and **Goal** tiles.
+
 ## App tour (a new person's first look around)
 
 - **Once per account, never per workspace.** `profiles.app_tour_seen_at`
@@ -334,6 +373,24 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
     (a test enforces it).
   - **Activity log:** `geo_agent_events` holds real tool/transition summaries
     only, never model reasoning.
+- **Score version 3** ([ADR-0035](docs/adr/0035-geo-engine-v3-http-citability-speed.md),
+  rules in `src/lib/geo/rules-v3.ts`): HTTP behaviour (`analysis.http`,
+  `site.http`), citability and hidden instructions to AI (`analysis.citability`,
+  `analysis.hygiene`), and speed (`site.performance`). Every v3 rule is N/A when
+  its evidence wasn't collected — keep it that way.
+  - **Speed** goes only through `src/server/geo/performance.server.ts`
+    (PageSpeed Insights + Chrome UX Report, Mellox's `GOOGLE_PAGESPEED_API_KEY`
+    in a header). The runner measures inside `crawling` after the frontier
+    empties, saving each result so a slice resumes; quick scans get real-user
+    data only, verification scans nothing. Flag `FEATURE_FLAG_GEO_PERFORMANCE_ENABLED`.
+  - `pageImportance` in `score.ts` orders findings; it never changes a score.
+  - Response-header fixes stay manual: `paths.ts` never lets Mellox write
+    hosting configuration. Don't loosen it to automate them.
+  - `PerformanceView` and `FixImpactView` are presentational; `/geo-lab`
+    renders them with sample data in development.
+  - The live check (`tests/live/geo-scan.live.ts`) drives 240-second slices: a
+    shorter slice expires the lease and the deployed worker's pg_cron finishes
+    the scan with production code.
 - Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
   rule summaries; every rule id must be mapped (a test enforces it).
 - WordPress / Webflow sites (migration `20260929090000_geo_site_connectors.sql`):
@@ -693,26 +750,30 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   run-schedules hook via the one search path. Generators only read it: a brief
   never triggers a trends search. A trend is kept only if it cites a source the
   search returned (`groundTrends`). Flag `FEATURE_FLAG_SOCIAL_TRENDS_ENABLED`.
-- **The real product, never an invented one.** A brand's products live in
-  `workspace_products` (pure half `src/lib/products/catalog.ts`; server
-  `src/server/products/catalog.server.ts`; RPC `src/server/fns/products.ts`; UI
-  Brain → Brand → Products, `brain/brand/products/`). The Brand scan finds them
-  (Shopify's `/products.json`, else product pages from the homepage and
-  sitemap, all through `safeFetch`, no model) and stores one photo per product
-  as a workspace asset. A product a person removed is never brought back.
-  - Studio picks the product with the pure `pickProduct` (the person's choice,
-    "none", one the brief names, else the main product for an ad) and keeps it
-    on `output.product`. Its photo goes right after any image being edited in
-    the references, with `productFidelity` naming its position; retries re-sign
-    it (`ProviderTask.productReference`). The image review compares the render
-    with that photo. Never send a product photo without that instruction.
+- **Art direction is one library** (`src/lib/studio/art-direction.ts`, pure):
+  proven campaign layouts (oversized object, product in its own world,
+  exploded view, miniature diorama, giant word behind the subject, and so on),
+  written brand-neutral, plus the craft rules every picture gets. The image
+  brief picks a layout (`artDirection`), post images and carousel covers are
+  staged on it, and a brand style with its own layout or exact references
+  keeps that layout. Add a layout there; never name another brand in it.
+- **Creative knowledge is one module** (`src/lib/studio/creative-knowledge.ts`,
+  pure; sources and licences in [docs/studio/creative-knowledge.md](docs/studio/creative-knowledge.md)):
+  deliverables (offer, event, launch, quote, tips cover...) with reading order
+  and "never invent" rules, exact copy as verbatim data with one emphasis per
+  brand, the type system, the final quality check, and the writers' cover test
+  and self-review. Post images, carousel slides, Story frames and the briefs
+  read it; add a rule there, never in one prompt only. Keep the attribution
+  table current when a source changes.
 - **An ad is a designed ad.** `src/lib/studio/ad-formats.ts` holds the proven
   static layouts (ids stored on jobs: add, never rename). The ad prompt picks
   one (`pickAdFormat`), the copy model writes `onImage` for it, and
   `adImagePrompt` renders a finished ad with exactly those words. A look with
   no words on pictures, composed artwork or a source-photo edit keeps the
-  plain visual. A format's copy rules never allow an invented quote, offer,
-  figure or competitor.
+  plain visual, and so does an ad about a picked product (its photo is kept
+  unchanged, ADR-0035), so layouts that need a product (`needsProduct`) are
+  not offered or picked. A format's copy rules never allow an invented quote,
+  offer, figure or competitor.
 - **Versions, the edit chat and the ideas deck** (review tools):
   - Versions (`src/lib/studio/variations.ts`): a revision with target
     `variations` renders 2-4 `option:N` slots for a single-picture piece,

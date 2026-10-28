@@ -11,6 +11,7 @@ import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context"
 import { audienceBlock } from "@/lib/audience/twins";
 import { isAudienceEnabled } from "@/lib/feature-flags";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
+import { readGoals } from "@/server/goals/service.server";
 import type { StrategyFacts } from "@/lib/strategy/contracts";
 import { supabaseAudienceStore } from "@/server/audience/store.server";
 import { connectedPlatforms } from "@/server/autopilot/ports.server";
@@ -55,36 +56,38 @@ type CompetitorRow = {
 };
 
 export async function gatherStrategySources(workspaceId: string): Promise<StrategySources> {
-  const [stored, ws, twins, competitorRows, updateRows, market, platforms] = await Promise.all([
-    quiet(readBrandDna(db, workspaceId), null),
-    quiet(db.from("workspaces").select("name, website_url").eq("id", workspaceId).maybeSingle(), {
-      data: null,
-    } as never),
-    isAudienceEnabled(workspaceId)
-      ? quiet(supabaseAudienceStore.listTwins(workspaceId), [])
-      : Promise.resolve([]),
-    quiet(
-      db
-        .from("workspace_competitors")
-        .select("id, name, domain, relationship, profile, profile_updated_at")
-        .eq("workspace_id", workspaceId)
-        .eq("status", "tracked")
-        .order("confidence", { ascending: false })
-        .limit(6),
-      { data: [] } as never,
-    ),
-    quiet(
-      db
-        .from("competitor_updates")
-        .select("competitor_id, title, summary, detected_at")
-        .eq("workspace_id", workspaceId)
-        .order("detected_at", { ascending: false })
-        .limit(6),
-      { data: [] } as never,
-    ),
-    quiet(getLatestMarketBrain(workspaceId), null),
-    quiet(connectedPlatforms(workspaceId), [] as string[]),
-  ]);
+  const [stored, ws, twins, competitorRows, updateRows, market, platforms, goals] =
+    await Promise.all([
+      quiet(readBrandDna(db, workspaceId), null),
+      quiet(db.from("workspaces").select("name, website_url").eq("id", workspaceId).maybeSingle(), {
+        data: null,
+      } as never),
+      isAudienceEnabled(workspaceId)
+        ? quiet(supabaseAudienceStore.listTwins(workspaceId), [])
+        : Promise.resolve([]),
+      quiet(
+        db
+          .from("workspace_competitors")
+          .select("id, name, domain, relationship, profile, profile_updated_at")
+          .eq("workspace_id", workspaceId)
+          .eq("status", "tracked")
+          .order("confidence", { ascending: false })
+          .limit(6),
+        { data: [] } as never,
+      ),
+      quiet(
+        db
+          .from("competitor_updates")
+          .select("competitor_id, title, summary, detected_at")
+          .eq("workspace_id", workspaceId)
+          .order("detected_at", { ascending: false })
+          .limit(6),
+        { data: [] } as never,
+      ),
+      quiet(getLatestMarketBrain(workspaceId), null),
+      quiet(connectedPlatforms(workspaceId), [] as string[]),
+      quiet(readGoals(workspaceId), null),
+    ]);
 
   const dna = (stored?.dna ?? null) as BrandCtxDna | null;
   const wsRow = ((ws as { data: unknown }).data ?? {}) as { name?: string; website_url?: string };
@@ -175,6 +178,7 @@ export async function gatherStrategySources(workspaceId: string): Promise<Strate
       twins: twins.map((t) => `${t.id}:${t.version}`).sort(),
       competitors: competitors.map((c) => `${c.id}:${c.profile_updated_at ?? ""}`).sort(),
       market: market?.result?.collectionId ?? null,
+      goals: goals ? [goals.focus, goals.startedAt, goals.postsPerWeek, goals.targets] : null,
     }),
   );
 
@@ -184,6 +188,7 @@ export async function gatherStrategySources(workspaceId: string): Promise<Strate
       sources: sources.map((s) => ({ url: s.url, title: s.title })),
       audiences: groups.map((t) => t.name),
       platforms,
+      goals,
     },
     available,
     fingerprint,

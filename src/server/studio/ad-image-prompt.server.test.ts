@@ -6,7 +6,7 @@ const { adImagePrompt } = await import("./visual-prompts.server");
 const { getAdFormat } = await import("@/lib/studio/ad-formats");
 
 const base = {
-  format: getAdFormat("product-hero")!,
+  format: getAdFormat("big-number")!,
   copy: { headline: "Cold brew in 5 minutes", support: "", badge: "", points: [], cta: "Shop now" },
   scene: "The kit on a sunny kitchen counter",
   brandName: "Brewly",
@@ -29,13 +29,8 @@ describe("adImagePrompt", () => {
     expect(prompt).not.toContain("PRODUCT:");
   });
 
-  it("names the attached product and keeps the logo corner clear", () => {
-    const prompt = adImagePrompt({
-      ...base,
-      product: { name: "Cold Brew Kit", position: 2 },
-      logoCorner: "bottom-right",
-    });
-    expect(prompt).toContain('Attached image 2 is the real product, "Cold Brew Kit"');
+  it("keeps the logo corner clear", () => {
+    const prompt = adImagePrompt({ ...base, logoCorner: "bottom-right" });
     expect(prompt).toContain("Leave the bottom-right corner clear");
   });
 

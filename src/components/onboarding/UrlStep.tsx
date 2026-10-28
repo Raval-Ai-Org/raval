@@ -12,7 +12,9 @@ import {
   Target,
   Users,
 } from "@/components/icons";
+import { dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { duration, ease } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { faviconFor } from "@/lib/site-screenshot";
 import { Eyebrow } from "./ui";
 import { hostOf, validUrl } from "./url";
@@ -44,12 +46,15 @@ export function UrlStep({
   headingRef,
   onChange,
   onSubmit,
+  onNoWebsite,
 }: {
   value: string;
   reduce: boolean;
   headingRef: Ref<HTMLHeadingElement>;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  /** No website yet: answer a few questions instead. */
+  onNoWebsite?: () => void;
 }) {
   const valid = validUrl(value);
   const [previewHost, setPreviewHost] = useState<string | null>(null);
@@ -94,7 +99,7 @@ export function UrlStep({
         <motion.div
           layoutId="site-address"
           transition={{ duration: duration.xslow, ease: ease.emphasized }}
-          className="focus-glow flex items-center gap-2 rounded-2xl border border-border bg-card p-2 pl-4 shadow-[0_18px_48px_-30px_hsl(var(--foreground)/0.45)]"
+          className="focus-glow flex items-center gap-2 rounded-full border border-border bg-card p-1.5 pl-4 shadow-[0_18px_48px_-30px_hsl(var(--foreground)/0.45)]"
         >
           <span className="grid h-6 w-6 shrink-0 place-items-center" aria-hidden>
             {showIcon ? (
@@ -126,7 +131,10 @@ export function UrlStep({
             type="submit"
             disabled={!valid}
             aria-label="Scan my brand"
-            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-primary px-4 text-[13.5px] font-semibold text-primary-foreground transition hover:brightness-110 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
+            className={cn(
+              dsPrimaryBtn,
+              "h-11 shrink-0 gap-2 px-5 text-[13.5px] disabled:opacity-40",
+            )}
           >
             <span className="hidden sm:inline">Scan my brand</span>
             <span className="sm:hidden">Scan</span>
@@ -159,6 +167,15 @@ export function UrlStep({
         <p className="mt-6 text-[12px] text-muted-foreground">
           Public pages only. You'll review everything before it's saved.
         </p>
+        {onNoWebsite && (
+          <button
+            type="button"
+            onClick={onNoWebsite}
+            className="mt-3 text-[13px] font-medium text-foreground/80 underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground/40"
+          >
+            I don&rsquo;t have a website yet
+          </button>
+        )}
       </div>
     </div>
   );

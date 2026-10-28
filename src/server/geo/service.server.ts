@@ -31,6 +31,11 @@ import { runCombinedProbes, runGeoCitationProbes } from "./citation-probes.serve
 import { tavilyEnabled } from "@/lib/tavily-flags.server";
 import { createRenderer, getRenderingAvailability } from "./render.server";
 import {
+  createPerformanceMeter,
+  labPagesPerScan,
+  performanceAvailability,
+} from "./performance.server";
+import {
   advanceScan,
   defaultMaxRenders,
   LEASE_SECONDS,
@@ -180,6 +185,7 @@ async function runSlice(scan: ScanRow, deadline: number): Promise<SliceResult> {
   const store = createSupabaseGeoStore(supabaseAdmin);
   const fetcher = getDefaultFetcher();
   const rendering = await getRenderingAvailability();
+  const performance = performanceAvailability(scan.workspace_id);
   return runWithScope(
     { workspaceId: scan.workspace_id, userId: scan.created_by ?? undefined, route: "geo.scan" },
     () =>
@@ -197,6 +203,8 @@ async function runSlice(scan: ScanRow, deadline: number): Promise<SliceResult> {
           : undefined,
         render: rendering.available ? createRenderer(fetcher) : undefined,
         renderUnavailableReason: rendering.available ? undefined : rendering.reason,
+        performance: performance.available ? createPerformanceMeter() : undefined,
+        labPages: labPagesPerScan(),
         log: (message, detail) => console.error(message, detail),
       }),
   );

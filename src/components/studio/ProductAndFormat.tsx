@@ -1,17 +1,38 @@
 "use client";
-// What an ad or picture shows, and how an ad is laid out: the brand's real
-// product (from Brain → Brand → Products) and one of the proven ad layouts
-// (src/lib/studio/ad-formats.ts). "Auto" leaves both to Studio.
+// What a piece is about, and how an ad is laid out: one product from the
+// brand's catalogue (ADR-0035, Brain → Brand → Products) and one of the proven
+// ad layouts (src/lib/studio/ad-formats.ts). A picked product keeps its own
+// photo unchanged, so only layouts that don't redraw a product are offered.
+import { useQuery } from "@tanstack/react-query";
 import { ShoppingBag } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { AD_FORMATS, type AdFormat, type AdFormatThumb } from "@/lib/studio/ad-formats";
-import { useProducts } from "@/components/app/brain/brand/products/hooks";
+import { adFormatsFor, type AdFormat, type AdFormatThumb } from "@/lib/studio/ad-formats";
+import { listProducts } from "@/lib/products.functions";
+import type { Product } from "@/lib/products/catalog";
 import { FieldLabel } from "./studio-ui";
+
+/** React Query keys for the catalogue as Studio reads it (workspace-scoped). */
+export const studioProductKeys = {
+  list: (workspaceId: string) => ["studio", "products", workspaceId] as const,
+};
+
+function useStudioProducts(workspaceId: string) {
+  return useQuery({
+    queryKey: studioProductKeys.list(workspaceId),
+    queryFn: async (): Promise<Product[]> =>
+      (await listProducts({ data: { workspaceId } })).filter((p) => p.status === "active"),
+    enabled: !!workspaceId,
+    staleTime: 60_000,
+  });
+}
 
 const chip =
   "flex h-14 shrink-0 items-center gap-2 rounded-2xl border px-2.5 text-left text-[12.5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55";
 const on = "border-primary bg-primary/10 text-foreground";
 const off = "border-border bg-surface-3 text-muted-foreground hover:text-foreground";
+
+/** Types whose picture is the product's own photo when one is picked (createBilledStudioJob). */
+const PICTURED = new Set(["image", "ad", "social"]);
 
 export function ProductPicker({
   workspaceId,
@@ -24,30 +45,29 @@ export function ProductPicker({
   type: string;
   onChange: (productId: string | undefined) => void;
 }) {
-  const { data: products } = useProducts(workspaceId);
+  const { data: products } = useStudioProducts(workspaceId);
   if (!products?.length) return null;
-  const auto = !value;
   return (
     <div>
       <FieldLabel>Product</FieldLabel>
       <div
         role="radiogroup"
-        aria-label="Product to show"
+        aria-label="Product this piece is about"
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [contain:inline-size]"
       >
         <button
           type="button"
           role="radio"
-          aria-checked={auto}
+          aria-checked={!value}
           onClick={() => onChange(undefined)}
-          className={cn(chip, auto ? on : off)}
+          className={cn(chip, !value ? on : off)}
         >
-          <span className="grid size-9 place-items-center rounded-xl bg-[var(--ds-well-bg)] text-[11px] font-semibold">
-            Auto
-          </span>
+          No product
         </button>
         {products.map((p) => {
           const active = value === p.id;
+          const photo =
+            p.images.find((img) => img.assetId === p.primaryAssetId)?.url ?? p.images[0]?.url;
           return (
             <button
               key={p.id}
@@ -59,8 +79,8 @@ export function ProductPicker({
               className={cn(chip, "max-w-[190px]", active ? on : off)}
             >
               <span className="size-9 shrink-0 overflow-hidden rounded-xl bg-[var(--ds-well-bg)]">
-                {p.imageUrl ? (
-                  <img src={p.imageUrl} alt="" className="size-full object-cover" loading="lazy" />
+                {photo ? (
+                  <img src={photo} alt="" className="size-full object-cover" loading="lazy" />
                 ) : (
                   <ShoppingBag className="m-2.5 size-4" />
                 )}
@@ -69,40 +89,25 @@ export function ProductPicker({
             </button>
           );
         })}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={value === "none"}
-          onClick={() => onChange("none")}
-          className={cn(chip, value === "none" ? on : off)}
-        >
-          No product
-        </button>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {auto
-          ? type === "ad"
-            ? "Ads show your main product unless the brief names another."
-            : "Shows a product when your brief names one."
-          : value === "none"
-            ? "Nothing from your catalogue is shown."
-            : "This exact product is shown, photographed from your catalogue."}
+        {!value
+          ? "Pick a product to write about it with its real name, price and facts."
+          : PICTURED.has(type)
+            ? "Written about this product. Its own photo is the picture, unchanged, unless you add photos below."
+            : "Written about this product, with its real name, price and facts."}
       </p>
     </div>
   );
 }
 
 export function AdFormatPicker({
-  workspaceId,
   value,
   onChange,
 }: {
-  workspaceId: string;
   value: string | undefined;
   onChange: (adFormat: string | undefined) => void;
 }) {
-  const { data: products } = useProducts(workspaceId);
-  const hasProduct = !!products?.length;
   return (
     <div>
       <FieldLabel>Ad layout</FieldLabel>
@@ -117,13 +122,12 @@ export function AdFormatPicker({
           active={!value}
           onClick={() => onChange(undefined)}
         />
-        {AD_FORMATS.map((f) => (
+        {adFormatsFor(false).map((f) => (
           <FormatTile
             key={f.id}
             format={f}
             label={f.label}
-            tagline={f.needsProduct && !hasProduct ? "Add a product first" : f.tagline}
-            disabled={f.needsProduct && !hasProduct}
+            tagline={f.tagline}
             active={value === f.id}
             onClick={() => onChange(f.id)}
           />

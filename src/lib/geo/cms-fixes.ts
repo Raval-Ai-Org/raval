@@ -90,6 +90,9 @@ const RULE_FIELDS: Record<string, Entry> = {
   "content.scannable": { fields: ["content_html"], scope: "page" },
   "content.image_alt": { fields: ["image_alt"], scope: "page" },
   "content.internal_links": { fields: ["content_html"], scope: "page" },
+  "content.self_contained": { fields: ["content_html"], scope: "page" },
+  "content.readability": { fields: ["content_html"], scope: "page" },
+  "tech.mixed_content": { fields: ["content_html"], scope: "page" },
 };
 
 /** The fields a rule's fix writes, or [] when it can't be fixed by writing fields. */
@@ -148,6 +151,24 @@ export const CMS_MANUAL_RULES: ReadonlySet<string> = new Set([
   "perf.html_size",
   "perf.response_time",
   "perf.text_ratio",
+  "tech.redirects",
+  "tech.soft_404",
+  "tech.https_redirect",
+  "tech.compression",
+  "tech.http_caching",
+  "tech.security_headers",
+  "tech.sitemap_quality",
+  "tech.hreflang_targets",
+  "content.quotable_passages",
+  "content.agent_usable",
+  "trust.hidden_instructions",
+  "trust.headline_year",
+  "trust.date_consistency",
+  "perf.core_web_vitals",
+  "perf.lab_score",
+  "perf.render_blocking",
+  "perf.image_dimensions",
+  "perf.dom_size",
 ]);
 
 /** Rule ids that have neither a field mapping nor an explicit manual entry. */

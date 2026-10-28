@@ -6,7 +6,6 @@ import type { AspectRatio } from "./aspect";
 import type { StageId, StudioType } from "./formats";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
-import type { JobProduct } from "@/lib/products/catalog";
 import type { AdOnImage } from "./ad-formats";
 
 export const PlatformIdSchema = z.enum([
@@ -86,11 +85,8 @@ export const ControlsSchema = z.object({
   referenceAssetIds: z.array(z.string().uuid()).max(4).optional(),
   /** Whether source photos stay intact, receive a targeted edit, or only inspire a new image. */
   referenceMode: z.enum(["preserve", "edit", "inspire"]).optional(),
-  /**
-   * The catalogue product to show (src/lib/products/catalog.ts), checked
-   * against this workspace; "none" for none. Absent: picked from the brief.
-   */
-  productId: z.union([z.string().uuid(), z.literal("none")]).optional(),
+  /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
+  productId: z.string().uuid().optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
   adFormat: z.string().max(40).optional(),
   /** Variations (src/lib/studio/variations.ts): how many more versions to make. */
@@ -377,6 +373,8 @@ export type StudioJobOutput = {
   ads?: AdVariant[];
   /** Image/video: the visual concept the render was built from. */
   concept?: string;
+  /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
+  artDirection?: string;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
   altText?: string;
@@ -385,8 +383,6 @@ export type StudioJobOutput = {
   /** Ad: the designed layout the picture follows, and the words typeset on it. */
   adFormat?: string;
   adOnImage?: AdOnImage;
-  /** The brand's real product this piece shows; its photo is re-signed per render. */
-  product?: JobProduct;
   media?: MediaOutput[];
   /** Per-part failures that did not fail the whole job. */
   partial?: { target: string; error: string }[];

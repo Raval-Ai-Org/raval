@@ -1,6 +1,12 @@
 "use client";
 
 import { LookEditor, LookTilePreview } from "@/components/app/brain/brand/look/LookEditor";
+import {
+  GoalEditor,
+  GoalPreview,
+  ProductsEditor,
+  ProductsPreview,
+} from "@/components/app/brain/brand/CatalogueAndGoal";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import { bootstrapCompetitors } from "@/lib/competitors.functions";
 import { flushBrandDnaFor } from "@/hooks/use-brand-dna";
@@ -8,12 +14,6 @@ import { competitorKeys } from "@/components/app/competitors/hooks";
 import { audienceKeys } from "@/components/app/audience/hooks";
 import { brainKeys } from "@/components/app/brain/use-brain";
 import { ScanSteps, type ScanStep } from "@/components/app/brain/brand/ScanSteps";
-import {
-  ProductCatalog,
-  ProductsPreview,
-} from "@/components/app/brain/brand/products/ProductCatalog";
-import { productKeys } from "@/components/app/brain/brand/products/hooks";
-import { discoverProducts } from "@/lib/products.functions";
 import { buildAudience, getAudience } from "@/lib/audience.functions";
 import { isActiveRun } from "@/lib/audience/contracts";
 import { useQueryClient } from "@tanstack/react-query";
@@ -286,7 +286,7 @@ export function BrandDnaSurface({
 
       setStatus("ok");
       if (!silent) toast.success("Brand updated", { description: `${stats.pages} pages read` });
-      if (workspaceId) void fillOtherBrains(workspaceId, url);
+      if (workspaceId) void fillOtherBrains(workspaceId);
     } catch (e: any) {
       const msg = e?.message ?? "Try again later";
       setStatus("error");
@@ -300,7 +300,7 @@ export function BrandDnaSurface({
    * from the fresh Brand DNA. Both are the same included work their own pages
    * start; a plan or flag that doesn't allow one simply skips it.
    */
-  const fillOtherBrains = async (ws: string, siteUrl: string) => {
+  const fillOtherBrains = async (ws: string) => {
     setAudienceStep("running");
     setCompetitorStep("running");
     try {
@@ -338,17 +338,7 @@ export function BrandDnaSurface({
       }
     })();
 
-    // The real products, so Studio's ads show them. Reads the site only; free.
-    const products = (async () => {
-      try {
-        await discoverProducts({ data: { workspaceId: ws, websiteUrl: siteUrl } });
-        await queryClient.invalidateQueries({ queryKey: productKeys.all(ws) });
-      } catch (productError) {
-        console.warn("[products] discovery after Brand DNA scan skipped", productError);
-      }
-    })();
-
-    await Promise.allSettled([audience, competitors, products]);
+    await Promise.allSettled([audience, competitors]);
     void refreshHome();
   };
 
@@ -462,10 +452,10 @@ export function BrandDnaSurface({
               />
               <TileGrid
                 dna={dna}
+                workspaceId={workspaceId}
                 onOpen={openTile}
                 query={tileQuery}
                 category={tileCategory}
-                workspaceId={workspaceId ?? null}
               />
               {status === "error" && lastError && (
                 <div className="mt-5 flex items-start gap-2 rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-[12.5px] text-danger">
@@ -712,9 +702,10 @@ type TileKey =
   | "headline"
   | "audience"
   | "look"
-  | "products"
   | "assets"
-  | "notes";
+  | "notes"
+  | "products"
+  | "goal";
 const TILE_KEYS: TileKey[] = [
   "logo",
   "identity",
@@ -724,9 +715,10 @@ const TILE_KEYS: TileKey[] = [
   "headline",
   "audience",
   "look",
-  "products",
   "assets",
   "notes",
+  "products",
+  "goal",
 ];
 
 type TileCategory = "all" | "identity" | "visual" | "voice" | "market" | "knowledge";
@@ -783,12 +775,6 @@ const TILE_META: TileMeta[] = [
     keywords: "look style design tone image mood emoji hashtags video writing",
   },
   {
-    key: "products",
-    label: "Products",
-    category: "market",
-    keywords: "products catalogue catalog shop items photos offer",
-  },
-  {
     key: "assets",
     label: "Assets",
     category: "knowledge",
@@ -799,6 +785,18 @@ const TILE_META: TileMeta[] = [
     label: "Notes",
     category: "knowledge",
     keywords: "notes insights memory rules facts",
+  },
+  {
+    key: "products",
+    label: "Products",
+    category: "market",
+    keywords: "products services catalogue catalog photos price offer sell",
+  },
+  {
+    key: "goal",
+    label: "Goal",
+    category: "market",
+    keywords: "goal target followers reach leads sales posts week",
   },
 ];
 
@@ -881,16 +879,16 @@ function TileToolbar({
 
 function TileGrid({
   dna,
+  workspaceId,
   onOpen,
   query,
   category,
-  workspaceId,
 }: {
   dna: BrandDna;
+  workspaceId?: string | null;
   onOpen: (t: TileKey) => void;
   query: string;
   category: TileCategory;
-  workspaceId: string | null;
 }) {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1018,16 +1016,6 @@ function TileGrid({
           <AudiencePreview dna={dna} />
         </Tile>
       )}
-      {show("look") && (
-        <Tile
-          tileKey="look"
-          label="Look & voice"
-          ariaLabel="Edit your look and voice"
-          onClick={() => onOpen("look")}
-        >
-          <LookTilePreview dna={dna} />
-        </Tile>
-      )}
       {show("products") && (
         <Tile
           tileKey="products"
@@ -1036,6 +1024,21 @@ function TileGrid({
           onClick={() => onOpen("products")}
         >
           <ProductsPreview workspaceId={workspaceId} />
+        </Tile>
+      )}
+      {show("goal") && (
+        <Tile tileKey="goal" label="Goal" ariaLabel="Edit Goal" onClick={() => onOpen("goal")}>
+          <GoalPreview workspaceId={workspaceId} />
+        </Tile>
+      )}
+      {show("look") && (
+        <Tile
+          tileKey="look"
+          label="Look & voice"
+          ariaLabel="Edit your look and voice"
+          onClick={() => onOpen("look")}
+        >
+          <LookTilePreview dna={dna} />
         </Tile>
       )}
       {show("assets") && (
@@ -1662,12 +1665,10 @@ function TileEditor({
       title: "Look & voice",
       subtitle: "How everything Mellox makes should look and sound.",
     },
-    products: {
-      title: "Products",
-      subtitle: "What you sell. Ads and pictures show these exact products.",
-    },
     assets: { title: "Assets", subtitle: "Reusable images, logos and links." },
     notes: { title: "Notes", subtitle: "Durable memory captured from chat." },
+    products: { title: "Products", subtitle: "What you sell, with real photos." },
+    goal: { title: "Goal", subtitle: "What your marketing is for, and by when." },
   };
   const m = meta[tile];
   return (
@@ -1714,11 +1715,12 @@ function TileEditor({
         </div>
       )}
       {tile === "look" && <LookEditor dna={dna} save={save} workspaceId={workspaceId} />}
-      {tile === "products" && (
-        <ProductCatalog workspaceId={workspaceId ?? null} websiteUrl={dna.websiteUrl ?? null} />
-      )}
       {tile === "assets" && <AssetsTab dna={dna} save={save} />}
       {tile === "notes" && <NotesTab dna={dna} save={save} />}
+      {tile === "products" && workspaceId && (
+        <ProductsEditor workspaceId={workspaceId} dna={dna} save={save} />
+      )}
+      {tile === "goal" && workspaceId && <GoalEditor workspaceId={workspaceId} />}
     </div>
   );
 }

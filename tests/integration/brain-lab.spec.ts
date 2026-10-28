@@ -3,8 +3,7 @@ import { test, expect } from "@playwright/test";
 /**
  * Brain screens, rendered with sample data at /brain-lab (dev only, no
  * sign-in). Checks Home, the strategy (reading, editing, confirming a draft),
- * the Coach pill, the Look & voice editor and the product catalogue, at
- * desktop and phone width.
+ * the Coach pill and the Look & voice editor, at desktop and phone width.
  */
 
 const VIEWPORTS = [
@@ -100,29 +99,6 @@ for (const vp of VIEWPORTS) {
       await bold.click();
       await expect(bold).toHaveAttribute("aria-pressed", "true");
       await expect(frame.getByRole("button", { name: "Reset to plain brand" })).toBeVisible();
-      await noSidewaysScroll(page);
-    });
-
-    test("the product catalogue shows the main product and its photos", async ({ page }) => {
-      await openScene(page, "products");
-      const frame = page.getByTestId("brain-lab-frame");
-      await expect(frame.getByText("House Espresso Blend")).toBeVisible({ timeout: 30_000 });
-      await expect(frame.getByText("Main product")).toBeVisible();
-      await expect(frame.getByText("4 products")).toBeVisible();
-      await expect(
-        frame.getByRole("button", { name: "Make Ethiopia Guji the main product" }),
-      ).toBeAttached();
-      await expect(frame.getByRole("button", { name: "Find on my website" })).toBeVisible();
-      await noSidewaysScroll(page);
-    });
-
-    test("an empty catalogue offers to find products on the website", async ({ page }) => {
-      await openScene(page, "products-empty");
-      const frame = page.getByTestId("brain-lab-frame");
-      await expect(frame.getByText("No products yet")).toBeVisible({ timeout: 30_000 });
-      await expect(
-        frame.getByRole("button", { name: "Find products on my website" }),
-      ).toBeVisible();
       await noSidewaysScroll(page);
     });
   });

@@ -10,16 +10,9 @@ const ReviewSchema = z.object({
 
 export type ImageReview = z.infer<typeof ReviewSchema>;
 type Identity = { rules: string; references: string[] };
-/** The real product the artwork must show (src/lib/products/catalog.ts). */
-type ReviewProduct = { name: string; url: string };
-type ReviewCall = (
-  dataUrl: string,
-  brief: string,
-  identity?: Identity,
-  product?: ReviewProduct,
-) => Promise<string>;
+type ReviewCall = (dataUrl: string, brief: string, identity?: Identity) => Promise<string>;
 
-const defaultCall: ReviewCall = async (dataUrl, brief, identity, product) => {
+const defaultCall: ReviewCall = async (dataUrl, brief, identity) => {
   const response = await chatCompletion({
     route: identity ? "brand-visuals.review" : "studio.image.review",
     task: "extraction",
@@ -48,15 +41,6 @@ const defaultCall: ReviewCall = async (dataUrl, brief, identity, product) => {
                   .map((url) => ({ type: "image_url" as const, image_url: { url } })),
               ]
             : []),
-          ...(product
-            ? [
-                {
-                  type: "text" as const,
-                  text: `The next image is the brand's real product, "${product.name.slice(0, 120)}", as photographed on its website. Flag it if the artwork shows a different item, or the product with a clearly changed shape, colour, label or packaging. Do not flag lighting, angle or background differences.`,
-                },
-                { type: "image_url" as const, image_url: { url: product.url } },
-              ]
-            : []),
         ],
       },
     ],
@@ -70,11 +54,10 @@ export async function reviewGeneratedImage(
   brief: string,
   call: ReviewCall = defaultCall,
   identity?: Identity,
-  product?: ReviewProduct,
 ): Promise<ImageReview | null> {
   if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(dataUrl)) return null;
   try {
-    const raw = await call(dataUrl, brief, identity, product);
+    const raw = await call(dataUrl, brief, identity);
     const parsed = ReviewSchema.safeParse(safeParseJson<unknown>(raw, null));
     if (!parsed.success) return null;
     return parsed.data.status === "pass" || parsed.data.issues.length === 0

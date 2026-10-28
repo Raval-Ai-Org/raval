@@ -272,6 +272,95 @@ export type PageAnalysis = {
    * and httpWords still describe the raw server HTML crawlers download.
    */
   rendering?: PageRendering;
+  /** What the HTTP response said (headers, redirect hops). Absent on older scans. */
+  http?: PageHttp;
+  /** Markup hygiene: hidden text, mixed content, images, forms, DOM. Absent on older scans. */
+  hygiene?: PageHygiene;
+  /** How liftable the copy is: passages, readability, dates. Absent on older scans. */
+  citability?: PageCitability;
+};
+
+/** One redirect hop: the status that sent the crawler on, and where it pointed. */
+export type RedirectHop = { status: number; url: string };
+
+/** The parts of a page's HTTP response the rules read. Headers are summarised, never stored raw. */
+export type PageHttp = {
+  redirects: RedirectHop[];
+  /** `content-encoding` (gzip, br, zstd…), or null when the HTML was sent uncompressed. */
+  contentEncoding: string | null;
+  cacheControl: string | null;
+  etag: boolean;
+  lastModified: boolean;
+  /** Presence of the security headers browsers act on. */
+  security: {
+    hsts: boolean;
+    contentTypeOptions: boolean;
+    frameProtection: boolean;
+    referrerPolicy: boolean;
+    csp: boolean;
+  };
+};
+
+/**
+ * Markup checks from one pass over the HTML: hidden instructions aimed at AI
+ * systems, insecure subresources, images without dimensions, unlabelled
+ * controls and DOM size.
+ */
+export type PageHygiene = {
+  /** Text hidden from people (inline display:none, tiny or transparent fonts, aria-hidden) that addresses AI systems. */
+  hiddenInstructions: string[];
+  /** Instructions to AI systems inside HTML comments. */
+  commentInstructions: string[];
+  /** Zero-width and bidi control characters in visible text. */
+  invisibleChars: number;
+  /** `data-ai-*` / `data-prompt-*` / `data-llm-*` attributes carrying text. */
+  promptAttributes: number;
+  /** `http://` subresources on an `https://` page (samples, capped). */
+  mixedContent: string[];
+  mixedContentCount: number;
+  images: {
+    total: number;
+    /** Images with neither width/height attributes nor an inline aspect ratio. */
+    withoutDimensions: number;
+    lazy: number;
+    /** Alt text that says nothing: "image", "photo", a file name. */
+    genericAlt: number;
+  };
+  /** `<script src>` in the head without async, defer or type=module. */
+  blockingScripts: number;
+  stylesheets: number;
+  dom: { elements: number; maxDepth: number };
+  /** Form controls with no label, aria-label, aria-labelledby or title. */
+  unlabeledControls: number;
+  /** Buttons and links with no accessible name. */
+  unnamedControls: number;
+  iframesWithoutTitle: number;
+  duplicateIds: number;
+};
+
+/** Passage-level signals that decide whether an engine can quote a paragraph on its own. */
+export type PageCitability = {
+  paragraphs: number;
+  /** Paragraphs of 40–150 words carrying a concrete fact (a figure or a name). */
+  quotablePassages: number;
+  /** Paragraphs opening with a reference that only makes sense in context ("This", "As mentioned above"). */
+  vagueOpeners: number;
+  vagueSamples: string[];
+  readability: {
+    /** Only scored for English text. */
+    english: boolean;
+    sentences: number;
+    avgSentenceWords: number;
+    /** Flesch reading ease (0–100, higher is easier); null when too little text. */
+    fleschEase: number | null;
+    /** Sentences longer than 40 words. */
+    longSentences: number;
+  };
+  tables: number;
+  /** A year written in the title or H1 ("Best tools of 2023"). */
+  headlineYear: number | null;
+  /** A visible "Updated on …" / "Last updated …" date. */
+  visibleUpdated: string | null;
 };
 
 export type PageRendering = {
@@ -324,6 +413,84 @@ export type SiteArtifacts = {
     contentSignals: Record<string, string> | null;
     llmsFull: boolean;
   };
+  /** Site-level HTTP behaviour (absent on older scans). */
+  http?: SiteHttp;
+  /** Lab (Lighthouse) and field (Chrome UX Report) measurements (absent when not measured). */
+  performance?: SitePerformance;
+};
+
+export type SiteHttp = {
+  /** The homepage's response headers, summarised. */
+  home: PageHttp | null;
+  /** What `http://<host>/` did. null when not checked (an http-only site). */
+  httpsRedirect: { status: number | null; finalUrl: string | null; redirected: boolean } | null;
+  /** What a page that cannot exist returned. A 200 means missing pages look like real ones. */
+  notFound: { url: string; status: number | null; looksLikeHome: boolean } | null;
+};
+
+/** Core Web Vitals verdict as Google defines it. */
+export type VitalRating = "good" | "needs_improvement" | "poor";
+
+export type FieldMetric = { p75: number; rating: VitalRating };
+
+/** Real-user data from the Chrome UX Report, 28-day window, phones. */
+export type FieldVitals = {
+  scope: "origin" | "url";
+  key: string;
+  lcp: FieldMetric | null;
+  inp: FieldMetric | null;
+  cls: FieldMetric | null;
+  fcp: FieldMetric | null;
+  ttfb: FieldMetric | null;
+  /** Last day of the collection window (YYYY-MM-DD). */
+  periodEnd: string | null;
+};
+
+/** Weekly p75 history from the CrUX History API. */
+export type FieldHistory = {
+  /** Period end dates (YYYY-MM-DD), oldest first. */
+  dates: string[];
+  lcp: (number | null)[];
+  inp: (number | null)[];
+  cls: (number | null)[];
+};
+
+/** One Lighthouse run (through PageSpeed Insights) on one sampled page. */
+export type LabRun = {
+  url: string;
+  /** Route group the page was sampled from, e.g. `/blog/:slug`. */
+  group: string;
+  ok: boolean;
+  error?: string;
+  /** Category scores 0–100. */
+  scores?: {
+    performance: number | null;
+    accessibility: number | null;
+    bestPractices: number | null;
+    seo: number | null;
+  };
+  metrics?: {
+    lcpMs: number | null;
+    cls: number | null;
+    tbtMs: number | null;
+    fcpMs: number | null;
+    speedIndexMs: number | null;
+    ttfbMs: number | null;
+  };
+  /** Biggest savings Lighthouse found, largest first (capped). */
+  opportunities?: { id: string; title: string; savingsMs: number }[];
+  /** Failed SEO / accessibility audits worth surfacing (capped). */
+  failedAudits?: { id: string; title: string; category: string }[];
+};
+
+export type SitePerformance = {
+  measuredAt: string;
+  /** Why measurement didn't run or was partial; null when it ran. */
+  unavailable: string | null;
+  field: { origin: FieldVitals | null; history: FieldHistory | null } | null;
+  /** Pages chosen for lab runs (route-sampled), and their results so far. */
+  sample: string[];
+  lab: LabRun[];
 };
 
 export const SITEMAP_PATH_CAP = 2000;
@@ -495,4 +662,6 @@ export type ScanReport = {
   dimensions?: DimensionSummary[];
   pathTo100?: PathTo100;
   agent?: SiteArtifacts["agent"];
+  /** Lab and real-user speed (absent when not measured). */
+  performance?: SitePerformance;
 };
