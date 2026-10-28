@@ -162,8 +162,11 @@ function ProjectsPage() {
     navigate({ to: openHref(w) });
   };
 
-  /** A create that returned an existing workspace (same brand domain) opens it instead. */
-  const afterCreate = (result: CreateWorkspaceOutcome, then: "onboarding" | "app") => {
+  /**
+   * A new brand always starts in onboarding (goal, products, first posts). A
+   * create that returned an existing workspace (same brand domain) opens it instead.
+   */
+  const afterCreate = (result: CreateWorkspaceOutcome) => {
     if (!result.created) {
       toast.message(`You already have ${result.domain || result.name}`, {
         description: "Opening the existing workspace instead of creating a duplicate.",
@@ -172,7 +175,7 @@ function ProjectsPage() {
       navigate({ to: existing ? openHref(existing) : workspacePath(result.id) });
       return;
     }
-    navigate({ to: then === "onboarding" ? onboardingPath(result.id) : workspacePath(result.id) });
+    navigate({ to: onboardingPath(result.id) });
   };
 
   const signOut = async () => {
@@ -327,7 +330,7 @@ function ProjectsPage() {
             ) : (
               <PasteLinkBar
                 existing={workspaces}
-                onCreated={(result) => afterCreate(result, "onboarding")}
+                onCreated={afterCreate}
                 onOpenAdvanced={() => setDialogOpen(true)}
               />
             )}
@@ -335,7 +338,7 @@ function ProjectsPage() {
               open={dialogOpen}
               onOpenChange={setDialogOpen}
               copy={copy}
-              onCreated={(result) => afterCreate(result, "app")}
+              onCreated={afterCreate}
             />
           </motion.div>
         </section>
