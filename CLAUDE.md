@@ -212,6 +212,45 @@ generators get no memory block. Chat tools off: chat is one plain reply.
   them with sample data in development (`tests/integration/memory-lab.spec.ts`).
 - Live check: `tests/live/memory.live.ts`.
 
+## Onboarding, goals and products
+
+Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
+[ADR-0035](docs/adr/0035-goals-and-product-catalog.md).
+
+- **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
+  website → goal (asked while the scan runs) → Brand DNA → products → channels
+  → first posts. "I don't have a website" swaps the scan for three questions.
+  New projects always start in onboarding. `/onboarding-lab` renders every new
+  step with sample data (`tests/integration/onboarding-lab.spec.ts`).
+- **Goals are the person's numbers** (`workspace_goals`).
+  - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the
+    RPC in `src/server/fns/goals.ts`.
+  - Save only through `decideGoals`. Never write an estimate into a goal.
+  - Progress (`goalProgress`, `GoalCard` on Brain home) counts only posts that
+    went out and their views. Followers, subscribers, leads and sales say "not
+    measured" until Mellox can really read them.
+  - Generators read the goal through `goalBlockFor`.
+  - The strategy follows it through `followGoals`, which pins the goal, the
+    first KPI and the weekly pace. Autopilot proposes its pace and channels.
+- **Products are rows; photos are assets** (`workspace_products`).
+  - Pure rules are in `src/lib/products/`, the server in `src/server/products/`.
+  - Discovery reads the site's own product data (Shopify feed, schema.org
+    Product) through `safeFetch`, with no model call, alongside the scan.
+  - Photos are `assets` rows checked against the workspace; never use a URL
+    or path from the browser. Upload through `POST /api/products/photos`.
+  - `BrandDna.products` is a summary of the catalogue. It is only rewritten
+    while it still says what Mellox wrote last.
+- **A product's photo is never redrawn.** `controls.productId` on a Studio job
+  keeps the product's main photo (`referenceMode: "preserve"`).
+  `createBilledStudioJob` decides this before pricing. The product's stored
+  facts lead the prompt (`productContextFor`), with the rule to claim nothing
+  else. Generators read the catalogue through `catalogBlockFor`.
+- **First posts are a person's click.** Three ordinary Studio jobs through the
+  metered route, with the price on the button. Keys are fixed per post
+  (`onboarding-first:<workspaceId>:<n>`), so nothing is made or charged twice.
+  A 402 never blocks finishing setup.
+- Editing after onboarding: Brain → Brand → **Products** and **Goal** tiles.
+
 ## App tour (a new person's first look around)
 
 - **Once per account, never per workspace.** `profiles.app_tour_seen_at`

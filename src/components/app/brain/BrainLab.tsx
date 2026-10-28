@@ -5,6 +5,8 @@
 import { useEffect, useState } from "react";
 import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
 import { newsSince, type BrainOverview, type BrainSection } from "@/lib/brain/brain";
+import { decideGoals, goalLine } from "@/lib/goals/decide";
+import { goalProgress } from "@/lib/goals/progress";
 import type { MarketingStrategy, StrategyView } from "@/lib/strategy/contracts";
 import { cn } from "@/lib/utils";
 import { BrainHome } from "./BrainHome";
@@ -193,6 +195,31 @@ const overview: BrainOverview = {
       cta: "Pick",
     },
   ],
+  goal: (() => {
+    const set = decideGoals(
+      {
+        focus: "followers",
+        targets: [
+          { metric: "followers", platform: "instagram", target: 5000, baseline: 1200 },
+          { metric: "reach", target: 60_000 },
+        ],
+        timeframeWeeks: 12,
+        postsPerWeek: 4,
+        channels: ["instagram"],
+      },
+      new Date(Date.now() - 3 * 7 * 86_400_000),
+    );
+    return set.ok
+      ? {
+          line: goalLine(set.goals),
+          progress: goalProgress(
+            set.goals,
+            { postsPublished: 11, views: 18_400, connected: ["instagram"] },
+            new Date(),
+          ),
+        }
+      : null;
+  })(),
   generatedAt: new Date().toISOString(),
 };
 

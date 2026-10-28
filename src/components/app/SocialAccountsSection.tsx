@@ -41,9 +41,14 @@ const RECONNECT_COPY: Record<string, string> = {
 /** Platforms whose disconnect can't revoke the grant on the platform itself. */
 const NO_REMOTE_REVOKE = new Set(["linkedin"]);
 
-type Props = { variant: "studio" | "settings"; onManage?: () => void };
+type Props = {
+  variant: "studio" | "settings" | "onboarding";
+  onManage?: () => void;
+  /** Platforms with an active connection, after every refresh (onboarding uses it). */
+  onConnectedChange?: (platforms: string[]) => void;
+};
 
-export function SocialAccountsSection({ variant }: Props) {
+export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
   // The workspace on screen: its own connections, never another brand's.
   const workspaceId = useOptionalWorkspaceId();
   const [status, setStatus] = useState<SdrStatus | null>(null);
@@ -157,6 +162,18 @@ export function SocialAccountsSection({ variant }: Props) {
   const pendingMeta = pendingPlatform ? metaFor(pendingPlatform) : null;
   const pendingLabel = pendingMeta?.label ?? pendingPlatform;
   const needsReconnect = visible.filter((a) => a.status !== "active").length;
+  const activeKey = visible
+    .filter((a) => a.status === "active")
+    .map((a) => a.platform)
+    .sort()
+    .join(",");
+  const onConnectedRef = useRef(onConnectedChange);
+  useEffect(() => {
+    onConnectedRef.current = onConnectedChange;
+  });
+  useEffect(() => {
+    if (!loading) onConnectedRef.current?.(activeKey ? [...new Set(activeKey.split(","))] : []);
+  }, [activeKey, loading]);
 
   if (variant === "studio") {
     if (loading || error || !status?.enabled || !status.canPublish) return null;
@@ -168,7 +185,12 @@ export function SocialAccountsSection({ variant }: Props) {
       className={cn(variant === "studio" ? "space-y-3 px-2 py-1" : "space-y-4")}
       aria-labelledby={`${variant}-connections-title`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className={cn(
+          "flex items-start justify-between gap-3",
+          variant === "onboarding" && "sr-only",
+        )}
+      >
         <div>
           <h3
             id={`${variant}-connections-title`}
@@ -227,6 +249,65 @@ export function SocialAccountsSection({ variant }: Props) {
             Posts can still be copied or downloaded and published manually.
           </p>
         </div>
+      ) : variant === "onboarding" ? (
+        <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {platforms.map((platform) => {
+            const account = visible.find((a) => a.platform === platform.id);
+            const active = account?.status === "active";
+            return (
+              <li key={platform.id}>
+                <button
+                  type="button"
+                  onClick={() => !active && setPendingPlatform(platform.id)}
+                  disabled={!status.canPublish || busy === platform.id}
+                  aria-pressed={active}
+                  className={cn(
+                    "ds-tile flex w-full min-w-0 items-center gap-3 p-3.5 text-left transition-colors",
+                    active
+                      ? "border-primary/40 bg-primary/[0.06]"
+                      : "ds-tile-hover disabled:opacity-60",
+                  )}
+                >
+                  <span
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary"
+                    style={{ color: platform.tint }}
+                  >
+                    <BrandLogo name={platform.logo} brand size={20} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium">{platform.label}</span>
+                    <span className="block truncate text-[12px] text-muted-foreground">
+                      {active
+                        ? account?.displayName || account?.platformUsername || "Connected"
+                        : account
+                          ? "Reconnect needed"
+                          : platform.description}
+                    </span>
+                  </span>
+                  {busy === platform.id ? (
+                    <Spinner
+                      className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+                      aria-hidden
+                    />
+                  ) : active ? (
+                    <span className="shrink-0 rounded-full bg-success-surface px-2.5 py-1 text-[11px] font-semibold text-success">
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full border border-border/70 px-3 py-1 text-[12px] font-medium">
+                      Connect
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+          {!status.canPublish ? (
+            <li className="text-[12px] text-muted-foreground sm:col-span-2">
+              Only editors, admins and owners can connect accounts.
+            </li>
+          ) : null}
+        </ul>
       ) : variant === "settings" ? (
         <div className="space-y-2">
           {visible.length === 0 ? (

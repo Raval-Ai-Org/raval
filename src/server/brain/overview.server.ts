@@ -18,6 +18,9 @@ import { parseLook } from "@/lib/brand-look/spec";
 import { isAudienceEnabled } from "@/lib/feature-flags";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { StrategySchema } from "@/lib/strategy/contracts";
+import { GoalsSchema } from "@/lib/goals/contracts";
+import { goalLine } from "@/lib/goals/decide";
+import { goalProgress } from "@/lib/goals/progress";
 
 type Row = Record<string, unknown>;
 
@@ -35,6 +38,43 @@ async function rows(query: PromiseLike<{ data: unknown; error: unknown }>): Prom
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The goal line and its progress, counted from posts that really went out. */
+async function goalOverview(
+  db: SupabaseClient,
+  workspaceId: string,
+): Promise<BrainOverview["goal"]> {
+  const [goalRow] = await rows(
+    db.from("workspace_goals").select("goals").eq("workspace_id", workspaceId).maybeSingle(),
+  );
+  const parsed = GoalsSchema.safeParse(goalRow?.goals);
+  if (!parsed.success) return null;
+  const goals = parsed.data;
+  const published = await rows(
+    db
+      .from("content_publications")
+      .select("platform, metrics")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "published")
+      .gte("delivered_at", goals.startedAt)
+      .limit(1000),
+  );
+  const views = published
+    .map((p) => Number((p.metrics as Record<string, unknown> | null)?.views))
+    .filter((v) => Number.isFinite(v) && v >= 0);
+  return {
+    line: goalLine(goals),
+    progress: goalProgress(
+      goals,
+      {
+        postsPublished: published.length,
+        views: views.length ? views.reduce((a, b) => a + b, 0) : null,
+        connected: [...new Set(published.map((p) => String(p.platform)))],
+      },
+      new Date(),
+    ),
+  };
+}
 
 export async function loadBrainOverview(
   db: SupabaseClient,
@@ -220,10 +260,14 @@ export async function loadBrainOverview(
       : [],
   ];
 
+  // ── Goal (ADR-0035): only rows that exist — posts that went out and their views ──
+  const goal = await goalOverview(db, workspaceId);
+
   const newest = (brain: BrainUpdate["brain"]) =>
     updates.flat().find((x) => x.brain === brain)?.title ?? "";
 
   return {
+    goal,
     brains: {
       brand: {
         ready: bHealth > 0,

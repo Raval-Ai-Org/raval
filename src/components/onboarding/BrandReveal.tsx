@@ -26,7 +26,9 @@ import { countBrandDnaFilled } from "@/hooks/use-brand-dna";
 import type { BrandExtractResult } from "@/lib/brand-extract-events";
 import type { CompetitorView } from "@/lib/competitors.functions";
 import { normalizeHex, pickTextOn } from "@/lib/color";
+import { dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { duration, ease } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { splitGuidance } from "./guidance";
 import { BrandMark, Eyebrow, Tag } from "./ui";
 import {
@@ -410,7 +412,7 @@ export function BrandReveal({
               onClick={onChangeUrl}
               disabled={saving}
               aria-label="Change URL"
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden />
               <span className="hidden sm:inline">Change URL</span>
@@ -420,7 +422,7 @@ export function BrandReveal({
               onClick={onRescan}
               disabled={saving}
               aria-label="Scan again"
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-[13px] text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-50"
             >
               <RefreshCw className="h-4 w-4" aria-hidden />
               <span className="hidden sm:inline">Scan again</span>
@@ -430,7 +432,7 @@ export function BrandReveal({
             type="button"
             onClick={onContinue}
             disabled={saving}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-5 text-[14px] font-semibold text-primary-foreground shadow-[0_12px_28px_-14px_hsl(var(--primary)/0.8)] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+            className={cn(dsPrimaryBtn, "h-11 gap-2 px-6 text-[14px] disabled:opacity-60")}
           >
             {saving ? (
               <>
@@ -438,7 +440,7 @@ export function BrandReveal({
               </>
             ) : (
               <>
-                Enter Mellox <ArrowRight className="h-4 w-4" aria-hidden />
+                Looks right, continue <ArrowRight className="h-4 w-4" aria-hidden />
               </>
             )}
           </button>

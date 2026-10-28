@@ -15,6 +15,8 @@ import { openingLine } from "@/lib/studio/memory";
 import { audienceBlockFor } from "@/server/audience/context.server";
 import { strategyBlockFor } from "@/server/strategy/context.server";
 import { memoryBlockFor } from "@/server/memory/context.server";
+import { goalBlockFor } from "@/server/goals/context.server";
+import { catalogBlockFor } from "@/server/products/context.server";
 import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
@@ -267,7 +269,7 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
-  const [snapshot, stored, socialTrends, audience, strategy, memory, visualMemory] =
+  const [snapshot, stored, socialTrends, audience, strategy, memory, visualMemory, goal, catalog] =
     await Promise.all([
       loadWorkspaceSnapshot(db, workspaceId),
       settle(readBrandDna(db, workspaceId), null, "brand dna"),
@@ -280,6 +282,9 @@ export async function loadStudioContext(
       // What the team told Mellox to remember (ADR-0033). Empty when off or unset.
       memoryBlockFor(workspaceId, "text"),
       memoryBlockFor(workspaceId, "image"),
+      // What the brand wants and what it sells (ADR-0035). Empty until set.
+      goalBlockFor(workspaceId),
+      catalogBlockFor(workspaceId),
     ]);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
@@ -294,7 +299,14 @@ export async function loadStudioContext(
         .join("\n")}`
     : "";
   const { name, rivals: _rivals, ...rest } = snapshot;
-  const brandBlocks = [brandText + insightsBlock, audience, snapshot.rivals, strategy];
+  const brandBlocks = [
+    brandText + insightsBlock,
+    catalog,
+    audience,
+    snapshot.rivals,
+    strategy,
+    goal,
+  ];
   // Memory goes first: several generators only read the start of this text.
   const join = (blocks: string[]) => blocks.filter(Boolean).join("\n\n").trim();
   return {

@@ -21,12 +21,14 @@ import * as geo from "./geo";
 import * as geoAeoAudit from "./geo-aeo-audit";
 import * as geoAgent from "./geo-agent";
 import * as geoFixes from "./geo-fixes";
+import * as goals from "./goals";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as links from "./links";
 import * as mcp from "./mcp";
 import * as memory from "./memory";
 import * as notion from "./notion";
+import * as products from "./products";
 import * as publish from "./publish";
 import * as schedules from "./schedules";
 import * as slack from "./slack";
@@ -61,12 +63,14 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "geo-aeo-audit": geoAeoAudit,
   "geo-agent": geoAgent,
   "geo-fixes": geoFixes,
+  goals,
   "google-analytics": googleAnalytics,
   insights,
   links,
   mcp,
   memory,
   notion,
+  products,
   publish,
   schedules,
   slack,
