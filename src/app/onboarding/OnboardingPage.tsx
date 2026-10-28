@@ -15,6 +15,7 @@ import { UrlStep } from "@/components/onboarding/UrlStep";
 import {
   GoalStep,
   emptyGoalDraft,
+  goalDraftFrom,
   goalDraftToRaw,
   type GoalDraft,
 } from "@/components/onboarding/GoalStep";
@@ -106,19 +107,6 @@ function buildBrandDna(
   return { ...base, ...cleanEdits, websiteUrl: url };
 }
 
-function draftFromGoals(goals: WorkspaceGoals): GoalDraft {
-  const t = goals.targets[0];
-  return {
-    focus: goals.focus,
-    target: t ? String(t.target) : "",
-    baseline: t?.baseline !== undefined ? String(t.baseline) : "",
-    platform: t?.platform ?? "",
-    timeframeWeeks: goals.timeframeWeeks,
-    postsPerWeek: goals.postsPerWeek,
-    channels: goals.channels,
-  };
-}
-
 function Onboarding() {
   const navigate = useNavigate();
   const reduce = useReducedMotionSafe();
@@ -208,7 +196,7 @@ function Onboarding() {
       .then((view) => {
         if (view.goals) {
           setGoals(view.goals);
-          setGoalDraft(draftFromGoals(view.goals));
+          setGoalDraft(goalDraftFrom(view.goals));
         }
       })
       .catch(() => undefined);

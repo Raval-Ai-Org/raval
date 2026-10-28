@@ -107,8 +107,8 @@ export function goalProgress(
       reason: UNMEASURABLE[t.metric] ?? "Mellox can't measure this yet.",
       fix:
         t.baseline !== undefined
-          ? `You started at ${formatCount(t.baseline)}. Update it in Brain when you check.`
-          : "Add where you are today in Brain so you can see the gap.",
+          ? `You started at ${formatCount(t.baseline)}. Update it in Brand → Goal when you check.`
+          : "Add where you are today in Brand → Goal so you can see the gap.",
     });
   }
 

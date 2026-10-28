@@ -25,6 +25,7 @@ import {
   TIMEFRAMES,
   type GoalFocus,
   type TimeframeWeeks,
+  type WorkspaceGoals,
 } from "@/lib/goals/contracts";
 import { platformLabel } from "@/lib/goals/decide";
 import { duration, ease } from "@/lib/motion";
@@ -50,6 +51,20 @@ export const emptyGoalDraft: GoalDraft = {
   postsPerWeek: 3,
   channels: [],
 };
+
+/** A stored goal, back in the form's shape. */
+export function goalDraftFrom(goals: WorkspaceGoals): GoalDraft {
+  const t = goals.targets[0];
+  return {
+    focus: goals.focus,
+    target: t ? String(t.target) : "",
+    baseline: t?.baseline !== undefined ? String(t.baseline) : "",
+    platform: t?.platform ?? "",
+    timeframeWeeks: goals.timeframeWeeks,
+    postsPerWeek: goals.postsPerWeek,
+    channels: goals.channels,
+  };
+}
 
 /** The draft as decideGoals reads it. Numbers stay strings: the server cleans them. */
 export function goalDraftToRaw(d: GoalDraft): Record<string, unknown> {
@@ -108,6 +123,8 @@ export function GoalStep({
   onChange,
   onBack,
   onContinue,
+  compact = false,
+  submitLabel = "Set my goal",
 }: {
   draft: GoalDraft;
   saving: boolean;
@@ -120,6 +137,9 @@ export function GoalStep({
   onChange: (patch: Partial<GoalDraft>) => void;
   onBack?: () => void;
   onContinue: () => void;
+  /** Outside onboarding (Brain → Brand → Goal) the step has no big heading. */
+  compact?: boolean;
+  submitLabel?: string;
 }) {
   const [showNumbers, setShowNumbers] = useState(Boolean(draft.target));
   const metric = draft.focus ? FOCUS_METRIC[draft.focus] : null;
@@ -144,24 +164,35 @@ export function GoalStep({
   return (
     <div>
       {scanStrip}
-      <Eyebrow icon={Target} className={scanStrip ? "mt-8" : undefined}>
-        Your goal
-      </Eyebrow>
-      <h1
-        ref={headingRef}
-        tabIndex={-1}
-        className="mt-4 text-[clamp(1.9rem,4.6vw,2.75rem)] font-semibold leading-[1.05] tracking-[-0.035em] outline-none"
-      >
-        What should your marketing do first?
-      </h1>
-      <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-muted-foreground">
-        Mellox plans every post around this. You can change it any time in Brain.
-      </p>
+      {compact ? (
+        <p className="text-[13.5px] leading-relaxed text-muted-foreground">
+          Mellox plans every post, the strategy and Autopilot around this.
+        </p>
+      ) : (
+        <>
+          <Eyebrow icon={Target} className={scanStrip ? "mt-8" : undefined}>
+            Your goal
+          </Eyebrow>
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-4 text-[clamp(1.9rem,4.6vw,2.75rem)] font-semibold leading-[1.05] tracking-[-0.035em] outline-none"
+          >
+            What should your marketing do first?
+          </h1>
+          <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-muted-foreground">
+            Mellox plans every post around this. You can change it any time in Brain.
+          </p>
+        </>
+      )}
 
       <div
         role="radiogroup"
         aria-label="Main goal"
-        className="mt-7 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5"
+        className={cn(
+          "grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5",
+          compact ? "mt-5" : "mt-7",
+        )}
       >
         {GOAL_FOCUSES.map((focus) => {
           const Icon = FOCUS_ICONS[focus];
@@ -410,7 +441,7 @@ export function GoalStep({
           onClick={onContinue}
           className={cn(dsPrimaryBtn, "h-12 px-6 text-[14.5px]")}
         >
-          Set my goal
+          {submitLabel}
           {saving ? (
             <Spinner className="h-4 w-4 animate-spin" aria-hidden />
           ) : (

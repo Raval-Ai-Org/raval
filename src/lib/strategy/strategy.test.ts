@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { StrategySchema as AutopilotStrategySchema } from "@/lib/autopilot/contracts";
 import type { StrategyFacts } from "./contracts";
+import { decideGoals } from "@/lib/goals/decide";
 import {
   groundStrategy,
   normalizeShares,
@@ -151,5 +152,37 @@ describe("what the rest of Mellox reads", () => {
     expect(block).toContain("Against Rivalry Inc: We show proof");
     expect(block).toContain("How-to tips");
     expect(strategyBlock(s, 120).length).toBeLessThanOrEqual(120);
+  });
+});
+
+describe("the person's goal decides the strategy's goal and pace", () => {
+  const set = decideGoals(
+    {
+      focus: "followers",
+      targets: [{ metric: "followers", platform: "linkedin", target: 3000, baseline: 1000 }],
+      timeframeWeeks: 12,
+      postsPerWeek: 3,
+    },
+    new Date("2026-11-01T00:00:00Z"),
+  );
+  if (!set.ok) throw new Error("expected ok");
+  const s = groundStrategy(raw, { ...facts, goals: set.goals })!;
+
+  it("pins the goal type, number and first KPI", () => {
+    expect(s.goal.type).toBe("awareness");
+    expect(s.goal.metric).toBe("LinkedIn followers");
+    expect(s.goal.target).toBe("1,000 → 3,000 LinkedIn followers by 24 Jan");
+    expect(s.kpis[0]).toMatchObject({ label: "LinkedIn followers", why: "The goal you set" });
+    // The model's words stay.
+    expect(s.goal.summary).toBe("Bring in more demo requests.");
+  });
+
+  it("never plans more posts a week than the person can look over", () => {
+    expect(s.channels.reduce((n, c) => n + c.perWeek, 0)).toBeLessThanOrEqual(3);
+    expect(s.channels.every((c) => c.perWeek >= 1)).toBe(true);
+  });
+
+  it("leaves a strategy alone when no goal is set", () => {
+    expect(groundStrategy(raw, facts)!.goal.type).toBe("leads");
   });
 });

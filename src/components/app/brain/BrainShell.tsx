@@ -285,6 +285,7 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
                           news={news}
                           locked={locked}
                           onOpen={open}
+                          onEditGoal={() => onNavigate("brand", "goal")}
                         />
                       ))}
                     {homeTab === "today" && (

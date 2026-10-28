@@ -20,6 +20,7 @@ import {
 } from "@/lib/brain/brain";
 import { cn } from "@/lib/utils";
 import { BrainIcon, BrainMark } from "./BrainMark";
+import { GoalCard } from "./home/GoalCard";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -30,6 +31,8 @@ export type BrainHomeProps = {
   /** Plan that unlocks a brain, when the current plan doesn't include it. */
   locked?: Partial<Record<BrainId, string>>;
   onOpen: (section: BrainSection) => void;
+  /** Open Brand → Goal. Absent in places that only show the goal. */
+  onEditGoal?: () => void;
 };
 
 /** A ring that fills to `value` percent, with the number inside. */
@@ -371,7 +374,7 @@ function ColumnTitle({ children, count }: { children: string; count?: number }) 
   );
 }
 
-export function BrainHome({ overview, news, locked = {}, onOpen }: BrainHomeProps) {
+export function BrainHome({ overview, news, locked = {}, onOpen, onEditGoal }: BrainHomeProps) {
   const shown = BRAINS.filter((b) => overview.brains[b].enabled);
   const columns = shown.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3";
   return (
@@ -401,6 +404,7 @@ export function BrainHome({ overview, news, locked = {}, onOpen }: BrainHomeProp
         news={news.strategy}
         onOpen={() => onOpen("strategy")}
       />
+      {overview.goal && <GoalCard goal={overview.goal} onEdit={onEditGoal} />}
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div role="region" aria-label="What's new">

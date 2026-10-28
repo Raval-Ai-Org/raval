@@ -49,7 +49,6 @@ export function ProductsStep(p: ProductsStepProps) {
   const [picked, setPicked] = useState<Set<string>>(
     () => new Set(p.candidates.map((c) => c.fingerprint)),
   );
-  const [formKind, setFormKind] = useState<ProductKind | null>(null);
   const showCandidates = p.candidates.length > 0;
   const enter = {
     initial: p.reduce ? { opacity: 0 } : { opacity: 0, y: 8 },
@@ -179,107 +178,21 @@ export function ProductsStep(p: ProductsStepProps) {
         )}
       </AnimatePresence>
 
-      <section aria-labelledby="your-products" className="mt-9">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p id="your-products" className="ds-label">
-            Your catalogue{p.products.length ? ` · ${p.products.length}` : ""}
-          </p>
-          {!formKind && (p.products.length > 0 || showCandidates) && (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setFormKind("product")}
-                className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden /> Product
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormKind("service")}
-                className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
-              >
-                <Wrench className="h-3.5 w-3.5" aria-hidden /> I sell a service
-              </button>
-            </div>
-          )}
-        </div>
-
-        <ul className="mt-4 grid grid-cols-1 gap-3 min-[460px]:grid-cols-2 lg:grid-cols-3">
-          <AnimatePresence initial={false}>
-            {formKind && (
-              <motion.li key="new" {...enter} className="ds-tile p-3.5">
-                <p className="mb-3 text-[13px] font-semibold">
-                  {formKind === "service" ? "Add a service" : "Add a product"}
-                </p>
-                <ProductForm
-                  initial={draftFrom(null, formKind)}
-                  saving={p.adding}
-                  onCancel={() => setFormKind(null)}
-                  onSave={(d) => {
-                    p.onAdd(d);
-                    setFormKind(null);
-                  }}
-                />
-              </motion.li>
-            )}
-            {p.products.map((product) => (
-              <motion.li key={product.id} layout={!p.reduce} {...enter}>
-                <ProductCard
-                  product={product}
-                  busy={Boolean(p.busy[product.id])}
-                  lowResolution={p.lowResolution[product.id]}
-                  onSave={(d) => p.onSave(product.id, d)}
-                  onArchive={() => p.onArchive(product.id)}
-                  onUpload={(file) => p.onUpload(product.id, file)}
-                  onPrimary={(assetId) => p.onPrimary(product.id, assetId)}
-                />
-              </motion.li>
-            ))}
-          </AnimatePresence>
-          {p.loading &&
-            !p.products.length &&
-            [0, 1].map((i) => (
-              <li key={i} className="ds-tile aspect-[4/5] animate-pulse bg-[var(--ds-well-bg)]" />
-            ))}
-          {!p.loading && !p.products.length && !formKind && !showCandidates && (
-            <li className="min-[460px]:col-span-2 lg:col-span-3">
-              <div className="ds-well flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
-                  <ShoppingBag className="h-5 w-5" aria-hidden />
-                </span>
-                <p className="text-[14px] font-medium">Add the first thing you sell</p>
-                <p className="max-w-sm text-[13px] text-muted-foreground">
-                  One is enough to start. Your first posts will be about it.
-                </p>
-                <div className="mt-1 flex flex-wrap justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormKind("product")}
-                    className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
-                  >
-                    <Plus className="h-3.5 w-3.5" aria-hidden /> Add a product
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormKind("service")}
-                    className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
-                  >
-                    <Wrench className="h-3.5 w-3.5" aria-hidden /> Add a service
-                  </button>
-                </div>
-              </div>
-            </li>
-          )}
-        </ul>
-
-        {p.products.some((x) => x.kind === "product" && !x.images.length) && (
-          <p className="mt-4 inline-flex items-start gap-2 rounded-2xl bg-primary/[0.06] px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
-            <Camera className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-            Add a real photo to each product. Mellox builds the post around it and never redraws the
-            product, so labels stay readable.
-          </p>
-        )}
-      </section>
+      <Catalogue
+        className="mt-9"
+        products={p.products}
+        loading={p.loading}
+        busy={p.busy}
+        lowResolution={p.lowResolution}
+        adding={p.adding}
+        reduce={p.reduce}
+        showEmpty={!showCandidates}
+        onAdd={p.onAdd}
+        onSave={p.onSave}
+        onArchive={p.onArchive}
+        onUpload={p.onUpload}
+        onPrimary={p.onPrimary}
+      />
 
       {p.error && (
         <p
@@ -315,5 +228,136 @@ export function ProductsStep(p: ProductsStepProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+export type CatalogueProps = {
+  products: Product[];
+  loading: boolean;
+  busy: Record<string, boolean>;
+  lowResolution: Record<string, boolean>;
+  adding: boolean;
+  reduce: boolean;
+  /** Show the "add the first thing you sell" panel when the list is empty. */
+  showEmpty: boolean;
+  className?: string;
+  onAdd: (draft: ProductDraft) => void;
+  onSave: (id: string, draft: ProductDraft) => void;
+  onArchive: (id: string) => void;
+  onUpload: (id: string, file: File) => void;
+  onPrimary: (id: string, assetId: string) => void;
+};
+
+/** The brand's products and services as cards, with add, edit and photo upload. */
+export function Catalogue({ className, ...p }: CatalogueProps) {
+  const [formKind, setFormKind] = useState<ProductKind | null>(null);
+  const enter = {
+    initial: p.reduce ? { opacity: 0 } : { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0 },
+    transition: { duration: duration.medium, ease: ease.emphasized },
+  };
+  return (
+    <section aria-labelledby="your-products" className={className}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p id="your-products" className="ds-label">
+          Your catalogue{p.products.length ? ` · ${p.products.length}` : ""}
+        </p>
+        {!formKind && (p.products.length > 0 || !p.showEmpty) && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setFormKind("product")}
+              className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden /> Product
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormKind("service")}
+              className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
+            >
+              <Wrench className="h-3.5 w-3.5" aria-hidden /> I sell a service
+            </button>
+          </div>
+        )}
+      </div>
+
+      <ul className="mt-4 grid grid-cols-1 gap-3 min-[460px]:grid-cols-2 lg:grid-cols-3">
+        <AnimatePresence initial={false}>
+          {formKind && (
+            <motion.li key="new" {...enter} className="ds-tile p-3.5">
+              <p className="mb-3 text-[13px] font-semibold">
+                {formKind === "service" ? "Add a service" : "Add a product"}
+              </p>
+              <ProductForm
+                initial={draftFrom(null, formKind)}
+                saving={p.adding}
+                onCancel={() => setFormKind(null)}
+                onSave={(d) => {
+                  p.onAdd(d);
+                  setFormKind(null);
+                }}
+              />
+            </motion.li>
+          )}
+          {p.products.map((product) => (
+            <motion.li key={product.id} layout={!p.reduce} {...enter}>
+              <ProductCard
+                product={product}
+                busy={Boolean(p.busy[product.id])}
+                lowResolution={p.lowResolution[product.id]}
+                onSave={(d) => p.onSave(product.id, d)}
+                onArchive={() => p.onArchive(product.id)}
+                onUpload={(file) => p.onUpload(product.id, file)}
+                onPrimary={(assetId) => p.onPrimary(product.id, assetId)}
+              />
+            </motion.li>
+          ))}
+        </AnimatePresence>
+        {p.loading &&
+          !p.products.length &&
+          [0, 1].map((i) => (
+            <li key={i} className="ds-tile aspect-[4/5] animate-pulse bg-[var(--ds-well-bg)]" />
+          ))}
+        {!p.loading && !p.products.length && !formKind && p.showEmpty && (
+          <li className="min-[460px]:col-span-2 lg:col-span-3">
+            <div className="ds-well flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
+                <ShoppingBag className="h-5 w-5" aria-hidden />
+              </span>
+              <p className="text-[14px] font-medium">Add the first thing you sell</p>
+              <p className="max-w-sm text-[13px] text-muted-foreground">
+                One is enough to start. Your first posts will be about it.
+              </p>
+              <div className="mt-1 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormKind("product")}
+                  className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden /> Add a product
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormKind("service")}
+                  className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
+                >
+                  <Wrench className="h-3.5 w-3.5" aria-hidden /> Add a service
+                </button>
+              </div>
+            </div>
+          </li>
+        )}
+      </ul>
+
+      {p.products.some((x) => x.kind === "product" && !x.images.length) && (
+        <p className="mt-4 inline-flex items-start gap-2 rounded-2xl bg-primary/[0.06] px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
+          <Camera className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          Add a real photo to each product. Mellox builds the post around it and never redraws the
+          product, so labels stay readable.
+        </p>
+      )}
+    </section>
   );
 }

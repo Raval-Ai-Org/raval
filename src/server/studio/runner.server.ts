@@ -102,6 +102,7 @@ import type {
   StudioJobOutput,
 } from "@/lib/studio/jobs";
 import { invalidateStudioContext, loadStudioContext } from "./context.server";
+import { productContextFor } from "@/server/products/context.server";
 import { findRepeatedOpening, findSimilarRecent, hasResearchCitation } from "@/lib/studio/novelty";
 import { pickHookStyle } from "@/lib/studio/memory";
 import { AIM_ANGLES } from "@/lib/studio/viral";
@@ -1530,7 +1531,20 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   const platforms = platformsFor(type, input.controls.platforms);
   const controls = { ...input.controls, platforms };
 
-  const base = await loadStudioContext(client, job.workspace_id, input.brand ?? null);
+  const loaded = await loadStudioContext(client, job.workspace_id, input.brand ?? null);
+  // The product this piece is about (ADR-0035), checked against the job's
+  // workspace: its stored facts lead the brand text, so the copy names it
+  // exactly and claims nothing it doesn't have.
+  const product = controls.productId
+    ? await productContextFor(job.workspace_id, controls.productId).catch(() => null)
+    : null;
+  const base = product
+    ? {
+        ...loaded,
+        brandText: `${product.block}\n\n${loaded.brandText}`.trim(),
+        visualBrandText: `${loaded.visualBrandText}\n\nThe piece is about: ${product.name}`.trim(),
+      }
+    : loaded;
   const style = await loadJobLook(job.workspace_id);
   // Research is per-brief, so it cannot live in the 60s workspace context
   // cache. Most briefs skip it entirely and cost nothing.

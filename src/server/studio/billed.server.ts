@@ -56,6 +56,29 @@ export async function createBilledStudioJob(args: {
   input: CreateJobInput;
 }): Promise<BilledStudioJob> {
   const { client, workspaceId, userId, role, input } = args;
+  // A piece about a catalogue product (ADR-0035) must name one of this
+  // workspace's products, and keeps that product's own photo unless the person
+  // chose photos themselves. Decided here, before pricing, so the charge
+  // matches what runs.
+  if (input.controls.productId) {
+    const { productForGeneration } = await import("@/server/products/service.server");
+    const product = await productForGeneration(workspaceId, input.controls.productId);
+    if (!product) throw new HttpError(400, "That product is no longer in this workspace.");
+    const pictured =
+      input.type === "image" ||
+      input.type === "ad" ||
+      (input.type === "social" && Boolean(input.controls.includeImage));
+    if (
+      product.photoAssetId &&
+      pictured &&
+      !input.controls.referenceAssetIds?.length &&
+      !input.parentJobId &&
+      !studioTextOnlyRevision(input)
+    ) {
+      input.controls.referenceAssetIds = [product.photoAssetId];
+      input.controls.referenceMode = "preserve";
+    }
+  }
   // Reject foreign/deleted references before reserving credits or starting work.
   if (!studioTextOnlyRevision(input))
     await resolveStudioReferences(

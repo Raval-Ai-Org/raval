@@ -195,3 +195,9 @@ export function goalLine(goals: WorkspaceGoals): string {
   const first = goals.targets[0];
   return first ? `${label}: ${targetLine(first)} by ${by}` : `${label} by ${by}`;
 }
+
+/** The first target with its deadline ("1,200 → 3,000 Instagram followers by 24 Jan"), or "". */
+export function goalTargetText(goals: WorkspaceGoals): string {
+  const first = goals.targets[0];
+  return first ? `${targetLine(first)} by ${shortDate(goalDeadline(goals))}` : "";
+}
