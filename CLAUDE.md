@@ -714,9 +714,10 @@ never sees one.
 - **Paused in the UI ("coming soon").** The route `/w/<id>/app/backlinks`
   (`BacklinksRoute`, an `AppModalShell` over `AppShell`) shows a coming-soon
   state instead of `LinksPanel`; the sidebar has only a dimmed, unclickable
-  "Backlinks · Soon" note at the bottom, and it is not shown as an upgrade
-  perk. To bring it back, render `LinksPanel` in the route and restore the
-  **Intelligence** sidebar entry. UI in
+  "Backlinks · Soon" note at the bottom, and it is not sold: the catalog marks
+  it `availability: "later"` and it is off the plan highlights and the pricing
+  table. To bring it back, render `LinksPanel` in the route, restore the
+  **Intelligence** sidebar entry, set it to `"launch"` and restore the copy. UI in
   `src/components/app/links/`, RPC `src/server/fns/links.ts`, stubs
   `src/lib/links.functions.ts`.
 - **Mellox owns the provider credential** (`RIXOT_API_KEY`) — never ask a user
