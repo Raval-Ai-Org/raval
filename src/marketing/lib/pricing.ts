@@ -108,14 +108,32 @@ export const VIDEO_PACKS = CATALOG_VIDEO_PACKS.map((pack) => {
 // What each add-on is, in a sentence. Only add-ons the product sells today are listed: one the catalog marks
 // "later" is never promised here.
 const ADDON_TEXT: Record<AddonKey, { name: string; desc: string }> = {
-  extra_brand: { name: "Extra brand", desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale." },
-  prompts_100: { name: "+100 tracked prompts", desc: "One hundred more prompts, checked weekly on your plan's engines." },
-  daily_tracking_100: { name: "Daily tracking", desc: "Moves 100 prompts from weekly checks to daily checks." },
-  ai_overviews_100: { name: "Google AI Overviews engine", desc: "Adds real AI Overview capture, per 100 prompts." },
-  daily_market_brain: { name: "Daily Market Brain", desc: "Refreshes market intelligence every day instead of weekly, per brand." },
+  extra_brand: {
+    name: "Extra brand",
+    desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale.",
+  },
+  prompts_100: {
+    name: "+100 tracked prompts",
+    desc: "One hundred more prompts, checked weekly on your plan's engines.",
+  },
+  daily_tracking_100: {
+    name: "Daily tracking",
+    desc: "Moves 100 prompts from weekly checks to daily checks.",
+  },
+  ai_overviews_100: {
+    name: "Google AI Overviews engine",
+    desc: "Adds real AI Overview capture, per 100 prompts.",
+  },
+  daily_market_brain: {
+    name: "Daily Market Brain",
+    desc: "Refreshes market intelligence every day instead of weekly, per brand.",
+  },
   pro_200: { name: "+200 Mellox Pro messages", desc: "Extra Pro chat for strategy heavy months." },
   extra_seat: { name: "Extra seat", desc: "One more teammate. Starter and Growth." },
-  white_label_domain: { name: "White label domain", desc: "Serve the client portal on your agency's own domain. Agency and Scale." },
+  white_label_domain: {
+    name: "White label domain",
+    desc: "Serve the client portal on your agency's own domain. Agency and Scale.",
+  },
 };
 
 export const ADDONS = Object.values(CATALOG_ADDONS)

@@ -83,7 +83,10 @@ export function BillingAdmin() {
   };
   const check = useQuery({
     queryKey: ["admin", "billing", "access"],
-    queryFn: () => api<{ report: Record<string, unknown>; creationCost?: CreationCostView[] | null }>("/api/admin/billing"),
+    queryFn: () =>
+      api<{ report: Record<string, unknown>; creationCost?: CreationCostView[] | null }>(
+        "/api/admin/billing",
+      ),
     retry: false,
   });
   const denied = (check.error as (Error & { status?: number }) | null)?.status === 403;
@@ -160,7 +163,12 @@ export function BillingAdmin() {
               ) : (
                 <AccountsPage open={openAccount} />
               ))}
-            {!accountId && tab === "health" && <HealthPage report={check.data?.report ?? {}} creationCost={check.data?.creationCost} />}
+            {!accountId && tab === "health" && (
+              <HealthPage
+                report={check.data?.report ?? {}}
+                creationCost={check.data?.creationCost}
+              />
+            )}
           </SurfaceLayout>
         )}
       </div>
@@ -562,7 +570,10 @@ function AccountPage({ id, back }: { id: string; back: () => void }) {
                   : undefined
               }
             />
-            <Stat label="Creation points" value={formatNumber(account.wallet?.creation?.available ?? 0)} />
+            <Stat
+              label="Creation points"
+              value={formatNumber(account.wallet?.creation?.available ?? 0)}
+            />
             <Stat
               label="Videos"
               value={formatMeter("video", account.wallet?.video?.available ?? 0)}
@@ -828,9 +839,9 @@ function GrantPackForm({ account }: { account: AccountDetail }) {
 
 function AdjustForm({ account }: { account: AccountDetail }) {
   const action = useAdminAction(account.id);
-  const [meter, setMeter] = useState<"credits" | "creation" | "video" | "pro_messages" | "flash_messages">(
-    "credits",
-  );
+  const [meter, setMeter] = useState<
+    "credits" | "creation" | "video" | "pro_messages" | "flash_messages"
+  >("credits");
   const [amount, setAmount] = useState(100);
   const [reason, setReason] = useState("");
   const units = meter === "video" ? amount * 100 : amount;
@@ -950,14 +961,50 @@ const HEALTH_LABELS: Record<string, string> = {
   refunded_cents: "Refunded",
 };
 
-type CreationCostView = { account_id: string; provider_usd: number; provider_limit_usd: number; creation_points_spent: number; calls: number };
-function HealthPage({ report, creationCost }: { report: Record<string, unknown>; creationCost?: CreationCostView[] | null }) {
+type CreationCostView = {
+  account_id: string;
+  provider_usd: number;
+  provider_limit_usd: number;
+  creation_points_spent: number;
+  calls: number;
+};
+function HealthPage({
+  report,
+  creationCost,
+}: {
+  report: Record<string, unknown>;
+  creationCost?: CreationCostView[] | null;
+}) {
   const entries = Object.entries(HEALTH_LABELS).filter(([key]) => key in report);
   return (
     <SurfacePage title="Health">
       <GroupLabel>Recorded creation-account provider spending</GroupLabel>
-      <p className="mb-3 text-xs text-muted-foreground">Includes recorded provider calls for all features and included edits. This is not profit or an invoice reconciliation. The emergency ceiling uses monthly-equivalent revenue for annual plans.</p>
-      {creationCost == null ? <p className="text-sm text-muted-foreground">Cost reporting is unavailable. Check the billing migration and worker.</p> : creationCost.length === 0 ? <p className="text-sm text-muted-foreground">No active creation grant windows yet.</p> : creationCost.map(row => <Tile key={row.account_id} className="mb-3 text-sm"><p className="break-all font-medium">{row.account_id}</p><p>{formatUsd(row.provider_usd)} recorded provider cost / {formatUsd(row.provider_limit_usd)} emergency ceiling</p><p className="text-xs text-muted-foreground">{formatNumber(row.creation_points_spent)} points spent · {formatNumber(row.calls)} recorded calls</p></Tile>)}
+      <p className="mb-3 text-xs text-muted-foreground">
+        Includes recorded provider calls for all features and included edits. This is not profit or
+        an invoice reconciliation. The emergency ceiling uses monthly-equivalent revenue for annual
+        plans.
+      </p>
+      {creationCost == null ? (
+        <p className="text-sm text-muted-foreground">
+          Cost reporting is unavailable. Check the billing migration and worker.
+        </p>
+      ) : creationCost.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No active creation grant windows yet.</p>
+      ) : (
+        creationCost.map((row) => (
+          <Tile key={row.account_id} className="mb-3 text-sm">
+            <p className="break-all font-medium">{row.account_id}</p>
+            <p>
+              {formatUsd(row.provider_usd)} recorded provider cost /{" "}
+              {formatUsd(row.provider_limit_usd)} emergency ceiling
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatNumber(row.creation_points_spent)} points spent · {formatNumber(row.calls)}{" "}
+              recorded calls
+            </p>
+          </Tile>
+        ))
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         {entries.map(([key, label]) => {
           const raw = Number(report[key] ?? 0);

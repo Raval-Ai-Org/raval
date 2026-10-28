@@ -14,8 +14,10 @@ const mocked = vi.hoisted(() => ({
   claimSettle: vi.fn(),
 }));
 vi.mock("@/server/billing/creation.server", () => ({
-  reserveCaptionEdit: mocked.claim, linkCaptionEdit: mocked.claimLink,
-  settleCaptionEdit: mocked.claimSettle, captionEditsRemaining: async () => 2,
+  reserveCaptionEdit: mocked.claim,
+  linkCaptionEdit: mocked.claimLink,
+  settleCaptionEdit: mocked.claimSettle,
+  captionEditsRemaining: async () => 2,
 }));
 
 vi.mock("@/server/api-auth", () => ({
@@ -86,46 +88,98 @@ beforeEach(() => {
 });
 
 describe("Studio creation points and included edits", () => {
-  const request = (extra: Record<string, unknown> = {}) => new Request("http://localhost/api/studio/jobs", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-      workspaceId: "00000000-0000-4000-8000-000000000002", type: "image", idempotencyKey: "new-policy-click",
-      intent: { brief: "Announce our next product" }, controls: { platforms: ["instagram"], paymentSource: "creation" }, ...extra,
+  const request = (extra: Record<string, unknown> = {}) =>
+    new Request("http://localhost/api/studio/jobs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: "00000000-0000-4000-8000-000000000002",
+        type: "image",
+        idempotencyKey: "new-policy-click",
+        intent: { brief: "Announce our next product" },
+        controls: { platforms: ["instagram"], paymentSource: "creation" },
+        ...extra,
+      }),
+    });
+  beforeEach(() =>
+    mocked.getEntitlements.mockResolvedValue({
+      accountId: "account-1",
+      enforcement: "on",
+      role: "editor",
+      frozen: false,
+      entitledPlan: "starter",
+      creation: { active: true, monthlyPoints: 200, flexCredits: 500 },
+      features: { studio: { allowed: true, requiredPlan: "free" } },
+      meters: { creation: { available: 200 }, credits: { available: 1234 } },
     }),
-  });
-  beforeEach(() => mocked.getEntitlements.mockResolvedValue({
-    accountId: "account-1", enforcement: "on", role: "editor", frozen: false, entitledPlan: "starter",
-    creation: { active: true, monthlyPoints: 200, flexCredits: 500 },
-    features: { studio: { allowed: true, requiredPlan: "free" } },
-    meters: { creation: { available: 200 }, credits: { available: 1234 } },
-  }));
+  );
   it("reserves two points, without consuming wallet credits", async () => {
     expect((await POST(request())).status).toBe(200);
     expect(mocked.hold).toHaveBeenCalledOnce();
-    expect(mocked.hold).toHaveBeenCalledWith(expect.objectContaining({ meter: "creation", action: "creation:image_post", amount: 2 }));
-    expect(mocked.saveLink).toHaveBeenCalledWith(expect.objectContaining({ meter: "creation", amount: 2 }));
+    expect(mocked.hold).toHaveBeenCalledWith(
+      expect.objectContaining({ meter: "creation", action: "creation:image_post", amount: 2 }),
+    );
+    expect(mocked.saveLink).toHaveBeenCalledWith(
+      expect.objectContaining({ meter: "creation", amount: 2 }),
+    );
   });
   it("never switches to wallet credits when the point reservation is refused", async () => {
-    mocked.hold.mockRejectedValue(new InsufficientBalanceError({ meter: "creation", needed: 2, available: 0, options: ["wallet_credits"] }));
+    mocked.hold.mockRejectedValue(
+      new InsufficientBalanceError({
+        meter: "creation",
+        needed: 2,
+        available: 0,
+        options: ["wallet_credits"],
+      }),
+    );
     expect((await POST(request())).status).toBe(402);
     expect(mocked.hold).toHaveBeenCalledOnce();
     expect(mocked.hold).toHaveBeenCalledWith(expect.objectContaining({ meter: "creation" }));
     expect(mocked.createJob).not.toHaveBeenCalled();
   });
   it("links an included caption edit durably without another money reservation", async () => {
-    const response = await POST(request({ parentJobId: "00000000-0000-4000-8000-000000000003", includedCaptionEdit: true, refine: { target: "captions", instruction: "Shorten the existing caption" } }));
+    const response = await POST(
+      request({
+        parentJobId: "00000000-0000-4000-8000-000000000003",
+        includedCaptionEdit: true,
+        refine: { target: "captions", instruction: "Shorten the existing caption" },
+      }),
+    );
     expect(response.status).toBe(200);
     expect(mocked.claim).toHaveBeenCalledOnce();
     expect(mocked.hold).not.toHaveBeenCalled();
-    expect(mocked.saveLink).toHaveBeenCalledWith(expect.objectContaining({ meter: "creation", amount: 0, caption_edit_id: "edit-1" }));
+    expect(mocked.saveLink).toHaveBeenCalledWith(
+      expect.objectContaining({ meter: "creation", amount: 0, caption_edit_id: "edit-1" }),
+    );
   });
   it("never silently charges after another tab consumes the last included edit", async () => {
     mocked.claim.mockResolvedValue(null);
-    expect((await POST(request({ parentJobId: "00000000-0000-4000-8000-000000000003", includedCaptionEdit: true, refine: { target: "captions", instruction: "Shorten the caption" } }))).status).toBe(409);
+    expect(
+      (
+        await POST(
+          request({
+            parentJobId: "00000000-0000-4000-8000-000000000003",
+            includedCaptionEdit: true,
+            refine: { target: "captions", instruction: "Shorten the caption" },
+          }),
+        )
+      ).status,
+    ).toBe(409);
     expect(mocked.hold).not.toHaveBeenCalled();
     expect(mocked.createJob).not.toHaveBeenCalled();
   });
   it("rejects using an included-caption claim to remake artwork", async () => {
-    expect((await POST(request({ parentJobId: "00000000-0000-4000-8000-000000000003", includedCaptionEdit: true, refine: { target: "media", instruction: "Remake the photo" } }))).status).toBe(400);
+    expect(
+      (
+        await POST(
+          request({
+            parentJobId: "00000000-0000-4000-8000-000000000003",
+            includedCaptionEdit: true,
+            refine: { target: "media", instruction: "Remake the photo" },
+          }),
+        )
+      ).status,
+    ).toBe(400);
     expect(mocked.hold).not.toHaveBeenCalled();
   });
 });

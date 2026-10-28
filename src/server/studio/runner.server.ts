@@ -39,7 +39,7 @@ import {
 import { mergeAddedPlatforms } from "@/lib/studio/add-platforms";
 import { studioJobRenders, studioTextOnlyRevision } from "@/lib/studio/billing";
 import { retainStudioMedia } from "@/lib/studio/revisions";
-import { studioJobIsStale } from "@/lib/studio/recovery";
+import { studioJobIsStale, studioProviderTaskIsTimedOut } from "@/lib/studio/recovery";
 import { isCaptionRevision } from "@/lib/billing/creation";
 import { sourceScriptDirection } from "@/lib/studio/script-video";
 import {
@@ -154,7 +154,6 @@ type Db = SupabaseClient;
 const JOB_COLS =
   "id, workspace_id, type, status, stage, stage_at, title, input, output, error, provider_tasks, group_id, parent_job_id, content_item_ids, asset_ids, attempt, idempotency_key, created_at, updated_at, completed_at";
 
-const RENDER_TIMEOUT_MS = 10 * 60_000;
 const LEASE_MS = 90_000;
 const MAX_VERSIONS = 5;
 
@@ -993,8 +992,12 @@ async function startMedia(args: {
   style?: LoadedLook | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
-  const ratio = input.controls.videoModelKey && !input.controls.videoPreview && (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video"))
-    ? input.controls.videoQuote?.aspectRatio ?? mediaRatio(job.type, input, platforms) : mediaRatio(job.type, input, platforms);
+  const ratio =
+    input.controls.videoModelKey &&
+    !input.controls.videoPreview &&
+    (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video"))
+      ? (input.controls.videoQuote?.aspectRatio ?? mediaRatio(job.type, input, platforms))
+      : mediaRatio(job.type, input, platforms);
   const seed = job.group_id;
   const variationKey = `${job.attempt}:${job.idempotency_key}`;
   // The server's own Brand DNA; the browser copy is only a fallback for a
@@ -1656,12 +1659,14 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       refine: input.refine,
       current: parent?.output,
     };
-    const built = boundedCaption ? buildCreationCaptionEditPrompt(promptArgs) : captionOnly
-      ? buildCaptionPrompt({
-          ...promptArgs,
-          visual: parent!.output.concept ?? parent!.output.altText ?? input.intent.brief,
-        })
-      : buildTextPrompt(type, promptArgs);
+    const built = boundedCaption
+      ? buildCreationCaptionEditPrompt(promptArgs)
+      : captionOnly
+        ? buildCaptionPrompt({
+            ...promptArgs,
+            visual: parent!.output.concept ?? parent!.output.altText ?? input.intent.brief,
+          })
+        : buildTextPrompt(type, promptArgs);
     if (firstStage !== "writing" && format.stages.some((s) => s.id === "writing")) {
       await setStage(client, job.id, "writing");
     }
@@ -1779,12 +1784,14 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     await requireActiveJob(client, job);
     output = {
       ...output,
-      variants: boundedCaption ? output.variants : await naturalizeVariants(output.variants, {
-        brandName: ctx.brandName,
-        brandText: ctx.brandText,
-        styleText: ctx.style ? writingStyleBlock(ctx.style, "social") : undefined,
-        protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
-      }),
+      variants: boundedCaption
+        ? output.variants
+        : await naturalizeVariants(output.variants, {
+            brandName: ctx.brandName,
+            brandText: ctx.brandText,
+            styleText: ctx.style ? writingStyleBlock(ctx.style, "social") : undefined,
+            protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
+          }),
     };
     // A caption that uses a word the team asked Mellox to avoid (ADR-0033)
     // carries a warning: a person sees it, and fully automatic mode holds it.
@@ -2376,10 +2383,14 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       if (slot >= 0) media[slot] = { ...media[slot], ...patch };
     };
     try {
-      const timeout = task.taskId.startsWith("composition:") ? 30 * 60_000 : RENDER_TIMEOUT_MS;
-      if (now - task.startedAt > timeout) {
+      if (studioProviderTaskIsTimedOut(task, now)) {
         task.state = "failed";
-        setMedia({ status: "failed", error: "The render took too long. Try again." });
+        task.failure = {
+          category: "timeout",
+          message: "The image render took too long. Try again.",
+          retryable: true,
+        };
+        setMedia({ status: "failed", error: task.failure.message });
         continue;
       }
       const check = await checkMediaTask(task);

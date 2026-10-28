@@ -11,6 +11,7 @@ import { CREDIT_ACTIONS, creditsFor, type CreditAction } from "@/lib/billing/cat
 import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
 import type { WorkspaceRole } from "@/server/api-auth";
+import { VIDEO_BILLING_HOLD_MS } from "@/lib/ugc/duration";
 import { resolveStudioReferences } from "./references.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { creationPointsFor, isCaptionRevision } from "@/lib/billing/creation";
@@ -92,7 +93,13 @@ export async function createBilledStudioJob(args: {
       409,
       "Video settings or prices changed. Refresh the quote before generating.",
     );
-  if (videoQuote) input.controls.videoQuote = { hash: videoQuote.hash, units: videoQuote.units, resolution: videoQuote.resolution, aspectRatio: videoQuote.aspectRatio };
+  if (videoQuote)
+    input.controls.videoQuote = {
+      hash: videoQuote.hash,
+      units: videoQuote.units,
+      resolution: videoQuote.resolution,
+      aspectRatio: videoQuote.aspectRatio,
+    };
   const useCreation = input.controls.paymentSource === "creation" && !video;
   const entitlements = useCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
   if (useCreation && !entitlements?.creation?.active)
@@ -104,13 +111,18 @@ export async function createBilledStudioJob(args: {
   let captionEditId: string | null = null;
   let captionCostChargeId: string | null = null;
   if (useCreation && input.includedCaptionEdit) {
-    if (entitlements?.enforcement === "on" && Object.values(entitlements.meters).some(wallet => wallet.debt > 0))
-      throw new HttpError(402, "Resolve the outstanding wallet balance before requesting another included edit.");
+    if (
+      entitlements?.enforcement === "on" &&
+      Object.values(entitlements.meters).some((wallet) => wallet.debt > 0)
+    )
+      throw new HttpError(
+        402,
+        "Resolve the outstanding wallet balance before requesting another included edit.",
+      );
     if (!isCaptionRevision(input))
       throw new HttpError(400, "Included edits cover captions, not new artwork or full rewrites.");
     await requireBillingFeature({ workspaceId, userId, role, feature: "studio", spending: true });
-    if (entitlements?.enforcement === "on")
-      {
+    if (entitlements?.enforcement === "on") {
       const claim = await reserveCaptionEdit({
         accountId: entitlements.accountId,
         workspaceId,
@@ -120,7 +132,7 @@ export async function createBilledStudioJob(args: {
       });
       captionEditId = claim?.id ?? null;
       captionCostChargeId = claim?.chargeId ?? null;
-      }
+    }
     if (!captionEditId && entitlements?.enforcement === "on")
       throw new HttpError(
         409,
@@ -170,7 +182,7 @@ export async function createBilledStudioJob(args: {
           idempotencyKey: input.idempotencyKey,
           route: billingRoute,
           expiresAt: new Date(
-            Date.now() + (studioJobRenders(input) ? 3 * 60 * 60_000 : 15 * 60_000),
+            Date.now() + (studioJobRenders(input) ? VIDEO_BILLING_HOLD_MS : 15 * 60_000),
           ).toISOString(),
         });
     let job: StudioJob;
@@ -178,7 +190,13 @@ export async function createBilledStudioJob(args: {
     let billingLinked = false;
     try {
       job = await runWithScope(
-        { billingAccountId: charge.accountId, billingChargeId: charge.chargeId ?? undefined, billingMeter: price.meter, workspaceId, userId },
+        {
+          billingAccountId: charge.accountId,
+          billingChargeId: charge.chargeId ?? undefined,
+          billingMeter: price.meter,
+          workspaceId,
+          userId,
+        },
         () =>
           createStudioJob({
             client,

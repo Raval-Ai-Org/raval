@@ -14,7 +14,9 @@ export function quoteStudioVideo(controls: StudioControls) {
   const requested = (controls.videoResolution ?? "720P").toLowerCase() as VideoResolution;
   const resolution = model.resolutions.includes(requested) ? requested : model.defaultResolution;
   const requestedRatio = controls.ratio ?? "9:16";
-  const aspectRatio = (model.aspectRatios.includes(requestedRatio as never) ? requestedRatio : model.aspectRatios[0]) as AspectRatio;
+  const aspectRatio = (
+    model.aspectRatios.includes(requestedRatio as never) ? requestedRatio : model.aspectRatios[0]
+  ) as AspectRatio;
   const seconds = controls.durationSec ?? 10;
   const referenceCount = Math.min(4, controls.referenceAssetIds?.length ?? 0);
   const estimate = estimateRender(model, resolution, seconds, referenceCount);
@@ -34,5 +36,12 @@ export function quoteStudioVideo(controls: StudioControls) {
       }),
     )
     .digest("hex");
-  return { hash, units, model: key, resolution, aspectRatio, feature: videoFeatureFor(key, resolution) };
+  return {
+    hash,
+    units,
+    model: key,
+    resolution,
+    aspectRatio,
+    feature: videoFeatureFor(key, resolution),
+  };
 }

@@ -14,7 +14,12 @@ export const maxDuration = 300;
 const BodySchema = z.object({
   prompt: z.string().trim().min(1).max(20_000),
   aspectRatio: z.enum(["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"]).default("16:9"),
-  duration: z.number().int().min(4).max(MAX_VIDEO_DURATION).default(DEFAULT_VIDEO_DURATION),
+  duration: z
+    .number()
+    .int()
+    .min(4)
+    .max(MAX_VIDEO_DURATION, "Videos can be up to 60 seconds long.")
+    .default(DEFAULT_VIDEO_DURATION),
   resolution: z.enum(["480P", "720P", "1080P"]).default("720P"),
   audio: z.boolean().default(true),
   seed: z.number().int().min(0).max(2_147_483_647).default(0),

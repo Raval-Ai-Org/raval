@@ -20,6 +20,12 @@ export const POST = defineRoute({
       feature: quote.feature,
       spending: true,
     });
-    return { hash: quote.hash, units: quote.units, model: quote.model, resolution: quote.resolution, aspectRatio: quote.aspectRatio };
+    return {
+      hash: quote.hash,
+      units: quote.units,
+      model: quote.model,
+      resolution: quote.resolution,
+      aspectRatio: quote.aspectRatio,
+    };
   },
 });

@@ -2,6 +2,8 @@
 export const DEFAULT_VIDEO_DURATION = 10;
 export const MAX_VIDEO_DURATION = 60;
 export const VIDEO_DURATION_OPTIONS = [10, 15, 20, 30, 40, 60] as const;
+/** Billing capacity stays reserved while an accepted provider job is reconciled. */
+export const VIDEO_BILLING_HOLD_MS = 7 * 24 * 60 * 60_000;
 
 export function outputDurations(native: readonly number[]): number[] {
   return [...new Set([...native, ...VIDEO_DURATION_OPTIONS])].sort((a, b) => a - b);

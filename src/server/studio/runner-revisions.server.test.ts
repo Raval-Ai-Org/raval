@@ -228,14 +228,27 @@ it("executes an image caption revision without another image task and keeps the 
 
 it("bounds an included edit to one small text request and keeps the paid visual", async () => {
   const db = database();
-  const input = CreateJobSchema.parse({ workspaceId: workspace, type: "image", parentJobId: parentId,
-    idempotencyKey: "included-caption", intent: { brief: "Our actual product" },
+  const input = CreateJobSchema.parse({
+    workspaceId: workspace,
+    type: "image",
+    parentJobId: parentId,
+    idempotencyKey: "included-caption",
+    intent: { brief: "Our actual product" },
     controls: { platforms: ["instagram"], paymentSource: "creation" },
-    refine: { instruction: "Make the existing caption clearer", target: "captions" }, includedCaptionEdit: true });
-  const job = await createStudioJob({ client: db.client, workspaceId: workspace, userId: "user", input });
+    refine: { instruction: "Make the existing caption clearer", target: "captions" },
+    includedCaptionEdit: true,
+  });
+  const job = await createStudioJob({
+    client: db.client,
+    workspaceId: workspace,
+    userId: "user",
+    input,
+  });
   expect(job.status).toBe("succeeded");
   expect(mocks.prompt).toHaveBeenCalledOnce();
-  expect(mocks.prompt).toHaveBeenCalledWith(expect.objectContaining({ route: "studio.caption.edit", maxTokens: 1800 }));
+  expect(mocks.prompt).toHaveBeenCalledWith(
+    expect.objectContaining({ route: "studio.caption.edit", maxTokens: 1800 }),
+  );
   expect(mocks.render).not.toHaveBeenCalled();
   expect(job.output.media?.[0].assetId).toBe("photo");
 });

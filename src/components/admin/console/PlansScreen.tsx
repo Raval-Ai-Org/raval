@@ -39,7 +39,9 @@ export function PlansScreen() {
                 {plan.seats === null
                   ? "unlimited seats"
                   : `${plan.seats} seat${plan.seats === 1 ? "" : "s"}`}{" "}
-                · {fmtNumber(CREATION_PLANS[id].points)} creation points + {fmtNumber(CREATION_PLANS[id].flexCredits)} wallet credits a month (new grant windows)
+                · {fmtNumber(CREATION_PLANS[id].points)} creation points +{" "}
+                {fmtNumber(CREATION_PLANS[id].flexCredits)} wallet credits a month (new grant
+                windows)
               </p>
             </Tile>
           );

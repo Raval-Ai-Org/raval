@@ -14,13 +14,13 @@ This improves the ordinary-image allowance from about 66 to 100 and makes normal
 
 The checked-in catalog grants Starter 2,000 general credits, four Video Credits, 30 Pro message units and 800 Flash message units. These are distinct pools. Provider dollars do not automatically determine general credit deductions. An action's fixed catalog price determines its debit, while provider usage is recorded separately.
 
-| Action | General credits per action | Capacity from 2,000 credits alone |
-| --- | ---: | ---: |
-| Text social post set, up to three platforms | 12 | 166 |
-| Standard AI image post, copy included | 30 | 66 |
-| Carousel | 30 | 66 |
-| Video script | 10 | 200 |
-| Short caption revision in the local safety changes | 4 | 500 revisions |
+| Action                                             | General credits per action | Capacity from 2,000 credits alone |
+| -------------------------------------------------- | -------------------------: | --------------------------------: |
+| Text social post set, up to three platforms        |                         12 |                               166 |
+| Standard AI image post, copy included              |                         30 |                                66 |
+| Carousel                                           |                         30 |                                66 |
+| Video script                                       |                         10 |                               200 |
+| Short caption revision in the local safety changes |                          4 |                     500 revisions |
 
 Each row assumes the entire pool goes to that action. Retakes, writing assistance and other paid tools reduce these counts. These are generation counts, not measured counts of accepted or published work.
 
@@ -55,36 +55,36 @@ If the founder instead chooses a 60% AI-provider budget, $49 x 60% = $29.40. Tha
 
 ## Alternatives
 
-| Design | Benefit | Limitation | Recommendation |
-| --- | --- | --- | --- |
-| Increase 2,000 to 4,000 credits | Quick, roughly doubles menu capacity | Leaves unrelated tools competing with creation and still charges normal iteration | Temporary pilot option |
-| Debit actual provider cost plus a markup | Closely follows cost | Customers cannot predict the number of posts; long context and fallbacks change prices | Use internally for costing, not as the main customer allowance |
-| Protected creation points, included caption edits, separately quoted expensive work | Clear monthly value and predictable iteration | Requires a versioned allowance policy and validated unit costs | Preferred design |
+| Design                                                                              | Benefit                                       | Limitation                                                                             | Recommendation                                                 |
+| ----------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Increase 2,000 to 4,000 credits                                                     | Quick, roughly doubles menu capacity          | Leaves unrelated tools competing with creation and still charges normal iteration      | Temporary pilot option                                         |
+| Debit actual provider cost plus a markup                                            | Closely follows cost                          | Customers cannot predict the number of posts; long context and fallbacks change prices | Use internally for costing, not as the main customer allowance |
+| Protected creation points, included caption edits, separately quoted expensive work | Clear monthly value and predictable iteration | Requires a versioned allowance policy and validated unit costs                         | Preferred design                                               |
 
 Do not redenominate 2,000 credits to 20,000 and multiply every action price by ten. That changes display numbers without increasing useful output. Do not increase grants tenfold at unchanged prices without a full-use cost test.
 
 For context, increasing only the current general grant while keeping the other workbook allowances and costs unchanged gives these indicative all-allowances-spent results:
 
 | General grant | Estimated general provider work | Total service costs | Contribution after existing workbook deductions |
-| --- | ---: | ---: | ---: |
-| 2,000 | $4.07 | $23.96 | 42.8% |
-| 4,000 | $8.14 | $28.02 | 34.5% |
-| 6,000 | $12.20 | $32.09 | 26.2% |
-| 10,000 | $20.34 | $40.23 | 9.6% |
+| ------------- | ------------------------------: | ------------------: | ----------------------------------------------: |
+| 2,000         |                           $4.07 |              $23.96 |                                           42.8% |
+| 4,000         |                           $8.14 |              $28.02 |                                           34.5% |
+| 6,000         |                          $12.20 |              $32.09 |                                           26.2% |
+| 10,000        |                          $20.34 |              $40.23 |                                            9.6% |
 
 Method: remove existing full-credit cost `Plans!D51`, add new grant x `Inputs!B37`, then subtract the unchanged `Plans!D58:D59` deductions from $49. These are estimates with unchanged mix and no new free revisions, not forecasts or newly verified provider prices. Annual billing needs its own lower-revenue scenario.
 
 ## Proposed $49 creation package and economics
 
-| Customer activity | Proposed creation points |
-| --- | ---: |
-| Text post set or caption using an unchanged supplied photo | 1 |
-| Standard AI image post, copy included | 2 |
-| Template carousel, bounded slide count and one generated background | 3 |
-| Up to three short caption revisions to that creation | Included |
-| Manual edits, uploads, viewing, approval and scheduling | Included |
-| A genuinely new image take, full-artwork carousel, article, campaign or premium task | Separate visible quote derived from the validated workload |
-| Video render | Separate video quote, never a debit from protected creation points |
+| Customer activity                                                                    |                                           Proposed creation points |
+| ------------------------------------------------------------------------------------ | -----------------------------------------------------------------: |
+| Text post set or caption using an unchanged supplied photo                           |                                                                  1 |
+| Standard AI image post, copy included                                                |                                                                  2 |
+| Template carousel, bounded slide count and one generated background                  |                                                                  3 |
+| Up to three short caption revisions to that creation                                 |                                                           Included |
+| Manual edits, uploads, viewing, approval and scheduling                              |                                                           Included |
+| A genuinely new image take, full-artwork carousel, article, campaign or premium task |         Separate visible quote derived from the validated workload |
+| Video render                                                                         | Separate video quote, never a debit from protected creation points |
 
 One possible month is 60 image posts + 20 text post sets + 10 template carousels = 170 points, leaving 30 points for additional creations. This is 90 distinct creations, before platform variants. Saved revisions do not multiply the number of finished creations shown as customer value.
 

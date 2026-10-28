@@ -39,9 +39,16 @@ it("issues a protected 200-point allowance and 500 flex credits with distinct ve
   );
 });
 it("leaves Free monthly chat grants on their existing path", async () => {
-  await grantPlanWindow({ account, plan: "free", windowStart: "2026-11-01T00:00:00Z", expiresAt: "2026-12-01T00:00:00Z" });
+  await grantPlanWindow({
+    account,
+    plan: "free",
+    windowStart: "2026-11-01T00:00:00Z",
+    expiresAt: "2026-12-01T00:00:00Z",
+  });
   expect(mocks.rpc).not.toHaveBeenCalled();
-  expect(mocks.grant).toHaveBeenCalledWith(expect.objectContaining({ meter: "flash_messages", amount: 30 }));
+  expect(mocks.grant).toHaveBeenCalledWith(
+    expect.objectContaining({ meter: "flash_messages", amount: 30 }),
+  );
   expect(mocks.grant).not.toHaveBeenCalledWith(expect.objectContaining({ meter: "creation" }));
 });
 it("replays an old grant window with its original credit amount and original keys", async () => {

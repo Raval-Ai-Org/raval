@@ -97,7 +97,10 @@ export function StudioComposer() {
     if (session && billing && !session.pendingKey && !session.job) {
       const controls = { ...session.controls };
       let changed = false;
-      if (!controls.paymentSourceExplicit && controls.paymentSource !== (billing.creation?.active ? "creation" : "credits")) {
+      if (
+        !controls.paymentSourceExplicit &&
+        controls.paymentSource !== (billing.creation?.active ? "creation" : "credits")
+      ) {
         controls.paymentSource = billing.creation?.active ? "creation" : "credits";
         changed = true;
       }

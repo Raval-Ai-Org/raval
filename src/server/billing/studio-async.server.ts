@@ -127,14 +127,14 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
 
 /** Advance a small batch from the billing hook even when the user closes the tab. */
 export async function advanceStudioBillingJobs(
-  limit = 8,
+  limit = 25,
 ): Promise<{ checked: number; settled: number }> {
   const { data, error } = await admin
     .from("billing_studio_jobs")
     .select("job_id,workspace_id,account_id,charge_id,meter")
     .is("settled_at", null)
     .order("created_at", { ascending: true })
-    .limit(Math.min(20, Math.max(1, limit)));
+    .limit(Math.min(50, Math.max(1, limit)));
   if (error) throw new Error("Could not load pending Studio billing jobs.");
   const { advanceStudioJob, getJobRow } = await import("@/server/studio/runner.server");
   let checked = 0;

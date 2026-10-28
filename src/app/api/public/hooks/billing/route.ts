@@ -37,7 +37,7 @@ export const POST = defineCronRoute({
       return 0;
     });
     const { warnCreationCosts } = await import("@/server/billing/creation-cost.server");
-    const creationCostWarnings = await warnCreationCosts().catch(cause => {
+    const creationCostWarnings = await warnCreationCosts().catch((cause) => {
       console.error("[billing] provider-cost monitoring unavailable", cause);
       return null;
     });

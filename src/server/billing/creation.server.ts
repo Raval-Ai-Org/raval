@@ -39,10 +39,16 @@ export async function reserveCaptionEdit(args: {
     },
   });
   if (error) throw new HttpError(503, "Could not reserve your included caption edit.");
-  if (data?.replayed && data.state === "released") throw new HttpError(410, "The previous edit was stopped and returned. Try again to start a new request.");
+  if (data?.replayed && data.state === "released")
+    throw new HttpError(
+      410,
+      "The previous edit was stopped and returned. Try again to start a new request.",
+    );
   if (data?.replayed)
     throw new HttpError(409, "This caption edit is already running or completed.");
-  return data?.included && typeof data.id === "string" ? { id: data.id, chargeId: typeof data.charge_id === "string" ? data.charge_id : null } : null;
+  return data?.included && typeof data.id === "string"
+    ? { id: data.id, chargeId: typeof data.charge_id === "string" ? data.charge_id : null }
+    : null;
 }
 
 export async function settleCaptionEdit(
@@ -68,7 +74,10 @@ export async function linkCaptionEdit(id: string, jobId: string) {
 }
 
 export async function captionEditsRemaining(workspaceId: string, groupId: string): Promise<number> {
-  const { data, error } = await admin.rpc("studio_caption_edits_remaining", { p_workspace: workspaceId, p_group: groupId });
+  const { data, error } = await admin.rpc("studio_caption_edits_remaining", {
+    p_workspace: workspaceId,
+    p_group: groupId,
+  });
   if (error) throw new HttpError(503, "Could not load your included caption edits.");
   return Math.max(0, Math.min(3, Number(data ?? 0)));
 }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { KieGatewayError } from "@/lib/kie-gateway.server";
 import { UGC_MODELS } from "@/lib/ugc/models";
-import { createRenderEngine, MAX_SUBMIT_ATTEMPTS, RENDER_TIMEOUT_MS } from "./engine.server";
+import { createRenderEngine, MAX_SUBMIT_ATTEMPTS } from "./engine.server";
 import { buildKieInput, kieFailure, kieGenerationType, kieModelId } from "./providers/kie.server";
 import type {
   ProviderCheck,
@@ -310,13 +310,21 @@ describe("UGC render engine", () => {
     expect(provider.submits).toHaveLength(1);
   });
 
-  it("times out a render the provider never finishes, and releases", async () => {
+  it("keeps an accepted render alive past the old timeout and stores a late result", async () => {
     const row = await start();
     await tick(row.id, 0);
-    await tick(row.id, RENDER_TIMEOUT_MS + 1_000);
-    const current = (await store.getRender(row.id))!;
-    expect(current).toMatchObject({ status: "failed", error_code: "timeout" });
-    expect([...store.holds.values()][0].state).toBe("released");
+    await tick(row.id, 31 * 60_000);
+    expect((await store.getRender(row.id))!).toMatchObject({
+      status: "processing",
+      provider_state: "generating",
+    });
+    expect([...store.holds.values()][0].state).toBe("held");
+
+    provider.checks = [success];
+    await tick(row.id, 60_000);
+    expect((await store.getRender(row.id))!).toMatchObject({ status: "succeeded" });
+    expect([...store.holds.values()][0].state).toBe("captured");
+    expect(provider.submits).toHaveLength(1);
   });
 
   it("retries storage, and never re-renders or double-charges while doing so", async () => {

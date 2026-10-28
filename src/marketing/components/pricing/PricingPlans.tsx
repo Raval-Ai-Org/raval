@@ -15,11 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import {
-  PLANS,
-  type BillingInterval,
-  type PaidPlanId,
-} from "@/lib/billing/catalog";
+import { PLANS, type BillingInterval, type PaidPlanId } from "@/lib/billing/catalog";
 import { formatMeter, formatNumber, formatUsd, planPrice } from "@/lib/billing/present";
 import { PAID_PLANS } from "@/marketing/lib/pricing";
 import { CREATION_PLANS } from "@/lib/billing/creation";
@@ -42,7 +38,10 @@ function planNumbers(plan: PaidPlanId): { Icon: LucideIcon; main: string; note?:
       main: `${formatNumber(CREATION_PLANS[plan].points)} creation points a month`,
       note: `up to ${formatNumber(Math.floor(CREATION_PLANS[plan].points / 2))} standard image posts, or a mix. Three short caption edits per paid social creation.`,
     },
-    { Icon: Zap, main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras` },
+    {
+      Icon: Zap,
+      main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras`,
+    },
     { Icon: Video, main: `${formatMeter("video", def.allowances.videoUnits)} a month` },
     {
       Icon: Building2,
@@ -147,8 +146,9 @@ function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInte
           <span>{def.fit}</span>
         </h3>
         <p>
-          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[plan].points)} creation points and{" "}
-          {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account manager
+          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[plan].points)} creation
+          points and {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account
+          manager
         </p>
       </div>
       <p className="pp-strip-price" aria-live="polite">

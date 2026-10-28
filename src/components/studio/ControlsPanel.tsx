@@ -102,25 +102,26 @@ export function ControlsPanel({
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
-      {billing?.creation?.active && ((session.type !== "video" && !storyVideo) || c.videoPreview) && (
-        <div>
-          <FieldLabel>Pay for this creation with</FieldLabel>
-          <Segmented
-            label="Payment source"
-            className="flex w-full flex-wrap"
-            value={c.paymentSource ?? "creation"}
-            onChange={(paymentSource) => set({ paymentSource, paymentSourceExplicit: true })}
-            options={[
-              { value: "creation", label: "Creation points" },
-              { value: "credits", label: "Wallet credits" },
-            ]}
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            {billing.meters.creation?.available ?? 0} creation points available. Wallet credits are
-            used only when you choose them.
-          </p>
-        </div>
-      )}
+      {billing?.creation?.active &&
+        ((session.type !== "video" && !storyVideo) || c.videoPreview) && (
+          <div>
+            <FieldLabel>Pay for this creation with</FieldLabel>
+            <Segmented
+              label="Payment source"
+              className="flex w-full flex-wrap"
+              value={c.paymentSource ?? "creation"}
+              onChange={(paymentSource) => set({ paymentSource, paymentSourceExplicit: true })}
+              options={[
+                { value: "creation", label: "Creation points" },
+                { value: "credits", label: "Wallet credits" },
+              ]}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {billing.meters.creation?.available ?? 0} creation points available. Wallet credits
+              are used only when you choose them.
+            </p>
+          </div>
+        )}
       {session.type === "carousel" && c.paymentSource === "creation" && (
         <div>
           <FieldLabel>Artwork</FieldLabel>
@@ -187,7 +188,11 @@ export function ControlsPanel({
               set(next);
             }}
           />
-          {c.paymentSource === "creation" && <p className="mt-2 text-xs text-muted-foreground">Up to three platform versions per creation.</p>}
+          {c.paymentSource === "creation" && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Up to three platform versions per creation.
+            </p>
+          )}
         </div>
       ) : null}
 

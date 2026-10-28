@@ -303,7 +303,14 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           )}
         </div>
         <div className="ds-tile space-y-5 p-5">
-          {!data.creation?.active && current !== "free" && <p className="text-xs text-muted-foreground">Your current wallet balances keep their existing terms. At the next renewal, this plan receives {CREATION_PLANS[current].points} protected creation points and {CREATION_PLANS[current].flexCredits} wallet credits, with video and chat allowances kept separate.</p>}
+          {!data.creation?.active && current !== "free" && (
+            <p className="text-xs text-muted-foreground">
+              Your current wallet balances keep their existing terms. At the next renewal, this plan
+              receives {CREATION_PLANS[current].points} protected creation points and{" "}
+              {CREATION_PLANS[current].flexCredits} wallet credits, with video and chat allowances
+              kept separate.
+            </p>
+          )}
           {data.creation?.active && (
             <div className="space-y-2">
               <UsageBar

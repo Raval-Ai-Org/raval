@@ -122,7 +122,8 @@ export async function grantPlanWindow(args: {
     const { data, error } = await admin.rpc("creation_plan_window", {
       p: { account_id: account.id, window_start: windowStart, expires_at: expiresAt },
     });
-    if (error || !["legacy", CREATION_POLICY].includes(String(data))) throw new Error("Could not prepare monthly creation allowance.");
+    if (error || !["legacy", CREATION_POLICY].includes(String(data)))
+      throw new Error("Could not prepare monthly creation allowance.");
     policy = String(data);
   }
   const creation = policy === CREATION_POLICY && plan !== "free";

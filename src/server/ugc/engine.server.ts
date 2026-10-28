@@ -24,7 +24,6 @@ import type { RenderPatch, RenderRow, UgcRenderStore } from "./store";
 
 export const MAX_SUBMIT_ATTEMPTS = 4;
 export const MAX_PERSIST_ATTEMPTS = 5;
-export const RENDER_TIMEOUT_MS = 30 * 60_000;
 export const LEASE_SECONDS = 120;
 /** Reference image links must outlive a slow provider queue. */
 const IMAGE_URL_TTL_SECONDS = 6 * 60 * 60;
@@ -182,13 +181,6 @@ export function createRenderEngine(deps: EngineDeps) {
     const t = now();
     if (!row.provider_task_id)
       return fail(row, "missing_task", "The render lost its provider task.");
-    if (row.submitted_at && t - Date.parse(row.submitted_at) > RENDER_TIMEOUT_MS) {
-      return fail(
-        row,
-        "timeout",
-        "The render took too long and was stopped. Your allowance was returned.",
-      );
-    }
     let result;
     try {
       result = await provider.check(row.provider_task_id, row.provider);

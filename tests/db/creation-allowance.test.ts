@@ -191,7 +191,13 @@ describe("creation allowance database safety", () => {
     expect(Number(rows[0].available)).toBe(198);
   });
   it("denies direct browser writes and direct calls to the paid edit RPC", async () => {
-    const privileges = await db.query<{ can_insert: boolean; can_update: boolean; can_read: boolean }>("select has_table_privilege('authenticated','studio_jobs','INSERT') can_insert,has_table_privilege('authenticated','studio_jobs','UPDATE') can_update,has_table_privilege('authenticated','studio_jobs','SELECT') can_read");
+    const privileges = await db.query<{
+      can_insert: boolean;
+      can_update: boolean;
+      can_read: boolean;
+    }>(
+      "select has_table_privilege('authenticated','studio_jobs','INSERT') can_insert,has_table_privilege('authenticated','studio_jobs','UPDATE') can_update,has_table_privilege('authenticated','studio_jobs','SELECT') can_read",
+    );
     expect(privileges.rows[0]).toEqual({ can_insert: false, can_update: false, can_read: true });
     await db.exec("begin; set local role authenticated;");
     try {

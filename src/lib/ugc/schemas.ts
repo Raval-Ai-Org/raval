@@ -48,7 +48,7 @@ export const ProductSchema = z.object({
 export type Product = z.infer<typeof ProductSchema>;
 
 export const BriefSchema = z.object({
-  durationSec: z.number().int().min(4).max(60).optional(),
+  durationSec: z.number().int().min(4).max(60, "Videos can be up to 60 seconds long.").optional(),
   objective: z.enum(ids(OBJECTIVES)).default("sales"),
   platform: z.enum(ids(PLATFORMS)).default("tiktok"),
   format: z.enum(ids(FORMATS)).default("problem_solution"),
@@ -140,7 +140,7 @@ export const GenerateConceptsBody = z.object({
   /** Replace all concepts, or rewrite the current script with an instruction. */
   mode: z.enum(["concepts", "rewrite"]).default("concepts"),
   instruction: text(300).optional(),
-  durationSec: z.number().int().min(4).max(60).optional(),
+  durationSec: z.number().int().min(4).max(60, "Videos can be up to 60 seconds long.").optional(),
 });
 
 export const StartRenderBody = z.object({
@@ -151,7 +151,7 @@ export const StartRenderBody = z.object({
   model: z
     .union([z.literal("auto"), z.enum(UGC_MODEL_KEYS as [string, ...string[]])])
     .default("auto"),
-  durationSec: z.number().int().min(4).max(60).default(10),
+  durationSec: z.number().int().min(4).max(60, "Videos can be up to 60 seconds long.").default(10),
   aspectRatio: z.enum(["9:16", "1:1", "16:9", "4:3", "3:4"]),
   resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]),
   /** Assets (uploaded or product images) to show the model; filtered to the workspace. */

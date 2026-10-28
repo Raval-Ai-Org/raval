@@ -276,7 +276,12 @@ function Hero({
     empty && block?.needed
       ? `This needs ${formatMeter(meter, block.needed)}. You have ${formatMeter(meter, block.available ?? 0)} left. `
       : "";
-  const outOf = meter === "creation" ? "Your creation points are used" : meter === "video" ? "You're out of Video Credits" : "You're out of credits";
+  const outOf =
+    meter === "creation"
+      ? "Your creation points are used"
+      : meter === "video"
+        ? "You're out of Video Credits"
+        : "You're out of credits";
 
   if (view === "credits") {
     Icon = Wallet;
@@ -554,8 +559,9 @@ function PlanStrip(props: UpgradeScreenProps & { plan: PaidPlanId }) {
           <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">{def.fit}</span>
         </p>
         <p className="text-[12.5px] text-muted-foreground">
-          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[def.id].points)} creation points and{" "}
-          {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account manager
+          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[def.id].points)} creation
+          points and {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account
+          manager
         </p>
       </div>
       <p className="text-[14px] font-semibold tabular-nums">

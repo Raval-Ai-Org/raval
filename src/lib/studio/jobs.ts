@@ -59,8 +59,12 @@ export const ControlsSchema = z.object({
     .enum(["standard", "draft", "premium", "long", "cinematic", "variation"])
     .optional(),
   videoQuote: z
-    .object({ hash: z.string().length(64), units: z.number().int().positive(),
-      resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(), aspectRatio: AspectRatioSchema.optional() })
+    .object({
+      hash: z.string().length(64),
+      units: z.number().int().positive(),
+      resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(),
+      aspectRatio: AspectRatioSchema.optional(),
+    })
     .optional(),
   audio: z.boolean().optional(),
   includeImage: z.boolean().optional(),
@@ -201,7 +205,11 @@ export const CreateJobSchema = z
   })
   .superRefine((input, ctx) => {
     if (input.controls.paymentSource === "creation" && input.controls.platforms.length > 3)
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["controls", "platforms"], message: "Choose up to three platform versions for one creation." });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "platforms"],
+        message: "Choose up to three platform versions for one creation.",
+      });
     if (
       ["social", "image", "ad"].includes(input.type) &&
       (input.controls.referenceMode ?? "preserve") === "preserve" &&

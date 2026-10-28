@@ -478,15 +478,29 @@ const approvedRows = (type: StudioType, status = "approved", scheduledAt: string
   (ROWS[type] ?? []).map((r) => ({ ...r, status, scheduled_at: scheduledAt }));
 
 const SCENES: Scene[] = [
-  { id: "brief-creation", label: "Brief · Creation points", make: () => {
-    const base = session("image", "intent", { brief: "Announce our freshly roasted coffee" });
-    return { ...base, controls: { ...base.controls, paymentSource: "creation" } };
-  } },
-  { id: "review-creation", label: "Review · Included caption edits", make: () => {
-    const base = session("image", "review");
-    const job = { ...base.job!, captionEditsRemaining: 3 };
-    return { ...base, controls: { ...base.controls, paymentSource: "creation" }, job, lastGood: job };
-  }, fixtures: { rows: ROWS.image, distribution: true } },
+  {
+    id: "brief-creation",
+    label: "Brief · Creation points",
+    make: () => {
+      const base = session("image", "intent", { brief: "Announce our freshly roasted coffee" });
+      return { ...base, controls: { ...base.controls, paymentSource: "creation" } };
+    },
+  },
+  {
+    id: "review-creation",
+    label: "Review · Included caption edits",
+    make: () => {
+      const base = session("image", "review");
+      const job = { ...base.job!, captionEditsRemaining: 3 };
+      return {
+        ...base,
+        controls: { ...base.controls, paymentSource: "creation" },
+        job,
+        lastGood: job,
+      };
+    },
+    fixtures: { rows: ROWS.image, distribution: true },
+  },
   { id: "live-social", label: "Live run · Social", live: "social" },
   { id: "live-image", label: "Live run · Image", live: "image" },
   { id: "live-article", label: "Live run · Article", live: "article" },
