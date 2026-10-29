@@ -43,7 +43,7 @@ const surfaces: Scene[] = [
   ].map((scene) => ({ path: `/studio-lab?scene=${scene}&device=phone` })),
   { path: "/links-lab" },
   { path: "/canva-lab" },
-  { path: "/visual-taste-lab" },
+  { path: "/inspo-lab" },
   { path: "/analytics-lab" },
   { path: "/calendar-lab" },
   ...["plans", "credits", "member", "confirm", "loading"].map((scene) => ({

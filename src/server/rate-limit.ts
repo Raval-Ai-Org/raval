@@ -211,7 +211,7 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // person editing cards, so a burst is normal.
   "setup-write": { limit: 60, windowSeconds: 60, label: "setup change" },
   // Keeping discovered products downloads their photos through the SSRF guard.
-  "product-import": { limit: 10, windowSeconds: 600, label: "product import" },
+  "product-import": { limit: 40, windowSeconds: 600, label: "product import" },
   // A person clicking a button chat offered. The work it starts is held to
   // its own tier and billing as well.
   "chat-action": { limit: 30, windowSeconds: 60, label: "chat action" },

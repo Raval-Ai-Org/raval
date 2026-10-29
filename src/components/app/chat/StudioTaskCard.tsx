@@ -16,9 +16,11 @@ import {
   cancelSession,
   focusSession,
   generate,
+  openComposer,
   openJob,
   useStudioStore,
 } from "@/lib/studio/session-store";
+import { repurposeOpen, repurposeSourceFromJob, repurposeTargets } from "@/lib/studio/repurpose";
 import {
   Burst,
   DrawCheck,
@@ -124,6 +126,17 @@ export function StudioTaskCard({
   };
 
   const working = view === "working" || view === "starting";
+
+  // "Make more from this": opens a draft that starts from this piece; nothing
+  // is made or charged until Generate there.
+  const finished = session?.lastGood ?? (job?.status === "succeeded" ? job : null);
+  const source = view === "ready" && finished ? repurposeSourceFromJob(finished) : null;
+  const more = source ? repurposeTargets(source.from, !!source.picture).slice(0, 3) : [];
+  const makeMore = (target: (typeof more)[number]) => {
+    if (!source) return;
+    openComposer(repurposeOpen({ ...source, target }));
+    emitAppEvent("open:studio");
+  };
 
   return (
     <motion.div
@@ -269,6 +282,31 @@ export function StudioTaskCard({
                 />
               ) : null}
             </span>
+          ))}
+        </div>
+      ) : null}
+
+      {more.length ? (
+        <div
+          className="relative flex flex-wrap items-center gap-1.5 px-3 pb-3"
+          data-testid="chat-make-more"
+        >
+          <span className="mr-0.5 text-[12px] text-muted-foreground">Make more:</span>
+          {more.map((target) => (
+            <button
+              key={target.type}
+              type="button"
+              onClick={() => makeMore(target)}
+              title={target.hint}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:border-primary-border hover:bg-surface-2"
+            >
+              <TypeGlyph
+                type={target.type}
+                size="sm"
+                className="size-5 rounded-md [&_svg]:size-3"
+              />
+              {target.label}
+            </button>
           ))}
         </div>
       ) : null}

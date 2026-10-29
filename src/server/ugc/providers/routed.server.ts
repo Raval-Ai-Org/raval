@@ -217,7 +217,7 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
       try {
         const downloaded = await chosen.download?.(result.videoUrl, provider);
         await assertSafeVideo(downloaded?.dataUrl ?? result.videoUrl);
-        return result;
+        return downloaded ? { ...result, downloaded } : result;
       } catch (error) {
         if (!(error instanceof MediaSafetyError)) throw error;
         if (error.code === "safety_unavailable")

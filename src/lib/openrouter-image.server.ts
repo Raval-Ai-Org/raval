@@ -108,6 +108,8 @@ export type ImageRequest = {
   aspectRatio: string;
   quality: ImageQuality;
   references: string[];
+  /** "transparent" only for a design layer laid over real photos. */
+  background?: "opaque" | "transparent";
 };
 
 export type ImageTransport = (req: ImageRequest) => Promise<GeneratedImage>;
@@ -119,7 +121,7 @@ async function openRouterImage(req: ImageRequest): Promise<GeneratedImage> {
     aspect_ratio: req.aspectRatio,
     quality: req.quality,
     resolution: "1K",
-    background: "opaque",
+    background: req.background ?? "opaque",
     output_format: "png",
     n: 1,
   };
@@ -204,6 +206,7 @@ export type GenerateImageOpts = {
   maxAttempts?: number;
   /** Skip the budget check (a restart of an already-budgeted task). */
   budgeted?: boolean;
+  background?: "opaque" | "transparent";
 };
 
 export type GenerateImageResult = GeneratedImage & {
@@ -258,7 +261,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     attempt += 1;
     const aspectRatio = aspectRatioFor(size);
     const key = `or:img:${await digest(
-      `${tenant()}|${model}|${aspectRatio}|${quality}|${references.join(",")}|${opts.prompt}`,
+      `${tenant()}|${model}|${aspectRatio}|${quality}|${opts.background ?? "opaque"}|${references.join(",")}|${opts.prompt}`,
     )}`;
     const hit = await cache.get<GeneratedImage>(key);
     recordCacheLookup("image", Boolean(hit));
@@ -285,6 +288,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               aspectRatio,
               quality,
               references,
+              background: opts.background,
             });
             recordUsage({
               provider: "openrouter",
@@ -415,6 +419,7 @@ export async function startImageTask(opts: {
   size: ImageSize;
   referenceAssets?: string[];
   model?: string;
+  background?: "opaque" | "transparent";
 }): Promise<StartedImageTask> {
   const references = usableReferences(opts.referenceAssets);
   const plan = (opts.costTier === "standard" ? routeStandardImageModel : routeImageModel)({
@@ -443,6 +448,7 @@ export async function startImageTask(opts: {
           model,
           maxAttempts: 1,
           budgeted: true,
+          background: opts.background,
         });
         parked = {
           state: "success",

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  CLIP_RETRIES,
   withVideoComposition,
   type CompositionRow,
   type CompositionStore,
@@ -137,6 +138,44 @@ describe("durable video composition", () => {
     expect(f.current().state.clips[0].taskId).toBe("first");
     expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "success" });
     expect(f.base.submit).toHaveBeenCalledTimes(5);
+  });
+
+  it("makes a clip again after an outage, then finishes the video", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    vi.mocked(f.base.check).mockResolvedValueOnce({
+      state: "failed",
+      providerState: "failed",
+      code: "render_failed",
+      message: "Internal server error",
+      retryable: true,
+      meta: {},
+    });
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "pending" });
+    expect(f.current().state.clips[0]).toMatchObject({ retries: 1, taskId: undefined });
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "success" });
+    expect(f.base.submit).toHaveBeenCalledTimes(5);
+  });
+
+  it("stops making a clip again after CLIP_RETRIES outages", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit(f.request);
+    if (!submitted.ok) throw new Error("Submit failed");
+    vi.mocked(f.base.check).mockResolvedValue({
+      state: "failed",
+      providerState: "failed",
+      code: "render_failed",
+      message: "Service busy",
+      retryable: true,
+      meta: {},
+    });
+    for (let i = 0; i < CLIP_RETRIES; i++)
+      expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "pending" });
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({
+      state: "failed",
+      message: "Service busy",
+    });
   });
 
   it("propagates a failed clip and prevents downloading an incomplete video", async () => {

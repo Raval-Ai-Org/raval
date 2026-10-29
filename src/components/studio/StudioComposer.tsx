@@ -12,6 +12,7 @@ import {
   ChevronDown,
   LayoutTemplate,
   Minus,
+  Repeat2,
   Sparkles,
   Wand2,
   X,
@@ -28,6 +29,8 @@ import { isActiveJob } from "@/lib/studio/jobs";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { studioChargeFor, studioPriceLabel } from "@/lib/studio/billing";
+import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
+import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
@@ -711,6 +714,32 @@ export function IntentStep({
                   )}
                 >
                   <WritingOverlay writer={writer} />
+                  {session.sourceContentId ? (
+                    <div
+                      className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground"
+                      data-testid="studio-source-strip"
+                    >
+                      <Repeat2 className="size-3.5 text-primary" />
+                      <span className="min-w-0 flex-1 truncate">
+                        Made from{" "}
+                        <span className="font-medium text-foreground">
+                          {session.sourceLabel ?? "your piece"}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSession(session.id, {
+                            sourceContentId: undefined,
+                            sourceLabel: undefined,
+                          })
+                        }
+                        className="rounded px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
                   {template ? (
                     <div
                       className={`studio-tone-${session.type} flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground`}
@@ -919,9 +948,15 @@ export function IntentStep({
 /** The price of the next Generate, from the same rule the server charges by. */
 function StudioPrice({ session }: { session: StudioSession }) {
   const [quoteError, setQuoteError] = useState(false);
+  const { videoMode, recapMotion } = session.controls;
+  // The brand's own clips (and camera-move recaps) use no video provider.
+  const ownFootage =
+    session.type === "video" &&
+    (videoMode === "brand" || (videoMode === "recap" && recapMotion !== "ai"));
   const quotedVideo = Boolean(
     (session.type === "video" ||
       (session.type === "story" && session.controls.storyMode === "video")) &&
+    !ownFootage &&
     !session.controls.videoPreview &&
     session.controls.videoModelKey,
   );
@@ -970,9 +1005,19 @@ function StudioPrice({ session }: { session: StudioSession }) {
         data-slot="cost-chip"
         className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground"
       >
-        {studioPriceLabel({ type: session.type, controls: session.controls })}
+        {studioPriceLabel({
+          type: session.type,
+          controls: session.controls,
+          intent: { brief: session.brief },
+        })}
       </span>
     );
+  // Words asked for on a kept photo make it a photo design: price what runs.
+  const referenceMode = resolvePhotoMode({
+    type: session.type,
+    controls: session.controls,
+    intent: { brief: session.brief },
+  });
   const charge = studioChargeFor({
     type: session.type,
     includeImage: session.controls.includeImage,
@@ -980,13 +1025,21 @@ function StudioPrice({ session }: { session: StudioSession }) {
     storyMode: session.controls.storyMode,
     videoPreview: session.controls.videoPreview,
     regenerate: Boolean(session.lastGood),
-    referenceMode: session.controls.referenceMode,
+    referenceMode,
     referenceAssetIds: session.controls.referenceAssetIds,
+    photoFidelity: session.controls.photoFidelity,
     articleQuality: session.controls.articleQuality,
+    videoMode,
+    recapMotion,
   });
   return charge === "studio_video" ? (
     <CostChip
-      videoUnits={studioVideoUnits(session.controls.durationSec)}
+      videoUnits={studioVideoUnits(
+        // Animated recap photos are five seconds each, whatever length was picked.
+        videoMode === "recap"
+          ? (session.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS
+          : session.controls.durationSec,
+      )}
       className="ml-auto shrink-0"
     />
   ) : (

@@ -87,13 +87,27 @@ for (const vp of VIEWPORTS) {
       await everyButtonIsAPill(page);
     });
 
-    test("products found on the site are kept with one click", async ({ page }) => {
+    test("what the scan found is already in the catalogue", async ({ page }) => {
       await openLab(page, "step=products");
-      await expect(page.getByText("Found on your site")).toBeVisible();
-      await expect(page.getByRole("button", { name: /Keep 3/ })).toBeVisible();
-      await page.getByRole("button", { name: /Gift Subscription/ }).click();
-      await expect(page.getByRole("button", { name: /Keep 2/ })).toBeVisible();
+      await expect(page.getByText(/Found 1 product on northwind\.example/)).toBeVisible();
+      await expect(page.getByRole("tab", { name: /Services · 1/ })).toBeVisible();
+      await page.getByRole("tab", { name: /Services · 1/ }).click();
+      await expect(page.getByText("Office coffee service")).toBeVisible();
+      await expect(page.getByText("Cold Brew, 1 L")).toBeHidden();
+      await page.getByRole("tab", { name: /All/ }).click();
       await expect(page.getByText(/Small photo/)).toBeVisible();
+      await page.getByRole("button", { name: "Remove all" }).click();
+      await page.getByRole("button", { name: "Remove all 1" }).click();
+      await expect(page.getByText("Cold Brew, 1 L")).toBeHidden();
+      await noSideScroll(page);
+      await everyButtonIsAPill(page);
+    });
+
+    test("found items show while they are being saved", async ({ page }) => {
+      await openLab(page, "step=products&saving=1");
+      await expect(page.getByText(/Adding what we found on northwind\.example/)).toBeVisible();
+      await expect(page.getByText("1 of 3 saved, with their photos")).toBeVisible();
+      await expect(page.getByText("House Espresso Beans")).toBeVisible();
       await noSideScroll(page);
     });
 

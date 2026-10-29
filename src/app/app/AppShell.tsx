@@ -17,7 +17,7 @@ import { autopilotPath } from "@/components/app/autopilot/composer/useComposerAu
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
-import { brainPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
+import { brainPath, conversationIdFromPath, inspoPath, workspacePath } from "@/lib/workspace/paths";
 import { BrainIcon } from "@/components/app/brain/BrainMark";
 import { useBrainOverview, useBrainSeen } from "@/components/app/brain/use-brain";
 import type { BrainSection } from "@/lib/brain/brain";
@@ -29,6 +29,7 @@ import {
   ChevronDown,
   Link2,
   Menu,
+  Palette,
   PanelRightOpen,
   Plus,
   Rocket,
@@ -282,6 +283,11 @@ function AppShell() {
     // Chat's buttons and the "/" menu reach these two routes the same way.
     const onOpenBacklinks = () => navigate({ to: workspacePath(workspaceId, "backlinks") });
     const onOpenExperiments = () => navigate({ to: workspacePath(workspaceId, "experiments") });
+    const onOpenInspo = (event: CustomEvent<{ section?: string } | null>) => {
+      navigate({ to: inspoPath(workspaceId, event.detail?.section) });
+      setNavOpen(false);
+    };
+    addAppEventListener("open:inspo", onOpenInspo);
     addAppEventListener("open:autopilot", onOpenAutopilot);
     addAppEventListener("open:backlinks", onOpenBacklinks);
     addAppEventListener("open:experiments", onOpenExperiments);
@@ -289,6 +295,7 @@ function AppShell() {
       removeAppEventListener("open:autopilot", onOpenAutopilot);
       removeAppEventListener("open:backlinks", onOpenBacklinks);
       removeAppEventListener("open:experiments", onOpenExperiments);
+      removeAppEventListener("open:inspo", onOpenInspo);
     };
   }, [navigate, workspaceId]);
 
@@ -308,6 +315,7 @@ function AppShell() {
     const onBrandDna = (event: CustomEvent<{ tab?: string } | null>) => {
       const tab = event.detail?.tab;
       if (tab === "competitors") openBrain("competitors");
+      else if (tab === "look" || tab === "assets") navigate({ to: inspoPath(workspaceId, tab) });
       else if (tab === "customers") openBrain("audience", "customers");
       else openBrain("brand", tab);
     };
@@ -323,7 +331,7 @@ function AppShell() {
       removeAppEventListener("open:audience", onAudience);
       removeAppEventListener("open:competitors", onCompetitors);
     };
-  }, [openBrain]);
+  }, [openBrain, navigate, workspaceId]);
 
   useEffect(() => {
     setChatOpen(false);
@@ -529,6 +537,16 @@ function AppShell() {
             onClick: () => openBrain(),
           })}
           {sidebarAction({
+            icon: Palette,
+            label: "Inspo",
+            hint: "Looks & media",
+            tour: "inspo",
+            onClick: () => {
+              navigate({ to: inspoPath(workspaceId) });
+              setNavOpen(false);
+            },
+          })}
+          {sidebarAction({
             icon: BarChart3,
             label: "Analytics",
             hint: "⌘.",
@@ -701,6 +719,11 @@ function AppShell() {
                   icon: BrainIcon,
                   label: "Brain",
                   onClick: () => openBrain(),
+                },
+                {
+                  icon: Palette,
+                  label: "Inspo",
+                  onClick: () => navigate({ to: inspoPath(workspaceId) }),
                 },
                 {
                   icon: Sparkles,

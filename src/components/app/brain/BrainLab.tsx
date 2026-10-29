@@ -3,7 +3,6 @@
 // Development-only: the Brain screens with sample data, so layout, motion and
 // copy can be checked without a workspace or a sign-in. Mounted at /brain-lab.
 import { useEffect, useState } from "react";
-import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
 import { newsSince, type BrainOverview, type BrainSection } from "@/lib/brain/brain";
 import { decideGoals, goalLine } from "@/lib/goals/decide";
 import { goalProgress } from "@/lib/goals/progress";
@@ -13,7 +12,6 @@ import { BrainHome } from "./BrainHome";
 import { BrainIcon, BrainMark } from "./BrainMark";
 import { BrainPulseView } from "./BrainPulse";
 import { ScanSteps } from "./brand/ScanSteps";
-import { LookEditor } from "./brand/look/LookEditor";
 import { NotesBoard } from "./home/NotesBoard";
 import { StrategyScreen, type StrategyHandlers } from "./strategy/StrategyScreen";
 
@@ -296,31 +294,16 @@ const SCENES = [
   "strategy-empty",
   "strategy-writing",
   "pulse",
-  "look",
   "notes",
   "scan",
   "marks",
 ] as const;
 type Scene = (typeof SCENES)[number];
 
-const sampleDna: BrandDna = {
-  ...emptyDna,
-  brandName: "Northside Roasters",
-  voice: "Warm, practical, a little dry",
-  colors: [
-    { name: "Primary", hex: "#1f3d2b" },
-    { name: "Accent", hex: "#e9a23b" },
-    { name: "Background", hex: "#f6f1e7" },
-    { name: "Text", hex: "#1b1b1b" },
-  ],
-  fonts: ["Fraunces", "Inter"],
-};
-
 export function BrainLab() {
   const [scene, setScene] = useState<Scene>("home");
   const [last, setLast] = useState<string>("");
   const [pulseOpen, setPulseOpen] = useState(true);
-  const [dna, setDna] = useState<BrandDna>(sampleDna);
   // Set once the page is interactive and on the scene the URL asked for.
   const [ready, setReady] = useState(false);
 
@@ -407,11 +390,6 @@ export function BrainLab() {
               onToggle={() => setPulseOpen((v) => !v)}
               onOpenBrain={open}
             />
-          </div>
-        )}
-        {scene === "look" && (
-          <div className="mx-auto max-w-[1100px] p-4 sm:p-7">
-            <LookEditor dna={dna} save={(patch) => setDna((d) => ({ ...d, ...patch }))} />
           </div>
         )}
         {scene === "notes" && (

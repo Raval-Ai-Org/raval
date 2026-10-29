@@ -11,6 +11,8 @@ import {
   variationCount,
   variationsCaptured,
 } from "./variations";
+import { isPhotoDesignType, withResolvedPhotoMode } from "./photo-design/mode";
+import { RECAP_AI_SECONDS } from "./clip-edit";
 
 export type StudioCharge = CreditAction | "studio_video";
 
@@ -54,12 +56,31 @@ export function studioChargeFor(args: {
   textOnly?: boolean;
   referenceMode?: string;
   referenceAssetIds?: string[];
+  photoFidelity?: string;
   articleQuality?: string;
   /** More versions of a finished picture: priced per picture. */
   variations?: boolean;
+  videoMode?: string;
+  recapMotion?: string;
 }): StudioCharge {
   if (args.variations) return "image_standard";
   if (args.textOnly) return "post_regenerate";
+  // The brand's own footage or photos: no video units, except animating photos.
+  if (args.type === "video" && args.videoMode === "brand") return "clip_brand";
+  if (args.type === "video" && args.videoMode === "recap")
+    return args.recapMotion === "ai" ? "studio_video" : "photo_recap";
+  // Designing with the person's photos: exact photos are placed by Mellox;
+  // "blend it more" is an ordinary generated picture.
+  if (
+    args.referenceAssetIds?.length &&
+    args.referenceMode === "design" &&
+    isPhotoDesignType(args.type)
+  )
+    return args.photoFidelity === "blend"
+      ? args.type === "ad"
+        ? "ad_set"
+        : "image_post"
+      : "photo_design";
   // Keeping an uploaded photo uses the existing copy price, with no AI-image fee.
   if (
     args.referenceAssetIds?.length &&
@@ -97,8 +118,14 @@ export function studioChargeFor(args: {
 }
 
 export function studioPriceLabel(
-  input: MediaRequest & { regenerate?: boolean; captionEditsRemaining?: number },
+  shown: MediaRequest & {
+    regenerate?: boolean;
+    captionEditsRemaining?: number;
+    intent?: CreateJobInput["intent"];
+  },
 ): string {
+  // The price of what will run: "post as is" with words asked for is a design.
+  const input = shown.intent ? withResolvedPhotoMode({ ...shown, intent: shown.intent }) : shown;
   if (input.controls.paymentSource === "creation") {
     const label = creationPriceLabel(input, input.captionEditsRemaining);
     if (label) return label;
@@ -111,8 +138,13 @@ export function studioPriceLabel(
     textOnly: studioTextOnlyRevision(input),
     variations,
   });
+  // Animated recap photos are five seconds each, whatever length was picked.
+  const animated =
+    input.type === "video" && input.controls.videoMode === "recap"
+      ? studioVideoUnits((input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS)
+      : null;
   return action === "studio_video"
-    ? `${(input.controls.videoQuote?.units ?? studioVideoUnits(input.controls.durationSec)) / VIDEO_UNITS_PER_VC} video credits`
+    ? `${(animated ?? input.controls.videoQuote?.units ?? studioVideoUnits(input.controls.durationSec)) / VIDEO_UNITS_PER_VC} video credits`
     : `${creditsFor(action) * (variations ? variationCount(input.controls) : 1)} credits`;
 }
 

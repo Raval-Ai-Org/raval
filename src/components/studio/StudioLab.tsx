@@ -568,6 +568,34 @@ const SCENES: Scene[] = [
       }),
   },
   {
+    id: "brief-from-piece",
+    label: "Brief · Made from a post",
+    make: () =>
+      session("carousel", "intent", {
+        brief:
+          'Turn my post "Harvest morning in Huila" into a carousel. Keep the same facts, offer and call to action, and make it work as a carousel.',
+        sourceContentId: "00000000-0000-4000-8000-0000000000d1",
+        sourceLabel: 'your post "Harvest morning in Huila"',
+      }),
+  },
+  {
+    id: "brief-own-clips",
+    label: "Brief · Brand my clips",
+    make: () =>
+      session("video", "intent", {
+        brief: "Our new bakery opening, with a line about fresh bread every morning",
+        controls: {
+          platforms: ["instagram", "tiktok"],
+          ratio: "9:16",
+          videoMode: "brand",
+          sourceVideoAssetIds: [
+            "00000000-0000-4000-8000-0000000000c1",
+            "00000000-0000-4000-8000-0000000000c2",
+          ],
+        },
+      }),
+  },
+  {
     id: "brief-template",
     label: "Brief · Template picked",
     make: () =>

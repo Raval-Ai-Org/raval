@@ -30,6 +30,39 @@ const PLATFORM_IDS: PlatformId[] = [
   "youtube",
 ];
 
+const PHOTO_MODES = ["preserve", "design", "edit", "inspire"] as const;
+const VIDEO_MODES = ["generate", "brand", "recap"] as const;
+const ids = (value: unknown, max: number) =>
+  Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === "string" && UUID_RE.test(id)).slice(0, max)
+    : [];
+
+/** The brand's own photos or clips an event carries; the server checks them again. */
+function ownMedia(detail: {
+  referenceAssetIds?: unknown;
+  referenceMode?: unknown;
+  sourceVideoAssetIds?: unknown;
+  videoMode?: unknown;
+}) {
+  const photos = ids(detail.referenceAssetIds, 6);
+  const clips = ids(detail.sourceVideoAssetIds, 5);
+  const referenceMode = PHOTO_MODES.find((mode) => mode === detail.referenceMode);
+  const videoMode = VIDEO_MODES.find((mode) => mode === detail.videoMode);
+  return {
+    ...(photos.length
+      ? { referenceAssetIds: photos, referenceMode: referenceMode ?? "design" }
+      : {}),
+    ...(clips.length || videoMode
+      ? {
+          extraControls: {
+            ...(clips.length ? { sourceVideoAssetIds: clips } : {}),
+            ...(videoMode ? { videoMode } : clips.length ? { videoMode: "brand" as const } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
 function lastType(): StudioType {
   try {
     const v = localStorage.getItem(STORAGE_LAST);
@@ -77,6 +110,7 @@ export function useStudioEntry(workspaceId: string | null) {
         platforms: Array.isArray(detail.platforms)
           ? (detail.platforms.filter((p) => PLATFORM_IDS.includes(p as PlatformId)) as PlatformId[])
           : undefined,
+        ...ownMedia(detail),
       });
       if (sessionId && brief.length >= 3) void generate(sessionId, { kind: "generate" });
     };

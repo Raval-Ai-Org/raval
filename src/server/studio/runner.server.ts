@@ -42,16 +42,36 @@ import { retainStudioMedia } from "@/lib/studio/revisions";
 import { studioJobIsStale, studioProviderTaskIsTimedOut } from "@/lib/studio/recovery";
 import { isCaptionRevision } from "@/lib/billing/creation";
 import { sourceScriptDirection } from "@/lib/studio/script-video";
+import { animateImageDirection, VIDEO_AD_RULES } from "@/lib/studio/video-ad";
 import {
   resolveStudioReferences,
   studioReferenceImages,
   type StudioReference,
 } from "./references.server";
+import { sourcePhotoWantsLogo } from "./source-photo.server";
 import {
-  composeSourcePhoto,
-  sourcePhotoOverlayText,
-  sourcePhotoWantsLogo,
-} from "./source-photo.server";
+  finishPhotoDesign,
+  photoDesignReferences,
+  preparePhotoDesign,
+  PHOTO_DESIGN_FAILED,
+  type PhotoDesignTask,
+} from "./photo-design/design.server";
+import { isPhotoDesignType } from "@/lib/studio/photo-design/mode";
+import { photoDesignCopy } from "@/lib/studio/photo-design/plan";
+import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
+import { isClipEditEnabled } from "@/lib/feature-flags";
+import {
+  CLIP_EDIT_FAILED,
+  CLIP_EDIT_PREFIX,
+  CLIP_EDIT_STALL_MS,
+  readClipEdit,
+  startClipEdit,
+  type ClipEditTask,
+} from "./clip-edit/render.server";
+
+/** An animated photo a recap video waits for; never the post's own media. */
+const MOTION_SLOT = "motion:";
+const isMotionSlot = (slot: string) => slot.startsWith(MOTION_SLOT);
 import {
   buildImagePromptDetailed,
   logoCorner,
@@ -185,10 +205,40 @@ type ProviderTask = {
   referenceWarning?: string;
   reviewAttempts?: number;
   compose?: boolean;
+  /** A design layer the person's real photos are laid into once it is finished. */
+  photoDesign?: PhotoDesignTask;
+  /** The brand's own clips or photos put together as a video (FFmpeg, after the response). */
+  clipEdit?: ClipEditTask;
+  /** A finished animated photo's stored file, for the recap that waits for it. */
+  assetPath?: string;
   startedAt: number;
   state: "pending" | "done" | "failed";
   failure?: JobErrorInfo;
+  /**
+   * Video only: what was sent, so a render the provider ended with an outage
+   * can be submitted again. Images are kept as workspace storage paths and
+   * signed again then (a signed link lasts an hour).
+   */
+  video?: {
+    modelKey?: import("@/lib/ugc/models").UgcModelKey;
+    durationSec: number;
+    aspectRatio: string;
+    resolution: "480P" | "720P" | "1080P" | UgcResolution;
+    audio: boolean;
+    imagePaths: string[];
+    /** Add the brand's saved style references after the person's own images. */
+    styleReferences: boolean;
+  };
+  /** Video only: times the render was submitted again after an outage. */
+  resubmits?: number;
+  /** Video only: status reads or saves in a row that failed for a passing reason. */
+  checkErrors?: number;
 };
+
+/** A video the provider ended with an outage-type failure is made again this many times. */
+const VIDEO_RESUBMITS = 2;
+/** Passing errors (a slow download, a dropped connection) tolerated in a row while collecting a video. */
+const VIDEO_CHECK_ERRORS = 10;
 
 type JobRow = StudioJob & {
   provider_tasks: ProviderTask[];
@@ -902,8 +952,7 @@ async function loadSource(
     body: string | null;
     meta: unknown;
   } | null;
-  if (!row)
-    throw new StudioJobError(404, "The piece you're turning into a Story no longer exists.");
+  if (!row) throw new StudioJobError(404, "The piece you're making this from no longer exists.");
   const meta = (row.meta ?? {}) as Record<string, unknown>;
   const first =
     Array.isArray(meta.asset_storage_paths) && typeof meta.asset_storage_paths[0] === "string"
@@ -988,6 +1037,7 @@ function videoPrompt(
     concept,
     "Follow the supplied shot plan and scene order, retaining its timestamps and any supplied voiceover. Keep the same product, setting and visual identity across shots. Use motivated cuts only, natural motion and believable materials.",
     "Avoid generic AI video tells: morphing products, warped hands, drifting logos, incoherent cuts, impossible camera movement, simulated social UI, or stock footage aesthetics.",
+    `How a short video ad works:\n${VIDEO_AD_RULES.map((rule) => `- ${rule}`).join("\n")}`,
     "Keep on-screen text to at most one short verified phrase; if it cannot be spelled perfectly, use no text. No gibberish, watermarks, invented claims, or other brands' logos.",
     ctx.style ? videoStyleBlock(ctx.style) : "",
     ctx.brandText ? `Brand context:\n${(ctx.visualBrandText ?? ctx.brandText).slice(0, 1200)}` : "",
@@ -1006,6 +1056,10 @@ async function startMedia(args: {
   platforms: PlatformId[];
   referenceUrl?: string | null;
   referencePath?: string | null;
+  /** A video made from a finished post: that post's picture, checked against the workspace. */
+  sourceImagePath?: string | null;
+  /** An edit of a photo design: the design layer it was made from. */
+  previousLayerPath?: string | null;
   style?: LoadedLook | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
@@ -1058,6 +1112,105 @@ async function startMedia(args: {
     urls: [...new Set([...lead, ...rest])].slice(0, 4),
   });
 
+  // The brand's own clips, or its photos, put together into the video. The
+  // footage is never redrawn; the image model only designs the opening and
+  // the end card.
+  const videoMode = input.controls.videoMode;
+  if (job.type === "video" && (videoMode === "brand" || videoMode === "recap")) {
+    if (!isClipEditEnabled(job.workspace_id))
+      throw new StudioJobError(404, "Making videos from your own clips isn't available here.");
+    const look = ctx.style ? imageStyleInput(ctx.style) : null;
+    const logoUrl = look?.useLogo === false ? null : brand?.logoUrl?.trim() || null;
+    const motion = videoMode === "recap" ? (input.controls.recapMotion ?? "camera") : undefined;
+    const tasks: ProviderTask[] = [];
+    if (motion === "ai") {
+      // Each photo animated as its own short clip; the recap waits for them.
+      const settings = {
+        modelKey: input.controls.videoModelKey,
+        durationSec: RECAP_AI_SECONDS,
+        aspectRatio: ratio,
+        resolution: "720P" as const,
+        audio: false,
+      };
+      for (const [index, photo] of suppliedReferences.entries()) {
+        const prompt = videoPrompt(
+          [animateImageDirection(RECAP_AI_SECONDS), input.intent.brief].join("\n\n"),
+          ctx,
+          ratio,
+          RECAP_AI_SECONDS,
+        );
+        const started = await startStudioVideo({ ...settings, prompt, imageUrls: [photo.url] });
+        tasks.push({
+          slot: `${MOTION_SLOT}${index}`,
+          kind: "video",
+          ratio,
+          prompt,
+          startedAt: Date.now(),
+          state: "pending",
+          fallbacks: [],
+          video: { ...settings, imagePaths: [photo.storagePath], styleReferences: false },
+          ...started,
+        });
+      }
+    }
+    const clipEdit: ClipEditTask = {
+      mode: videoMode,
+      ...(motion ? { motion } : {}),
+      clipAssetIds: input.controls.sourceVideoAssetIds ?? [],
+      photoAssetIds: suppliedReferences.map((photo) => photo.id),
+      ...(tasks.length ? { waitFor: tasks.map((task) => task.slot) } : {}),
+      ratio,
+      brief: input.intent.brief,
+      copy: photoDesignCopy({
+        brief: input.intent.brief,
+        onImageText: output.onImageText,
+        title: output.title,
+        maxWords: look?.maxWords,
+      }),
+      endCopy: look?.maxWords === 0 ? [] : [{ label: "Headline", text: ctx.brandName }],
+      brand: {
+        brandName: ctx.brandName,
+        brandContext: ctx.visualBrandText ?? ctx.brandText,
+        lookBlock: look?.block,
+        colours: look?.colors.length
+          ? look.colors
+          : (brand?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+        fonts: look?.fonts.length ? look.fonts : (brand?.fonts ?? []).filter(Boolean),
+        visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+        logoCorner: logoUrl ? (look?.logoCorner ?? "bottom-right") : null,
+      },
+      ...(logoUrl ? { logo: { url: logoUrl, corner: look?.logoCorner ?? "bottom-right" } } : {}),
+      ...(refineNote ? { revision: refineNote } : {}),
+      emphasisSeed: seed,
+      ...(videoMode === "brand" ? { captions: input.controls.clipCaptions !== false } : {}),
+    };
+    const main: ProviderTask = {
+      slot: "main",
+      kind: "video",
+      taskId: `${CLIP_EDIT_PREFIX}${job.id}:${job.attempt}`,
+      provider: "mellox",
+      model: "ffmpeg",
+      fallbacks: [],
+      ratio,
+      prompt: input.intent.brief,
+      startedAt: Date.now(),
+      state: "pending",
+      clipEdit,
+    };
+    if (!tasks.length) {
+      clipEdit.startedAt = Date.now();
+      startClipEdit({
+        client: db(args.client),
+        workspaceId: job.workspace_id,
+        jobId: job.id,
+        taskId: main.taskId,
+        task: clipEdit,
+        contentItemIds: job.content_item_ids ?? [],
+      });
+    }
+    return [...tasks, main];
+  }
+
   if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
     if (input.controls.videoPreview) {
       const refs = withReferences([], approvedReferences);
@@ -1092,12 +1245,27 @@ async function startMedia(args: {
     // The shot plan written in the brief stage drives the render; the user's
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
+    // A video made from a finished post opens on that post's own picture. The
+    // person may also have attached it as a reference; it is sent once.
+    const sourceImage = args.sourceImagePath
+      ? (suppliedReferences.find((reference) => reference.storagePath === args.sourceImagePath)
+          ?.url ?? (await signAssetPath(args.sourceImagePath)))
+      : null;
+    if (args.sourceImagePath && !sourceImage)
+      throw new StudioJobError(503, "Could not open the post's picture. Try again.");
+    const lead = [
+      ...(sourceImage ? [sourceImage] : []),
+      ...(args.referenceUrl ? [args.referenceUrl] : []),
+    ];
+    // Animating a picture keeps to that picture: the brand's other style
+    // references would pull the first frame away from it.
     const videoRefs = withReferences(
-      args.referenceUrl ? [args.referenceUrl] : [],
-      approvedReferences,
+      lead,
+      sourceImage ? suppliedReferences.map((reference) => reference.url) : approvedReferences,
     );
     const full = videoPrompt(
       [
+        sourceImage ? animateImageDirection(seconds) : null,
         input.intent.sourceScript
           ? sourceScriptDirection(
               input.intent.sourceScript,
@@ -1116,20 +1284,21 @@ async function startMedia(args: {
       seconds,
     );
     const videoImages = videoRefs.urls;
-    const ownImages = new Set([
-      ...(args.referenceUrl ? [args.referenceUrl] : []),
-      ...suppliedReferences.map((reference) => reference.url),
-    ]);
-    const started = await startStudioVideo({
+    const ownImages = new Set([...lead, ...suppliedReferences.map((reference) => reference.url)]);
+    const styleReferenceCount = videoImages.filter((url) => !ownImages.has(url)).length;
+    const settings = {
       modelKey: input.controls.videoModelKey,
-      prompt: full,
-      aspectRatio: ratio,
       durationSec: seconds,
+      aspectRatio: ratio,
       resolution: input.controls.videoQuote?.resolution ?? input.controls.videoResolution ?? "720P",
       audio: input.controls.audio ?? true,
+    };
+    const started = await startStudioVideo({
+      ...settings,
+      prompt: full,
       imageUrls: videoImages,
       // The brand's saved style references come after the person's own photos.
-      styleReferenceCount: videoImages.filter((url) => !ownImages.has(url)).length,
+      styleReferenceCount,
     });
     return [
       {
@@ -1140,6 +1309,19 @@ async function startMedia(args: {
         startedAt: Date.now(),
         state: "pending",
         fallbacks: [],
+        video: {
+          ...settings,
+          imagePaths: [
+            ...new Set(
+              [
+                args.sourceImagePath,
+                args.referencePath,
+                ...suppliedReferences.map((reference) => reference.storagePath),
+              ].filter((path): path is string => !!path),
+            ),
+          ],
+          styleReferences: styleReferenceCount > 0,
+        },
         ...started,
       },
     ];
@@ -1283,6 +1465,71 @@ async function startMedia(args: {
   const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
   const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   const logoAt = logoUrl ? (look?.logoCorner ?? logoCorner(builderSize)) : null;
+  // Designing with the person's own photos: the model draws the design and
+  // leaves windows; the real photos are laid in when it is finished.
+  if (
+    input.controls.referenceMode === "design" &&
+    suppliedReferences.length &&
+    isPhotoDesignType(job.type)
+  ) {
+    const prepared = await preparePhotoDesign({
+      client: db(args.client),
+      workspaceId: job.workspace_id,
+      jobId: job.id,
+      photos: suppliedReferences,
+      fidelity: input.controls.photoFidelity === "blend" ? "blend" : "exact",
+      ratio,
+      brief: input.intent.brief,
+      brand: {
+        brandName: ctx.brandName,
+        brandContext: ctx.visualBrandText ?? ctx.brandText,
+        lookBlock: look?.block,
+        colours: look?.colors.length
+          ? look.colors
+          : (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+        fonts: look?.fonts.length ? look.fonts : (styled?.fonts ?? []).filter(Boolean),
+        visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+        logoCorner: logoAt,
+      },
+      onImageText: output.onImageText ?? output.adOnImage?.headline,
+      title: output.title,
+      maxWords: look?.maxWords,
+      revision: refineNote,
+      novelty: noveltyNote,
+      tasteReferences: await resolveVisualReferenceUrls(
+        job.workspace_id,
+        output.visualTaste ?? null,
+      ),
+      previousLayerPath: args.previousLayerPath,
+      emphasisSeed: seed,
+    });
+    const count = isVariationsRequest(input) ? variationCount(input.controls) : 1;
+    return Promise.all(
+      Array.from({ length: count }, async (_, index) => {
+        const prompt =
+          count > 1 ? `${prepared.prompt}\n\n${variationNote(index, count)}` : prepared.prompt;
+        const started = await startImageTask({
+          costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
+          prompt,
+          size: size as ImageSize,
+          referenceAssets: prepared.references,
+          background: prepared.background,
+        });
+        return {
+          slot: count > 1 ? optionSlot(index) : "main",
+          kind: "image" as const,
+          ratio,
+          prompt,
+          referenceAssets: prepared.references,
+          ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
+          ...(prepared.task ? { photoDesign: { ...prepared.task, basePrompt: prompt } } : {}),
+          startedAt: Date.now(),
+          state: "pending" as const,
+          ...started,
+        };
+      }),
+    );
+  }
   // An ad with a layout is a finished, designed ad with its exact copy; a
   // look that allows no words on pictures, or composed artwork, keeps the
   // plain visual.
@@ -1396,12 +1643,13 @@ async function keepSourcePhoto(args: {
   const { client, job, input, output, reference, ratio } = args;
   await assertSafeMediaPrompt(input.intent.brief);
   await assertSafeMediaImages([reference.url], { stage: "source" });
-  const overlayText = sourcePhotoOverlayText(input.intent.brief, output);
+  // Words or design on the photo are a photo design (resolvePhotoMode); here
+  // the photo is posted as it is, with only the real logo if asked for.
   const addLogo = sourcePhotoWantsLogo(input.intent.brief) && !!args.logoUrl;
 
   // No requested visual mutation: link the upload itself. Its bytes, crop and
   // details remain exactly the ones the customer supplied.
-  if (!overlayText && !addLogo) {
+  if (!addLogo) {
     await linkAssetToContent(job.workspace_id, job.content_item_ids, {
       id: reference.id,
       path: reference.storagePath,
@@ -1421,19 +1669,11 @@ async function keepSourcePhoto(args: {
   if (downloaded.error || !downloaded.data)
     throw new StudioJobError(503, "Your original photo could not be opened. Try again.");
   const original = Buffer.from(await downloaded.data.arrayBuffer());
-  let dataUrl: string;
-  if (overlayText) {
-    const composed = await composeSourcePhoto({ bytes: original, ratio, text: overlayText });
-    dataUrl = `data:image/png;base64,${composed.toString("base64")}`;
-  } else {
-    dataUrl = `data:${reference.mimeType};base64,${original.toString("base64")}`;
-  }
-  if (addLogo)
-    dataUrl = await overlayBrandLogo(
-      dataUrl,
-      args.logoUrl!,
-      logoCorner(ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024"),
-    );
+  const dataUrl = await overlayBrandLogo(
+    `data:${reference.mimeType};base64,${original.toString("base64")}`,
+    args.logoUrl!,
+    logoCorner(ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024"),
+  );
   const saved = await persistAsset({
     workspaceId: job.workspace_id,
     idempotencyKey: `source-photo:${job.id}:${reference.id}`,
@@ -1445,8 +1685,7 @@ async function keepSourcePhoto(args: {
       source: "studio_source_photo",
       source_asset_id: reference.id,
       source_preserved: true,
-      text_overlay: Boolean(overlayText),
-      logo_overlay: addLogo,
+      logo_overlay: true,
       job_id: job.id,
     },
   });
@@ -2098,18 +2337,33 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         platforms,
         referenceUrl,
         referencePath,
+        // A video made from a finished post opens on its picture. A revision
+        // already starts from its own last frame instead.
+        sourceImagePath:
+          (type === "video" || (type === "story" && input.controls.storyMode === "video")) &&
+          !referenceUrl
+            ? (source?.imagePath ?? null)
+            : null,
+        // An edit of a photo design starts from the design it is editing.
+        previousLayerPath:
+          mediaOnly && !variations
+            ? (parent?.provider_tasks?.find((t) => t.slot === "main")?.photoDesign?.layerPath ??
+              null)
+            : null,
         style,
       });
       for (const task of tasks) {
         if (output.visualTaste) task.referenceAssets = undefined;
         if (referencePath) task.referenceAssetPath = referencePath;
       }
-      const media: MediaOutput[] = tasks.map((t) => ({
-        slot: t.slot,
-        kind: t.kind,
-        ratio: t.ratio,
-        status: "pending",
-      }));
+      const media: MediaOutput[] = tasks
+        .filter((t) => !isMotionSlot(t.slot))
+        .map((t) => ({
+          slot: t.slot,
+          kind: t.kind,
+          ratio: t.ratio,
+          status: "pending",
+        }));
       // Versions made for an earlier take are dropped; a variations job
       // replaces them with its own.
       const keepOldMedia = (parent?.output?.media ?? []).filter(
@@ -2387,6 +2641,52 @@ async function startStudioVideo(opts: {
   };
 }
 
+/**
+ * One more passing error while collecting a video. True while the task should
+ * stay pending for the next poll; false once too many came in a row.
+ */
+function keepCollecting(task: ProviderTask): boolean {
+  task.checkErrors = (task.checkErrors ?? 0) + 1;
+  return task.checkErrors < VIDEO_CHECK_ERRORS;
+}
+
+/**
+ * Submit a video again after the provider ended it with an outage. The same
+ * prompt and settings; images are signed again from their workspace paths.
+ */
+async function resubmitStudioVideo(
+  row: JobRow,
+  task: ProviderTask,
+): Promise<Pick<ProviderTask, "taskId" | "model" | "provider"> | null> {
+  const video = task.video;
+  if (!video) return null;
+  const own = (
+    await Promise.all(
+      video.imagePaths
+        .filter((path) => isWorkspaceStoragePath(path, row.workspace_id))
+        .map((path) => signAssetPath(path)),
+    )
+  ).filter((url): url is string => !!url);
+  // An image the person chose that can no longer be opened would change the video.
+  if (own.length < video.imagePaths.length) return null;
+  const style =
+    video.styleReferences && row.output?.visualTaste
+      ? await resolveVisualReferenceUrls(row.workspace_id, row.output.visualTaste)
+      : [];
+  const imageUrls = [...new Set([...own, ...style])].slice(0, 4);
+  const started = await startStudioVideo({
+    ...video,
+    prompt: task.prompt,
+    imageUrls,
+    styleReferenceCount: imageUrls.length - Math.min(own.length, imageUrls.length),
+  });
+  return {
+    taskId: started.taskId,
+    model: started.model,
+    provider: started.provider,
+  };
+}
+
 type MediaCheck =
   | { state: "pending" }
   | { state: "failed"; message: string; code?: string; retryable?: boolean }
@@ -2429,8 +2729,16 @@ async function checkMediaTask(task: ProviderTask): Promise<MediaCheck> {
   const provider = task.provider ?? "kie";
   const check = await routedVideoProvider.check(task.taskId, provider);
   if (check.state === "pending") return { state: "pending" };
-  if (check.state === "failed") return { state: "failed", message: check.message };
-  const downloaded = await routedVideoProvider.download?.(check.videoUrl, provider);
+  if (check.state === "failed")
+    return {
+      state: "failed",
+      message: check.message,
+      code: check.code,
+      retryable: check.retryable,
+    };
+  // The safety review may already have downloaded it; never fetch the file twice.
+  const downloaded =
+    check.downloaded ?? (await routedVideoProvider.download?.(check.videoUrl, provider));
   return downloaded
     ? { state: "success", dataUrl: downloaded.dataUrl, costUsd: check.costUsd }
     : { state: "success", url: check.videoUrl, costUsd: check.costUsd };
@@ -2439,6 +2747,8 @@ async function checkMediaTask(task: ProviderTask): Promise<MediaCheck> {
 /* ───────────────────────── poll / advance ───────────────────────── */
 
 async function retryReferenceUrls(client: Db, row: JobRow, task: ProviderTask) {
+  // A design layer is made from its contact sheet, never from the photos.
+  if (task.photoDesign) return photoDesignReferences(task.photoDesign, row.workspace_id);
   const ids = row.input?.controls?.referenceAssetIds;
   if (!ids?.length && !row.output?.visualTaste) return task.referenceAssets;
   const supplied = await resolveStudioReferences(client, row.workspace_id, ids);
@@ -2516,7 +2826,9 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       if (slot >= 0) media[slot] = { ...media[slot], ...patch };
     };
     try {
-      if (studioProviderTaskIsTimedOut(task, now)) {
+      // A recap still waiting for its animated photos has not started yet.
+      const waitingToStart = !!task.clipEdit && !task.clipEdit.startedAt;
+      if (!waitingToStart && studioProviderTaskIsTimedOut(task, now)) {
         task.state = "failed";
         task.failure = {
           category: "timeout",
@@ -2526,8 +2838,71 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         setMedia({ status: "failed", error: task.failure.message });
         continue;
       }
+      if (task.clipEdit) {
+        const fail = (failure?: JobErrorInfo) => {
+          task.state = "failed";
+          task.failure = failure ?? {
+            category: "provider",
+            message: CLIP_EDIT_FAILED,
+            retryable: true,
+          };
+          setMedia({ status: "failed", error: task.failure.message });
+        };
+        const waiting = (task.clipEdit.waitFor ?? []).map((s) => tasks.find((t) => t.slot === s));
+        const missed = waiting.find(
+          (t) => !t || t.state === "failed" || (t.state === "done" && !t.assetPath),
+        );
+        if (missed !== undefined || waiting.some((t) => !t)) {
+          fail(missed?.failure);
+          continue;
+        }
+        if (waiting.some((t) => t!.state === "pending")) continue;
+        const parked = task.clipEdit.startedAt ? await readClipEdit(task.taskId) : null;
+        if (!parked || (parked.state === "running" && now - parked.at > CLIP_EDIT_STALL_MS)) {
+          // Not started yet (it waited for animated photos), or it stopped.
+          if (task.clipEdit.startedAt) {
+            if ((task.resubmits ?? 0) >= VIDEO_RESUBMITS) {
+              fail();
+              continue;
+            }
+            task.resubmits = (task.resubmits ?? 0) + 1;
+          }
+          await requireActiveJob(c, row);
+          task.clipEdit.startedAt = now;
+          task.startedAt = now;
+          startClipEdit({
+            client: c,
+            workspaceId: row.workspace_id,
+            jobId: row.id,
+            taskId: task.taskId,
+            task: task.clipEdit,
+            contentItemIds: row.content_item_ids ?? [],
+            motionPaths: waiting.map((t) => t!.assetPath!),
+          });
+          continue;
+        }
+        if (parked.state === "running") continue;
+        if (parked.state === "failed") {
+          fail();
+          continue;
+        }
+        stage = "save";
+        task.state = "done";
+        warnings.push(...parked.warnings);
+        assetIds.push(parked.assetId);
+        setMedia({
+          status: "ready",
+          assetId: parked.assetId,
+          storagePath: parked.storagePath,
+          error: undefined,
+        });
+        continue;
+      }
       const check = await checkMediaTask(task);
-      if (check.state === "pending") continue;
+      if (check.state === "pending") {
+        if (task.checkErrors) task.checkErrors = 0;
+        continue;
+      }
       if (check.state === "failed") {
         // Image attempts are metered where they ran; a failed video costs nothing.
         const next =
@@ -2543,6 +2918,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
             size,
             model: next,
             referenceAssets: await retryReferenceUrls(c, row, task),
+            background: task.photoDesign?.background,
           });
           Object.assign(task, {
             taskId: restarted.taskId,
@@ -2551,6 +2927,31 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
             startedAt: Date.now(),
           });
           continue;
+        }
+        // The provider's task has ended, so a new submission can never run the
+        // same video twice. Only an outage-type failure is made again, never a
+        // refusal. A failed video costs nothing.
+        if (
+          task.kind === "video" &&
+          task.video &&
+          check.retryable === true &&
+          check.code !== "refusal" &&
+          (task.resubmits ?? 0) < VIDEO_RESUBMITS
+        ) {
+          await requireActiveJob(c, row);
+          const restarted = await resubmitStudioVideo(row, task).catch((error: unknown) => {
+            console.warn("[studio] video resubmit failed", classify(error).message);
+            return null;
+          });
+          if (restarted) {
+            Object.assign(task, {
+              ...restarted,
+              resubmits: (task.resubmits ?? 0) + 1,
+              checkErrors: 0,
+              startedAt: Date.now(),
+            });
+            continue;
+          }
         }
         task.state = "failed";
         task.failure = {
@@ -2564,7 +2965,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       stage = "save";
       await setStage(c, row.id, "save");
-      if (task.kind === "video" && row.output?.visualTaste) {
+      if (task.kind === "video" && row.output?.visualTaste && !isMotionSlot(task.slot)) {
         try {
           const { sampleVideoFrames } = await import("@/server/brand-visuals/video-frames.server");
           const { safeFetch } = await import("@/server/safe-fetch");
@@ -2620,6 +3021,44 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         check.dataUrl && task.kind === "image"
           ? await fitPortraitImage(check.dataUrl, task.ratio)
           : check.dataUrl;
+      if (task.photoDesign && finalImage) {
+        const designed = await finishPhotoDesign({
+          client: c,
+          workspaceId: row.workspace_id,
+          jobId: row.id,
+          slot: task.slot,
+          taskId: task.taskId,
+          layerDataUrl: finalImage,
+          task: task.photoDesign,
+        });
+        if (designed.state === "retry") {
+          await requireActiveJob(c, row);
+          const restarted = await startImageTask({
+            costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
+            prompt: designed.prompt,
+            size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
+            referenceAssets: await retryReferenceUrls(c, row, task),
+            background: task.photoDesign.background,
+          });
+          task.photoDesign.attempts += 1;
+          Object.assign(task, {
+            taskId: restarted.taskId,
+            model: restarted.model,
+            fallbacks: restarted.fallbacks,
+            prompt: designed.prompt,
+            startedAt: Date.now(),
+          });
+          continue;
+        }
+        if (designed.state === "failed") {
+          console.warn("[studio] photo design could not hold the photos", designed.reason);
+          task.state = "failed";
+          task.failure = { category: "provider", message: PHOTO_DESIGN_FAILED, retryable: true };
+          setMedia({ status: "failed", error: PHOTO_DESIGN_FAILED });
+          continue;
+        }
+        finalImage = designed.dataUrl;
+      }
       if (task.compose && finalImage && row.output?.visualTaste && row.output.artwork) {
         const art = await persistAsset({
           workspaceId: row.workspace_id,
@@ -2648,7 +3087,21 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         task.kind === "image" && finalImage
           ? await reviewGeneratedImage(
               finalImage,
-              [row.title, row.output?.concept, task.prompt.slice(-1900), task.prompt.slice(0, 350)]
+              (task.photoDesign
+                ? [
+                    row.title,
+                    "A designed social post built around the brand's own real photos, which are placed in it unchanged. Judge the design around the photos, its words and legibility; flag any text, badge or shape that covers a person's face.",
+                    task.photoDesign.plan.copy.length
+                      ? `Exact words: ${task.photoDesign.plan.copy.map((line) => JSON.stringify(line.text)).join(", ")}`
+                      : "No words are expected on it.",
+                  ]
+                : [
+                    row.title,
+                    row.output?.concept,
+                    task.prompt.slice(-1900),
+                    task.prompt.slice(0, 350),
+                  ]
+              )
                 .filter(Boolean)
                 .join("\n"),
               undefined,
@@ -2681,6 +3134,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           prompt: repairPrompt,
           size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
           referenceAssets: await retryReferenceUrls(c, row, task),
+          background: task.photoDesign?.background,
         });
         Object.assign(task, {
           taskId: restarted.taskId,
@@ -2705,7 +3159,8 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         idempotencyKey: `studio:${row.id}:${task.slot}:${task.taskId}`,
         ...(savedImage ? { dataUrl: savedImage } : { sourceUrl: check.url }),
         // A version waits for a person to choose it before it becomes the post's picture.
-        contentItemIds: isOptionSlot(task.slot) ? [] : row.content_item_ids,
+        contentItemIds:
+          isOptionSlot(task.slot) || isMotionSlot(task.slot) ? [] : row.content_item_ids,
         assetType: task.kind,
         filename: `mellox-${row.type}-${task.ratio.replace(":", "x")}-${row.id.slice(0, 8)}`,
         platform: null,
@@ -2714,13 +3169,23 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         seed: row.group_id,
         promptVersion: "studio-2",
         metadata: {
-          source: "studio",
+          source: task.photoDesign ? "studio_photo_design" : "studio",
           job_id: row.id,
           aspect_ratio: task.ratio,
           studio_type: row.type,
+          ...(task.photoDesign
+            ? {
+                source_asset_ids: task.photoDesign.assetIds,
+                source_preserved: true,
+                design_layer_path: task.photoDesign.layerPath ?? null,
+              }
+            : {}),
           ...(imageReview ? { image_review: imageReview } : {}),
         },
       });
+      // A finished video that couldn't be stored yet is still at the
+      // provider: the next poll tries again (the save is idempotent).
+      if (!persisted.ok && task.kind === "video" && keepCollecting(task)) continue;
       if (task.kind === "video") {
         recordUsage({
           provider: task.provider === "kie" ? "kie" : "openrouter",
@@ -2737,6 +3202,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         continue;
       }
       task.state = "done";
+      if (isMotionSlot(task.slot)) task.assetPath = persisted.asset.storage_path ?? undefined;
       if (row.output?.storyboard) {
         if (task.kind === "video")
           row.output.storyboard = { ...row.output.storyboard, status: "ready" };
@@ -2755,8 +3221,31 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         error: undefined,
       });
     } catch (err) {
+      const failure = classify(err);
+      // A paid video is finished or still rendering at the provider. A slow
+      // download or a dropped connection while collecting it must not throw
+      // it away: the next poll reads it again. Refusals and settled errors
+      // still end it at once.
+      if (
+        task.kind === "video" &&
+        failure.retryable &&
+        failure.category !== "safety" &&
+        failure.category !== "budget" &&
+        keepCollecting(task)
+      ) {
+        console.warn("[studio] video check will be retried", failure.message);
+        continue;
+      }
       task.state = "failed";
-      setMedia({ status: "failed", error: classify(err).message });
+      task.failure =
+        task.kind === "video" && failure.retryable
+          ? {
+              ...failure,
+              message:
+                "The video service stopped responding while we collected your video. Please try again.",
+            }
+          : failure;
+      setMedia({ status: "failed", error: task.failure.message });
     }
   }
 

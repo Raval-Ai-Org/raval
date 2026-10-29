@@ -10,6 +10,7 @@ import {
   MAX_IMAGES_PER_CANDIDATE,
   MAX_PRODUCT_IMAGES,
   decideProduct,
+  nameKey,
   type Product,
   type ProductCandidate,
 } from "@/lib/products/catalog";
@@ -248,18 +249,32 @@ const imageKey = (productId: string, url: string) =>
   `product-img:${productId}:${createHash("sha1").update(url).digest("hex")}`;
 
 /**
- * Keep the products a person chose from discovery. Their photos are copied
- * into Mellox storage; a photo that can't be downloaded is skipped, never fatal.
+ * Keep products and services found on the site. Onboarding calls this by
+ * itself as discovery finds them, so it only ever adds: something already in
+ * the catalogue (by page or by name), or one a person removed, is left as it
+ * is. Photos are copied into Mellox storage; a photo that can't be downloaded
+ * is skipped, never fatal.
  */
 export async function importCandidates(
   caller: ProductCaller,
   candidates: ProductCandidate[],
 ): Promise<Product[]> {
+  const { data: existing, error: readError } = await db
+    .from(TABLE)
+    .select("fingerprint, name")
+    .eq("workspace_id", caller.workspaceId)
+    .limit(500);
+  if (readError) throw new HttpError(503, "Could not load your products.");
+  const seenPrints = new Set(
+    ((existing ?? []) as { fingerprint: string | null }[]).map((r) => r.fingerprint),
+  );
+  const seenNames = new Set(((existing ?? []) as { name: string }[]).map((r) => nameKey(r.name)));
   let position = await nextPosition(caller.workspaceId);
-  const kept: string[] = [];
+  const added: Array<{ row: ProductRow; images: string[] }> = [];
   for (const c of candidates.slice(0, MAX_DISCOVERED)) {
+    const kind = c.kind === "service" ? "service" : "product";
     const decision = decideProduct({
-      kind: "product",
+      kind,
       name: c.name,
       description: c.description,
       price: c.price,
@@ -267,12 +282,16 @@ export async function importCandidates(
       category: c.category,
     });
     if (!decision.ok) continue;
+    const key = nameKey(decision.input.name);
+    if (seenPrints.has(decision.fingerprint) || seenNames.has(key)) continue;
+    seenPrints.add(decision.fingerprint);
+    seenNames.add(key);
     const { data, error } = await db
       .from(TABLE)
       .upsert(
         {
           workspace_id: caller.workspaceId,
-          kind: "product",
+          kind,
           name: decision.input.name,
           description: decision.input.description,
           price: decision.input.price,
@@ -284,26 +303,36 @@ export async function importCandidates(
           position: position++,
           created_by: caller.userId,
         },
-        { onConflict: "workspace_id,fingerprint" },
+        // A row added meanwhile (another tab, a retry) is left alone.
+        { onConflict: "workspace_id,fingerprint", ignoreDuplicates: true },
       )
       .select(COLUMNS)
-      .single();
+      .maybeSingle();
     if (error || !data) continue;
-    const row = data as ProductRow;
-    kept.push(row.id);
-    const stored = await Promise.all(
-      c.images.slice(0, MAX_IMAGES_PER_CANDIDATE).map((url) =>
-        importImageFromUrl(caller.workspaceId, url, {
-          source: "product-photo",
-          idempotencyKey: imageKey(row.id, url),
-          metadata: { product_id: row.id },
-        }).catch(() => null),
-      ),
-    );
-    const ids = stored.filter((s): s is NonNullable<typeof s> => !!s).map((s) => s.assetId);
-    if (ids.length)
-      await setImages(caller, row, [...(row.image_asset_ids ?? []), ...ids], row.primary_asset_id);
+    added.push({ row: data as ProductRow, images: c.images.slice(0, MAX_IMAGES_PER_CANDIDATE) });
   }
+  // Every product's photos download at once; each product saves its own.
+  await Promise.all(
+    added.map(async ({ row, images }) => {
+      const stored = await Promise.all(
+        images.map((url) =>
+          importImageFromUrl(caller.workspaceId, url, {
+            source: "product-photo",
+            idempotencyKey: imageKey(row.id, url),
+            metadata: { product_id: row.id },
+          }).catch(() => null),
+        ),
+      );
+      const ids = stored.filter((s): s is NonNullable<typeof s> => !!s).map((s) => s.assetId);
+      if (ids.length)
+        await setImages(
+          caller,
+          row,
+          [...(row.image_asset_ids ?? []), ...ids],
+          row.primary_asset_id,
+        ).catch(() => undefined);
+    }),
+  );
   changed(caller.workspaceId);
   const rows = await readProductRows(caller.workspaceId);
   return present(caller.workspaceId, rows);

@@ -81,7 +81,7 @@ describe("database format-change approval", () => {
   });
   it("can reapply the migration safely", async () => {
     await db.exec(
-      readFileSync("supabase/migrations/20261018090000_content_kind_approval.sql", "utf8"),
+      readFileSync("supabase/migrations/20261018090100_content_kind_approval.sql", "utf8"),
     );
     const id = await approvedPost();
     expect(

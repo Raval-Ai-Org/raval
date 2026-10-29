@@ -13,7 +13,7 @@ import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/stu
 import { runWithScope } from "@/server/request-context";
 import type { WorkspaceRole } from "@/server/api-auth";
 import { VIDEO_BILLING_HOLD_MS } from "@/lib/ugc/duration";
-import { resolveStudioReferences } from "./references.server";
+import { resolveStudioClips, resolveStudioReferences } from "./references.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { creationPointsFor, isCaptionRevision } from "@/lib/billing/creation";
 import { getEntitlements } from "@/server/billing/entitlements.server";
@@ -26,6 +26,9 @@ import {
 } from "@/server/billing/creation.server";
 import { HttpError } from "@/server/http-error";
 import { quoteStudioVideo } from "./video-quote.server";
+import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
+import { isClipEditEnabled, isPhotoDesignEnabled } from "@/lib/feature-flags";
+import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 
 const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   social: "studio.social",
@@ -80,13 +83,44 @@ export async function createBilledStudioJob(args: {
       input.controls.referenceMode = "preserve";
     }
   }
+  // "Post as is" with words or design asked for, a picture edit or more
+  // versions designs with the photo instead; decided here so the price
+  // matches what runs. Designing can be switched off per workspace.
+  const photoMode = resolvePhotoMode(input);
+  if (photoMode === "design" && !isPhotoDesignEnabled(workspaceId)) {
+    if (input.controls.referenceMode === "design")
+      throw new HttpError(404, "Designing with your own photos isn't available here.");
+  } else input.controls.referenceMode = photoMode;
+  // The brand's own clips or photos as a video: can be switched off per workspace.
+  const ownFootage =
+    input.type === "video" &&
+    (input.controls.videoMode === "brand" || input.controls.videoMode === "recap");
+  if (ownFootage && !isClipEditEnabled(workspaceId))
+    throw new HttpError(404, "Making videos from your own clips isn't available here.");
+  if (ownFootage) {
+    // Priced on what really runs: animated photos are five seconds each, and
+    // there is no model quote for footage that is the brand's own.
+    input.controls.videoPreview = false;
+    delete input.controls.videoQuote;
+    delete input.controls.videoModelKey;
+    if (input.controls.videoMode === "recap" && input.controls.recapMotion === "ai")
+      input.controls.durationSec =
+        (input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS;
+  }
   // Reject foreign/deleted references before reserving credits or starting work.
-  if (!studioTextOnlyRevision(input))
+  if (!studioTextOnlyRevision(input)) {
     await resolveStudioReferences(
       client as SupabaseClient,
       workspaceId,
       input.controls.referenceAssetIds,
     );
+    if (ownFootage && input.controls.videoMode === "brand")
+      await resolveStudioClips(
+        client as SupabaseClient,
+        workspaceId,
+        input.controls.sourceVideoAssetIds,
+      );
+  }
   const action: MeteredAction = studioChargeFor({
     type: input.type,
     includeImage: input.controls.includeImage,
@@ -97,8 +131,11 @@ export async function createBilledStudioJob(args: {
     textOnly: studioTextOnlyRevision(input),
     referenceMode: input.controls.referenceMode,
     referenceAssetIds: input.controls.referenceAssetIds,
+    photoFidelity: input.controls.photoFidelity,
     articleQuality: input.controls.articleQuality,
     variations: isVariationsRequest(input),
+    videoMode: input.controls.videoMode,
+    recapMotion: input.controls.recapMotion,
   });
   const billingRoute =
     studioTextOnlyRevision(input) && ["video", "image", "social"].includes(input.type)

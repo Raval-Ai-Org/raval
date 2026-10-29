@@ -263,6 +263,18 @@ export const contentTools: McpTool[] = [
         .max(7)
         .optional()
         .describe("Stories only: how many frames (default 3)."),
+      photoAssetIds: z
+        .array(z.string().uuid())
+        .max(6)
+        .optional()
+        .describe(
+          "The brand's own photos (asset ids from this workspace). For a post, image or ad they are designed around and kept exact; for a video, two or more become a recap.",
+        ),
+      clipAssetIds: z
+        .array(z.string().uuid())
+        .max(5)
+        .optional()
+        .describe("Video only: the brand's own clips (asset ids) to brand as filmed."),
       requestId: z
         .string()
         .min(4)
@@ -291,6 +303,14 @@ export const contentTools: McpTool[] = [
             platforms: args.platforms ?? [],
             tone: args.tone,
             ...(args.type === "story" && args.frames ? { frameCount: args.frames } : {}),
+            // Asset ids only; the jobs route checks each belongs to this workspace.
+            ...(args.type === "video" && args.clipAssetIds?.length
+              ? { videoMode: "brand", sourceVideoAssetIds: args.clipAssetIds }
+              : args.type === "video" && (args.photoAssetIds?.length ?? 0) >= 2
+                ? { videoMode: "recap", referenceAssetIds: args.photoAssetIds }
+                : args.photoAssetIds?.length
+                  ? { referenceAssetIds: args.photoAssetIds, referenceMode: "design" }
+                  : {}),
           },
         },
       });

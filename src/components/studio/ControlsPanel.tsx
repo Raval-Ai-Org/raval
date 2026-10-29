@@ -12,6 +12,8 @@ import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
 import { ReferencePhotos } from "./ReferencePhotos";
+import { SourceClips } from "./SourceClips";
+import { isPhotoDesignType, photoLimit } from "@/lib/studio/photo-design/mode";
 import { AdFormatPicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
@@ -28,7 +30,9 @@ export function describeControls(session: StudioSession): string {
     parts.push({ short: "Short", standard: "Medium length", long: "Long" }[c.length ?? "standard"]);
   }
   if (session.type === "script") parts.push(`${c.durationSec ?? 30} seconds`);
-  if (session.type === "video")
+  if (session.type === "video" && (c.videoMode === "brand" || c.videoMode === "recap"))
+    parts.push(c.videoMode === "brand" ? "Your clips" : "Recap from your photos");
+  else if (session.type === "video")
     parts.push(
       `${c.durationSec ?? 10} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
     );
@@ -100,6 +104,10 @@ export function ControlsPanel({
     format.ratios.length > 0 &&
     (format.media !== "optional-image" || c.includeImage || session.type === "carousel");
   const storyVideo = session.type === "story" && c.storyMode === "video";
+  // The brand's own clips or photos: no model footage, length or quality to pick.
+  const ownFootage =
+    session.type === "video" && (c.videoMode === "brand" || c.videoMode === "recap");
+  const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
@@ -153,7 +161,17 @@ export function ControlsPanel({
           />
         </div>
       )}
-      {(session.type === "video" || storyVideo) && (
+      {session.type === "video" && (
+        <SourceClips
+          key={session.workspaceId}
+          workspaceId={session.workspaceId}
+          controls={c}
+          set={set}
+          disabled={disabled}
+          onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
+        />
+      )}
+      {(session.type === "video" || storyVideo) && (!ownFootage || animatedRecap) && (
         <div>
           <FieldLabel>Video option</FieldLabel>
           <Segmented
@@ -234,31 +252,43 @@ export function ControlsPanel({
         <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
       )}
 
-      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
-        <ReferencePhotos
-          key={session.workspaceId}
-          workspaceId={session.workspaceId}
-          value={c.referenceAssetIds ?? []}
-          mode={c.referenceMode ?? "preserve"}
-          onChange={(referenceAssetIds) =>
-            set({
-              referenceAssetIds,
-              referenceMode: referenceAssetIds.length ? (c.referenceMode ?? "preserve") : undefined,
-            })
-          }
-          onModeChange={(referenceMode) =>
-            set({
-              referenceMode,
-              referenceAssetIds:
-                referenceMode === "preserve"
-                  ? (c.referenceAssetIds ?? []).slice(0, 1)
-                  : c.referenceAssetIds,
-            })
-          }
-          onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
-          disabled={disabled}
-        />
-      )}
+      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) &&
+        !(session.type === "video" && c.videoMode === "brand") && (
+          <ReferencePhotos
+            key={session.workspaceId}
+            {...(ownFootage ? { limit: 6, hideModes: true } : {})}
+            workspaceId={session.workspaceId}
+            type={session.type}
+            value={c.referenceAssetIds ?? []}
+            mode={c.referenceMode ?? "preserve"}
+            fidelity={c.photoFidelity ?? "exact"}
+            onChange={(referenceAssetIds) =>
+              set({
+                referenceAssetIds,
+                // Several photos for one picture means designing with them.
+                referenceMode: !referenceAssetIds.length
+                  ? undefined
+                  : referenceAssetIds.length > 1 &&
+                      (c.referenceMode ?? "preserve") === "preserve" &&
+                      isPhotoDesignType(session.type)
+                    ? "design"
+                    : (c.referenceMode ?? "preserve"),
+              })
+            }
+            onModeChange={(referenceMode) =>
+              set({
+                referenceMode,
+                referenceAssetIds: (c.referenceAssetIds ?? []).slice(
+                  0,
+                  photoLimit(referenceMode, session.type),
+                ),
+              })
+            }
+            onFidelityChange={(photoFidelity) => set({ photoFidelity })}
+            onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
+            disabled={disabled}
+          />
+        )}
 
       <div className="rounded-xl border border-border bg-surface-3">
         <button
@@ -324,7 +354,7 @@ export function ControlsPanel({
               </div>
             ) : null}
 
-            {session.type === "script" || session.type === "video" ? (
+            {session.type === "script" || (session.type === "video" && !ownFootage) ? (
               <div>
                 <FieldLabel
                   hint={
@@ -366,7 +396,7 @@ export function ControlsPanel({
               </div>
             ) : null}
 
-            {session.type === "video" ? (
+            {session.type === "video" && !ownFootage ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <FieldLabel>Quality</FieldLabel>

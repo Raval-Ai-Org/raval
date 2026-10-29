@@ -146,6 +146,7 @@ describe("interrupted Studio jobs", () => {
         now,
       ),
     ).toBe(false);
+    // A paid render still queued at the provider after hours is kept...
     expect(
       studioJobIsStale(
         {
@@ -154,6 +155,26 @@ describe("interrupted Studio jobs", () => {
           stage_at: time(1),
           provider_tasks: [{ state: "pending" }],
         },
+        now,
+      ),
+    ).toBe(false);
+    // ...until the absolute deadline, when a render that never answered is
+    // failed and its hold released.
+    expect(
+      studioJobIsStale(
+        {
+          status: "running",
+          created_at: time(24 * 60 + 1),
+          stage_at: time(1),
+          provider_tasks: [{ state: "pending" }],
+        },
+        now,
+      ),
+    ).toBe(true);
+    // A job with nothing at a provider still ends at two hours.
+    expect(
+      studioJobIsStale(
+        { status: "running", created_at: time(121), stage_at: time(1), provider_tasks: [] },
         now,
       ),
     ).toBe(true);

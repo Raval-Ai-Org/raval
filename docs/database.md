@@ -27,7 +27,7 @@ to reconcile the difference.
 
 Changing an approved post's `kind` while keeping its status unchanged now
 invalidates approval through `content_items_invalidate_kind_approval`. Apply
-`20261018090000_content_kind_approval.sql` before releasing this behavior. The
+`20261018090100_content_kind_approval.sql` before releasing this behavior. The
 trigger runs before the existing lifecycle validator; calendar-only moves and
 provider delivery transitions retain their existing rules. No columns or
 client-facing database function signatures change.

@@ -56,6 +56,11 @@ export type ProviderCheck =
       thumbnailUrl?: string;
       costUsd: number | null;
       meta: Record<string, unknown>;
+      /**
+       * The file, when this check already downloaded it (a provider whose URL
+       * needs its key, read for the safety review). Saves a second download.
+       */
+      downloaded?: DownloadedVideo;
     }
   | ({ state: "failed"; providerState: string; meta: Record<string, unknown> } & ProviderFailure);
 

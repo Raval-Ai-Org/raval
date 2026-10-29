@@ -82,8 +82,13 @@ export type AppEventMap = {
         tab?: string;
       }
     | undefined;
-  /** Opens Brain → Brand, optionally on one editor ("look", "voice", "colors"…). */
+  /** Opens Brain → Brand, optionally on one editor ("colors"…). "look" / "assets" open Inspo. */
   "open:brand-dna": { tab?: string } | undefined;
+  /**
+   * Navigates to Inspo (ADR-0037) at /w/<id>/app/inspo, optionally on a
+   * section (board, post, video, voice, media). Only ever fired by a button.
+   */
+  "open:inspo": { section?: string } | undefined;
   /** Open a Studio canvas. `type` is validated by the listener (use-studio). */
   "open:canvas":
     | {
@@ -95,6 +100,12 @@ export type AppEventMap = {
         ideaId?: string;
         ideaSource?: string;
         platforms?: string[];
+        /** The brand's own photos (asset ids, checked again on the server). */
+        referenceAssetIds?: string[];
+        referenceMode?: "preserve" | "design" | "edit" | "inspire";
+        /** The brand's own clips, for "Brand my clips". */
+        sourceVideoAssetIds?: string[];
+        videoMode?: "generate" | "brand" | "recap";
       }
     | undefined;
   /** Review a single content item outside a Studio job (legacy or chat-created). */

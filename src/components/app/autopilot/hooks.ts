@@ -93,7 +93,7 @@ export function useAutopilotOpen(workspaceId: string) {
     else if (target === "website" || target === "blog")
       emitAppEvent("open:settings", { section: "website" });
     else if (target === "brand") emitAppEvent("open:brand-dna");
-    else if (target === "style") emitAppEvent("open:brand-dna", { tab: "look" });
+    else if (target === "style") emitAppEvent("open:inspo", { section: "post" });
     else if (target === "audience" || target === "competitors" || target === "market")
       emitAppEvent("open:brain", { section: target });
     else emitAppEvent("open:ai-visibility");

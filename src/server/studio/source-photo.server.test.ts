@@ -1,45 +1,18 @@
 import { describe, expect, it } from "vitest";
-import sharp from "sharp";
-import {
-  composeSourcePhoto,
-  sourcePhotoOverlayText,
-  sourcePhotoWantsLogo,
-} from "./source-photo.server";
+import { sourcePhotoWantsLogo } from "./source-photo.server";
+import { asksForDesign } from "@/lib/studio/photo-design/mode";
 
 describe("source photo preservation", () => {
-  it("does not invent an overlay for an ordinary post request", () => {
-    expect(
-      sourcePhotoOverlayText("Make an Instagram post using this photo", { title: "New post" }),
-    ).toBeNull();
-  });
-
-  it("uses exact quoted copy only when an overlay was requested", () => {
-    expect(
-      sourcePhotoOverlayText('Add the headline "Summer sale" to this photo', { title: "Other" }),
-    ).toBe("Summer sale");
+  it("adds only the logo when that is all that was asked", () => {
     expect(sourcePhotoWantsLogo("Please add our logo in the corner")).toBe(true);
+    expect(sourcePhotoWantsLogo("Make an Instagram post using this photo")).toBe(false);
   });
 
-  it("falls back past an empty model suggestion", () => {
-    expect(
-      sourcePhotoOverlayText("Add a headline to this photo", {
-        title: "Launch day",
-        onImageText: "",
-      }),
-    ).toBe("Launch day");
-  });
-
-  it("keeps the complete source visible inside the requested canvas", async () => {
-    const source = await sharp({
-      create: { width: 200, height: 100, channels: 3, background: "#ff0000" },
-    })
-      .png()
-      .toBuffer();
-    const output = await composeSourcePhoto({ bytes: source, ratio: "1:1", text: "Launch day" });
-    await expect(sharp(output).metadata()).resolves.toMatchObject({
-      width: 1080,
-      height: 1080,
-      format: "png",
-    });
+  it("sends words on a photo to a photo design instead of a template", () => {
+    expect(asksForDesign('Add the headline "Summer sale" to this photo')).toBe(true);
+    expect(asksForDesign("Please add our logo in the corner")).toBe(false);
+    expect(asksForDesign("Make an Instagram post using this photo")).toBe(false);
+    expect(asksForDesign("Write a caption for this photo")).toBe(false);
+    expect(asksForDesign("put the caption on the photo")).toBe(true);
   });
 });

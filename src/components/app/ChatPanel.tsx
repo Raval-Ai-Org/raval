@@ -24,7 +24,7 @@ import {
   classify as classifyAttachment,
   extractAttachment,
   attachmentsToContext,
-  MAX_FILE_BYTES,
+  maxBytesFor,
   MAX_TOTAL_BYTES,
   type Attachment,
 } from "@/lib/file-extract";
@@ -46,10 +46,13 @@ import { detectChatActions, type ChatAction } from "@/lib/chat-actions";
 import type { ChatToolCall, ChatToolResult } from "@/lib/chat-tools";
 import { SuggestedActions } from "@/components/app/SuggestedActions";
 import {
-  attachedImageMode,
+  attachedPhotoChoice,
+  detectAttachedClipIntent,
   detectAttachedImageIntent,
   detectCreateIntent,
+  detectRepurposeIntent,
 } from "@/lib/chat-intent";
+import { repurposeSourceFromJob, sourceLabelFor } from "@/lib/studio/repurpose";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import {
   getStudioState,
@@ -233,17 +236,19 @@ export function ChatPanel({
     let running = currentTotal;
     const staged: Attachment[] = [];
     for (const f of files) {
-      if (f.size > MAX_FILE_BYTES) {
+      if (f.size > maxBytesFor(f)) {
         toast.error(`${f.name} is too big`, {
-          description: `Files can be up to ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)} MB.`,
+          description: `${classifyAttachment(f) === "video" ? "Clips" : "Files"} can be up to ${Math.floor(maxBytesFor(f) / 1024 / 1024)} MB.`,
         });
         continue;
       }
-      if (running + f.size > MAX_TOTAL_BYTES) {
+      // Clips go to Studio as footage and are never read into the chat.
+      const counted = classifyAttachment(f) === "video" ? 0 : f.size;
+      if (running + counted > MAX_TOTAL_BYTES) {
         toast.error("Too many files", { description: "Remove some files and try again." });
         break;
       }
-      running += f.size;
+      running += counted;
       staged.push({
         id: crypto.randomUUID(),
         file: f,
@@ -977,6 +982,22 @@ export function ChatPanel({
 
   /* ───────────── Studio: start work from the chat ───────────── */
 
+  const lastFinishedPiece = (history: Msg[]) => {
+    const { sessions, jobs } = getStudioState();
+    for (const m of [...history].reverse()) {
+      if (m.kind !== "studio" || !m.payload) continue;
+      const task = m.payload as StudioTaskPayload;
+      const session = task.sessionId ? sessions.find((x) => x.id === task.sessionId) : null;
+      const job =
+        session?.lastGood ??
+        (task.jobId ? jobs.find((j) => j.id === task.jobId) : null) ??
+        session?.job;
+      const found = job ? repurposeSourceFromJob(job) : null;
+      if (found) return found;
+    }
+    return null;
+  };
+
   const persistStudioCard = async (msg: Msg, conversation: string) => {
     const task = msg.payload as StudioTaskPayload;
     const jobId = task.sessionId ? await waitForJobId(task.sessionId) : null;
@@ -1111,28 +1132,59 @@ export function ChatPanel({
     const imageAttachments = outgoingAttachments.filter(
       (attachment) => attachment.kind === "image" && attachment.status === "ready",
     );
-    const detectedIntent = imageAttachments.length
-      ? detectAttachedImageIntent(text)
-      : detectCreateIntent(text);
+    const clipAttachments = outgoingAttachments.filter(
+      (attachment) => attachment.kind === "video" && attachment.status === "ready",
+    );
+    const detectedIntent = clipAttachments.length
+      ? detectAttachedClipIntent(text)
+      : imageAttachments.length
+        ? detectAttachedImageIntent(text)
+        : detectCreateIntent(text);
+    // "Turn this into a carousel" after chat made a piece: start from that piece.
+    const repurpose = hasAttachments ? null : detectRepurposeIntent(text);
+    const source = repurpose ? lastFinishedPiece(priorMessages) : null;
     const intent =
-      detectedIntent && (!hasAttachments || imageAttachments.length) ? detectedIntent : null;
+      repurpose && source
+        ? repurpose
+        : detectedIntent && (!hasAttachments || imageAttachments.length || clipAttachments.length)
+          ? detectedIntent
+          : null;
     if (intent) {
       const format = STUDIO_FORMATS[intent.type];
-      const referenceMode = imageAttachments.length ? attachedImageMode(text) : undefined;
+      // Clips are branded as filmed; several photos asked for as a video become a recap.
+      const videoMode = clipAttachments.length
+        ? ("brand" as const)
+        : intent.type === "video" && imageAttachments.length >= 2
+          ? ("recap" as const)
+          : undefined;
+      const choice =
+        imageAttachments.length && !videoMode
+          ? attachedPhotoChoice(text, imageAttachments.length)
+          : undefined;
+      const referenceMode = choice?.mode;
       let referenceAssetIds: string[] | undefined;
-      if (imageAttachments.length) {
-        try {
+      let sourceVideoAssetIds: string[] | undefined;
+      try {
+        if (videoMode === "brand")
+          sourceVideoAssetIds = await uploadStudioImages(clipAttachments, 5);
+        else if (imageAttachments.length)
           referenceAssetIds = await uploadStudioImages(
             imageAttachments,
-            referenceMode === "preserve" ? 1 : 4,
+            videoMode === "recap" || referenceMode === "design"
+              ? 6
+              : referenceMode === "preserve"
+                ? 1
+                : 4,
           );
-        } catch (error) {
-          toast.error("Couldn't use your attached image", {
-            description: error instanceof Error ? error.message : "Please attach it again.",
-          });
-        }
+      } catch (error) {
+        toast.error(`Couldn't use your attached ${videoMode === "brand" ? "clip" : "image"}`, {
+          description: error instanceof Error ? error.message : "Please attach it again.",
+        });
       }
-      if (imageAttachments.length && !referenceAssetIds?.length) {
+      if (
+        (videoMode === "brand" && !sourceVideoAssetIds?.length) ||
+        (videoMode !== "brand" && imageAttachments.length && !referenceAssetIds?.length)
+      ) {
         const history = [...priorMessages, userMsg]
           .filter((m) => m.kind === "text")
           .slice(-12)
@@ -1146,20 +1198,43 @@ export function ChatPanel({
         brief: intent.brief,
         referenceAssetIds,
         referenceMode,
+        extraControls: {
+          ...(choice?.fidelity ? { photoFidelity: choice.fidelity } : {}),
+          ...(videoMode ? { videoMode } : {}),
+          ...(sourceVideoAssetIds ? { sourceVideoAssetIds } : {}),
+        },
         origin: "chat",
+        ...(repurpose && source
+          ? {
+              sourceContentId: source.contentItemId,
+              sourceLabel: sourceLabelFor(source.from, source.title),
+              platforms: source.platforms,
+            }
+          : {}),
       });
       if (sessionId) {
         const ack: Msg = {
           id: crypto.randomUUID(),
           role: "assistant",
           kind: "text",
-          content: imageAttachments.length
-            ? referenceMode === "preserve"
-              ? `On it — I'm making your ${format.noun} with your original photo kept intact. I’ll only add the text or layout your prompt asks for.`
-              : referenceMode === "edit"
-                ? `On it — I'm editing your photo for the ${format.noun}. Everything outside the requested changes should stay intact.`
-                : `On it — I'm making a new ${format.noun} inspired by your attached image.`
-            : `On it — I'm making your ${format.noun} in Studio. ${format.estimate}, and you can keep chatting while it works.`,
+          content:
+            repurpose && source
+              ? `On it — I'm making your ${format.noun} from your ${STUDIO_FORMATS[source.from].noun}, with the same facts. You can keep chatting while it works.`
+              : videoMode === "brand"
+                ? "On it — I'm adding your design and logo to your clips. The footage stays exactly as you filmed it."
+                : videoMode === "recap"
+                  ? "On it — I'm turning your photos into a short recap video, with your photos kept exact."
+                  : imageAttachments.length
+                    ? referenceMode === "preserve"
+                      ? `On it — I'm making your ${format.noun} with your original photo kept intact.`
+                      : referenceMode === "design"
+                        ? choice?.fidelity === "blend"
+                          ? `On it — I'm designing your ${format.noun} and blending your photos into it. Faces may change slightly.`
+                          : `On it — I'm designing your ${format.noun} around your photos. Your photos stay exactly as they are.`
+                        : referenceMode === "edit"
+                          ? `On it — I'm editing your photo for the ${format.noun}. Everything outside the requested changes should stay intact.`
+                          : `On it — I'm making a new ${format.noun} inspired by your attached image.`
+                    : `On it — I'm making your ${format.noun} in Studio. ${format.estimate}, and you can keep chatting while it works.`,
           live: true,
         };
         setMessages((m) => [...m, ack]);

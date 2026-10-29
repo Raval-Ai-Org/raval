@@ -7,26 +7,41 @@ import { Button } from "@/components/ui/button";
 import { Upload, X } from "@/components/icons";
 import { Segmented } from "./studio-ui";
 import type { StudioControls } from "@/lib/studio/jobs";
+import { photoLimit, photoModeOptions } from "@/lib/studio/photo-design/mode";
 
 type Photo = { id: string; filename: string; url: string };
+type Mode = NonNullable<StudioControls["referenceMode"]>;
+type Fidelity = NonNullable<StudioControls["photoFidelity"]>;
 
 /** Uploads are source material. Nothing is generated or charged in this picker. */
 export function ReferencePhotos({
   workspaceId,
+  type,
   value,
   mode,
+  fidelity,
   onChange,
   onModeChange,
+  onFidelityChange,
   disabled,
   onBusyChange,
+  limit: fixedLimit,
+  hideModes,
 }: {
   workspaceId: string;
+  /** The Studio type, which decides the modes on offer. */
+  type: string;
   value: string[];
-  mode: NonNullable<StudioControls["referenceMode"]>;
+  mode: Mode;
+  fidelity: Fidelity;
   onChange: (ids: string[]) => void;
-  onModeChange: (mode: NonNullable<StudioControls["referenceMode"]>) => void;
+  onModeChange: (mode: Mode) => void;
+  onFidelityChange: (fidelity: Fidelity) => void;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
+  /** A recap video takes its own number of photos and no photo modes. */
+  limit?: number;
+  hideModes?: boolean;
 }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [open, setOpen] = useState(false);
@@ -34,6 +49,8 @@ export function ReferencePhotos({
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
+  const limit = fixedLimit ?? photoLimit(mode, type);
+  const single = limit === 1;
 
   useEffect(() => {
     const request = ++generation.current;
@@ -57,44 +74,55 @@ export function ReferencePhotos({
     };
   }, [workspaceId]);
 
-  const upload = async (file?: File) => {
-    if (!file || busy || disabled) return;
+  const uploadOne = async (file: File): Promise<Photo | null> => {
     if (
       !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
       file.size > 20 * 1024 * 1024
     ) {
-      toast.error("Choose a JPG, PNG or WebP photo under 20 MB.");
-      return;
+      toast.error(`${file.name}: choose a JPG, PNG or WebP photo under 20 MB.`);
+      return null;
     }
-    const limit = mode === "preserve" ? 1 : 4;
-    if (value.length >= limit)
+    const params = new URLSearchParams({
+      workspaceId,
+      requestId: crypto.randomUUID(),
+      filename: file.name,
+    });
+    const response = await authedFetch(`/api/assets/upload?${params}`, {
+      method: "POST",
+      workspaceId,
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    const body = await response.json();
+    if (!response.ok || !body.asset?.id || !body.asset?.public_url)
+      throw new Error("Could not upload the photo.");
+    return { id: body.asset.id, filename: file.name, url: body.asset.public_url };
+  };
+
+  const upload = async (files: File[]) => {
+    if (!files.length || busy || disabled) return;
+    const room = single ? 1 : limit - value.length;
+    if (room <= 0)
       return void toast.error(
-        mode === "preserve"
-          ? "Keep original uses one photo. Choose Edit details or Inspiration for more."
-          : "Choose up to four reference photos.",
+        `This uses up to ${limit} photo${limit === 1 ? "" : "s"}. Remove one first.`,
       );
+    if (files.length > room)
+      toast.info(`Only the first ${room} photo${room === 1 ? "" : "s"} will be used.`);
     const request = generation.current;
     setBusy(true);
     onBusyChange?.(true);
     try {
-      const params = new URLSearchParams({
-        workspaceId,
-        requestId: crypto.randomUUID(),
-        filename: file.name,
-      });
-      const response = await authedFetch(`/api/assets/upload?${params}`, {
-        method: "POST",
-        workspaceId,
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      const body = await response.json();
-      if (!response.ok || !body.asset?.id || !body.asset?.public_url)
-        throw new Error("Could not upload the photo.");
-      if (request !== generation.current) return;
-      const photo = { id: body.asset.id, filename: file.name, url: body.asset.public_url };
-      setPhotos((current) => [photo, ...current.filter((p) => p.id !== photo.id)]);
-      onChange(mode === "preserve" ? [photo.id] : [...value, photo.id]);
+      const added: Photo[] = [];
+      for (const file of files.slice(0, room)) {
+        const photo = await uploadOne(file);
+        if (photo) added.push(photo);
+      }
+      if (request !== generation.current || !added.length) return;
+      setPhotos((current) => [
+        ...added,
+        ...current.filter((p) => !added.some((a) => a.id === p.id)),
+      ]);
+      onChange(single ? [added[0].id] : [...value, ...added.map((photo) => photo.id)]);
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : "Could not upload the photo.");
     } finally {
@@ -108,26 +136,38 @@ export function ReferencePhotos({
     <section className="space-y-2 rounded-xl border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-medium">
-          Reference photos <span className="text-muted-foreground">(optional)</span>
+          Your photos <span className="text-muted-foreground">(optional)</span>
         </span>
         <span className="text-xs text-muted-foreground">
-          {value.length}/{mode === "preserve" ? 1 : 4}
+          {value.length}/{limit}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Decide exactly how Mellox may use your photo. Uploading is free.
-      </p>
-      <Segmented
-        label="How to use the photo"
-        className="max-w-full flex-wrap"
-        value={mode}
-        onChange={onModeChange}
-        options={[
-          { value: "preserve", label: "Keep original", hint: "No regeneration" },
-          { value: "edit", label: "Edit details", hint: "Only requested changes" },
-          { value: "inspire", label: "Inspiration", hint: "Create something new" },
-        ]}
-      />
+      {!hideModes && (
+        <p className="text-xs text-muted-foreground">
+          Choose how Mellox uses your photos. Uploading is free.
+        </p>
+      )}
+      {!hideModes && (
+        <Segmented
+          label="How to use the photos"
+          className="max-w-full flex-wrap"
+          value={mode}
+          onChange={onModeChange}
+          options={photoModeOptions(type)}
+        />
+      )}
+      {!hideModes && mode === "design" && (
+        <Segmented
+          label="Your photos in the design"
+          className="max-w-full flex-wrap"
+          value={fidelity}
+          onChange={onFidelityChange}
+          options={[
+            { value: "exact", label: "Keep photos exact", hint: "People stay exactly as shot" },
+            { value: "blend", label: "Blend it more", hint: "Faces may change slightly" },
+          ]}
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         {value.map((id) => {
           const photo = photos.find((p) => p.id === id);
@@ -143,7 +183,7 @@ export function ReferencePhotos({
               )}
               <button
                 type="button"
-                aria-label={`Remove ${photo?.filename ?? "reference photo"}`}
+                aria-label={`Remove ${photo?.filename ?? "photo"}`}
                 disabled={disabled || busy}
                 onClick={() => onChange(value.filter((v) => v !== id))}
                 className="absolute right-0 top-0 rounded-full bg-background p-1"
@@ -158,19 +198,20 @@ export function ReferencePhotos({
         ref={fileInput}
         type="file"
         accept="image/jpeg,image/png,image/webp"
+        multiple={!single}
         className="hidden"
-        onChange={(event) => void upload(event.target.files?.[0])}
+        onChange={(event) => void upload([...(event.target.files ?? [])])}
       />
       <div className="flex gap-2">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          disabled={disabled || busy || value.length >= (mode === "preserve" ? 1 : 4)}
+          disabled={disabled || busy || (!single && value.length >= limit)}
           onClick={() => fileInput.current?.click()}
         >
           <Upload className="size-3" />
-          {busy ? "Uploading…" : "Upload photo"}
+          {busy ? "Uploading…" : single ? "Upload photo" : "Upload photos"}
         </Button>
         <Button
           type="button"
@@ -196,15 +237,13 @@ export function ReferencePhotos({
               aria-label={`Use ${photo.filename}`}
               aria-pressed={value.includes(photo.id)}
               disabled={
-                disabled ||
-                busy ||
-                (!value.includes(photo.id) && value.length >= (mode === "preserve" ? 1 : 4))
+                disabled || busy || (!single && !value.includes(photo.id) && value.length >= limit)
               }
               onClick={() =>
                 onChange(
                   value.includes(photo.id)
                     ? value.filter((id) => id !== photo.id)
-                    : mode === "preserve"
+                    : single
                       ? [photo.id]
                       : [...value, photo.id],
                 )

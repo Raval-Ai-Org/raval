@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  catalogFromJsonLd,
+  catalogLinks,
   decideProduct,
   dedupeCandidates,
+  foundLine,
+  groundCatalog,
+  linkForName,
   hasSellable,
   parseShopifyProducts,
   productFingerprint,
@@ -28,6 +33,114 @@ describe("productLinks", () => {
       "https://example.com/products/blue-mug",
       "https://www.example.com/products/red-mug",
     ]);
+  });
+});
+
+describe("catalogLinks", () => {
+  it("knows product and service pages, including products inside a collection", () => {
+    const links = catalogLinks(
+      [
+        "/collections/mugs/products/blue-mug",
+        "/collections/mugs",
+        "/product-page/linen-apron",
+        "/services/web-design",
+        "/services",
+        "/product-category/kitchen",
+        "/products/blue-mug.jpg",
+      ],
+      "https://example.com",
+    );
+    expect(links).toEqual([
+      { url: "https://example.com/collections/mugs/products/blue-mug", kind: "product" },
+      { url: "https://example.com/product-page/linen-apron", kind: "product" },
+      { url: "https://example.com/services/web-design", kind: "service" },
+    ]);
+  });
+});
+
+describe("catalogFromJsonLd", () => {
+  it("reads an ItemList of products and keeps links on the site", () => {
+    const out = catalogFromJsonLd(
+      [
+        {
+          "@type": "ItemList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              item: {
+                "@type": "Product",
+                name: "Blue Mug",
+                url: "/products/blue-mug",
+                offers: { price: "18", priceCurrency: "USD" },
+              },
+            },
+            {
+              "@type": "ListItem",
+              item: { "@type": "Product", name: "Elsewhere", url: "https://other.com/x" },
+            },
+          ],
+        },
+      ],
+      "https://example.com/shop",
+    );
+    expect(out.map((c) => [c.name, c.url, c.price])).toEqual([
+      ["Blue Mug", "https://example.com/products/blue-mug", "USD 18"],
+      ["Elsewhere", null, ""],
+    ]);
+  });
+});
+
+describe("groundCatalog", () => {
+  const text =
+    "Bright Smiles. Our treatments: Teeth Whitening from £199. Invisalign clear aligners for adults.";
+
+  it("keeps only what the site says", () => {
+    const out = groundCatalog(
+      [
+        { name: "Teeth whitening", kind: "service", price: "£199", description: "", url: "" },
+        {
+          name: "Invisalign",
+          kind: "service",
+          price: "£2,500",
+          description: "Clear aligners for adults",
+          url: "https://other.com/x",
+        },
+        { name: "Veneers", kind: "service", price: "", description: "", url: "" },
+      ],
+      { text, origin: "https://brightsmiles.example" },
+    );
+    expect(out.map((c) => [c.name, c.price, c.url, c.description])).toEqual([
+      ["Teeth whitening", "£199", null, ""],
+      ["Invisalign", "", null, "Clear aligners for adults"],
+    ]);
+    expect(out.every((c) => c.kind === "service")).toBe(true);
+  });
+
+  it("drops a description written in other words", () => {
+    const [c] = groundCatalog(
+      [
+        {
+          name: "Invisalign",
+          kind: "service",
+          price: "",
+          description: "Award-winning painless orthodontics",
+          url: "",
+        },
+      ],
+      { text, origin: "https://brightsmiles.example" },
+    );
+    expect(c.description).toBe("");
+  });
+});
+
+describe("linkForName and foundLine", () => {
+  it("matches a page by its address and counts kinds", () => {
+    const pages = [{ url: "https://e.com/services/web-design/", kind: "service" as const }];
+    expect(linkForName("Web Design", pages)?.url).toBe("https://e.com/services/web-design/");
+    expect(linkForName("SEO", pages)).toBeNull();
+    expect(foundLine([{ kind: "product" }, { kind: "service" }, {}])).toBe(
+      "2 products and 1 service",
+    );
   });
 });
 

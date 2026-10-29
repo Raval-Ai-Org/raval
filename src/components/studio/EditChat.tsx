@@ -84,6 +84,7 @@ export function EditChat({
             target: a === "words" ? wordsTarget : editTarget(a, session.type),
           },
           captionEditsRemaining: base.captionEditsRemaining,
+          intent: { brief: session.brief },
         })
       : "";
 

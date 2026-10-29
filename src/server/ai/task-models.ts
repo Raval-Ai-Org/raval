@@ -135,6 +135,11 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.captions": tier(WORKHORSE, "medium"),
   "studio.caption.edit": tier(ECONOMY, "low", { maxTokens: 1800 }),
   "studio.naturalize": tier(WORKHORSE, "low"),
+  // Reads the brand's own photos (faces, calm areas, colours) before a design.
+  "studio.photo-read": tier(WORKHORSE, "low", { maxTokens: 2400 }),
+  // Hears a branded clip's sound for its captions (Gemini Flash takes audio).
+  // Not used when a local whisper.cpp is configured.
+  "studio.transcribe": tier(WORKHORSE, "low", { maxTokens: 6000, temperature: 0 }),
   "studio.ideas": tier(WORKHORSE, "low", { temperature: 0.9 }),
   "studio.prompt": tier(WORKHORSE, "low"),
   "studio.research": tier(WORKHORSE, "medium"),

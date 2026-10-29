@@ -55,6 +55,17 @@ export function brainPath(
 }
 
 /**
+ * Inspo (ADR-0037): how the brand's posts look and sound, and its own media.
+ *   inspoPath(id)          → /w/<id>/app/inspo
+ *   inspoPath(id, "voice") → /w/<id>/app/inspo?s=voice
+ */
+export function inspoPath(workspaceId: string, section?: string | null): string {
+  return workspacePath(workspaceId, "inspo", {
+    s: section && section !== "board" ? section : undefined,
+  });
+}
+
+/**
  * Re-anchor an in-app path ("/app?settings=connections", "/app/chat/x") inside
  * a workspace. Already-canonical and non-app paths are returned unchanged.
  */

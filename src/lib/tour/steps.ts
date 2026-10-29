@@ -84,6 +84,15 @@ const STOPS: TourStop[] = [
     sidebar: true,
   },
   {
+    id: "inspo",
+    icon: "studio",
+    title: "Show Mellox what you like",
+    body: "Drop in posts you love, your photos and your colours. Everything Mellox makes follows them.",
+    anchors: ["inspo"],
+    side: "right",
+    sidebar: true,
+  },
+  {
     id: "analytics",
     icon: "analytics",
     title: "See what is working",

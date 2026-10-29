@@ -1,6 +1,6 @@
 "use client";
 
-import { LookEditor, LookTilePreview } from "@/components/app/brain/brand/look/LookEditor";
+import { InspoTilePreview } from "@/components/app/inspo/InspoTilePreview";
 import {
   GoalEditor,
   GoalPreview,
@@ -181,9 +181,10 @@ export function BrandDnaSurface({
 
   // A link from elsewhere in Mellox names the editor to open.
   useEffect(() => {
-    // legacy map: essentials → voice tile
+    // legacy map: essentials â†’ voice tile
     if (tile === "essentials") setActiveTile("voice");
-    else if (tile && TILE_KEYS.includes(tile as TileKey)) setActiveTile(tile as TileKey);
+    else if (tile && tile !== "inspo" && TILE_KEYS.includes(tile as TileKey))
+      setActiveTile(tile as TileKey);
     else setActiveTile(null);
   }, [tile]);
 
@@ -219,9 +220,9 @@ export function BrandDnaSurface({
     setLastError(null);
     setProgress({
       stage: "start",
-      message: "Starting…",
+      message: "Startingâ€¦",
       pct: 2,
-      log: [{ stage: "start", message: "Starting…", pct: 2, at: Date.now() }],
+      log: [{ stage: "start", message: "Startingâ€¦", pct: 2, at: Date.now() }],
     });
     try {
       const res = await authedFetch("/api/brand-extract", {
@@ -504,7 +505,7 @@ export function BrandDnaSurface({
             variant="ghost"
             onClick={async () => {
               if (!workspaceId) return;
-              const t = toast.loading("Reading chat for insights…");
+              const t = toast.loading("Reading chat for insightsâ€¦");
               try {
                 const { syncMemoryFromChat } = await import("@/lib/memory-sync");
                 const res = await syncMemoryFromChat(workspaceId, dna, save);
@@ -541,7 +542,7 @@ export function BrandDnaSurface({
   );
 }
 
-/* ─────────── STATUS PILL ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STATUS PILL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function StatusPill({
   status,
@@ -558,7 +559,7 @@ function StatusPill({
       return {
         icon: Loader2,
         spin: true,
-        label: `${progress.message || "Reading site…"} · ${pct}%`,
+        label: `${progress.message || "Reading siteâ€¦"} Â· ${pct}%`,
         tone: "text-muted-foreground",
       };
     }
@@ -597,7 +598,7 @@ function timeAgo(ts: number) {
   return new Date(ts).toLocaleDateString();
 }
 
-/* ─────────── OVERVIEW HERO (brand card + URL input) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ OVERVIEW HERO (brand card + URL input) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function OverviewHero({
   dna,
@@ -691,7 +692,7 @@ function OverviewHero({
   );
 }
 
-/* ─────────── TILE GRID (Pomelli-inspired) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ TILE GRID (Pomelli-inspired) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 type TileKey =
   | "logo"
@@ -701,8 +702,7 @@ type TileKey =
   | "voice"
   | "headline"
   | "audience"
-  | "look"
-  | "assets"
+  | "inspo"
   | "notes"
   | "products"
   | "goal";
@@ -714,8 +714,7 @@ const TILE_KEYS: TileKey[] = [
   "voice",
   "headline",
   "audience",
-  "look",
-  "assets",
+  "inspo",
   "notes",
   "products",
   "goal",
@@ -769,16 +768,11 @@ const TILE_META: TileMeta[] = [
     keywords: "audience target market segment icp",
   },
   {
-    key: "look",
-    label: "Look & voice",
+    key: "inspo",
+    label: "Inspo",
     category: "visual",
-    keywords: "look style design tone image mood emoji hashtags video writing",
-  },
-  {
-    key: "assets",
-    label: "Assets",
-    category: "knowledge",
-    keywords: "assets files uploads images pdf",
+    keywords:
+      "inspo look style design tone image mood emoji hashtags video writing assets photos references",
   },
   {
     key: "notes",
@@ -832,7 +826,7 @@ function TileToolbar({
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search brand rules… (logo, colors, voice)"
+          placeholder="Search brand rulesâ€¦ (logo, colors, voice)"
           aria-label="Search Brand DNA sections"
           className="h-9 rounded-full border-border/60 bg-card/50 pl-9 pr-9 text-[13px] placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand-green))]"
         />
@@ -1031,24 +1025,15 @@ function TileGrid({
           <GoalPreview workspaceId={workspaceId} />
         </Tile>
       )}
-      {show("look") && (
+      {/* Look & voice and Assets live in Inspo (ADR-0037). */}
+      {show("inspo") && (
         <Tile
-          tileKey="look"
-          label="Look & voice"
-          ariaLabel="Edit your look and voice"
-          onClick={() => onOpen("look")}
+          tileKey="inspo"
+          label="Inspo"
+          ariaLabel="Open Inspo: your look, voice and media"
+          onClick={() => emitAppEvent("open:inspo")}
         >
-          <LookTilePreview dna={dna} />
-        </Tile>
-      )}
-      {show("assets") && (
-        <Tile
-          tileKey="assets"
-          label="Assets"
-          ariaLabel={`Edit Assets (${dna.assets.length} uploaded)`}
-          onClick={() => onOpen("assets")}
-        >
-          <AssetsPreview dna={dna} />
+          <InspoTilePreview dna={dna} />
         </Tile>
       )}
       {show("notes") && (
@@ -1133,7 +1118,7 @@ function Tile({
   );
 }
 
-/* Tile previews — visual, on-brand */
+/* Tile previews â€” visual, on-brand */
 
 function LogoTilePreviewLarge({ dna }: { dna: BrandDna }) {
   const primary = dna.colors[0]?.hex;
@@ -1326,45 +1311,6 @@ function AudiencePreview({ dna }: { dna: BrandDna }) {
   );
 }
 
-function AssetsPreview({ dna }: { dna: BrandDna }) {
-  const imgs = dna.assets.filter((a) => a.kind === "logo" || a.kind === "image").slice(0, 3);
-  return (
-    <div className="flex h-full items-center gap-2">
-      {imgs.length === 0 ? (
-        <div className="grid h-full w-full place-items-center text-[12.5px] text-muted-foreground">
-          <div className="flex flex-col items-center gap-2">
-            <ImageIcon className="h-6 w-6 opacity-50" />
-            <span>Add reusable assets</span>
-          </div>
-        </div>
-      ) : (
-        <>
-          {imgs.map((a) => (
-            <div
-              key={a.id}
-              className="h-16 w-16 shrink-0 overflow-hidden rounded-xl ring-1 ring-border/60 bg-secondary/40"
-            >
-              <img
-                src={a.url}
-                alt={a.label}
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            </div>
-          ))}
-          {dna.assets.length > imgs.length && (
-            <span className="ml-1 rounded-full bg-secondary/80 px-2 py-1 text-[11.5px] tabular-nums text-muted-foreground">
-              +{dna.assets.length - imgs.length}
-            </span>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 function CountPreview({
   count,
   icon: Icon,
@@ -1398,7 +1344,7 @@ function CountPreview({
   );
 }
 
-/* ─────────── LIVE SUMMARY PANE (real-time preview while editing) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ LIVE SUMMARY PANE (real-time preview while editing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function LiveSummaryPane({
   dna,
@@ -1486,7 +1432,7 @@ function LiveSummaryPane({
               {name}
             </div>
             <div className="truncate text-[11.5px] text-muted-foreground">
-              {dna.industry || "Industry —"}
+              {dna.industry || "Industry â€”"}
             </div>
           </div>
         </div>
@@ -1585,11 +1531,11 @@ function LiveSummaryPane({
               {dos.length ? (
                 dos.map((d, i) => (
                   <li key={i} className="line-clamp-1">
-                    · {d}
+                    Â· {d}
                   </li>
                 ))
               ) : (
-                <li className="opacity-60">—</li>
+                <li className="opacity-60">â€”</li>
               )}
             </ul>
           </div>
@@ -1601,11 +1547,11 @@ function LiveSummaryPane({
               {donts.length ? (
                 donts.map((d, i) => (
                   <li key={i} className="line-clamp-1">
-                    · {d}
+                    Â· {d}
                   </li>
                 ))
               ) : (
-                <li className="opacity-60">—</li>
+                <li className="opacity-60">â€”</li>
               )}
             </ul>
           </div>
@@ -1634,7 +1580,7 @@ function LiveSummaryPane({
   );
 }
 
-/* ─────────── TILE EDITOR (right-panel content per tile) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ TILE EDITOR (right-panel content per tile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function TileEditor({
   tile,
@@ -1660,12 +1606,8 @@ function TileEditor({
     colors: { title: "Colors", subtitle: "The palette that anchors every design." },
     voice: { title: "Voice & essentials", subtitle: "The 5 inputs Mellox uses to write like you." },
     headline: { title: "Tagline & positioning", subtitle: "The story behind what you sell." },
-    audience: { title: "Audience", subtitle: "Who you're for — segments and tags." },
-    look: {
-      title: "Look & voice",
-      subtitle: "How everything Mellox makes should look and sound.",
-    },
-    assets: { title: "Assets", subtitle: "Reusable images, logos and links." },
+    audience: { title: "Audience", subtitle: "Who you're for â€” segments and tags." },
+    inspo: { title: "Inspo", subtitle: "How your posts look and sound." },
     notes: { title: "Notes", subtitle: "Durable memory captured from chat." },
     products: { title: "Products", subtitle: "What you sell, with real photos." },
     goal: { title: "Goal", subtitle: "What your marketing is for, and by when." },
@@ -1714,8 +1656,6 @@ function TileEditor({
           <RulesGrid dna={dna} save={save} />
         </div>
       )}
-      {tile === "look" && <LookEditor dna={dna} save={save} workspaceId={workspaceId} />}
-      {tile === "assets" && <AssetsTab dna={dna} save={save} />}
       {tile === "notes" && <NotesTab dna={dna} save={save} />}
       {tile === "products" && workspaceId && (
         <ProductsEditor workspaceId={workspaceId} dna={dna} save={save} />
@@ -1725,7 +1665,7 @@ function TileEditor({
   );
 }
 
-/* ─────────── HERO ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ HERO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function BrandHero({
   dna,
@@ -1815,7 +1755,7 @@ function BrandHero({
             </span>
           </div>
           <h2 className="mt-1 truncate text-[17px] font-semibold tracking-tight text-foreground sm:text-[20px]">
-            {dna.brandName || (loading ? "Reading your site…" : "Your brand")}
+            {dna.brandName || (loading ? "Reading your siteâ€¦" : "Your brand")}
           </h2>
           {websiteUrl ? (
             <a
@@ -1851,7 +1791,7 @@ function BrandHero({
   );
 }
 
-/* ─────────── NAV (sidebar on desktop, chips on mobile) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ NAV (sidebar on desktop, chips on mobile) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const NAV_META: {
   key: MemoryTabKey;
@@ -1875,7 +1815,8 @@ const NAV_META: {
     icon: ShieldCheck,
     desc: "5-item checklist + preview",
     headline: "Brand DNA essentials",
-    subhead: "The 5 inputs Mellox uses to write and design every post — with a live style preview.",
+    subhead:
+      "The 5 inputs Mellox uses to write and design every post â€” with a live style preview.",
   },
   {
     key: "competitors",
@@ -1883,7 +1824,7 @@ const NAV_META: {
     icon: Building2,
     desc: "Who you're up against",
     headline: "Competitors",
-    subhead: "Players in your space — strengths, gaps, positioning.",
+    subhead: "Players in your space â€” strengths, gaps, positioning.",
   },
   {
     key: "customers",
@@ -2106,7 +2047,7 @@ function PillTag({ icon: Icon, children }: { icon: any; children: React.ReactNod
   );
 }
 
-/* ─────────── URL CONNECT STEP ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ URL CONNECT STEP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 type ProgressState = {
   stage: string;
@@ -2144,13 +2085,13 @@ function UrlConnectStep({
 
   const statusBadge = useMemo(() => {
     if (status === "loading") {
-      const label = progress.message || "Reading your site…";
+      const label = progress.message || "Reading your siteâ€¦";
       const pct = Math.max(2, Math.min(99, progress.pct || 0));
       return {
         icon: Loader2,
         color: "text-muted-foreground",
         spin: true,
-        label: `${label} · ${pct}%`,
+        label: `${label} Â· ${pct}%`,
       };
     }
     if (status === "error")
@@ -2368,11 +2309,11 @@ function UrlConnectStep({
   );
 }
 
-/* ─────────── SOURCE BADGE ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SOURCE BADGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function SourceBadge({ source }: { source?: BrandSource }) {
   if (!source) return null;
-  const tip = source.snippet ? `${source.label} — "${source.snippet}"` : source.label;
+  const tip = source.snippet ? `${source.label} â€” "${source.snippet}"` : source.label;
   const content = (
     <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/70 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors">
       <Info className="h-2.5 w-2.5" />
@@ -2388,7 +2329,7 @@ function SourceBadge({ source }: { source?: BrandSource }) {
   );
 }
 
-/* ─────────── LOGO TILES (big visual) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ LOGO TILES (big visual) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function LogoTilesCard({
   dna,
@@ -2436,7 +2377,7 @@ function LogoTilesCard({
         <Input
           defaultValue={dna.logoUrl ?? ""}
           onBlur={(e) => save({ logoUrl: e.target.value.trim() || null })}
-          placeholder="Paste a logo URL to override…"
+          placeholder="Paste a logo URL to overrideâ€¦"
           className="h-8 text-[12px]"
         />
       </div>
@@ -2502,7 +2443,7 @@ function LogoTilePreview({
   );
 }
 
-/* ─────────── PALETTE ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PALETTE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function PaletteCard({
   dna,
@@ -2615,7 +2556,7 @@ function ColorChip({
   );
 }
 
-/* ─────────── FONTS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ FONTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function FontCard({
   dna,
@@ -2660,7 +2601,7 @@ function FontCard({
                   className="mt-0.5 truncate text-[12px] text-muted-foreground"
                   style={{ fontFamily: `'${f}', ui-sans-serif, system-ui` }}
                 >
-                  Aa Bb Cc · 0123 · The quick brown fox
+                  Aa Bb Cc Â· 0123 Â· The quick brown fox
                 </div>
               </div>
               <button
@@ -2692,7 +2633,7 @@ function FontCard({
   );
 }
 
-/* ─────────── CHANNELS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CHANNELS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function ChannelChips({ dna, source }: { dna: BrandDna; source?: BrandSource }) {
   return (
@@ -2729,7 +2670,7 @@ function ChannelChips({ dna, source }: { dna: BrandDna; source?: BrandSource }) 
   );
 }
 
-/* ─────────── INFO + RULES ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ INFO + RULES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function InfoGrid({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) => void }) {
   return (
@@ -2869,14 +2810,14 @@ function EditableField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={2}
-          placeholder={`Add ${label.toLowerCase()}…`}
+          placeholder={`Add ${label.toLowerCase()}â€¦`}
           className="w-full resize-none rounded-md border-0 bg-transparent p-0 text-[13.5px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
         />
       ) : (
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={`Add ${label.toLowerCase()}…`}
+          placeholder={`Add ${label.toLowerCase()}â€¦`}
           className="h-7 border-0 bg-transparent p-0 text-[14px] font-medium text-foreground focus-visible:ring-0"
         />
       )}
@@ -2884,7 +2825,7 @@ function EditableField({
   );
 }
 
-/* ─────────── TAGS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ TAGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function TagsCard({
   title,
@@ -2930,7 +2871,7 @@ function TagsCard({
           value={val}
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-          placeholder={tags.length === 0 ? (placeholder ?? "Add tag…") : "Add…"}
+          placeholder={tags.length === 0 ? (placeholder ?? "Add tagâ€¦") : "Addâ€¦"}
           className="h-7 min-w-[120px] flex-1 rounded-full border border-dashed border-border/70 bg-transparent px-2.5 text-[11.5px] outline-none placeholder:text-muted-foreground focus:border-foreground/40"
         />
       </div>
@@ -2938,7 +2879,7 @@ function TagsCard({
   );
 }
 
-/* ─────────── PRIMITIVES ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PRIMITIVES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function SectionCard({
   icon: Icon,
@@ -2985,12 +2926,12 @@ function EmptyAction({ onClick, label }: { onClick: () => void; label: string })
   );
 }
 
-/* ─────────── MEMORY TABS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ MEMORY TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export type MemoryTabKey =
   "brand" | "essentials" | "competitors" | "customers" | "assets" | "notes";
 
-/* ─────────── POSITIONING ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ POSITIONING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function PositioningGrid({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) => void }) {
   return (
@@ -3033,13 +2974,13 @@ function PositioningGrid({ dna, save }: { dna: BrandDna; save: (n: Partial<Brand
   );
 }
 
-/* ─────────── COMPETITORS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPETITORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-/* ─────────── CUSTOMERS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ CUSTOMERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export function CustomersTab({
   dna,
@@ -3092,7 +3033,7 @@ export function CustomersTab({
             label="Buying triggers"
             description="Moments or events that push prospects to act."
             placeholder="e.g. Hit 50 customers and lost track of replies"
-            sourcePlaceholder="Sales call, G2 review…"
+            sourcePlaceholder="Sales call, G2 reviewâ€¦"
             tone="hsl(var(--brand-green))"
             items={c.triggerSignals}
             onAdd={() => addSignal("triggerSignals")}
@@ -3103,7 +3044,7 @@ export function CustomersTab({
             label="Objections"
             description="Concerns prospects raise before committing."
             placeholder="e.g. Worried our team can't migrate in a week"
-            sourcePlaceholder="Demo, churn interview…"
+            sourcePlaceholder="Demo, churn interviewâ€¦"
             tone="hsl(var(--warning, 30 95% 56%))"
             items={c.objectionSignals}
             onAdd={() => addSignal("objectionSignals")}
@@ -3112,9 +3053,9 @@ export function CustomersTab({
           />
           <EvidenceList
             label="Feedback sources"
-            description="Where the signals above came from — links matter."
+            description="Where the signals above came from â€” links matter."
             placeholder="e.g. 12 NPS verbatims mentioning slow onboarding"
-            sourcePlaceholder="https://… or 'Support inbox'"
+            sourcePlaceholder="https://â€¦ or 'Support inbox'"
             tone="hsl(var(--brand-blue))"
             items={c.feedbackSources}
             onAdd={() => addSignal("feedbackSources")}
@@ -3230,7 +3171,7 @@ export function CustomersTab({
               <textarea
                 value={t.quote}
                 onChange={(e) => updTestimonial(t.id, { quote: e.target.value })}
-                placeholder="“This product saved us 10 hours a week.”"
+                placeholder="â€œThis product saved us 10 hours a week.â€"
                 rows={2}
                 className="w-full resize-none rounded-md border-0 bg-transparent p-0 text-[13px] outline-none placeholder:text-muted-foreground focus:ring-0"
               />
@@ -3274,73 +3215,9 @@ export function CustomersTab({
   );
 }
 
-/* ─────────── ASSETS ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ASSETS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function AssetsTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) => void }) {
-  const add = () =>
-    save({ assets: [...dna.assets, { id: uid(), label: "", url: "", kind: "link" }] });
-  const update = (id: string, patch: Partial<import("@/hooks/use-brand-dna").AssetItem>) =>
-    save({ assets: dna.assets.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
-  const remove = (id: string) => save({ assets: dna.assets.filter((a) => a.id !== id) });
-
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground/80 inline-flex items-center gap-1.5">
-          <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> Designs, assets & references
-        </div>
-        <Button size="sm" variant="outline" onClick={add}>
-          <Plus className="h-3.5 w-3.5" /> Add asset
-        </Button>
-      </div>
-      {dna.assets.length === 0 && (
-        <EmptyAction onClick={add} label="Add Figma, brand kit, drive folder…" />
-      )}
-      <div className="grid gap-2">
-        {dna.assets.map((a) => (
-          <div
-            key={a.id}
-            className="grid grid-cols-[110px_1fr_1.4fr_28px] items-center gap-2 rounded-xl border border-border/60 bg-card/60 p-2"
-          >
-            <select
-              value={a.kind ?? "link"}
-              onChange={(e) => update(a.id, { kind: e.target.value as any })}
-              className="h-8 rounded-md border border-border/60 bg-transparent px-2 text-[12px]"
-            >
-              <option value="link">Link</option>
-              <option value="design">Design</option>
-              <option value="logo">Logo</option>
-              <option value="image">Image</option>
-              <option value="doc">Doc</option>
-              <option value="video">Video</option>
-            </select>
-            <Input
-              value={a.label}
-              onChange={(e) => update(a.id, { label: e.target.value })}
-              placeholder="Label"
-              className="h-8 text-[12px]"
-            />
-            <Input
-              value={a.url}
-              onChange={(e) => update(a.id, { url: e.target.value })}
-              placeholder="https://…"
-              className="h-8 text-[12px]"
-            />
-            <button
-              onClick={() => remove(a.id)}
-              className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
-              aria-label="Remove"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ─────────── NOTES / HISTORY ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ NOTES / HISTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function NotesTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) => void }) {
   const add = () =>
@@ -3417,7 +3294,7 @@ function NotesTab({ dna, save }: { dna: BrandDna; save: (n: Partial<BrandDna>) =
   );
 }
 
-/* ─────────── MINI FIELD ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ MINI FIELD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function MiniField({
   label,
@@ -3442,14 +3319,14 @@ function MiniField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={2}
-          placeholder={`Add ${label.toLowerCase()}…`}
+          placeholder={`Add ${label.toLowerCase()}â€¦`}
           className="w-full resize-none border-0 bg-transparent p-0 text-[12.5px] outline-none placeholder:text-muted-foreground focus:ring-0"
         />
       ) : (
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={`Add ${label.toLowerCase()}…`}
+          placeholder={`Add ${label.toLowerCase()}â€¦`}
           className="h-7 border-0 bg-transparent p-0 text-[12.5px] focus-visible:ring-0"
         />
       )}
@@ -3457,7 +3334,7 @@ function MiniField({
   );
 }
 
-/* ─────────── EVIDENCE LIST (signals with sources) ─────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ EVIDENCE LIST (signals with sources) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 type SignalEvidence = import("@/hooks/use-brand-dna").SignalEvidence;
 
@@ -3534,7 +3411,7 @@ function EvidenceList({
                   <Input
                     value={it.sourceUrl ?? ""}
                     onChange={(e) => onChange(it.id, { sourceUrl: e.target.value })}
-                    placeholder="https://evidence-link…"
+                    placeholder="https://evidence-linkâ€¦"
                     className="h-7 flex-1 border-0 bg-transparent px-0 text-[11.5px] focus-visible:ring-0"
                   />
                   {it.sourceUrl && (

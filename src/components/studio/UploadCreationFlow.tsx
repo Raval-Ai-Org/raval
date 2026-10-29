@@ -184,17 +184,28 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
     };
   };
 
-  const openReferenceComposer = async () => {
-    if (busy || kind !== "photo") return;
+  /** Studio with this photo (designed around, or as a reference) or this clip (branded). */
+  const openReferenceComposer = async (mode: "design" | "reference") => {
+    if (busy || (kind !== "photo" && kind !== "video")) return;
     setBusy("save");
     try {
       const asset = await ensureUpload();
-      if (!asset) throw new Error("Choose a photo first.");
-      openComposer({
-        type: "image",
-        brief: [title, description, direction].filter(Boolean).join("\n\n"),
-        referenceAssetIds: [asset.id],
-      });
+      if (!asset)
+        throw new Error(kind === "video" ? "Choose a clip first." : "Choose a photo first.");
+      const brief = [title, description, direction].filter(Boolean).join("\n\n");
+      if (kind === "video")
+        openComposer({
+          type: "video",
+          brief,
+          extraControls: { videoMode: "brand", sourceVideoAssetIds: [asset.id] },
+        });
+      else
+        openComposer({
+          type: "image",
+          brief,
+          referenceAssetIds: [asset.id],
+          ...(mode === "design" ? { referenceMode: "design" as const } : {}),
+        });
       onClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open this photo.");
@@ -570,22 +581,37 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
                 </div>
               </section>
 
-              {kind === "photo" && (file || storedPath) && (
+              {(kind === "photo" || kind === "video") && (file || storedPath) && (
                 <div className="space-y-2 rounded-xl border border-border p-3">
                   <p className="text-sm font-medium">
-                    Want to create something new with this photo?
+                    {kind === "video"
+                      ? "Want your design on this clip?"
+                      : "Want a designed post with this photo?"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Use it as source material in Studio. Uploading and choosing settings are free;
-                    the Generate button shows the price.
+                    {kind === "video"
+                      ? "Mellox adds an opening design, your logo and a closing card. The footage stays as filmed."
+                      : "Mellox adds words and design around it. Your photo stays exactly as it is."}{" "}
+                    The Generate button shows the price.
                   </p>
-                  <Button
-                    variant="outline"
-                    disabled={!!busy}
-                    onClick={() => void openReferenceComposer()}
-                  >
-                    Use as reference in Studio
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={!!busy}
+                      onClick={() => void openReferenceComposer("design")}
+                    >
+                      {kind === "video" ? "Brand this clip" : "Design with this"}
+                    </Button>
+                    {kind === "photo" && (
+                      <Button
+                        variant="ghost"
+                        disabled={!!busy}
+                        onClick={() => void openReferenceComposer("reference")}
+                      >
+                        Use as reference
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -2,7 +2,7 @@
 // Handles: text/code, PDF, DOCX, XLSX/XLS/CSV, and images (via server vision).
 import { authedFetch } from "./authed-fetch";
 
-export type AttachmentKind = "text" | "pdf" | "docx" | "xlsx" | "image" | "other";
+export type AttachmentKind = "text" | "pdf" | "docx" | "xlsx" | "image" | "video" | "other";
 
 export type Attachment = {
   id: string;
@@ -19,6 +19,13 @@ export type Attachment = {
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB
 export const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
+/** A clip is source footage for Studio, never read into the chat, so it has its own limit. */
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const CLIP_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+
+export function maxBytesFor(file: File): number {
+  return classify(file) === "video" ? MAX_VIDEO_BYTES : MAX_FILE_BYTES;
+}
 export const MAX_TEXT_CHARS = 60_000; // per file, keeps prompt sane
 
 const TEXT_EXT = new Set([
@@ -96,6 +103,7 @@ export function classify(file: File): AttachmentKind {
   const name = file.name.toLowerCase();
   const ext = name.includes(".") ? name.split(".").pop()! : "";
   if (mime.startsWith("image/")) return "image";
+  if (CLIP_TYPES.includes(mime)) return "video";
   if (mime === "application/pdf" || ext === "pdf") return "pdf";
   if (mime.includes("wordprocessingml") || ext === "docx") return "docx";
   if (
@@ -222,9 +230,11 @@ export async function extractAttachment(
   file: File,
 ): Promise<{ text: string; preview?: string; kind: AttachmentKind }> {
   const kind = classify(file);
-  if (file.size > MAX_FILE_BYTES) {
-    throw new Error(`File exceeds ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB limit`);
+  if (file.size > maxBytesFor(file)) {
+    throw new Error(`File exceeds ${Math.floor(maxBytesFor(file) / 1024 / 1024)}MB limit`);
   }
+  // A clip is only ever handed to Studio as footage.
+  if (kind === "video") return { text: "", kind };
   if (kind === "image") {
     const preview = await readAsDataURL(file);
     let text = "";
@@ -249,13 +259,16 @@ export async function extractAttachment(
 
 // Build a compact context block from attachments for injection into the chat.
 export function attachmentsToContext(atts: Attachment[]): string {
-  const ready = atts.filter((a) => a.status === "ready" && (a.text?.trim() || a.preview));
+  const ready = atts.filter(
+    (a) => a.status === "ready" && (a.text?.trim() || a.preview || a.kind === "video"),
+  );
   if (!ready.length) return "";
   const parts: string[] = ["# Attached files (verbatim contents)"];
   for (const a of ready) {
     parts.push("");
     parts.push(`## ${a.name} · ${a.kind.toUpperCase()} · ${niceSize(a.size)}`);
     if (a.text?.trim()) parts.push(a.text.trim());
+    else if (a.kind === "video") parts.push("(video clip attached)");
     else if (a.kind === "image") parts.push("(image attached — described above)");
   }
   return parts.join("\n");

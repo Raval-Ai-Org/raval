@@ -275,6 +275,37 @@ export function isChatToolsEnabled(workspaceId?: string): boolean {
   return !isFalsy((process.env.FEATURE_FLAG_CHAT_TOOLS_ENABLED ?? "").trim().toLowerCase());
 }
 
+/**
+ * Designing with a brand's own photos (src/lib/studio/photo-design/). On
+ * unless set to "false"; `FEATURE_FLAG_PHOTO_DESIGN_ENABLED_WS_<id>` overrides
+ * it for one workspace. Off means a design request answers 404; "post as is"
+ * still works.
+ */
+export function isPhotoDesignEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_PHOTO_DESIGN_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_PHOTO_DESIGN_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Branding a brand's own video clips and turning its photos into a recap
+ * video (src/lib/studio/clip-edit.ts). On unless set to "false";
+ * `FEATURE_FLAG_CLIP_EDIT_ENABLED_WS_<id>` overrides it for one workspace.
+ */
+export function isClipEditEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_CLIP_EDIT_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_CLIP_EDIT_ENABLED ?? "").trim().toLowerCase());
+}
+
 export function isProofEngineEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_${workspaceId}`] ?? "")

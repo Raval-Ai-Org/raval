@@ -41,11 +41,15 @@ export function creationPointsFor(
   if (isVariationsRequest(input)) return 2 * variationCount(input.controls);
   const c = input.controls;
   const kept = c.referenceAssetIds?.length && (c.referenceMode ?? "preserve") === "preserve";
+  // A design with the brand's photos is a picture, asked for or not.
+  const designed = !!c.referenceAssetIds?.length && c.referenceMode === "design";
   switch (input.type) {
     case "video":
+      // The brand's own footage or photos cost a few points; animated photos use video credits.
+      if (c.videoMode === "brand" || (c.videoMode === "recap" && c.recapMotion !== "ai")) return 3;
       return c.videoPreview ? 2 : null;
     case "social":
-      return kept || !c.includeImage ? 1 : 2;
+      return designed ? 2 : kept || !c.includeImage ? 1 : 2;
     case "image":
     case "ad":
       return kept ? 1 : 2;

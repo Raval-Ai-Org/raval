@@ -7,30 +7,31 @@ Audience, Competitors, Market) and the marketing strategy written from them.
 
 ## Where things are
 
-| What                   | Where                                                            |
-| ---------------------- | ---------------------------------------------------------------- |
-| Route                  | `/w/<id>/app/brain?s=<section>&t=<place>` (`brainPath`)          |
-| Window and tabs        | `src/components/app/BrainRoute.tsx`, `brain/BrainShell.tsx`      |
-| Marks                  | `brain/BrainMark.tsx` (`BrainMark`, `BrainIcon`)                 |
-| Home                   | `brain/BrainHome.tsx` (presentational)                           |
-| Today (Coach briefing) | `brain/home/TodayBrief.tsx`                                      |
-| Strategy               | `brain/strategy/StrategyScreen.tsx` (+ `StrategyPanel`)          |
-| Look & voice           | `brain/brand/look/LookEditor.tsx`                                |
-| Coach pill             | `brain/BrainPulse.tsx`                                           |
-| Data hooks             | `brain/use-brain.ts`                                             |
-| Overview (pure)        | `src/lib/brain/brain.ts`                                         |
-| Overview (server)      | `src/server/brain/overview.server.ts`, `src/server/fns/brain.ts` |
-| Strategy (pure)        | `src/lib/strategy/` (`contracts.ts`, `ground.ts`)                |
-| Strategy (server)      | `src/server/strategy/`, `src/server/fns/strategy.ts`             |
-| Brand look (pure)      | `src/lib/brand-look/`                                            |
-| Brand look (server)    | `src/server/brand-look/resolve.server.ts`                        |
-| Lab                    | `/brain-lab` (`brain/BrainLab.tsx`), development only            |
+| What                   | Where                                                              |
+| ---------------------- | ------------------------------------------------------------------ |
+| Route                  | `/w/<id>/app/brain?s=<section>&t=<place>` (`brainPath`)            |
+| Window and tabs        | `src/components/app/BrainRoute.tsx`, `brain/BrainShell.tsx`        |
+| Marks                  | `brain/BrainMark.tsx` (`BrainMark`, `BrainIcon`)                   |
+| Home                   | `brain/BrainHome.tsx` (presentational)                             |
+| Today (Coach briefing) | `brain/home/TodayBrief.tsx`                                        |
+| Strategy               | `brain/strategy/StrategyScreen.tsx` (+ `StrategyPanel`)            |
+| Look, voice, media     | Inspo, `src/components/app/inspo/` ([ADR-0037](adr/0037-inspo.md)) |
+| Coach pill             | `brain/BrainPulse.tsx`                                             |
+| Data hooks             | `brain/use-brain.ts`                                               |
+| Overview (pure)        | `src/lib/brain/brain.ts`                                           |
+| Overview (server)      | `src/server/brain/overview.server.ts`, `src/server/fns/brain.ts`   |
+| Strategy (pure)        | `src/lib/strategy/` (`contracts.ts`, `ground.ts`)                  |
+| Strategy (server)      | `src/server/strategy/`, `src/server/fns/strategy.ts`               |
+| Brand look (pure)      | `src/lib/brand-look/`                                              |
+| Brand look (server)    | `src/server/brand-look/resolve.server.ts`                          |
+| Lab                    | `/brain-lab` (`brain/BrainLab.tsx`), development only              |
 
 ## Sections
 
 - `home` — tabs `overview` (default), `today`, `notes`.
 - `brand` — `t` is a Brand DNA tile: `logo`, `identity`, `typography`, `colors`,
-  `look`, `voice`, `headline`, `audience`, `assets`, `notes`.
+  `voice`, `headline`, `audience`, `notes`, `products`, `goal`. `look` and
+  `assets` moved to Inspo and redirect there.
 - `audience` — `t=customers` shows the customer notes kept on Brand DNA.
 - `competitors`, `market`, `strategy`.
 
@@ -63,7 +64,8 @@ Rules that must hold:
 `visual`, `video`. `resolveLook(dna)` merges it with Brand DNA's colours, fonts,
 voice, logo and rules into the `BrandLook` every generator reads. A workspace
 with no look behaves exactly like plain Brand DNA (`customized: false`, no style
-block in prompts).
+block in prompts). It is edited in Inspo (`inspoPath(id, "post" | "video" |
+"voice")`).
 
 ## Updates and the Coach pill
 

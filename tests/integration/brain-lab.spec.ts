@@ -90,16 +90,5 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByTestId("lab-last")).toHaveText("open:home");
       await noSidewaysScroll(page);
     });
-
-    test("a starter look changes the preview's settings", async ({ page }) => {
-      await openScene(page, "look");
-      const frame = page.getByTestId("brain-lab-frame");
-      const bold = frame.getByRole("button", { name: "Bold", exact: true }).first();
-      await expect(bold).toBeVisible({ timeout: 30_000 });
-      await bold.click();
-      await expect(bold).toHaveAttribute("aria-pressed", "true");
-      await expect(frame.getByRole("button", { name: "Reset to plain brand" })).toBeVisible();
-      await noSidewaysScroll(page);
-    });
   });
 }

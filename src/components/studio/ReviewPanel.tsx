@@ -70,6 +70,7 @@ import { useAudienceEnabled } from "@/components/app/audience/hooks";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { ScriptVideoActions } from "./ScriptVideoActions";
 import { EditChat } from "./EditChat";
+import { MakeMoreFrom } from "./MakeMoreFrom";
 import { VersionStrip } from "./VersionStrip";
 
 export type ReviewRow = {
@@ -340,6 +341,7 @@ export function ReviewPanel({
     controls: session.controls,
     parentJobId: job.id,
     refine: { instruction: "Remake visual", target: "media" },
+    intent: { brief: session.brief },
   });
 
   const edit = (next: StudioJobOutput) => {
@@ -1555,8 +1557,20 @@ export function ReviewPanel({
             <div className="mt-5 hidden @5xl/composer:flex">{actions}</div>
           </div>
 
-          {session.type === "story" ||
-          (["video", "social", "image", "carousel"].includes(session.type) && rows.length) ? (
+          {job.status === "succeeded" && job.content_item_ids?.[0] ? (
+            <InspectorSection title="Make more from this">
+              <MakeMoreFrom
+                session={session}
+                contentItemId={job.content_item_ids[0]}
+                title={draft.title ?? job.title}
+                media={mediaReady ? media : null}
+                disabled={revising || dirty || editing}
+              />
+            </InspectorSection>
+          ) : null}
+
+          {/* Other formats make a Story through "Make more from this". */}
+          {session.type === "story" || (session.type === "video" && rows.length) ? (
             <InspectorSection title={session.type === "story" ? "About Stories" : "Stories"}>
               <StoryNotes
                 workspaceId={session.workspaceId}

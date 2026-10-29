@@ -580,6 +580,36 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.066,
     routes: ["studio.captions"],
   },
+  // Designing with the brand's own photos: reading the photos, one design
+  // layer (a second if the first can't hold them) and the visual check.
+  photo_design: {
+    credits: 35,
+    label: "Design with your photos",
+    unit: "copy + designed picture",
+    feature: "studio",
+    expectedCostUsd: 0.09,
+    routes: ["studio.photo-read"],
+  },
+  // The brand's own clips (or photos with camera moves) put together into a
+  // video: reading frames, the opening design, the end card, and hearing the
+  // sound once for captions. The footage is the brand's, so no video units
+  // are used.
+  clip_brand: {
+    credits: 45,
+    label: "Brand your clips",
+    unit: "branded video",
+    feature: "studio",
+    expectedCostUsd: 0.125,
+    routes: ["studio.photo-read", "studio.transcribe"],
+  },
+  photo_recap: {
+    credits: 45,
+    label: "Recap from your photos",
+    unit: "recap video",
+    feature: "studio",
+    expectedCostUsd: 0.12,
+    routes: ["studio.photo-read"],
+  },
   carousel: {
     credits: 30,
     label: "Carousel",

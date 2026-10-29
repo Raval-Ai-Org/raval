@@ -141,12 +141,18 @@ export function OnboardingLab() {
   });
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  const [incoming, setIncoming] = useState<ProductCandidate[]>([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setStep(params.get("step") ?? "goals");
     if (params.get("empty") === "1") setProducts([]);
+    // `?saving=1`: what the scan found is still being kept.
+    if (params.get("saving") === "1") {
+      setProducts(PRODUCTS.slice(0, 1));
+      setIncoming(CANDIDATES.slice(1));
+    }
     setReady(true);
   }, []);
 
@@ -206,7 +212,7 @@ export function OnboardingLab() {
                   status="loading"
                   progress={{ stage: "search", message: "", pct: 62 }}
                   phase={2}
-                  discoveries={{}}
+                  discoveries={{ products: { products: CANDIDATES } }}
                   reduce
                   onRetry={record("retry")}
                 />
@@ -231,10 +237,12 @@ export function OnboardingLab() {
         {step === "products" && (
           <ProductsStep
             brandName="Northwind"
-            candidates={products.length ? CANDIDATES : []}
+            siteHost="northwind.example"
+            scanning={false}
+            incoming={incoming}
+            failed={[]}
             products={products}
             loading={false}
-            importing={false}
             busy={{}}
             lowResolution={{ [PRODUCTS[0].id]: true }}
             adding={false}
@@ -246,8 +254,8 @@ export function OnboardingLab() {
             }
             reduce
             headingRef={headingRef}
-            onImport={record("import")}
-            onDismissCandidates={record("dismiss")}
+            onRetry={record("retry")}
+            onRemoveFound={() => setProducts((list) => list.filter((p) => p.source === "manual"))}
             onAdd={(d: ProductDraft) => {
               setLast(`add:${d.kind}:${d.name}`);
               setProducts((list) => [

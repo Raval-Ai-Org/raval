@@ -31,6 +31,7 @@ const CandidateSchema = z.object({
   images: z.array(z.string().url().max(1200)).max(3).default([]),
   source: z.enum(["scan", "shopify"]),
   fingerprint: z.string().min(1).max(200),
+  kind: z.enum(["product", "service"]).optional(),
 });
 
 export const listProducts = createServerFn({ method: "POST" })

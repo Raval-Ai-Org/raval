@@ -131,13 +131,27 @@ Brand Styles and the Brand Kit are gone — never add them back).
     column is a copy; the workspace row is the source.
   - Nothing rebuilds or spends by itself. The first strategy is included; a
     rebuild is `strategy_rebuild` through `runMetered`.
-- **One look per brand, on Brand DNA** (`dna.look`, edited in Brand → Look &
-  voice). Pure core in `src/lib/brand-look/` (`parseLook`, `resolveLook`, prompt
+- **One look per brand, on Brand DNA** (`dna.look`, edited in Inspo — see
+  below). Pure core in `src/lib/brand-look/` (`parseLook`, `resolveLook`, prompt
   blocks, `checkWritingConformance`, fonts).
   - **Generators get the look only through** `loadBrandLook` / `lookTextFor`
     (`src/server/brand-look/resolve.server.ts`), with the verified workspace id.
     There is no style id anywhere; never add a picker or a second look.
   - No look set means plain Brand DNA (`customized: false`, no style block).
+- **Inspo** ([ADR-0037](docs/adr/0037-inspo.md)) is where the look is edited:
+  sidebar → Inspo, `/w/<id>/app/inspo?s=board|post|video|voice|media`
+  (`inspoPath`, `open:inspo`), the one look-related exception to "no sidebar
+  entry". UI `src/components/app/inspo/` (`InspoScreen` is presentational,
+  `/inspo-lab` + `tests/integration/inspo-lab.spec.ts`), pure rules
+  `src/lib/inspo/`.
+  - Board and Media are `brand_visual_sources` rows (Love/`style`, Avoid,
+    Product, Person) through `POST /api/brand-visuals/upload`; Post look,
+    Video look and Voice write `dna.look` via `tidyLook`. No new table.
+  - "Learn my style" is the existing paid analysis with the price on the
+    button; a direction is used only after "Use this". Style strength and the
+    voice sample are pure and free.
+  - Brand DNA keeps one Inspo tile; `?t=look` / `?t=assets` / `/brand-kit`
+    land in Inspo. `dna.assets` is not edited any more.
 - **One scan fills three brains.** A Brand DNA scan (`BrandDnaSurface`) then
   builds the audience groups (`buildAudience`) and looks for competitors
   (`bootstrapCompetitors`) from what it found; `ScanSteps` shows the three
@@ -234,8 +248,14 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
     first KPI and the weekly pace. Autopilot proposes its pace and channels.
 - **Products are rows; photos are assets** (`workspace_products`).
   - Pure rules are in `src/lib/products/`, the server in `src/server/products/`.
-  - Discovery reads the site's own product data (Shopify feed, schema.org
-    Product) through `safeFetch`, with no model call, alongside the scan.
+  - Discovery starts with the scan and reads the site's own data through
+    `safeFetch` (Shopify / WooCommerce feeds, product and service pages,
+    sitemaps, schema.org Product / Service / OfferCatalog), plus the Brand DNA
+    call's `catalog` list, which `groundCatalog` keeps only where the site says
+    so. No extra model call.
+  - Found items are kept by themselves as they arrive (`autoKeep`); a person
+    removes what they don't sell. `importCandidates` only adds, so a removed
+    product never comes back.
   - Photos are `assets` rows checked against the workspace; never use a URL
     or path from the browser. Upload through `POST /api/products/photos`.
   - `BrandDna.products` is a summary of the catalogue. It is only rewritten
@@ -792,6 +812,14 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   - The ideas deck (`IdeaSwipeDeck.tsx`, pure `src/lib/studio/idea-deck.ts`)
     keeps saved and skipped ideas per browser only. More ideas is always a
     person's click.
+- **Make more from this** (`src/lib/studio/repurpose.ts`, pure): a finished
+  piece offers the formats it can become (`repurposeTargets`), in review
+  (`MakeMoreFrom.tsx`) and on the chat's Studio card. A click opens a draft
+  with `sourceContentId` (shown as "Made from …" in the prompt box); nothing
+  is made until Generate. In chat, "turn this into a carousel" right after a
+  piece (`detectRepurposeIntent`) starts from that piece. The server reads the
+  source by id against the job's workspace and every text prompt keeps its
+  facts (`sourceSection`). A picture becomes a video with the picture kept.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style
@@ -801,6 +829,40 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   repeat the previous carousel.
 - Live check: `tests/live/studio-carousel-trends.live.ts` (collecting behind
   `TRENDS_LIVE_REFRESH=yes`).
+
+## Own photos and clips (design with the brand's real media)
+
+Full reference: [docs/studio/photo-design.md](docs/studio/photo-design.md),
+decision record [ADR-0036](docs/adr/0036-own-photos-and-clips.md). Flags
+`FEATURE_FLAG_PHOTO_DESIGN_ENABLED` / `FEATURE_FLAG_CLIP_EDIT_ENABLED` (each
+with `_WS_<id>`), on unless `false`.
+
+- **Photos are composited, never redrawn**, unless the person chose "Blend it
+  more". The image model draws a design layer with key-colour windows
+  (`src/lib/studio/photo-design/`); code places the real photos
+  (`src/server/studio/photo-design/compose.server.ts`).
+- **No template fallback.** A layer that fails the pure checks (`checks.ts`)
+  is asked for once more with the reason, then the piece fails plainly.
+- **The model never draws a logo or a person**; only the real logo, placed by
+  code.
+- `resolvePhotoMode` decides the mode once, before pricing. "Post as is" with
+  words asked for, a picture edit or versions becomes a design.
+- **Clips and recaps** (`src/server/studio/clip-edit/`, FFmpeg):
+  - the footage is kept;
+  - the render runs in `after()` and parks its result in the cache for
+    `advanceStudioJob`;
+  - no cron job;
+  - animated recap photos are `motion:<n>` slots, never linked to the post;
+  - **which part of a clip is used is code's decision** (`src/lib/studio/smart-cut.ts`):
+    FFmpeg measures scene changes, black/frozen footage and pauses, the minute
+    is shared so every clip appears, and pieces join with one short `xfade`.
+    No Python and no second toolchain;
+  - **captions only when someone talks**, heard once per sound (cached by
+    hash) by local whisper.cpp (`WHISPER_CPP_PATH` + `WHISPER_MODEL_PATH`) or
+    route `studio.transcribe`; cues, colours and position are pure
+    (`src/lib/studio/captions.ts`), words heard in silence are dropped, and a
+    failure leaves captions out, never the video;
+  - the brand's own sound is brought to -14 LUFS.
 
 ## Backlink Growth (buying real placements)
 

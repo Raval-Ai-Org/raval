@@ -45,6 +45,8 @@ export type StudioSession = {
   template?: string;
   /** Repurposing: the content item this piece is made from. */
   sourceContentId?: string;
+  /** What the composer shows for it ("Made from your carousel …"); display only. */
+  sourceLabel?: string;
   sourceScript?: ScriptOutput;
   controls: StudioControls;
   /** Current job (latest generate / regenerate / refine). */
@@ -314,10 +316,17 @@ export function openComposer(
     template?: string;
     platforms?: PlatformId[];
     sourceContentId?: string;
+    sourceLabel?: string;
     sourceScript?: ScriptOutput;
     referenceAssetIds?: string[];
     referenceMode?: StudioControls["referenceMode"];
     durationSec?: number;
+    ratio?: StudioControls["ratio"];
+    /** Photo fidelity, clip and recap settings carried from chat or a place. */
+    extraControls?: Pick<
+      StudioControls,
+      "photoFidelity" | "videoMode" | "sourceVideoAssetIds" | "recapMotion"
+    >;
   } = {},
 ): string | null {
   hydrate();
@@ -352,6 +361,7 @@ export function openComposer(
         ideaSource: opts.ideaSource,
         template: opts.template,
         sourceContentId: opts.sourceContentId,
+        sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
         sourceScript: opts.sourceScript,
         type,
         controls:
@@ -373,6 +383,7 @@ export function openComposer(
         ideaSource: opts.ideaSource,
         template: opts.template,
         sourceContentId: opts.sourceContentId,
+        sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
         sourceScript: opts.sourceScript,
         controls: defaultControls(type, opts.platforms),
         job: null,
@@ -396,6 +407,8 @@ export function openComposer(
       ...session.controls,
       durationSec: Math.min(60, Math.max(4, opts.durationSec)),
     };
+  if (opts.ratio) session.controls = { ...session.controls, ratio: opts.ratio };
+  if (opts.extraControls) session.controls = { ...session.controls, ...opts.extraControls };
   const others = state.sessions
     .filter((s) => s.id !== session.id)
     .map((s) => (s.window === "minimized" ? s : { ...s, window: "minimized" as const }));
@@ -417,7 +430,14 @@ export function startInBackground(opts: {
   platforms?: PlatformId[];
   referenceAssetIds?: string[];
   referenceMode?: StudioControls["referenceMode"];
+  extraControls?: Pick<
+    StudioControls,
+    "photoFidelity" | "videoMode" | "sourceVideoAssetIds" | "recapMotion"
+  >;
   origin?: StudioSession["origin"];
+  /** A finished piece to start from (checked against the workspace on the server). */
+  sourceContentId?: string;
+  sourceLabel?: string;
 }): string | null {
   hydrate();
   const brief = opts.brief.trim().slice(0, 4000);
@@ -430,6 +450,8 @@ export function startInBackground(opts: {
     step: "intent",
     brief,
     goal: opts.goal,
+    sourceContentId: opts.sourceContentId,
+    sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
     controls: {
       ...defaultControls(opts.type, opts.platforms),
       ...(opts.referenceAssetIds?.length
@@ -439,6 +461,7 @@ export function startInBackground(opts: {
             ...(opts.type === "social" ? { includeImage: true } : {}),
           }
         : {}),
+      ...opts.extraControls,
     },
     job: null,
     lastGood: null,
@@ -538,6 +561,8 @@ export function updateSession(
       | "type"
       | "error"
       | "uploadingReference"
+      | "sourceContentId"
+      | "sourceLabel"
     >
   >,
 ) {

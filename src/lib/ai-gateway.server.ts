@@ -55,6 +55,7 @@ export type ContentPart = {
   type: string;
   text?: string;
   image_url?: { url: string };
+  input_audio?: { data: string; format: LlmAudioInput["format"] };
   cache_control?: { type: "ephemeral" };
 };
 
@@ -897,13 +898,38 @@ export type LlmImageInput = {
   data: string;
 };
 
+/** Sound heard by a model that takes audio (OpenRouter `input_audio`, base64 only). */
+export type LlmAudioInput = {
+  format: "mp3" | "wav";
+  /** Base64 data, no data: prefix. */
+  data: string;
+};
+
 /** Per-image and per-request limits that every tier accepts. */
 export const LLM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const LLM_MAX_IMAGES = 20;
+/** About ten minutes of the small mono MP3 Studio sends. */
+export const LLM_MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 /** llmText callers assemble and cap their own prompts; this only stops abuse. */
 const PROMPT_MAX_INPUT_CHARS = 400_000;
 
-function userContent(user: string, images?: LlmImageInput[]): string | ContentPart[] {
+function userContent(
+  user: string,
+  images?: LlmImageInput[],
+  audio?: LlmAudioInput[],
+): string | ContentPart[] {
+  if (audio?.length) {
+    if (audio.length > 1 || images?.length) {
+      throw new AiGatewayError(400, "Send one sound file on its own.", "too_many_inputs");
+    }
+    if (Math.floor((audio[0].data.length * 3) / 4) > LLM_MAX_AUDIO_BYTES) {
+      throw new AiGatewayError(400, "The sound is too long to transcribe.", "audio_too_large");
+    }
+    return [
+      { type: "input_audio", input_audio: { data: audio[0].data, format: audio[0].format } },
+      { type: "text", text: user },
+    ];
+  }
   if (!images?.length) return user;
   if (images.length > LLM_MAX_IMAGES) {
     throw new AiGatewayError(400, "Too many images for one request.", "too_many_images");
@@ -928,6 +954,8 @@ export type LlmTextOpts = {
   user: string;
   /** Images shown to the model before the user text (vision). */
   images?: LlmImageInput[];
+  /** One sound file heard before the user text (the route's model must take audio). */
+  audio?: LlmAudioInput[];
   /**
    * Total output ceiling (reasoning + answer). The route plan's ceiling is the
    * floor, so a caller only raises it.
@@ -966,7 +994,7 @@ export async function llmText(opts: LlmTextOpts): Promise<LlmTextResult> {
     route: opts.route,
     messages: [
       { role: "system", content: opts.system },
-      { role: "user", content: userContent(opts.user, opts.images) },
+      { role: "user", content: userContent(opts.user, opts.images, opts.audio) },
     ],
     task: "generate",
     // System + user prompts are built and bounded by their callers.

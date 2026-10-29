@@ -28,7 +28,7 @@ import { ProductsStep } from "@/components/onboarding/ProductsStep";
 import { ChannelsStep } from "@/components/onboarding/ChannelsStep";
 import { FirstWinStep } from "@/components/onboarding/FirstWinStep";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
-import { normalizeUrl, validUrl } from "@/components/onboarding/url";
+import { hostOf, normalizeUrl, validUrl } from "@/components/onboarding/url";
 import { useOnboardingProducts } from "@/components/onboarding/use-onboarding-products";
 import { useFirstPosts } from "@/components/onboarding/use-first-posts";
 import { emptyDna, flushBrandDnaFor, saveBrandDnaFor, type BrandDna } from "@/hooks/use-brand-dna";
@@ -166,6 +166,12 @@ function Onboarding() {
     () => discoveries.products?.products ?? result?.productCandidates ?? [],
     [discoveries.products, result?.productCandidates],
   );
+  // What the scan finds is kept as it arrives, while the person sets their
+  // goal, so the products step is already filled in when they get there.
+  const { autoKeep } = catalogue;
+  useEffect(() => {
+    if (mode === "site" && candidates.length) autoKeep(candidates);
+  }, [mode, candidates, autoKeep]);
 
   const flow: FlowState = {
     mode,
@@ -770,21 +776,28 @@ function Onboarding() {
                 )}
                 {step === "products" && (
                   <ProductsStep
-                    key={candidates.map((c) => c.fingerprint).join("|")}
                     brandName={brandName}
-                    candidates={catalogue.candidatesDismissed ? [] : catalogue.pending(candidates)}
+                    siteHost={mode === "site" && websiteUrl ? hostOf(websiteUrl) : null}
+                    scanning={mode === "site" && scanStatus === "loading"}
+                    incoming={catalogue.incoming}
+                    failed={catalogue.failed}
                     products={catalogue.products}
                     loading={catalogue.loading}
-                    importing={catalogue.importing}
                     busy={catalogue.busy}
                     lowResolution={catalogue.lowResolution}
                     adding={catalogue.adding}
                     error={catalogue.error}
-                    blockedReason={saving ? "Saving…" : blockedReason("products", flow)}
+                    blockedReason={
+                      saving
+                        ? "Saving…"
+                        : !catalogue.products.length && catalogue.incoming.length
+                          ? "Adding what we found on your site…"
+                          : blockedReason("products", flow)
+                    }
                     reduce={reduce}
                     headingRef={headingRef}
-                    onImport={(picked) => void catalogue.importCandidates(picked)}
-                    onDismissCandidates={catalogue.dismissCandidates}
+                    onRetry={catalogue.retryFailed}
+                    onRemoveFound={() => void catalogue.removeFound()}
                     onAdd={(d) => void catalogue.add(d)}
                     onSave={(id, d) => void catalogue.save(id, d)}
                     onArchive={(id) => void catalogue.archive(id)}

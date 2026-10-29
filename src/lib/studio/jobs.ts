@@ -81,10 +81,30 @@ export const ControlsSchema = z.object({
   /** Build a still storyboard before spending video credits. */
   videoPreview: z.boolean().optional(),
   campaign: z.string().trim().max(120).optional(),
-  /** Explicit source photos selected for this generation, checked against this workspace. */
-  referenceAssetIds: z.array(z.string().uuid()).max(4).optional(),
-  /** Whether source photos stay intact, receive a targeted edit, or only inspire a new image. */
-  referenceMode: z.enum(["preserve", "edit", "inspire"]).optional(),
+  /**
+   * Explicit source photos selected for this generation, checked against this
+   * workspace. Up to six when designing with them, four otherwise.
+   */
+  referenceAssetIds: z.array(z.string().uuid()).max(6).optional(),
+  /**
+   * Whether source photos stay intact ("preserve"), get a design built around
+   * them ("design", src/lib/studio/photo-design/), receive a targeted edit, or
+   * only inspire a new image.
+   */
+  referenceMode: z.enum(["preserve", "design", "edit", "inspire"]).optional(),
+  /** Design mode: keep the photos exact (default) or let the model blend them in. */
+  photoFidelity: z.enum(["exact", "blend"]).optional(),
+  /**
+   * Video: make a new one (default), brand the person's own clips, or make a
+   * recap from their photos (src/lib/studio/clip-edit.ts).
+   */
+  videoMode: z.enum(["generate", "brand", "recap"]).optional(),
+  /** Brand mode: the person's own clips, checked against this workspace. */
+  sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
+  /** Brand mode: captions of what is said (absent means on). */
+  clipCaptions: z.boolean().optional(),
+  /** Recap mode: camera moves over the exact photos, or AI motion per photo. */
+  recapMotion: z.enum(["camera", "ai"]).optional(),
   /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
   productId: z.string().uuid().optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
@@ -225,10 +245,39 @@ export const CreateJobSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["controls", "referenceAssetIds"],
-        message:
-          "Choose one photo to keep unchanged, or switch to Edit or Inspire for multiple references.",
+        message: "Choose one photo to post as is, or design with several photos instead.",
       });
     }
+    if (
+      input.controls.referenceMode !== "design" &&
+      input.controls.videoMode !== "recap" &&
+      (input.controls.referenceAssetIds?.length ?? 0) > 4
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose up to four photos, or design with up to six.",
+      });
+    if (
+      input.type === "video" &&
+      input.controls.videoMode === "brand" &&
+      !input.controls.sourceVideoAssetIds?.length
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "sourceVideoAssetIds"],
+        message: "Add at least one of your clips to brand.",
+      });
+    if (
+      input.type === "video" &&
+      input.controls.videoMode === "recap" &&
+      (input.controls.referenceAssetIds?.length ?? 0) < 2
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose at least two photos for a recap.",
+      });
     if (
       (input.type === "video" ||
         (input.type === "story" && input.controls.storyMode === "video")) &&

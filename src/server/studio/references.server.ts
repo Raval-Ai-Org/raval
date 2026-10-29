@@ -20,11 +20,12 @@ export async function resolveStudioReferences(
   client: SupabaseClient,
   workspaceId: string,
   assetIds: string[] = [],
-  limit: 4 | 40 = 4,
+  /** Six when designing with photos (the job schema keeps other modes to four). */
+  limit: 6 | 40 = 6,
 ): Promise<StudioReference[]> {
   const ids = [...new Set(assetIds)];
   if (!ids.length) return [];
-  if (ids.length > limit) throw new HttpError(400, "Choose up to four reference photos.");
+  if (ids.length > limit) throw new HttpError(400, "Choose up to six photos.");
   const { data, error } = await client
     .from("assets")
     .select("id,filename,storage_path,mime_type,status,asset_type")
@@ -57,6 +58,42 @@ export async function resolveStudioReferences(
       };
     }),
   );
+}
+
+const CLIP_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+
+/** The brand's own clips for "Brand my clips", by asset id, checked like photos. */
+export async function resolveStudioClips(
+  client: SupabaseClient,
+  workspaceId: string,
+  assetIds: string[] = [],
+): Promise<Pick<StudioReference, "id" | "filename" | "mimeType" | "storagePath">[]> {
+  const ids = [...new Set(assetIds)];
+  if (!ids.length) return [];
+  if (ids.length > 5) throw new HttpError(400, "Choose up to five clips.");
+  const { data, error } = await client
+    .from("assets")
+    .select("id,filename,storage_path,mime_type,status,asset_type")
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  if (error) throw new HttpError(503, "Could not load your clips.");
+  return ids.map((id) => {
+    const asset = data?.find((row) => row.id === id);
+    if (
+      !asset ||
+      asset.asset_type !== "video" ||
+      asset.status !== "ready" ||
+      !CLIP_TYPES.includes(asset.mime_type) ||
+      !isWorkspaceStoragePath(asset.storage_path, workspaceId)
+    )
+      throw new HttpError(400, "A clip is unavailable in this workspace. Choose it again.");
+    return {
+      id,
+      filename: asset.filename,
+      mimeType: asset.mime_type,
+      storagePath: asset.storage_path!,
+    };
+  });
 }
 
 /** Bound vision input size without sending untrusted remote URLs to the model. */

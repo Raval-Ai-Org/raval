@@ -11,7 +11,12 @@ type Clip = VideoSegment & {
   videoUrl?: string;
   costUsd?: number | null;
   submitting?: boolean;
+  /** Times this clip was submitted again after an outage-type failure. */
+  retries?: number;
 };
+
+/** A clip that ended with an outage-type failure is made again this many times. */
+export const CLIP_RETRIES = 2;
 export type CompositionState = {
   request: VideoRenderRequest;
   clips: Clip[];
@@ -182,6 +187,16 @@ export function withVideoComposition(
             if (clip.videoUrl || !clip.taskId) continue;
             const checked = await base.check(clip.taskId, clip.provider);
             if (checked.state === "failed") {
+              // The clip's task has ended, so submitting it again can never
+              // run it twice. Only an outage-type failure is retried; a
+              // refusal or anything else still ends the whole video.
+              if (checked.retryable && (clip.retries ?? 0) < CLIP_RETRIES) {
+                clip.taskId = undefined;
+                clip.provider = undefined;
+                clip.retries = (clip.retries ?? 0) + 1;
+                await save();
+                return pending();
+              }
               row.state.error = checked.message;
               break;
             }

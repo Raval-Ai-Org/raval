@@ -3,17 +3,25 @@
 import { useState, type Ref } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Camera,
   Check,
+  Globe,
   Plus,
+  RefreshCw,
   ShoppingBag,
   Spinner,
   Wrench,
 } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
-import type { Product, ProductCandidate, ProductKind } from "@/lib/products/catalog";
+import {
+  foundLine,
+  type Product,
+  type ProductCandidate,
+  type ProductKind,
+} from "@/lib/products/catalog";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { ProductCard, ProductForm, draftFrom, type ProductDraft } from "./ProductCard";
@@ -21,11 +29,16 @@ import { Eyebrow } from "./ui";
 
 export type ProductsStepProps = {
   brandName: string;
-  /** What the scan found and the person hasn't kept or dropped yet. */
-  candidates: ProductCandidate[];
+  /** The site the scan read, or null when the brand has none. */
+  siteHost: string | null;
+  /** True while the scan may still find more. */
+  scanning: boolean;
+  /** Found on the site and being saved right now. */
+  incoming: ProductCandidate[];
+  /** Found, but saving failed. */
+  failed: ProductCandidate[];
   products: Product[];
   loading: boolean;
-  importing: boolean;
   /** Product id → busy (saving, uploading). */
   busy: Record<string, boolean>;
   lowResolution: Record<string, boolean>;
@@ -34,8 +47,8 @@ export type ProductsStepProps = {
   blockedReason: string | null;
   reduce: boolean;
   headingRef: Ref<HTMLHeadingElement>;
-  onImport: (candidates: ProductCandidate[]) => void;
-  onDismissCandidates: () => void;
+  onRetry: () => void;
+  onRemoveFound: () => void;
   onAdd: (draft: ProductDraft) => void;
   onSave: (id: string, draft: ProductDraft) => void;
   onArchive: (id: string) => void;
@@ -45,24 +58,14 @@ export type ProductsStepProps = {
   onContinue: () => void;
 };
 
+const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
+
 export function ProductsStep(p: ProductsStepProps) {
-  const [picked, setPicked] = useState<Set<string>>(
-    () => new Set(p.candidates.map((c) => c.fingerprint)),
-  );
-  const showCandidates = p.candidates.length > 0;
-  const enter = {
-    initial: p.reduce ? { opacity: 0 } : { opacity: 0, y: 8 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0 },
-    transition: { duration: duration.medium, ease: ease.emphasized },
-  };
-  const toggle = (fp: string) =>
-    setPicked((s) => {
-      const next = new Set(s);
-      if (next.has(fp)) next.delete(fp);
-      else next.add(fp);
-      return next;
-    });
+  const [filter, setFilter] = useState<ProductKind | "all">("all");
+  const found = p.products.filter((x) => x.source !== "manual");
+  const services = p.products.filter((x) => x.kind === "service").length;
+  const showFilter = services > 0 && services < p.products.length;
+  const any = p.products.length > 0 || p.incoming.length > 0;
 
   return (
     <div>
@@ -72,121 +75,107 @@ export function ProductsStep(p: ProductsStepProps) {
         tabIndex={-1}
         className="mt-4 text-[clamp(1.9rem,4.6vw,2.75rem)] font-semibold leading-[1.05] tracking-[-0.035em] outline-none"
       >
-        {p.products.length || showCandidates
+        {any
           ? `What ${p.brandName || "you"} sells`
           : `What does ${p.brandName || "your brand"} sell?`}
       </h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-        Mellox writes about real products, with your real photos. Labels, text and packaging stay
-        exactly as they are in the picture.
+        Mellox writes about these, with your real photos. Labels and packaging stay exactly as they
+        are.
       </p>
 
+      <FoundBanner
+        className="mt-7"
+        host={p.siteHost}
+        found={found}
+        incoming={p.incoming}
+        scanning={p.scanning}
+        reduce={p.reduce}
+        onRemoveFound={p.onRemoveFound}
+      />
+
       <AnimatePresence initial={false}>
-        {showCandidates && (
-          <motion.section {...enter} aria-labelledby="found-products" className="mt-8">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p id="found-products" className="ds-label">
-                  Found on your site
-                </p>
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  Untick anything you don&rsquo;t want Mellox to post about.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={p.onDismissCandidates}
-                  className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
-                >
-                  Skip these
-                </button>
-                <button
-                  type="button"
-                  disabled={!picked.size || p.importing}
-                  onClick={() => p.onImport(p.candidates.filter((c) => picked.has(c.fingerprint)))}
-                  className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                >
-                  {p.importing ? (
-                    <Spinner className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {p.importing ? "Saving photos…" : `Keep ${picked.size}`}
-                </button>
-              </div>
+        {p.failed.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: duration.medium, ease: ease.standard }}
+            className="overflow-hidden"
+          >
+            <div
+              role="alert"
+              className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-destructive/[0.07] px-4 py-3 text-[13px] text-destructive"
+            >
+              <span className="inline-flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" aria-hidden />
+                {plural(p.failed.length, "item")} couldn&rsquo;t be saved.
+              </span>
+              <button
+                type="button"
+                onClick={p.onRetry}
+                className={cn(dsGhostBtn, "h-8 px-3 text-[12.5px]")}
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Try again
+              </button>
             </div>
-            <ul className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-              {p.candidates.map((c) => {
-                const on = picked.has(c.fingerprint);
-                return (
-                  <li key={c.fingerprint}>
-                    <button
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => toggle(c.fingerprint)}
-                      disabled={p.importing}
-                      className={cn(
-                        "ds-tile relative flex w-full flex-col overflow-hidden text-left transition-[border-color,box-shadow]",
-                        on
-                          ? "border-primary/60 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
-                          : "opacity-60 hover:opacity-90",
-                      )}
-                    >
-                      <span className="block aspect-square w-full bg-[var(--ds-well-bg)]">
-                        {c.images[0] ? (
-                          <img
-                            src={c.images[0]}
-                            alt=""
-                            referrerPolicy="no-referrer"
-                            loading="lazy"
-                            className="h-full w-full object-contain p-2"
-                          />
-                        ) : (
-                          <span className="grid h-full place-items-center text-muted-foreground">
-                            <ShoppingBag className="h-6 w-6" aria-hidden />
-                          </span>
-                        )}
-                      </span>
-                      <span className="block p-2.5">
-                        <span className="line-clamp-2 text-[12.5px] font-medium leading-snug">
-                          {c.name}
-                        </span>
-                        {c.price && (
-                          <span className="mt-0.5 block text-[11.5px] tabular-nums text-muted-foreground">
-                            {c.price}
-                          </span>
-                        )}
-                      </span>
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full border transition-colors",
-                          on
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-card",
-                        )}
-                      >
-                        {on && <Check className="h-3.5 w-3.5" />}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </motion.section>
+          </motion.div>
         )}
       </AnimatePresence>
 
+      {showFilter && (
+        <div
+          role="tablist"
+          aria-label="Show"
+          className="ds-well mt-7 inline-flex rounded-full p-1 text-[12.5px] font-medium"
+        >
+          {(
+            [
+              ["all", `All · ${p.products.length}`],
+              ["product", `Products · ${p.products.length - services}`],
+              ["service", `Services · ${services}`],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={filter === id}
+              onClick={() => setFilter(id)}
+              className={cn(
+                "relative h-8 rounded-full px-3.5 transition-colors",
+                filter === id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {filter === id && (
+                <motion.span
+                  layoutId="products-filter"
+                  className="absolute inset-0 rounded-full bg-card shadow-sm"
+                  transition={{ duration: p.reduce ? 0 : duration.medium, ease: ease.emphasized }}
+                />
+              )}
+              <span className="relative">{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <Catalogue
-        className="mt-9"
+        className={showFilter ? "mt-4" : "mt-8"}
         products={p.products}
+        incoming={p.incoming}
+        filter={showFilter ? filter : "all"}
         loading={p.loading}
         busy={p.busy}
         lowResolution={p.lowResolution}
         adding={p.adding}
         reduce={p.reduce}
-        showEmpty={!showCandidates}
+        showEmpty={!p.scanning}
+        emptyHint={
+          p.siteHost
+            ? `We couldn't spot anything for sale on ${p.siteHost}. Add the first thing you sell — one is enough to start.`
+            : undefined
+        }
         onAdd={p.onAdd}
         onSave={p.onSave}
         onArchive={p.onArchive}
@@ -231,8 +220,186 @@ export function ProductsStep(p: ProductsStepProps) {
   );
 }
 
+/**
+ * What the scan found, said once at the top: saving with real progress, then
+ * a plain count. Nothing here is a decision — removing is on each card.
+ */
+function FoundBanner({
+  host,
+  found,
+  incoming,
+  scanning,
+  reduce,
+  className,
+  onRemoveFound,
+}: {
+  host: string | null;
+  found: Product[];
+  incoming: ProductCandidate[];
+  scanning: boolean;
+  reduce: boolean;
+  className?: string;
+  onRemoveFound: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const saving = incoming.length > 0;
+  const total = found.length + incoming.length;
+  const state: "saving" | "looking" | "done" | null = saving
+    ? "saving"
+    : found.length
+      ? "done"
+      : scanning && host
+        ? "looking"
+        : null;
+  if (!state) return null;
+  const pct = total ? Math.round((found.length / total) * 100) : 0;
+  const where = host ? ` on ${host}` : "";
+
+  return (
+    <motion.div
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: duration.medium, ease: ease.emphasized }}
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "ds-tile relative overflow-hidden px-4 py-3.5",
+        state !== "done" && !reduce && "shimmer",
+        className,
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="relative grid h-10 w-10 shrink-0 place-items-center">
+          {state === "done" ? (
+            <motion.span
+              key="done"
+              initial={reduce ? false : { scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 420, damping: 22 }}
+              className="grid h-10 w-10 place-items-center rounded-full bg-primary text-primary-foreground"
+            >
+              <Check className="h-5 w-5" aria-hidden />
+            </motion.span>
+          ) : (
+            <>
+              {!reduce && (
+                <span className="absolute inset-0 animate-ping rounded-full bg-primary/20 [animation-duration:1.8s]" />
+              )}
+              <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary/12 text-primary">
+                {state === "saving" ? (
+                  <Spinner className="h-4.5 w-4.5 animate-spin" aria-hidden />
+                ) : (
+                  <Globe className="h-4.5 w-4.5" aria-hidden />
+                )}
+              </span>
+            </>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold leading-snug">
+            {state === "saving"
+              ? `Adding what we found${where}`
+              : state === "looking"
+                ? `Looking for what you sell${where}`
+                : `Found ${foundLine(found)}${where}`}
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+            {state === "saving"
+              ? `${found.length} of ${total} saved, with their photos`
+              : state === "looking"
+                ? "They'll appear here by themselves."
+                : "Already in your catalogue. Remove anything you don't sell anymore."}
+          </p>
+        </div>
+        {state === "done" && (
+          <div className="flex items-center gap-2">
+            {confirm ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setConfirm(false)}
+                  className={cn(dsGhostBtn, "h-8 px-3 text-[12.5px]")}
+                >
+                  Keep them
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirm(false);
+                    onRemoveFound();
+                  }}
+                  className="inline-flex h-8 items-center rounded-full bg-destructive/10 px-3 text-[12.5px] font-medium text-destructive hover:bg-destructive/15"
+                >
+                  Remove all {found.length}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirm(true)}
+                className={cn(dsGhostBtn, "h-8 px-3 text-[12.5px] text-muted-foreground")}
+              >
+                Remove all
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {state === "saving" && (
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--ds-well-bg)]">
+          <motion.div
+            className="h-full rounded-full bg-primary"
+            initial={false}
+            animate={{ width: `${Math.max(6, pct)}%` }}
+            transition={{ duration: reduce ? 0 : duration.slow, ease: ease.standard }}
+          />
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+/** A found item while its photos are being saved: the real picture, gently shimmering. */
+function IncomingCard({ item }: { item: ProductCandidate }) {
+  const service = item.kind === "service";
+  const KindIcon = service ? Wrench : ShoppingBag;
+  return (
+    <article className="ds-tile shimmer flex flex-col overflow-hidden" aria-busy="true">
+      <div className="relative aspect-[4/3] w-full bg-[var(--ds-well-bg)]">
+        {item.images[0] ? (
+          <img
+            src={item.images[0]}
+            alt=""
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            className="h-full w-full object-contain p-3 opacity-70"
+          />
+        ) : (
+          <span className="grid h-full place-items-center text-muted-foreground/70">
+            <KindIcon className="h-7 w-7" aria-hidden />
+          </span>
+        )}
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/90 px-2 py-1 text-[11px] font-medium text-foreground/80 backdrop-blur">
+          <Spinner className="h-3 w-3 animate-spin text-primary" aria-hidden /> Saving
+        </span>
+      </div>
+      <div className="p-3.5">
+        <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-foreground/80">
+          {item.name}
+        </p>
+        {item.price && (
+          <p className="mt-0.5 text-[12.5px] tabular-nums text-muted-foreground">{item.price}</p>
+        )}
+      </div>
+    </article>
+  );
+}
+
 export type CatalogueProps = {
   products: Product[];
+  /** Found on the site and being saved: shown as cards that fill in. */
+  incoming?: ProductCandidate[];
+  filter?: ProductKind | "all";
   loading: boolean;
   busy: Record<string, boolean>;
   lowResolution: Record<string, boolean>;
@@ -240,6 +407,8 @@ export type CatalogueProps = {
   reduce: boolean;
   /** Show the "add the first thing you sell" panel when the list is empty. */
   showEmpty: boolean;
+  /** What the empty panel says (onboarding names the site it read). */
+  emptyHint?: string;
   className?: string;
   onAdd: (draft: ProductDraft) => void;
   onSave: (id: string, draft: ProductDraft) => void;
@@ -249,21 +418,35 @@ export type CatalogueProps = {
 };
 
 /** The brand's products and services as cards, with add, edit and photo upload. */
-export function Catalogue({ className, ...p }: CatalogueProps) {
+export function Catalogue({
+  className,
+  incoming = [],
+  filter = "all",
+  emptyHint,
+  ...p
+}: CatalogueProps) {
   const [formKind, setFormKind] = useState<ProductKind | null>(null);
-  const enter = {
-    initial: p.reduce ? { opacity: 0 } : { opacity: 0, y: 8 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0 },
-    transition: { duration: duration.medium, ease: ease.emphasized },
-  };
+  const shown = filter === "all" ? p.products : p.products.filter((x) => x.kind === filter);
+  const waiting =
+    filter === "all" ? incoming : incoming.filter((x) => (x.kind ?? "product") === filter);
+  const enter = (i: number) => ({
+    initial: p.reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 },
+    animate: { opacity: 1, y: 0, scale: 1 },
+    exit: p.reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 },
+    transition: {
+      duration: duration.slow,
+      ease: ease.emphasized,
+      delay: p.reduce ? 0 : Math.min(i, 8) * 0.04,
+    },
+  });
+  const empty = !p.loading && !p.products.length && !incoming.length && !formKind && p.showEmpty;
   return (
     <section aria-labelledby="your-products" className={className}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p id="your-products" className="ds-label">
           Your catalogue{p.products.length ? ` · ${p.products.length}` : ""}
         </p>
-        {!formKind && (p.products.length > 0 || !p.showEmpty) && (
+        {!formKind && !empty && (
           <div className="flex gap-2">
             <button
               type="button"
@@ -277,16 +460,16 @@ export function Catalogue({ className, ...p }: CatalogueProps) {
               onClick={() => setFormKind("service")}
               className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
             >
-              <Wrench className="h-3.5 w-3.5" aria-hidden /> I sell a service
+              <Wrench className="h-3.5 w-3.5" aria-hidden /> Service
             </button>
           </div>
         )}
       </div>
 
       <ul className="mt-4 grid grid-cols-1 gap-3 min-[460px]:grid-cols-2 lg:grid-cols-3">
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="popLayout">
           {formKind && (
-            <motion.li key="new" {...enter} className="ds-tile p-3.5">
+            <motion.li key="new" layout={!p.reduce} {...enter(0)} className="ds-tile p-3.5">
               <p className="mb-3 text-[13px] font-semibold">
                 {formKind === "service" ? "Add a service" : "Add a product"}
               </p>
@@ -301,8 +484,8 @@ export function Catalogue({ className, ...p }: CatalogueProps) {
               />
             </motion.li>
           )}
-          {p.products.map((product) => (
-            <motion.li key={product.id} layout={!p.reduce} {...enter}>
+          {shown.map((product, i) => (
+            <motion.li key={product.id} layout={!p.reduce} {...enter(i)}>
               <ProductCard
                 product={product}
                 busy={Boolean(p.busy[product.id])}
@@ -314,21 +497,34 @@ export function Catalogue({ className, ...p }: CatalogueProps) {
               />
             </motion.li>
           ))}
+          {waiting.map((item, i) => (
+            <motion.li
+              key={`incoming:${item.fingerprint}`}
+              layout={!p.reduce}
+              {...enter(shown.length + i)}
+            >
+              <IncomingCard item={item} />
+            </motion.li>
+          ))}
         </AnimatePresence>
         {p.loading &&
           !p.products.length &&
-          [0, 1].map((i) => (
-            <li key={i} className="ds-tile aspect-[4/5] animate-pulse bg-[var(--ds-well-bg)]" />
+          !incoming.length &&
+          [0, 1, 2].map((i) => (
+            <li key={i} className="ds-tile shimmer aspect-[4/5] bg-[var(--ds-well-bg)]" />
           ))}
-        {!p.loading && !p.products.length && !formKind && p.showEmpty && (
+        {empty && (
           <li className="min-[460px]:col-span-2 lg:col-span-3">
-            <div className="ds-well flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center">
+            <motion.div
+              {...enter(0)}
+              className="ds-well flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center"
+            >
               <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
                 <ShoppingBag className="h-5 w-5" aria-hidden />
               </span>
               <p className="text-[14px] font-medium">Add the first thing you sell</p>
               <p className="max-w-sm text-[13px] text-muted-foreground">
-                One is enough to start. Your first posts will be about it.
+                {emptyHint ?? "One is enough to start. Your first posts will be about it."}
               </p>
               <div className="mt-1 flex flex-wrap justify-center gap-2">
                 <button
@@ -346,7 +542,7 @@ export function Catalogue({ className, ...p }: CatalogueProps) {
                   <Wrench className="h-3.5 w-3.5" aria-hidden /> Add a service
                 </button>
               </div>
-            </div>
+            </motion.div>
           </li>
         )}
       </ul>

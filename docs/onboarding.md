@@ -43,6 +43,25 @@ extras: a person who closes the tab there still has a set-up brand.
 - **Photos:** upload through `POST /api/products/photos`. Images are imported
   through `src/server/assets/reference-image.server.ts`, shared with UGC.
 - **Editing:** in onboarding and in Brain → Brand → Products (`ProductsEditor`).
+- **Finding them on the site** starts the moment the person gives the link,
+  inside the Brand DNA scan, and keeps going while they answer the goal
+  questions. In order (`discover.server.ts`, pure parts in `catalog.ts`):
+  1. Store feeds: Shopify `/products.json`, WooCommerce `/wp-json/wc/store/v1/products`.
+  2. Product and service pages (`catalogLinks`: `/products/…`, `/product-page/…`,
+     `/services/…`, …) from the crawl, the sitemap and its product sitemaps
+     (`catalogSitemaps`), and the listing pages (`LISTING_PATHS`), read for
+     schema.org Product / Service markup; an ItemList or OfferCatalog on a
+     listing page counts too (`catalogFromJsonLd`).
+  3. The Brand DNA model's `catalog` list from the crawled text, in the same
+     call (no extra charge). `groundCatalog` keeps an item only if its name is
+     on the site, a price only if it is written there, a link only to this
+     site, and a description only if most of its words are the site's own.
+     Results stream to the browser as `discovery` / `products` events.
+- **Kept by itself.** `useOnboardingProducts.autoKeep` saves what was found in
+  batches of six as it arrives, so the products step is filled in when the
+  person gets there; they remove what they don't sell. `importCandidates` only
+  ever adds: anything already in the catalogue, or a product a person removed,
+  is left as it is.
 - **Rules:**
   - Photos are `assets` rows checked against the workspace
     (`productForGeneration`). Never trust a URL or a path from the browser.
@@ -58,5 +77,6 @@ extras: a person who closes the tab there still has a set-up brand.
   `src/server/products/discover.server.test.ts`, and the goal cases in
   `src/lib/strategy/strategy.test.ts`.
 - **Visual:** `/onboarding-lab?step=goals|manual|products|channels|first|first-running|first-failed`
+  (`&saving=1` shows found items while they are saved, `&empty=1` an empty catalogue)
   (development only). It is covered by `tests/integration/onboarding-lab.spec.ts`
   at desktop and phone width.
