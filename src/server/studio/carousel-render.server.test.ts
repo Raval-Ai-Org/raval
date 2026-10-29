@@ -90,6 +90,67 @@ describe("renderCarouselSlides", () => {
     }
   }, 60_000);
 
+  it("draws the type-led looks and the brand's own pictures in their frames", async () => {
+    const { slidePhotoData } = await import("./carousel-render.server");
+    const screen = await sharp({
+      create: { width: 1440, height: 4000, channels: 3, background: "#2f6fe4" },
+    })
+      .png()
+      .toBuffer();
+    const photo = await sharp({
+      create: { width: 1600, height: 1200, channels: 3, background: "#d94f30" },
+    })
+      .jpeg()
+      .toBuffer();
+    const cases = [
+      { look: "swiss", motif: "orbit", structure: "reveal", photos: null },
+      { look: "editorial", motif: "glow", structure: "running-joke", photos: null },
+      {
+        look: "editorial",
+        motif: "orbit",
+        structure: "case-study",
+        photos: [
+          { bytes: photo, frame: "photo" as const },
+          { bytes: screen, frame: "browser" as const },
+          { bytes: screen, frame: "phone" as const },
+        ],
+      },
+    ] as const;
+    for (const c of cases) {
+      const colorway = c.look === "swiss" ? "light" : "dark";
+      const images = await renderCarouselSlides({
+        slides: normalizeSlides(
+          slides.slice(0, 4).map((s, i) => ({ ...s, photo: c.photos && i < 3 ? i : undefined })),
+          4,
+        ),
+        design: { v: 1, look: c.look, colorway, motif: c.motif } as CarouselDesign,
+        theme: carouselTheme({ palette, colorway }),
+        ratio: "4:5",
+        brand: "Slow Pour Coffee",
+        structure: c.structure,
+        photos: c.photos ? [...c.photos] : null,
+      });
+      expect(images).toHaveLength(4);
+      if (OUT) {
+        mkdirSync(OUT, { recursive: true });
+        images.forEach((image, i) => writeFileSync(join(OUT, `${c.structure}-${i}.jpg`), image));
+      }
+      if (c.photos) {
+        // The browser frame's screen shows the real capture's colour.
+        const { data } = await sharp(images[1]).resize(54, 68).raw().toBuffer({
+          resolveWithObject: true,
+        });
+        let blue = 0;
+        for (let i = 0; i < data.length; i += 3) if (data[i + 2] > 180 && data[i] < 90) blue += 1;
+        expect(blue).toBeGreaterThan(54 * 68 * 0.1);
+      }
+    }
+    // Screens are cut to their window from the top; photos keep their shape.
+    const cut = await slidePhotoData(screen, "phone");
+    const phone = await sharp(Buffer.from(cut!.src.split(",")[1], "base64")).metadata();
+    expect((phone.width ?? 0) / (phone.height ?? 1)).toBeCloseTo(0.5, 1);
+  }, 120_000);
+
   it("draws the square size too", async () => {
     const theme = carouselTheme({ palette, colorway: "dark" });
     const [first] = await renderCarouselSlides({

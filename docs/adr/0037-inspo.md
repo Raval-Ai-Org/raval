@@ -74,3 +74,6 @@ development (`tests/integration/inspo-lab.spec.ts`).
   Media → "From your site" and can be kept as real uploads; nothing is deleted.
 - The website scan's page-by-page crop review is no longer shown; a scan's
   approved crops appear on the board marked "Your site".
+- Posts loved in the Library (ADR-0038) appear on the board as references
+  labelled "Loved in Library". Only a picture with no reference yet is added,
+  and unloving removes only the reference the heart created.

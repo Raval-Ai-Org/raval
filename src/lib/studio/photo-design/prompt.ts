@@ -55,6 +55,20 @@ function whatThePhotosShow(plan: PhotoDesignPlan): string[] {
   ].filter(Boolean);
 }
 
+/**
+ * Website screens sit in a device the model draws around the window: a laptop
+ * or browser for a wide screen, a phone for a tall one, seen straight on so the
+ * screen stays a clean rectangle the real capture fills exactly.
+ */
+function screenWindowLines(plan: PhotoDesignPlan): string[] {
+  const screens = (plan.screens ?? []).map((screen, i) => (screen ? i : -1)).filter((i) => i >= 0);
+  if (!screens.length) return [];
+  return [
+    `Window${screens.length === 1 ? "" : "s"} ${screens.map((i) => i + 1).join(", ")} ${screens.length === 1 ? "is" : "are"} the screen of a device: ${screens.map((i) => `window ${i + 1} a ${plan.shapes[i] === "portrait" ? "phone" : "laptop or browser window"}`).join(", ")}. Draw the device itself around the window (thin dark bezel, rounded corners, a laptop base or stand, a soft contact shadow), seen straight on with no tilt or perspective, on a calm set in the brand's colours with the accent picked up in one corner. The window is the screen: flat key colour edge to edge inside the bezel, with no reflections, glare, icons or interface drawn on it.`,
+    "Leave a calm band above or beside the device for the headline; never set words on the screen.",
+  ];
+}
+
 export function designLayerPrompt(args: {
   plan: PhotoDesignPlan;
   brand: PhotoDesignBrand;
@@ -83,6 +97,7 @@ export function designLayerPrompt(args: {
           `Fill every window with ${key}: one solid colour, nothing inside it — no texture, gradient, noise, shadow, people or picture. The windows must not touch or overlap each other.`,
           `Window 1 is the hero and the largest (about a third of the canvas or more). Match each window to its photo's shape: ${plan.shapes.map((shape, i) => `window ${i + 1} ${shape}`).join(", ")}.`,
           "Windows can be rectangles, rounded cards, circles, arches, tilted polaroids or torn-paper shapes, whatever suits the brand. Tape, stickers, ribbons, badges and type may overlap a window's edge a little, but never cross a window or cut it in two.",
+          ...screenWindowLines(plan),
           "Around and behind the windows: the brand's colours, shapes, texture, a headline area and calm space. It should look like a designed event or campaign post, not a plain grid.",
         ];
   return [

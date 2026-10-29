@@ -11,12 +11,20 @@
 // Pure and browser-safe: the preview and the server renderer both read it.
 import { contrastRatio, hexToRgb, normalizeHex, relLuminance } from "@/lib/color";
 import { catalogFont, nearestCatalogFont } from "@/lib/brand-look/fonts";
+import { applyLean } from "@/lib/taste/bias";
+import type { Lean } from "@/lib/taste/contracts";
 import type { CarouselSpecOutput } from "../jobs";
 import type { SlideRole } from "./story";
 
-export const CAROUSEL_LOOKS = ["editorial", "bold", "soft", "frame"] as const;
+export const CAROUSEL_LOOKS = ["editorial", "bold", "soft", "frame", "swiss"] as const;
+/**
+ * The looks a brand is given by its profile key. "swiss" (white, heavy caps
+ * top-left, one accent word) is chosen by the structure, never by the brand,
+ * so adding it changed no brand's look.
+ */
+const BRAND_LOOKS = ["editorial", "bold", "soft", "frame"] as const;
 export const CAROUSEL_COLORWAYS = ["light", "dark", "brand"] as const;
-export const CAROUSEL_MOTIFS = ["orbit", "wave", "blocks"] as const;
+export const CAROUSEL_MOTIFS = ["orbit", "wave", "blocks", "glow"] as const;
 
 export type CarouselLook = (typeof CAROUSEL_LOOKS)[number];
 export type CarouselColorway = (typeof CAROUSEL_COLORWAYS)[number];
@@ -228,8 +236,22 @@ export function pickCarouselDesign(args: {
   /** Recent carousels' designs, newest first. */
   previous?: ({ colorway?: string; motif?: string } | null | undefined)[];
   palette?: CarouselPalette | null;
+  /** The story structure (story.ts): some are drawn in their own way. */
+  structure?: string | null;
+  /** The brand's taste for backgrounds and motifs (ADR-0038). */
+  lean?: { colorway?: Lean | null; motif?: Lean | null } | null;
 }): CarouselDesign {
-  const look = CAROUSEL_LOOKS[hash(`look:${args.profileKey}`) % CAROUSEL_LOOKS.length];
+  const look: CarouselLook =
+    args.structure === "reveal" || args.structure === "intro"
+      ? "swiss"
+      : BRAND_LOOKS[hash(`look:${args.profileKey}`) % BRAND_LOOKS.length];
+  if (args.structure === "running-joke") {
+    // A joke is one template on a glowing brand field, the glow moving each slide.
+    const colorway: CarouselColorway = availableColorways(args.palette).includes("brand")
+      ? "brand"
+      : "dark";
+    return { v: 1, look, colorway, motif: "glow" };
+  }
   const last = args.previous?.[0];
   const before = args.previous?.[1];
   const combos = availableColorways(args.palette).flatMap((colorway) =>
@@ -241,9 +263,16 @@ export function pickCarouselDesign(args: {
       c.motif !== last?.motif &&
       !(c.colorway === before?.colorway && c.motif === before?.motif),
   );
-  const pool = fresh.length ? fresh : combos;
+  // Never-repeat first, then the team's taste within what's left.
+  const pool = applyLean(
+    applyLean(fresh.length ? fresh : combos, args.lean?.colorway, args.seed, (c) => c.colorway),
+    args.lean?.motif,
+    args.seed,
+    (c) => c.motif,
+  );
   const pick = pool[hash(`combo:${args.seed}`) % pool.length];
-  return { v: 1, look, ...pick };
+  // Swiss is white paper with black type; the accent is its only colour.
+  return { v: 1, look, ...pick, ...(look === "swiss" ? { colorway: "light" as const } : {}) };
 }
 
 /**

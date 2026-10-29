@@ -255,6 +255,59 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     controls: { slideCount: 6 },
     thumb: "chat",
   },
+  {
+    id: "carousel-case-study",
+    types: ["carousel"],
+    label: "Show our work",
+    tagline: "A project, one touchpoint per slide",
+    beats: ["Project", "Touchpoint", "Touchpoint", "Touchpoint", "Scope"],
+    starter:
+      "Show our work for [client or project]: [what we made, e.g. logo, packaging, website].",
+    directive:
+      "Slide 1 names the project. Each middle slide shows the work on one real touchpoint (website, packaging, sign, app, social post), never the same kind twice, with very few words. Last slide: the scope in a few words and one step. Caption: a short hook, then a credits block ('Client · Category' on one line, 'Scope: a · b · c' on the next). No results, quotes or figures unless given.",
+    goal: "leads",
+    controls: { slideCount: 5 },
+    thumb: "grid",
+  },
+  {
+    id: "carousel-intro",
+    types: ["carousel"],
+    label: "Who we are",
+    tagline: "Turn a stranger into a customer",
+    beats: ["A bold opener", "What we do", "Who it's for", "Proof", "Talk to us"],
+    starter: "Introduce [brand] to [audience]: we do [offers] for [who].",
+    directive:
+      "Cover: the name large with a small aside that promises a payoff. Then the offers as a numbered list with a short plain aside each, who it is for, proof only from given facts, and a last slide that asks a question and pays off the cover. Never state a slide count that is not exact.",
+    goal: "leads",
+    controls: { slideCount: 5 },
+    thumb: "list",
+  },
+  {
+    id: "carousel-hiring",
+    types: ["carousel"],
+    label: "We're hiring",
+    tagline: "Make good people lean in",
+    beats: ["The standard", "The reveal", "Roles", "Apply"],
+    starter: "We're hiring [roles]. Apply at [link or email].",
+    directive:
+      "Slide 1: a bold line of five words or fewer about the standard the team holds (it does not say 'hiring'). Slide 2 reveals the hiring plainly and quietly. Then the roles as a numbered list, only those given. Last slide: exactly how to apply. Never invent salary, benefits or locations.",
+    goal: "awareness",
+    controls: { slideCount: 4 },
+    thumb: "list",
+  },
+  {
+    id: "carousel-running-joke",
+    types: ["carousel"],
+    label: "Running joke",
+    tagline: "One joke your audience gets",
+    beats: ["Setup", "Again", "Again", "The reason"],
+    starter: "A light joke about [situation our audience knows], because [occasion or reason].",
+    directive:
+      "Every slide repeats one template: a short setup line and the same two-to-four-word punchline. The joke is about the audience's world, kind and never about a person or another company. Last slide gives the reason (a holiday, a day off, a promise). The link back to the brand goes in the caption, with at most two emoji.",
+    goal: "engagement",
+    controls: { slideCount: 4 },
+    thumb: "quote",
+  },
 
   /* ───────────── Image post ───────────── */
   {
@@ -350,6 +403,43 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     starter: "Invite [audience] to [event] on [date] at [place or link].",
     directive:
       "Image: an inviting scene or graphic that captures the atmosphere of the event, in brand colours, with clean space for a title. Caption: event name and one-line promise, then date, time and place on their own lines, then the top reason to come, then exactly how to register or RSVP. Use only the details given.",
+    goal: "launch",
+    thumb: "hero",
+  },
+  {
+    id: "image-greeting",
+    types: ["image"],
+    label: "Holiday greeting",
+    tagline: "A calm wish in your brand's colour",
+    beats: ["Symbol", "Greeting", "Signature"],
+    starter: "A greeting for [occasion] to our [audience].",
+    directive:
+      "Image: one universal symbol of the occasion in the brand's main colour on a plain dark or flat field, most of the frame empty, the greeting small below it. Caption: a warm one-line wish; a light pun on the brand is fine here, never on the picture. No offers unless given.",
+    goal: "awareness",
+    thumb: "quote",
+  },
+  {
+    id: "image-website-showcase",
+    types: ["image"],
+    label: "Website showcase",
+    tagline: "Your real site, shown on a device",
+    beats: ["The device", "Your real screen", "One line"],
+    starter: "Show off our website [page or what it does] for [audience].",
+    directive:
+      "Pick a capture of the website (or a screenshot) as the photo. Image: the real screen placed inside a device drawn straight on (laptop or browser for wide, phone for tall), on a calm set in brand colours with the accent picked up in one corner; never a raw screenshot. Headline above or beside the device, never on the screen. Caption: the one detail that makes the site worth a visit, then a question or the link.",
+    goal: "leads",
+    controls: { referenceMode: "design" },
+    thumb: "hero",
+  },
+  {
+    id: "image-teaser",
+    types: ["image"],
+    label: "Coming soon",
+    tagline: "Build curiosity before a reveal",
+    beats: ["A glimpse", "The date", "Coming soon"],
+    starter: "Tease [new thing] before it arrives on [date, if known].",
+    directive:
+      "Image: a tight, partial glimpse or an abstract form in the brand's colours, nothing fully shown, with 'coming soon' in small, widely spaced caps. Caption: one line of intrigue and the date only if given.",
     goal: "launch",
     thumb: "hero",
   },
@@ -557,6 +647,19 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     goal: "launch",
     controls: { durationSec: 10 },
     thumb: "grid",
+  },
+  {
+    id: "video-site-reel",
+    types: ["video"],
+    label: "Website reel",
+    tagline: "Your real site scrolling on a screen",
+    beats: ["Top of the page", "A few stops down", "Back to the top"],
+    starter: "Show off our website [page or what it does] for [audience].",
+    directive:
+      "Made from a capture of the website: the real page scrolls inside a phone or browser drawn by code, pausing on each section, then returns to the top so it loops. Silent. Caption: the one detail that makes the site worth a visit, then a question or the link.",
+    goal: "leads",
+    controls: { videoMode: "site" },
+    thumb: "play",
   },
 
   /* ───────────── Video script ───────────── */

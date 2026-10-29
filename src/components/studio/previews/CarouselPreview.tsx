@@ -203,6 +203,8 @@ export function CarouselPreview({
     brand: spec?.brand || brand.name,
     site: spec?.site,
     coverImage,
+    photos: spec?.photos?.map((p) => (p.url ? { src: p.url, frame: p.frame } : null)),
+    structure: spec?.structure,
   };
   const thumbWidth = 44;
 

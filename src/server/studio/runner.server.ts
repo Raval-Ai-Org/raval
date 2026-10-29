@@ -179,6 +179,8 @@ import {
 const BACKDROP_SLOT = "backdrop";
 import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import { archetypeById, type ArchetypeId } from "@/lib/studio/art-direction";
+import { assignPhotos } from "@/lib/studio/carousel/photos";
+import { carouselPhotos } from "./carousel-photos.server";
 
 type Db = SupabaseClient;
 
@@ -374,6 +376,19 @@ export async function presentJob(row: JobRow): Promise<StudioJob> {
     job.captionEditsRemaining = await captionEditsRemaining(row.workspace_id, row.group_id);
   }
   const media = row.output?.media;
+  // A carousel's own photos are shown in the preview from signed links too.
+  const photos = row.output?.carousel?.photos;
+  if (photos?.length && row.output?.carousel) {
+    const withUrls = await Promise.all(
+      photos.map(async (p) => ({
+        ...p,
+        url: isWorkspaceStoragePath(p.path, row.workspace_id)
+          ? ((await signAssetPath(p.path)) ?? undefined)
+          : undefined,
+      })),
+    );
+    job.output = { ...row.output, carousel: { ...row.output.carousel, photos: withUrls } };
+  }
   if (!media?.length) return job;
   const signed = await Promise.all(
     media.map(async (m) => {
@@ -385,7 +400,7 @@ export async function presentJob(row: JobRow): Promise<StudioJob> {
         : m;
     }),
   );
-  return { ...job, output: { ...row.output, media: signed } };
+  return { ...job, output: { ...(job.output ?? row.output), media: signed } };
 }
 
 export async function getJobRow(
@@ -861,6 +876,8 @@ function carouselSpec(args: {
     seed: input.idempotencyKey,
     previous: ctx.recent.filter((r) => r.type === "carousel" && r.design).map((r) => r.design),
     palette,
+    structure: args.structure,
+    lean: { colorway: ctx.taste?.lean.colorway, motif: ctx.taste?.lean.motif },
   });
   if (ctx.visualTaste?.direction.lockTheme) {
     Object.assign(picked, {
@@ -916,6 +933,7 @@ function storyLook(args: {
     seed: args.input.idempotencyKey,
     previous: args.ctx.recent.filter((r) => r.type === "story" && r.design).map((r) => r.design),
     palette,
+    lean: { colorway: args.ctx.taste?.lean.colorway, motif: args.ctx.taste?.lean.motif },
   });
   if (args.ctx.visualTaste?.direction.lockTheme) {
     Object.assign(design, {
@@ -1116,7 +1134,10 @@ async function startMedia(args: {
   // footage is never redrawn; the image model only designs the opening and
   // the end card.
   const videoMode = input.controls.videoMode;
-  if (job.type === "video" && (videoMode === "brand" || videoMode === "recap")) {
+  if (
+    job.type === "video" &&
+    (videoMode === "brand" || videoMode === "recap" || videoMode === "site")
+  ) {
     if (!isClipEditEnabled(job.workspace_id))
       throw new StudioJobError(404, "Making videos from your own clips isn't available here.");
     const look = ctx.style ? imageStyleInput(ctx.style) : null;
@@ -1908,6 +1929,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     input.refine ? ANGLE_ID(previousAngle) : undefined,
     // A planned piece keeps to the angles that do what it is for.
     input.intent.aim ? AIM_ANGLES[input.intent.aim] : undefined,
+    ctx.taste?.lean.angle,
   );
   // A new piece opens in a way the last few didn't; a revision keeps its opening.
   const hook = input.refine
@@ -1917,6 +1939,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         ctx.recent.map((r) => r.hookStyle),
         // The plan already chose how this piece opens.
         input.intent.hookStyle,
+        ctx.taste?.lean.hook,
       );
   const carouselStructure =
     type === "carousel"
@@ -1927,6 +1950,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
           brief: input.intent.brief,
           recent: ctx.recent.filter((r) => r.type === "carousel").map((r) => r.structure),
           preferred: input.refine ? parent?.output?.carousel?.structure : undefined,
+          lean: ctx.taste?.lean.structure,
         })
       : undefined;
 
@@ -1941,6 +1965,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
             : input.intent.sourceContentId
               ? "repurpose"
               : input.controls.storyTheme,
+          lean: ctx.taste?.lean.storyTheme,
         })
       : undefined;
   // An ad's designed layout. A revision keeps it, so an edit never swaps it.
@@ -1957,6 +1982,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
             hasProduct: false,
             seed: input.idempotencyKey,
             recent: ctx.recent.filter((r) => r.type === "ad").map((r) => r.adFormat),
+            lean: ctx.taste?.lean.adFormat,
           });
   const source = input.intent.sourceScript
     ? {
@@ -2080,7 +2106,13 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         input.refine || attempt === 1 ? null : findRepeatedOpening(candidate, ctx.recent);
       const qualityIssue = input.refine
         ? null
-        : studioOutputQualityIssue(type, candidate, controls, platforms.length);
+        : studioOutputQualityIssue(
+            type,
+            candidate,
+            controls,
+            platforms.length,
+            carouselStructure?.id,
+          );
       const uncitedResearch =
         type === "article" &&
         !!ctx.liveResearch?.sources.length &&
@@ -2198,6 +2230,32 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         flow: input.controls.artworkMode === "full" ? undefined : "composed",
       },
     };
+  }
+  // The brand's own photos and screenshots go on the slides as they are
+  // (a case study shows the real work). A revision keeps the ones it had.
+  if (
+    type === "carousel" &&
+    output.carousel &&
+    output.slides?.length &&
+    (controls.referenceMode ?? "preserve") === "preserve"
+  ) {
+    const photos = studioReferences.length
+      ? await carouselPhotos(db(client), job.workspace_id, studioReferences)
+      : (output.carousel.photos ?? []);
+    if (photos.length) {
+      output = {
+        ...output,
+        carousel: {
+          ...output.carousel,
+          photos,
+          // Real pictures are placed by code, so the slides are drawn, not generated.
+          design: isSeamless(output.carousel.design)
+            ? output.carousel.design
+            : { ...output.carousel.design, flow: "composed" },
+        },
+        slides: assignPhotos(output.slides, photos.length),
+      };
+    }
   }
   if (type === "story" && output.story?.mode === "frames" && output.story.frames.length) {
     output = {

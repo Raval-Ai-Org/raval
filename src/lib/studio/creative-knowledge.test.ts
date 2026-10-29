@@ -14,7 +14,25 @@ import {
 } from "./creative-knowledge";
 import { archetypeById, pickArchetype } from "./art-direction";
 
-const OTHER_BRANDS = ["Nike", "Crocs", "Pepsi", "Fanta", "Starbucks", "Apple", "Stripe", "Linear"];
+const OTHER_BRANDS = [
+  "Nike",
+  "Crocs",
+  "Pepsi",
+  "Fanta",
+  "Starbucks",
+  "Apple",
+  "Stripe",
+  "Linear",
+  // Names in the studied reference set (Post Training): lessons only, never names.
+  "Buzz",
+  "Higgsfield",
+  "PRSNLI",
+  "KIKO",
+  "Chicken Express",
+  "Siri",
+  "Tesla",
+  "DAP",
+];
 
 describe("deliverables", () => {
   it.each([
@@ -27,6 +45,16 @@ describe("deliverables", () => {
     ["What's inside every bottle, and why", "feature-board"],
     ["Before and after: the same kitchen in a week", "comparison"],
     ["“It changed how our whole team works,” a customer told us", "quote"],
+    ["Wishing everyone a joyful Ramadan Kareem", "greeting"],
+    ["Something new is coming soon. Stay tuned.", "teaser"],
+    ["Northwind x Lumen: two studios, one collection", "collab"],
+    [
+      "Case study: a new identity for a fitness app. Scope: naming, identity, website",
+      "case-study",
+    ],
+    ["Hi, we’re Northwind. We build websites and digital products.", "intro"],
+    ["Taking the day off today, so hold your horses", "humour"],
+    ["Now open in Lahore: our first store in Pakistan", "market-entry"],
   ])("reads %j as %s", (text, id) => {
     expect(detectDeliverable({ text }).id).toBe(id);
   });

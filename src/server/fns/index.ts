@@ -35,6 +35,7 @@ import * as slack from "./slack";
 import * as sitePublishing from "./site-publishing";
 import * as stories from "./stories";
 import * as strategy from "./strategy";
+import * as taste from "./taste";
 import * as trackedPrompts from "./tracked-prompts";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
@@ -77,6 +78,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "site-publishing": sitePublishing,
   stories,
   strategy,
+  taste,
   "tracked-prompts": trackedPrompts,
   workspaces,
   webflow,

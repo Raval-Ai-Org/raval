@@ -40,6 +40,8 @@ export type Group = {
   platforms: PlatformId[];
   storagePath: string | null;
   mediaType: "image" | "video" | null;
+  /** The picture's shape as stored ("4:5"), so the Library never crops it. */
+  ratio?: string | null;
   createdAt: string;
   jobId: string | null;
   /** The least-advanced status across the group's versions. */
@@ -222,6 +224,8 @@ export function groupRows(rows: ContentRow[]): Group[] {
         existing.storagePath = storagePath;
         existing.mediaType = meta.media_type === "video" ? "video" : "image";
       }
+      if (!existing.ratio && typeof meta.aspect_ratio === "string")
+        existing.ratio = meta.aspect_ratio;
       if (r.scheduled_at && (!existing.scheduledAt || r.scheduled_at < existing.scheduledAt))
         existing.scheduledAt = r.scheduled_at;
       continue;
@@ -239,6 +243,7 @@ export function groupRows(rows: ContentRow[]): Group[] {
       platforms: platform ? [platform] : [],
       storagePath,
       mediaType: meta.media_type === "video" ? "video" : storagePath ? "image" : null,
+      ratio: typeof meta.aspect_ratio === "string" ? meta.aspect_ratio : null,
       createdAt: r.created_at,
       jobId: typeof meta.job_id === "string" ? meta.job_id : null,
       status: r.status,

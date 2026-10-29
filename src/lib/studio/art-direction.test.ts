@@ -10,7 +10,24 @@ import {
   sellsPhysicalProduct,
 } from "./art-direction";
 
-const BRANDS = ["Nike", "Crocs", "Pepsi", "Fanta", "Starbucks", "Adidas", "ChatGPT", "Ronaldo"];
+const BRANDS = [
+  "Nike",
+  "Crocs",
+  "Pepsi",
+  "Fanta",
+  "Starbucks",
+  "Adidas",
+  "ChatGPT",
+  "Ronaldo",
+  "Buzz",
+  "Higgsfield",
+  "PRSNLI",
+  "KIKO",
+  "Chicken Express",
+  "Siri",
+  "Tesla",
+  "DAP",
+];
 
 describe("art direction library", () => {
   it("has unique ids and every layout is complete", () => {

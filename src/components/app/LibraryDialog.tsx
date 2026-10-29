@@ -7,16 +7,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { duration, ease, spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import type { LibraryAsset } from "@/lib/library";
-import type { Group, StageFilter } from "@/lib/studio/content-groups";
+import type { StageFilter } from "@/lib/studio/content-groups";
 import { LibraryPage, type LibraryTab } from "./LibraryPage";
 
 /** Preview/testing data (the Studio lab); the app renders the live Library. */
-type Fixtures = {
-  fixtureGroups?: Group[];
-  fixtureThumbs?: Record<string, string>;
-  fixtureAssets?: LibraryAsset[];
-};
+type Fixtures = Pick<
+  NonNullable<Parameters<typeof LibraryPage>[0]>,
+  "fixtureGroups" | "fixtureThumbs" | "fixtureAssets" | "fixtureTaste" | "fixtureLastSeen"
+>;
 
 /**
  * The Library as a pop-up over the workspace. Opens from the sidebar, from
@@ -42,7 +40,7 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
       const url = new URL(window.location.href);
       const param = url.searchParams.get("library");
       if (param) {
-        setTab(param === "posts" || param === "media" ? param : "all");
+        setTab(param === "posts" || param === "media" || param === "loved" ? param : "all");
         setOpen(true);
         url.searchParams.delete("library");
         const q = url.searchParams.toString();

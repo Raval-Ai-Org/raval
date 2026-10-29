@@ -17,6 +17,7 @@ import { strategyBlockFor } from "@/server/strategy/context.server";
 import { memoryBlockFor } from "@/server/memory/context.server";
 import { goalBlockFor } from "@/server/goals/context.server";
 import { catalogBlockFor } from "@/server/products/context.server";
+import { tasteContextFor } from "@/server/taste/context.server";
 import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
@@ -270,23 +271,35 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
-  const [snapshot, stored, socialTrends, audience, strategy, memory, visualMemory, goal, catalog] =
-    await Promise.all([
-      loadWorkspaceSnapshot(db, workspaceId),
-      settle(readBrandDna(db, workspaceId), null, "brand dna"),
-      // The stored snapshot only; a job never searches for trends itself.
-      getSocialTrends(),
-      // Who the piece is for (ADR-0031). Empty when Audience is off or not set up.
-      audienceBlockFor(workspaceId),
-      // The confirmed marketing strategy (ADR-0032). Empty until a person confirms one.
-      strategyBlockFor(workspaceId),
-      // What the team told Mellox to remember (ADR-0033). Empty when off or unset.
-      memoryBlockFor(workspaceId, "text"),
-      memoryBlockFor(workspaceId, "image"),
-      // What the brand wants and what it sells (ADR-0035). Empty until set.
-      goalBlockFor(workspaceId),
-      catalogBlockFor(workspaceId),
-    ]);
+  const [
+    snapshot,
+    stored,
+    socialTrends,
+    audience,
+    strategy,
+    memory,
+    visualMemory,
+    goal,
+    catalog,
+    taste,
+  ] = await Promise.all([
+    loadWorkspaceSnapshot(db, workspaceId),
+    settle(readBrandDna(db, workspaceId), null, "brand dna"),
+    // The stored snapshot only; a job never searches for trends itself.
+    getSocialTrends(),
+    // Who the piece is for (ADR-0031). Empty when Audience is off or not set up.
+    audienceBlockFor(workspaceId),
+    // The confirmed marketing strategy (ADR-0032). Empty until a person confirms one.
+    strategyBlockFor(workspaceId),
+    // What the team told Mellox to remember (ADR-0033). Empty when off or unset.
+    memoryBlockFor(workspaceId, "text"),
+    memoryBlockFor(workspaceId, "image"),
+    // What the brand wants and what it sells (ADR-0035). Empty until set.
+    goalBlockFor(workspaceId),
+    catalogBlockFor(workspaceId),
+    // What the team loved in the Library (ADR-0038). Empty until something is learned.
+    tasteContextFor(workspaceId),
+  ]);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
   const brandText = serializeBrandContext(dna, {
@@ -314,8 +327,10 @@ export async function loadStudioContext(
     ...rest,
     brand: dna as Record<string, unknown> | null,
     brandName: str(dna?.brandName) ?? name,
-    brandText: join([memory, ...brandBlocks]),
-    visualBrandText: join([visualMemory, brandText]),
+    brandText: join([memory, taste.text, ...brandBlocks]),
+    visualBrandText: join([visualMemory, taste.text, brandText]),
+    taste: taste.taste,
+    lovedSamples: taste.lovedSamples,
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
     moments: upcomingMoments(new Date(), { limit: 4 }),

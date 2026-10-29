@@ -28,6 +28,8 @@ export type PhotoDesignPlan = {
   copy: CopyLine[];
   /** Overlay only: canvas areas (fractions) the design must keep clear. */
   avoid: Box[];
+  /** In `order`: which photos are website screens, shown inside a device. */
+  screens?: boolean[];
 };
 
 const RATIO_VALUE: Record<AspectRatio, number> = {
@@ -145,6 +147,8 @@ export function planPhotoDesign(args: {
   brandColours?: string[];
   /** A video's opening is always over the footage; its end card always framed. */
   layout?: PhotoDesignPlan["layout"];
+  /** Per photo, in input order: a website capture, framed as a device screen. */
+  screens?: boolean[];
 }): PhotoDesignPlan {
   const count = Math.min(args.readings.length, args.sizes.length, MAX_DESIGN_PHOTOS);
   if (!count) throw new Error("A photo design needs at least one photo.");
@@ -155,8 +159,11 @@ export function planPhotoDesign(args: {
   const photoAspect = args.sizes[0].width / args.sizes[0].height;
   const canvasAspect = ratioValue(args.ratio);
   const mismatch = Math.max(photoAspect / canvasAspect, canvasAspect / photoAspect);
+  // A screen is never the whole canvas: it always sits in a device window.
+  const anyScreen = order.some((i) => args.screens?.[i]);
   const layout =
-    args.layout ?? (single && mismatch <= 1.35 && !FRAMED.test(args.brief) ? "overlay" : "windows");
+    args.layout ??
+    (single && mismatch <= 1.35 && !FRAMED.test(args.brief) && !anyScreen ? "overlay" : "windows");
   return {
     v: 1,
     layout,
@@ -171,5 +178,6 @@ export function planPhotoDesign(args: {
     ...(args.occasion ? { occasion: args.occasion } : {}),
     copy: args.copy,
     avoid: layout === "overlay" ? overlayAvoid(args.readings[0], args.sizes[0], args.ratio) : [],
+    ...(anyScreen ? { screens: order.map((i) => !!args.screens?.[i]) } : {}),
   };
 }

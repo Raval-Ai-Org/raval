@@ -820,6 +820,25 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   piece (`detectRepurposeIntent`) starts from that piece. The server reads the
   source by id against the job's workspace and every text prompt keeps its
   facts (`sourceSection`). A picture becomes a video with the picture kept.
+- **A carousel can show the brand's own photos and screenshots**
+  (`src/lib/studio/carousel/photos.ts`, `carousel-photos.server.ts`). Code
+  places them on slides (`assignPhotos`: cover first, the last slide stays
+  type-only) in a `phone`, `browser` or `photo` frame; screens are cut to
+  their window from the top on the server, never redrawn. `carousel.photos`
+  stores workspace paths only (re-checked by `workspacePhotos`); signed links
+  are added on read.
+- **Type-led structures have their own looks:** `reveal` / `intro` → `swiss`,
+  `running-joke` → the `glow` motif (`pickCarouselDesign`). `BRAND_LOOKS`
+  keeps the original four, so adding a look never reshuffles a brand's look.
+- **A website capture is always shown in a device** (`screenCaptureIds`,
+  `cropToScreen`, `image-website-showcase`), never as a raw picture.
+- **"From my website"** (`videoMode: "site"`, `src/lib/studio/site-reel.ts`,
+  `clip-edit/site-frame.server.ts`, `siteScroll`): one full-page capture
+  scrolls in a code-drawn device with holds and eased moves and loops back to
+  the top. No model call; priced as `photo_recap`.
+- Lessons from studied reference posts are distilled into these modules and
+  [docs/studio/reference-study-2026-10.md](docs/studio/reference-study-2026-10.md).
+  `Post Training/` is never committed or shipped; never name a brand from it.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style
@@ -863,6 +882,29 @@ with `_WS_<id>`), on unless `false`.
     (`src/lib/studio/captions.ts`), words heard in silence are dropped, and a
     failure leaves captions out, never the video;
   - the brand's own sound is brought to -14 LUFS.
+
+## Library and taste (hearts teach Mellox)
+
+Decision record [ADR-0038](docs/adr/0038-library-taste.md). Flag
+`FEATURE_FLAG_TASTE_ENABLED` (with `_WS_<id>`), on unless `false`. Off: no
+hearts, RPCs answer 404, no prompt block, no lean.
+
+- **Nothing is cropped.** Library tiles are masonry at each piece's true shape
+  (`src/lib/library-grid.ts`, `src/components/app/library/`), pictures
+  `object-contain`. Never go back to fixed-ratio `object-cover` tiles.
+- **One reaction per piece per brand** (`content_reactions`, `love` / `less`,
+  shared by the team). A post's subject is its `group_id`; a post's picture
+  belongs to its post.
+- **Traits are copied from stored rows only** (`traitsOf`,
+  `src/lib/taste/traits.ts`) by `setReaction` (`src/server/taste/`, RPC
+  `src/server/fns/taste.ts`, editor only). Never take a trait from the browser.
+- **Honest thresholds** (`src/lib/taste/learn.ts`): two loves to like a value,
+  two lesses to avoid one, newest 200 reactions. Never lower them.
+- **Generators get taste only through** `tasteContextFor` / `tasteBlockFor` or
+  `ctx.taste` (`loadStudioContext`). Pickers take a lean through `applyLean`,
+  which never empties a list and runs after the picker's own rules.
+- **Loved pictures become Inspo references** ("Loved in Library") only when the
+  asset has none; removing a heart removes only the reference it created.
 
 ## Backlink Growth (buying real placements)
 

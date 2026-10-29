@@ -101,6 +101,37 @@ The MIT-licensed sources above are used under these terms:
 - Copyright (c) 2026 Enrique Rocha (@soyenriquerocha); Copyright (c) 2026 Open Carrusel Contributors
 - Copyright (c) 2022-present Fatih Kadir Akin and contributors
 
+## Reference study, October 2026
+
+The team gave Mellox about 30 published agency posts to learn from (84
+pictures and 11 short clips: case studies, an agency intro, website
+showcases, hiring, greetings, day-off humour, topical puns, a market entry,
+teasers, price offers, co-brand Stories and silent website reels). They live
+in `Post Training/`, which is kept out of git. Nothing from them ships: no
+picture, caption, brand name or palette. Each lesson was rewritten
+brand-neutral and put in the module that owns it:
+
+- `creative-knowledge.ts`: deliverables `case-study`, `intro`, `greeting`,
+  `teaser`, `humour`, `collab`, `market-entry`; a new hiring recipe; and the
+  emphasis rule (a weight change or one coloured word, never both).
+- `art-direction.ts`: seven layouts (device showcase, touchpoint world,
+  occasion symbol, what-if render, sticker journey, glossy macro, mixed-media
+  breakout) and three craft rules (accent at 3–8% of the picture, one grade
+  with fine grain, the subject overlapping the headline).
+- `carousel/story.ts`: `case-study`, `intro`, `reveal` and `running-joke`
+  structures, plus a check that a cover promising "8 slides" really has 8.
+- `carousel/design.ts` + `SlideArt.tsx`: the `swiss` look (reveal and intro)
+  and the `glow` motif (running joke); slides that hold the brand's own photos
+  and screenshots in a phone, browser or photo frame (`carousel/photos.ts`).
+- `photo-design/`: website captures are always shown inside a device
+  (`image-website-showcase`).
+- `video-ad.ts`: rules for showing a screen and for a flip-book; `site-reel.ts`:
+  the website reel ("From my website").
+
+The full notes (recipes per post kind, measured clip timings, mistakes to
+avoid) are in [reference-study-2026-10.md](reference-study-2026-10.md). The
+names seen in the set are in the "never names another company" tests.
+
 ## Checking it
 
 ```bash

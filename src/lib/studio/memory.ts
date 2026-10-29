@@ -5,6 +5,8 @@
 //   - the idea, the opening and the structure must be NEW each time;
 //   - the voice and the look must stay the SAME, so a profile reads as one brand.
 // Pure and browser-safe.
+import { applyLean } from "@/lib/taste/bias";
+import type { Lean } from "@/lib/taste/contracts";
 import type { StudioContext } from "./prompts";
 
 export type HookStyle = { id: string; label: string; directive: string };
@@ -67,17 +69,21 @@ function hash(value: string): number {
   return h >>> 0;
 }
 
-/** An opening style the workspace hasn't used in its last few pieces. */
+/**
+ * An opening style the workspace hasn't used in its last few pieces, leaning
+ * toward the openings its team loved (ADR-0038).
+ */
 export function pickHookStyle(
   seed: string,
   recent: (string | null | undefined)[],
   preferred?: string | null,
+  lean?: Lean | null,
 ): HookStyle {
   const kept = preferred ? HOOK_STYLES.find((h) => h.id === preferred) : null;
   if (kept) return kept;
   const used = new Set(recent.filter(Boolean).slice(0, 5));
   const pool = HOOK_STYLES.filter((h) => !used.has(h.id));
-  const candidates = pool.length ? pool : HOOK_STYLES;
+  const candidates = applyLean(pool.length ? pool : HOOK_STYLES, lean, seed, (h) => h.id);
   return candidates[hash(`hook:${seed}`) % candidates.length];
 }
 
@@ -158,11 +164,21 @@ export function voiceSamples(recent: Recent, channel?: string | null): string[] 
   );
 }
 
-/** The consistency block: sound like the same brand that wrote these. */
-export function consistencySection(recent: Recent, channel?: string | null): string {
-  const samples = voiceSamples(recent, channel);
+/**
+ * The consistency block: sound like the same brand that wrote these. Captions
+ * the team loved (ADR-0038) come first and take the place of published ones.
+ */
+export function consistencySection(
+  recent: Recent,
+  channel?: string | null,
+  loved?: readonly string[] | null,
+): string {
+  const samples = distinct([...(loved ?? []), ...voiceSamples(recent, channel)], 2);
   if (!samples.length) return "";
-  return `These went out from this brand. Match how they sound: the same person, the same sentence rhythm, the same way of addressing the reader, the same habits with emoji and line breaks. Take nothing else from them: not the topic, not the opening, not the facts.\n${samples
+  const intro = loved?.length
+    ? "These are this brand's own posts, published or loved by its team."
+    : "These went out from this brand.";
+  return `${intro} Match how they sound: the same person, the same sentence rhythm, the same way of addressing the reader, the same habits with emoji and line breaks. Take nothing else from them: not the topic, not the opening, not the facts.\n${samples
     .map((s, i) => `<published ${i + 1}>\n${s}\n</published>`)
     .join("\n")}`;
 }

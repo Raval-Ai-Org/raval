@@ -62,9 +62,19 @@ import {
   grabFrame,
   joinWithTransitions,
   probeVideo,
+  siteScroll,
   stillClip,
   writeCaptionTrack,
 } from "./ffmpeg.server";
+import { siteFramePng } from "./site-frame.server";
+import {
+  MAX_SITE_SCREENS,
+  scrollExpression,
+  siteDevice,
+  siteFrame,
+  siteStops,
+  siteTimeline,
+} from "@/lib/studio/site-reel";
 import { captionsDrawable, renderCaptionImages } from "./captions.server";
 import { transcribeVideo } from "./transcribe.server";
 
@@ -72,7 +82,8 @@ export const CLIP_EDIT_PREFIX = "clip-edit:";
 
 /** Stored on the Studio media task while the video is put together. */
 export type ClipEditTask = {
-  mode: "brand" | "recap";
+  /** "site": the brand's website capture scrolling in a device (site-reel.ts). */
+  mode: "brand" | "recap" | "site";
   motion?: "camera" | "ai";
   /** "Brand my clips": the person's clips, by asset id. */
   clipAssetIds: string[];
@@ -360,11 +371,115 @@ async function download(client: SupabaseClient, path: string, out: string) {
   await writeFile(out, Buffer.from(await downloaded.data.arrayBuffer()));
 }
 
+/**
+ * "From my website": the brand's own capture scrolls inside a device drawn by
+ * code. No model is asked for anything; the capture is never redrawn.
+ */
+async function siteReel(args: ClipEditArgs, dir: string): Promise<string> {
+  const { task, client, workspaceId } = args;
+  const [capture] = await resolveStudioReferences(client, workspaceId, task.photoAssetIds);
+  if (!capture || !isWorkspaceStoragePath(capture.storagePath, workspaceId))
+    throw new Error("The website capture is unavailable.");
+  const source = join(dir, "site-source");
+  await download(client, capture.storagePath, source);
+  const meta = await sharp(source, { limitInputPixels: 120_000_000 }).metadata();
+  if (!meta.width || !meta.height) throw new Error("The website capture could not be read.");
+  const canvas = videoCanvas(task.ratio);
+  const device = siteDevice(meta.width);
+  const { screen } = siteFrame(canvas, device);
+  // The page at the screen's width, cut to the screens the reel can reach.
+  const scaled = Math.round((meta.height * screen.w) / meta.width);
+  const pageHeight = Math.min(scaled, screen.h * MAX_SITE_SCREENS);
+  const page = join(dir, "site-page.png");
+  await sharp(source, { limitInputPixels: 120_000_000 })
+    .resize(screen.w, scaled)
+    .extract({ left: 0, top: 0, width: screen.w, height: pageHeight })
+    .png()
+    .toFile(page);
+  const stops = siteStops(pageHeight, screen.h);
+  if (!stops.length) throw new Error("The page is too short to scroll.");
+  const { segments, total } = siteTimeline(stops);
+  const frame = join(dir, "site-frame.png");
+  await writeFile(frame, await siteFramePng({ canvas, device, colours: task.brand.colours ?? [] }));
+  const scrolled = join(dir, "site.mp4");
+  await siteScroll({
+    page,
+    frame,
+    output: scrolled,
+    ...canvas,
+    screen,
+    scroll: scrollExpression(segments),
+    seconds: total,
+  });
+  await park(args.taskId, { state: "running", at: Date.now() });
+
+  let logo: { path: string; x: number; y: number } | null = null;
+  if (task.logo) {
+    const backdrop = await sharp(frame).flatten({ background: "#000000" }).png().toBuffer();
+    const layers = await logoLayers(backdrop, task.logo.url, task.logo.corner);
+    if (layers) {
+      logo = { path: join(dir, "logo.png"), x: 0, y: 0 };
+      await sharp({
+        create: { ...canvas, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+      })
+        .composite(layers)
+        .png()
+        .toFile(logo.path);
+    }
+  }
+  if (!logo) return scrolled;
+  const finished = join(dir, "finished.mp4");
+  await brandVideo({ input: scrolled, output: finished, overlay: null, logo });
+  return finished;
+}
+
+async function saveVideo(
+  args: ClipEditArgs,
+  finished: string,
+  warnings: string[],
+  metadata: Record<string, unknown>,
+): Promise<ClipEditResult> {
+  const { task } = args;
+  const saved = await persistAsset({
+    workspaceId: args.workspaceId,
+    idempotencyKey: `studio:${args.jobId}:main:${args.taskId}`,
+    bytes: await readFile(finished),
+    mimeType: "video/mp4",
+    assetType: "video",
+    contentItemIds: args.contentItemIds,
+    filename: `mellox-video-${task.ratio.replace(":", "x")}-${args.jobId.slice(0, 8)}`,
+    platform: null,
+    metadata: {
+      source: "studio_clip_edit",
+      job_id: args.jobId,
+      aspect_ratio: task.ratio,
+      studio_type: "video",
+      video_mode: task.mode,
+      ...metadata,
+    },
+  });
+  if (!saved.ok || !saved.asset.storage_path)
+    throw new Error(saved.ok ? "No file was stored." : saved.message);
+  const result: ClipEditResult = {
+    state: "done",
+    assetId: saved.asset.id,
+    storagePath: saved.asset.storage_path,
+    warnings,
+  };
+  await park(args.taskId, result);
+  return result;
+}
+
 export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult> {
   const { task, client, workspaceId } = args;
   const beat = () => park(args.taskId, { state: "running", at: Date.now() });
   const dir = await mkdtemp(join(tmpdir(), "mellox-clip-"));
   try {
+    if (task.mode === "site")
+      return await saveVideo(args, await siteReel(args, dir), [], {
+        source_asset_ids: task.photoAssetIds,
+        source_preserved: true,
+      });
     const canvas = videoCanvas(task.ratio);
     const clips: string[] = [];
     /** Each piece's real length, for the transitions between them. */
@@ -505,37 +620,12 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
       loudness: sound,
     });
 
-    const saved = await persistAsset({
-      workspaceId,
-      idempotencyKey: `studio:${args.jobId}:main:${args.taskId}`,
-      bytes: await readFile(finished),
-      mimeType: "video/mp4",
-      assetType: "video",
-      contentItemIds: args.contentItemIds,
-      filename: `mellox-video-${task.ratio.replace(":", "x")}-${args.jobId.slice(0, 8)}`,
-      platform: null,
-      metadata: {
-        source: "studio_clip_edit",
-        job_id: args.jobId,
-        aspect_ratio: task.ratio,
-        studio_type: "video",
-        video_mode: task.mode,
-        ...(task.motion ? { recap_motion: task.motion } : {}),
-        source_asset_ids: task.mode === "brand" ? task.clipAssetIds : task.photoAssetIds,
-        source_preserved: task.motion !== "ai",
-        ...(captions ? { captions: true } : {}),
-      },
+    return await saveVideo(args, finished, warnings, {
+      ...(task.motion ? { recap_motion: task.motion } : {}),
+      source_asset_ids: task.mode === "brand" ? task.clipAssetIds : task.photoAssetIds,
+      source_preserved: task.motion !== "ai",
+      ...(captions ? { captions: true } : {}),
     });
-    if (!saved.ok || !saved.asset.storage_path)
-      throw new Error(saved.ok ? "No file was stored." : saved.message);
-    const result: ClipEditResult = {
-      state: "done",
-      assetId: saved.asset.id,
-      storagePath: saved.asset.storage_path,
-      warnings,
-    };
-    await park(args.taskId, result);
-    return result;
   } catch (error) {
     console.warn("[clip-edit] render failed", error instanceof Error ? error.message : error);
     const result: ClipEditResult = { state: "failed", message: CLIP_EDIT_FAILED };

@@ -16,6 +16,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mergeMeta } from "@/lib/content-lifecycle";
 import { safeDesign, safeTheme } from "@/lib/studio/carousel/design";
+import { safePhotos, type SlidePhoto } from "@/lib/studio/carousel/photos";
 import { normalizeSlides } from "@/lib/studio/carousel/story";
 import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
@@ -90,7 +91,16 @@ export function carouselHash(
     .update(
       JSON.stringify({
         v: RENDER_VERSION,
-        slides: slides.map((s) => [s.role, s.kicker ?? "", s.heading, s.emphasis ?? "", s.body]),
+        slides: slides.map((s) => [
+          s.role,
+          s.kicker ?? "",
+          s.heading,
+          s.emphasis ?? "",
+          s.body,
+          s.photo ?? null,
+        ]),
+        structure: spec.structure ?? "",
+        photos: (spec.photos ?? []).map((p) => [p.path, p.frame]),
         design: spec.design,
         theme: spec.theme,
         brand: spec.brand,
@@ -100,6 +110,24 @@ export function carouselHash(
       }),
     )
     .digest("hex");
+}
+
+/** The brand's own pictures from this workspace only; one that can't be read is skipped. */
+async function readPhotos(
+  workspaceId: string,
+  photos: SlidePhoto[] | undefined,
+): Promise<({ bytes: Buffer; frame: SlidePhoto["frame"] } | null)[]> {
+  return Promise.all(
+    (photos ?? []).map(async (photo) => {
+      const bytes = await readCover(workspaceId, photo.path);
+      return bytes ? { bytes, frame: photo.frame } : null;
+    }),
+  );
+}
+
+/** Keep only well-formed photos whose files belong to this workspace. */
+export function workspacePhotos(raw: unknown, workspaceId: string): SlidePhoto[] {
+  return safePhotos(raw).filter((p) => isWorkspaceStoragePath(p.path, workspaceId));
 }
 
 async function readCover(workspaceId: string, path: string | null): Promise<Buffer | null> {
@@ -121,7 +149,8 @@ export async function storeCarouselSlides(args: {
   /** Storage path of the generated cover picture, if there is one. */
   coverPath?: string | null;
 }): Promise<StoredCarousel | null> {
-  const { workspaceId, spec } = args;
+  const { workspaceId } = args;
+  const spec: Spec = { ...args.spec, photos: workspacePhotos(args.spec.photos, workspaceId) };
   const design = safeDesign(spec.design);
   const theme = safeTheme(spec.theme);
   const slides = normalizeSlides(args.slides, args.slides.length);
@@ -140,6 +169,8 @@ export async function storeCarouselSlides(args: {
       brand: spec.brand,
       site: spec.site,
       coverArt: await readCover(workspaceId, coverPath),
+      photos: await readPhotos(workspaceId, spec.photos),
+      structure: spec.structure,
     });
     const stored: { id: string; path: string }[] = [];
     for (const [i, image] of images.entries()) {
@@ -253,6 +284,7 @@ export async function ensureCarouselMedia(item: {
     brand: typeof stored.brand === "string" ? stored.brand.slice(0, 80) : "",
     site: typeof stored.site === "string" ? stored.site.slice(0, 80) : undefined,
     structure: typeof stored.structure === "string" ? stored.structure : undefined,
+    photos: workspacePhotos(stored.photos, item.workspace_id),
     ratio:
       typeof stored.ratio === "string"
         ? stored.ratio

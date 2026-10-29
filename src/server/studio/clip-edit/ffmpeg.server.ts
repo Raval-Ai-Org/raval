@@ -274,6 +274,77 @@ export async function stillClip(args: {
   );
 }
 
+/**
+ * "From my website": the page scrolls behind the device frame's screen. The
+ * page is already scaled to the screen's width; the frame is an RGBA PNG at
+ * the canvas size with the screen cut out. Silent, like the clips it joins.
+ */
+export async function siteScroll(args: {
+  page: string;
+  frame: string;
+  output: string;
+  width: number;
+  height: number;
+  screen: { x: number; y: number; w: number; h: number };
+  /** FFmpeg expression of t for the page offset (site-reel.ts scrollExpression). */
+  scroll: string;
+  seconds: number;
+}): Promise<void> {
+  const seconds = args.seconds.toFixed(2);
+  await run(
+    ffmpeg(),
+    [
+      ...QUIET,
+      ...SAFE_INPUT,
+      "-f",
+      "lavfi",
+      "-i",
+      `color=c=black:s=${args.width}x${args.height}:r=30:d=${seconds}`,
+      "-loop",
+      "1",
+      "-framerate",
+      "30",
+      "-t",
+      seconds,
+      "-i",
+      args.page,
+      "-loop",
+      "1",
+      "-framerate",
+      "30",
+      "-t",
+      seconds,
+      "-i",
+      args.frame,
+      "-f",
+      "lavfi",
+      "-t",
+      seconds,
+      "-i",
+      "anullsrc=r=48000:cl=stereo",
+      "-filter_complex",
+      [
+        `[1:v]crop=${args.screen.w}:${args.screen.h}:0:'${args.scroll}',setsar=1[page]`,
+        `[0:v][page]overlay=${args.screen.x}:${args.screen.y}:shortest=1[base]`,
+        `[2:v]format=rgba[frame]`,
+        `[base][frame]overlay=0:0:shortest=1,setsar=1,format=yuv420p[v]`,
+      ].join(";"),
+      "-map",
+      "[v]",
+      "-map",
+      "3:a:0",
+      ...H264,
+      ...AAC,
+      "-t",
+      seconds,
+      "-movflags",
+      "+faststart",
+      args.output,
+    ],
+    options,
+  );
+}
+
 /** Join clips made by fitClip/stillClip (same size, rate and audio). */
 export async function joinClips(directory: string, clips: string[], output: string) {
   const { writeFile } = await import("node:fs/promises");

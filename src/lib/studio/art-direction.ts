@@ -30,7 +30,14 @@ export type ArchetypeId =
   | "callout-board"
   | "material-lettering"
   | "mirror-kaleidoscope"
-  | "brand-miniature-store";
+  | "brand-miniature-store"
+  | "device-showcase"
+  | "touchpoint-world"
+  | "occasion-symbol"
+  | "what-if-render"
+  | "sticker-journey"
+  | "glossy-macro"
+  | "mixed-media-breakout";
 
 type Energy = "calm" | "bold" | "playful";
 
@@ -46,6 +53,13 @@ export type Archetype = {
   person: "required" | "optional" | "none";
   /** Only for brands that sell a physical thing. */
   physicalOnly?: boolean;
+  /** Only for brands whose product is on a screen (software, sites, apps, services). */
+  screenOnly?: boolean;
+  /**
+   * Only for one kind of piece (a greeting, a teaser, a joke): picked only when
+   * the deliverable prefers it, and the concept menu says when to use it.
+   */
+  onlyFor?: string;
   /** The layout depends on a typeset word. */
   needsText?: boolean;
   scene: (hero: string, people: boolean) => string;
@@ -421,6 +435,135 @@ export const ARCHETYPES: readonly Archetype[] = [
     finish: "Blind-box toy craft, rich detail, cosy and charming.",
     avoid: "real chain store signage, other brands, a cluttered street",
   },
+  // Round 2, from a study of agency portfolio posts (docs/studio/reference-study-2026-10.md).
+  {
+    id: "device-showcase",
+    name: "Device showcase",
+    summary:
+      "a website or app shown on a laptop, phone or tablet at a slightly low angle, on a set tinted with the brand's accent colour",
+    formats: ["product-focused", "educational-visual", "editorial"],
+    energy: ["calm", "bold"],
+    person: "none",
+    screenOnly: true,
+    scene: () =>
+      "One modern device (laptop, phone or tablet, whichever suits the message) seen straight on or from a slightly low three-quarter angle, resting on a sculptural stand, a glossy bench or a soft fabric surface. The background is a smooth studio gradient that picks up the brand's accent colour in one corner. The screen shows a calm, abstract interface made only of soft colour blocks and image placeholders in the brand palette: no readable words, numbers, logos or invented interface text.",
+    type: "The headline sits in the calm band above or beside the device, never on the screen; one small support line at most.",
+    typeWithoutText:
+      "Keep a calm band above or beside the device for a headline added later; nothing written on the screen.",
+    light:
+      "Soft key light with a gentle reflection running across the screen glass, a thin rim light on the device edge in the accent colour, a believable contact shadow; 50mm, everything sharp.",
+    finish: "Premium portfolio presentation: precise, airy, the device as an object of desire.",
+    avoid:
+      "a raw flat screenshot pasted on a background, fake interface text, a cluttered desk, tilted or warped screens",
+  },
+  {
+    id: "touchpoint-world",
+    name: "Identity in the real world",
+    summary:
+      "the brand shown on one real-world object (a billboard, a shopfront sign, a delivery bag, a cap, a van side) in a black-and-white photo where the brand colour is the only colour",
+    formats: ["cinematic-campaign", "editorial", "storytelling"],
+    energy: ["bold", "calm"],
+    person: "optional",
+    scene: (hero, people) =>
+      `One real-world brand touchpoint fills most of the frame, cropped boldly off one edge: a billboard on a wall, a shop sign, a delivery bag, a cap or a vehicle side, carrying ${hero}. The whole photograph is black and white; the brand's own colour on the touchpoint is the only saturated colour anywhere.${people ? ` ${cap(PERSON)} passes by or uses it, slightly blurred.` : ""} Its surface carries flat colour blocks and simple shapes from the brand palette, never a drawn logo or invented words.`,
+    type: "The headline in one bold face on a calm area of the photograph, not on the touchpoint itself; one small support line at most.",
+    typeWithoutText:
+      "Leave a calm band of wall or sky for a headline added later; the touchpoint carries no letters.",
+    light:
+      "Hard midday sun with crisp cast shadows, or one strong spotlight at night; low camera angle so the touchpoint feels heroic.",
+    finish: "Identity case-study photography: graphic, confident, one spot of colour.",
+    avoid:
+      "more than one saturated colour, a drawn or invented logo, fake signage text, a cluttered street",
+  },
+  {
+    id: "occasion-symbol",
+    name: "Occasion symbol",
+    summary:
+      "one universal symbol of the day (a crescent, a lantern, a flame, a heart) in the brand's colour on a plain dark or flat field, with most of the frame left empty",
+    formats: ["minimal-typography", "abstract-metaphorical", "editorial"],
+    energy: ["calm"],
+    person: "none",
+    onlyFor: "a greeting for a holiday or occasion",
+    scene: () =>
+      "One universal symbol of the occasion, made as a softly glowing three-dimensional form in the brand's main colour, centred a little above the middle of a plain dark or flat field. At least three quarters of the frame is empty. Nothing else: no ornaments, borders, confetti or clip-art.",
+    type: "The greeting small and quiet below the symbol, lowercase or sentence case, at most a third of the width; one line, two at most.",
+    typeWithoutText: "Leave the band below the symbol empty for a greeting added later.",
+    light:
+      "The symbol lit from within or by one soft source, a gentle gradient across it, no hard shadows.",
+    finish: "Respectful, calm and premium; restraint is the point.",
+    avoid:
+      "busy patterns, stock ornaments, many colours, any religious figure or text other than the supplied greeting",
+  },
+  {
+    id: "what-if-render",
+    name: "What-if render",
+    summary:
+      "a photoreal, impossible version of an everyday thing (a car that hovers, a cup that rains) that makes people stop and smile",
+    formats: ["meme-style", "abstract-metaphorical", "cinematic-campaign"],
+    energy: ["playful", "bold"],
+    person: "none",
+    onlyFor: "a playful or topical post",
+    scene: (hero) =>
+      `A photoreal, impossible version of ${hero}: one physical law playfully broken (it floats, flies, melts, grows, rains) in a real, believable setting such as a desert flat, a street or a studio. The object is large and centred; the rest of the frame is calm and real.`,
+    type: "A short reaction line, like something a viewer would say, set small at the bottom centre; one smaller support line under it.",
+    typeWithoutText: "Keep the bottom quarter calm for a reaction line added later.",
+    light:
+      "Natural daylight matched to the setting, dust, reflections and shadows obeying the same sun, as if shot on location.",
+    finish: "Campaign-grade CGI that looks photographed, not rendered.",
+    avoid:
+      "another company's logo or product design, cartoon rendering, more than one impossible thing",
+  },
+  {
+    id: "sticker-journey",
+    name: "Sticker journey",
+    summary:
+      "a recognisable place or object cut out like a sticker with a torn white edge, rising from a flat floor band on a warm gradient stage",
+    formats: ["storytelling", "meme-style", "editorial"],
+    energy: ["playful", "bold"],
+    person: "none",
+    onlyFor: "arriving somewhere new, an origin, a journey or a place",
+    scene: (hero) =>
+      `${cap(hero)} or a landmark that stands for the place in the message, as a photographic cut-out with a ragged white sticker edge, rising from the bottom edge of the frame and cropped by it. Behind it, a smooth diagonal gradient in the brand's colours over a flat floor band across the bottom sixth. A few thin line-art doodles that suit the category float around it.`,
+    type: "A two-line title in the top fifth: a thin connector word in caps on the first line, the heavy place or product name on the second.",
+    typeWithoutText: "Keep the top fifth empty for a title added later.",
+    light: "Flat, even light on the cut-out with a soft shadow where it meets the floor band.",
+    finish: "Bright, graphic travel-poster collage, crisp edges.",
+    avoid: "clip-art, more than five doodles, a real store or other brand's signage",
+  },
+  {
+    id: "glossy-macro",
+    name: "Glossy macro form",
+    summary:
+      "one abstract inflated or glass form in a single glossy material and the brand colour, cropped so large it runs off two edges, on black",
+    formats: ["abstract-metaphorical", "minimal-typography", "cinematic-campaign"],
+    energy: ["bold", "calm"],
+    person: "none",
+    onlyFor: "a teaser, a reveal or a new look",
+    scene: () =>
+      "One abstract form (soft inflated curves, a glass blob or a smooth extruded shape) in a single glossy material in the brand's main colour, cropped so close that it runs off two or three edges of the frame. Pure black or near-black stage, no floor.",
+    type: "At most two words in a condensed heavy face, set in the dark gap between the forms.",
+    typeWithoutText: "Leave the dark gap between the forms empty for words added later.",
+    light:
+      "One soft studio key from the top left with a long specular highlight along the curve and a deep core shadow.",
+    finish: "Teaser-grade 3D: one material, one colour, nothing else.",
+    avoid: "a logo or letters drawn in 3D, several materials, rainbow colours, a visible floor",
+  },
+  {
+    id: "mixed-media-breakout",
+    name: "Mixed-media breakout",
+    summary:
+      "a flat, grain-textured 2D illustrated character stepping out of a photographed poster or screen into the real scene",
+    formats: ["storytelling", "human-lifestyle", "meme-style"],
+    energy: ["playful"],
+    person: "none",
+    scene: (hero) =>
+      `A photographed real-world scene (a street poster in dappled light, a shop window or a screen) showing ${hero}. A flat, grain-textured 2D illustrated character in the brand palette steps out of it into the photograph, breaking the frame's edge and casting a soft shadow on the real surface.`,
+    type: "Headline small, in one calm corner of the photograph.",
+    typeWithoutText: "Keep one corner calm for a headline added later.",
+    light: "Real daylight with leaf or window shadows falling across the poster surface.",
+    finish: "Authored, hand-made feel: flat illustration and real photo clearly two layers.",
+    avoid: "a 3D-rendered character, a human face, the illustration fully inside the frame",
+  },
 ];
 
 const BY_ID = new Map(ARCHETYPES.map((a) => [a.id, a]));
@@ -496,6 +639,8 @@ export function pickArchetype(input: ArtDirectionInput): Archetype {
     (a) =>
       !exclude.has(a.id) &&
       (physical || !a.physicalOnly) &&
+      (!physical || !a.screenOnly) &&
+      (!a.onlyFor || !!input.prefer?.includes(a.id)) &&
       (allowPeople || a.person !== "required") &&
       (allowText || !a.needsText),
   ).map((a) => {
@@ -511,7 +656,9 @@ export function pickArchetype(input: ArtDirectionInput): Archetype {
       score += 1;
     return { a, score };
   });
-  const pool = scored.length ? scored : ARCHETYPES.map((a) => ({ a, score: 0 }));
+  const pool = scored.length
+    ? scored
+    : ARCHETYPES.filter((a) => !a.onlyFor).map((a) => ({ a, score: 0 }));
   const best = Math.max(...pool.map((p) => p.score));
   // The top tier and the one just below it, so the same brand doesn't get the
   // same layout every time while a poor fit is never chosen.
@@ -530,6 +677,9 @@ export const CRAFT_RULES: readonly string[] = [
   "Art-direct the light like a shoot: name-able key light, rim or edge light, believable contact shadows and reflections.",
   "Real materials: true textures, fabric folds, condensation, glass and metal reflections; nothing plastic or waxy.",
   "Palette comes from the brand and the product: one dominant colour, one accent, neutrals; no rainbow gradients.",
+  "Accent restraint: the accent colour covers only a few small hits (roughly 3–8% of the frame), so it pops every time it appears.",
+  "One grade for the whole picture: a shared shadow tint, one light direction and a fine, even film grain; never a flat digital fill next to a photographic one.",
+  "Where the layout allows, let the subject overlap the headline (type behind, subject in front) so the layers read as real depth.",
   "Type hierarchy of three steps at most (headline, one support line, one tiny detail), in no more than two typefaces, high contrast against what is behind it.",
   "Avoid AI tells: extra or fused fingers, warped faces, duplicated subjects, melted product shapes, gibberish lettering, over-smoothed skin, oversaturated colour.",
 ];
@@ -562,12 +712,20 @@ export function heroSubject(args: { products?: string | null; physical: boolean 
   return "one simple, physical everyday object that stands for the post's message";
 }
 
-/** The concept writer's menu: id, name and when to use it. */
-export function archetypeMenu(): string {
-  return ARCHETYPES.map(
-    (a) =>
-      `- ${a.id}: ${a.name}, ${a.summary}. Best for ${a.formats.join(", ")}.${a.physicalOnly ? " Only for a physical product." : ""}${a.person === "required" ? " Needs a person." : ""}`,
-  ).join("\n");
+/**
+ * The concept writer's menu: id, name and when to use it. Layouts the team
+ * asked for less of are left out, and loved ones are marked (ADR-0038).
+ */
+export function archetypeMenu(lean?: { liked: string[]; avoided: string[] } | null): string {
+  const avoided = new Set(lean?.avoided ?? []);
+  const liked = new Set(lean?.liked ?? []);
+  const menu = ARCHETYPES.filter((a) => !avoided.has(a.id));
+  return (menu.length ? menu : ARCHETYPES)
+    .map(
+      (a) =>
+        `- ${a.id}: ${a.name}, ${a.summary}. Best for ${a.formats.join(", ")}.${a.physicalOnly ? " Only for a physical product." : ""}${a.screenOnly ? " Only for something used on a screen." : ""}${a.onlyFor ? ` Only for ${a.onlyFor}.` : ""}${a.person === "required" ? " Needs a person." : ""}${liked.has(a.id) ? " The team loved this layout: prefer it when it fits." : ""}`,
+    )
+    .join("\n");
 }
 
 /**

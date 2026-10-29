@@ -10,6 +10,7 @@ import { LibraryPage } from "@/components/app/LibraryPage";
 import { LibraryDialog } from "@/components/app/LibraryDialog";
 import { emitAppEvent } from "@/lib/app-events";
 import { normalizeLibraryAsset } from "@/lib/library";
+import type { TasteView } from "@/lib/taste/contracts";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
@@ -1165,10 +1166,46 @@ function RailScene() {
   );
 }
 
+/** Library posts in every shape Studio makes, so a crop would show at once. */
+const LIBRARY_ROWS: ContentRow[] = (
+  [
+    ["l1", "Stop guessing your grind", "carousel", "9:16", "thumb-tall", 90],
+    ["l2", "Weekend pour-over ritual", "social", "4:5", "thumb-portrait", 600],
+    ["l3", "Fresh beans every Friday", "ad", "1:1", "thumb-square", 1500],
+    ["l4", "How we roast, start to finish", "image", "16:9", "thumb-wide", 3000],
+  ] as const
+).map(([id, title, type, ratio, path, ago]) => ({
+  id,
+  title,
+  body: `${title}. Small batches, roasted on Tuesday and shipped the same week.`,
+  kind: type === "social" ? "post" : type,
+  channel: "instagram",
+  status: "approved",
+  meta: {
+    source: "studio",
+    studio_type: type,
+    group_id: `g-${id}`,
+    job_id: `job-${id}`,
+    platform: "instagram",
+    asset_storage_path: path,
+    media_type: "image",
+    aspect_ratio: ratio,
+  },
+  created_at: minutesAgo(ago),
+  updated_at: minutesAgo(ago),
+  scheduled_at: null,
+}));
+
 function libraryFixtures() {
   return {
-    fixtureGroups: RAIL_GROUPS,
-    fixtureThumbs: { "thumb-1": art(1280, 960, "#223012", "#b5d84a", "Harvest") },
+    fixtureGroups: [...RAIL_GROUPS, ...groupRows(LIBRARY_ROWS)],
+    fixtureThumbs: {
+      "thumb-1": art(1280, 960, "#223012", "#b5d84a", "Harvest"),
+      "thumb-tall": art(1080, 1920, "#0d1a0b", "#9ad13a", "Stop guessing"),
+      "thumb-portrait": art(1080, 1350, "#2b1d12", "#d49a5a", "Pour-over"),
+      "thumb-square": art(1080, 1080, "#101820", "#4fd1c5", "Fresh Friday"),
+      "thumb-wide": art(1920, 1080, "#1d1d1d", "#c9f25c", "Roast day"),
+    },
     fixtureAssets: [
       normalizeLibraryAsset({
         id: "asset-1",
@@ -1177,8 +1214,23 @@ function libraryFixtures() {
         kind: "image",
         created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
         source: "generated",
+        metadata: { aspect_ratio: "4:5" },
       }),
     ],
+    fixtureTaste: {
+      reactions: { "g-l2": "love", "g-l4": "love", "g-carousel": "love", "g-l3": "less" },
+      summary: {
+        loves: 3,
+        lesses: 1,
+        toLearn: 0,
+        chips: [
+          { kind: "format", value: "carousel", label: "Carousel", tone: "liked" },
+          { kind: "hook", value: "question", label: "Opens with a question", tone: "liked" },
+          { kind: "colorway", value: "dark", label: "Dark backgrounds", tone: "avoided" },
+        ],
+      },
+    } satisfies TasteView,
+    fixtureLastSeen: minutesAgo(30),
   };
 }
 

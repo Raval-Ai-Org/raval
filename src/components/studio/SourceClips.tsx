@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/authed-fetch";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,9 @@ import { Upload, X } from "@/components/icons";
 import { Segmented } from "./studio-ui";
 import type { StudioControls } from "@/lib/studio/jobs";
 import { MAX_CLIPS, VIDEO_MODES } from "@/lib/studio/clip-edit";
+import { siteCaptures, type SiteCapture } from "@/lib/studio/site-reel";
+import { getVisualTaste } from "@/lib/brand-visuals.functions";
+import { emitAppEvent } from "@/lib/app-events";
 
 type Clip = { id: string; filename: string };
 const CLIP_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
@@ -36,6 +39,23 @@ export function SourceClips({
   const fileInput = useRef<HTMLInputElement>(null);
   const mode = c.videoMode ?? "generate";
   const value = c.sourceVideoAssetIds ?? [];
+  // Website captures are read (free) only once a person picks "From my website".
+  const [captures, setCaptures] = useState<SiteCapture[] | null>(null);
+  useEffect(() => {
+    if (mode !== "site" || captures) return;
+    let cancelled = false;
+    getVisualTaste({ data: { workspaceId } })
+      .then((view) => {
+        if (!cancelled) setCaptures(siteCaptures(view?.sources ?? []));
+      })
+      .catch(() => {
+        if (!cancelled) setCaptures([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, captures, workspaceId]);
+  const picked = c.referenceAssetIds?.[0];
 
   const upload = async (files: File[]) => {
     if (!files.length || busy || disabled) return;
@@ -86,7 +106,14 @@ export function SourceClips({
         label="Make the video from"
         className="max-w-full flex-wrap"
         value={mode}
-        onChange={(videoMode) => set({ videoMode })}
+        onChange={(videoMode) =>
+          // The website reel uses one capture; other modes start without it.
+          set(
+            videoMode === "site" || mode === "site"
+              ? { videoMode, referenceAssetIds: [] }
+              : { videoMode },
+          )
+        }
         options={VIDEO_MODES}
       />
       {mode === "brand" && (
@@ -163,6 +190,60 @@ export function SourceClips({
               { value: "ai", label: "Bring photos to life", hint: "AI motion · people may change" },
             ]}
           />
+        </>
+      )}
+      {mode === "site" && (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Your page scrolls on a phone or laptop screen, in your colours with your logo. About 10
+            seconds, no sound, and it loops.
+          </p>
+          {captures === null ? (
+            <p className="text-xs text-muted-foreground">Looking for your website pictures…</p>
+          ) : captures.length ? (
+            <ul className="grid grid-cols-3 gap-2">
+              {captures.slice(0, 9).map((capture) => (
+                <li key={capture.assetId}>
+                  <button
+                    type="button"
+                    aria-pressed={picked === capture.assetId}
+                    disabled={disabled}
+                    onClick={() => set({ referenceAssetIds: [capture.assetId] })}
+                    className={`w-full overflow-hidden rounded-lg border text-left text-[11px] ${
+                      picked === capture.assetId
+                        ? "border-primary ring-2 ring-primary/40"
+                        : "border-border"
+                    }`}
+                  >
+                    {capture.thumb ? (
+                      <img
+                        src={capture.thumb}
+                        alt=""
+                        className="h-20 w-full bg-surface-2 object-cover object-top"
+                      />
+                    ) : (
+                      <span className="block h-20 bg-surface-2" />
+                    )}
+                    <span className="block truncate px-2 py-1">
+                      {capture.mobile ? "Phone · " : ""}
+                      {capture.label}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No pictures of your website yet.{" "}
+              <button
+                type="button"
+                className="font-medium text-foreground underline"
+                onClick={() => emitAppEvent("open:inspo", { section: "media" })}
+              >
+                Add them in Inspo
+              </button>
+            </p>
+          )}
         </>
       )}
     </section>

@@ -18,8 +18,12 @@ import {
 } from "@/lib/studio/photo-design/prompt";
 import type { PhotoReading } from "@/lib/studio/photo-design/read";
 import type { AspectRatio } from "@/lib/studio/aspect";
-import { resolveStudioReferences, type StudioReference } from "../references.server";
-import { contactSheet, loadDesignPhotos, readDesignPhotos } from "./photos.server";
+import {
+  resolveStudioReferences,
+  screenCaptureIds,
+  type StudioReference,
+} from "../references.server";
+import { contactSheet, cropToScreen, loadDesignPhotos, readDesignPhotos } from "./photos.server";
 import { composePhotoDesign } from "./compose.server";
 
 /** Stored on the Studio image task while its design layer renders. */
@@ -138,7 +142,16 @@ export async function preparePhotoDesign(args: {
   previousLayerPath?: string | null;
   emphasisSeed: string;
 }): Promise<PreparedPhotoDesign> {
-  const photos = await loadDesignPhotos(args.client, args.photos);
+  const screenIds = await screenCaptureIds(
+    args.client,
+    args.workspaceId,
+    args.photos.map((p) => p.id),
+  );
+  const screens = args.photos.map((p) => screenIds.has(p.id));
+  const loaded = await loadDesignPhotos(args.client, args.photos);
+  const photos = await Promise.all(
+    loaded.map((photo, i) => (screens[i] ? cropToScreen(photo) : photo)),
+  );
   const read = await readDesignPhotos(photos);
   const plan = planPhotoDesign({
     readings: read.photos,
@@ -148,6 +161,7 @@ export async function preparePhotoDesign(args: {
     brief: args.brief,
     occasion: read.occasion,
     brandColours: args.brand.colours,
+    screens,
   });
 
   if (args.fidelity === "blend") {
@@ -269,7 +283,13 @@ export async function finishPhotoDesign(args: {
   if (saved.ok && saved.asset.storage_path) task.layerPath = saved.asset.storage_path;
 
   const references = await resolveStudioReferences(args.client, args.workspaceId, task.assetIds);
-  const photos = await loadDesignPhotos(args.client, references);
+  const loaded = await loadDesignPhotos(args.client, references);
+  // Screens are cut exactly as they were when the design was planned.
+  const photos = await Promise.all(
+    loaded.map((photo, i) =>
+      task.plan.screens?.[task.plan.order.indexOf(i)] ? cropToScreen(photo) : photo,
+    ),
+  );
   const result = await composePhotoDesign({
     layer,
     photos,

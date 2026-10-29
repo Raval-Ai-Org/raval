@@ -4925,6 +4925,80 @@ export type Database = {
           },
         ];
       };
+      content_reactions: {
+        Row: {
+          asset_id: string | null;
+          caption_sample: string;
+          content_item_id: string | null;
+          created_at: string;
+          id: string;
+          reaction: string;
+          set_by: string | null;
+          subject_key: string;
+          traits: Json;
+          updated_at: string;
+          visual_source_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          asset_id?: string | null;
+          caption_sample?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          id?: string;
+          reaction: string;
+          set_by?: string | null;
+          subject_key: string;
+          traits?: Json;
+          updated_at?: string;
+          visual_source_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          asset_id?: string | null;
+          caption_sample?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          id?: string;
+          reaction?: string;
+          set_by?: string | null;
+          subject_key?: string;
+          traits?: Json;
+          updated_at?: string;
+          visual_source_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "content_reactions_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "content_reactions_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "content_reactions_visual_source_id_fkey";
+            columns: ["visual_source_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_visual_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "content_reactions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       conversations: {
         Row: {
           archived_at: string | null;

@@ -18,6 +18,7 @@ import {
   type CarouselDesign,
   type CarouselTheme,
 } from "./design";
+import { SCREEN_ASPECT, type PhotoFrame } from "./photos";
 import { pointNumber, withRoles } from "./story";
 
 export type SlideArtProps = {
@@ -36,6 +37,13 @@ export type SlideArtProps = {
    * the one background picture that runs behind every slide.
    */
   coverImage?: string | null;
+  /**
+   * The brand's own pictures, in the carousel's photo order (slide.photo
+   * indexes into it). Screens arrive already cut to their window's shape.
+   */
+  photos?: ({ src: string; frame: PhotoFrame } | null)[] | null;
+  /** The story structure (story.ts); a running joke has its own layout. */
+  structure?: string | null;
 };
 
 type Colors = ReturnType<typeof slideColors>;
@@ -58,6 +66,30 @@ function Motif({
   c: Colors;
 }): ReactElement {
   const u = w / 1080;
+  if (design.motif === "glow") {
+    // One soft glow that moves to the next corner on every slide.
+    const corners = [
+      [16, 84],
+      [84, 86],
+      [86, 14],
+      [14, 16],
+    ];
+    const [x, y] = corners[index % corners.length];
+    return (
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: w,
+          height: h,
+          display: "flex",
+          opacity: 0.6,
+          backgroundImage: `radial-gradient(circle at ${x}% ${y}%, ${c.accent} 0%, ${c.bg} 62%)`,
+        }}
+      />
+    );
+  }
   if (design.motif === "wave") {
     // One long sine wave across the whole carousel; this slide shows its part.
     const line = (base: number, amp: number, phase: number) => {
@@ -296,6 +328,8 @@ export function Heading({
   accentInk,
   font,
   block,
+  upper,
+  align,
 }: {
   text: string;
   emphasis?: string;
@@ -306,6 +340,9 @@ export function Heading({
   font: string;
   /** Highlight as a filled block instead of a colour. */
   block: boolean;
+  /** Set in capitals with a heavier weight (the swiss look). */
+  upper?: boolean;
+  align?: "left" | "center";
 }): ReactElement {
   const at = emphasis ? text.toLowerCase().indexOf(emphasis.toLowerCase()) : -1;
   const end = at >= 0 ? at + (emphasis?.length ?? 0) : -1;
@@ -324,12 +361,14 @@ export function Heading({
         display: "flex",
         flexDirection: "row",
         flexWrap: "wrap",
+        justifyContent: align === "center" ? "center" : "flex-start",
         fontFamily: font,
         fontSize: size,
-        fontWeight: 700,
-        lineHeight: 1.08,
+        fontWeight: upper ? 800 : 700,
+        lineHeight: upper ? 0.98 : 1.08,
         letterSpacing: -0.02 * size,
         color,
+        ...(upper ? { textTransform: "uppercase" as const } : {}),
       }}
     >
       {words.map((w, i) => (
@@ -385,6 +424,109 @@ function Check({ size, color }: { size: number; color: string }): ReactElement {
   );
 }
 
+/**
+ * One of the brand's own pictures, framed: a screen sits in a phone or a
+ * browser window, a photo is a rounded card. Sizes come from the box it gets.
+ */
+function PhotoBlock({
+  src,
+  frame,
+  boxW,
+  boxH,
+  u,
+  c,
+}: {
+  src: string;
+  frame: PhotoFrame;
+  boxW: number;
+  boxH: number;
+  u: number;
+  c: Colors;
+}): ReactElement {
+  const shadow = "0 18px 50px rgba(0,0,0,0.22)";
+  if (frame === "phone") {
+    const bezel = 14 * u;
+    const innerH = boxH - bezel * 2;
+    const innerW = innerH * SCREEN_ASPECT.phone;
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignSelf: "center",
+          padding: bezel,
+          borderRadius: 64 * u,
+          background: "#0d0e10",
+          boxShadow: shadow,
+        }}
+      >
+        <img
+          src={src}
+          alt=""
+          width={innerW}
+          height={innerH}
+          style={{ width: innerW, height: innerH, borderRadius: 50 * u, objectFit: "cover" }}
+        />
+      </div>
+    );
+  }
+  if (frame === "browser") {
+    const bar = 44 * u;
+    const innerW = Math.min(boxW, (boxH - bar) * SCREEN_ASPECT.browser);
+    const innerH = innerW / SCREEN_ASPECT.browser;
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignSelf: "center",
+          borderRadius: 22 * u,
+          overflow: "hidden",
+          background: c.surface,
+          border: `${2 * u}px solid ${c.line}`,
+          boxShadow: shadow,
+        }}
+      >
+        <div style={{ ...row, height: bar, paddingLeft: 20 * u, gap: 10 * u }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                width: 13 * u,
+                height: 13 * u,
+                borderRadius: 7 * u,
+                background: c.line,
+              }}
+            />
+          ))}
+        </div>
+        <img
+          src={src}
+          alt=""
+          width={innerW}
+          height={innerH}
+          style={{ width: innerW, height: innerH, objectFit: "cover" }}
+        />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      width={boxW}
+      height={boxH}
+      style={{
+        width: boxW,
+        height: boxH,
+        borderRadius: 28 * u,
+        objectFit: "cover",
+        boxShadow: shadow,
+      }}
+    />
+  );
+}
+
 export function SlideArt(props: SlideArtProps): ReactElement {
   const { design, theme, width: w, height: h, index } = props;
   const slides = withRoles(props.slides);
@@ -395,9 +537,20 @@ export function SlideArt(props: SlideArtProps): ReactElement {
   const square = h / w < 1.1;
   // One long picture: no cover photo and no colour flip, or an edge would show.
   const seamless = isSeamless(design);
-  const art = !seamless && index === 0 && props.coverImage ? props.coverImage : null;
+  const swiss = design.look === "swiss" && !seamless;
+  const joke = props.structure === "running-joke";
+  const pic = slide.photo != null ? (props.photos?.[slide.photo] ?? null) : null;
+  // A photo on the cover is the whole slide; anywhere else it is framed.
+  const art = seamless
+    ? null
+    : index === 0 && pic?.frame === "photo"
+      ? pic.src
+      : index === 0 && props.coverImage
+        ? props.coverImage
+        : null;
+  const framed = pic && pic.src !== art ? pic : null;
 
-  const base = slideColors(theme, seamless ? "point" : role);
+  const base = slideColors(theme, seamless || swiss ? "point" : role);
   // Over a picture the text is always white on a dark scrim.
   const c: Colors = art
     ? { ...base, ink: "#ffffff", muted: "rgba(255,255,255,0.78)", line: "rgba(255,255,255,0.3)" }
@@ -406,7 +559,8 @@ export function SlideArt(props: SlideArtProps): ReactElement {
   const headFont = fontStack(theme.headingFont);
   const bodyFont = fontStack(theme.bodyFont);
   const pad = 84 * u;
-  const hSize = headingSize(role, slide.heading.length, square) * u;
+  const hSize =
+    headingSize(role, slide.heading.length, square) * u * (joke ? 1.45 : swiss ? 1.1 : 1);
   const bSize = bodySize(slide.body.length, square) * u;
   const number = pointNumber(slides, index);
   const label = number != null ? String(number).padStart(2, "0") : null;
@@ -438,7 +592,9 @@ export function SlideArt(props: SlideArtProps): ReactElement {
       accent={art ? "#ffffff" : c.accent}
       accentInk={art ? "#111315" : c.accentInk}
       font={headFont}
-      block={bold || !!art}
+      block={(bold || !!art) && !swiss}
+      upper={swiss}
+      align={joke ? "center" : "left"}
     />
   );
 
@@ -525,7 +681,86 @@ export function SlideArt(props: SlideArtProps): ReactElement {
   );
 
   let main: ReactElement;
-  if (role === "recap") {
+  if (joke) {
+    // The same template on every slide: a small setup, a big punchline.
+    main = (
+      <div style={{ ...col, alignItems: "center", gap: 28 * u }}>
+        {slide.body ? (
+          <div
+            style={{
+              display: "flex",
+              textAlign: "center",
+              fontFamily: bodyFont,
+              fontSize: 40 * u,
+              lineHeight: 1.25,
+              color: c.ink,
+            }}
+          >
+            {slide.body}
+          </div>
+        ) : null}
+        {heading}
+      </div>
+    );
+  } else if (swiss) {
+    // Heavy capitals top-left, a wide empty middle, the quieter line low down.
+    main = (
+      <div style={{ ...col, flex: 1, justifyContent: "space-between", gap: 40 * u }}>
+        <div style={{ ...col, gap: 28 * u }}>
+          {kicker}
+          {heading}
+        </div>
+        {framed ? (
+          <PhotoBlock
+            src={framed.src}
+            frame={framed.frame}
+            boxW={w - pad * 2}
+            boxH={h * (square ? 0.4 : 0.44)}
+            u={u}
+            c={c}
+          />
+        ) : null}
+        {slide.body ? (
+          <div
+            style={{
+              display: "flex",
+              fontFamily: headFont,
+              fontSize: (slide.body.length <= 40 ? 64 : 42) * u,
+              fontWeight: 700,
+              lineHeight: 1.12,
+              letterSpacing: -1 * u,
+              color: role === "cta" ? c.accent : c.muted,
+            }}
+          >
+            {slide.body}
+          </div>
+        ) : null}
+        {role === "cta" && props.site ? (
+          <div style={{ display: "flex", fontFamily: bodyFont, fontSize: 30 * u, color: c.ink }}>
+            {props.site}
+          </div>
+        ) : null}
+      </div>
+    );
+  } else if (framed) {
+    main = (
+      <div style={{ ...col, gap: 36 * u }}>
+        <PhotoBlock
+          src={framed.src}
+          frame={framed.frame}
+          boxW={w - pad * 2}
+          boxH={h * (square ? 0.42 : 0.48)}
+          u={u}
+          c={c}
+        />
+        <div style={{ ...col, gap: 18 * u }}>
+          {kicker}
+          {heading}
+          {role === "cover" ? null : body}
+        </div>
+      </div>
+    );
+  } else if (role === "recap") {
     const lines = slide.body
       .split(/\n+/)
       .map((l) => l.trim())
@@ -664,7 +899,7 @@ export function SlideArt(props: SlideArtProps): ReactElement {
           c={c}
           picture={props.coverImage}
         />
-      ) : (
+      ) : swiss ? null : (
         <Motif design={design} index={index} w={w} h={h} c={c} />
       )}
       {design.look === "frame" && !art && !seamless ? (
@@ -721,7 +956,13 @@ export function SlideArt(props: SlideArtProps): ReactElement {
             display: "flex",
             flexDirection: "column",
             flex: 1,
-            justifyContent: role === "cover" ? "flex-end" : "center",
+            justifyContent: swiss
+              ? "flex-start"
+              : joke
+                ? "center"
+                : role === "cover" && !framed
+                  ? "flex-end"
+                  : "center",
             paddingTop: 40 * u,
             // The ribbon runs along the bottom of a seamless carousel.
             paddingBottom: (seamless ? 170 : 40) * u,
@@ -745,7 +986,12 @@ export function SlideArt(props: SlideArtProps): ReactElement {
         </div>
 
         {/* A connected carousel has no page dots or arrow: the picture itself leads on. */}
-        {seamless ? null : (
+        {seamless ? null : swiss ? (
+          // Swiss keeps only a quiet arrow, bottom right, until the last slide.
+          <div style={{ ...row, justifyContent: "flex-end", height: 48 * u }}>
+            {index < count - 1 ? <Arrow size={48 * u} color={c.muted} /> : null}
+          </div>
+        ) : (
           <div style={{ ...row, justifyContent: "space-between" }}>
             <div style={{ ...row, gap: 10 * u }}>
               {slides.map((_, i) => (

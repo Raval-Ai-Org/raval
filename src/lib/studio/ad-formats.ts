@@ -6,6 +6,8 @@
 //
 // Pure (no React, no server) so the prompt engine and the picker share it.
 // Ids are stored on jobs: add formats, never rename ids.
+import { applyLean } from "@/lib/taste/bias";
+import type { Lean } from "@/lib/taste/contracts";
 import type { GoalId } from "./jobs";
 
 export type AdFormatThumb =
@@ -223,6 +225,8 @@ export function pickAdFormat(args: {
   hasProduct: boolean;
   seed: string;
   recent?: (string | null | undefined)[];
+  /** The brand's taste for ad layouts (ADR-0038). */
+  lean?: Lean | null;
 }): AdFormat {
   const chosen = getAdFormat(args.chosen);
   if (chosen && (args.hasProduct || !chosen.needsProduct)) return chosen;
@@ -231,7 +235,7 @@ export function pickAdFormat(args: {
   const pool = byGoal.length ? byGoal : usable;
   const recent = new Set((args.recent ?? []).filter(Boolean).slice(0, 3));
   const fresh = pool.filter((f) => !recent.has(f.id));
-  const choices = fresh.length ? fresh : pool;
+  const choices = applyLean(fresh.length ? fresh : pool, args.lean, args.seed, (f) => f.id);
   // With a product, lead with formats that show it.
   const ranked = args.hasProduct
     ? [...choices.filter((f) => f.needsProduct), ...choices.filter((f) => !f.needsProduct)]

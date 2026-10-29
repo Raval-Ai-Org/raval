@@ -60,6 +60,30 @@ export async function resolveStudioReferences(
   );
 }
 
+/**
+ * Which of these assets are captures of the brand's website (brand-visuals
+ * worker). A screen is always shown in a device, never as a raw picture.
+ */
+export async function screenCaptureIds(
+  client: SupabaseClient,
+  workspaceId: string,
+  assetIds: string[],
+): Promise<Set<string>> {
+  if (!assetIds.length) return new Set();
+  const { data } = await client
+    .from("assets")
+    .select("id,metadata")
+    .eq("workspace_id", workspaceId)
+    .in("id", assetIds);
+  return new Set(
+    ((data ?? []) as Array<{ id: string; metadata: unknown }>)
+      .filter(
+        (row) => (row.metadata as Record<string, unknown> | null)?.source === "website_capture",
+      )
+      .map((row) => row.id),
+  );
+}
+
 const CLIP_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
 /** The brand's own clips for "Brand my clips", by asset id, checked like photos. */

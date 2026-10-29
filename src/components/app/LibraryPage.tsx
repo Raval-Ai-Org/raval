@@ -2,21 +2,23 @@
 
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import {
   ArrowLeft,
   CalendarClock,
   Copy,
-  Download,
   FileText,
+  Heart,
   Image as ImageIcon,
   LayoutGrid,
   Link as LinkIcon,
   List,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
+  ThumbsDown,
   Video as VideoIcon,
   Wand2,
   X,
@@ -31,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
 import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
+import { isNewSince, parseRatio } from "@/lib/library-grid";
 import { getSignedAssetUrls } from "@/lib/persistent-assets";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { duration, ease } from "@/lib/motion";
@@ -53,6 +56,11 @@ import {
   type StudioType,
 } from "@/lib/studio/formats";
 import { openComposer, openJob } from "@/lib/studio/session-store";
+import type { Reaction, TasteView } from "@/lib/taste/contracts";
+import { LibraryTile, type TileAction } from "./library/LibraryTile";
+import { Masonry } from "./library/Masonry";
+import { TasteStrip } from "./library/TasteStrip";
+import { useLibraryTaste, type ReactTarget } from "./library/useLibraryTaste";
 
 type LibraryApiAsset = {
   id: string;
@@ -63,20 +71,24 @@ type LibraryApiAsset = {
   createdAt: string;
   updatedAt: string;
   workspaceId: string;
+  postId?: string | null;
   status: string;
   platform: string | null;
   mimeType: string | null;
   metadata: Record<string, unknown>;
 };
 
-export type LibraryTab = "all" | "posts" | "media";
+/** A library picture or clip, with the post it belongs to (if any). */
+type Media = LibraryAsset & { postId?: string | null };
+
+export type LibraryTab = "all" | "posts" | "media" | "loved";
 type StatusFilter = "all" | StageFilter;
 type Sort = "newest" | "oldest";
 type View = "grid" | "list";
 
 type Item =
-  | { kind: "post"; key: string; createdAt: string; title: string; group: Group }
-  | { kind: "media"; key: string; createdAt: string; title: string; asset: LibraryAsset };
+  | { kind: "post"; key: string; subject: string; createdAt: string; title: string; group: Group }
+  | { kind: "media"; key: string; subject: string; createdAt: string; title: string; asset: Media };
 
 const TONE_BADGE = {
   warn: "bg-warning-surface text-warning ring-warning-border",
@@ -97,6 +109,8 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
 const SELECT =
   "h-9 rounded-full border-0 bg-surface-2/80 pl-3 pr-8 text-xs font-medium text-foreground ring-1 ring-border/60 outline-none focus-visible:ring-2 focus-visible:ring-ring/55";
 
+const SEEN_KEY = "library:last-seen";
+
 function mediaKind(asset: LibraryAsset): "image" | "video" {
   return asset.type === "video" ? "video" : "image";
 }
@@ -111,16 +125,57 @@ function fullDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+function dayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /** The workspace this library belongs to (from the route). */
 function useWorkspaceId(): string | null {
   return useOptionalWorkspaceId();
 }
 
+/** When this browser last opened the Library, read once; "now" is saved for next time. */
+function useLastSeen(workspaceId: string | null, fixtures: boolean): string | null {
+  const [seen, setSeen] = useState<string | null>(null);
+  useEffect(() => {
+    if (fixtures) return;
+    const key = `${SEEN_KEY}:${workspaceId ?? "none"}`;
+    try {
+      setSeen(localStorage.getItem(key));
+      localStorage.setItem(key, new Date().toISOString());
+    } catch {
+      /* private window: everything from today counts as new */
+    }
+  }, [workspaceId, fixtures]);
+  return seen;
+}
+
+async function shareFile(url: string, name: string) {
+  try {
+    if (typeof navigator.canShare === "function") {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], name, { type: blob.type });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name });
+        return;
+      }
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success("Link copied", { description: "The link expires after a while." });
+  } catch {
+    toast.error("Couldn't share");
+  }
+}
+
 /**
  * Everything created in Studio, in one place: every post in every format and
- * status until it's discarded, and the images and video behind them. Search,
- * filter, and open anything to read its captions, copy, download, or pick it
- * back up in Studio. Rendered inside the Library pop-up (LibraryDialog).
+ * status until it's discarded, and the images and video behind them, each at
+ * its true shape. A heart teaches Mellox what this brand loves (ADR-0038).
+ * Rendered inside the Library pop-up (LibraryDialog).
  */
 export function LibraryPage({
   initialTab = "all",
@@ -130,6 +185,8 @@ export function LibraryPage({
   fixtureGroups,
   fixtureThumbs,
   fixtureAssets,
+  fixtureTaste,
+  fixtureLastSeen,
 }: {
   initialTab?: LibraryTab;
   /** Preselect a pipeline stage (from the Studio rail). */
@@ -141,13 +198,14 @@ export function LibraryPage({
   /** Preview/testing: render these instead of querying. */
   fixtureGroups?: Group[];
   fixtureThumbs?: Record<string, string>;
-  fixtureAssets?: LibraryAsset[];
+  fixtureAssets?: Media[];
+  fixtureTaste?: TasteView & { onChange?: (label: string) => void };
+  fixtureLastSeen?: string;
 } = {}) {
   const workspaceId = useWorkspaceId();
-  const reduce = useReducedMotion();
   const fixtures = !!fixtureGroups || !!fixtureAssets;
   const [tab, setTab] = useState<LibraryTab>(initialTab);
-  const [assets, setAssets] = useState<LibraryAsset[]>(fixtureAssets ?? []);
+  const [assets, setAssets] = useState<Media[]>(fixtureAssets ?? []);
   const [groups, setGroups] = useState<Group[]>(fixtureGroups ?? []);
   const [thumbs, setThumbs] = useState<Record<string, string>>(fixtureThumbs ?? {});
   const [loading, setLoading] = useState(!fixtures);
@@ -158,8 +216,12 @@ export function LibraryPage({
   const [sort, setSort] = useState<Sort>("newest");
   const [view, setView] = useState<View>("grid");
   const [selected, setSelected] = useState<Item | null>(null);
+  const [measured, setMeasured] = useState<Record<string, number>>({});
   const searchRef = useRef<HTMLInputElement>(null);
   const loadVersion = useRef(0);
+  const taste = useLibraryTaste(fixtures ? null : workspaceId, fixtureTaste);
+  const storedSeen = useLastSeen(workspaceId, fixtures);
+  const lastSeen = fixtureLastSeen ?? storedSeen;
 
   useEffect(() => setTab(initialTab), [initialTab]);
   useEffect(() => setStatus(initialStatus ?? "all"), [initialStatus]);
@@ -255,6 +317,7 @@ export function LibraryPage({
             source: "generated",
           }),
           thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+          postId: asset.postId ?? null,
         })),
       );
       const rows = (posts.data ?? []) as ContentRow[];
@@ -299,6 +362,21 @@ export function LibraryPage({
     };
   }, [load, fixtures]);
 
+  // Which post each content row belongs to, and each post's picture asset.
+  const postKeyOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of groups) for (const id of g.ids) map.set(id, g.key);
+    return map;
+  }, [groups]);
+  const pictureOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of assets) {
+      const key = a.postId ? postKeyOf.get(a.postId) : undefined;
+      if (key && mediaKind(a) === "image" && !map.has(key)) map.set(key, a.id);
+    }
+    return map;
+  }, [assets, postKeyOf]);
+
   const presentFormats = useMemo(
     () => STUDIO_TYPE_ORDER.filter((t) => groups.some((g) => g.type === t)),
     [groups],
@@ -306,9 +384,11 @@ export function LibraryPage({
   const images = assets.filter((a) => mediaKind(a) === "image").length;
   const videos = assets.length - images;
   const filtering = !!query.trim() || format !== "all" || status !== "all";
+  const lovedCount = Object.values(taste.reactions).filter((r) => r === "love").length;
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim().toLowerCase();
+    const loved = (subject: string) => taste.reactions[subject] === "love";
     const posts: Item[] =
       tab === "media"
         ? []
@@ -318,9 +398,11 @@ export function LibraryPage({
             .filter(
               (g) => !q || g.title.toLowerCase().includes(q) || g.excerpt.toLowerCase().includes(q),
             )
+            .filter((g) => tab !== "loved" || loved(g.key))
             .map((g) => ({
               kind: "post",
               key: `p-${g.key}`,
+              subject: g.key,
               createdAt: g.createdAt,
               title: g.title,
               group: g,
@@ -329,27 +411,35 @@ export function LibraryPage({
       tab === "posts" || status !== "all"
         ? []
         : assets
+            // A post's own picture is shown once, as the post (except under Media).
+            .filter((a) => tab === "media" || !(a.postId && postKeyOf.has(a.postId)))
             .filter((a) => format === "all" || mediaStudioType(a) === format)
             .filter((a) => !q || a.name.toLowerCase().includes(q))
-            .map((a) => ({
-              kind: "media",
-              key: `m-${a.id}`,
-              createdAt: a.createdAt ?? "",
-              title: a.name,
-              asset: a,
-            }));
+            .map((a) => {
+              const subject = (a.postId && postKeyOf.get(a.postId)) || a.id;
+              return {
+                kind: "media" as const,
+                key: `m-${a.id}`,
+                subject,
+                createdAt: a.createdAt ?? "",
+                title: a.name,
+                asset: a,
+              };
+            })
+            .filter((m) => tab !== "loved" || loved(m.subject));
     const list = [...posts, ...media];
     return list.sort((a, b) =>
       sort === "newest"
         ? b.createdAt.localeCompare(a.createdAt)
         : a.createdAt.localeCompare(b.createdAt),
     );
-  }, [groups, assets, tab, query, format, status, sort]);
+  }, [groups, assets, tab, query, format, status, sort, postKeyOf, taste.reactions]);
 
   const tabs: { id: LibraryTab; label: string; count: number }[] = [
     { id: "all", label: "All", count: groups.length + assets.length },
     { id: "posts", label: "Posts", count: groups.length },
     { id: "media", label: "Media", count: assets.length },
+    ...(taste.available ? [{ id: "loved" as const, label: "Loved", count: lovedCount }] : []),
   ];
 
   const clearFilters = () => {
@@ -364,11 +454,172 @@ export function LibraryPage({
     else void openItemOrJob(group.ids[0]);
   };
 
+  const makeMore = (type: StudioType | null, pictureId: string | null, video: boolean) => {
+    onClose?.();
+    if (pictureId && !video)
+      emitAppEvent("open:canvas", {
+        type: type ?? "social",
+        referenceAssetIds: [pictureId],
+        referenceMode: "inspire",
+      });
+    else openComposer({ type: type ?? (video ? "video" : "image") });
+  };
+
+  const copyCaption = async (group: Group) => {
+    let text = group.excerpt || group.title;
+    if (!fixtures) {
+      const { data } = await supabase
+        .from("content_items")
+        .select("body")
+        .in("id", group.ids)
+        .limit(1)
+        .maybeSingle();
+      if (data?.body) text = data.body;
+    }
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("Caption copied"),
+      () => toast.error("Couldn't copy"),
+    );
+  };
+
+  const target = (item: Item): ReactTarget =>
+    item.kind === "post"
+      ? { key: item.subject, contentItemId: item.group.ids[0] }
+      : { key: item.subject, assetId: item.asset.id };
+
+  const ratioOf = useCallback(
+    (item: Item): number => {
+      const seen = measured[item.key];
+      if (seen) return seen;
+      if (item.kind === "post") {
+        const g = item.group;
+        const thumb = g.storagePath ? thumbs[g.storagePath] : undefined;
+        return parseRatio(g.ratio) ?? (thumb ? 1 : 0.8);
+      }
+      const a = item.asset;
+      return (
+        parseRatio(a.metadata?.aspect_ratio) ??
+        (a.width && a.height ? a.width / a.height : null) ??
+        (mediaKind(a) === "video" ? 9 / 16 : 1)
+      );
+    },
+    [measured, thumbs],
+  );
+
+  const keyOf = useCallback((item: Item) => item.key, []);
+
+  const measure = (key: string, ratio: number) =>
+    setMeasured((m) => (m[key] && Math.abs(m[key] - ratio) < 0.01 ? m : { ...m, [key]: ratio }));
+
+  const renderTile = (item: Item) => {
+    const reaction = taste.available ? (taste.reactions[item.subject] ?? null) : undefined;
+    const react = (next: Reaction | null) => taste.react(target(item), next);
+    const isNew = isNewSince(item.createdAt, lastSeen);
+    if (item.kind === "post") {
+      const g = item.group;
+      const legacy = g.type === "legacy";
+      const type = (legacy ? "article" : g.type) as StudioType;
+      const thumb = g.storagePath ? thumbs[g.storagePath] : undefined;
+      const badge = STATUS_BADGE[g.status];
+      const picture = pictureOf.get(g.key) ?? null;
+      const actions: TileAction[] = [
+        { id: "open", label: "Open in Studio", icon: Wand2, onSelect: () => openInStudio(g) },
+        ...(!legacy
+          ? [
+              {
+                id: "more",
+                label: "Make more like this",
+                icon: Sparkles,
+                onSelect: () => makeMore(type, picture, g.mediaType === "video"),
+              },
+            ]
+          : []),
+        { id: "copy", label: "Copy caption", icon: Copy, onSelect: () => void copyCaption(g) },
+      ];
+      return (
+        <LibraryTile
+          openLabel={`Open content: ${g.title}`}
+          src={thumb}
+          kind={thumb ? (g.mediaType === "video" ? "video" : "image") : "text"}
+          ratio={ratioOf(item)}
+          excerpt={g.excerpt || g.title}
+          type={type}
+          flag={
+            badge && (badge.tone === "warn" || badge.tone === "danger")
+              ? { label: badge.label, tone: badge.tone }
+              : null
+          }
+          isNew={isNew}
+          reaction={reaction}
+          downloadName={`mellox-${g.mediaType ?? "asset"}-${dayStamp()}`}
+          actions={actions}
+          onOpen={() => setSelected(item)}
+          onReact={react}
+          onShare={thumb ? () => void shareFile(thumb, `mellox-${dayStamp()}`) : undefined}
+          onMeasured={(r) => measure(item.key, r)}
+          footer={
+            <div className="px-1 pb-1 pt-2">
+              <p className="truncate text-[13px] font-medium leading-snug text-foreground">
+                {g.title}
+              </p>
+              <p
+                data-testid="library-post-meta"
+                className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+              >
+                <span className="truncate">
+                  {legacy ? (g.legacyLabel ?? "Content") : STUDIO_FORMATS[type].label}
+                </span>
+                {g.platforms.length ? <PlatformStack platforms={g.platforms} size={14} /> : null}
+                <span className="ml-auto shrink-0 tabular-nums">{ago(g.createdAt)}</span>
+              </p>
+            </div>
+          }
+        />
+      );
+    }
+    const a = item.asset;
+    const kind = mediaKind(a);
+    return (
+      <LibraryTile
+        openLabel={`Open ${kind}: ${a.name}`}
+        src={a.url}
+        kind={kind}
+        ratio={ratioOf(item)}
+        isNew={isNew}
+        reaction={reaction}
+        downloadName={`mellox-${kind}-${dayStamp()}`}
+        mimeType={a.mimeType}
+        actions={[
+          {
+            id: "more",
+            label: "Make more like this",
+            icon: Sparkles,
+            onSelect: () => makeMore(mediaStudioType(a), a.id, kind === "video"),
+          },
+        ]}
+        onOpen={() => setSelected(item)}
+        onReact={react}
+        onShare={a.url ? () => void shareFile(a.url!, `mellox-${kind}-${dayStamp()}`) : undefined}
+        onMeasured={(r) => measure(item.key, r)}
+        footer={
+          <p className="flex items-center gap-1.5 px-1 pb-1 pt-2 text-[11px] text-muted-foreground">
+            {kind === "video" ? <VideoIcon className="size-3" /> : <ImageIcon className="size-3" />}
+            {kind === "video" ? "Video" : "Image"}
+            {a.createdAt ? <span className="ml-auto tabular-nums">{ago(a.createdAt)}</span> : null}
+          </p>
+        }
+      />
+    );
+  };
+
   const summary = [
     `${groups.length} post${groups.length === 1 ? "" : "s"}`,
     `${images} image${images === 1 ? "" : "s"}`,
     ...(videos ? [`${videos} video${videos === 1 ? "" : "s"}`] : []),
   ].join(" · ");
+
+  const selectedReaction =
+    selected && taste.available ? (taste.reactions[selected.subject] ?? null) : undefined;
 
   return (
     <div className="@container/library flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
@@ -460,6 +711,8 @@ export function LibraryPage({
               thumb={selected.group.storagePath ? thumbs[selected.group.storagePath] : undefined}
               fixtures={fixtures}
               onOpen={() => openInStudio(selected.group)}
+              reaction={selectedReaction}
+              onReact={(next) => taste.react(target(selected), next)}
             />
           ) : (
             <MediaDetail
@@ -468,18 +721,20 @@ export function LibraryPage({
                 onClose?.();
                 openComposer({ type: mediaKind(selected.asset) === "video" ? "video" : "image" });
               }}
+              reaction={selectedReaction}
+              onReact={(next) => taste.react(target(selected), next)}
             />
           )}
         </div>
       ) : (
         <>
           {/* ── Toolbar ── */}
-          <div className="shrink-0 space-y-2.5 border-b border-border/50 px-3 py-3 @3xl/library:px-5">
+          <div className="shrink-0 border-b border-border/50 px-3 py-3 @3xl/library:px-5">
             <div className="flex flex-wrap items-center gap-2">
               <div
                 role="tablist"
                 aria-label="Library filter"
-                className="inline-flex rounded-full bg-surface-2/80 p-1 ring-1 ring-border/60"
+                className="inline-flex max-w-full overflow-x-auto rounded-full bg-surface-2/80 p-1 ring-1 ring-border/60 [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden"
               >
                 {tabs.map((t) => {
                   const on = tab === t.id;
@@ -491,7 +746,7 @@ export function LibraryPage({
                       aria-selected={on}
                       onClick={() => setTab(t.id)}
                       className={cn(
-                        "relative inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
+                        "relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs @md/library:px-3 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
                         on ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                       )}
                     >
@@ -500,6 +755,14 @@ export function LibraryPage({
                           layoutId="library-tab"
                           className="absolute inset-0 rounded-full bg-surface-3 shadow-1 ring-1 ring-border/70"
                           transition={{ duration: duration.medium, ease: ease.emphasized }}
+                        />
+                      ) : null}
+                      {t.id === "loved" ? (
+                        <Heart
+                          className={cn(
+                            "relative size-3.5",
+                            on ? "fill-primary text-primary" : "text-current",
+                          )}
                         />
                       ) : null}
                       <span className="relative">{t.label}</span>
@@ -540,6 +803,21 @@ export function LibraryPage({
               </label>
 
               <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
+                {presentFormats.length > 1 ? (
+                  <select
+                    value={format}
+                    onChange={(e) => setFormat(e.target.value as StudioType | "all")}
+                    aria-label="Format"
+                    className={SELECT}
+                  >
+                    <option value="all">All creatives</option>
+                    {presentFormats.map((f) => (
+                      <option key={f} value={f}>
+                        {STUDIO_FORMATS[f].label}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
                 {tab !== "media" ? (
                   <select
                     value={status}
@@ -595,55 +873,26 @@ export function LibraryPage({
                 </div>
               </div>
             </div>
-
-            {presentFormats.length > 1 ? (
-              <div
-                role="radiogroup"
-                aria-label="Format"
-                className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
-                {(["all", ...presentFormats] as const).map((f) => {
-                  const on = format === f;
-                  return (
-                    <button
-                      key={f}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      onClick={() => setFormat(f)}
-                      className={cn(
-                        f === "all" ? "" : `studio-tone-${f}`,
-                        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium ring-1 transition-colors",
-                        on
-                          ? f === "all"
-                            ? "bg-foreground text-background ring-foreground"
-                            : "bg-[hsl(var(--tone)/0.14)] text-foreground ring-[hsl(var(--tone)/0.45)]"
-                          : "bg-surface-3 text-muted-foreground ring-border/70 hover:text-foreground",
-                      )}
-                    >
-                      {f === "all" ? (
-                        "All formats"
-                      ) : (
-                        <>
-                          <TypeGlyph type={f} size="sm" className="size-5 [&_svg]:size-3" />
-                          {STUDIO_FORMATS[f].label}
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
 
           {/* ── Results ── */}
           <main className="min-h-0 flex-1 overflow-y-auto p-3 @3xl/library:p-5">
+            {taste.available && taste.summary && !loading && !error ? (
+              <div className="mb-3">
+                <TasteStrip
+                  summary={taste.summary}
+                  onShowLoved={() => setTab("loved")}
+                  onReset={taste.reset}
+                />
+              </div>
+            ) : null}
             {loading ? (
-              <div className="grid grid-cols-1 gap-3 @sm/library:grid-cols-2 @2xl/library:grid-cols-3 @4xl/library:grid-cols-4 @6xl/library:grid-cols-5">
+              <div className="columns-2 gap-3 @2xl/library:columns-3 @4xl/library:columns-4 @6xl/library:columns-5">
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div
                     key={index}
-                    className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-surface-2 ring-1 ring-border/60"
+                    className="relative mb-3 overflow-hidden rounded-[20px] bg-surface-2 ring-1 ring-border/60"
+                    style={{ aspectRatio: String([0.8, 1, 0.5625, 1.25, 0.8][index % 5]) }}
                   >
                     <span className="studio-weave absolute inset-0" aria-hidden />
                   </div>
@@ -657,7 +906,18 @@ export function LibraryPage({
                 onRetry={() => void load()}
               />
             ) : items.length === 0 ? (
-              filtering ? (
+              tab === "loved" && !filtering ? (
+                <EmptyState
+                  icon={Heart}
+                  title="Nothing loved yet"
+                  description="Tap ♥ on a post you love. Mellox makes more like it."
+                  action={
+                    <Button variant="outline" onClick={() => setTab("all")}>
+                      See everything
+                    </Button>
+                  }
+                />
+              ) : filtering ? (
                 <EmptyState
                   icon={Search}
                   title="No matches"
@@ -687,33 +947,14 @@ export function LibraryPage({
                 />
               )
             ) : view === "grid" ? (
-              <ul
-                key={`${tab}-grid`}
-                className="grid grid-cols-1 gap-3 @sm/library:grid-cols-2 @2xl/library:grid-cols-3 @4xl/library:grid-cols-4 @6xl/library:grid-cols-5"
-              >
-                {items.map((item, i) => (
-                  <motion.li
-                    key={item.key}
-                    initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      delay: Math.min(i, 12) * 0.03,
-                      duration: duration.slow,
-                      ease: ease.emphasized,
-                    }}
-                  >
-                    {item.kind === "post" ? (
-                      <PostCard
-                        group={item.group}
-                        thumb={item.group.storagePath ? thumbs[item.group.storagePath] : undefined}
-                        onOpen={() => setSelected(item)}
-                      />
-                    ) : (
-                      <MediaCard asset={item.asset} onOpen={() => setSelected(item)} />
-                    )}
-                  </motion.li>
-                ))}
-              </ul>
+              <Masonry
+                key={tab}
+                testId="library-grid"
+                items={items}
+                keyOf={keyOf}
+                ratioOf={ratioOf}
+                render={renderTile}
+              />
             ) : (
               <ul
                 key={`${tab}-list`}
@@ -730,6 +971,7 @@ export function LibraryPage({
                             : undefined
                           : (item.asset.url ?? undefined)
                       }
+                      loved={taste.reactions[item.subject] === "love"}
                       onOpen={() => setSelected(item)}
                     />
                   </li>
@@ -758,138 +1000,17 @@ function StatusBadge({ status, className }: { status: string; className?: string
   );
 }
 
-function PostCard({ group, thumb, onOpen }: { group: Group; thumb?: string; onOpen: () => void }) {
-  const legacy = group.type === "legacy";
-  const type = (legacy ? "article" : group.type) as StudioType;
-  const downloadName = `mellox-${group.mediaType ?? "asset"}-${new Date().toISOString().slice(0, 10)}`;
-
-  return (
-    <div
-      className={cn(
-        `studio-tone-${type} group relative flex h-full w-full flex-col overflow-hidden rounded-2xl bg-surface-3 text-left shadow-1 ring-1 ring-border/70`,
-        "transition-[box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized] hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-18px_hsl(var(--tone)/0.5)]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]",
-      )}
-    >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open content: ${group.title}`}
-        className="absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[hsl(var(--tone))]"
-      />
-      <span className="relative block aspect-[4/3] w-full overflow-hidden bg-gradient-to-br from-[hsl(var(--tone)/0.16)] to-[hsl(var(--tone)/0.04)]">
-        {thumb && group.mediaType === "image" ? (
-          <img
-            src={thumb}
-            alt=""
-            loading="lazy"
-            className="size-full object-cover transition-transform duration-[--motion-duration-xslow] group-hover:scale-[1.03]"
-          />
-        ) : thumb && group.mediaType === "video" ? (
-          <video
-            src={thumb}
-            muted
-            playsInline
-            preload="metadata"
-            className="size-full object-cover"
-          />
-        ) : (
-          <span className="absolute inset-0 flex flex-col p-3.5 pt-10">
-            <span className="line-clamp-4 text-[12px] leading-snug text-foreground/75">
-              {group.excerpt || group.title}
-            </span>
-            <TypeGlyph type={type} className="mt-auto" />
-          </span>
-        )}
-        <StatusBadge status={group.status} className="absolute left-2.5 top-2.5" />
-        {thumb ? (
-          <span className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-            <DownloadAssetButton
-              url={thumb}
-              filename={downloadName}
-              compact
-              className="bg-black/55 text-white backdrop-blur hover:bg-black/75"
-            />
-          </span>
-        ) : null}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col p-3">
-        <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
-          {group.title}
-        </span>
-        <span
-          data-testid="library-post-meta"
-          className="mt-auto flex min-w-0 flex-wrap items-center gap-1.5 pt-2 text-[11px] text-muted-foreground"
-        >
-          <span className="truncate">
-            {legacy ? (group.legacyLabel ?? "Content") : STUDIO_FORMATS[type].label}
-          </span>
-          {group.platforms.length ? <PlatformStack platforms={group.platforms} size={16} /> : null}
-          <span className="ml-auto shrink-0 tabular-nums">{ago(group.createdAt)}</span>
-        </span>
-      </span>
-    </div>
-  );
-}
-
-function MediaCard({ asset, onOpen }: { asset: LibraryAsset; onOpen: () => void }) {
-  const kind = mediaKind(asset);
-  const downloadName = `mellox-${kind}-${new Date().toISOString().slice(0, 10)}`;
-  return (
-    <div className="group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-surface-2 shadow-1 ring-1 ring-border/70 transition-[box-shadow,translate] duration-[--motion-duration-base] hover:-translate-y-0.5 hover:shadow-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55">
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${kind}: ${asset.name}`}
-        className="absolute inset-0 z-10 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/55"
-      />
-      {kind === "video" && asset.url ? (
-        <video
-          src={asset.url}
-          muted
-          playsInline
-          preload="metadata"
-          className="h-full w-full object-cover"
-        />
-      ) : asset.url ? (
-        <img
-          src={asset.url}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover transition duration-[--motion-duration-xslow] group-hover:scale-[1.03]"
-        />
-      ) : (
-        <span className="grid size-full place-items-center">
-          {kind === "video" ? (
-            <VideoIcon className="size-8 text-muted-foreground" />
-          ) : (
-            <ImageIcon className="size-8 text-muted-foreground" />
-          )}
-        </span>
-      )}
-      <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-        {kind === "video" ? <VideoIcon className="size-3" /> : <ImageIcon className="size-3" />}
-        {kind === "video" ? "Video" : "Image"}
-      </span>
-      <span className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-        <DownloadAssetButton
-          url={asset.url}
-          filename={downloadName}
-          mimeType={asset.mimeType}
-          compact
-          className="bg-black/55 text-white backdrop-blur hover:bg-black/75"
-        />
-      </span>
-      {asset.createdAt ? (
-        <span className="absolute inset-x-0 bottom-0 translate-y-1 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2 pt-6 text-left text-[11px] text-white opacity-0 transition-[opacity,translate] duration-[--motion-duration-base] group-hover:translate-y-0 group-hover:opacity-100">
-          {ago(asset.createdAt)}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: () => void }) {
+function ListRow({
+  item,
+  thumb,
+  loved,
+  onOpen,
+}: {
+  item: Item;
+  thumb?: string;
+  loved?: boolean;
+  onOpen: () => void;
+}) {
   const isPost = item.kind === "post";
   const type: StudioType | null = isPost
     ? item.group.type === "legacy"
@@ -897,7 +1018,7 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
       : item.group.type
     : mediaStudioType(item.asset);
   const kind = isPost ? item.group.mediaType : mediaKind(item.asset);
-  const downloadName = `mellox-${isPost ? (item.group.mediaType ?? "asset") : kind}-${new Date().toISOString().slice(0, 10)}`;
+  const downloadName = `mellox-${isPost ? (item.group.mediaType ?? "asset") : kind}-${dayStamp()}`;
   return (
     <div className="relative flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-surface-2/70">
       <button
@@ -908,9 +1029,9 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
       />
       <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border/60">
         {thumb && kind === "image" ? (
-          <img src={thumb} alt="" loading="lazy" className="size-full object-cover" />
+          <img src={thumb} alt="" loading="lazy" className="size-full object-contain" />
         ) : thumb && kind === "video" ? (
-          <video src={thumb} muted preload="metadata" className="size-full object-cover" />
+          <video src={thumb} muted preload="metadata" className="size-full object-contain" />
         ) : type ? (
           <TypeGlyph type={type} />
         ) : (
@@ -918,7 +1039,12 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">{item.title}</span>
+        <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+          <span className="truncate">{item.title}</span>
+          {loved ? (
+            <Heart aria-label="Loved" className="size-3.5 shrink-0 fill-primary text-primary" />
+          ) : null}
+        </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="truncate">
             {isPost
@@ -951,6 +1077,35 @@ function ListRow({ item, thumb, onOpen }: { item: Item; thumb?: string; onOpen: 
   );
 }
 
+/** Love and "less like this" in a detail view. Hidden when hearts are off. */
+function ReactButtons({
+  reaction,
+  onReact,
+}: {
+  reaction: Reaction | null | undefined;
+  onReact: (next: Reaction | null) => void;
+}) {
+  if (reaction === undefined) return null;
+  const loved = reaction === "love";
+  const less = reaction === "less";
+  return (
+    <>
+      <Button
+        variant={loved ? "default" : "outline"}
+        aria-pressed={loved}
+        onClick={() => onReact(loved ? null : "love")}
+      >
+        <Heart className={cn(loved && "fill-current")} />
+        {loved ? "Loved" : "Love"}
+      </Button>
+      <Button variant="ghost" onClick={() => onReact(less ? null : "less")}>
+        {less ? <RotateCcw /> : <ThumbsDown />}
+        {less ? "Show more like this" : "Less like this"}
+      </Button>
+    </>
+  );
+}
+
 type Version = { id: string; platform: PlatformId | null; body: string };
 
 const OPEN_LABEL: Record<string, string> = {
@@ -969,11 +1124,15 @@ function PostDetail({
   thumb,
   fixtures,
   onOpen,
+  reaction,
+  onReact,
 }: {
   group: Group;
   thumb?: string;
   fixtures: boolean;
   onOpen: () => void;
+  reaction?: Reaction | null;
+  onReact: (next: Reaction | null) => void;
 }) {
   const legacy = group.type === "legacy";
   const type = (legacy ? "article" : group.type) as StudioType;
@@ -1143,6 +1302,7 @@ function PostDetail({
             {group.status === "approved" ? <CalendarClock /> : <Wand2 />}
             {OPEN_LABEL[group.status] ?? "Open in Studio"}
           </Button>
+          <ReactButtons reaction={reaction} onReact={onReact} />
           <Button variant="outline" onClick={copy} disabled={rows === null}>
             <Copy />
             Copy caption
@@ -1150,7 +1310,7 @@ function PostDetail({
           {thumb ? (
             <DownloadAssetButton
               url={thumb}
-              filename={`mellox-${group.mediaType ?? "asset"}-${new Date().toISOString().slice(0, 10)}`}
+              filename={`mellox-${group.mediaType ?? "asset"}-${dayStamp()}`}
             >
               Download {group.mediaType === "video" ? "video" : "image"}
             </DownloadAssetButton>
@@ -1164,7 +1324,17 @@ function PostDetail({
   );
 }
 
-function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () => void }) {
+function MediaDetail({
+  asset,
+  onCreate,
+  reaction,
+  onReact,
+}: {
+  asset: LibraryAsset;
+  onCreate: () => void;
+  reaction?: Reaction | null;
+  onReact: (next: Reaction | null) => void;
+}) {
   const kind = mediaKind(asset);
   const studioType = mediaStudioType(asset);
   const ratio =
@@ -1233,6 +1403,7 @@ function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () =>
         </dl>
 
         <div className="mt-6 flex flex-wrap gap-2">
+          <ReactButtons reaction={reaction} onReact={onReact} />
           {kind === "image" &&
           asset.source === "generated" &&
           asset.status === "ready" &&
@@ -1242,7 +1413,7 @@ function MediaDetail({ asset, onCreate }: { asset: LibraryAsset; onCreate: () =>
           {asset.url ? (
             <DownloadAssetButton
               url={asset.url}
-              filename={`mellox-${kind}-${new Date().toISOString().slice(0, 10)}`}
+              filename={`mellox-${kind}-${dayStamp()}`}
               mimeType={asset.mimeType}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             />

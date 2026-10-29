@@ -67,6 +67,8 @@ export function studioChargeFor(args: {
   if (args.textOnly) return "post_regenerate";
   // The brand's own footage or photos: no video units, except animating photos.
   if (args.type === "video" && args.videoMode === "brand") return "clip_brand";
+  // The website reel is code and FFmpeg only, priced like a camera-move recap.
+  if (args.type === "video" && args.videoMode === "site") return "photo_recap";
   if (args.type === "video" && args.videoMode === "recap")
     return args.recapMotion === "ai" ? "studio_video" : "photo_recap";
   // Designing with the person's photos: exact photos are placed by Mellox;

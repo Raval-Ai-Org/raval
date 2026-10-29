@@ -98,7 +98,7 @@ export const ControlsSchema = z.object({
    * Video: make a new one (default), brand the person's own clips, or make a
    * recap from their photos (src/lib/studio/clip-edit.ts).
    */
-  videoMode: z.enum(["generate", "brand", "recap"]).optional(),
+  videoMode: z.enum(["generate", "brand", "recap", "site"]).optional(),
   /** Brand mode: the person's own clips, checked against this workspace. */
   sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
   /** Brand mode: captions of what is said (absent means on). */
@@ -279,6 +279,16 @@ export const CreateJobSchema = z
         message: "Choose at least two photos for a recap.",
       });
     if (
+      input.type === "video" &&
+      input.controls.videoMode === "site" &&
+      input.controls.referenceAssetIds?.length !== 1
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose one capture of your website.",
+      });
+    if (
       (input.type === "video" ||
         (input.type === "story" && input.controls.storyMode === "video")) &&
       (input.controls.durationSec ?? 10) > 60
@@ -315,6 +325,8 @@ export type CarouselSlide = {
   kicker?: string;
   /** Words from the heading to highlight. */
   emphasis?: string;
+  /** Index into the carousel's own photos (carousel/photos.ts), placed by code. */
+  photo?: number;
 };
 
 /** A Story: its frames and the look they share (the carousel design system). */
@@ -349,6 +361,8 @@ export type CarouselSpecOutput = {
   brand: string;
   site?: string;
   ratio?: string;
+  /** The brand's own photos and screenshots shown on slides, in order. */
+  photos?: import("./carousel/photos").SlidePhoto[];
 };
 
 export type ArticleOutput = {

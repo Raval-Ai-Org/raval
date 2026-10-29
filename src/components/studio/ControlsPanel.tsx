@@ -30,8 +30,13 @@ export function describeControls(session: StudioSession): string {
     parts.push({ short: "Short", standard: "Medium length", long: "Long" }[c.length ?? "standard"]);
   }
   if (session.type === "script") parts.push(`${c.durationSec ?? 30} seconds`);
-  if (session.type === "video" && (c.videoMode === "brand" || c.videoMode === "recap"))
-    parts.push(c.videoMode === "brand" ? "Your clips" : "Recap from your photos");
+  if (
+    session.type === "video" &&
+    (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site")
+  )
+    parts.push(
+      { brand: "Your clips", recap: "Recap from your photos", site: "Your website" }[c.videoMode],
+    );
   else if (session.type === "video")
     parts.push(
       `${c.durationSec ?? 10} seconds · ${{ "480P": "Basic", "720P": "HD", "1080P": "Full HD" }[c.videoResolution ?? "720P"]}`,
@@ -106,7 +111,8 @@ export function ControlsPanel({
   const storyVideo = session.type === "story" && c.storyMode === "video";
   // The brand's own clips or photos: no model footage, length or quality to pick.
   const ownFootage =
-    session.type === "video" && (c.videoMode === "brand" || c.videoMode === "recap");
+    session.type === "video" &&
+    (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site");
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
 
   return (

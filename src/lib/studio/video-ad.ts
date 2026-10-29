@@ -13,6 +13,36 @@ export const VIDEO_AD_RULES: readonly string[] = [
   "End on a clean hero frame held for about a second, with room for the brand and the next step. That frame should also work as the cover picture, and where it fits it loops back into the opening.",
 ];
 
+/**
+ * Showing a screen (an app, a website, a dashboard): measured on agency
+ * showcase reels. Calm and readable beats fast here.
+ */
+export const SCREEN_VIDEO_RULES: readonly string[] = [
+  "Hold, move, hold: rest on a screen for about a second so it can be read, then one smooth move, every 1.5 to 2 seconds. No fast flicking.",
+  "One interaction per clip (a scroll, a tap, a menu opening). Never several things moving on the screen at once.",
+  "The screen always sits in a device or a browser frame, seen straight on, never as a raw screenshot filling the frame.",
+  "The last frame matches the first, so the reel loops cleanly in the feed.",
+  "4:5 at 720 wide or more, one resolution all the way through. Silent is fine: the screen tells the story.",
+];
+
+/** A topical flip-book: matched stills cut hard to a beat (memes, "what if" sets). */
+export const FLIP_BOOK_RULES: readonly string[] = [
+  "Six or seven stills in one matched frame and grade, each on screen for about 0.8 seconds, with hard cuts and no transitions.",
+  "Only the subject changes from still to still; the framing, light and type position stay fixed, so the change is the joke.",
+];
+
+const SCREEN_BRIEF =
+  /\b(app|website|web ?site|site|dashboard|landing page|screen|ui|software|saas|platform)\b/i;
+const FLIP_BRIEF = /\b(flip ?book|meme|what if|stop[- ]motion|one after another)\b/i;
+
+/** The extra rules a brief needs, if it shows a screen or is a flip-book. */
+export function videoCraftRules(brief: string): readonly string[] {
+  return [
+    ...(SCREEN_BRIEF.test(brief) ? SCREEN_VIDEO_RULES : []),
+    ...(FLIP_BRIEF.test(brief) ? FLIP_BOOK_RULES : []),
+  ];
+}
+
 /** What a platform's viewers expect from a short video. */
 export function platformVideoNote(platforms: readonly string[]): string {
   const notes: string[] = [];

@@ -113,7 +113,7 @@ export type AppEventMap = {
   /** Open the Library pop-up, optionally on a tab. */
   "open:library":
     | {
-        tab?: "all" | "posts" | "media";
+        tab?: "all" | "posts" | "media" | "loved";
         /** Preselect a pipeline stage filter. */
         status?: "review" | "ready" | "scheduled" | "published" | "scheduled-published";
       }

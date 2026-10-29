@@ -5,6 +5,8 @@
 // A Story is short (1 to 7 frames, each seen for about five seconds), so every
 // frame says one thing in big type. The model writes the words; the theme, the
 // role of each position, the limits and the cleanup are decided here.
+import { applyLean } from "@/lib/taste/bias";
+import type { Lean } from "@/lib/taste/contracts";
 
 export const STORY_FRAME_ROLES = ["hook", "value", "proof", "question", "offer", "cta"] as const;
 export type StoryFrameRole = (typeof STORY_FRAME_ROLES)[number];
@@ -170,6 +172,8 @@ export function pickStoryTheme(args: {
   mix?: readonly string[];
   recent?: readonly (string | null | undefined)[];
   preferred?: string | null;
+  /** The brand's taste for Story themes (ADR-0038). */
+  lean?: Lean | null;
 }): StoryTheme {
   const kept = getStoryTheme(args.preferred);
   if (kept) return kept;
@@ -179,7 +183,7 @@ export function pickStoryTheme(args: {
   const pool = allowed.length ? allowed : STORY_THEMES.filter((t) => t.id !== "repurpose");
   const used = new Set((args.recent ?? []).filter(Boolean).slice(0, Math.max(1, pool.length - 1)));
   const fresh = pool.filter((t) => !used.has(t.id));
-  const from = fresh.length ? fresh : pool;
+  const from = applyLean(fresh.length ? fresh : pool, args.lean, args.seed, (t) => t.id);
   return from[hash(args.seed) % from.length];
 }
 

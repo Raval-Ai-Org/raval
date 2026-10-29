@@ -261,6 +261,22 @@ export function isMemoryEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Library hearts (ADR-0038): what a brand's team loved, so the next posts lean
+ * toward it. On unless set to "false"; `FEATURE_FLAG_TASTE_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off means no hearts in the Library, RPCs
+ * answer 404 and generators get no taste block or lean.
+ */
+export function isTasteEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_TASTE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_TASTE_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * Chat tools (ADR-0033): chat reads the workspace's own data to answer and
  * offers changes as buttons. On unless set to "false"; off falls back to a
  * plain reply with no tools.

@@ -19,6 +19,13 @@ export type DeliverableId =
   | "promo-offer"
   | "event"
   | "hiring"
+  | "greeting"
+  | "teaser"
+  | "collab"
+  | "market-entry"
+  | "case-study"
+  | "intro"
+  | "humour"
   | "launch"
   | "quote"
   | "tips"
@@ -77,19 +84,108 @@ export const DELIVERABLES: readonly Deliverable[] = [
     id: "hiring",
     name: "Hiring post",
     signals:
-      /(we'?re hiring|now hiring|join (our|the) team|open role|job opening|\bvacanc|careers?\b)/i,
-    readingOrder: "first 'hiring' and the role, then why it is worth it, then how to apply",
+      /(we['’]?re hiring|we are hiring|now hiring|join (our|the) team|open role|job opening|\bvacanc|careers?\b)/i,
+    readingOrder:
+      "first a line about the standard or craft the team holds itself to (it need not say 'hiring'), then the reveal that the team is hiring and for what, then how to apply",
     layout:
-      "an honest, warm workplace or team moment (fictional people) or a strong typographic poster; role name set like a headline",
-    copy: "Role as the headline; one line on the team or mission; the action small.",
-    neverInvent: `salary, benefits, locations, team size, or ${NO_FACTS}`,
-    prefer: ["quiet-editorial", "name-on-the-wall", "material-lettering", "film-strip-cutout"],
+      "a type-led Swiss poster (heavy caps top-left on a generous margin, one accent word, a large empty middle, the reveal set lower and quieter), or one surreal metaphor image about quality with the line beneath it",
+    copy: "Opening line of five words or fewer in heavy caps; the reveal one short, quiet line; roles as a numbered list only when supplied; the way to apply small at the end.",
+    neverInvent: `roles, salary, benefits, locations, team size, or ${NO_FACTS}`,
+    prefer: ["literal-metaphor", "quiet-editorial", "material-lettering", "name-on-the-wall"],
+  },
+  {
+    id: "greeting",
+    name: "Greeting for a holiday or occasion",
+    signals:
+      /(eid mubarak|ramadan (kareem|mubarak)|happy (new year|diwali|holi|holidays|eid|easter|hanukkah|lunar new year|labou?r day|independence day|mother['’]?s day|father['’]?s day|women['’]?s day|thanksgiving)|merry christmas|season['’]?s greetings|wishing (you|everyone|all|the entire)|warm(est)? wishes)/i,
+    readingOrder:
+      "first the symbol of the day, then the greeting, then the brand's quiet signature",
+    layout:
+      "one universal symbol of the occasion in the brand's main colour on a plain dark or flat field, at least three quarters of the frame left empty, the greeting small below it",
+    copy: "The greeting only, small and calm, one line; any wordplay on the brand belongs in the caption, never on the picture.",
+    neverInvent: `opening hours, closures, offers, religious text or quotations, or ${NO_FACTS}`,
+    prefer: ["occasion-symbol", "quiet-editorial", "glossy-macro"],
+  },
+  {
+    id: "teaser",
+    name: "Teaser before a reveal",
+    signals:
+      /(coming soon|stay tuned|something (big|new) is coming|sneak peek|guess what['’]?s coming|\bteaser\b|watch this space)/i,
+    readingOrder:
+      "first the intrigue (one form or a tight crop), then the two words that say something is coming",
+    layout:
+      "one tight, partial view of the new thing or an abstract form in the brand's colours, cropped off the edges, everything else dark or flat; nothing is fully shown",
+    copy: "Two or three words in small, very widely spaced caps; no date unless supplied.",
+    neverInvent: `a launch date, a product name, features, or ${NO_FACTS}`,
+    prefer: ["glossy-macro", "spotlight-noir", "monument-object"],
+  },
+  {
+    id: "collab",
+    name: "Partnership announcement",
+    signals:
+      /(in (collaboration|partnership) with|partnered with|partnering with|teamed up with|\bcollab(oration)?\b|[a-z]\s[x×]\s[a-z])/i,
+    readingOrder: "first the two names joined by ×, then what they made together, then the action",
+    layout:
+      "a tight, centred lockup with both names set as words and a × between them, the new thing named in one pill below, generous empty space around it, playful shapes cropped by the frame's edges",
+    copy: "Both names exactly as supplied with × between them; one short pill for what it is; nothing else.",
+    neverInvent: `the partner's logo, the partner's claims, prices, dates, or ${NO_FACTS}`,
+    prefer: ["pop-collage", "quiet-editorial", "material-lettering"],
+  },
+  {
+    id: "market-entry",
+    name: "Arriving somewhere new",
+    signals:
+      /(now (open|live|available) in\b|\b(has |have |is |are )?(arrived|landed) in\b|\bexpand(ing|s|ed)? (to|into)\b|\bopening (our first|in)\b|\bfirst store in\b)/i,
+    readingOrder:
+      "first the place (or the two places, from and to), then what has arrived, then where to find it",
+    layout:
+      "a from → to journey: one recognisable landmark or object for the place, cut out like a sticker and rising from a floor band, a two-line title with a thin connector word and a heavy place name",
+    copy: "A thin connector word ('from', 'to', 'now in') over the heavy place name; one practical line (where or when) only if supplied.",
+    neverInvent: `store addresses, opening dates, prices, product ranges, or ${NO_FACTS}`,
+    prefer: ["sticker-journey", "touchpoint-world", "pop-collage"],
+  },
+  {
+    id: "case-study",
+    name: "Work showcase or case study",
+    signals:
+      /(case study|\bclient\s*[:\-–]|\bscope\s*[:\-–]|\bproject\s*[:\-–]|our (latest|recent|new) (project|work|branding|website)|portfolio|we (designed|built|rebranded|redesigned|created|launched) .{0,40}\bfor\b|brand identity (design|project)|\brebrand(ed|ing)?\b|website (design|launch) for)/i,
+    readingOrder:
+      "first the work itself, large and real, then the project's name, then what was done (the scope)",
+    layout:
+      "the work on one real-world touchpoint per frame (a sign, packaging, a website on a device, merch), full-bleed and boldly cropped, with almost no words; the brand's colour carried by the work, not by added graphics",
+    copy: "On the picture: the project's name at most, or nothing. The story and the scope go in the caption.",
+    neverInvent: `results, metrics, awards, client quotes, client names, or ${NO_FACTS}`,
+    prefer: ["touchpoint-world", "device-showcase", "flat-lay-story", "mixed-media-breakout"],
+  },
+  {
+    id: "intro",
+    name: "Who we are",
+    signals:
+      /(who we are|meet (the team|us)|\bhi,? we['’]?re\b|hello,? we['’]?re\b|nice to meet you|about us|get to know us)/i,
+    readingOrder: "first a hook that promises a payoff, then the name, then what the brand does",
+    layout:
+      "a dark, striking first frame with one bold visual of the brand's shape or colour cropped off two edges and the name set large in the lower left; later frames light and type-led",
+    copy: "A short lead word, the name large, one small aside that promises what the reader gets; three type roles at most (statement, warm serif, small label).",
+    neverInvent: `services, clients, awards, ratings, testimonials, figures, or ${NO_FACTS}`,
+    prefer: ["glossy-macro", "name-on-the-wall", "quiet-editorial"],
+  },
+  {
+    id: "humour",
+    name: "Joke or topical post",
+    signals:
+      /(\bmeme\b|\bjoke\b|\bpov:|\bnobody:|not today|plot twist|literally just|be like\b|when (your|the) (client|boss)|hold your horses)/i,
+    readingOrder: "first the setup in small type, then the punchline large, then nothing",
+    layout:
+      "either a type-only template (a small setup line and a punchline about six times larger in the brand's most characterful face on a two-tone grainy field), or one photoreal impossible scene with a short reaction line",
+    copy: "Setup one short line; punchline two to four words. The link back to the brand belongs in the caption.",
+    neverInvent: `another company's logo or product, quotes from real people, or ${NO_FACTS}`,
+    prefer: ["what-if-render", "pop-collage", "literal-metaphor"],
   },
   {
     id: "launch",
     name: "Launch key visual",
     signals:
-      /(introducing|\blaunch(ing|ed|es)?\b|now available|out now|just dropped|new drop|new (product|collection|flavou?r|release|range)|meet the new|coming soon)/i,
+      /(introducing|\blaunch(ing|ed|es)?\b|now available|out now|just dropped|new drop|new (product|collection|flavou?r|release|range)|meet the new)/i,
     readingOrder:
       "first the new thing itself, then its name, then the one line that says why it matters",
     layout:
@@ -242,12 +338,17 @@ export function verbatimTextBlock(args: {
   ].filter(Boolean);
 }
 
+/** How professional posts emphasise: one device, used once. */
+export const EMPHASIS_RULE =
+  "Emphasis comes from one change only: a weight contrast (a light word or line, then a heavy one) or one key word in the accent colour; never both on one frame, never more than one emphasised phrase.";
+
 /** Type that reads on a phone, stated in proportions so it fits any canvas. */
 export const TYPE_SYSTEM: readonly string[] = [
   "Type scale (proportions of the canvas width): cover or hook headline 6–9%, inside headlines 3.5–4.5%, supporting copy 2.2–2.6%, small labels 1.5–1.9%. Headline line height about 1.1, body about 1.45.",
   "At most two typefaces: one display face for headlines, one quiet text face. Three sizes at most on one frame.",
   "Contrast at least 4.5:1 between type and what is directly behind it; put type on a calm area, solid band or soft scrim, never over busy detail.",
   "Margins of 6–8% on every side; keep words and faces inside the central safe area, clear of the bottom strip where app buttons sit.",
+  EMPHASIS_RULE,
 ];
 
 /** The last thing in an image prompt: check, and simplify instead of adding. */

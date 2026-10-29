@@ -17,9 +17,11 @@ import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
 import { shareSection } from "./viral";
 import { ARCHETYPE_IDS, archetypeMenu } from "./art-direction";
 import { CONCEPT_METHOD, COVER_TEST, SELF_REVIEW } from "./creative-knowledge";
+import { applyLean } from "@/lib/taste/bias";
+import type { Lean, Taste } from "@/lib/taste/contracts";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import { adFormatDirective, type AdFormat } from "./ad-formats";
-import { platformVideoNote, VIDEO_AD_RULES, videoBeatsText } from "./video-ad";
+import { platformVideoNote, VIDEO_AD_RULES, videoBeatsText, videoCraftRules } from "./video-ad";
 import type {
   StudioControls,
   StudioIntent,
@@ -87,6 +89,13 @@ export type StudioContext = {
    * (src/server/studio/social-trends.server.ts). Never searched per request.
    */
   socialTrends?: SocialTrends | null;
+  /**
+   * What the team loved or wanted less of in the Library (ADR-0038), loaded by
+   * the verified workspace id. Pickers lean on it; the words are in brandText.
+   */
+  taste?: Taste | null;
+  /** Captions of posts the team loved, used only as a voice reference. */
+  lovedSamples?: string[];
 };
 
 export function emptyContext(brandName = "the brand"): StudioContext {
@@ -182,6 +191,8 @@ export function pickAngle(
   preferred?: string,
   /** Only these angle ids, when the piece has a stated purpose. */
   allowed?: readonly string[],
+  /** The brand's taste for angles (ADR-0038). */
+  lean?: Lean | null,
 ): Angle {
   if (preferred) {
     const match = ANGLES.find((a) => a.id === preferred);
@@ -191,7 +202,7 @@ export function pickAngle(
   const all = fitting.length ? fitting : ANGLES;
   const recent = new Set(recentAngles.filter(Boolean).slice(0, 6));
   const pool = all.filter((a) => !recent.has(a.id));
-  const candidates = pool.length ? pool : all;
+  const candidates = applyLean(pool.length ? pool : all, lean, seed, (a) => a.id);
   return candidates[hash(seed) % candidates.length];
 }
 
@@ -371,7 +382,7 @@ function sharedUser(
     { label: "Already made", body: memorySection(ctx.recent) },
     {
       label: "Stay consistent with the profile",
-      body: ctx.style ? null : consistencySection(ctx.recent),
+      body: ctx.style ? null : consistencySection(ctx.recent, null, ctx.lovedSamples),
     },
     ...(args.extra ?? []),
   ];
@@ -593,6 +604,18 @@ export function buildSocialPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof S
   };
 }
 
+/**
+ * The brand's own pictures are laid on the first slides by code
+ * (carousel/photos.ts): the writer keeps those slides short and never
+ * describes what it can't see.
+ */
+function carouselPhotoNote(controls: BuildArgs["controls"], count: number): string {
+  const photos = controls.referenceAssetIds?.length ?? 0;
+  if (!photos || (controls.referenceMode ?? "preserve") !== "preserve") return "";
+  const shown = Math.min(photos, count - 1);
+  return `The brand's own ${shown === 1 ? "picture is" : `${shown} pictures are`} placed, exactly as they are, on slide${shown === 1 ? " 1" : `s 1 to ${shown}`}; the last slide stays words only. On those slides the picture is the point: heading of 6 words or fewer, body one short line. Say only what the brief says the pictures show; never describe details you cannot see.`;
+}
+
 export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof CarouselSchema>> {
   const count = args.controls.slideCount ?? 6;
   const structure = args.carouselStructure;
@@ -618,6 +641,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
         "`visual` is one line of art direction for that slide. Keep one visual idea running through every slide (the same setting, object or metaphor), never unrelated pictures. Slide 1's visual is a poster-grade hook: a concrete hero subject, a surprise of scale, material or pose, and the light. Later slides reuse that hero or motif from a new angle or closer crop. No text-in-image instructions.",
         "`caption` is the post caption: an opening line that names the topic in plain searchable words, 1-3 short lines of context, and a call to action. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
+        carouselPhotoNote(args.controls, count),
         SELF_REVIEW,
       ].filter(Boolean),
       `{"title": string, "caption": string, "hashtags": string[], "slides": [{"role": string, "kicker": string, "heading": string, "emphasis": string, "body": string, "visual": string}]}`,
@@ -807,7 +831,7 @@ export function buildVisualBriefPrompt(
         ...(video
           ? []
           : [
-              `\`artDirection\` is the id of the one campaign layout below that best fits this brand and message; build the concept on it and adapt it, never name other brands.\n${archetypeMenu()}`,
+              `\`artDirection\` is the id of the one campaign layout below that best fits this brand and message; build the concept on it and adapt it, never name other brands.\n${archetypeMenu(args.ctx.taste?.lean.layout)}`,
             ]),
         "Ground the visual in the brand's actual product, audience and identity. Choose a recognizable focal subject and a distinct visual treatment; avoid generic stock imagery or fabricated product details.",
         ...(video ? [] : CONCEPT_METHOD),
@@ -816,6 +840,7 @@ export function buildVisualBriefPrompt(
               `Write one shot per line as [start–ends] followed by the visual direction, covering the entire ${seconds} seconds. Keep the same subjects, product, clothing, location and lighting across connected shots.`,
               `Build it on these beats, adjusted to the idea:\n${videoBeatsText(seconds)}`,
               ...VIDEO_AD_RULES,
+              ...videoCraftRules(args.intent.brief),
               platformVideoNote(args.controls.platforms ?? []),
               ...(animate
                 ? [

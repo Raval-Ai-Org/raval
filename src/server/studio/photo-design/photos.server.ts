@@ -41,6 +41,23 @@ export async function loadDesignPhotos(
   );
 }
 
+/**
+ * A website capture cut to the first screen of the page (what people
+ * recognise): a phone screen when it was taken on mobile or is narrow, a
+ * laptop screen otherwise. Photos are left as they are.
+ */
+export async function cropToScreen(photo: DesignPhoto): Promise<DesignPhoto> {
+  const phone = photo.width < 900;
+  const aspect = phone ? 9 / 19.5 : 16 / 10;
+  const height = Math.min(photo.height, Math.round(photo.width / aspect));
+  if (height >= photo.height) return photo;
+  const { data, info } = await sharp(photo.bytes)
+    .extract({ left: 0, top: 0, width: photo.width, height })
+    .png()
+    .toBuffer({ resolveWithObject: true });
+  return { bytes: data, width: info.width, height: info.height };
+}
+
 /** Small copies for the vision model; nothing leaves the workspace but these bytes. */
 async function visionCopies(photos: DesignPhoto[]): Promise<LlmImageInput[]> {
   return Promise.all(

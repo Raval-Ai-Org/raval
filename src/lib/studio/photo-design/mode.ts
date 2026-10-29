@@ -65,7 +65,9 @@ export function resolvePhotoMode(input: ModeInput): CreateJobInput["controls"]["
     !!input.parentJobId &&
     (input.refine?.target === "media" ||
       isVariationsRequest({ ...input, parentJobId: input.parentJobId }));
-  return pictureEdit || asksForDesign(input.intent.brief) ? "design" : mode;
+  // A website showcase always puts the screen in a designed device.
+  const showcase = input.intent.template === "image-website-showcase";
+  return pictureEdit || showcase || asksForDesign(input.intent.brief) ? "design" : mode;
 }
 
 /** The same request with its photo mode settled (for pricing and running). */

@@ -952,7 +952,9 @@ function StudioPrice({ session }: { session: StudioSession }) {
   // The brand's own clips (and camera-move recaps) use no video provider.
   const ownFootage =
     session.type === "video" &&
-    (videoMode === "brand" || (videoMode === "recap" && recapMotion !== "ai"));
+    (videoMode === "brand" ||
+      videoMode === "site" ||
+      (videoMode === "recap" && recapMotion !== "ai"));
   const quotedVideo = Boolean(
     (session.type === "video" ||
       (session.type === "story" && session.controls.storyMode === "video")) &&
