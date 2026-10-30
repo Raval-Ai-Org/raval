@@ -2,6 +2,7 @@
 // prompt. Every prompt carries the brand, the goal, the platform rules, a
 // deliberately chosen angle that differs from recent work, and an explicit
 // "don't repeat these" list. Pure (no server imports) so it is unit-testable.
+import type { HeroLook } from "./product-hero/variety";
 import { z } from "zod";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import type { MarketingMoment } from "./moments";
@@ -63,6 +64,8 @@ export type StudioContext = {
     adFormat?: string | null;
     /** Pictures: the campaign layout it was staged on (art-direction.ts), so the next one differs. */
     artDirection?: string | null;
+    /** Product posters: what it used and said (ADR-0040), so the next one differs. */
+    heroLook?: Partial<HeroLook> | null;
     /** Stories: the theme it followed, so the next one rotates. */
     storyTheme?: string | null;
     /** A longer passage of the copy, used only as a voice reference. */

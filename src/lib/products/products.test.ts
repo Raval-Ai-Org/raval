@@ -261,7 +261,7 @@ describe("productBlock", () => {
     );
     expect(block).toContain("Blue Mug");
     expect(block).toContain("Never add a feature");
-    expect(block).toContain("Never redraw");
+    expect(block).toContain("Never rewrite or change its label");
     expect(productOffer({ name: "Blue Mug", price: "$18" })).toBe("Blue Mug — $18");
   });
 });

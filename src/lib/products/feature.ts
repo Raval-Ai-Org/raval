@@ -123,7 +123,9 @@ export const CAROUSEL_PRODUCT_PHOTOS = 3;
 /**
  * How a product's own photos are used in a piece, or null when they aren't:
  * a revision keeps what it had, and photos a person chose come first.
- * `designEnabled` false keeps a single picture as the photo itself.
+ * A single picture is a product hero poster: the product cut out of its main
+ * photo and staged (ADR-0040). Without that, `designEnabled` designs around
+ * the photo, and false keeps the photo itself.
  */
 export function productPhotoControls(args: {
   type: string;
@@ -131,7 +133,8 @@ export function productPhotoControls(args: {
   photoIds: string[];
   revision: boolean;
   designEnabled: boolean;
-}): { referenceAssetIds: string[]; referenceMode: "preserve" | "design" } | null {
+  heroEnabled?: boolean;
+}): { referenceAssetIds: string[]; referenceMode: "preserve" | "design" | "hero" } | null {
   const { type, controls, photoIds } = args;
   if (!photoIds.length || args.revision || controls.referenceAssetIds?.length) return null;
   const single =
@@ -139,7 +142,7 @@ export function productPhotoControls(args: {
   if (single)
     return {
       referenceAssetIds: [photoIds[0]],
-      referenceMode: args.designEnabled ? "design" : "preserve",
+      referenceMode: args.heroEnabled ? "hero" : args.designEnabled ? "design" : "preserve",
     };
   if (type === "carousel")
     return {

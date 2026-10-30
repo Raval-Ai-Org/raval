@@ -128,6 +128,21 @@ describe("productPhotoControls", () => {
     expect(productPhotoControls({ ...base, type: "social", controls: {} })).toBeNull();
   });
 
+  it("stages a single picture as a product hero when that is on, and nothing else", () => {
+    const hero = { ...base, heroEnabled: true };
+    for (const type of ["image", "ad"])
+      expect(productPhotoControls({ ...hero, type, controls: {} })).toEqual({
+        referenceAssetIds: ["a"],
+        referenceMode: "hero",
+      });
+    expect(productPhotoControls({ ...hero, type: "carousel", controls: {} })?.referenceMode).toBe(
+      "preserve",
+    );
+    expect(productPhotoControls({ ...hero, type: "story", controls: {} })?.referenceMode).toBe(
+      "preserve",
+    );
+  });
+
   it("posts the photo as is when designing is off", () => {
     expect(
       productPhotoControls({ ...base, designEnabled: false, type: "image", controls: {} }),

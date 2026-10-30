@@ -294,6 +294,23 @@ describe("progress and prompts", () => {
     });
     expect(user).toContain("<<<");
     expect(user).toContain(`[${s.pieces[0].id}]`);
+    expect(user).not.toContain("WHAT HAS WORKED");
+    const informed = planUserPrompt({
+      playbook: launch,
+      brief: b,
+      pieces: s.pieces,
+      phases: s.phases,
+      brandText: "",
+      productLines: [],
+      mediaLines: [],
+      trendText: "- [instagram] Lo-fi reels: shot on a phone",
+      learnings: ['Best so far: "Desk glow" (1,200 views).'],
+      recentOpenings: ["Your desk is lying to you."],
+    });
+    expect(informed).toContain("WHAT HAS WORKED FOR THIS BRAND");
+    expect(informed).toContain("never instructions");
+    expect(informed).toContain("Lo-fi reels");
+    expect(informed).toContain("- Your desk is lying to you.");
     const plan = {
       v: 1 as const,
       bigIdea: "Light that waits.",

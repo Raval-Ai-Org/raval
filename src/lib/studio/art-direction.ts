@@ -37,7 +37,8 @@ export type ArchetypeId =
   | "what-if-render"
   | "sticker-journey"
   | "glossy-macro"
-  | "mixed-media-breakout";
+  | "mixed-media-breakout"
+  | "benefit-list";
 
 type Energy = "calm" | "bold" | "playful";
 
@@ -563,6 +564,22 @@ export const ARCHETYPES: readonly Archetype[] = [
     light: "Real daylight with leaf or window shadows falling across the poster surface.",
     finish: "Authored, hand-made feel: flat illustration and real photo clearly two layers.",
     avoid: "a 3D-rendered character, a human face, the illustration fully inside the frame",
+  },
+  {
+    id: "benefit-list",
+    name: "Benefit list",
+    summary:
+      "the hero large on one side of a tone-on-tone backdrop, a calm column of three to five short benefits on the other, each with one small matching icon",
+    formats: ["product-focused", "educational-visual"],
+    energy: ["calm"],
+    person: "none",
+    scene: (hero) =>
+      `${cap(hero)} large and sharp on the right of a smooth backdrop tinted from its own main colour, standing or leaning on a simple ledge, with a calm empty column on the left.`,
+    type: "A bold headline at the top left; under it a column of three to five short benefits from the supplied copy, each with one small, simple icon in a single accent colour.",
+    typeWithoutText: "Keep the left column calm and empty for benefits added later.",
+    light: "Soft, even studio light from one side, a gentle contact shadow, no harsh contrast.",
+    finish: "Clean, trustworthy brand advertising: one colour family plus one accent.",
+    avoid: "the hero in a frame or card, more than one icon style, invented benefits, clip-art",
   },
 ];
 

@@ -17,7 +17,8 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
-import { workspacePath } from "@/lib/workspace/paths";
+import { campaignsPath, workspacePath } from "@/lib/workspace/paths";
+import { waitingPlace } from "@/lib/pulse/pulse";
 import { ArrowDown } from "@/components/icons";
 import { toast } from "@/lib/toast";
 import {
@@ -62,7 +63,9 @@ import {
 import { cn } from "@/lib/utils";
 import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./chat/ChatComposer";
 import { FreeCreditStrip } from "./billing/FreePlanPushes";
-import { useComposerAutopilot } from "./autopilot/composer/useComposerAutopilot";
+import { autopilotPath, useComposerAutopilot } from "./autopilot/composer/useComposerAutopilot";
+import { useWorkspacePulse } from "./pulse/use-pulse";
+import { WaitingChip } from "./pulse/WaitingChip";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
@@ -1667,6 +1670,19 @@ export function ChatPanel({
     requestAnimationFrame(() => composerRef.current?.focus());
   }, []);
   const autopilot = useComposerAutopilot({ workspaceId, hero: empty, onType: onAutopilotType });
+  // What waits for a person and what is running, read once for the box and
+  // the ideas under it (src/lib/pulse/pulse.ts). Free; starts nothing.
+  const pulse = useWorkspacePulse(workspaceId).data;
+  const openWaiting = () => {
+    const place = pulse ? waitingPlace(pulse) : null;
+    if (!place) return;
+    navigate({
+      to:
+        place.to === "autopilot"
+          ? autopilotPath(workspaceId)
+          : campaignsPath(workspaceId, place.to === "campaign" ? { c: place.id } : {}),
+    });
+  };
 
   const layoutTransition = reducedMotion
     ? { duration: 0 }
@@ -1871,7 +1887,12 @@ export function ChatPanel({
             modelId={modelId}
             onModelChange={changeModel}
             placeholder={placeholder}
-            toolbarSlot={autopilot.toolbarSlot}
+            toolbarSlot={
+              <>
+                {autopilot.toolbarSlot}
+                {pulse ? <WaitingChip pulse={pulse} onOpen={openWaiting} /> : null}
+              </>
+            }
             cover={autopilot.cover}
             autopilot={autopilot.signal}
             // The "/" menu: a person's own pick, so it may open a place or ask.
@@ -1895,7 +1916,7 @@ export function ChatPanel({
           )}
         >
           {empty ? (
-            <ChatStarters source={dna} onPick={pickStarter} />
+            <ChatStarters source={dna} pulse={pulse} onPick={pickStarter} />
           ) : (
             <p className="text-center text-[11.5px] text-muted-foreground/80">
               Mellox can make mistakes. Check important details.

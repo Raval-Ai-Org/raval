@@ -262,11 +262,21 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
     or path from the browser. Upload through `POST /api/products/photos`.
   - `BrandDna.products` is a summary of the catalogue. It is only rewritten
     while it still says what Mellox wrote last.
-- **A product's photo is never redrawn.** `controls.productId` on a Studio job
-  makes the piece with the product's own photos (`productPhotoControls`,
-  `src/lib/products/feature.ts`): a single picture is designed around the main
-  photo (photo design, kept exact; "post as is" when designing is off), a
-  carousel places up to three on its slides, a Story or a made video starts
+- **A product's photo is never redrawn, except in a hero poster.**
+  `controls.productId` on a Studio job makes the piece with the product's own
+  photos (`productPhotoControls`, `src/lib/products/feature.ts`): a single
+  picture is a **product hero poster** ([ADR-0040](docs/adr/0040-product-hero.md),
+  `referenceMode: "hero"`, `src/lib/studio/product-hero/`,
+  `src/server/studio/product-hero/`, flag `FEATURE_FLAG_PRODUCT_HERO_ENABLED`):
+  the image model cuts the product out once per photo (checked by `judgeCutout`,
+  cached as a `product-cutout` asset), code picks a new topic, staging, light,
+  set and occasion off the brand's latest posters while the brand's colours,
+  type and finish stay the same (`variety.ts`, `meta.hero_look`), the concept writer (`studio.hero.concept`) gives it its
+  own idea and headline, checked by `groundConcept` (no claim or figure the
+  facts don't state, no near-repeat), and the model stages it, never in a
+  frame or card.
+  With the flag off it is designed around the main photo (photo design, kept
+  exact; "post as is" when designing is off). A carousel places up to three on its slides, a Story or a made video starts
   from the main one. Photos a person chose and edits keep what they had.
   `createBilledStudioJob` decides this before pricing. The product's stored
   facts lead the prompt (`productContextFor`), with the rule to claim nothing
@@ -557,6 +567,18 @@ worker cancels campaign steps and generators get no block.
     which the calendar shows and the Library filters by;
   - chat and MCP have read-only `list_campaigns` / `get_campaign`.
   - Never plan or start a campaign from chat.
+- **People always know what waits for them, Autopilot on or off.**
+  - `notifyCampaignWaiting` (`src/server/campaigns/notify.server.ts`, from the
+    existing `runDueAutopilot` sweep) emails the campaign's acting member at most
+    once a day per campaign (`workspace_campaigns.last_notified_at`, compare-and-set).
+  - The workspace pulse (`src/lib/pulse/pulse.ts`, `src/server/pulse/`, RPC
+    `src/server/fns/pulse.ts`) is one free read with the caller's own client:
+    posts waiting, running campaigns and their phase, products, goal.
+    `WaitingChip` shows campaign approvals in the message box when there is no
+    Autopilot program, and the ideas under the box (`buildStarters`) name them.
+- "Write the plan" also gets the brand's measured learnings (`measuredPieces`
+  → `summarizeLearnings`), the stored trends snapshot (`trendLines`) and recent
+  openings. Never search the web from planning.
 - `CampaignsScreen` is presentational; `/campaigns-lab` renders it with
   sample data (`tests/integration/campaigns-lab.spec.ts`).
 

@@ -590,6 +590,17 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.09,
     routes: ["studio.photo-read"],
   },
+  // A product hero poster (ADR-0040): the product cut out of its photo once
+  // (kept for later posts), this poster's own idea and headline, one premium
+  // staged render and the visual check.
+  product_hero: {
+    credits: 40,
+    label: "Product poster",
+    unit: "copy + product poster",
+    feature: "studio",
+    expectedCostUsd: 0.12,
+    routes: ["studio.hero.concept"],
+  },
   // The brand's own clips (or photos with camera moves) put together into a
   // video: reading frames, the opening design, the end card, and hearing the
   // sound once for captions. The footage is the brand's, so no video units

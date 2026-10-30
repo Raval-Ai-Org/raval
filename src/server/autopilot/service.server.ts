@@ -79,6 +79,10 @@ export async function runDueAutopilot(
 ): Promise<SweepResult> {
   const result = await runSweep(store, realPorts, { worker: WORKER, ...opts });
   await notifyWaiting().catch((error) => console.error("[autopilot] notice failed", error));
+  // A campaign's posts wait for a person with or without a program (ADR-0039).
+  await import("@/server/campaigns/notify.server")
+    .then((m) => m.notifyCampaignWaiting())
+    .catch((error) => console.error("[campaigns] notice failed", error));
   return result;
 }
 

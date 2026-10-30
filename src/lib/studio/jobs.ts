@@ -1,5 +1,6 @@
 // The Studio job contract shared by the browser and the server: what a
 // generation request contains and what a finished job returns. Pure + zod.
+import type { HeroLook } from "./product-hero/variety";
 import { z } from "zod";
 import type { PlatformId } from "@/lib/social-platforms";
 import type { AspectRatio } from "./aspect";
@@ -89,9 +90,10 @@ export const ControlsSchema = z.object({
   /**
    * Whether source photos stay intact ("preserve"), get a design built around
    * them ("design", src/lib/studio/photo-design/), receive a targeted edit, or
-   * only inspire a new image.
+   * only inspire a new image. "hero" is a catalogue product cut out of its
+   * own photo and staged as a poster (ADR-0040); set by the server only.
    */
-  referenceMode: z.enum(["preserve", "design", "edit", "inspire"]).optional(),
+  referenceMode: z.enum(["preserve", "design", "edit", "inspire", "hero"]).optional(),
   /** Design mode: keep the photos exact (default) or let the model blend them in. */
   photoFidelity: z.enum(["exact", "blend"]).optional(),
   /**
@@ -440,6 +442,8 @@ export type StudioJobOutput = {
   concept?: string;
   /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
   artDirection?: string;
+  /** Product poster: its staging, colour mood, light, set, idea and words (ADR-0040). */
+  heroLook?: HeroLook;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
   altText?: string;

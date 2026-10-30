@@ -48,6 +48,9 @@ export async function productContextFor(
   photoAssetIds: string[];
   name: string;
   price: string;
+  description: string;
+  category: string;
+  benefits: string[];
 } | null> {
   const { productForGeneration } = await import("./service.server");
   const row = await productForGeneration(workspaceId, productId);
@@ -69,5 +72,8 @@ export async function productContextFor(
     photoAssetIds: row.photoAssetIds,
     name: row.name,
     price: row.price,
+    description: row.description,
+    category: row.category,
+    benefits: row.benefits ?? [],
   };
 }

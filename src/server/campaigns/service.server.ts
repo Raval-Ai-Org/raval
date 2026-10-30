@@ -40,6 +40,9 @@ import { suggestCampaigns } from "@/lib/campaigns/suggest";
 import { diffPieces, pieceSignature, type CampaignStep } from "@/lib/campaigns/sync";
 import { isCampaignsEnabled, isAutopilotEnabled } from "@/lib/feature-flags";
 import { upcomingMoments } from "@/lib/studio/moments";
+import { trendLines } from "@/lib/studio/trends";
+import { summarizeLearnings } from "@/lib/autopilot/learn";
+import type { PlatformId } from "@/lib/social-platforms";
 import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
 import { signAssetPath } from "@/server/assets/persist.server";
 import { runMetered } from "@/server/billing/metered.server";
@@ -723,11 +726,25 @@ export async function planCampaign(
         (m, i) =>
           `${i + 1}. ${m.kind === "video" ? "Clip" : "Photo"}${m.role !== "any" ? ` (${m.role})` : ""}${m.label ? `: ${m.label}` : ""}`,
       );
+      // What the brand's own posts showed, what works on these channels now
+      // (the stored snapshot; never a search) and the openings already used.
+      const channels = [...new Set(plan.pieces.map((p) => p.platform))];
+      const learnings = await import("@/server/autopilot/ports.server")
+        .then(async (m) => summarizeLearnings(await m.measuredPieces(caller.workspaceId)))
+        .catch(() => [] as string[]);
+      const recentOpenings = [
+        ...new Set(ctx.recent.map((r) => r.hook?.trim()).filter((h): h is string => Boolean(h))),
+      ]
+        .slice(0, 8)
+        .map((h) => h.slice(0, 140));
       const user = planUserPrompt({
         playbook,
         brief,
         pieces: plan.pieces,
         phases: plan.phases,
+        trendText: trendLines(ctx.socialTrends, channels as PlatformId[], 6),
+        learnings,
+        recentOpenings,
         brandText: wrapUntrusted("brand-context", ctx.brandText, {
           maxChars: 6000,
           route: "campaign.plan",

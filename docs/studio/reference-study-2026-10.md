@@ -58,6 +58,25 @@ Mellox's website reel (`site-reel.ts`) follows the first: 3–5 stops down the
 first few screens of the page, a 1-second hold and a 1.2-second eased scroll
 between them, then back to the top: 6–12 seconds in all.
 
+## Round 3: product hero posters
+
+One skincare brand's feed (15 posts) against one Mellox post that pasted the
+whole product photo into a rounded card with clip-art around it.
+
+- One product per post, cut out and large (55–75% of the frame), never in a
+  frame or card.
+- Tone-on-tone: the backdrop is a light tint of the pack's own colour, the
+  type a deep shade of it, plus one contrasting accent.
+- The product's own formula is the prop: a gel pour, a cream swirl, foam,
+  drips. Nothing unrelated.
+- Recurring stagings: a glow sweep on a curved horizon, a wet glass ledge, a
+  macro crop running off the frame, a podium stack, a benefit column with
+  small matching icons.
+- The same handling every post, so the feed reads as one series.
+
+Distilled into `src/lib/studio/product-hero/` (ADR-0040), the `benefit-list`
+art-direction layout for services, and the product-hero deliverable.
+
 ## Mistakes seen in the set (and guarded against)
 
 - A cover promising "8 slides" over 6 slides → `carouselStoryIssue` refuses it.
@@ -68,4 +87,6 @@ between them, then back to the top: 6–12 seconds in all.
   the brand name; the closing slide carries the action.
 - Background tones that don't match between slides → one colourway per carousel.
 - Low-resolution cut-outs → the brand's own pictures are placed by code at
-  full size, never cut out by a model.
+  full size; a product hero's cut-out is checked and cleaned before use.
+- A product photo pasted in a card with clip-art (round 3) → product hero
+  posters, `HERO_NEVER`, and "no unrelated props" in the quality check.

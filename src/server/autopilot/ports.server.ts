@@ -399,8 +399,11 @@ async function context(workspaceId: string) {
   return loadStudioContext(db, workspaceId, null);
 }
 
-/** Autopilot's own posts that have numbers, for what it learns between weeks. */
-async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
+/**
+ * Autopilot's and campaigns' posts that have numbers, for what it learns
+ * between weeks. Campaign planning reads it too.
+ */
+export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
   const { data } = await db
     .from("autopilot_actions")
     .select("title, platform, content_type, result")

@@ -19,6 +19,7 @@ import {
   type StarterGroupId,
   type StarterSource,
 } from "@/lib/chat/starters";
+import type { WorkspacePulse } from "@/lib/pulse/pulse";
 import { duration, ease, spring } from "@/lib/motion";
 
 export type Starter = {
@@ -86,18 +87,24 @@ export function ChatGreeting({
 }
 
 // Topics under the message box. A topic opens a short list of things to ask,
-// written from the brand's own details (no request is made to show them).
+// written from the brand's own details and what is running now.
 export function ChatStarters({
   source,
+  pulse,
   onPick,
 }: {
   source: StarterSource;
+  /** What is running and waiting, once loaded; the ideas name it. */
+  pulse?: WorkspacePulse | null;
   onPick: (s: Starter) => void;
 }) {
   const [open, setOpen] = useState<StarterGroupId | null>(null);
   // Read on click, so server and client render the same markup.
   const [day, setDay] = useState(0);
-  const groups = useMemo(() => buildStarters(starterFacts(source), day), [source, day]);
+  const groups = useMemo(
+    () => buildStarters(starterFacts(source, pulse), day),
+    [source, pulse, day],
+  );
   const listRef = useRef<HTMLUListElement>(null);
   const group = groups.find((g) => g.id === open);
 

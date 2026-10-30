@@ -4,6 +4,7 @@
 // Workspace data is cached briefly. Brand DNA is read from the database for the
 // job's own workspace; a request-supplied copy is only used when none is stored.
 import "server-only";
+import { readHeroLook } from "@/lib/studio/product-hero/variety";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
@@ -198,6 +199,7 @@ async function loadWorkspaceSnapshot(
         structure: str(record(meta.carousel).structure),
         adFormat: str(meta.ad_format),
         artDirection: str(meta.art_direction),
+        heroLook: readHeroLook(meta.hero_look),
         design:
           meta.carousel || story.spec
             ? {

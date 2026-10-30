@@ -1,9 +1,9 @@
 "use client";
 // What a piece is about, and how an ad is laid out: one product from the
 // brand's catalogue (ADR-0035, Brain → Brand → Products) and one of the proven
-// ad layouts (src/lib/studio/ad-formats.ts). A picked product is shown with
-// its own photos, never redrawn, so only layouts that don't redraw a product
-// are offered. A product the brief names is picked by itself
+// ad layouts (src/lib/studio/ad-formats.ts). A picked product's single picture
+// is a product poster made from its own photo (ADR-0040), so the ad layouts
+// that draw a product are not offered. A product the brief names is picked by itself
 // (src/lib/products/feature.ts), the same way the server picks it.
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -91,6 +91,7 @@ export function withProductPhotos(
     photoIds: productPhotoIds(product),
     revision: false,
     designEnabled: true,
+    heroEnabled: true,
   });
   return photos
     ? {

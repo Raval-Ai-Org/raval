@@ -179,6 +179,17 @@ import {
 const BACKDROP_SLOT = "backdrop";
 import { messageForFailure, userSafeMessage } from "@/lib/user-errors";
 import { archetypeById, recentLayouts, type ArchetypeId } from "@/lib/studio/art-direction";
+import { planProductHero, type HeroProduct } from "@/lib/studio/product-hero/plan";
+import { recentStagings, stagingById } from "@/lib/studio/product-hero/stagings";
+import type { HeroLook } from "@/lib/studio/product-hero/variety";
+import { quotedHeadline } from "@/lib/studio/product-hero/concept";
+import { writeHeroConcept } from "./product-hero/concept.server";
+import {
+  prepareProductHero,
+  productHeroReferences,
+  PRODUCT_HERO_SOURCE,
+  type ProductHeroTask,
+} from "./product-hero/hero.server";
 import { assignPhotos } from "@/lib/studio/carousel/photos";
 import { carouselPhotos } from "./carousel-photos.server";
 
@@ -209,6 +220,8 @@ type ProviderTask = {
   compose?: boolean;
   /** A design layer the person's real photos are laid into once it is finished. */
   photoDesign?: PhotoDesignTask;
+  /** A product hero poster made from the product's own cut-out (ADR-0040). */
+  productHero?: ProductHeroTask;
   /** The brand's own clips or photos put together as a video (FFmpeg, after the response). */
   clipEdit?: ClipEditTask;
   /** A finished animated photo's stored file, for the recap that waits for it. */
@@ -1080,6 +1093,8 @@ async function startMedia(args: {
   sourceImagePath?: string | null;
   /** An edit of a photo design: the design layer it was made from. */
   previousLayerPath?: string | null;
+  /** A product hero poster: the product's stored facts and the staging decided for it. */
+  hero?: { product: HeroProduct & { id: string }; staging: string | null } | null;
   style?: LoadedLook | null;
 }): Promise<ProviderTask[]> {
   const { job, input, ctx, output, platforms } = args;
@@ -1488,6 +1503,76 @@ async function startMedia(args: {
   const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
   const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   const logoAt = logoUrl ? (look?.logoCorner ?? logoCorner(builderSize)) : null;
+  // A catalogue product's single picture: the product cut out of its own
+  // photo and staged as a poster (ADR-0040).
+  if (
+    input.controls.referenceMode === "hero" &&
+    args.hero &&
+    suppliedReferences.length === 1 &&
+    isPhotoDesignType(job.type)
+  ) {
+    const prepared = await prepareProductHero({
+      client: db(args.client),
+      workspaceId: job.workspace_id,
+      product: args.hero.product,
+      photo: suppliedReferences[0],
+      seed,
+      brief: input.intent.brief,
+      headline: heroHeadline(output),
+      look: output.heroLook ?? null,
+      noWords: look?.maxWords === 0,
+      recent: input.refine ? [] : recentStagings(ctx.recent),
+      lean: ctx.taste?.lean.layout,
+      keepStaging: args.hero.staging,
+      previousRenderPath: args.referencePath,
+      brand: {
+        brandName: ctx.brandName,
+        brandContext: ctx.visualBrandText ?? ctx.brandText,
+        lookBlock: look?.block,
+        fonts: look?.fonts.length ? look.fonts : (styled?.fonts ?? []).filter(Boolean),
+        colours: look?.colors.length
+          ? look.colors
+          : (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+        visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+        logoCorner: logoAt,
+      },
+      revision: refineNote,
+      novelty: noveltyNote,
+      tasteReferences: await resolveVisualReferenceUrls(
+        job.workspace_id,
+        output.visualTaste ?? null,
+      ),
+    });
+    const count = isVariationsRequest(input) ? variationCount(input.controls) : 1;
+    return Promise.all(
+      Array.from({ length: count }, async (_, index) => {
+        const prompt =
+          count > 1
+            ? `${prepared.prompt}
+
+${variationNote(index, count)}`
+            : prepared.prompt;
+        const started = await startImageTask({
+          costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
+          prompt,
+          size: size as ImageSize,
+          referenceAssets: prepared.references,
+        });
+        return {
+          slot: count > 1 ? optionSlot(index) : "main",
+          kind: "image" as const,
+          ratio,
+          prompt,
+          referenceAssets: prepared.references,
+          ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
+          productHero: prepared.task,
+          startedAt: Date.now(),
+          state: "pending" as const,
+          ...started,
+        };
+      }),
+    );
+  }
   // Designing with the person's own photos: the model draws the design and
   // leaves windows; the real photos are laid in when it is finished.
   if (
@@ -2281,6 +2366,33 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     };
   }
 
+  // A product poster's staging is decided here, so the post records it
+  // (meta.art_direction) and the next poster is staged on another one; a
+  // picture edit keeps the staging it had (ADR-0040).
+  const heroProduct =
+    controls.referenceMode === "hero" && product && controls.productId
+      ? {
+          id: controls.productId,
+          name: product.name,
+          category: product.category,
+          description: product.description,
+          benefits: product.benefits,
+        }
+      : null;
+  const heroLook = heroProduct
+    ? mediaOnly
+      ? parentHeroLook(parent)
+      : await planHeroLook({ job, input, ctx, output, product: heroProduct })
+    : null;
+  const heroStaging = heroLook?.staging ?? null;
+  if (heroLook)
+    output = {
+      ...output,
+      artDirection: heroLook.staging,
+      heroLook,
+      ...(heroLook.headline ? { onImageText: heroLook.headline } : {}),
+    };
+
   // Drafts before rendering so the asset can link to them.
   const polishStage: StageId = format.stages.some((s) => s.id === "polish") ? "polish" : "save";
   if (!mediaOnly) {
@@ -2302,6 +2414,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         // is staged on another layout (src/lib/products/feature.ts).
         ...(product ? { product_id: controls.productId } : {}),
         ...(output.artDirection ? { art_direction: output.artDirection } : {}),
+        ...(output.heroLook ? { hero_look: output.heroLook } : {}),
         // The job's headline, so every surface titles the piece consistently.
         job_title: title,
         brand_version: brandVersion(input.brand),
@@ -2429,6 +2542,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
             ? (parent?.provider_tasks?.find((t) => t.slot === "main")?.photoDesign?.layerPath ??
               null)
             : null,
+        hero: heroProduct ? { product: heroProduct, staging: heroStaging } : null,
         style,
       });
       for (const task of tasks) {
@@ -2841,9 +2955,104 @@ async function checkMediaTask(task: ProviderTask): Promise<MediaCheck> {
 
 /* ───────────────────────── poll / advance ───────────────────────── */
 
+/** A picture edit keeps the poster's look; only the render changes. */
+function parentHeroLook(parent: JobRow | null | undefined): HeroLook | null {
+  if (parent?.output?.heroLook) return parent.output.heroLook;
+  const staging =
+    stagingById(parent?.provider_tasks?.find((t) => t.slot === "main")?.productHero?.staging) ??
+    stagingById(parent?.output?.artDirection);
+  return staging ? { staging: staging.id, palette: "tint", light: "", set: "" } : null;
+}
+
+/**
+ * This product poster's look and words (ADR-0040): code picks the staging,
+ * colour mood, light and set off the brand's latest posters, then the concept
+ * writer gives it its own idea and a fresh headline, both checked.
+ */
+async function planHeroLook(args: {
+  job: JobRow;
+  input: CreateJobInput;
+  ctx: StudioContext;
+  output: StudioJobOutput;
+  product: HeroProduct;
+}): Promise<HeroLook> {
+  const { job, input, ctx, output, product } = args;
+  const noWords = (ctx.style ? imageStyleInput(ctx.style)?.maxWords : undefined) === 0;
+  const recentLooks = ctx.recent
+    .map((r) => r.heroLook)
+    .filter((l): l is Partial<HeroLook> => !!l?.staging);
+  const fixedHeadline = quotedHeadline(input.intent.brief);
+  const plan = planProductHero({
+    seed: job.group_id,
+    brief: input.intent.brief,
+    product,
+    headline: fixedHeadline ?? heroHeadline(output),
+    noWords,
+    recent: recentStagings(ctx.recent),
+    recentLooks,
+    context: input.controls.campaign ?? null,
+    lean: ctx.taste?.lean.layout,
+  });
+  const concept = await writeHeroConcept({
+    brandName: ctx.brandName,
+    product,
+    staging: plan.staging,
+    look: plan.look,
+    occasion: plan.occasion,
+    topic: plan.topic,
+    texture: plan.texture,
+    ingredients: plan.ingredients,
+    benefits: plan.copy.benefits ?? [],
+    brief: input.intent.brief,
+    caption: output.variants?.[0]?.body ?? null,
+    draftHeadline: heroHeadline(output),
+    fixedHeadline,
+    audience: ctx.audience ?? null,
+    allowText: plan.allowText,
+    recent: recentLooks,
+  });
+  return {
+    ...plan.look,
+    concept: concept.scene,
+    headline: fixedHeadline ?? concept.headline ?? plan.look.headline ?? null,
+    support: concept.support ?? plan.look.support ?? null,
+  };
+}
+
+/** The words a product poster leads with: the piece's own on-image line, else a short title. */
+function heroHeadline(output: StudioJobOutput): string | null {
+  const line = output.onImageText?.trim() || output.adOnImage?.headline?.trim();
+  if (line) return line;
+  const title = output.title?.trim();
+  return title && title.split(/\s+/).length <= 7 ? title : null;
+}
+
+/** The visual review compares a product poster with the real product. */
+async function productReviewIdentity(client: Db, row: JobRow, hero: ProductHeroTask) {
+  const [product] = await productHeroReferences(
+    { referencePaths: [hero.productPath] },
+    row.workspace_id,
+  );
+  const taste = row.output?.visualTaste;
+  return {
+    rules: [
+      "Product identity: the first reference image is the real product. The poster must show this same product, with the same shape, proportions, colours, cap and label words, staged in its scene rather than pasted in a frame or card.",
+      taste?.rules ?? "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    references: [
+      ...(product ? [product] : []),
+      ...(taste ? await resolveVisualReferenceUrls(row.workspace_id, taste) : []),
+    ].slice(0, 3),
+  };
+}
+
 async function retryReferenceUrls(client: Db, row: JobRow, task: ProviderTask) {
   // A design layer is made from its contact sheet, never from the photos.
   if (task.photoDesign) return photoDesignReferences(task.photoDesign, row.workspace_id);
+  // A product poster is always remade from the product itself.
+  if (task.productHero) return productHeroReferences(task.productHero, row.workspace_id);
   const ids = row.input?.controls?.referenceAssetIds;
   if (!ids?.length && !row.output?.visualTaste) return task.referenceAssets;
   const supplied = await resolveStudioReferences(client, row.workspace_id, ids);
@@ -3182,33 +3391,43 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         task.kind === "image" && finalImage
           ? await reviewGeneratedImage(
               finalImage,
-              (task.photoDesign
+              (task.productHero
                 ? [
                     row.title,
-                    "A designed social post built around the brand's own real photos, which are placed in it unchanged. Judge the design around the photos, its words and legibility; flag any text, badge or shape that covers a person's face.",
-                    task.photoDesign.plan.copy.length
-                      ? `Exact words: ${task.photoDesign.plan.copy.map((line) => JSON.stringify(line.text)).join(", ")}`
-                      : "No words are expected on it.",
+                    "A product poster: the brand's real product, cut out of its own photo, staged as the hero of a designed scene. Flag: the product shown inside a frame, card, box or window instead of in the scene; the product's shape, colours or label words differing from the reference product image; a second or invented product; clip-art or props that don't belong; misspelled or extra words.",
+                    task.productHero.words.length
+                      ? `Exact words: ${task.productHero.words.map((w) => JSON.stringify(w)).join(", ")}`
+                      : "No words are expected on it apart from the product's own label.",
                   ]
-                : [
-                    row.title,
-                    row.output?.concept,
-                    task.prompt.slice(-1900),
-                    task.prompt.slice(0, 350),
-                  ]
+                : task.photoDesign
+                  ? [
+                      row.title,
+                      "A designed social post built around the brand's own real photos, which are placed in it unchanged. Judge the design around the photos, its words and legibility; flag any text, badge or shape that covers a person's face.",
+                      task.photoDesign.plan.copy.length
+                        ? `Exact words: ${task.photoDesign.plan.copy.map((line) => JSON.stringify(line.text)).join(", ")}`
+                        : "No words are expected on it.",
+                    ]
+                  : [
+                      row.title,
+                      row.output?.concept,
+                      task.prompt.slice(-1900),
+                      task.prompt.slice(0, 350),
+                    ]
               )
                 .filter(Boolean)
                 .join("\n"),
               undefined,
-              row.output?.visualTaste
-                ? {
-                    rules: row.output.visualTaste.rules,
-                    references: await resolveVisualReferenceUrls(
-                      row.workspace_id,
-                      row.output.visualTaste,
-                    ),
-                  }
-                : undefined,
+              task.productHero
+                ? await productReviewIdentity(c, row, task.productHero)
+                : row.output?.visualTaste
+                  ? {
+                      rules: row.output.visualTaste.rules,
+                      references: await resolveVisualReferenceUrls(
+                        row.workspace_id,
+                        row.output.visualTaste,
+                      ),
+                    }
+                  : undefined,
             )
           : null;
       const artIssues =
@@ -3264,7 +3483,11 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         seed: row.group_id,
         promptVersion: "studio-2",
         metadata: {
-          source: task.photoDesign ? "studio_photo_design" : "studio",
+          source: task.photoDesign
+            ? "studio_photo_design"
+            : task.productHero
+              ? PRODUCT_HERO_SOURCE
+              : "studio",
           job_id: row.id,
           aspect_ratio: task.ratio,
           studio_type: row.type,
@@ -3273,6 +3496,17 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
                 source_asset_ids: task.photoDesign.assetIds,
                 source_preserved: true,
                 design_layer_path: task.photoDesign.layerPath ?? null,
+              }
+            : {}),
+          ...(task.productHero
+            ? {
+                product_hero: {
+                  product_id: task.productHero.productId,
+                  source_asset_id: task.productHero.sourceAssetId,
+                  cutout_asset_id: task.productHero.cutoutAssetId,
+                  staging: task.productHero.staging,
+                  palette: task.productHero.palette,
+                },
               }
             : {}),
           ...(imageReview ? { image_review: imageReview } : {}),

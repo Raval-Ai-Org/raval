@@ -324,6 +324,22 @@ export function isPhotoDesignEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * A catalogue product's single picture as a product hero poster: the product
+ * cut out of its photo and staged (ADR-0040). On unless set to "false";
+ * `FEATURE_FLAG_PRODUCT_HERO_ENABLED_WS_<id>` overrides it for one workspace.
+ * Off, a product picture is designed around its photo as before.
+ */
+export function isProductHeroEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_PRODUCT_HERO_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_PRODUCT_HERO_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * Branding a brand's own video clips and turning its photos into a recap
  * video (src/lib/studio/clip-edit.ts). On unless set to "false";
  * `FEATURE_FLAG_CLIP_EDIT_ENABLED_WS_<id>` overrides it for one workspace.

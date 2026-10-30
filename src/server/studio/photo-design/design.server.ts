@@ -52,17 +52,22 @@ export const PHOTO_DESIGN_FAILED =
 const SERIES_SOURCES = ["studio_photo_design"];
 
 /**
- * Up to two of the brand's earlier photo designs that a person approved or
- * sent, so a brand's event posts read as one series. Best effort.
+ * Up to two of the brand's earlier photo designs (or other pictures from
+ * `sources`) that a person approved or sent, so a brand's posts read as one
+ * series. Best effort.
  */
-async function seriesPaths(client: SupabaseClient, workspaceId: string): Promise<string[]> {
+export async function seriesPaths(
+  client: SupabaseClient,
+  workspaceId: string,
+  sources: readonly string[] = SERIES_SOURCES,
+): Promise<string[]> {
   try {
     const { data: assets } = await client
       .from("assets")
       .select("storage_path, content_item_id")
       .eq("workspace_id", workspaceId)
       .eq("status", "ready")
-      .in("metadata->>source", SERIES_SOURCES)
+      .in("metadata->>source", [...sources])
       .not("content_item_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(8);

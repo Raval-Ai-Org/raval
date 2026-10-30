@@ -33,7 +33,7 @@ export function productBlock(
       ". Never add a feature, ingredient, result, price or offer that isn't listed.",
     "- Call it by its exact name.",
     opts.hasPhoto
-      ? "- The real product photo is used as is. Never redraw, rewrite or change its label, text, logo or packaging."
+      ? "- The real product photo shows how it looks. Never rewrite or change its label, text, logo or packaging."
       : "",
   ];
   return lines

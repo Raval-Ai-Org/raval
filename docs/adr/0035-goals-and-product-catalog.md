@@ -78,6 +78,10 @@ A Studio job may carry `controls.productId`. At job creation
 The runner puts the product's stored facts at the top of the prompt, with the
 rule to claim nothing else.
 
+> Since ADR-0040 a single picture about a picked product is a product hero
+> poster: the product is cut out of its photo and re-rendered in a staged
+> scene. Carousels, Stories and videos keep the photo as it is.
+
 ### 5. Onboarding ends in three real drafts, only on a click
 
 The flow is: website → goal (asked while the scan runs) → Brand DNA →

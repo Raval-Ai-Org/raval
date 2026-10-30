@@ -29,6 +29,8 @@ const MODE_ICON: Record<Mode, LucideIcon> = {
   preserve: ImageIcon,
   edit: Pencil,
   inspire: Lightbulb,
+  // Set by the server for a catalogue product; never offered here.
+  hero: Palette,
 };
 
 /**

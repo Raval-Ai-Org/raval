@@ -71,6 +71,13 @@ export function studioChargeFor(args: {
   if (args.type === "video" && args.videoMode === "site") return "photo_recap";
   if (args.type === "video" && args.videoMode === "recap")
     return args.recapMotion === "ai" ? "studio_video" : "photo_recap";
+  // A product cut out of its photo and staged as the hero (ADR-0040).
+  if (
+    args.referenceAssetIds?.length &&
+    args.referenceMode === "hero" &&
+    isPhotoDesignType(args.type)
+  )
+    return "product_hero";
   // Designing with the person's photos: exact photos are placed by Mellox;
   // "blend it more" is an ordinary generated picture.
   if (

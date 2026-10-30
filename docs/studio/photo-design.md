@@ -101,7 +101,9 @@ again. "Bring photos to life" first waits for one animated clip per photo
 
 ## Rules
 
-- A photo is never redrawn unless the person chose Blend it more.
+- A photo is never redrawn unless the person chose Blend it more. A single
+  picture about a picked product is a product hero poster instead (ADR-0040):
+  the product is cut out and staged, never pasted in a window.
 - The model never draws a logo or a person; only the real logo, placed by code.
 - No template fallback: a design that can't hold the photos fails plainly.
 - Photo and clip ids are always checked against the workspace

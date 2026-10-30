@@ -27,7 +27,7 @@ import {
 import { HttpError } from "@/server/http-error";
 import { quoteStudioVideo } from "./video-quote.server";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
-import { isClipEditEnabled, isPhotoDesignEnabled } from "@/lib/feature-flags";
+import { isClipEditEnabled, isPhotoDesignEnabled, isProductHeroEnabled } from "@/lib/feature-flags";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { pickFeaturedProduct, productPhotoControls } from "@/lib/products/feature";
 
@@ -80,6 +80,8 @@ export async function createBilledStudioJob(args: {
     const picked = await autoPickProduct(workspaceId, input, args.autoProduct ?? "named");
     if (picked) input.controls.productId = picked;
   }
+  // Set when the product's own main photo was just chosen for a hero.
+  let heroFromProduct = false;
   if (input.controls.productId) {
     const { productForGeneration } = await import("@/server/products/service.server");
     const product = await productForGeneration(workspaceId, input.controls.productId);
@@ -90,11 +92,28 @@ export async function createBilledStudioJob(args: {
       photoIds: product.kind === "product" ? product.photoAssetIds : [],
       revision,
       designEnabled: isPhotoDesignEnabled(workspaceId),
+      heroEnabled: isProductHeroEnabled(workspaceId),
     });
     if (photos) {
       input.controls.referenceAssetIds = photos.referenceAssetIds;
       input.controls.referenceMode = photos.referenceMode;
       if (photos.referenceMode === "design") input.controls.photoFidelity = "exact";
+      heroFromProduct = photos.referenceMode === "hero";
+    }
+  }
+  // A product hero is only ever made from the picked product's own photo
+  // (ADR-0040): anything else asking for it designs around the photos.
+  if (input.controls.referenceMode === "hero" && !heroFromProduct) {
+    const own =
+      input.controls.productId && isProductHeroEnabled(workspaceId)
+        ? await import("@/server/products/service.server").then(({ productForGeneration }) =>
+            productForGeneration(workspaceId, input.controls.productId!),
+          )
+        : null;
+    const ids = input.controls.referenceAssetIds ?? [];
+    if (!own || own.kind !== "product" || ids.length !== 1 || !own.photoAssetIds.includes(ids[0])) {
+      input.controls.referenceMode = "design";
+      input.controls.photoFidelity = "exact";
     }
   }
   // "Post as is" with words or design asked for, a picture edit or more

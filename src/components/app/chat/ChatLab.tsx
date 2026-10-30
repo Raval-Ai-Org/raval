@@ -13,6 +13,8 @@ import { AssistantMessage, UserMessage } from "./ChatMessages";
 import { ChatOffers } from "./ChatOffers";
 import { StudioTaskCard } from "./StudioTaskCard";
 import { ThinkingIndicator } from "./ThinkingIndicator";
+import { WaitingChip } from "../pulse/WaitingChip";
+import type { WorkspacePulse } from "@/lib/pulse/pulse";
 
 type LabMsg =
   | { id: string; kind: "user"; text: string }
@@ -53,6 +55,17 @@ const LAB_BRAND = {
   competitors: [{ name: "Bean Box" }],
   socials: [{ platform: "instagram" }],
   websiteUrl: "https://acme.example",
+};
+
+// What is running and waiting, as the real chat reads it (src/lib/pulse/pulse.ts).
+const LAB_PULSE: WorkspacePulse = {
+  waiting: 2,
+  autopilot: { status: null, waiting: 0 },
+  campaigns: [
+    { id: "lab", name: "Winter blend launch", phase: "Build-up", keyDate: null, waiting: 2 },
+  ],
+  products: ["Oat latte kit"],
+  goal: { focus: "sales", label: "Sell more" },
 };
 
 export function ChatLab() {
@@ -231,6 +244,7 @@ export function ChatLab() {
               modelId={CHAT_MODELS[0].id}
               onModelChange={() => {}}
               placeholder={empty ? "How can Mellox help today?" : "Reply to Mellox…"}
+              toolbarSlot={<WaitingChip pulse={LAB_PULSE} onOpen={() => {}} />}
             />
           </motion.div>
           <div
@@ -244,6 +258,7 @@ export function ChatLab() {
             {empty ? (
               <ChatStarters
                 source={LAB_BRAND}
+                pulse={LAB_PULSE}
                 onPick={(s) => (s.prompt ? reply(s.prompt) : setInput(s.prefill ?? ""))}
               />
             ) : (

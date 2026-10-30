@@ -31,6 +31,7 @@ import * as memory from "./memory";
 import * as notion from "./notion";
 import * as products from "./products";
 import * as publish from "./publish";
+import * as pulse from "./pulse";
 import * as schedules from "./schedules";
 import * as slack from "./slack";
 import * as sitePublishing from "./site-publishing";
@@ -75,6 +76,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   notion,
   products,
   publish,
+  pulse,
   schedules,
   slack,
   "site-publishing": sitePublishing,

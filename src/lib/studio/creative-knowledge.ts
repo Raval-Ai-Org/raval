@@ -247,10 +247,10 @@ export const DELIVERABLES: readonly Deliverable[] = [
     name: "Product hero",
     readingOrder: "first the product, then the headline, then the brand feeling",
     layout:
-      "the product large and accurate (60–75% of the frame), clean silhouette, honest materials, one surface or set that fits the brand",
+      "the product large and accurate (60–75% of the frame), clean silhouette, honest materials, one surface or set that fits the brand; a backdrop tinted from the product's own colour with one contrasting accent; the product itself is in the scene, never a photo inside a frame or card",
     copy: "One short headline at most; the product's own label is the only other writing.",
     neverInvent: `label text, colourways, accessories, or ${NO_FACTS}`,
-    prefer: ["spotlight-noir", "hero-world", "monument-object", "material-swap"],
+    prefer: ["spotlight-noir", "hero-world", "monument-object", "material-swap", "benefit-list"],
   },
   {
     id: "brand-moment",
@@ -363,6 +363,7 @@ export function qualityCheckLines(opts: { hasText: boolean; hasProduct?: boolean
       ? "• The product's silhouette, proportions, materials and label layout match the brand's product; nothing invented on the pack."
       : "",
     "• One clear focal point that reads at thumbnail size; everything important inside the safe area.",
+    "• No unrelated props, clip-art or corner doodles; every object in the frame belongs to the idea.",
     "• If anything fails or the frame feels busy, simplify: drop the smallest text, remove a prop, widen the space. Never fix it by adding.",
   ].filter(Boolean);
 }
