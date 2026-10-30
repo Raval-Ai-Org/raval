@@ -33,7 +33,7 @@ const SCENES = [
 type Scene = (typeof SCENES)[number];
 
 const BLOCKS: Partial<Record<Scene, BillingBlock>> = {
-  feature: { code: "upgrade_required", feature: "autopilot", requiredPlan: "growth" },
+  feature: { code: "upgrade_required", feature: "campaigns", requiredPlan: "growth" },
   limit: { code: "limit_reached", limit: "competitors", used: 3, max: 3 },
   "brands-window": { code: "limit_reached", limit: "brands", used: 1, max: 1 },
   credits: { code: "insufficient_balance", meter: "credits", needed: 140, available: 35 },
@@ -95,7 +95,7 @@ export function UpgradeLab() {
           })}
           <LockedFeaturesView
             locked={[
-              { feature: "autopilot", plan: "growth" },
+              { feature: "autopilot", plan: "starter" },
               { feature: "ugc", plan: "starter" },
               { feature: "audience", plan: "starter" },
               { feature: "competitors", plan: "starter" },

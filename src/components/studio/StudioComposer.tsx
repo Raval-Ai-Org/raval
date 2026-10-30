@@ -40,7 +40,7 @@ import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
 import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
 import { PLATFORMS } from "@/lib/social-platforms";
-import { countBlanks, getTemplate, templatesFor } from "@/lib/studio/templates";
+import { countBlanks, getTemplate } from "@/lib/studio/templates";
 import {
   applyTemplate,
   backToBrief,
@@ -55,7 +55,15 @@ import {
   useStudioStore,
   type StudioSession,
 } from "@/lib/studio/session-store";
-import { ControlsPanel } from "./ControlsPanel";
+import { ControlsPanel, PlatformControls } from "./ControlsPanel";
+import {
+  AttachButtons,
+  DropHint,
+  LibraryPicker,
+  MediaStrip,
+  PhotoUse,
+  usePromptMedia,
+} from "./PromptMedia";
 import { GenerationProgress } from "./GenerationProgress";
 import { IdeasPanel } from "./IdeasPanel";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
@@ -642,12 +650,8 @@ export function IntentStep({
   const template = getTemplate(session.template);
   const blanks = countBlanks(session.brief);
   const hasBrand = useMemo(() => !!readBrandPayload(session.workspaceId), [session.workspaceId]);
-  const hasTemplates = templatesFor(session.type).length > 0;
   const writer = usePromptWriter(session);
-  // Templates lead while the box is empty; once someone writes their own, they tuck away.
-  const [templatesPicked, setTemplatesPicked] = useState<boolean | null>(null);
-  const showTemplates =
-    hasTemplates && (templatesPicked ?? (!session.brief.trim() || !!session.template));
+  const media = usePromptMedia(session, !!session.pendingKey || writer.busy);
 
   useEffect(() => {
     if (!isMobile) textarea.current?.focus();
@@ -702,6 +706,7 @@ export function IntentStep({
                 </label>
 
                 <div
+                  {...media.dropProps}
                   className={cn(
                     "relative mt-4 rounded-2xl border bg-surface-3 shadow-1 transition-[border-color,box-shadow]",
                     "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_22px_50px_-22px_hsl(var(--primary)/0.5)]",
@@ -709,6 +714,7 @@ export function IntentStep({
                   )}
                 >
                   <WritingOverlay writer={writer} />
+                  <DropHint media={media} />
                   {session.sourceContentId ? (
                     <div
                       className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground"
@@ -796,24 +802,10 @@ export function IntentStep({
                       <BeatPills beats={template.beats} />
                     </div>
                   ) : null}
+                  <MediaStrip media={media} />
                   <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-1.5 text-xs">
                     <WriteForMeButton writer={writer} />
-                    {hasTemplates ? (
-                      <button
-                        type="button"
-                        onClick={() => setTemplatesPicked(!showTemplates)}
-                        aria-expanded={showTemplates}
-                        className={cn(
-                          "inline-flex items-center gap-1 font-medium transition-colors",
-                          showTemplates
-                            ? "text-foreground"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        <LayoutTemplate className="size-3.5" />
-                        {showTemplates ? "Hide templates" : "Templates"}
-                      </button>
-                    ) : null}
+                    <AttachButtons media={media} />
                     {!hasBrand ? (
                       <button
                         type="button"
@@ -833,6 +825,7 @@ export function IntentStep({
                     ) : null}
                   </div>
                 </div>
+                <LibraryPicker media={media} />
                 <WrittenNote writer={writer} />
                 {session.billing ? (
                   <UpgradePrompt block={session.billing} className="mt-3" />
@@ -841,20 +834,12 @@ export function IntentStep({
                     {session.error}
                   </p>
                 ) : null}
-
-                {showTemplates ? (
-                  <TemplateGallery
-                    session={session}
-                    textareaRef={textarea}
-                    className="mt-5"
-                    onWriteOwn={() => {
-                      setTemplatesPicked(false);
-                      textarea.current?.focus();
-                    }}
-                  />
-                ) : null}
               </div>
             )}
+
+            {!session.sourceScript ? <PhotoUse media={media} /> : null}
+
+            <PlatformControls session={session} disabled={busy} />
 
             {!session.sourceScript ? (
               <div>
@@ -893,6 +878,15 @@ export function IntentStep({
                   fixtureIdeas={fixtureIdeas}
                 />
               </div>
+            ) : null}
+
+            {/* Templates are a starting point for those who want one: last. */}
+            {!session.sourceScript ? (
+              <TemplateGallery
+                session={session}
+                textareaRef={textarea}
+                title="Or start from a template"
+              />
             ) : null}
           </div>
         </div>

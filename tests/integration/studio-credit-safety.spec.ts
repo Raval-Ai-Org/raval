@@ -21,10 +21,11 @@ test("Studio shows revision prices, source photos and the script-to-video handof
   await page.getByRole("combobox", { name: "Window size" }).selectOption("phone");
   await page.screenshot({ path: testInfo.outputPath("script-video-mobile.png"), fullPage: true });
   await scenes.selectOption("brief-template");
-  await expect(page.getByRole("button", { name: "Upload", exact: true })).toBeVisible();
+  // Photos are added in the description box itself, before the platforms.
+  const addPhotos = page.getByRole("button", { name: "Photos", exact: true });
+  await expect(addPhotos).toBeVisible();
   await expect(page.getByRole("button", { name: "From Library", exact: true })).toBeVisible();
-  await expect(page.getByText("Adding them is free.", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Upload", exact: true }).scrollIntoViewIfNeeded();
+  await addPhotos.scrollIntoViewIfNeeded();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);

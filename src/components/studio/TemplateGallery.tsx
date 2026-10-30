@@ -514,11 +514,13 @@ export function TemplateGallery({
   textareaRef,
   onWriteOwn,
   className,
+  title = "Start with a template",
 }: {
   session: StudioSession;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onWriteOwn?: () => void;
   className?: string;
+  title?: string;
 }) {
   const templates = templatesFor(session.type);
   const [showAll, setShowAll] = useState(false);
@@ -553,7 +555,7 @@ export function TemplateGallery({
   return (
     <section data-no-rhythm aria-labelledby="studio-templates" className={className}>
       <h3 id="studio-templates" className="mb-2.5 text-xs font-medium text-foreground">
-        Start with a template
+        {title}
       </h3>
       <div
         role="radiogroup"

@@ -106,7 +106,8 @@ const AppTour = lazy(() =>
 );
 
 import { useStudioEntry } from "@/hooks/use-studio";
-import { StudioDock } from "@/components/studio/StudioDock";
+import { StudioActivityWatcher, StudioButton } from "@/components/studio/StudioButton";
+import { setStudioRailOpen } from "@/lib/studio/rail-state";
 import { useStudioStore } from "@/lib/studio/session-store";
 import { useIsCompact } from "@/hooks/use-mobile";
 import { Logo } from "@/components/brand/Logo";
@@ -191,18 +192,32 @@ function AppShell() {
     },
   });
 
-  // Hydrate persisted sidebar state after mount (avoids SSR hydration mismatch).
+  // On a computer the sidebar starts open and stays open until the person
+  // minimizes it; that choice is remembered. Read after mount (avoids SSR
+  // hydration mismatch). On a phone it is a drawer and starts closed.
+  const navHydrated = useRef(false);
   useEffect(() => {
     try {
       const v = localStorage.getItem("app:navOpen");
-      if (v === "1" && window.innerWidth >= 1024) setNavOpen(true);
-    } catch {}
+      if (v !== "0" && window.innerWidth >= 1024) setNavOpen(true);
+    } catch {
+      if (window.innerWidth >= 1024) setNavOpen(true);
+    }
   }, []);
   useEffect(() => {
+    // Skip the first pass, before the stored choice has been applied.
+    if (!navHydrated.current) {
+      navHydrated.current = true;
+      return;
+    }
     try {
       if (!isCompact) localStorage.setItem("app:navOpen", navOpen ? "1" : "0");
     } catch {}
   }, [navOpen, isCompact]);
+  // Going somewhere from the sidebar closes it only where it is a drawer.
+  const closeNavOnPhone = useCallback(() => {
+    if (isCompact) setNavOpen(false);
+  }, [isCompact]);
   useEffect(() => {
     if (isCompact) setNavOpen(false);
   }, [isCompact]);
@@ -291,7 +306,7 @@ function AppShell() {
     const onOpenExperiments = () => navigate({ to: workspacePath(workspaceId, "experiments") });
     const onOpenInspo = (event: CustomEvent<{ section?: string } | null>) => {
       navigate({ to: inspoPath(workspaceId, event.detail?.section) });
-      setNavOpen(false);
+      closeNavOnPhone();
     };
     const onOpenCampaigns = (event: CustomEvent<{ campaignId?: string; type?: string } | null>) => {
       navigate({
@@ -301,7 +316,7 @@ function AppShell() {
           type: event.detail?.type,
         }),
       });
-      setNavOpen(false);
+      closeNavOnPhone();
     };
     addAppEventListener("open:inspo", onOpenInspo);
     addAppEventListener("open:campaigns", onOpenCampaigns);
@@ -315,7 +330,7 @@ function AppShell() {
       removeAppEventListener("open:inspo", onOpenInspo);
       removeAppEventListener("open:campaigns", onOpenCampaigns);
     };
-  }, [navigate, workspaceId]);
+  }, [navigate, workspaceId, closeNavOnPhone]);
 
   // Brain (ADR-0032) holds the four brains and the strategy. Older buttons and
   // chat actions still name the place they used to open; each lands on its
@@ -323,9 +338,9 @@ function AppShell() {
   const openBrain = useCallback(
     (section?: BrainSection | null, tab?: string | null) => {
       navigate({ to: brainPath(workspaceId, section, tab) });
-      setNavOpen(false);
+      closeNavOnPhone();
     },
-    [navigate, workspaceId],
+    [navigate, workspaceId, closeNavOnPhone],
   );
   useEffect(() => {
     const onBrain = (event: CustomEvent<{ section?: BrainSection; tab?: string } | null>) =>
@@ -440,7 +455,7 @@ function AppShell() {
         onClick={() => {
           if (lock && opts.feature) openFeatureUpgrade(opts.feature);
           else opts.onClick();
-          setNavOpen(false);
+          closeNavOnPhone();
         }}
         aria-label={lock ? `${opts.label} (needs the ${PLANS[lock].label} plan)` : undefined}
         className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -478,7 +493,7 @@ function AppShell() {
       <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
         <Link
           to={homeHref}
-          onClick={() => setNavOpen(false)}
+          onClick={closeNavOnPhone}
           aria-label="Mellox AI — workspace home"
           title="Workspace home"
           className="group flex h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -512,7 +527,7 @@ function AppShell() {
           workspaceId={workspaceId}
           workspaceName={workspaceName}
           workspaceWebsite={workspaceWebsite}
-          onSwitch={() => setNavOpen(false)}
+          onSwitch={closeNavOnPhone}
         />
 
         <div className="h-px bg-border/50" />
@@ -521,30 +536,38 @@ function AppShell() {
         <RecentChats
           workspaceId={workspaceId}
           activeConversationId={activeConversationId}
-          onNavigate={() => setNavOpen(false)}
+          onNavigate={closeNavOnPhone}
         />
-
-        <div className="pt-1">
-          <button
-            type="button"
-            data-tour="library"
-            onClick={() => {
-              setNavOpen(false);
-              emitAppEvent("open:library");
-            }}
-            className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground transition-colors group-hover:bg-primary/12 group-hover:text-primary">
-              <BookOpen className="h-4 w-4" aria-hidden />
-            </span>
-            <span className="flex-1 truncate leading-none">Library</span>
-          </button>
-        </div>
 
         <div className="h-px bg-border/50" />
 
-        {/* Workspace actions */}
-        <SidebarSection label="Workspace">
+        {/* Ordered by how often people reach for them: making and posting
+            first, then the brand, then results, then the team. */}
+        <SidebarSection label="Create">
+          {sidebarAction({
+            icon: BookOpen,
+            label: "Library",
+            tour: "library",
+            onClick: () => emitAppEvent("open:library"),
+          })}
+          {/* Campaigns (ADR-0039) holds the content calendar: its header opens it. */}
+          {sidebarAction({
+            icon: Megaphone,
+            label: "Campaigns",
+            tour: "campaigns",
+            onClick: () => navigate({ to: campaignsPath(workspaceId) }),
+          })}
+          {sidebarAction({
+            icon: CalendarIcon,
+            label: "Schedule",
+            feature: "publishing",
+            onClick: () => emitAppEvent("open:schedule"),
+          })}
+        </SidebarSection>
+
+        <div className="h-px bg-border/50" />
+
+        <SidebarSection label="Brand">
           {sidebarAction({
             icon: BrainIcon,
             label: "Brain",
@@ -556,11 +579,13 @@ function AppShell() {
             icon: Palette,
             label: "Inspo",
             tour: "inspo",
-            onClick: () => {
-              navigate({ to: inspoPath(workspaceId) });
-              setNavOpen(false);
-            },
+            onClick: () => navigate({ to: inspoPath(workspaceId) }),
           })}
+        </SidebarSection>
+
+        <div className="h-px bg-border/50" />
+
+        <SidebarSection label="Results">
           {sidebarAction({
             icon: BarChart3,
             label: "Analytics",
@@ -568,31 +593,12 @@ function AppShell() {
             tour: "analytics",
             onClick: () => setAnalyticsOpen(true),
           })}
-          {/* Campaigns (ADR-0039) holds the content calendar: its header opens it. */}
-          {sidebarAction({
-            icon: Megaphone,
-            label: "Campaigns",
-            tour: "campaigns",
-            onClick: () => {
-              navigate({ to: campaignsPath(workspaceId) });
-              setNavOpen(false);
-            },
-          })}
-        </SidebarSection>
-
-        <div className="h-px bg-border/50" />
-
-        {/* Intelligence */}
-        <SidebarSection label="Intelligence">
           {sidebarAction({
             icon: Sparkles,
             label: "AI Visibility",
             accent: "hsl(var(--brand-blue))",
             tour: "visibility",
-            onClick: () => {
-              emitAppEvent("open:ai-visibility");
-              setNavOpen(false);
-            },
+            onClick: () => emitAppEvent("open:ai-visibility"),
           })}
           {proofEngine?.enabled &&
             sidebarAction({
@@ -600,34 +606,24 @@ function AppShell() {
               label: "Experiments",
               accent: "hsl(var(--brand-green))",
               feature: "experiments",
-              onClick: () => {
-                navigate({ to: workspacePath(workspaceId, "experiments") });
-                setNavOpen(false);
-              },
+              onClick: () => navigate({ to: workspacePath(workspaceId, "experiments") }),
             })}
-          {sidebarAction({
-            icon: CalendarIcon,
-            label: "Schedule",
-            feature: "publishing",
-            onClick: () => emitAppEvent("open:schedule"),
-          })}
         </SidebarSection>
 
         <div className="h-px bg-border/50" />
 
-        {/* Collaborate */}
-        <SidebarSection label="Collaborate">
-          {sidebarAction({
-            icon: Rocket,
-            label: "Client Portal",
-            feature: "client_portal",
-            onClick: () => emitAppEvent("open:client-portal"),
-          })}
+        <SidebarSection label="Team">
           {sidebarAction({
             icon: Share2,
             label: "Share",
             accent: "hsl(var(--brand-green))",
             onClick: () => emitAppEvent("open:share"),
+          })}
+          {sidebarAction({
+            icon: Rocket,
+            label: "Client Portal",
+            feature: "client_portal",
+            onClick: () => emitAppEvent("open:client-portal"),
           })}
         </SidebarSection>
 
@@ -656,7 +652,7 @@ function AppShell() {
         <div data-tour="account" className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu
             onOpenSettings={() => emitAppEvent("open:settings")}
-            onClose={() => setNavOpen(false)}
+            onClose={closeNavOnPhone}
           />
         </div>
       </div>
@@ -729,7 +725,18 @@ function AppShell() {
               {/* Divider between primary and quick actions */}
               <div aria-hidden className="my-1 h-px w-6 bg-border/50" />
 
+              {/* Same order as the open sidebar. */}
               {[
+                {
+                  icon: BookOpen,
+                  label: "Library",
+                  onClick: () => emitAppEvent("open:library"),
+                },
+                {
+                  icon: Megaphone,
+                  label: "Campaigns",
+                  onClick: () => navigate({ to: campaignsPath(workspaceId) }),
+                },
                 {
                   icon: BrainIcon,
                   label: "Brain",
@@ -741,19 +748,14 @@ function AppShell() {
                   onClick: () => navigate({ to: inspoPath(workspaceId) }),
                 },
                 {
-                  icon: Sparkles,
-                  label: "AI Visibility",
-                  onClick: () => emitAppEvent("open:ai-visibility"),
-                },
-                {
                   icon: BarChart3,
                   label: "Analytics",
                   onClick: () => emitAppEvent("open:analytics"),
                 },
                 {
-                  icon: Megaphone,
-                  label: "Campaigns",
-                  onClick: () => navigate({ to: campaignsPath(workspaceId) }),
+                  icon: Sparkles,
+                  label: "AI Visibility",
+                  onClick: () => emitAppEvent("open:ai-visibility"),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
@@ -928,17 +930,7 @@ function AppShell() {
                 </Suspense>
                 <WalletPill />
               </div>
-              <button
-                type="button"
-                onClick={() => emitAppEvent("toggle:studio")}
-                aria-label="Open Studio"
-                title="Open Studio"
-                data-tour="studio"
-                className="group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-primary-border bg-primary-surface px-3.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97] sm:h-9 sm:px-3.5"
-              >
-                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden sm:inline">Studio</span>
-              </button>
+              <StudioButton />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1077,7 +1069,7 @@ function AppShell() {
       </div>
 
       <CommandBar />
-      <StudioDock />
+      <StudioActivityWatcher />
       <Suspense fallback={<OpeningPill />}>
         {analyticsOpen && (
           <AnalyticsModal
@@ -1126,15 +1118,23 @@ function WorkspaceSurface({
 }) {
   const isCompact = useIsCompact();
   const [studioOpen, setStudioOpen] = useState(false);
+  // Like the sidebar: open on a computer until the person closes it, and that
+  // choice is remembered. On a phone it is a drawer and starts closed.
+  const studioHydrated = useRef(false);
   useEffect(() => {
     try {
-      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") === "1")
+      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") !== "0")
         setStudioOpen(true);
     } catch {
-      /* ignore */
+      if (window.innerWidth >= 1024) setStudioOpen(true);
     }
   }, []);
   useEffect(() => {
+    // Skip the first pass, before the stored choice has been applied.
+    if (!studioHydrated.current) {
+      studioHydrated.current = true;
+      return;
+    }
     try {
       if (!isCompact) window.localStorage.setItem("mellox:studioOpen", studioOpen ? "1" : "0");
     } catch {
@@ -1144,6 +1144,10 @@ function WorkspaceSurface({
   useEffect(() => {
     if (isCompact) setStudioOpen(false);
   }, [isCompact]);
+  // The Studio button shows progress only while the panel is closed.
+  useEffect(() => {
+    setStudioRailOpen(studioOpen);
+  }, [studioOpen]);
   useEffect(() => {
     if (!isCompact || !studioOpen) return;
     const onKey = (event: KeyboardEvent) => {

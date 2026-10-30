@@ -22,7 +22,7 @@ import type { MediaOutput, StudioJob, StudioJobOutput } from "@/lib/studio/jobs"
 import type { SessionStep, StudioSession } from "@/lib/studio/session-store";
 import { ComposerBody } from "./StudioComposer";
 import { CreateLauncher } from "./CreateLauncher";
-import { DockCard } from "./StudioDock";
+import { StudioButtonView } from "./StudioButton";
 import type { ReviewRow } from "./ReviewPanel";
 
 /* Sample data — deliberately realistic so layout problems show up. */
@@ -1168,11 +1168,13 @@ function RailScene() {
     title: "Roastery pan",
     error: { category: "provider", message: "The video provider timed out.", retryable: true },
   };
-  const docked: StudioSession[] = [
-    running,
-    session("social", "review"),
-    { ...video, id: "lab-video-docked", job: { ...video.job!, stage: "render" } },
-  ];
+  const rendering: StudioJob = {
+    ...video.job!,
+    id: "job-rendering",
+    group_id: "g-rendering",
+    stage: "render",
+    title: "Roastery pan, 15 seconds",
+  };
   return (
     <div className="flex flex-wrap items-start justify-center gap-10">
       <div className="w-[340px] space-y-6 rounded-2xl bg-surface-1 p-3.5 ring-1 ring-border">
@@ -1181,17 +1183,19 @@ function RailScene() {
           loading={false}
           error={null}
           thumbs={{ "thumb-1": art(1280, 720, "#223012", "#b5d84a", "Harvest") }}
-          jobs={[running.job!, failed]}
+          jobs={[running.job!, rendering, failed]}
           agentActions={2}
           publishedThisWeek={4}
           onRefresh={() => {}}
           fixture
         />
       </div>
-      <div className="flex w-[340px] flex-col items-end gap-2">
-        {docked.map((d) => (
-          <DockCard key={d.id} session={d} />
-        ))}
+      {/* The top-bar button while the panel is closed: the only other place progress shows. */}
+      <div className="flex w-[340px] flex-col items-start gap-3" aria-label="Studio button states">
+        <StudioButtonView state="idle" working={0} unseen={0} onClick={() => {}} />
+        <StudioButtonView state="working" working={2} unseen={0} onClick={() => {}} />
+        <StudioButtonView state="ready" working={0} unseen={1} onClick={() => {}} />
+        <StudioButtonView state="failed" working={0} unseen={0} onClick={() => {}} />
       </div>
     </div>
   );

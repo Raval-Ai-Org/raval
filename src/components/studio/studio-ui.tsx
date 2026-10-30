@@ -520,6 +520,40 @@ export function formatElapsed(seconds: number): string {
   return `${m}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+/** A thin ring that turns while something is being made. Inherits the text colour. */
+export function WorkingRing({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={cn(
+        "size-4 animate-spin [animation-duration:0.9s] motion-reduce:animate-none",
+        className,
+      )}
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6.25"
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.22"
+        strokeWidth="1.75"
+      />
+      <circle
+        cx="8"
+        cy="8"
+        r="6.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeDasharray="12 40"
+      />
+    </svg>
+  );
+}
+
 /** A check mark that draws itself — the one completion gesture Studio uses. */
 export function DrawCheck({
   className,

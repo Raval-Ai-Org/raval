@@ -4,7 +4,7 @@ import { readBrandDnaFor } from "@/hooks/use-brand-dna";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import {
@@ -14,6 +14,7 @@ import {
   Calendar,
   CalendarClock,
   Check,
+  ChevronDown,
   Eye,
   FileText,
   Plus,
@@ -40,7 +41,15 @@ import { cancelSession, getStudioState, openJob, useStudioStore } from "@/lib/st
 import { openItemOrJob } from "@/hooks/use-studio";
 import { useVisibleInterval } from "@/hooks/use-visible-interval";
 import { useStudioSuggestions } from "@/hooks/use-studio-suggestions";
-import { Burst, DrawCheck, PlatformStack, TypeGlyph } from "@/components/studio/studio-ui";
+import {
+  Burst,
+  DrawCheck,
+  PlatformStack,
+  TypeGlyph,
+  WorkingRing,
+  formatElapsed,
+  useElapsed,
+} from "@/components/studio/studio-ui";
 import { studioApi } from "@/lib/studio/client";
 import { createPostFromDraft } from "@/lib/studio/convert";
 import { StopStudioJobsButton } from "@/components/studio/StopStudioJobsButton";
@@ -256,23 +265,52 @@ function BrandDnaCta() {
 
 /* ───────────────────────── Generating jobs ───────────────────────── */
 
+/**
+ * One piece being made: what it is, the step it's on, how long it has run and
+ * what's left. The Studio panel is the one place this progress is shown.
+ */
 export function JobRow({
   job,
   tracked: _tracked,
   onDismiss,
+  defaultOpen = false,
 }: {
   job: StudioJob;
   tracked: boolean;
   onDismiss: () => void;
+  /** Show the list of steps without a click (the first piece in the list). */
+  defaultOpen?: boolean;
 }) {
   const format = STUDIO_FORMATS[job.type];
   const active = isActiveJob(job);
-  const stage = format.stages.find((s) => s.id === job.stage);
+  if (!active) return <FailedJobRow job={job} onDismiss={onDismiss} />;
+  return <ActiveJobRow job={job} defaultOpen={defaultOpen} format={format} />;
+}
+
+function ActiveJobRow({
+  job,
+  defaultOpen,
+  format,
+}: {
+  job: StudioJob;
+  defaultOpen: boolean;
+  format: (typeof STUDIO_FORMATS)[StudioType];
+}) {
+  const reduce = useReducedMotion();
+  const [open, setOpen] = useState(defaultOpen);
+  const [cancelling, setCancelling] = useState(false);
+  const elapsed = useElapsed(Date.parse(job.created_at));
+  const steps = format.stages;
+  const queued = job.status === "queued";
   const index = Math.max(
     0,
-    format.stages.findIndex((s) => s.id === job.stage),
+    steps.findIndex((s) => s.id === job.stage),
   );
-  const [cancelling, setCancelling] = useState(false);
+  const current = queued ? "Waiting to start" : (steps[index]?.label ?? "Starting");
+  // Done steps are full; the current one fills slowly toward its end and the
+  // bar picks up from there when the next step starts. Never goes backwards.
+  const start = queued ? 2 : (index / steps.length) * 100;
+  const end = queued ? 6 : ((index + 0.88) / steps.length) * 100;
 
   const cancel = async () => {
     setCancelling(true);
@@ -291,106 +329,190 @@ export function JobRow({
   return (
     <motion.li
       layoutId={job.parent_job_id ? undefined : `group-${job.group_id}`}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, transition: { duration: duration.fast } }}
+      transition={{ duration: duration.medium, ease: ease.emphasized }}
+      className={`studio-tone-${job.type} relative overflow-hidden rounded-xl bg-surface-3 shadow-1 ring-1 ring-border/70`}
+    >
+      <div className="flex items-start gap-3 px-3 pt-3">
+        <TypeGlyph type={job.type} />
+        <button
+          type="button"
+          onClick={() => void openJob(job.id, job.workspace_id)}
+          className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+          title="Open in Studio"
+        >
+          <span className="block truncate text-[13px] font-medium leading-5 text-foreground">
+            {job.title || `New ${format.noun}`}
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+            <span className="truncate">{format.label}</span>
+            <span aria-hidden>·</span>
+            <span className="font-mono tabular-nums" aria-label={`Running for ${elapsed} seconds`}>
+              {formatElapsed(elapsed)}
+            </span>
+          </span>
+        </button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="-mr-1 -mt-0.5 size-7 rounded-full text-muted-foreground hover:text-foreground"
+          onClick={() => void cancel()}
+          loading={cancelling}
+          aria-label={`Stop ${job.title ?? format.noun}`}
+          title="Stop"
+        >
+          <X />
+        </Button>
+      </div>
+
+      <div className="px-3 pb-2.5 pt-3">
+        <div
+          role="progressbar"
+          aria-label={`${current}, step ${index + 1} of ${steps.length}`}
+          aria-valuemin={0}
+          aria-valuemax={steps.length}
+          aria-valuenow={queued ? 0 : index}
+          className="relative h-1 overflow-hidden rounded-full bg-foreground/[0.08]"
+        >
+          <motion.span
+            className="studio-progress-fill absolute inset-y-0 left-0 rounded-full"
+            initial={{ width: `${start}%` }}
+            animate={{ width: `${end}%` }}
+            transition={reduce ? { duration: 0 } : { duration: 30, ease: [0.05, 0.7, 0.2, 1] }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="mt-2 flex w-full items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+        >
+          <WorkingRing className="size-3.5 shrink-0 text-primary" />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={current}
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4 }}
+              transition={{ duration: duration.base, ease: ease.standard }}
+              className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
+              aria-live="polite"
+            >
+              {current}
+            </motion.span>
+          </AnimatePresence>
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            {queued ? "In line" : `Step ${index + 1} of ${steps.length}`}
+          </span>
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-[--motion-duration-base]",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          />
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            initial={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            animate={reduce ? { opacity: 1 } : { height: "auto", opacity: 1 }}
+            exit={reduce ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            transition={{ duration: duration.medium, ease: ease.emphasized }}
+            className="overflow-hidden"
+          >
+            <ol className="space-y-1.5 border-t border-border/60 px-3 pb-3 pt-2.5">
+              {steps.map((step, i) => {
+                const done = !queued && i < index;
+                const now = !queued && i === index;
+                return (
+                  <li key={step.id} className="flex items-center gap-2.5 text-[11.5px] leading-4">
+                    <span className="grid size-4 shrink-0 place-items-center">
+                      {done ? (
+                        <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-primary">
+                          <Check className="size-2.5" strokeWidth={3.5} />
+                        </span>
+                      ) : now ? (
+                        <WorkingRing className="size-3.5 text-primary" />
+                      ) : (
+                        <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate",
+                        now
+                          ? "font-medium text-foreground"
+                          : done
+                            ? "text-muted-foreground"
+                            : "text-muted-foreground/60",
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+              {format.estimate}. You can keep working; it saves to Review by itself.
+            </p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.li>
+  );
+}
+
+function FailedJobRow({ job, onDismiss }: { job: StudioJob; onDismiss: () => void }) {
+  const format = STUDIO_FORMATS[job.type];
+  return (
+    <motion.li
+      layoutId={job.parent_job_id ? undefined : `group-${job.group_id}`}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: duration.fast } }}
       transition={{ duration: duration.medium, ease: ease.emphasized }}
-      className={cn(
-        `studio-tone-${job.type} relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1`,
-        active ? "studio-ring ring-primary-border/50" : "ring-danger-border",
-      )}
+      className={`studio-tone-${job.type} relative overflow-hidden rounded-xl bg-surface-3 shadow-1 ring-1 ring-danger-border`}
     >
-      {active ? <span className="studio-weave absolute inset-0 opacity-70" aria-hidden /> : null}
-      <div className={cn("relative flex items-center gap-3 p-3", active && "pb-2.5")}>
+      <div className="flex items-center gap-3 p-3">
         <TypeGlyph type={job.type} />
         <button
           type="button"
           onClick={() => void openJob(job.id, job.workspace_id)}
           className="min-w-0 flex-1 text-left"
         >
-          <span className="block truncate text-sm font-medium text-foreground">
+          <span className="block truncate text-[13px] font-medium text-foreground">
             {job.title || format.label}
           </span>
-          <>
-            <motion.span
-              key={active ? job.stage : "failed"}
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: duration.base }}
-              className={cn(
-                "flex items-center gap-1.5 truncate text-xs",
-                active ? "text-muted-foreground" : "text-danger",
-              )}
-            >
-              {active ? (
-                (stage?.label ?? "Starting")
-              ) : (
-                <>
-                  <AlertTriangle className="size-3 shrink-0" />
-                  <span className="truncate">{job.error?.message ?? "Couldn't finish"}</span>
-                </>
-              )}
-            </motion.span>
-          </>
+          <span className="flex items-center gap-1.5 truncate text-xs text-danger">
+            <AlertTriangle className="size-3 shrink-0" />
+            <span className="truncate">{job.error?.message ?? "Couldn't finish"}</span>
+          </span>
         </button>
-        {active ? (
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="size-7 rounded-full"
-            onClick={() => void cancel()}
-            loading={cancelling}
-            aria-label={`Cancel ${job.title ?? format.noun}`}
-            title="Cancel"
-          >
-            <X />
-          </Button>
-        ) : (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 rounded-full px-2.5"
-              onClick={() => void openJob(job.id, job.workspace_id)}
-            >
-              Retry
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              className="size-7 rounded-full"
-              onClick={onDismiss}
-              aria-label="Dismiss"
-              title="Dismiss"
-            >
-              <X />
-            </Button>
-          </>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 rounded-full px-2.5"
+          onClick={() => void openJob(job.id, job.workspace_id)}
+        >
+          Retry
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          className="size-7 rounded-full"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          title="Dismiss"
+        >
+          <X />
+        </Button>
       </div>
-      {active ? (
-        <div className="relative flex gap-1 px-3 pb-3" aria-hidden>
-          {format.stages.map((s, i) => (
-            <span
-              key={s.id}
-              className="relative h-1 flex-1 overflow-hidden rounded-full bg-foreground/[0.08]"
-            >
-              {i < index ? (
-                <span className="absolute inset-0 rounded-full bg-primary" />
-              ) : i === index ? (
-                <motion.span
-                  key={s.id}
-                  className="studio-progress-fill absolute inset-y-0 left-0 rounded-full"
-                  initial={{ width: "8%" }}
-                  animate={{ width: "82%" }}
-                  transition={{ duration: 14, ease: [0.1, 0.6, 0.3, 1] }}
-                />
-              ) : null}
-            </span>
-          ))}
-        </div>
-      ) : null}
     </motion.li>
   );
 }
@@ -559,6 +681,21 @@ export function PipelineSection({
     }
   }, [jobs, followJob]);
 
+  // When the last piece finishes, leave the empty Creating tab for where it landed.
+  const wasMaking = useRef(makingCount);
+  useEffect(() => {
+    const before = wasMaking.current;
+    wasMaking.current = makingCount;
+    if (before === 0 || makingCount > 0 || failedJobs.length) return;
+    setPicked((p) => (p === "generating" ? null : p));
+    try {
+      if (sessionStorage.getItem(PIPELINE_TAB_KEY) === "generating")
+        sessionStorage.removeItem(PIPELINE_TAB_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [makingCount, failedJobs.length]);
+
   const list = useMemo(() => {
     if (active === "generating") return [];
     const inStage = visibleGroups.filter((g) =>
@@ -646,7 +783,7 @@ export function PipelineSection({
   const summary =
     active === "generating"
       ? makingCount
-        ? `Creating ${makingCount} post${makingCount === 1 ? "" : "s"}. They move on by themselves.`
+        ? `Making ${makingCount} ${makingCount === 1 ? "piece" : "pieces"}. Each one moves to Review when it's done.`
         : failedJobs.length
           ? `${failedJobs.length} couldn't finish. Retry or dismiss.`
           : "Nothing is being created right now."
@@ -679,11 +816,6 @@ export function PipelineSection({
       </div>
 
       {/* ── The pipeline: four connected stages ── */}
-      {activeJobs.length > 0 && !fixture && rowWorkspaceId && (
-        <div className="mb-3">
-          <StopStudioJobsButton workspaceId={rowWorkspaceId} />
-        </div>
-      )}
       <div role="tablist" aria-label="Pipeline stage" className="relative grid grid-cols-4">
         <span
           aria-hidden
@@ -773,13 +905,18 @@ export function PipelineSection({
         })}
       </div>
 
-      <p
-        key={`${active}-${summary}`}
-        aria-live="polite"
-        className="studio-enter-blur mb-2.5 mt-1.5 px-1 text-[11.5px] leading-snug text-muted-foreground"
-      >
-        {loading ? "Loading your content…" : summary}
-      </p>
+      <div className="mb-2.5 mt-1.5 flex items-center gap-2 px-1">
+        <p
+          key={`${active}-${summary}`}
+          aria-live="polite"
+          className="studio-enter-blur min-w-0 flex-1 text-[11.5px] leading-snug text-muted-foreground"
+        >
+          {loading ? "Loading your content…" : summary}
+        </p>
+        {active === "generating" && activeJobs.length > 1 && !fixture && rowWorkspaceId ? (
+          <StopStudioJobsButton workspaceId={rowWorkspaceId} compact className="-mr-1 shrink-0" />
+        ) : null}
+      </div>
 
       {loading ? (
         <div className="space-y-2.5">
@@ -825,8 +962,14 @@ export function PipelineSection({
               {creating.map((c) => (
                 <CreatingRow key={`creating-${c.key}`} title={c.title} type={c.type} />
               ))}
-              {activeJobs.map((job) => (
-                <JobRow key={job.id} job={job} tracked onDismiss={() => {}} />
+              {activeJobs.map((job, i) => (
+                <JobRow
+                  key={job.id}
+                  job={job}
+                  tracked
+                  defaultOpen={i === 0 && creating.length === 0}
+                  onDismiss={() => {}}
+                />
               ))}
               {failedJobs.map((job) => (
                 <JobRow
@@ -946,27 +1089,31 @@ function CreatingRow({ title, type }: { title: string; type: StudioType | "legac
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, transition: { duration: duration.fast } }}
       transition={{ duration: duration.slow, ease: ease.emphasized }}
-      className={`studio-tone-${t} studio-ring relative overflow-hidden rounded-2xl bg-surface-3 shadow-1 ring-1 ring-primary-border/50`}
+      className={`studio-tone-${t} relative overflow-hidden rounded-xl bg-surface-3 shadow-1 ring-1 ring-border/70`}
     >
-      <span className="studio-weave absolute inset-0 opacity-70" aria-hidden />
-      <div className="relative flex items-center gap-3 p-3 pb-2.5">
+      <div className="flex items-start gap-3 px-3 pt-3">
         <TypeGlyph type={t} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground">{title}</span>
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Spinner className="size-3 animate-spin" />
-            Writing captions and planning the visual
+          <span className="block truncate text-[13px] font-medium leading-5 text-foreground">
+            {title}
+          </span>
+          <span className="block text-[11px] leading-4 text-muted-foreground">
+            {STUDIO_FORMATS[t].label}
           </span>
         </span>
       </div>
-      <div className="relative px-3 pb-3">
-        <span className="block h-1 overflow-hidden rounded-full bg-foreground/[0.08]">
+      <div className="px-3 pb-3 pt-3">
+        <span className="relative block h-1 overflow-hidden rounded-full bg-foreground/[0.08]">
           <motion.span
-            className="studio-progress-fill relative block h-full rounded-full"
-            initial={{ width: "6%" }}
-            animate={{ width: "72%" }}
-            transition={{ duration: 20, ease: [0.1, 0.6, 0.3, 1] }}
+            className="studio-progress-fill absolute inset-y-0 left-0 rounded-full"
+            initial={{ width: "2%" }}
+            animate={{ width: "12%" }}
+            transition={{ duration: 20, ease: [0.05, 0.7, 0.2, 1] }}
           />
+        </span>
+        <span className="mt-2 flex items-center gap-2 text-xs font-medium text-foreground">
+          <WorkingRing className="size-3.5 shrink-0 text-primary" />
+          Getting started
         </span>
       </div>
     </motion.li>

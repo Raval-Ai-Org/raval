@@ -27,15 +27,17 @@ test.describe("Upgrade lab — laptop", () => {
     page,
   }) => {
     await openScene(page, "feature");
-    await expect(page.getByRole("heading", { name: "Unlock Autopilot" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Unlock Campaign plans" })).toBeVisible();
     await expect(page.getByText("On Growth and above")).toBeVisible();
     await expect(page.getByTestId("plan-growth")).toHaveAttribute("data-recommended", "true");
-    await expect(page.getByTestId("plan-growth")).toContainText("Unlocks Autopilot");
+    await expect(page.getByTestId("plan-growth")).toContainText("Unlocks Campaign plans");
     await expect(page.getByTestId("plan-growth")).toContainText("Everything in Starter, plus");
     await expect(page.getByTestId("plan-growth")).toContainText("6,000 credits a month");
 
     // The smaller plan says what it leaves out, and can still be chosen.
-    await expect(page.getByTestId("missing-starter")).toContainText("Autopilot is not included");
+    await expect(page.getByTestId("missing-starter")).toContainText(
+      "Campaign plans is not included",
+    );
     await expect(page.getByTestId("missing-growth")).toHaveCount(0);
     for (const name of ["Starter", "Growth", "Agency", "Scale"]) {
       const button = page.getByRole("button", { name: `Upgrade to ${name}` });

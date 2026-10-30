@@ -160,6 +160,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     support: "Email",
     fit: "For one brand getting started",
     highlights: [
+      "Autopilot writes and schedules your posts",
       "Posts, articles and video ads in your voice",
       "See what ChatGPT and Gemini say about you",
       "Test posts on your audience first",
@@ -196,7 +197,6 @@ export const PLANS: Record<PlanId, PlanDef> = {
     support: "Email, 24 h",
     fit: "For growing brands and small teams",
     highlights: [
-      "Autopilot writes and schedules your posts",
       "Fix all website issues in one go",
       "Full-HD and premium video",
       "Campaigns, approvals and a client portal",
@@ -492,7 +492,7 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     label: "Autopilot",
     pitch:
       "Mellox plans, writes and schedules your marketing. You approve before anything goes out.",
-    minPlan: "growth",
+    minPlan: "starter",
   },
   white_label: {
     key: "white_label",

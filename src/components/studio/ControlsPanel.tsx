@@ -11,9 +11,7 @@ import { cleanMentions } from "@/lib/stories/placement";
 import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
-import { ReferencePhotos } from "./ReferencePhotos";
 import { SourceClips } from "./SourceClips";
-import { isPhotoDesignType, photoLimit } from "@/lib/studio/photo-design/mode";
 import { AdFormatPicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
@@ -65,8 +63,53 @@ export function describeControls(session: StudioSession): string {
 }
 
 /**
- * Where it goes stays visible; the shape and fine-tuning live in a settings
+ * Where it goes: shown right under the description, before anything else.
+ * A size that still matches the old platforms follows the new ones; one a
+ * person picked stays.
+ */
+export function PlatformControls({
+  session,
+  disabled,
+}: {
+  session: StudioSession;
+  disabled?: boolean;
+}) {
+  const format = STUDIO_FORMATS[session.type];
+  const c = session.controls;
+  if (!format.platforms.length) return null;
+  const mediaKind = session.type === "video" ? "video" : "image";
+  return (
+    <fieldset disabled={disabled} className="disabled:opacity-60">
+      <FieldLabel>{format.multiPlatform ? "Platforms" : "Platform"}</FieldLabel>
+      <PlatformPicker
+        maxSelections={c.paymentSource === "creation" ? 3 : undefined}
+        platforms={format.platforms}
+        value={c.platforms}
+        multi={format.multiPlatform}
+        onChange={(platforms) => {
+          const next: Partial<StudioControls> = { platforms };
+          const followed =
+            !c.ratio || c.ratio === recommendedRatio(c.platforms, mediaKind, format.ratios);
+          if (followed && format.ratios.length && session.type !== "carousel") {
+            next.ratio = recommendedRatio(platforms, mediaKind, format.ratios);
+          }
+          updateSession(session.id, { controls: { ...c, ...next } });
+        }}
+      />
+      {c.paymentSource === "creation" && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Up to three platform versions per creation.
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+/**
+ * Everything after the description and platforms: what the piece is made
+ * from and the product first, then payment, and fine-tuning in a settings
  * card that summarizes itself when collapsed, so the brief stays the focus.
+ * Photos and clips are added in the description box (`PromptMedia`).
  */
 export function ControlsPanel({
   session,
@@ -79,10 +122,8 @@ export function ControlsPanel({
   const c = session.controls;
   const [open, setOpen] = useState(false);
   const { data: billing } = useEntitlements();
-  const [ratioPinned, setRatioPinned] = useState(false);
 
   useEffect(() => {
-    setRatioPinned(false);
     setOpen(false);
   }, [session.type]);
 
@@ -114,58 +155,76 @@ export function ControlsPanel({
     session.type === "video" &&
     (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site");
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
-  const recap = ownFootage && c.videoMode === "recap";
-  // The brand's own photos. A recap shows them inside the video card, where
-  // they are needed; the clips and website reels take none.
-  const photos = (["image", "video", "carousel", "story", "ad"].includes(session.type) ||
-    c.includeImage) &&
-    !(session.type === "video" && (c.videoMode === "brand" || c.videoMode === "site")) && (
-      <ReferencePhotos
-        key={session.workspaceId}
-        {...(recap
-          ? {
-              limit: 6,
-              hideModes: true,
-              bare: true,
-              title: "Photos",
-              note: "2 to 6, in play order",
-            }
-          : {})}
-        workspaceId={session.workspaceId}
-        type={session.type}
-        value={c.referenceAssetIds ?? []}
-        mode={c.referenceMode ?? "preserve"}
-        fidelity={c.photoFidelity ?? "exact"}
-        onChange={(referenceAssetIds) =>
-          set({
-            referenceAssetIds,
-            // Several photos for one picture means designing with them.
-            referenceMode: !referenceAssetIds.length
-              ? undefined
-              : referenceAssetIds.length > 1 &&
-                  (c.referenceMode ?? "preserve") === "preserve" &&
-                  isPhotoDesignType(session.type)
-                ? "design"
-                : (c.referenceMode ?? "preserve"),
-          })
-        }
-        onModeChange={(referenceMode) =>
-          set({
-            referenceMode,
-            referenceAssetIds: (c.referenceAssetIds ?? []).slice(
-              0,
-              photoLimit(referenceMode, session.type),
-            ),
-          })
-        }
-        onFidelityChange={(photoFidelity) => set({ photoFidelity })}
-        onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
-        disabled={disabled}
-      />
-    );
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
+      {session.type === "video" && (
+        <SourceClips
+          key={session.workspaceId}
+          workspaceId={session.workspaceId}
+          controls={c}
+          set={set}
+          disabled={disabled}
+        />
+      )}
+      {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
+
+      {format.media === "optional-image" && !storyVideo && !c.seamless ? (
+        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
+          <span>
+            <span className="block text-sm font-medium text-foreground">
+              {session.type === "carousel"
+                ? "Generate a cover visual"
+                : session.type === "story"
+                  ? "Add a photo behind the first frame"
+                  : "Add a generated visual"}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {studioPriceLabel({ type: session.type, controls: { ...c, includeImage: true } })}{" "}
+              including copy
+            </span>
+          </span>
+          <Switch
+            checked={!!c.includeImage}
+            onCheckedChange={(v) => set({ includeImage: v })}
+            aria-label="Add a generated visual"
+          />
+        </label>
+      ) : null}
+
+      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
+        <ProductPicker
+          workspaceId={session.workspaceId}
+          type={session.type}
+          value={c.productId}
+          // "No product" also stops a product the brief names being picked.
+          onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
+        />
+      )}
+      {session.type === "ad" && (
+        <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
+      )}
+
+      {(session.type === "video" || storyVideo) && (!ownFootage || animatedRecap) && (
+        <div>
+          <FieldLabel>Video option</FieldLabel>
+          <Segmented
+            label="Video option"
+            className="flex w-full flex-wrap"
+            value={c.videoModelKey ?? "standard"}
+            onChange={(videoModelKey) => set({ videoModelKey, videoResolution: "720P" })}
+            options={[
+              { value: "draft", label: "Economy" },
+              { value: "standard", label: "Standard" },
+              { value: "premium", label: "Premium" },
+            ]}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Longer and higher quality videos cost more.
+          </p>
+        </div>
+      )}
+
       {billing?.creation?.active &&
         ((session.type !== "video" && !storyVideo) || c.videoPreview) && (
           <div>
@@ -216,100 +275,6 @@ export function ControlsPanel({
           />
         </div>
       )}
-      {session.type === "video" && (
-        <SourceClips
-          key={session.workspaceId}
-          workspaceId={session.workspaceId}
-          controls={c}
-          set={set}
-          disabled={disabled}
-          onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
-          photos={recap ? photos : undefined}
-        />
-      )}
-      {(session.type === "video" || storyVideo) && (!ownFootage || animatedRecap) && (
-        <div>
-          <FieldLabel>Video option</FieldLabel>
-          <Segmented
-            label="Video option"
-            className="flex w-full flex-wrap"
-            value={c.videoModelKey ?? "standard"}
-            onChange={(videoModelKey) => set({ videoModelKey, videoResolution: "720P" })}
-            options={[
-              { value: "draft", label: "Economy" },
-              { value: "standard", label: "Standard" },
-              { value: "premium", label: "Premium" },
-            ]}
-          />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Longer and higher quality videos cost more.
-          </p>
-        </div>
-      )}
-      {format.platforms.length ? (
-        <div>
-          <FieldLabel>{format.multiPlatform ? "Platforms" : "Platform"}</FieldLabel>
-          <PlatformPicker
-            maxSelections={c.paymentSource === "creation" ? 3 : undefined}
-            platforms={format.platforms}
-            value={c.platforms}
-            multi={format.multiPlatform}
-            onChange={(platforms) => {
-              const next: Partial<StudioControls> = { platforms };
-              if (!ratioPinned && format.ratios.length && session.type !== "carousel") {
-                next.ratio = recommendedRatio(platforms, mediaKind, format.ratios);
-              }
-              set(next);
-            }}
-          />
-          {c.paymentSource === "creation" && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Up to three platform versions per creation.
-            </p>
-          )}
-        </div>
-      ) : null}
-
-      {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
-
-      {format.media === "optional-image" && !storyVideo && !c.seamless ? (
-        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
-          <span>
-            <span className="block text-sm font-medium text-foreground">
-              {session.type === "carousel"
-                ? "Generate a cover visual"
-                : session.type === "story"
-                  ? "Add a photo behind the first frame"
-                  : "Add a generated visual"}
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              {studioPriceLabel({ type: session.type, controls: { ...c, includeImage: true } })}{" "}
-              including copy
-            </span>
-          </span>
-          <Switch
-            checked={!!c.includeImage}
-            onCheckedChange={(v) => set({ includeImage: v })}
-            aria-label="Add a generated visual"
-          />
-        </label>
-      ) : null}
-
-      {!recap && photos}
-
-      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
-        <ProductPicker
-          workspaceId={session.workspaceId}
-          type={session.type}
-          value={c.productId}
-          // "No product" also stops a product the brief names being picked.
-          onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
-        />
-      )}
-      {session.type === "ad" && (
-        <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
-      )}
-
       <div className="rounded-xl border border-border bg-surface-3">
         <button
           type="button"
@@ -349,10 +314,7 @@ export function ControlsPanel({
                   ratios={format.ratios}
                   value={c.ratio}
                   recommended={recommended}
-                  onChange={(ratio) => {
-                    setRatioPinned(ratio !== recommended);
-                    set({ ratio });
-                  }}
+                  onChange={(ratio) => set({ ratio })}
                 />
               </div>
             ) : null}

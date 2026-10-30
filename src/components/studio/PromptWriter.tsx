@@ -166,9 +166,24 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
     }
   };
 
+  // With the person's own photos or clips attached, the writing starts from them.
+  const c = session.controls;
+  const clips = session.type === "video" && c.videoMode === "brand";
+  const looking =
+    session.type === "video" && c.videoMode === "site"
+      ? null
+      : clips
+        ? c.sourceVideoAssetIds?.length
+          ? "Watching your clips"
+          : null
+        : c.referenceAssetIds?.length
+          ? "Looking at your photos"
+          : null;
+  const statuses = looking ? [looking, ...STATUS.slice(1)] : STATUS;
+
   return {
     busy,
-    status: STATUS[statusIndex],
+    status: statuses[statusIndex],
     result: isOurs ? result : null,
     label,
     write: () => void write(),

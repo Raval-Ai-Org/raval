@@ -896,9 +896,8 @@ function applyJob(sessionId: string, job: StudioJob, opts: { fromCreate?: boolea
 
   if (wasActive && !active) {
     emitAppEvent("content:changed");
-    // No toast here: the dock card (Studio closed), the composer and the rail
-    // already show that a creation finished or failed. A second notice would
-    // only duplicate them.
+    // No toast here: the composer and the Studio panel show it, and
+    // StudioActivityWatcher tells the person once while the panel is closed.
   }
 }
 
