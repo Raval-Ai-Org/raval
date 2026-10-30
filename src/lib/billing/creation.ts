@@ -3,6 +3,7 @@
 import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
 import type { PlanId } from "./catalog";
 import type { CreateJobInput } from "@/lib/studio/jobs";
+import { shortClipPlan, shortClipPrice } from "@/lib/studio/short-clip";
 
 export const CREATION_POLICY = "creation_v3";
 export const INCLUDED_CAPTION_EDITS = 3;
@@ -43,6 +44,9 @@ export function creationPointsFor(
   const kept = c.referenceAssetIds?.length && (c.referenceMode ?? "preserve") === "preserve";
   // A design with the brand's photos is a picture, asked for or not.
   const designed = !!c.referenceAssetIds?.length && c.referenceMode === "design";
+  // A short AI clip (8 s or less, Economy or Standard) is paid in points too.
+  const clip = shortClipPlan(input);
+  if (clip) return shortClipPrice(clip).points;
   switch (input.type) {
     case "video":
       // The brand's own footage or photos cost a few points; animated photos use video credits.

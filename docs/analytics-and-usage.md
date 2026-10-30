@@ -8,6 +8,14 @@ insights. The Google OAuth callback is `/api/integrations/google/callback` and
 sync is advanced through the analytics hook. Social analytics has dedicated
 routes under `/api/social/analytics` and metrics sync.
 
+Analytics → Social needs no Google connection: every post on the brand's
+connected accounts (including posts made outside Mellox) is read from Post for
+Me's account feed into `social_account_posts` by the existing sdr-reconcile
+sweep and the Refresh button, normalised per network
+(`src/lib/social-insights/normalize.ts`) and reported by
+`src/lib/social-insights/report.ts`. A post's lifetime numbers count on the day
+it went out; a number a network doesn't report is shown as not reported.
+
 The codebase does not establish a universal business definition for every
 metric. Treat stored fields and server aggregations as implementation facts;
 TODO: publish metric definitions and timezone/attribution rules with product

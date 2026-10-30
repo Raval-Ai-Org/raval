@@ -1185,6 +1185,58 @@ export function videoFeatureFor(ugcKey: UgcModelKey, resolution: VideoResolution
   return "ugc";
 }
 
+/* ─────────────────────────── short clips ─────────────────────────── */
+
+/**
+ * A short clip is one AI clip of 8 seconds or less on Economy (Veo 3.1 Lite) or
+ * Standard (Veo 3.1 Fast): a picture brought to life, one animated photo in a
+ * recap, a short video or video Story. It is priced in ordinary credits (or
+ * creation points), so animating pictures never uses up the plan's few Video
+ * Credits. Longer videos, Premium, Cinematic and UGC renders stay on Video
+ * Credits.
+ *
+ * Costed per clip (KIE primary, OpenRouter fallback incl. 5.5% fee, one 8 s render):
+ *   Economy  720p $0.15 / $0.42    1080p $0.175 / $0.68
+ *   Standard 720p $0.30 / $0.84    1080p $0.325 / $1.01
+ * so even the fallback is covered at the prices below.
+ */
+export const SHORT_CLIP_MAX_SECONDS = 8;
+export const SHORT_CLIP_CREDITS = {
+  draft: { "720p": 60, "1080p": 80 },
+  standard: { "720p": 120, "1080p": 150 },
+} as const;
+export type ShortClipKey = keyof typeof SHORT_CLIP_CREDITS;
+
+export function isShortClipKey(key: string | undefined): key is ShortClipKey {
+  return !!key && key in SHORT_CLIP_CREDITS;
+}
+
+/** Guard like MAX_USD_PER_VC: a clip may never cost Mellox more than this per credit charged. */
+export const MAX_USD_PER_CREDIT = 0.0085;
+
+/**
+ * Credits for `clips` short clips. The server passes the routed provider's cost
+ * for one clip; with today's routes the catalog price is always higher.
+ */
+export function shortClipCredits(args: {
+  ugcKey: ShortClipKey;
+  resolution: VideoResolution;
+  clips?: number;
+  providerCostUsd?: number;
+}): number {
+  const band = priceBand(args.resolution) === "1080p" ? "1080p" : "720p";
+  const each = Math.max(
+    SHORT_CLIP_CREDITS[args.ugcKey][band],
+    Math.ceil(Math.max(0, args.providerCostUsd ?? 0) / MAX_USD_PER_CREDIT / 5) * 5,
+  );
+  return each * Math.max(1, args.clips ?? 1);
+}
+
+/** The same clips in creation points (a picture is 2 points, about 15 credits each). */
+export function shortClipPoints(credits: number): number {
+  return Math.ceil(credits / 12);
+}
+
 export function formatVc(videoUnits: number): string {
   const vc = videoUnits / VIDEO_UNITS_PER_VC;
   return Number.isInteger(vc) ? String(vc) : vc.toFixed(2).replace(/0$/, "");

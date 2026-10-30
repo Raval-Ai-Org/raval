@@ -13,8 +13,10 @@ import {
 } from "./variations";
 import { isPhotoDesignType, withResolvedPhotoMode } from "./photo-design/mode";
 import { RECAP_AI_SECONDS } from "./clip-edit";
+import { shortClipPlan, shortClipPrice } from "./short-clip";
 
-export type StudioCharge = CreditAction | "studio_video";
+/** "studio_short_clip": an AI clip of 8 s or less, in credits (src/lib/studio/short-clip.ts). */
+export type StudioCharge = CreditAction | "studio_video" | "studio_short_clip";
 
 type MediaRequest = Pick<CreateJobInput, "type" | "controls"> &
   Partial<Pick<CreateJobInput, "parentJobId" | "refine">>;
@@ -62,9 +64,20 @@ export function studioChargeFor(args: {
   variations?: boolean;
   videoMode?: string;
   recapMotion?: string;
+  videoModelKey?: string;
+  durationSec?: number;
+  videoResolution?: string;
 }): StudioCharge {
   if (args.variations) return "image_standard";
   if (args.textOnly) return "post_regenerate";
+  if (
+    (args.type === "video" || args.type === "story") &&
+    shortClipPlan({
+      type: args.type,
+      controls: args as Parameters<typeof shortClipPlan>[0]["controls"],
+    })
+  )
+    return "studio_short_clip";
   // The brand's own footage or photos: no video units, except animating photos.
   if (args.type === "video" && args.videoMode === "brand") return "clip_brand";
   // The website reel is code and FFmpeg only, priced like a camera-move recap.
@@ -147,6 +160,12 @@ export function studioPriceLabel(
     textOnly: studioTextOnlyRevision(input),
     variations,
   });
+  if (action === "studio_short_clip") {
+    const plan = shortClipPlan(input);
+    const quoted =
+      input.controls.videoQuote?.meter === "credits" ? input.controls.videoQuote.units : null;
+    if (plan) return `${quoted ?? shortClipPrice(plan).credits} credits`;
+  }
   // Animated recap photos are five seconds each, whatever length was picked.
   const animated =
     input.type === "video" && input.controls.videoMode === "recap"
@@ -154,7 +173,7 @@ export function studioPriceLabel(
       : null;
   return action === "studio_video"
     ? `${(animated ?? input.controls.videoQuote?.units ?? studioVideoUnits(input.controls.durationSec)) / VIDEO_UNITS_PER_VC} video credits`
-    : `${creditsFor(action) * (variations ? variationCount(input.controls) : 1)} credits`;
+    : `${creditsFor(action as CreditAction) * (variations ? variationCount(input.controls) : 1)} credits`;
 }
 
 /** A social post whose optional image failed must not cost the image bundle price. */

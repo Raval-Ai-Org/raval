@@ -2,13 +2,23 @@
 // credit or video hold, shared by the jobs route (a person pressing Generate)
 // and Autopilot (the worker, acting as a stored member). Same price either way.
 import "server-only";
-import { studioChargeFor, studioJobRenders, studioTextOnlyRevision } from "@/lib/studio/billing";
+import {
+  studioChargeFor,
+  studioJobRenders,
+  studioTextOnlyRevision,
+  type StudioCharge,
+} from "@/lib/studio/billing";
 import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
 import { createStudioJob } from "@/server/studio/runner.server";
-import { beginDeferredMetered, type MeteredAction } from "@/server/billing/metered.server";
-import { CREDIT_ACTIONS, creditsFor, type CreditAction } from "@/lib/billing/catalog";
+import { beginDeferredMetered } from "@/server/billing/metered.server";
+import {
+  CREDIT_ACTIONS,
+  creditsFor,
+  videoFeatureFor,
+  type CreditAction,
+} from "@/lib/billing/catalog";
 import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
 import type { WorkspaceRole } from "@/server/api-auth";
@@ -25,7 +35,8 @@ import {
   settleCaptionEdit,
 } from "@/server/billing/creation.server";
 import { HttpError } from "@/server/http-error";
-import { quoteStudioVideo } from "./video-quote.server";
+import { quoteStudioVideo, shortClipCreditsForRecap } from "./video-quote.server";
+import { shortClipPlan } from "@/lib/studio/short-clip";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { isClipEditEnabled, isPhotoDesignEnabled, isProductHeroEnabled } from "@/lib/feature-flags";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
@@ -132,11 +143,14 @@ export async function createBilledStudioJob(args: {
     throw new HttpError(404, "Making videos from your own clips isn't available here.");
   if (ownFootage) {
     // Priced on what really runs: animated photos are five seconds each, and
-    // there is no model quote for footage that is the brand's own.
+    // there is no model quote for footage that is the brand's own. Animated
+    // photos keep the video option picked for them (Economy and Standard are
+    // short clips, in credits).
+    const animated = input.controls.videoMode === "recap" && input.controls.recapMotion === "ai";
     input.controls.videoPreview = false;
     delete input.controls.videoQuote;
-    delete input.controls.videoModelKey;
-    if (input.controls.videoMode === "recap" && input.controls.recapMotion === "ai")
+    if (!animated) delete input.controls.videoModelKey;
+    if (animated)
       input.controls.durationSec =
         (input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS;
   }
@@ -154,7 +168,7 @@ export async function createBilledStudioJob(args: {
         input.controls.sourceVideoAssetIds,
       );
   }
-  const action: MeteredAction = studioChargeFor({
+  const action: StudioCharge = studioChargeFor({
     type: input.type,
     includeImage: input.controls.includeImage,
     length: input.controls.length,
@@ -169,6 +183,9 @@ export async function createBilledStudioJob(args: {
     variations: isVariationsRequest(input),
     videoMode: input.controls.videoMode,
     recapMotion: input.controls.recapMotion,
+    videoModelKey: input.controls.videoModelKey,
+    durationSec: input.controls.durationSec,
+    videoResolution: input.controls.videoResolution,
   });
   const billingRoute =
     studioTextOnlyRevision(input) && ["video", "image", "social"].includes(input.type)
@@ -177,8 +194,13 @@ export async function createBilledStudioJob(args: {
         ? "video"
         : BILLING_ROUTE[input.type];
   const video = action === "studio_video";
+  // An AI clip of 8 s or less on Economy or Standard: credits, not Video Credits.
+  const clip = action === "studio_short_clip" ? shortClipPlan(input) : null;
+  const recapClips = clip && input.controls.videoMode === "recap";
   const videoQuote =
-    video && input.controls.videoModelKey ? quoteStudioVideo(input.controls) : null;
+    (video || (clip && !recapClips)) && input.controls.videoModelKey
+      ? quoteStudioVideo(input.controls)
+      : null;
   if (
     videoQuote &&
     (input.controls.videoQuote?.hash !== videoQuote.hash ||
@@ -192,6 +214,7 @@ export async function createBilledStudioJob(args: {
     input.controls.videoQuote = {
       hash: videoQuote.hash,
       units: videoQuote.units,
+      meter: videoQuote.meter,
       resolution: videoQuote.resolution,
       aspectRatio: videoQuote.aspectRatio,
     };
@@ -239,8 +262,10 @@ export async function createBilledStudioJob(args: {
     : (points ??
       (video
         ? (videoQuote?.units ?? studioVideoUnits(input.controls.durationSec))
-        : creditsFor(action as CreditAction) *
-          (isVariationsRequest(input) ? variationCount(input.controls) : 1)));
+        : clip
+          ? (videoQuote?.units ?? shortClipCreditsForRecap(input.controls, clip.clips))
+          : creditsFor(action as CreditAction) *
+            (isVariationsRequest(input) ? variationCount(input.controls) : 1)));
   const meter = useCreation
     ? ("creation" as const)
     : video
@@ -272,9 +297,11 @@ export async function createBilledStudioJob(args: {
           actionName,
           meter: price.meter,
           amount,
-          feature: video
-            ? (videoQuote?.feature ?? "ugc")
-            : CREDIT_ACTIONS[action as CreditAction].feature,
+          feature:
+            video || clip
+              ? (videoQuote?.feature ??
+                (clip ? videoFeatureFor(clip.ugcKey, clip.resolution) : "ugc"))
+              : CREDIT_ACTIONS[action as CreditAction].feature,
           idempotencyKey: input.idempotencyKey,
           route: billingRoute,
           expiresAt: new Date(

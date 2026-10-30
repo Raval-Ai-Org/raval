@@ -314,6 +314,26 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
   the last card's first steps are a person's click. `/tour-lab` renders it on
   a stand-in shell in development (`tests/integration/tour-lab.spec.ts`).
 
+## Analytics (social, Google, and what needs no connection)
+
+- **Only Website and Search wait for Google** (`GoogleGate`,
+  `src/components/app/analytics/AnalyticsLock.tsx`). Overview, Social, Content
+  and Insights are always open; with Google not connected Overview shows one
+  `GoogleConnectBanner`, never six empty cards.
+- **Social is the brand's own accounts, read from Post for Me's account feed**
+  (every post, made in Mellox or not): `src/lib/postforme/feeds.ts` stores
+  `social_account_posts`, advanced by the **existing** sdr-reconcile sweep
+  (`syncDueFeeds`, each account every 6 h) and "Refresh"
+  (`/api/social/metrics/sync`). No cron job of its own.
+- Network numbers are normalised in `src/lib/social-insights/normalize.ts`; a
+  number a network doesn't report is left out, never 0. The report is pure
+  (`src/lib/social-insights/report.ts`): a post counts on the day it went out,
+  patterns need 2 posts per group (weekdays 8 in the window).
+- Source `social` and metrics `social.*` (`src/lib/analytics/metrics.ts`) feed
+  Overview, insights signals and the chat context like the other sources; never
+  add social numbers to GA4 or Search Console ones.
+- `/analytics-lab` renders every tab with sample data, including Social.
+
 ## Sharing (team invites and the client portal)
 
 - **Team invites:** `src/server/fns/workspaces.ts` + `ShareDialog.tsx`.
@@ -1069,6 +1089,12 @@ record ADR-0027.
   Included work uses `requireBillingFeature` / `requireWithinLimit`. Background jobs
   use `beginAsyncCharge` → `link(kind, rowId)` (`async-charges.server.ts`) and settle
   from the job's own status; add new kinds to `billing_async_links` and `outcomeFor`.
+- **Short clips use credits, not Video Credits.** One AI clip of 8 s or less on
+  Economy or Standard (a picture brought to life, each animated recap photo, an
+  8 s video or video Story) is `studio_short_clip`: `SHORT_CLIP_CREDITS` in the
+  catalog, decided by the pure `shortClipPlan` (`src/lib/studio/short-clip.ts`),
+  also payable in creation points. Longer, Premium, Cinematic and UGC renders
+  stay on Video Credits.
 - Notices go through `notify()` (`src/server/billing/notify.server.ts`, deduped per
   window); email only via `src/server/notify/email.server.ts` (Resend).
 - Tracked prompts: `src/server/geo/tracked-prompts.server.ts`, run from the existing

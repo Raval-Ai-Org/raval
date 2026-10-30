@@ -5,18 +5,21 @@ import { cn } from "@/lib/utils";
 
 /**
  * The price on a paid button: "12 credits" or "1 video". Charged only when the
- * action succeeds. Pass `videoUnits` for video; otherwise a catalog action.
+ * action succeeds. Pass `videoUnits` for video, `credits` for a price worked
+ * out elsewhere (a short video clip); otherwise a catalog action.
  */
 export function CostChip({
   action,
   quantity = 1,
   videoUnits,
+  credits: fixedCredits,
   free,
   className,
 }: {
   action?: CreditAction;
   quantity?: number;
   videoUnits?: number;
+  credits?: number;
   /** Included in the plan (first scan, scheduled refresh): shows "Free". */
   free?: boolean;
   className?: string;
@@ -43,8 +46,8 @@ export function CostChip({
       </span>
     );
   }
-  if (!action) return null;
-  const credits = Math.ceil(CREDIT_ACTIONS[action].credits * quantity);
+  if (!action && fixedCredits === undefined) return null;
+  const credits = fixedCredits ?? Math.ceil(CREDIT_ACTIONS[action!].credits * quantity);
   return (
     <span data-slot="cost-chip" className={cn(base, className)} title="Charged only if it works">
       <Bolt className="h-3 w-3 shrink-0" aria-hidden />

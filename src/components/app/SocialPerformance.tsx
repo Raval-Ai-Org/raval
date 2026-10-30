@@ -1,6 +1,6 @@
 "use client";
 
-// SocialPerformance — measured social results for the Analytics › Social tab:
+// SocialPerformance — what Mellox sent, for the Analytics › Content tab:
 // delivery outcomes, engagement pulled from the platforms (via SocialAPI.ai),
 // top posts, recent failures, account health and publishing credits. Nothing
 // is estimated; with no deliveries the panel says so.
@@ -97,7 +97,7 @@ export function SocialPerformance({
 
   if (query.isLoading) {
     return (
-      <Card title="Social performance" subtitle="Loading measured results…">
+      <Card title="Sent from Mellox" subtitle="Loading measured results…">
         <div
           className="grid grid-cols-2 gap-3 md:grid-cols-4"
           aria-label="Loading social performance"
@@ -112,7 +112,7 @@ export function SocialPerformance({
 
   if (query.isError || !query.data) {
     return (
-      <Card title="Social performance">
+      <Card title="Sent from Mellox">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/25 bg-destructive/5 p-3">
           <p className="text-[12px] text-destructive">
             {query.error instanceof Error
@@ -133,7 +133,7 @@ export function SocialPerformance({
   if (!data.provider && totals.deliveries === 0) {
     return (
       <Card
-        title="Social performance"
+        title="Sent from Mellox"
         subtitle="Delivery and engagement from your connected accounts"
       >
         <p className="rounded-xl border border-dashed border-border p-5 text-center text-[12px] text-muted-foreground">
@@ -155,7 +155,7 @@ export function SocialPerformance({
 
   return (
     <Card
-      title="Social performance"
+      title="Sent from Mellox"
       subtitle={
         data.metricsSyncedAt
           ? `Engagement last refreshed ${new Date(data.metricsSyncedAt).toLocaleString()}`

@@ -1167,7 +1167,9 @@ async function startMedia(args: {
         modelKey: input.controls.videoModelKey,
         durationSec: RECAP_AI_SECONDS,
         aspectRatio: ratio,
-        resolution: "720P" as const,
+        // Priced at this resolution (src/lib/studio/short-clip.ts).
+        resolution:
+          input.controls.videoResolution === "1080P" ? ("1080P" as const) : ("720P" as const),
         audio: false,
       };
       for (const [index, photo] of suppliedReferences.entries()) {

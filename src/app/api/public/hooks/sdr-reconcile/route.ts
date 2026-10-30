@@ -3,7 +3,8 @@
 // and heartbeat). Sweeps stale in-flight deliveries against the provider that
 // owns them so nothing strands in "publishing":
 //   * SDR rows against each workspace's own SDR (when the SDR is configured);
-//   * SocialAPI.ai rows via GET /posts/{id}, plus engagement metrics refresh.
+//   * SocialAPI.ai rows via GET /posts/{id}, plus engagement metrics refresh;
+//   * Post for Me account feeds (Analytics → Social), a few accounts per run.
 // Auth + heartbeat come from defineCronRoute.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { reconcileStalePublications } from "@/lib/sdr.reconcile";
@@ -13,6 +14,7 @@ import { isPostForMeConfigured } from "@/lib/feature-flags";
 import { postForMeDb } from "@/lib/postforme/workspace.server";
 import { reconcilePostForMe } from "@/lib/postforme/reconcile";
 import { createPostForMeAdapter } from "@/lib/postforme/client.server";
+import { syncDueFeeds } from "@/lib/postforme/feeds";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,14 @@ export const POST = defineCronRoute({
         });
       } catch (e) {
         failures.push(`postforme: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      try {
+        result.feeds = await syncDueFeeds({
+          apiFor: (workspaceId) => createPostForMeAdapter(workspaceId),
+          db: postForMeDb,
+        });
+      } catch (e) {
+        failures.push(`feeds: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

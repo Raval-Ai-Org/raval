@@ -552,6 +552,29 @@ describe("chat context", () => {
         kpi: { key: "geo.score", value: null, comparison: compareMetric("geo.score", null, null) },
         history: [],
       },
+      social: {
+        status: { state: "ready", accounts: 2, reconnect: 0, lastSyncedAt: null },
+        window: null,
+        kpis: [
+          {
+            key: "social.views",
+            value: 4200,
+            comparison: compareMetric("social.views", 4200, 3000),
+          },
+        ],
+        series: [],
+        byPlatform: [
+          {
+            platform: "instagram",
+            posts: 5,
+            views: 4200,
+            engagement: 310,
+            engagementRate: 0.07,
+            follows: null,
+          },
+        ],
+        topPosts: [],
+      },
     };
     const text = buildChatContext(report);
     expect(text).toContain("Google Analytics 4");
@@ -559,6 +582,8 @@ describe("chat context", () => {
     expect(text).toContain("First sync still running");
     expect(text).toContain("No scan yet");
     expect(text).toContain("Published");
+    expect(text).toContain("Your social accounts");
+    expect(text).toContain("instagram: 5 posts, 4,200 views");
     expect(text).toMatch(/never add or compare numbers across them/);
   });
 });

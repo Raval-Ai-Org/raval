@@ -108,7 +108,7 @@ export function SourceClips({
             label="Bring photos to life"
             hint={
               c.recapMotion === "ai"
-                ? "AI motion · people may change · uses video credits"
+                ? "AI motion · people may change · Economy and Standard use credits"
                 : "Off: slow camera moves, photos stay exact"
             }
             checked={c.recapMotion === "ai"}

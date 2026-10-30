@@ -343,9 +343,16 @@ export const getAnalyticsDrilldown = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------------ */
 // Each section reads one data source through the caller's RLS client. The
 // report shapes live in src/lib/analytics/types.ts; nothing here mixes GA4
-// sessions, Search Console clicks and AI Visibility scores.
+// sessions, Search Console clicks, social post views and AI Visibility scores.
 
-const ReportSection = z.enum(["overview", "website", "search", "ai-visibility", "mellox"]);
+const ReportSection = z.enum([
+  "overview",
+  "website",
+  "search",
+  "ai-visibility",
+  "mellox",
+  "social",
+]);
 export type AnalyticsReportSection = z.infer<typeof ReportSection>;
 
 export const getAnalyticsReport = createServerFn({ method: "POST" })
@@ -383,6 +390,13 @@ export const getAnalyticsReport = createServerFn({ method: "POST" })
           section: "mellox" as const,
           report: await read.getMelloxKpis(db, data.workspaceId, data.range),
         };
+      case "social": {
+        const { getSocialReport } = await import("@/server/analytics/social.server");
+        return {
+          section: "social" as const,
+          report: await getSocialReport(db, data.workspaceId, data.range),
+        };
+      }
     }
   });
 

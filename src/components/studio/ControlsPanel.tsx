@@ -14,6 +14,7 @@ import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui"
 import { SourceClips } from "./SourceClips";
 import { AdFormatPicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
+import { shortClipPlan } from "@/lib/studio/short-clip";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 
 const INPUT =
@@ -220,13 +221,17 @@ export function ControlsPanel({
             ]}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            Longer and higher quality videos cost more.
+            {animatedRecap
+              ? "Economy and Standard use credits for each photo. Premium uses video credits."
+              : "8 seconds or less on Economy or Standard uses credits. Longer or Premium uses video credits."}
           </p>
         </div>
       )}
 
       {billing?.creation?.active &&
-        ((session.type !== "video" && !storyVideo) || c.videoPreview) && (
+        ((session.type !== "video" && !storyVideo) ||
+          c.videoPreview ||
+          shortClipPlan({ type: session.type, controls: c })) && (
           <div>
             <FieldLabel>Pay for this creation with</FieldLabel>
             <Segmented
@@ -481,7 +486,7 @@ function StoryControls({
           }
           options={[
             { value: "frames", label: "Designed frames", hint: "Your brand look" },
-            { value: "video", label: "AI video", hint: "Uses a video credit" },
+            { value: "video", label: "AI video", hint: "8s uses credits" },
           ]}
         />
       </div>
@@ -494,7 +499,7 @@ function StoryControls({
             className="max-w-full flex-wrap"
             value={c.durationSec ?? 10}
             onChange={(durationSec) => set({ durationSec })}
-            options={[10, 15, 20, 30, 40, 60].map((v) => ({ value: v, label: `${v}s` }))}
+            options={[8, 10, 15, 20, 30, 40, 60].map((v) => ({ value: v, label: `${v}s` }))}
           />
         </div>
       ) : (

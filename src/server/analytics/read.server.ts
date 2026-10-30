@@ -46,6 +46,7 @@ import type {
 import { CATEGORY_BY_ID } from "@/lib/geo/types";
 import { getConnectionView } from "./google/service.server";
 import { googleApiFor } from "./google/tokens.server";
+import { getSocialReport } from "./social.server";
 import { sourceTimeZone } from "./sync/service.server";
 
 type Db = SupabaseClient<Database>;
@@ -654,11 +655,12 @@ export async function getOverviewReport(
   input: RangeInput,
 ): Promise<OverviewReport> {
   const view = await getConnectionView(db, workspaceId);
-  const [mellox, website, search, ai] = await Promise.all([
+  const [mellox, website, search, ai, social] = await Promise.all([
     getMelloxKpis(db, workspaceId, input),
     getWebsiteReport(db, workspaceId, input, { view }),
     getSearchReport(db, workspaceId, input, { view }),
     getAiVisibilityReport(db, workspaceId, input),
+    getSocialReport(db, workspaceId, input),
   ]);
   const pick = (kpis: Kpi[], keys: MetricKey[]) => kpis.filter((k) => keys.includes(k.key));
   return {
@@ -691,6 +693,20 @@ export async function getOverviewReport(
       pages: search.breakdowns.page,
     },
     aiVisibility: { latest: ai.latest, kpi: ai.kpi, history: ai.history },
+    social: {
+      status: social.status,
+      window: social.window,
+      kpis: pick(social.kpis, [
+        "social.views",
+        "social.engagement",
+        "social.engagementRate",
+        "social.follows",
+        "social.posts",
+      ]),
+      series: social.series.views,
+      byPlatform: social.byPlatform,
+      topPosts: social.topPosts.slice(0, 4),
+    },
   };
 }
 
@@ -706,14 +722,15 @@ export async function getInsightInputs(
   movers: MoverGroup[];
 }> {
   const view = await getConnectionView(db, workspaceId);
-  const [mellox, website, search, ai] = await Promise.all([
+  const [mellox, website, search, ai, social] = await Promise.all([
     getMelloxKpis(db, workspaceId, input),
     getWebsiteReport(db, workspaceId, input, { view, breakdowns: false }),
     getSearchReport(db, workspaceId, input, { view, breakdowns: false }),
     getAiVisibilityReport(db, workspaceId, input),
+    getSocialReport(db, workspaceId, input),
   ]);
   const metrics: Partial<Record<MetricKey, Comparison>> = {};
-  for (const k of [...mellox.kpis, ...website.kpis, ...search.kpis, ai.kpi])
+  for (const k of [...mellox.kpis, ...website.kpis, ...search.kpis, ai.kpi, ...social.kpis])
     metrics[k.key] = k.comparison;
 
   const movers: MoverGroup[] = [];
@@ -763,5 +780,21 @@ export async function getInsightInputs(
       { dimension: "page", label: "Page" },
     ]),
   ]);
+  if (social.window?.previousCovered) {
+    const views = (rows: typeof social.byPlatform) =>
+      new Map(rows.filter((r) => r.views !== null).map((r) => [r.platform, r.views as number]));
+    const m = computeMovers(views(social.byPlatform), views(social.previousByPlatform ?? []), {
+      minBase: 200,
+      minAbs: 100,
+    });
+    if (m.risers.length || m.fallers.length)
+      movers.push({
+        source: "social",
+        metric: "social.views",
+        dimension: "platform",
+        dimensionLabel: "Network",
+        ...m,
+      });
+  }
   return { window: mellox.window, metrics, movers };
 }

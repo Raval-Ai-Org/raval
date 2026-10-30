@@ -1,6 +1,8 @@
 // POST /api/social/metrics/sync — pull live engagement metrics for the
-// workspace's posts delivered in the last 30 days (also refreshed by the
-// 5-minute reconcile sweep). Rate limited: each post is a provider call.
+// workspace's posts delivered in the last 30 days, and (Post for Me) re-read
+// every connected account's feed for Analytics → Social. Both are also
+// refreshed by the 5-minute reconcile sweep. Rate limited: each post is a
+// provider call.
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { syncPostMetrics } from "@/lib/socialapi/handlers";
@@ -8,6 +10,7 @@ import { withSocialApi } from "@/lib/socialapi/route.server";
 import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { syncPostMetrics as syncPostForMeMetrics } from "@/lib/postforme/handlers";
 import { withPostForMe } from "@/lib/postforme/route.server";
+import { syncWorkspaceFeeds } from "@/lib/postforme/feeds";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +48,8 @@ export const POST = defineRoute({
           await (postForMe ? syncPostForMeMetrics : syncPostMetrics)({ postId, workspaceId }, deps)
         ).updated;
       }
-      return { status: 200, body: { posts: postIds.length, updated } };
+      const feeds = postForMe ? await syncWorkspaceFeeds(workspaceId, deps) : null;
+      return { status: 200, body: { posts: postIds.length, updated, feeds } };
     });
   },
 });

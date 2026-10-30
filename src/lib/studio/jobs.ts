@@ -64,6 +64,8 @@ export const ControlsSchema = z.object({
     .object({
       hash: z.string().length(64),
       units: z.number().int().positive(),
+      /** "credits" for a short clip (src/lib/studio/short-clip.ts); video units otherwise. */
+      meter: z.enum(["video", "credits"]).optional(),
       resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(),
       aspectRatio: AspectRatioSchema.optional(),
     })

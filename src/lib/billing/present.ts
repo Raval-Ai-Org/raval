@@ -286,6 +286,7 @@ export function ledgerLabel(entry: { kind: string; action: string | null; meter:
   }
   if (entry.action?.startsWith("video_")) return "Video";
   if (entry.action === "studio_video") return "Studio video";
+  if (entry.action?.endsWith("studio_short_clip")) return "Short video clip";
   if (entry.action === "backlink_order") return "Backlink order";
   if (entry.action === "chat_flash" || entry.action === "flash_message") return "Chat message";
   if (entry.action === "chat_pro") return "Pro message";

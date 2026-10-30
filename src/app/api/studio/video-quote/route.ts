@@ -23,6 +23,7 @@ export const POST = defineRoute({
     return {
       hash: quote.hash,
       units: quote.units,
+      meter: quote.meter,
       model: quote.model,
       resolution: quote.resolution,
       aspectRatio: quote.aspectRatio,

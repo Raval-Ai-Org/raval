@@ -46,7 +46,9 @@ export function useFirstPosts(workspaceId: string | null, briefs: FirstPostBrief
         referenceAssetIds: b.job.controls.referenceAssetIds,
       });
       // Social posts never take the video meter.
-      return charge === "studio_video" ? sum : sum + creditsFor(charge);
+      return charge === "studio_video" || charge === "studio_short_clip"
+        ? sum
+        : sum + creditsFor(charge);
     }, 0);
     return `${total} credits`;
   }, [briefs]);

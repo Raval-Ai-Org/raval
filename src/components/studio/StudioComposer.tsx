@@ -29,6 +29,8 @@ import { isActiveJob } from "@/lib/studio/jobs";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { studioChargeFor, studioPriceLabel } from "@/lib/studio/billing";
+import { shortClipPlan, shortClipPrice } from "@/lib/studio/short-clip";
+import type { CreditAction } from "@/lib/billing/catalog";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { useBriefProduct, withProductPhotos } from "./ProductAndFormat";
@@ -951,6 +953,8 @@ function StudioPrice({ session }: { session: StudioSession }) {
     (session.type === "video" ||
       (session.type === "story" && session.controls.storyMode === "video")) &&
     !ownFootage &&
+    // Animated recap photos are priced per photo, without a model quote.
+    videoMode !== "recap" &&
     !session.controls.videoPreview &&
     session.controls.videoModelKey,
   );
@@ -1025,7 +1029,12 @@ function StudioPrice({ session }: { session: StudioSession }) {
     articleQuality: session.controls.articleQuality,
     videoMode,
     recapMotion,
+    videoModelKey: session.controls.videoModelKey,
+    durationSec: session.controls.durationSec,
+    videoResolution: session.controls.videoResolution,
   });
+  const clip = charge === "studio_short_clip" ? shortClipPlan({ ...session, controls }) : null;
+  if (clip) return <CostChip credits={shortClipPrice(clip).credits} className="ml-auto shrink-0" />;
   return charge === "studio_video" ? (
     <CostChip
       videoUnits={studioVideoUnits(
@@ -1037,6 +1046,6 @@ function StudioPrice({ session }: { session: StudioSession }) {
       className="ml-auto shrink-0"
     />
   ) : (
-    <CostChip action={charge} className="ml-auto shrink-0" />
+    <CostChip action={charge as CreditAction} className="ml-auto shrink-0" />
   );
 }

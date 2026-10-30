@@ -12,7 +12,7 @@ export const InsightSchema = z.object({
       z.object({
         title: z.string().min(3).max(120),
         summary: z.string().min(10).max(500),
-        source: z.enum(["mellox", "ga4", "gsc", "geo"]),
+        source: z.enum(["mellox", "ga4", "gsc", "geo", "social"]),
         signalIds: z.array(z.string().max(700)).min(1).max(6),
         severity: z.enum(["positive", "watch", "negative"]),
         recommendation: z.string().min(10).max(400),

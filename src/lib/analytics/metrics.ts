@@ -130,6 +130,73 @@ export const METRICS = {
     higherIsBetter: true,
     significance: { minAbs: 5 },
   },
+  // Social accounts — numbers the networks report for the brand's posts
+  // (read through Post for Me's account feed). A post's numbers count on the
+  // day it went out.
+  "social.views": {
+    source: "social",
+    label: "Post views",
+    hint: "Times your posts were seen, as the networks report it",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 15, minBase: 200 },
+  },
+  "social.reach": {
+    source: "social",
+    label: "People reached",
+    hint: "Different people who saw your posts (where the network reports it)",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 15, minBase: 200 },
+  },
+  "social.engagement": {
+    source: "social",
+    label: "Interactions",
+    hint: "Likes, comments, shares and saves on your posts",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 15, minBase: 30 },
+  },
+  "social.engagementRate": {
+    source: "social",
+    label: "Interaction rate",
+    hint: "Interactions ÷ views, on posts whose network reports views",
+    format: "percent",
+    higherIsBetter: true,
+    significance: { minAbs: 0.005, minVolume: 500 },
+  },
+  "social.follows": {
+    source: "social",
+    label: "New followers",
+    hint: "Follows that came from your posts (where the network reports it)",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 25, minBase: 10 },
+  },
+  "social.profileVisits": {
+    source: "social",
+    label: "Profile visits",
+    hint: "Visits to your profile from your posts (where the network reports it)",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 20, minBase: 20 },
+  },
+  "social.linkClicks": {
+    source: "social",
+    label: "Link clicks",
+    hint: "Clicks on links in your posts (where the network reports it)",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 20, minBase: 10 },
+  },
+  "social.posts": {
+    source: "social",
+    label: "Posts",
+    hint: "Posts that went out on your connected accounts",
+    format: "count",
+    higherIsBetter: true,
+    significance: { minPct: 25, minBase: 4 },
+  },
   // Mellox internal activity.
   "mellox.created": {
     source: "mellox",
