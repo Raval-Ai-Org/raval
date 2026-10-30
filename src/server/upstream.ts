@@ -3,20 +3,40 @@
 // so the route kernel maps every provider failure to an HTTP status in one
 // place instead of each route listing `instanceof XGatewayError` checks.
 import "server-only";
+import { messageForFailure } from "@/lib/user-errors";
 
 /** Base for every provider error. `status` is the HTTP status to surface. */
 export class UpstreamError extends Error {
   readonly status: number;
   readonly provider: string;
   readonly code?: string;
+  /** The provider's own wording. Logs and classification only, never a person. */
+  readonly detail: string;
 
-  constructor(status: number, message: string, opts: { provider: string; code?: string }) {
-    super(message);
+  constructor(
+    status: number,
+    message: string,
+    opts: { provider: string; code?: string; internal?: boolean },
+  ) {
+    // A supplier a person never chose (AI, video, search, crawling) is never
+    // named to them: the message is a plain sentence, the wording stays in
+    // `detail` and in the log written here, so every failure is still traceable.
+    super(opts.internal ? messageForFailure(status, opts.code) : message);
     this.name = "UpstreamError";
     this.status = status;
     this.provider = opts.provider;
     this.code = opts.code;
+    this.detail = message;
+    if (opts.internal) {
+      console.warn(`[upstream] ${opts.provider} ${status} ${opts.code ?? ""}: ${message}`);
+    }
   }
+}
+
+/** The provider's own wording for classification and logs. */
+export function upstreamDetail(error: unknown): string {
+  if (error instanceof UpstreamError) return error.detail;
+  return error instanceof Error ? error.message : String(error);
 }
 
 export type TransportFailure = { kind: "timeout" | "network"; detail: string };

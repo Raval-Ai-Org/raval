@@ -18,7 +18,7 @@ import { extractFirstJsonObject, stripJsonFences } from "@/lib/ai/json";
 
 export class AiOutputError extends UpstreamError {
   constructor(message: string, code: "parse_failure" | "truncated" | "empty" = "parse_failure") {
-    super(502, message, { provider: "model", code });
+    super(502, message, { provider: "model", code, internal: true });
     this.name = "AiOutputError";
   }
 }

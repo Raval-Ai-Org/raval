@@ -132,7 +132,7 @@ export async function generateStudioIdeas(args: {
         "Use the brand's actual audience, positioning, voice and offer. Competitor angles must be fair and traceable to a supplied competitor fact. Do not suggest a holiday or platform unless the context supports its relevance.",
         "Use brand, customer, market, or competitor facts as the creative topic. Activity gaps and momentum may explain timing, but cannot be the only basis for an idea.",
         "Return STRICT JSON only.",
-        `Schema: {"ideas":[{"type": ${only ? `"${only}"` : "one of the format ids"}, "title": string, "why": string, "brief": string, "platforms": string[], "source": "season"|"trend"|"competitor"|"gap"|"pillar"|"momentum", "goal": "awareness"|"engagement"|"leads"|"launch"|"education"|"offer"}]}`,
+        `Schema: {"ideas":[{"type": ${only ? `"${only}"` : "one of the format ids"}, "title": string, "why": string, "brief": string, "platforms": string[], "source": "season"|"trend"|"competitor"|"gap"|"pillar"|"momentum"|"campaign", "goal": "awareness"|"engagement"|"leads"|"launch"|"education"|"offer"}]}`,
       ]
         .filter(Boolean)
         .join("\n");

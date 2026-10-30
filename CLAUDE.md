@@ -37,7 +37,9 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   primary colour is Ultra Moss lime in both themes; use `EmptyState` /
   `ErrorState` / `Skeleton` for states; feature surfaces are `AppModalShell` modals.
   Follow [docs/design-system.md](docs/design-system.md): `ds-*` tokens/utilities,
-  `SurfaceLayout` rail for multi-section surfaces, pill buttons. Never restyle the
+  `SurfaceLayout` rail for multi-section surfaces, pill buttons. A social platform
+  is shown by its app icon (`PlatformAppIcon`, `src/components/brand/`), and picked
+  from `PlatformLogoGrid` (`studio-ui.tsx`), never as a row of text names. Never restyle the
   public landing page (`src/app/page.tsx`) as part of app UI work.
 - **Background work:** no queue service — job rows with leases claimed via
   SKIP LOCKED RPCs, advanced by pg_cron → `/api/public/hooks/*` and `after()`.
@@ -261,10 +263,24 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
   - `BrandDna.products` is a summary of the catalogue. It is only rewritten
     while it still says what Mellox wrote last.
 - **A product's photo is never redrawn.** `controls.productId` on a Studio job
-  keeps the product's main photo (`referenceMode: "preserve"`).
+  makes the piece with the product's own photos (`productPhotoControls`,
+  `src/lib/products/feature.ts`): a single picture is designed around the main
+  photo (photo design, kept exact; "post as is" when designing is off), a
+  carousel places up to three on its slides, a Story or a made video starts
+  from the main one. Photos a person chose and edits keep what they had.
   `createBilledStudioJob` decides this before pricing. The product's stored
   facts lead the prompt (`productContextFor`), with the rule to claim nothing
   else. Generators read the catalogue through `catalogBlockFor`.
+- **The right product is picked by itself.** A product the brief names is
+  picked (`namedProduct`) on the server and in Studio, which shows it and
+  prices it the same way; "No product" (`controls.noProduct`) stops that.
+  Autopilot (`autoProduct: "any"`) also features one for a selling brief that
+  names none, the one shown least recently (`content_items.meta.product_id`),
+  so posts move through the catalogue. Never let a model pick the product.
+- **A new picture is staged on another layout.** `meta.art_direction` is
+  stored per post; `recentLayouts` keeps the next concept off the latest two
+  (left out of `archetypeMenu`, refused in `shapeOutput`, excluded in
+  `pickArchetype`). A revision keeps its layout.
 - **First posts are a person's click.** Three ordinary Studio jobs through the
   metered route, with the price on the button. Keys are fixed per post
   (`onboarding-first:<workspaceId>:<n>`), so nothing is made or charged twice.
@@ -503,6 +519,46 @@ sidebar entry is hidden, RPCs answer 404, and the worker pauses that workspace.
   `/api/public/hooks/experiments` every 5 minutes. PR state arrives via the
   GitHub webhook and a poll.
 - Live check: `tests/live/experiments.live.ts`.
+
+## Campaigns
+
+Full reference: [docs/campaigns.md](docs/campaigns.md), decision record
+[ADR-0039](docs/adr/0039-campaigns.md). Flag `FEATURE_FLAG_CAMPAIGNS_ENABLED`
+(with `_WS_<id>`), on unless `false`. When it's off, the RPCs answer 404, the
+worker cancels campaign steps and generators get no block.
+
+- **Sidebar → Campaigns replaced "Content calendar".** The calendar opens from
+  the Campaigns header (`open:content-calendar`). The route is
+  `/w/<id>/app/campaigns`; build links with `campaignsPath`; open it with
+  `open:campaigns`.
+- **A kind is a playbook** (`src/lib/campaigns/playbooks.ts`): phases around
+  a key date, each with its purpose, aims, formats, deliverable, openings,
+  Story theme, photo roles and link strength. Ids are stored: add, never
+  rename.
+- **Code shapes, the model writes.** `buildCampaignSkeleton` (free; at most
+  one feed post per channel per day across everything planned),
+  `settleFormats` and `assignMedia` decide the plan. "Write the plan"
+  (`campaign.plan`, 55 credits) only fills the words, through
+  `groundCampaignPlan`, which drops unknown figures, foreign links and
+  competitor names.
+- **The goal is the person's.** Their link must be public https (`linkRule`:
+  it goes in the caption where links work, "link in bio" on Instagram and
+  TikTok). Their count is typed in. Never estimate it.
+- **Pieces are Autopilot steps** (`autopilot_actions.campaign_id`,
+  `program_id` null), made by the existing worker through
+  `createBilledStudioJob`, with `campaignControls`. Approval follows the live
+  program's mode, else a person. Edits go through `diffPieces`, which never
+  touches a made step. No new cron job.
+- **Everything hears about it:**
+  - `runningCampaignsFor` / `campaignBlockFor` feed `loadStudioContext`, so
+    every generator gets the block and ideas get a `campaign` source;
+  - Autopilot's `calendar()` counts campaign steps as taken;
+  - posts carry `meta.campaign_id` / `campaign_phase` / `campaign_name`,
+    which the calendar shows and the Library filters by;
+  - chat and MCP have read-only `list_campaigns` / `get_campaign`.
+  - Never plan or start a campaign from chat.
+- `CampaignsScreen` is presentational; `/campaigns-lab` renders it with
+  sample data (`tests/integration/campaigns-lab.spec.ts`).
 
 ## Autopilot
 

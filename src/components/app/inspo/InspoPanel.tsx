@@ -29,6 +29,7 @@ import {
 import { tidyLook } from "@/lib/inspo/look";
 import type { InspoSection } from "@/lib/inspo/sections";
 import { toast } from "@/lib/toast";
+import { userSafeMessage } from "@/lib/user-errors";
 import { InspoScreen } from "./InspoScreen";
 import type { InspoHandlers, InspoTaste, InspoUpload, InspoView } from "./types";
 
@@ -36,7 +37,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 const ACCEPTED = /^(image\/(png|jpeg|webp)|video\/(mp4|webm))$/;
 
 function message(cause: unknown, fallback: string) {
-  return cause instanceof Error && cause.message ? cause.message : fallback;
+  return userSafeMessage(cause instanceof Error ? cause.message : null, fallback);
 }
 
 export function tasteOf(view: VisualView | null, draft: VisualProfile | null): InspoTaste | null {
@@ -57,7 +58,14 @@ export function tasteOf(view: VisualView | null, draft: VisualProfile | null): I
         }
       : null,
     running: running ? { stage: running.stage, pages: running.next_page } : null,
-    lastError: !running ? (view.jobs[0]?.error ?? null) : null,
+    // Older rows may still hold raw browser text: show only a plain sentence.
+    lastError:
+      !running && view.jobs[0]?.error
+        ? userSafeMessage(
+            view.jobs[0].error,
+            "We couldn't look at your site's pages just now. Please try again.",
+          )
+        : null,
     learnPrice: view.profiles.length ? creditsFor("brand_dna_rescan") : 0,
   };
 }

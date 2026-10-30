@@ -57,7 +57,7 @@ export function ManualBrandStep({
         Tell Mellox about your brand.
       </h1>
       <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-muted-foreground">
-        No website yet is fine. Three answers are enough to start, and you can add more in Brain.
+        No website? Three answers are enough to start.
       </p>
 
       <form

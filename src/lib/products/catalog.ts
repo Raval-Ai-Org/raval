@@ -89,7 +89,7 @@ const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1
 const asText = (v: unknown): string =>
   typeof v === "string" ? decode(v) : typeof v === "number" ? String(v) : "";
 /** Lower-case words with single spaces and a space at each end, for whole-word matching. */
-function looseText(s: string): string {
+export function looseText(s: string): string {
   const words = s
     .toLowerCase()
     .normalize("NFKD")

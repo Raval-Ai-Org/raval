@@ -94,10 +94,10 @@ const MODEL_UNAVAILABLE_RE =
 /** Map a gateway error to a failure the user can act on. Exported for tests. */
 export function kieFailure(error: unknown): ProviderFailure {
   if (error instanceof KieGatewayError) {
-    if (error.providerCode === 402 || /credit|balance|insufficient/i.test(error.message)) {
+    if (error.providerCode === 402 || /credit|balance|insufficient/i.test(error.detail)) {
       return {
         code: "provider_credits",
-        message: "The video provider account is out of credits. Please try again later.",
+        message: "Video making isn't available right now. Please try again soon.",
         retryable: false,
         definite: true,
       };
@@ -105,7 +105,7 @@ export function kieFailure(error: unknown): ProviderFailure {
     if (error.providerCode === 455) {
       return {
         code: "provider_maintenance",
-        message: "The video provider is under maintenance. Retrying shortly.",
+        message: "Video making is paused for a moment. We'll try again shortly.",
         retryable: true,
         definite: true,
       };
@@ -113,15 +113,15 @@ export function kieFailure(error: unknown): ProviderFailure {
     if (error.category === "configuration" || error.category === "authentication") {
       return {
         code: "provider_configuration",
-        message: "Video generation isn't configured on the server. Contact your workspace admin.",
+        message: "Video making isn't available right now. Please try again soon.",
         retryable: false,
         definite: true,
       };
     }
-    if (error.category === "request" && MODEL_UNAVAILABLE_RE.test(error.message)) {
+    if (error.category === "request" && MODEL_UNAVAILABLE_RE.test(error.detail)) {
       return {
         code: "provider_model_unavailable",
-        message: "This video model is unavailable at the provider right now.",
+        message: "This video style isn't available right now. Try another one.",
         retryable: false,
         definite: true,
       };
@@ -148,7 +148,7 @@ export function kieFailure(error: unknown): ProviderFailure {
   }
   return {
     code: "provider_error",
-    message: "The video provider could not be reached.",
+    message: "We couldn't start the video. Please try again.",
     retryable: true,
   };
 }
@@ -168,7 +168,7 @@ export const kieVideoProvider: VideoProvider = {
       return {
         ok: false,
         code: "provider_model_unavailable",
-        message: error instanceof Error ? error.message : "No KIE model for this render.",
+        message: "This video style isn't available for these settings. Try another one.",
         retryable: false,
         definite: true,
       };
@@ -218,7 +218,7 @@ export const kieVideoProvider: VideoProvider = {
         providerState: record.providerState,
         meta,
         code: "no_result",
-        message: "The provider finished without a video. Your allowance was returned.",
+        message: "The video didn't come out this time. Your allowance was returned.",
         retryable: false,
       };
     }

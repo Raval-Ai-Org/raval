@@ -40,6 +40,7 @@ const ICON = {
   gap: "FileText",
   pillar: "Brain",
   momentum: "Sparkles",
+  campaign: "Calendar",
 } as const;
 const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
   season: "green",
@@ -48,6 +49,7 @@ const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
   gap: "amber",
   pillar: "violet",
   momentum: "indigo",
+  campaign: "green",
 };
 
 function toSuggestion(idea: StudioIdea): StudioSuggestion {

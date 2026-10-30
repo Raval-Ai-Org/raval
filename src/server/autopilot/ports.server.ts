@@ -9,7 +9,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
 import { PLAN_GOALS } from "@/lib/calendar/planner";
-import { isAutopilotEnabled, isFullAutopilotEnabled, isStoriesEnabled } from "@/lib/feature-flags";
+import {
+  isAutopilotEnabled,
+  isCampaignsEnabled,
+  isFullAutopilotEnabled,
+  isStoriesEnabled,
+} from "@/lib/feature-flags";
+import { campaignControls, campaignState } from "@/server/campaigns/context.server";
 import { StrategySchema } from "@/lib/autopilot/contracts";
 import type { Candidate, Rating } from "@/lib/autopilot/opportunities";
 import { matchEvidence } from "@/lib/autopilot/opportunities";
@@ -503,6 +509,8 @@ export const realPorts: AutopilotPorts = {
   enabled: (workspaceId) => isAutopilotEnabled(workspaceId),
   fullEnabled: (workspaceId) => isFullAutopilotEnabled(workspaceId),
   storiesEnabled: (workspaceId) => isStoriesEnabled(workspaceId),
+  campaignsEnabled: (workspaceId) => isCampaignsEnabled(workspaceId),
+  campaignState,
 
   async automationPaused(workspaceId) {
     if (agentsGloballyDisabled()) return true;
@@ -546,6 +554,14 @@ export const realPorts: AutopilotPorts = {
         source: "autopilot",
         // The calendar shows this as the post's topic.
         ...(tag.pillar ? { pillar: tag.pillar } : {}),
+        // Campaigns (ADR-0039): the calendar and the Library group by it.
+        ...(tag.campaignId
+          ? {
+              campaign_id: tag.campaignId,
+              campaign_phase: tag.campaignPhase ?? null,
+              campaign_name: tag.campaignName ?? null,
+            }
+          : {}),
       };
       const { error: writeError } = await db
         .from("content_items")
@@ -577,6 +593,9 @@ export const realPorts: AutopilotPorts = {
       const type = (action.content_type ?? "social") as StudioType;
       // Instagram, TikTok and YouTube can't take words alone: the post gets a picture.
       const picture = withPicture(type, action.platform);
+      // A campaign piece brings the brand's own photos or clips, its product
+      // and its call to action, all placed when the campaign was planned.
+      const campaign = action.campaign_id ? campaignControls(action) : {};
       const input = CreateJobSchema.parse({
         workspaceId,
         type,
@@ -603,6 +622,7 @@ export const realPorts: AutopilotPorts = {
           paymentSource: entitlements.creation?.active ? "creation" : "credits",
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
           ...(picture ? { includeImage: true } : {}),
+          ...campaign,
           // Story frames are individually generated and reviewed by the image model.
           ...(story
             ? { storyMode: "frames", frameCount: story.frames, storyTheme: story.theme }
@@ -611,7 +631,17 @@ export const realPorts: AutopilotPorts = {
       });
       const { job, charge } = await runWithScope(
         { workspaceId, userId, route: "autopilot.run" },
-        () => createBilledStudioJob({ client: db, workspaceId, userId, role, input }),
+        // A selling piece shows a real product from the catalogue, moving
+        // through the catalogue rather than repeating the last one.
+        () =>
+          createBilledStudioJob({
+            client: db,
+            workspaceId,
+            userId,
+            role,
+            input,
+            autoProduct: "any",
+          }),
       );
       const charged =
         job.status === "succeeded" || job.status === "running" || job.status === "queued";
@@ -750,6 +780,33 @@ export const realPorts: AutopilotPorts = {
       if (placed.error) throw new Error(placed.error.message);
       if (timed.error) throw new Error(timed.error.message);
       const out = new Map<string, CalendarPost>();
+      // A running campaign's pieces own their days too, made or not (ADR-0039).
+      const { data: campaignSteps } = await db
+        .from("autopilot_actions")
+        .select("title, platform, planned_for, content_type")
+        .eq("workspace_id", workspaceId)
+        .eq("kind", "content")
+        .not("campaign_id", "is", null)
+        .in("status", [
+          "proposed",
+          "planned",
+          "generating",
+          "needs_approval",
+          "approved",
+          "scheduled",
+          "published",
+        ])
+        .gte("planned_for", dayBefore)
+        .lte("planned_for", dayAfter)
+        .limit(200);
+      for (const row of (campaignSteps ?? []) as Record<string, unknown>[]) {
+        if (row.content_type === "story" || typeof row.planned_for !== "string") continue;
+        const date = ymdInZone(new Date(row.planned_for), timeZone);
+        if (date < from || date > to) continue;
+        const platform = typeof row.platform === "string" ? row.platform : null;
+        const title = typeof row.title === "string" ? row.title.trim() : "";
+        out.set(`${date}|${platform}|${title}`, { date, platform, title });
+      }
       for (const row of [...(placed.data ?? []), ...(timed.data ?? [])] as Record<
         string,
         unknown

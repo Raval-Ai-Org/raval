@@ -17,8 +17,15 @@ import {
   Video,
   type LucideIcon,
 } from "@/components/icons";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { duration, ease } from "@/lib/motion";
+import { duration, ease, spring } from "@/lib/motion";
+import {
+  PlatformAppIcon,
+  platformAppIconLabel,
+  platformGlow,
+  type PlatformAppIconId,
+} from "@/components/brand/PlatformAppIcon";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { RATIOS, type AspectRatio } from "@/lib/studio/aspect";
 import type { StudioType } from "@/lib/studio/formats";
@@ -126,6 +133,104 @@ export function Segmented<T extends string | number>({
   );
 }
 
+/**
+ * A short list of choices that each need a word of explanation: cards with an
+ * icon, a name and the hint on show (a `Segmented` hides its hints).
+ */
+export function OptionCards<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  className,
+}: {
+  value: T | undefined;
+  options: { value: T; label: string; hint?: string; icon?: LucideIcon }[];
+  onChange: (value: T) => void;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={cn("grid grid-cols-1 gap-2 min-[420px]:grid-cols-2", className)}
+    >
+      {options.map((o) => {
+        const selected = o.value === value;
+        const Icon = o.icon;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "flex min-h-11 items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors duration-[--motion-duration-fast]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-50",
+              selected
+                ? "border-primary-border bg-primary-surface"
+                : "border-border bg-surface-2 hover:border-border-strong",
+            )}
+          >
+            {Icon ? (
+              <span
+                className={cn(
+                  "mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg",
+                  selected
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface-3 text-muted-foreground",
+                )}
+              >
+                <Icon className="size-3.5" />
+              </span>
+            ) : null}
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-foreground">{o.label}</span>
+              {o.hint ? (
+                <span className="block text-[11px] leading-snug text-muted-foreground">
+                  {o.hint}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A switch with a name and a one-line hint, for a single yes/no choice. */
+export function SwitchRow({
+  label,
+  hint,
+  checked,
+  onCheckedChange,
+  disabled,
+}: {
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onCheckedChange: (on: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-surface-2 px-3 py-2.5">
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-foreground">{label}</span>
+        {hint ? <span className="block text-[11px] text-muted-foreground">{hint}</span> : null}
+      </span>
+      <Switch
+        aria-label={label}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
+    </label>
+  );
+}
+
 export function ChipButton({
   selected,
   onClick,
@@ -176,26 +281,133 @@ export function PlatformPicker({
   maxSelections?: number;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {platforms.map((id) => {
-        const spec = PLATFORMS[id];
-        const Icon = spec.icon;
+    <PlatformLogoGrid
+      platforms={platforms}
+      isSelected={(id) => value.includes(id)}
+      isDisabled={(id) =>
+        !value.includes(id) && maxSelections !== undefined && value.length >= maxSelections
+      }
+      multi={multi}
+      onToggle={(id) => {
         const selected = value.includes(id);
+        if (!multi) return onChange([id]);
+        if (selected && value.length === 1) return; // keep at least one
+        onChange(selected ? value.filter((p) => p !== id) : [...value, id]);
+      }}
+    />
+  );
+}
+
+/**
+ * Channels as their app icons: a person finds Instagram by its logo, not by
+ * reading a row of names. The name is the button's label and tooltip. Picked
+ * icons are full colour with a lime ring and a check; the rest are softened
+ * until hovered.
+ */
+export function PlatformLogoGrid<T extends PlatformAppIconId>({
+  platforms,
+  isSelected,
+  isDisabled,
+  onToggle,
+  multi = true,
+  size = 44,
+  note,
+  className,
+}: {
+  platforms: readonly T[];
+  isSelected: (id: T) => boolean;
+  isDisabled?: (id: T) => boolean;
+  onToggle: (id: T) => void;
+  multi?: boolean;
+  size?: number;
+  /** A small line under an icon, such as "not connected". */
+  note?: (id: T) => string | null | undefined;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <div role={multi ? "group" : "radiogroup"} className={cn("flex flex-wrap gap-2.5", className)}>
+      {platforms.map((id, i) => {
+        const selected = isSelected(id);
+        const disabled = isDisabled?.(id) ?? false;
+        const name = platformAppIconLabel(id);
+        const sub = note?.(id);
         return (
-          <ChipButton
+          <motion.button
             key={id}
-            selected={selected}
-            disabled={!selected && maxSelections !== undefined && value.length >= maxSelections}
-            onClick={() => {
-              if (!multi) return onChange([id]);
-              if (selected && value.length === 1) return; // keep at least one
-              onChange(selected ? value.filter((p) => p !== id) : [...value, id]);
-            }}
+            type="button"
+            role={multi ? undefined : "radio"}
+            aria-pressed={multi ? selected : undefined}
+            aria-checked={multi ? undefined : selected}
+            aria-label={sub ? `${name}, ${sub}` : name}
+            title={sub ? `${name} · ${sub}` : name}
+            disabled={disabled}
+            onClick={() => onToggle(id)}
+            initial={reduce ? false : { opacity: 0, y: 6, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ ...spring.control, delay: reduce ? 0 : i * 0.035 }}
+            whileHover={reduce || disabled ? undefined : { y: -2 }}
+            whileTap={reduce || disabled ? undefined : { scale: 0.92 }}
+            className={cn(
+              "group relative flex flex-col items-center gap-1 rounded-[18px] p-1 outline-none",
+              "focus-visible:ring-2 focus-visible:ring-ring/55",
+              "disabled:cursor-not-allowed",
+            )}
           >
-            <Icon className="size-3.5" />
-            {spec.label}
-            {selected && multi ? <Check className="size-3 text-primary" /> : null}
-          </ChipButton>
+            <span className="relative">
+              {/* The platform's own colour glows softly behind a picked icon. */}
+              <motion.span
+                aria-hidden
+                initial={false}
+                animate={selected ? { opacity: 0.55, scale: 1 } : { opacity: 0, scale: 0.7 }}
+                transition={spring.surface}
+                className="pointer-events-none absolute inset-1 rounded-full blur-[10px]"
+                style={{ background: platformGlow(id) }}
+              />
+              <motion.span
+                className="relative block"
+                initial={false}
+                animate={selected ? { scale: 1 } : { scale: disabled ? 0.9 : 0.94 }}
+                transition={spring.control}
+              >
+                <PlatformAppIcon
+                  platform={id}
+                  size={size}
+                  className={cn(
+                    "transition-[filter,opacity,box-shadow] duration-[--motion-duration-fast]",
+                    // Unpicked icons keep their real colours; only a disabled one fades.
+                    disabled && "opacity-35 grayscale",
+                    !selected &&
+                      !disabled &&
+                      "group-hover:shadow-[0_2px_4px_rgb(0_0_0/0.14),0_10px_22px_-6px_rgb(0_0_0/0.35)]",
+                  )}
+                />
+              </motion.span>
+              {/* Ring sits outside the tile so the logo itself is never covered. */}
+              <span
+                aria-hidden
+                className={cn(
+                  "pointer-events-none absolute -inset-[3px] rounded-[calc(var(--r)+3px)] ring-2 transition-[box-shadow,opacity] duration-[--motion-duration-fast]",
+                  selected ? "ring-primary opacity-100" : "ring-transparent opacity-0",
+                )}
+                style={{ ["--r" as string]: `${Math.round(size * 0.26)}px` }}
+              />
+              <motion.span
+                aria-hidden
+                initial={false}
+                animate={selected ? { scale: 1, opacity: 1 } : { scale: 0.4, opacity: 0 }}
+                transition={spring.control}
+                className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-surface-2"
+              >
+                <Check className="size-2.5" />
+              </motion.span>
+            </span>
+            {sub ? (
+              <span className="max-w-[4.5rem] truncate text-[10px] leading-none text-muted-foreground">
+                {sub}
+              </span>
+            ) : null}
+          </motion.button>
         );
       })}
     </div>
@@ -394,19 +606,16 @@ export function PlatformStack({
   const shown = platforms.slice(0, max);
   return (
     <span className={cn("inline-flex items-center", className)}>
-      {shown.map((p, i) => {
-        const Icon = PLATFORMS[p].icon;
-        return (
-          <span
-            key={p}
-            title={PLATFORMS[p].label}
-            className="grid shrink-0 place-items-center rounded-full bg-surface-3 ring-2 ring-surface-3"
-            style={{ width: size, height: size, marginLeft: i ? -size * 0.28 : 0, zIndex: max - i }}
-          >
-            <Icon style={{ width: size * 0.58, height: size * 0.58 }} />
-          </span>
-        );
-      })}
+      {shown.map((p, i) => (
+        <span
+          key={p}
+          title={PLATFORMS[p].label}
+          className="relative shrink-0 rounded-[30%] ring-2 ring-surface-2"
+          style={{ marginLeft: i ? -size * 0.22 : 0, zIndex: max - i }}
+        >
+          <PlatformAppIcon platform={p} size={size} className="shadow-none" />
+        </span>
+      ))}
       {platforms.length > max ? (
         <span className="ml-1 text-[11px] tabular-nums text-muted-foreground">
           +{platforms.length - max}

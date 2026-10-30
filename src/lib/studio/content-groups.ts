@@ -54,6 +54,8 @@ export type Group = {
   problem: boolean;
   /** Studio job currently turning this text draft into a finished post. */
   convertingJobId: string | null;
+  /** The campaign it was made for (ADR-0039), when there is one. */
+  campaign?: { id: string; name: string } | null;
 };
 
 export const CONTENT_COLUMNS =
@@ -252,6 +254,13 @@ export function groupRows(rows: ContentRow[]): Group[] {
       scheduledAt: r.scheduled_at,
       problem: r.status === "failed" || r.status === "partial_failed",
       convertingJobId: typeof meta.converting_job === "string" ? meta.converting_job : null,
+      campaign:
+        typeof meta.campaign_id === "string"
+          ? {
+              id: meta.campaign_id,
+              name: typeof meta.campaign_name === "string" ? meta.campaign_name : "Campaign",
+            }
+          : null,
     });
   }
   return [...map.values()].map(({ titleRank: _rank, bodies, ...g }) => {

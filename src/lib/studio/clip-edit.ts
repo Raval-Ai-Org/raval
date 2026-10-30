@@ -83,8 +83,8 @@ export const RECAP_ZOOM = 1.08;
 
 /** Plain words for the video modes. */
 export const VIDEO_MODES = [
-  { value: "generate" as const, label: "Make a new video", hint: "AI makes the footage" },
-  { value: "brand" as const, label: "Brand my clips", hint: "Your footage, with your design" },
-  { value: "recap" as const, label: "Recap from my photos", hint: "Your photos as a short video" },
-  { value: "site" as const, label: "From my website", hint: "Your site scrolling on a screen" },
+  { value: "generate" as const, label: "New video", hint: "AI makes the footage" },
+  { value: "brand" as const, label: "My clips", hint: "Kept as filmed, with your design" },
+  { value: "recap" as const, label: "My photos", hint: "A short video of your photos" },
+  { value: "site" as const, label: "My website", hint: "Your site scrolling on a screen" },
 ];

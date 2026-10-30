@@ -10,6 +10,7 @@ const INTERNAL_PATTERNS: RegExp[] = [
   /open\s?router/i,
   /\bkie\b|kie\.ai/i,
   /anthropic|claude-|gemini|gpt-|google\.com\/|fal\.ai|replicate|tavily|firecrawl|rixot|dataforseo|resend|post\s?for\s?me|stripe/i,
+  /helicone|trigger\.dev|pagespeed|unsplash|pexels|whisper|ffmpeg|ffprobe|exiftool|python|chromium|playwright|puppeteer|browserType|headless/i,
   /supabase|postgres|pgrst|\bsql\b|\brls\b|row[- ]level|violates|duplicate key|relation ".*"/i,
   /api[\s_-]?key|secret|bearer|token (?:is )?(?:invalid|expired|missing)|\bsk-[a-z0-9_-]{6,}/i,
   /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){1,}\b/, // ENV_VAR_NAMES
@@ -30,11 +31,44 @@ export function isInternalMessage(message: string | null | undefined): boolean {
   return INTERNAL_PATTERNS.some((p) => p.test(message));
 }
 
+export const SLOW_ERROR = "That took longer than it should. Please try again.";
+export const DECLINED_ERROR = "We couldn't make this one. Try wording it a little differently.";
+export const TOO_LONG_ERROR = "This is too much to handle in one go. Try something shorter.";
+export const SETTINGS_ERROR = "That combination of settings didn't work. Try changing one of them.";
+
 /** A safe sentence for a provider/HTTP status. */
 export function messageForStatus(status?: number): string {
   if (status === 429) return BUSY_ERROR;
   if (status === 503) return UNAVAILABLE_ERROR;
   return GENERIC_ERROR;
+}
+
+// Failure codes from our own suppliers (AI, video, search, crawling). Anything
+// that is ours to fix — balance, keys, setup, a model gone — reads the same to
+// a person: not available right now.
+const FAILURE_MESSAGES: Record<string, string> = {
+  insufficient_credits: UNAVAILABLE_ERROR,
+  invalid_api_key: UNAVAILABLE_ERROR,
+  missing_api_key: UNAVAILABLE_ERROR,
+  no_endpoints: UNAVAILABLE_ERROR,
+  provider_forbidden: UNAVAILABLE_ERROR,
+  configuration: UNAVAILABLE_ERROR,
+  authentication: UNAVAILABLE_ERROR,
+  not_configured: UNAVAILABLE_ERROR,
+  rate_limited: BUSY_ERROR,
+  rate_limit: BUSY_ERROR,
+  timeout: SLOW_ERROR,
+  refusal: DECLINED_ERROR,
+  context_exceeded: TOO_LONG_ERROR,
+  request: SETTINGS_ERROR,
+};
+
+/** A safe sentence for a supplier failure, by its code first, then its status. */
+export function messageForFailure(status?: number, code?: string): string {
+  if (code && FAILURE_MESSAGES[code]) return FAILURE_MESSAGES[code];
+  if (status === 402 || status === 401 || status === 403) return UNAVAILABLE_ERROR;
+  if (status === 504) return SLOW_ERROR;
+  return messageForStatus(status);
 }
 
 /** The message itself when it is safe to show, else a plain one. */

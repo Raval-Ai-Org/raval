@@ -1,14 +1,19 @@
 "use client";
 // What a piece is about, and how an ad is laid out: one product from the
 // brand's catalogue (ADR-0035, Brain → Brand → Products) and one of the proven
-// ad layouts (src/lib/studio/ad-formats.ts). A picked product keeps its own
-// photo unchanged, so only layouts that don't redraw a product are offered.
+// ad layouts (src/lib/studio/ad-formats.ts). A picked product is shown with
+// its own photos, never redrawn, so only layouts that don't redraw a product
+// are offered. A product the brief names is picked by itself
+// (src/lib/products/feature.ts), the same way the server picks it.
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShoppingBag } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { adFormatsFor, type AdFormat, type AdFormatThumb } from "@/lib/studio/ad-formats";
 import { listProducts } from "@/lib/products.functions";
 import type { Product } from "@/lib/products/catalog";
+import { namedProduct, productPhotoControls } from "@/lib/products/feature";
+import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel } from "./studio-ui";
 
 /** React Query keys for the catalogue as Studio reads it (workspace-scoped). */
@@ -16,7 +21,7 @@ export const studioProductKeys = {
   list: (workspaceId: string) => ["studio", "products", workspaceId] as const,
 };
 
-function useStudioProducts(workspaceId: string) {
+export function useStudioProducts(workspaceId: string) {
   return useQuery({
     queryKey: studioProductKeys.list(workspaceId),
     queryFn: async (): Promise<Product[]> =>
@@ -31,8 +36,70 @@ const chip =
 const on = "border-primary bg-primary/10 text-foreground";
 const off = "border-border bg-surface-3 text-muted-foreground hover:text-foreground";
 
-/** Types whose picture is the product's own photo when one is picked (createBilledStudioJob). */
-const PICTURED = new Set(["image", "ad", "social"]);
+/** The product's photos, main first, as `productPhotoControls` takes them. */
+export function productPhotoIds(product: Product | null | undefined): string[] {
+  if (!product || product.kind !== "product") return [];
+  const ids = product.images.map((img) => img.assetId);
+  const main = product.primaryAssetId && ids.includes(product.primaryAssetId);
+  return main
+    ? [product.primaryAssetId!, ...ids.filter((id) => id !== product.primaryAssetId)]
+    : ids;
+}
+
+/**
+ * Picks the product the brief names while the person hasn't chosen one, and
+ * lets it go again when the brief stops naming it. Returns the session's
+ * product. The server makes the same pick, so the price shown is what runs.
+ */
+export function useBriefProduct(session: StudioSession): Product | null {
+  const { data: products } = useStudioProducts(session.workspaceId);
+  const auto = useRef<string | null>(null);
+  const { productId, noProduct } = session.controls;
+  useEffect(() => {
+    if (!products?.length || noProduct || session.lastGood) return;
+    if (productId && productId !== auto.current) return;
+    const named = namedProduct(
+      session.brief,
+      products.map((p) => ({ ...p, hasPhoto: p.images.length > 0 })),
+    );
+    const next = named?.id ?? null;
+    if (next === (productId ?? null)) return;
+    auto.current = next;
+    updateSession(session.id, {
+      controls: { ...session.controls, productId: next ?? undefined },
+    });
+  }, [
+    products,
+    session.brief,
+    productId,
+    noProduct,
+    session.lastGood,
+    session.id,
+    session.controls,
+  ]);
+  return products?.find((p) => p.id === productId) ?? null;
+}
+
+/** The session's controls as the server will run them with the product's photos. */
+export function withProductPhotos(
+  session: StudioSession,
+  product: Product | null,
+): StudioSession["controls"] {
+  const photos = productPhotoControls({
+    type: session.type,
+    controls: session.controls,
+    photoIds: productPhotoIds(product),
+    revision: false,
+    designEnabled: true,
+  });
+  return photos
+    ? {
+        ...session.controls,
+        ...photos,
+        ...(photos.referenceMode === "design" ? { photoFidelity: "exact" as const } : {}),
+      }
+    : session.controls;
+}
 
 export function ProductPicker({
   workspaceId,
@@ -92,10 +159,14 @@ export function ProductPicker({
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         {!value
-          ? "Pick a product to write about it with its real name, price and facts."
-          : PICTURED.has(type)
-            ? "Written about this product. Its own photo is the picture, unchanged, unless you add photos below."
-            : "Written about this product, with its real name, price and facts."}
+          ? "Pick a product, or name it in your brief, to show the real thing."
+          : !productPhotoIds(products.find((p) => p.id === value)).length
+            ? "Written about this product with its real name, price and facts. Add a photo in Brain → Products to show it too."
+            : type === "carousel"
+              ? "Its real photos go on the slides, unchanged."
+              : type === "video" || type === "story"
+                ? "Made from its real photo, so the product looks like itself."
+                : "Designed around its real photo. The photo itself is never changed."}
       </p>
     </div>
   );

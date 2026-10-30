@@ -144,9 +144,16 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.prompt": tier(WORKHORSE, "low"),
   "studio.research": tier(WORKHORSE, "medium"),
   "studio.trends": tier(WORKHORSE, "low"),
+  // The visual brief a picture or video is made from (buildVisualBriefPrompt).
+  "studio.image.brief": tier(WORKHORSE, "medium"),
+  "studio.video.brief": tier(WORKHORSE, "medium"),
   "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
   "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "campaign-generation": tier(PREMIUM, "low"),
+  // Campaigns (ADR-0039): the words for a laid-out campaign, and the brief
+  // the designer's "Write it for me" fills in.
+  "campaign.plan": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
+  "campaign.write": tier(ECONOMY, "low"),
   "schedule.*": tier(WORKHORSE, "medium"),
 
   // Marketing Coach and Market Brain.

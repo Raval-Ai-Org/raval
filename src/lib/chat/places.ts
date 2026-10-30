@@ -160,6 +160,14 @@ export const PLACES: readonly Place[] = [
     event: "open:analytics",
   }),
   place({
+    id: "campaigns",
+    label: "Campaigns",
+    hint: "Launches, events, seasons and sales",
+    group: "Plan",
+    keywords: ["campaign", "launch", "event", "sale", "season", "promotion"],
+    event: "open:campaigns",
+  }),
+  place({
     id: "calendar",
     label: "Calendar",
     hint: "What's planned and scheduled",

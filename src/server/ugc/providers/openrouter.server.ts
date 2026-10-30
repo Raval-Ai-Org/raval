@@ -90,7 +90,7 @@ export function openRouterFailure(error: unknown): ProviderFailure {
       case "insufficient_credits":
         return {
           code: "provider_credits",
-          message: "The video provider account is out of credits. Please try again later.",
+          message: "Video making isn't available right now. Please try again soon.",
           retryable: false,
           definite: true,
         };
@@ -98,7 +98,7 @@ export function openRouterFailure(error: unknown): ProviderFailure {
       case "invalid_api_key":
         return {
           code: "provider_configuration",
-          message: "Video generation isn't configured on the server. Contact your workspace admin.",
+          message: "Video making isn't available right now. Please try again soon.",
           retryable: false,
           definite: true,
         };
@@ -112,7 +112,7 @@ export function openRouterFailure(error: unknown): ProviderFailure {
       case "no_endpoints":
         return {
           code: "provider_model_unavailable",
-          message: "This video model is unavailable at the provider right now.",
+          message: "This video style isn't available right now. Try another one.",
           retryable: true,
           definite: true,
         };
@@ -133,7 +133,7 @@ export function openRouterFailure(error: unknown): ProviderFailure {
   }
   return {
     code: "provider_error",
-    message: "The video provider could not be reached.",
+    message: "We couldn't start the video. Please try again.",
     retryable: true,
   };
 }
@@ -202,7 +202,7 @@ export const openRouterVideoProvider: VideoProvider = {
       return {
         ok: false,
         code: "reference_unreadable",
-        message: "A product photo couldn't be prepared for the video model. Try another photo.",
+        message: "A product photo couldn't be used for this video. Try another photo.",
         retryable: true,
       };
     }
@@ -213,7 +213,7 @@ export const openRouterVideoProvider: VideoProvider = {
       return {
         ok: false,
         code: "provider_model_unavailable",
-        message: error instanceof Error ? error.message : "No OpenRouter model for this render.",
+        message: "This video style isn't available for these settings. Try another one.",
         retryable: false,
         definite: true,
       };
@@ -234,7 +234,7 @@ export const openRouterVideoProvider: VideoProvider = {
         return {
           ok: false,
           code: "provider_response",
-          message: "The video provider did not return a job id.",
+          message: "We couldn't start the video. Please try again.",
           retryable: false,
         };
       }
@@ -291,7 +291,7 @@ export const openRouterVideoProvider: VideoProvider = {
           providerState: status,
           meta,
           code: "no_result",
-          message: "The provider finished without a video. Your allowance was returned.",
+          message: "The video didn't come out this time. Your allowance was returned.",
           retryable: false,
         };
       }

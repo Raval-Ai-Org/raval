@@ -57,20 +57,6 @@ import { CheckRow, DiffView, VerificationCard } from "../FindingDetail";
 
 const errMsg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-const MODEL_NAMES: Record<string, string> = {
-  "anthropic/claude-opus-5.5": "Claude Opus 5.5",
-  "google/gemini-3.8-flash": "Gemini 3.8 Flash",
-  "openai/gpt-6.1-sol": "GPT-6.1 Sol",
-  "openai/gpt-6-luna": "GPT-6 Luna",
-  // Preserve labels for previously recorded runs.
-  "openai/gpt-5.6-terra": "GPT-5.6 Terra",
-  // Labels for runs recorded before the move to OpenRouter.
-  "claude-sonnet-5": "Claude Sonnet 5",
-  "claude-opus-5": "Claude Opus 5",
-};
-const modelLabel = (id: string | null | undefined) =>
-  id ? (MODEL_NAMES[id] ?? id) : "Claude Opus 5.5";
-
 const siteName = (p: SiteProviderId) =>
   p === "webflow" ? "Webflow" : p === "wordpress" ? "WordPress" : "GitHub";
 
@@ -787,20 +773,16 @@ export function AgentPanel({
         <div className="min-w-0">
           <div className="text-[13px] font-semibold">Mellox GEO Engineer</div>
           <div className="text-[11.5px] text-muted-foreground">
-            {`Anthropic ${modelLabel(run?.model)}`}
             {run?.repository
-              ? ` · ${run.repository}@${run.baseBranch}${run.baseSha ? ` (${run.baseSha.slice(0, 7)})` : ""}`
+              ? `Works on ${run.repository}@${run.baseBranch}${run.baseSha ? ` (${run.baseSha.slice(0, 7)})` : ""}`
               : run && run.provider !== "github"
-                ? ` · works on your ${siteName(run.provider)} site`
-                : ""}
+                ? `Works on your ${siteName(run.provider)} site`
+                : "Fixes your website for AI search"}
           </div>
         </div>
         {run && (
           <span className="ml-auto text-[11.5px] text-muted-foreground">
-            {run.usage
-              ? `${run.usage.turns} model turns · $${run.usage.costUsd.toFixed(2)} · `
-              : ""}
-            started {relativeTime(run.createdAt)}
+            Started {relativeTime(run.createdAt)}
           </span>
         )}
       </div>

@@ -80,8 +80,7 @@ export function ProductsStep(p: ProductsStepProps) {
           : `What does ${p.brandName || "your brand"} sell?`}
       </h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-        Mellox writes about these, with your real photos. Labels and packaging stay exactly as they
-        are.
+        Your real photos, never redrawn.
       </p>
 
       <FoundBanner
@@ -550,8 +549,7 @@ export function Catalogue({
       {p.products.some((x) => x.kind === "product" && !x.images.length) && (
         <p className="mt-4 inline-flex items-start gap-2 rounded-2xl bg-primary/[0.06] px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
           <Camera className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-          Add a real photo to each product. Mellox builds the post around it and never redraws the
-          product, so labels stay readable.
+          Add a real photo to each product.
         </p>
       )}
     </section>

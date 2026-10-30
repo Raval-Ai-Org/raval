@@ -10,9 +10,7 @@ test("brand my clips offers captions and shows the clip price", async ({ page },
   const captions = page.getByRole("switch", { name: "Captions" });
   await expect(captions).toBeVisible();
   await expect(captions).toHaveAttribute("data-state", "checked");
-  await expect(
-    page.getByText("Mellox picks the best part of each", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText("picks the best part of each", { exact: false })).toBeVisible();
   const footer = page.locator("footer").last();
   await expect(footer).toContainText("45 credits");
   await expect(footer).not.toContainText("video credit");

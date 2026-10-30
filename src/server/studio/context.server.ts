@@ -18,6 +18,7 @@ import { memoryBlockFor } from "@/server/memory/context.server";
 import { goalBlockFor } from "@/server/goals/context.server";
 import { catalogBlockFor } from "@/server/products/context.server";
 import { tasteContextFor } from "@/server/taste/context.server";
+import { campaignBlockText, runningCampaignsFor } from "@/server/campaigns/context.server";
 import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
@@ -196,6 +197,7 @@ async function loadWorkspaceSnapshot(
         hookStyle: str(meta.hook_style),
         structure: str(record(meta.carousel).structure),
         adFormat: str(meta.ad_format),
+        artDirection: str(meta.art_direction),
         design:
           meta.carousel || story.spec
             ? {
@@ -282,6 +284,7 @@ export async function loadStudioContext(
     goal,
     catalog,
     taste,
+    campaignsNow,
   ] = await Promise.all([
     loadWorkspaceSnapshot(db, workspaceId),
     settle(readBrandDna(db, workspaceId), null, "brand dna"),
@@ -299,7 +302,10 @@ export async function loadStudioContext(
     catalogBlockFor(workspaceId),
     // What the team loved in the Library (ADR-0038). Empty until something is learned.
     tasteContextFor(workspaceId),
+    // The campaigns that are on (ADR-0039), so new pieces support them.
+    settle(runningCampaignsFor(workspaceId), [], "campaigns"),
   ]);
+  const campaigns = campaignBlockText(campaignsNow);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
   const brandText = serializeBrandContext(dna, {
@@ -320,6 +326,7 @@ export async function loadStudioContext(
     snapshot.rivals,
     strategy,
     goal,
+    campaigns,
   ];
   // Memory goes first: several generators only read the start of this text.
   const join = (blocks: string[]) => blocks.filter(Boolean).join("\n\n").trim();
@@ -334,5 +341,6 @@ export async function loadStudioContext(
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
     moments: upcomingMoments(new Date(), { limit: 4 }),
+    campaignsNow: campaignsNow.map((c) => ({ name: c.name, phase: c.phase, purpose: c.purpose })),
   };
 }

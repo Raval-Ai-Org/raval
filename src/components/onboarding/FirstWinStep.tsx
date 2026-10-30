@@ -12,6 +12,8 @@ import {
   Wand,
 } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { isPlatformAppIconId, PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { PlatformLogoGrid } from "@/components/studio/studio-ui";
 import { platformLabel } from "@/lib/goals/decide";
 import type { FirstPostBrief } from "@/lib/onboarding/flow";
 import type { Product } from "@/lib/products/catalog";
@@ -107,24 +109,12 @@ export function FirstWinStep(p: FirstWinStepProps) {
           </label>
           <div>
             <span className="ds-label mb-2 block">On</span>
-            <div className="flex flex-wrap gap-1.5">
-              {p.platforms.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={p.platform === id}
-                  onClick={() => p.onPlatform(id)}
-                  className={cn(
-                    "h-11 rounded-full border px-4 text-[13px] font-medium transition-colors",
-                    p.platform === id
-                      ? "border-primary/60 bg-primary/10"
-                      : "border-border/70 bg-card/70 hover:border-foreground/25",
-                  )}
-                >
-                  {platformLabel(id)}
-                </button>
-              ))}
-            </div>
+            <PlatformLogoGrid
+              multi={false}
+              platforms={p.platforms.filter(isPlatformAppIconId)}
+              isSelected={(id) => p.platform === id}
+              onToggle={p.onPlatform}
+            />
           </div>
         </div>
       )}
@@ -205,8 +195,14 @@ export function FirstWinStep(p: FirstWinStepProps) {
                             : "A small, true moment your audience recognises."}
                   </p>
                 )}
-                <span className="mt-auto pt-3 text-[11.5px] text-muted-foreground">
-                  {platformLabel(brief.platform)}
+                <span className="mt-auto pt-3">
+                  {isPlatformAppIconId(brief.platform) ? (
+                    <PlatformAppIcon platform={brief.platform} size={26} label />
+                  ) : (
+                    <span className="text-[11.5px] text-muted-foreground">
+                      {platformLabel(brief.platform)}
+                    </span>
+                  )}
                 </span>
               </div>
             </motion.li>

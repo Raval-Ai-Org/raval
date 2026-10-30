@@ -177,8 +177,8 @@ import {
 
 /** The media slot of a connected carousel's one background picture. */
 const BACKDROP_SLOT = "backdrop";
-import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
-import { archetypeById, type ArchetypeId } from "@/lib/studio/art-direction";
+import { messageForFailure, userSafeMessage } from "@/lib/user-errors";
+import { archetypeById, recentLayouts, type ArchetypeId } from "@/lib/studio/art-direction";
 import { assignPhotos } from "@/lib/studio/carousel/photos";
 import { carouselPhotos } from "./carousel-photos.server";
 
@@ -285,7 +285,7 @@ function classify(error: unknown): JobErrorInfo {
     console.warn("[studio] provider error", status, error.message);
     return {
       category: status === 429 ? "rate_limit" : status === 503 ? "configuration" : "provider",
-      message: messageForStatus(status),
+      message: messageForFailure(status, (error as { code?: string }).code),
       retryable: status !== 400 && status !== 422 && status !== 503,
     };
   }
@@ -1011,6 +1011,7 @@ function imagePrompt(args: {
   extra?: string;
   style?: ImageStyleInput | null;
   artDirection?: ArchetypeId | null;
+  avoidArtDirections?: ArchetypeId[];
   noText?: boolean;
   onImageText?: string | null;
 }): string {
@@ -1029,6 +1030,7 @@ function imagePrompt(args: {
     variationKey: args.variationKey,
     style: args.style,
     artDirection: args.artDirection,
+    avoidArtDirections: args.avoidArtDirections,
     noText: args.noText,
     onImageText: args.onImageText,
   }).prompt;
@@ -1599,6 +1601,7 @@ async function startMedia(args: {
           .join("\n\n"),
         style: look,
         artDirection: archetypeById(output.artDirection)?.id ?? null,
+        avoidArtDirections: input.refine ? [] : recentLayouts(ctx.recent),
         noText: compose,
         onImageText: job.type === "image" ? output.onImageText : null,
       });
@@ -1875,11 +1878,25 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   const product = controls.productId
     ? await productContextFor(job.workspace_id, controls.productId).catch(() => null)
     : null;
+  const productPhoto =
+    !!product?.photoAssetId &&
+    !!controls.referenceAssetIds?.some((id) => product.photoAssetIds.includes(id));
   const base = product
     ? {
         ...loaded,
         brandText: `${product.block}\n\n${loaded.brandText}`.trim(),
-        visualBrandText: `${loaded.visualBrandText}\n\nThe piece is about: ${product.name}`.trim(),
+        visualBrandText: [
+          loaded.visualBrandText,
+          `The piece is about: ${product.name}`,
+          // Pictures and videos made from the product's own photo show that
+          // product, not one the model imagines.
+          productPhoto
+            ? `The supplied product photo is the real ${product.name}. Show exactly this product: the same shape, colours, label, text and packaging. Never invent, restyle or replace it, and never show a different product.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+          .trim(),
       }
     : loaded;
   const style = await loadJobLook(job.workspace_id);
@@ -2281,6 +2298,10 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         idea_id: input.intent.ideaId ?? null,
         template: input.intent.template ?? null,
         ...(adFormat ? { ad_format: adFormat.id } : {}),
+        // What the piece showed, so the next one features another product and
+        // is staged on another layout (src/lib/products/feature.ts).
+        ...(product ? { product_id: controls.productId } : {}),
+        ...(output.artDirection ? { art_direction: output.artDirection } : {}),
         // The job's headline, so every surface titles the piece consistently.
         job_title: title,
         brand_version: brandVersion(input.brand),
@@ -2493,6 +2514,12 @@ function ANGLE_ID(label: string | null): string | undefined {
   return map[lower];
 }
 
+/** The concept writer's layout, unless one of the brand's latest pictures used it. */
+function freshLayout(id: unknown, recent: ArchetypeId[]): boolean {
+  const layout = archetypeById(id);
+  return !!layout && !recent.includes(layout.id);
+}
+
 async function shapeOutput(args: {
   client: Db;
   job: JobRow;
@@ -2639,7 +2666,9 @@ async function shapeOutput(args: {
         variants: completeVariants(platforms, variants, input.intent.brief),
         ...({
           concept: visual,
-          ...(archetypeById(parsed.artDirection)
+          // A layout the last pictures used is set aside, so a new piece
+          // looks different; a revision keeps the one it had.
+          ...(freshLayout(parsed.artDirection, input.refine ? [] : recentLayouts(ctx.recent))
             ? { artDirection: archetypeById(parsed.artDirection)!.id }
             : {}),
           onImageText: String(parsed.onImageText ?? "").trim(),
@@ -2684,7 +2713,15 @@ async function startStudioVideo(opts: {
     requireReferences: opts.imageUrls.length > 0,
     styleReferenceCount: opts.styleReferenceCount,
   });
-  if (!submitted.ok) throw new StudioJobError(submitted.retryable ? 503 : 502, submitted.message);
+  if (!submitted.ok) {
+    // A safety answer keeps its own words and category, never "provider".
+    if (submitted.code === "refusal" || submitted.code === "safety_unavailable") {
+      const refusal = new MediaSafetyError(submitted.code === "safety_unavailable");
+      refusal.message = submitted.message;
+      throw refusal;
+    }
+    throw new StudioJobError(submitted.retryable ? 503 : 502, submitted.message);
+  }
   return {
     taskId: submitted.taskId,
     model: submitted.providerModel,

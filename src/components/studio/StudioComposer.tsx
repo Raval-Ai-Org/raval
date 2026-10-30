@@ -31,12 +31,14 @@ import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { studioChargeFor, studioPriceLabel } from "@/lib/studio/billing";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
+import { useBriefProduct, withProductPhotos } from "./ProductAndFormat";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
 import { PLATFORMS } from "@/lib/social-platforms";
 import { countBlanks, getTemplate, templatesFor } from "@/lib/studio/templates";
 import {
@@ -585,7 +587,6 @@ function WhatYoullGet({ session }: { session: StudioSession }) {
           aria-label="Preview platform"
         >
           {c.platforms.map((p, i) => {
-            const Icon = PLATFORMS[p].icon;
             const on = i === active;
             return (
               <button
@@ -600,13 +601,11 @@ function WhatYoullGet({ session }: { session: StudioSession }) {
                   setPaused(true);
                 }}
                 className={cn(
-                  "grid size-7 place-items-center rounded-full ring-1 transition-colors duration-[--motion-duration-fast]",
-                  on
-                    ? "bg-[hsl(var(--tone)/0.14)] text-foreground ring-[hsl(var(--tone)/0.5)]"
-                    : "text-muted-foreground ring-border/60 hover:text-foreground",
+                  "grid place-items-center rounded-[10px] p-[2px] ring-2 transition-[box-shadow,opacity,transform] duration-[--motion-duration-fast]",
+                  on ? "ring-primary" : "scale-90 ring-transparent hover:scale-100",
                 )}
               >
-                <Icon className="size-3.5" />
+                <PlatformAppIcon platform={p} size={26} />
               </button>
             );
           })}
@@ -673,10 +672,6 @@ export function IntentStep({
             {session.sourceScript ? (
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">Make your video</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Your reviewed script is attached. Choose the video settings and check the price
-                  before generating.
-                </p>
                 <details className="mt-4 rounded-2xl border border-border bg-surface-3 p-4">
                   <summary className="cursor-pointer text-sm font-medium">
                     Script used in this video
@@ -948,6 +943,9 @@ export function IntentStep({
 /** The price of the next Generate, from the same rule the server charges by. */
 function StudioPrice({ session }: { session: StudioSession }) {
   const [quoteError, setQuoteError] = useState(false);
+  // A product the brief names is picked here too, and its photos priced in.
+  const product = useBriefProduct(session);
+  const controls = withProductPhotos(session, product);
   const { videoMode, recapMotion } = session.controls;
   // The brand's own clips (and camera-move recaps) use no video provider.
   const ownFootage =
@@ -1017,7 +1015,7 @@ function StudioPrice({ session }: { session: StudioSession }) {
   // Words asked for on a kept photo make it a photo design: price what runs.
   const referenceMode = resolvePhotoMode({
     type: session.type,
-    controls: session.controls,
+    controls,
     intent: { brief: session.brief },
   });
   const charge = studioChargeFor({
@@ -1028,8 +1026,8 @@ function StudioPrice({ session }: { session: StudioSession }) {
     videoPreview: session.controls.videoPreview,
     regenerate: Boolean(session.lastGood),
     referenceMode,
-    referenceAssetIds: session.controls.referenceAssetIds,
-    photoFidelity: session.controls.photoFidelity,
+    referenceAssetIds: controls.referenceAssetIds,
+    photoFidelity: controls.photoFidelity,
     articleQuality: session.controls.articleQuality,
     videoMode,
     recapMotion,

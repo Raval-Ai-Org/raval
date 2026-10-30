@@ -27,6 +27,8 @@ import {
   type TimeframeWeeks,
   type WorkspaceGoals,
 } from "@/lib/goals/contracts";
+import { isPlatformAppIconId, PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { PlatformLogoGrid } from "@/components/studio/studio-ui";
 import { platformLabel } from "@/lib/goals/decide";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -104,7 +106,15 @@ const TIMEFRAME_LABELS: Record<TimeframeWeeks, string> = {
   52: "1 year",
 };
 
-const CHANNELS = ["instagram", "tiktok", "linkedin", "facebook", "youtube", "twitter", "threads"];
+const CHANNELS = [
+  "instagram",
+  "tiktok",
+  "linkedin",
+  "facebook",
+  "youtube",
+  "twitter",
+  "threads",
+] as const;
 
 /** Counted on one platform: followers and reach are per account. */
 const PER_PLATFORM: Partial<Record<GoalFocus, true>> = { followers: true, reach: true };
@@ -181,7 +191,7 @@ export function GoalStep({
             What should your marketing do first?
           </h1>
           <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-muted-foreground">
-            Mellox plans every post around this. You can change it any time in Brain.
+            You can change it any time.
           </p>
         </>
       )}
@@ -238,27 +248,13 @@ export function GoalStep({
             <p id="goal-channels" className="ds-label">
               Where do you want to grow?
             </p>
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              {CHANNELS.map((id) => {
-                const on = draft.channels.includes(id);
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleChannel(id)}
-                    className={cn(
-                      "h-9 rounded-full border px-3.5 text-[13px] font-medium transition-colors",
-                      on
-                        ? "border-primary/60 bg-primary/10 text-foreground"
-                        : "border-border/70 bg-card/70 text-foreground/80 hover:border-foreground/25",
-                    )}
-                  >
-                    {platformLabel(id)}
-                  </button>
-                );
-              })}
-            </div>
+            <PlatformLogoGrid
+              className="mt-3"
+              size={48}
+              platforms={CHANNELS}
+              isSelected={(id) => draft.channels.includes(id)}
+              onToggle={toggleChannel}
+            />
           </section>
 
           <section aria-labelledby="goal-cadence">
@@ -357,14 +353,23 @@ export function GoalStep({
                           type="button"
                           aria-pressed={draft.platform === id}
                           onClick={() => onChange({ platform: id })}
+                          aria-label={id ? platformLabel(id) : undefined}
+                          title={id ? platformLabel(id) : undefined}
                           className={cn(
-                            "h-8 rounded-full border px-3 text-[12.5px] transition-colors",
+                            "inline-flex h-8 items-center rounded-full border text-[12.5px] transition-colors",
+                            id && isPlatformAppIconId(id) ? "px-1" : "px-3",
                             draft.platform === id
                               ? "border-primary/60 bg-primary/10"
                               : "border-border/70 hover:border-foreground/25",
                           )}
                         >
-                          {id ? platformLabel(id) : "All channels"}
+                          {id && isPlatformAppIconId(id) ? (
+                            <PlatformAppIcon platform={id} size={22} />
+                          ) : id ? (
+                            platformLabel(id)
+                          ) : (
+                            "All channels"
+                          )}
                         </button>
                       ))}
                     </div>

@@ -22,6 +22,7 @@ import {
 import { SCREEN_ASPECT, type PhotoFrame } from "@/lib/studio/carousel/photos";
 import type { CarouselSlide } from "@/lib/studio/jobs";
 import { safeFetch } from "@/server/safe-fetch";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 
 type FontFace = { name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" };
 
@@ -118,7 +119,7 @@ export async function slidePhotoData(
   frame: PhotoFrame,
 ): Promise<{ src: string; frame: PhotoFrame } | null> {
   try {
-    const image = sharp(bytes, { limitInputPixels: 80_000_000 }).rotate();
+    const image = sharp(bytes, { limitInputPixels: PHOTO_PIXEL_LIMIT, failOn: "none" }).rotate();
     const fitted =
       frame === "photo"
         ? image.resize(1400, 1400, { fit: "inside", withoutEnlargement: true })

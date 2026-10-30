@@ -37,6 +37,7 @@ import { workspacePath } from "@/lib/workspace/paths";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
+import { userSafeMessage } from "@/lib/user-errors";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import type { BrandExtractResult, Discoveries, SiteDiscovery } from "@/lib/brand-extract-events";
 import {
@@ -384,9 +385,10 @@ function Onboarding() {
       }
       setScanStatus("error");
       setScanError(
-        error instanceof Error
-          ? error.message
-          : "We couldn't complete the scan after a few attempts.",
+        userSafeMessage(
+          error instanceof Error ? error.message : null,
+          "We couldn't finish reading your site. Please try again.",
+        ),
       );
     }
   };

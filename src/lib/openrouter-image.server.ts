@@ -22,7 +22,7 @@ import {
   MediaSafetyError,
 } from "@/server/guardrails/media-safety.server";
 import { randomUUID } from "node:crypto";
-import { fetchWithRetry } from "@/server/upstream";
+import { fetchWithRetry, upstreamDetail } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
 import { enforceBudget } from "@/server/ai/budget";
 import { recordUsage } from "@/server/ai/metering";
@@ -329,7 +329,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         model,
         attempt,
         code: error instanceof AiGatewayError ? error.code : undefined,
-        message: error instanceof Error ? error.message : String(error),
+        message: upstreamDetail(error),
       });
       if (error instanceof AiGatewayError && TERMINAL_CODES.has(error.code ?? "")) throw error;
     }
@@ -465,7 +465,7 @@ export async function startImageTask(opts: {
             error instanceof AiGatewayError || error instanceof MediaSafetyError
               ? error.code
               : undefined,
-          message: error instanceof Error ? error.message : String(error),
+          message: upstreamDetail(error),
         });
         parked = {
           state: "failed",
@@ -478,7 +478,7 @@ export async function startImageTask(opts: {
           message:
             error instanceof AiGatewayError || error instanceof MediaSafetyError
               ? error.message.slice(0, 300)
-              : "The image provider could not complete this render.",
+              : "The picture couldn't be made this time. Please try again.",
         };
       }
       await cache.set(taskKey(taskId), parked, TASK_TTL_SECONDS);

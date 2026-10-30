@@ -270,7 +270,7 @@ export function withPromptCache(
 
 export class AiGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(status, message, { provider: "openrouter", code });
+    super(status, message, { provider: "openrouter", code, internal: true });
     this.name = "AiGatewayError";
   }
 }
@@ -355,7 +355,15 @@ export function mapOpenRouterError(status: number, raw: string): AiGatewayError 
       "context_exceeded",
     );
   }
-  if (errorType === "refusal" || errorType === "content_policy_violation") {
+  if (
+    errorType === "refusal" ||
+    errorType === "content_policy_violation" ||
+    // Image models answer a refused request with a plain 400 and these words.
+    (status === 400 &&
+      /safety system|moderation_blocked|content[ _]policy|safety_violations|rejected by the safety/i.test(
+        detail,
+      ))
+  ) {
     return new AiGatewayError(422, "The AI model declined this request.", "refusal");
   }
   if (status === 403) {
@@ -465,11 +473,37 @@ type BodyArgs = {
  *                require_parameters whenever a schema or tools must be honoured.
  *   tool_choice — "auto" only: Opus 5.5 rejects forced tool use.
  */
+const JSON_MENTION = "Answer with one valid JSON object.";
+
+/**
+ * JSON mode on an OpenAI fallback refuses a request whose messages never say
+ * "json" (400), so a slow primary would turn into a failed piece. Says it
+ * once, in the system message, when the prompt does not already.
+ */
+export function withJsonMention(messages: ChatMessage[] | unknown[]): ChatMessage[] | unknown[] {
+  const list = messages as ChatMessage[];
+  const says = list.some((message) =>
+    typeof message?.content === "string"
+      ? /json/i.test(message.content)
+      : Array.isArray(message?.content) &&
+        message.content.some((part) => part?.type === "text" && /json/i.test(part.text ?? "")),
+  );
+  if (says) return messages;
+  const system = list.findIndex(
+    (message) => message?.role === "system" && typeof message.content === "string",
+  );
+  if (system < 0) return [{ role: "system", content: JSON_MENTION }, ...list];
+  return list.map((message, index) =>
+    index === system ? { ...message, content: `${message.content}\n\n${JSON_MENTION}` } : message,
+  );
+}
+
 export function buildRequestBody(args: BodyArgs): Record<string, unknown> {
   const strict = Boolean(args.tools?.length) || args.responseFormat?.type === "json_schema";
   const body: Record<string, unknown> = {
     models: args.plan.models,
-    messages: args.messages,
+    messages:
+      args.responseFormat?.type === "json_object" ? withJsonMention(args.messages) : args.messages,
     stream: args.stream,
     max_tokens: args.maxTokens,
     usage: { include: true },
@@ -694,7 +728,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
     try {
       return await attempt();
     } catch (error) {
-      if (error instanceof AiGatewayError && error.message.startsWith(MID_ANSWER_FAILURE)) {
+      if (error instanceof AiGatewayError && error.detail.startsWith(MID_ANSWER_FAILURE)) {
         return attempt();
       }
       throw error;

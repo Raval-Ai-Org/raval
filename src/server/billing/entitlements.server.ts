@@ -54,6 +54,8 @@ export type Entitlements = {
   limits: (typeof PLANS)[PlanId]["limits"] & { brands: number; seats: number | null };
   usage: {
     brands: number;
+    /** Brands that count against the plan's limit: not paused (the create check's count). */
+    activeBrands: number;
     seats: number;
     /** Posts sent this calendar month (UTC), each network counts. Fair use only. */
     postsThisMonth: number;
@@ -188,6 +190,7 @@ export function resolveEntitlements(args: {
     limits: limitsFor(entitledPlan, args.addons ?? [], paused),
     usage: args.usage ?? {
       brands: 0,
+      activeBrands: 0,
       seats: 0,
       postsThisMonth: 0,
       trackedPrompts: 0,
@@ -251,7 +254,7 @@ export async function getEntitlements(args: {
       .eq("status", "active"),
     admin
       .from("workspaces")
-      .select("id,owner_id")
+      .select("id,owner_id,frozen_at")
       .eq("billing_account_id", account.id)
       .is("duplicate_of", null),
     admin.rpc("account_wallet", { p_account: account.id }),
@@ -354,6 +357,7 @@ export async function getEntitlements(args: {
     addons: (items.data ?? []) as Addon[],
     usage: {
       brands: workspaceIds.length,
+      activeBrands: (spaces.data ?? []).filter((row) => !row.frozen_at).length,
       seats: seatCount,
       postsThisMonth: (posts.data ?? []).reduce(
         (sum, row) => sum + Math.max(1, Number(row.targets ?? 1)),

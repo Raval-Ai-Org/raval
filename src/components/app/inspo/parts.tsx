@@ -16,6 +16,7 @@ import {
   Wand,
 } from "@/components/icons";
 import { dsFocus, dsIconBtn } from "@/components/app/surface/buttons";
+import { PinButton } from "@/components/app/pins";
 import { CHIPS, type InspoCard, type InspoChip } from "@/lib/inspo/board";
 import { cn } from "@/lib/utils";
 import type { InspoUpload } from "./types";
@@ -355,12 +356,12 @@ export function InspoCardView({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.18 } }}
       transition={{ duration: 0.4, ease: EASE }}
-      whileHover={{ y: -3 }}
-      className="group relative mb-3 break-inside-avoid overflow-hidden rounded-[20px] bg-[var(--ds-well-bg)] ring-1 ring-[var(--ds-tile-border)] transition-shadow duration-300 hover:shadow-[0_18px_40px_-18px_rgb(0_0_0/0.35)]"
+      whileHover={{ y: -2 }}
+      className="group relative mb-3 break-inside-avoid overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2 ring-1 ring-border/60 transition-shadow duration-300 hover:shadow-[var(--ds-tile-shadow-hover)]"
       data-testid="inspo-card"
     >
       <CardMedia card={card} />
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 via-black/10 to-transparent opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100" />
       <figcaption className="absolute left-2 top-2 flex gap-1">
         <ChipPill chip={card.chip} />
         {card.fromSite && (
@@ -370,7 +371,7 @@ export function InspoCardView({
         )}
       </figcaption>
       {canEdit && (
-        <div className="absolute inset-x-2 bottom-2 flex translate-y-2 items-center justify-between gap-1 opacity-0 transition-all duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100">
+        <div className="absolute inset-x-2 bottom-2 flex translate-y-2 items-center justify-between gap-1 opacity-0 transition-all duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100">
           <div className="flex rounded-full bg-black/45 p-0.5 backdrop-blur-md">
             {chips.map((chip) => {
               const Icon = CHIP_ICON[chip];
@@ -406,17 +407,9 @@ export function InspoCardView({
                 <Wand className="h-3.5 w-3.5" /> Use
               </button>
             )}
-            <button
-              type="button"
-              aria-label="Remove"
-              onClick={onRemove}
-              className={cn(
-                dsIconBtn,
-                "bg-black/45 text-white/90 backdrop-blur-md hover:bg-black/60 hover:text-white",
-              )}
-            >
+            <PinButton aria-label="Remove" onClick={onRemove} className="size-8">
               <Trash className="h-3.5 w-3.5" />
-            </button>
+            </PinButton>
           </div>
         </div>
       )}
@@ -431,7 +424,7 @@ export function UploadCardView({ upload }: { upload: InspoUpload }) {
       initial={{ opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0 }}
-      className="relative mb-3 break-inside-avoid overflow-hidden rounded-[20px] bg-[var(--ds-well-bg)] ring-1 ring-primary/30"
+      className="relative mb-3 break-inside-avoid overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2 ring-1 ring-primary/30"
       data-testid="inspo-uploading"
     >
       {upload.previewUrl ? (
@@ -482,7 +475,7 @@ export function PickTile({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.035, ease: EASE }}
-      whileHover={{ y: -3 }}
+      whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
       className={cn(
         "group relative overflow-hidden rounded-[20px] text-left ring-1 transition-shadow",

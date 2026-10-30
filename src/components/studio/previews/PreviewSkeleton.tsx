@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Check, Sparkles } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { RATIOS, type AspectRatio } from "@/lib/studio/aspect";
 import { STUDIO_FORMATS, type StageId } from "@/lib/studio/formats";
@@ -679,18 +680,10 @@ function Signals({
     },
     ...(template ? [{ key: "template", label: `Template · ${template.label}` }] : []),
     ...(goal ? [{ key: "goal", label: `Goal · ${goal}` }] : []),
-    ...session.controls.platforms.slice(0, 3).map((p) => {
-      const Icon = PLATFORMS[p].icon;
-      return {
-        key: p,
-        label: (
-          <>
-            <Icon className="size-3" />
-            {PLATFORMS[p].label}
-          </>
-        ),
-      };
-    }),
+    ...session.controls.platforms.slice(0, 3).map((p) => ({
+      key: p,
+      label: <PlatformAppIcon platform={p} size={18} label />,
+    })),
     { key: "recent", label: "Recent posts" },
   ];
   return (
@@ -710,6 +703,8 @@ function Signals({
             gathering
               ? "bg-surface-3 text-foreground shadow-1 ring-1 ring-border"
               : "bg-surface-3/70 text-muted-foreground ring-1 ring-border/60",
+            // A platform is its logo alone; hug it instead of padding it like text.
+            typeof item.label !== "string" && "pr-[3px]",
           )}
         >
           {gathering ? (

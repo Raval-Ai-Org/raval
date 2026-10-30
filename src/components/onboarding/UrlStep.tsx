@@ -84,8 +84,7 @@ export function UrlStep({
         Let Mellox learn your brand.
       </h1>
       <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-muted-foreground">
-        Share your website. Mellox studies it like a brand strategist would — your look, your voice,
-        your audience — and turns it into the Brand DNA behind everything it creates.
+        Mellox learns your look, voice and audience from it.
       </p>
 
       <form

@@ -94,6 +94,7 @@ export async function prepareAppUi(page: Page, theme: "light" | "dark") {
           limits: { ...PLANS.agency.limits, brands: 10, seats: 5 },
           usage: {
             brands: 1,
+            activeBrands: 1,
             seats: 3,
             postsThisMonth: 0,
             trackedPrompts: 0,

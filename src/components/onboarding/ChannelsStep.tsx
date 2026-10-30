@@ -35,8 +35,7 @@ export function ChannelsStep({
         Where should your posts go?
       </h1>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-        Connect the accounts you post on. Mellox only publishes what you approve, and it reads each
-        post&rsquo;s results so it can learn what works for you.
+        Mellox only posts what you approve.
       </p>
 
       <div className="mt-8">{children}</div>

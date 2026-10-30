@@ -297,6 +297,11 @@ function Hero({
     tag = min === "scale" ? "On the Scale plan" : `On ${PLANS[min].label} and above`;
     title = `Unlock ${FEATURES[feature].label}`;
     text = FEATURES[feature].pitch;
+  } else if (block?.code === "limit_reached" && block.limit === "brands") {
+    Icon = Gauge;
+    title = "Add another brand";
+    const max = typeof block.max === "number" ? block.max : PLANS[current].brands;
+    text = `${PLANS[current].label} includes ${max === 1 ? "1 brand" : `${formatNumber(max)} brands`}. A bigger plan gives each brand its own workspace and a full scan.`;
   } else if (block?.code === "limit_reached") {
     Icon = Gauge;
     title = "You've reached your limit";

@@ -9,6 +9,7 @@ import { PURPOSES, FORMATS } from "@/lib/brand-visuals/contracts";
 import sharp from "sharp";
 import { readReferenceForm } from "@/server/brand-visuals/multipart.server";
 import { createVisualPreview } from "@/server/brand-visuals/preview.server";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -59,7 +60,7 @@ export const POST = defineRoute({
       const sampled = video ? await sampleVideoFrames(input, mime) : null;
       const bytes = video
         ? input
-        : await sharp(input, { limitInputPixels: 30_000_000 })
+        : await sharp(input, { limitInputPixels: PHOTO_PIXEL_LIMIT, failOn: "none" })
             .rotate()
             .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
             .png()

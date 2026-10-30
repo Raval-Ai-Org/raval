@@ -211,6 +211,7 @@ const SOURCE_BOOST: Record<IdeaSource, number> = {
   momentum: 10,
   gap: 5,
   pillar: 0,
+  campaign: 20,
 };
 
 function normalize(text: string): string {
@@ -252,6 +253,7 @@ export const SIGNAL_LABEL: Record<IdeaSource, string> = {
   gap: "Content gap",
   pillar: "Your brand",
   momentum: "Working well",
+  campaign: "Your campaign",
 };
 
 /** Plain-language settings the prompt should respect. */

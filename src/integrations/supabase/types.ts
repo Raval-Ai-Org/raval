@@ -1899,6 +1899,7 @@ export type Database = {
           approved_via: string | null;
           attempts: number;
           brief: string;
+          campaign_id: string | null;
           content_item_ids: string[];
           content_type: string | null;
           created_at: string;
@@ -1933,6 +1934,7 @@ export type Database = {
           approved_via?: string | null;
           attempts?: number;
           brief?: string;
+          campaign_id?: string | null;
           content_item_ids?: string[];
           content_type?: string | null;
           created_at?: string;
@@ -1967,6 +1969,7 @@ export type Database = {
           approved_via?: string | null;
           attempts?: number;
           brief?: string;
+          campaign_id?: string | null;
           content_item_ids?: string[];
           content_type?: string | null;
           created_at?: string;
@@ -1997,6 +2000,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "autopilot_actions_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_campaigns";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "autopilot_actions_opportunity_id_fkey";
             columns: ["opportunity_id"];
@@ -10456,6 +10466,77 @@ export type Database = {
             foreignKeyName: "workspace_brand_dna_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_campaigns: {
+        Row: {
+          acting_user_id: string | null;
+          brief: Json;
+          created_at: string;
+          created_by: string | null;
+          ended_at: string | null;
+          ends_on: string;
+          goal: Json;
+          id: string;
+          key_date: string | null;
+          name: string;
+          plan: Json;
+          started_at: string | null;
+          starts_on: string;
+          status: string;
+          type: string;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          acting_user_id?: string | null;
+          brief?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          ended_at?: string | null;
+          ends_on: string;
+          goal?: Json;
+          id?: string;
+          key_date?: string | null;
+          name: string;
+          plan?: Json;
+          started_at?: string | null;
+          starts_on: string;
+          status?: string;
+          type: string;
+          updated_at?: string;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          acting_user_id?: string | null;
+          brief?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          ended_at?: string | null;
+          ends_on?: string;
+          goal?: Json;
+          id?: string;
+          key_date?: string | null;
+          name?: string;
+          plan?: Json;
+          started_at?: string | null;
+          starts_on?: string;
+          status?: string;
+          type?: string;
+          updated_at?: string;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_campaigns_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },

@@ -2,7 +2,6 @@
 
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { motion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import {
   ArrowLeft,
@@ -36,7 +35,6 @@ import { normalizeLibraryAsset, type LibraryAsset } from "@/lib/library";
 import { isNewSince, parseRatio } from "@/lib/library-grid";
 import { getSignedAssetUrls } from "@/lib/persistent-assets";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
-import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import {
@@ -58,7 +56,7 @@ import {
 import { openComposer, openJob } from "@/lib/studio/session-store";
 import type { Reaction, TasteView } from "@/lib/taste/contracts";
 import { LibraryTile, type TileAction } from "./library/LibraryTile";
-import { Masonry } from "./library/Masonry";
+import { Masonry, PILL_SELECT, PILL_TRACK, PillTabs, PinGridSkeleton, SearchPill } from "./pins";
 import { TasteStrip } from "./library/TasteStrip";
 import { useLibraryTaste, type ReactTarget } from "./library/useLibraryTaste";
 
@@ -106,8 +104,7 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
   { id: "published", label: "Published" },
 ];
 
-const SELECT =
-  "h-9 rounded-full border-0 bg-surface-2/80 pl-3 pr-8 text-xs font-medium text-foreground ring-1 ring-border/60 outline-none focus-visible:ring-2 focus-visible:ring-ring/55";
+const SELECT = PILL_SELECT;
 
 const SEEN_KEY = "library:last-seen";
 
@@ -212,6 +209,7 @@ export function LibraryPage({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [format, setFormat] = useState<StudioType | "all">("all");
+  const [campaign, setCampaign] = useState<string>("all");
   const [status, setStatus] = useState<StatusFilter>(initialStatus ?? "all");
   const [sort, setSort] = useState<Sort>("newest");
   const [view, setView] = useState<View>("grid");
@@ -381,9 +379,15 @@ export function LibraryPage({
     () => STUDIO_TYPE_ORDER.filter((t) => groups.some((g) => g.type === t)),
     [groups],
   );
+  // Campaigns that made at least one post here (ADR-0039).
+  const campaigns = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const g of groups) if (g.campaign) seen.set(g.campaign.id, g.campaign.name);
+    return [...seen].map(([id, name]) => ({ id, name }));
+  }, [groups]);
   const images = assets.filter((a) => mediaKind(a) === "image").length;
   const videos = assets.length - images;
-  const filtering = !!query.trim() || format !== "all" || status !== "all";
+  const filtering = !!query.trim() || format !== "all" || status !== "all" || campaign !== "all";
   const lovedCount = Object.values(taste.reactions).filter((r) => r === "love").length;
 
   const items = useMemo<Item[]>(() => {
@@ -395,6 +399,7 @@ export function LibraryPage({
         : groups
             .filter((g) => format === "all" || g.type === format)
             .filter((g) => status === "all" || matchesStage(g.stage, status))
+            .filter((g) => campaign === "all" || g.campaign?.id === campaign)
             .filter(
               (g) => !q || g.title.toLowerCase().includes(q) || g.excerpt.toLowerCase().includes(q),
             )
@@ -433,7 +438,7 @@ export function LibraryPage({
         ? b.createdAt.localeCompare(a.createdAt)
         : a.createdAt.localeCompare(b.createdAt),
     );
-  }, [groups, assets, tab, query, format, status, sort, postKeyOf, taste.reactions]);
+  }, [groups, assets, tab, query, format, status, campaign, sort, postKeyOf, taste.reactions]);
 
   const tabs: { id: LibraryTab; label: string; count: number }[] = [
     { id: "all", label: "All", count: groups.length + assets.length },
@@ -445,6 +450,7 @@ export function LibraryPage({
   const clearFilters = () => {
     setQuery("");
     setFormat("all");
+    setCampaign("all");
     setStatus("all");
   };
 
@@ -731,76 +737,36 @@ export function LibraryPage({
           {/* ── Toolbar ── */}
           <div className="shrink-0 border-b border-border/50 px-3 py-3 @3xl/library:px-5">
             <div className="flex flex-wrap items-center gap-2">
-              <div
-                role="tablist"
-                aria-label="Library filter"
-                className="inline-flex max-w-full overflow-x-auto rounded-full bg-surface-2/80 p-1 ring-1 ring-border/60 [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden"
-              >
-                {tabs.map((t) => {
-                  const on = tab === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={on}
-                      onClick={() => setTab(t.id)}
-                      className={cn(
-                        "relative inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs @md/library:px-3 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
-                        on ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {on ? (
-                        <motion.span
-                          layoutId="library-tab"
-                          className="absolute inset-0 rounded-full bg-surface-3 shadow-1 ring-1 ring-border/70"
-                          transition={{ duration: duration.medium, ease: ease.emphasized }}
-                        />
-                      ) : null}
-                      {t.id === "loved" ? (
-                        <Heart
-                          className={cn(
-                            "relative size-3.5",
-                            on ? "fill-primary text-primary" : "text-current",
-                          )}
-                        />
-                      ) : null}
-                      <span className="relative">{t.label}</span>
-                      {!loading ? (
-                        <span className="relative tabular-nums text-muted-foreground">
-                          {t.count}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
+              <PillTabs
+                label="Library filter"
+                layoutId="library-tab"
+                value={tab}
+                onChange={setTab}
+                tabs={tabs.map((t) => ({
+                  id: t.id,
+                  label: t.label,
+                  count: loading ? null : t.count,
+                  icon:
+                    t.id === "loved" ? (
+                      <Heart
+                        className={cn(
+                          "size-3.5",
+                          tab === "loved" ? "fill-primary text-primary" : "text-current",
+                        )}
+                      />
+                    ) : undefined,
+                }))}
+              />
 
-              <label className="relative order-last flex h-9 min-w-0 basis-full items-center @2xl/library:order-none @2xl/library:basis-auto @2xl/library:flex-1">
-                <Search className="pointer-events-none absolute z-10 left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                <span className="sr-only">Search the library</span>
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search titles and captions"
-                  className="h-9 w-full rounded-full border-0 bg-surface-2/80 pl-8 pr-9 text-sm text-foreground ring-1 ring-border/60 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55"
-                />
-                {query ? (
-                  <button
-                    type="button"
-                    onClick={() => setQuery("")}
-                    aria-label="Clear search"
-                    className="absolute right-1.5 grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-surface-3 hover:text-foreground"
-                  >
-                    <X className="size-3" />
-                  </button>
-                ) : (
-                  <kbd className="pointer-events-none absolute right-3 hidden rounded bg-surface-3 px-1.5 font-mono text-[10px] text-muted-foreground ring-1 ring-border @2xl/library:inline">
-                    /
-                  </kbd>
-                )}
-              </label>
+              <SearchPill
+                ref={searchRef}
+                value={query}
+                onChange={setQuery}
+                label="Search the library"
+                placeholder="Search titles and captions"
+                hotkey
+                className="order-last basis-full @2xl/library:order-none @2xl/library:basis-auto @2xl/library:flex-1"
+              />
 
               <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
                 {presentFormats.length > 1 ? (
@@ -814,6 +780,21 @@ export function LibraryPage({
                     {presentFormats.map((f) => (
                       <option key={f} value={f}>
                         {STUDIO_FORMATS[f].label}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {tab !== "media" && campaigns.length ? (
+                  <select
+                    value={campaign}
+                    onChange={(e) => setCampaign(e.target.value)}
+                    aria-label="Campaign"
+                    className={SELECT}
+                  >
+                    <option value="all">All campaigns</option>
+                    {campaigns.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
                       </option>
                     ))}
                   </select>
@@ -841,11 +822,7 @@ export function LibraryPage({
                   <option value="newest">Newest</option>
                   <option value="oldest">Oldest</option>
                 </select>
-                <div
-                  role="radiogroup"
-                  aria-label="View"
-                  className="inline-flex rounded-full bg-surface-2/80 p-1 ring-1 ring-border/60"
-                >
+                <div role="radiogroup" aria-label="View" className={PILL_TRACK}>
                   {(
                     [
                       { id: "grid", icon: LayoutGrid, label: "Grid" },
@@ -887,17 +864,7 @@ export function LibraryPage({
               </div>
             ) : null}
             {loading ? (
-              <div className="columns-2 gap-3 @2xl/library:columns-3 @4xl/library:columns-4 @6xl/library:columns-5">
-                {Array.from({ length: 10 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="relative mb-3 overflow-hidden rounded-[20px] bg-surface-2 ring-1 ring-border/60"
-                    style={{ aspectRatio: String([0.8, 1, 0.5625, 1.25, 0.8][index % 5]) }}
-                  >
-                    <span className="studio-weave absolute inset-0" aria-hidden />
-                  </div>
-                ))}
-              </div>
+              <PinGridSkeleton columns="columns-2 @2xl/library:columns-3 @4xl/library:columns-4 @6xl/library:columns-5" />
             ) : error ? (
               <ErrorState
                 title="Couldn't load your library"

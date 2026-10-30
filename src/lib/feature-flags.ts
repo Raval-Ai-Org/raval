@@ -277,6 +277,22 @@ export function isTasteEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Campaigns (ADR-0039): planned runs of posts and Stories. On unless set to
+ * "false"; `FEATURE_FLAG_CAMPAIGNS_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off hides the sidebar entry, RPCs answer 404 and the worker
+ * leaves campaign pieces alone.
+ */
+export function isCampaignsEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_CAMPAIGNS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_CAMPAIGNS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * Chat tools (ADR-0033): chat reads the workspace's own data to answer and
  * offers changes as buttons. On unless set to "false"; off falls back to a
  * plain reply with no tools.

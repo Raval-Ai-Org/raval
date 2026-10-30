@@ -65,8 +65,11 @@ extras: a person who closes the tab there still has a set-up brand.
 - **Rules:**
   - Photos are `assets` rows checked against the workspace
     (`productForGeneration`). Never trust a URL or a path from the browser.
-  - `controls.productId` on a Studio job keeps the product's photo
-    (`preserve`), decided before pricing in `createBilledStudioJob`.
+  - `controls.productId` on a Studio job makes the piece with the product's
+    own photos (`productPhotoControls` in `src/lib/products/feature.ts`),
+    decided before pricing in `createBilledStudioJob`. A product the brief
+    names is picked by itself; Autopilot also rotates through the catalogue
+    for selling briefs.
   - Generators read the catalogue through `catalogBlockFor`, and one product
     through `productContextFor`.
 

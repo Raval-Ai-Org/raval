@@ -134,6 +134,11 @@ export type AppEventMap = {
   /** Opens Brain → Audience. Only ever fired by a button. */
   "open:audience": undefined;
   "open:content-calendar": undefined;
+  /**
+   * Navigates to Campaigns (ADR-0039) at /w/<id>/app/campaigns, optionally on
+   * one campaign or the designer for a kind. Only ever fired by a button.
+   */
+  "open:campaigns": { campaignId?: string; type?: string } | undefined;
   "open:details": undefined;
   /** Opens Brain → Home → Today (the day's plan). */
   "open:marketing-coach": undefined;

@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { PlatformLogoGrid } from "./studio-ui";
 import { Button } from "@/components/ui/button";
 import { CalendarClock, Check, Send, Spinner } from "@/components/icons";
 import { DISTRIBUTION_PLATFORMS, type DistributionPlatformId } from "@/lib/distribution-platforms";
-import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
+import type { PlatformId } from "@/lib/social-platforms";
 import {
   getConnections,
   getCreatorInfo,
@@ -321,12 +322,7 @@ export function StudioPublishFlow({
                       className="mt-1 size-4 accent-primary"
                       aria-label={`Publish ${platform.label} version`}
                     />
-                    <span
-                      className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-card"
-                      style={{ color: platform.tint }}
-                    >
-                      <BrandLogo name={platform.logo} brand size={18} />
-                    </span>
+                    <PlatformAppIcon platform={platform.logo} size={32} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold">
                         {platform.label}
@@ -378,28 +374,19 @@ export function StudioPublishFlow({
                 <p className="mt-2 text-xs text-muted-foreground">
                   Create more captions from this post and return here to publish them together.
                 </p>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-                  {morePlatforms.map((platform) => (
-                    <label
-                      key={platform}
-                      className="flex cursor-pointer items-center gap-2 text-xs"
-                    >
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-primary"
-                        checked={extraPlatforms.includes(platform)}
-                        onChange={() =>
-                          setExtraPlatforms((current) =>
-                            current.includes(platform)
-                              ? current.filter((item) => item !== platform)
-                              : [...current, platform],
-                          )
-                        }
-                      />
-                      {PLATFORMS[platform].label}
-                    </label>
-                  ))}
-                </div>
+                <PlatformLogoGrid
+                  className="mt-3"
+                  size={40}
+                  platforms={morePlatforms}
+                  isSelected={(platform) => extraPlatforms.includes(platform)}
+                  onToggle={(platform) =>
+                    setExtraPlatforms((current) =>
+                      current.includes(platform)
+                        ? current.filter((item) => item !== platform)
+                        : [...current, platform],
+                    )
+                  }
+                />
                 <Button
                   size="sm"
                   variant="outline"

@@ -536,6 +536,8 @@ export function buildImagePromptDetailed(args: {
   style?: ImageStyleInput | null;
   /** The layout the concept writer chose; otherwise one is picked to fit. */
   artDirection?: ArchetypeId | null;
+  /** Layouts the brand's latest pictures used; a picked layout avoids them. */
+  avoidArtDirections?: ArchetypeId[];
   /** Words are added afterward, so the picture carries none. */
   noText?: boolean;
   /** The exact short line the brief chose for the picture, set verbatim. */
@@ -668,6 +670,7 @@ export function buildImagePromptDetailed(args: {
         allowText,
         seed: `${brandName}::${args.variationKey ?? seedKey}`,
         prefer: deliverable.prefer,
+        exclude: args.avoidArtDirections,
       }));
   const exactText = (args.onImageText ?? "").replace(/\s+/g, " ").trim();
   const verbatim =

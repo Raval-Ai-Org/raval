@@ -7,6 +7,7 @@ import {
   carouselSeriesRules,
   heroSubject,
   pickArchetype,
+  recentLayouts,
   sellsPhysicalProduct,
 } from "./art-direction";
 
@@ -105,5 +106,39 @@ describe("art direction library", () => {
   it("rejects unknown ids", () => {
     expect(archetypeById("not-a-layout")).toBeNull();
     expect(archetypeById(undefined)).toBeNull();
+  });
+});
+
+describe("recentLayouts", () => {
+  const [a, b, c] = ARCHETYPES.map((x) => x.id);
+
+  it("lists the latest distinct layouts, newest first, ignoring unknown ones", () => {
+    expect(
+      recentLayouts([
+        { artDirection: a },
+        { artDirection: "gone" },
+        { artDirection: null },
+        { artDirection: a },
+        { artDirection: b },
+        { artDirection: c },
+      ]),
+    ).toEqual([a, b]);
+  });
+
+  it("leaves recent layouts out of the concept writer's menu", () => {
+    const menu = archetypeMenu(null, [a]);
+    expect(menu).not.toContain(`- ${a}:`);
+    expect(menu).toContain(`- ${b}:`);
+  });
+
+  it("keeps a picked layout off the latest ones", () => {
+    for (let i = 0; i < 20; i++) {
+      const picked = pickArchetype({
+        brandText: "coffee roastery",
+        seed: `s${i}`,
+        exclude: [a, b],
+      });
+      expect([a, b]).not.toContain(picked.id);
+    }
   });
 });

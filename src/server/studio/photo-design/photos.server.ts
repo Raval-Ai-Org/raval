@@ -9,6 +9,7 @@ import { downloadAssetObject } from "@/server/assets/storage.server";
 import { groundRead, type GroundedRead } from "@/lib/studio/photo-design/read";
 import { PHOTO_READ_SYSTEM } from "@/lib/studio/photo-design/prompt";
 import type { StudioReference } from "../references.server";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 
 /** Long side the photos are kept at while designing (the post renders at about 1K). */
 const WORKING_SIDE = 2048;
@@ -30,7 +31,8 @@ export async function loadDesignPhotos(
       if (downloaded.error || !downloaded.data)
         throw new Error("One of your photos could not be opened. Try again.");
       const { data, info } = await sharp(Buffer.from(await downloaded.data.arrayBuffer()), {
-        limitInputPixels: 60_000_000,
+        limitInputPixels: PHOTO_PIXEL_LIMIT,
+        failOn: "none",
       })
         .rotate()
         .resize(WORKING_SIDE, WORKING_SIDE, { fit: "inside", withoutEnlargement: true })

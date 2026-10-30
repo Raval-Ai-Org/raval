@@ -230,6 +230,8 @@ export type ActionRow = {
   reason: string;
   goal: string | null;
   opportunity_id: string | null;
+  /** The campaign this piece belongs to (ADR-0039), if any. */
+  campaign_id: string | null;
   requested_by: string | null;
   studio_job_id: string | null;
   content_item_ids: string[];

@@ -21,7 +21,7 @@
 // never placed in a URL, and never returned to a caller.
 import "server-only";
 import { assertPublicUrl } from "@/server/safe-fetch";
-import { UpstreamError, fetchWithRetry } from "@/server/upstream";
+import { UpstreamError, fetchWithRetry, upstreamDetail } from "@/server/upstream";
 import { recordUsage } from "@/server/ai/metering";
 import { unitPrice } from "@/server/ai/pricing";
 import { enforceBudget } from "@/server/ai/budget";
@@ -31,7 +31,7 @@ import { tavilyEnabled } from "@/lib/tavily-flags.server";
 
 export class TavilyGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(status, message, { provider: "tavily", code });
+    super(status, message, { provider: "tavily", code, internal: true });
     this.name = "TavilyGatewayError";
   }
 }
@@ -260,7 +260,7 @@ function toResults(raw: unknown): TavilySearchResult[] {
 
 function wrapUnknown(error: unknown, action: string): UpstreamError {
   if (error instanceof UpstreamError) return error;
-  const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+  const message = upstreamDetail(error).slice(0, 300);
   return new TavilyGatewayError(502, `Web research ${action} failed: ${message}`, "provider_error");
 }
 

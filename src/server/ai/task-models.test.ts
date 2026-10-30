@@ -37,6 +37,12 @@ function routeLabels(): { label: string; dynamic: boolean; file: string }[] {
       const dynamic = m[1] === "`" && raw.includes("${");
       out.push({ label: dynamic ? raw.slice(0, raw.indexOf("${")) : raw, dynamic, file });
     }
+    // Both labels of `route: cond ? "a" : "b"`.
+    for (const m of text.matchAll(
+      /\broute:\s*[\w.!?() ]+?\?\s*(["'])([^"'`]+)\1\s*:\s*(["'])([^"'`]+)\3/g,
+    )) {
+      out.push({ label: m[2], dynamic: false, file }, { label: m[4], dynamic: false, file });
+    }
   }
   return out;
 }

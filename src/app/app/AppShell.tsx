@@ -17,7 +17,13 @@ import { autopilotPath } from "@/components/app/autopilot/composer/useComposerAu
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
-import { brainPath, conversationIdFromPath, inspoPath, workspacePath } from "@/lib/workspace/paths";
+import {
+  brainPath,
+  campaignsPath,
+  conversationIdFromPath,
+  inspoPath,
+  workspacePath,
+} from "@/lib/workspace/paths";
 import { BrainIcon } from "@/components/app/brain/BrainMark";
 import { useBrainOverview, useBrainSeen } from "@/components/app/brain/use-brain";
 import type { BrainSection } from "@/lib/brain/brain";
@@ -28,6 +34,7 @@ import {
   Calendar as CalendarIcon,
   ChevronDown,
   Link2,
+  Megaphone,
   Menu,
   Palette,
   PanelRightOpen,
@@ -43,7 +50,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -287,7 +293,18 @@ function AppShell() {
       navigate({ to: inspoPath(workspaceId, event.detail?.section) });
       setNavOpen(false);
     };
+    const onOpenCampaigns = (event: CustomEvent<{ campaignId?: string; type?: string } | null>) => {
+      navigate({
+        to: campaignsPath(workspaceId, {
+          c: event.detail?.campaignId,
+          v: event.detail?.type ? "new" : null,
+          type: event.detail?.type,
+        }),
+      });
+      setNavOpen(false);
+    };
     addAppEventListener("open:inspo", onOpenInspo);
+    addAppEventListener("open:campaigns", onOpenCampaigns);
     addAppEventListener("open:autopilot", onOpenAutopilot);
     addAppEventListener("open:backlinks", onOpenBacklinks);
     addAppEventListener("open:experiments", onOpenExperiments);
@@ -296,6 +313,7 @@ function AppShell() {
       removeAppEventListener("open:backlinks", onOpenBacklinks);
       removeAppEventListener("open:experiments", onOpenExperiments);
       removeAppEventListener("open:inspo", onOpenInspo);
+      removeAppEventListener("open:campaigns", onOpenCampaigns);
     };
   }, [navigate, workspaceId]);
 
@@ -438,7 +456,7 @@ function AppShell() {
           <PlanLock plan={lock} />
         ) : (
           opts.hint && (
-            <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/80">
+            <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
               {opts.hint}
             </span>
           )
@@ -448,10 +466,8 @@ function AppShell() {
   };
 
   const SidebarSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="space-y-0.5">
-      <div className="mb-1 px-3 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">
-        {label}
-      </div>
+    // Grouped by a thin line only; the name is for screen readers.
+    <div role="group" aria-label={label} className="space-y-0.5">
       <div className="space-y-0.5">{children}</div>
     </div>
   );
@@ -465,7 +481,7 @@ function AppShell() {
           onClick={() => setNavOpen(false)}
           aria-label="Mellox AI — workspace home"
           title="Workspace home"
-          className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="group flex h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <Logo height={28} markOnly />
           <span
@@ -484,7 +500,7 @@ function AppShell() {
           onClick={() => setNavOpen(false)}
           aria-label="Collapse sidebar"
           title="Collapse sidebar"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
         >
           <PanelRightOpen className="h-4 w-4" aria-hidden />
         </button>
@@ -539,7 +555,6 @@ function AppShell() {
           {sidebarAction({
             icon: Palette,
             label: "Inspo",
-            hint: "Looks & media",
             tour: "inspo",
             onClick: () => {
               navigate({ to: inspoPath(workspaceId) });
@@ -549,17 +564,19 @@ function AppShell() {
           {sidebarAction({
             icon: BarChart3,
             label: "Analytics",
-            hint: "⌘.",
             accent: "hsl(var(--brand-green))",
             tour: "analytics",
             onClick: () => setAnalyticsOpen(true),
           })}
+          {/* Campaigns (ADR-0039) holds the content calendar: its header opens it. */}
           {sidebarAction({
-            icon: CalendarIcon,
-            label: "Content calendar",
-            accent: "hsl(var(--brand-blue))",
-            tour: "calendar",
-            onClick: () => emitAppEvent("open:content-calendar"),
+            icon: Megaphone,
+            label: "Campaigns",
+            tour: "campaigns",
+            onClick: () => {
+              navigate({ to: campaignsPath(workspaceId) });
+              setNavOpen(false);
+            },
           })}
         </SidebarSection>
 
@@ -570,7 +587,6 @@ function AppShell() {
           {sidebarAction({
             icon: Sparkles,
             label: "AI Visibility",
-            hint: "GEO · AEO",
             accent: "hsl(var(--brand-blue))",
             tour: "visibility",
             onClick: () => {
@@ -582,7 +598,6 @@ function AppShell() {
             sidebarAction({
               icon: Trophy,
               label: "Experiments",
-              hint: "Prove what works",
               accent: "hsl(var(--brand-green))",
               feature: "experiments",
               onClick: () => {
@@ -736,9 +751,9 @@ function AppShell() {
                   onClick: () => emitAppEvent("open:analytics"),
                 },
                 {
-                  icon: CalendarIcon,
-                  label: "Calendar",
-                  onClick: () => emitAppEvent("open:content-calendar"),
+                  icon: Megaphone,
+                  label: "Campaigns",
+                  onClick: () => navigate({ to: campaignsPath(workspaceId) }),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
@@ -823,7 +838,7 @@ function AppShell() {
               aria-label="Open sidebar"
               aria-controls="app-inline-nav"
               aria-expanded={navOpen}
-              className="grid size-11 shrink-0 place-items-center rounded-xl text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+              className="grid size-11 shrink-0 place-items-center rounded-full text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             >
               <Menu className="size-5" aria-hidden />
             </button>
@@ -839,7 +854,7 @@ function AppShell() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                   title="Workspace menu"
-                  className="group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                  className="group flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
                 >
                   {brandLogo ? (
                     <img
@@ -919,7 +934,7 @@ function AppShell() {
                 aria-label="Open Studio"
                 title="Open Studio"
                 data-tour="studio"
-                className="group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-primary-border bg-primary-surface px-3 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97] sm:h-8 sm:rounded-md sm:px-2.5"
+                className="group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-primary-border bg-primary-surface px-3.5 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97] sm:h-9 sm:px-3.5"
               >
                 <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
                 <span className="hidden sm:inline">Studio</span>
@@ -931,7 +946,7 @@ function AppShell() {
                     aria-label="Share"
                     title="Share"
                     data-tour="share"
-                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-primary px-2.5 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-8 sm:min-w-8 sm:rounded-md sm:px-3"
+                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-primary px-3 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-9 sm:min-w-9 sm:px-4"
                   >
                     <span
                       aria-hidden
@@ -945,39 +960,26 @@ function AppShell() {
                     />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5">
-                  <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Share
-                  </DropdownMenuLabel>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-52 p-1.5">
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
                       emitAppEvent("open:share");
                     }}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Share2 className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-green))]" />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-tight">Invite teammates</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                        Share workspace access with your team
-                      </div>
-                    </div>
+                    <Share2 className="h-4 w-4 text-[hsl(var(--brand-green))]" />
+                    <span className="text-[13px] font-medium">Invite teammates</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
                       emitAppEvent("open:client-portal");
                     }}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Users className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-blue))]" />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-tight">Client portal</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                        Share plans with clients for approval
-                      </div>
-                    </div>
+                    <Users className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
+                    <span className="text-[13px] font-medium">Client portal</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -985,15 +987,10 @@ function AppShell() {
                       e.preventDefault();
                       emitAppEvent("open:publish");
                     }}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Rocket className="mt-0.5 h-4 w-4 text-foreground/80" />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-tight">Publish</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                        Deploy the latest version live
-                      </div>
-                    </div>
+                    <Rocket className="h-4 w-4 text-foreground/80" />
+                    <span className="text-[13px] font-medium">Publish</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

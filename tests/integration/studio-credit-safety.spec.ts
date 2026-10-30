@@ -21,12 +21,10 @@ test("Studio shows revision prices, source photos and the script-to-video handof
   await page.getByRole("combobox", { name: "Window size" }).selectOption("phone");
   await page.screenshot({ path: testInfo.outputPath("script-video-mobile.png"), fullPage: true });
   await scenes.selectOption("brief-template");
-  await expect(page.getByRole("button", { name: "Upload photo", exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Choose from Library", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Uploading is free.", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Upload photo", exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("button", { name: "Upload", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "From Library", exact: true })).toBeVisible();
+  await expect(page.getByText("Adding them is free.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Upload", exact: true }).scrollIntoViewIfNeeded();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
   ).toBe(true);

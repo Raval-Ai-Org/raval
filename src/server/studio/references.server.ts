@@ -5,6 +5,7 @@ import { HttpError } from "@/server/http-error";
 import { signAssetPath } from "@/server/assets/persist.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { safeFetch } from "@/server/safe-fetch";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 import type { LlmImageInput } from "@/lib/ai-gateway.server";
 
 export type StudioReference = {
@@ -120,23 +121,41 @@ export async function resolveStudioClips(
   });
 }
 
-/** Bound vision input size without sending untrusted remote URLs to the model. */
+/**
+ * Bound vision input size without sending untrusted remote URLs to the model.
+ * The words are written with the photos as context only: one that can't be
+ * read here is left out of the writing, never a reason to fail the piece (the
+ * render still gets it, and has its own checks).
+ */
 export async function studioReferenceImages(
   references: StudioReference[],
 ): Promise<LlmImageInput[]> {
-  return Promise.all(
-    references.map(async (reference) => {
-      const { bytes } = await safeFetch(reference.url, {
-        maxBytes: 20 * 1024 * 1024,
-        timeoutMs: 15_000,
-        onOverflow: "error",
-      });
-      const image = await sharp(Buffer.from(bytes), { limitInputPixels: 40_000_000 })
-        .rotate()
-        .resize(1536, 1536, { fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 85 })
-        .toBuffer();
-      return { mediaType: "image/webp" as const, data: image.toString("base64") };
+  const images = await Promise.all(
+    references.map(async (reference): Promise<LlmImageInput | null> => {
+      try {
+        const { bytes } = await safeFetch(reference.url, {
+          maxBytes: 50 * 1024 * 1024,
+          timeoutMs: 20_000,
+          onOverflow: "error",
+        });
+        const image = await sharp(Buffer.from(bytes), {
+          limitInputPixels: PHOTO_PIXEL_LIMIT,
+          failOn: "none",
+        })
+          .rotate()
+          .resize(1536, 1536, { fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+        return { mediaType: "image/webp" as const, data: image.toString("base64") };
+      } catch (error) {
+        console.warn(
+          "[studio] reference photo left out of the writing",
+          reference.id,
+          error instanceof Error ? error.message.slice(0, 200) : "unreadable",
+        );
+        return null;
+      }
     }),
   );
+  return images.filter((image): image is LlmImageInput => image !== null);
 }

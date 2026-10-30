@@ -17,13 +17,13 @@
 import "server-only";
 import FirecrawlSdk from "@mendable/firecrawl-js";
 import { assertPublicUrl } from "@/server/safe-fetch";
-import { UpstreamError } from "@/server/upstream";
+import { UpstreamError, upstreamDetail } from "@/server/upstream";
 import { recordUsage } from "@/server/ai/metering";
 import { firecrawlEnabled } from "@/lib/firecrawl-flags.server";
 
 export class FirecrawlGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(status, message, { provider: "firecrawl", code });
+    super(status, message, { provider: "firecrawl", code, internal: true });
     this.name = "FirecrawlGatewayError";
   }
 }
@@ -87,7 +87,7 @@ function requireEnabled(): void {
 
 function mapError(error: unknown, action: string): FirecrawlGatewayError {
   if (error instanceof FirecrawlGatewayError) return error;
-  const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+  const message = upstreamDetail(error).slice(0, 300);
   return new FirecrawlGatewayError(502, `Firecrawl ${action} failed: ${message}`, "provider_error");
 }
 
@@ -127,8 +127,7 @@ function configuredNumber(name: string, fallback: number, maximum: number): numb
 }
 
 function retryable(error: unknown): boolean {
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const message = upstreamDetail(error).toLowerCase();
   return /timeout|timed out|abort|econn|enotfound|429|502|503|504|network/.test(message);
 }
 

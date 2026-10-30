@@ -17,6 +17,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { isInternalMessage } from "@/lib/user-errors";
 import { AlertTriangle, RefreshCw, type LucideIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 
@@ -54,22 +55,27 @@ export function EmptyState({
         <span
           aria-hidden
           className={cn(
-            "grid shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15",
-            compact ? "size-9" : "size-12",
+            "grid shrink-0 place-items-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15",
+            compact ? "size-9" : "size-14",
           )}
         >
           <Icon className={compact ? "size-4" : "size-5"} />
         </span>
       ) : null}
 
-      <div className={cn("max-w-prose", compact ? "space-y-1" : "space-y-1.5")}>
-        <p className={cn("font-medium text-foreground", compact ? "text-sm" : "text-base")}>
+      <div className={cn("max-w-sm", compact ? "space-y-1" : "space-y-1.5")}>
+        <p
+          className={cn(
+            "font-semibold tracking-tight text-foreground",
+            compact ? "text-sm" : "text-lg",
+          )}
+        >
           {title}
         </p>
         {description ? (
           <p
             className={cn(
-              "text-balance text-muted-foreground",
+              "line-clamp-2 text-balance text-muted-foreground",
               compact ? "text-xs leading-relaxed" : "text-sm leading-relaxed",
             )}
           >
@@ -120,6 +126,8 @@ export function ErrorState({
   className?: string;
 }) {
   const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  // Raw error text is shown only when it names nothing internal.
+  const safeDetail = detail && !isInternalMessage(detail) ? detail : null;
   return (
     <EmptyState
       size={size}
@@ -131,9 +139,9 @@ export function ErrorState({
           {offline
             ? "Reconnect and this will load again."
             : (description ?? "The request didn't come back. This is usually temporary.")}
-          {detail && !offline ? (
+          {safeDetail && !offline ? (
             <span className="mt-1.5 block break-words font-mono text-xs text-muted-foreground/80">
-              {detail}
+              {safeDetail}
             </span>
           ) : null}
         </>

@@ -14,6 +14,7 @@ import {
   type Product,
   type ProductCandidate,
 } from "@/lib/products/catalog";
+import type { FeatureCandidate } from "@/lib/products/feature";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { signAssetPath } from "@/server/assets/persist.server";
 import { importImageFromUrl, storeUploadedImage } from "@/server/assets/reference-image.server";
@@ -380,10 +381,46 @@ export async function updatePhotos(
 export async function productForGeneration(
   workspaceId: string,
   productId: string,
-): Promise<(ProductRow & { photoAssetId: string | null }) | null> {
+): Promise<(ProductRow & { photoAssetId: string | null; photoAssetIds: string[] }) | null> {
   const row = await readProductRow(workspaceId, productId);
   if (!row || row.status !== "active") return null;
-  const candidate = row.primary_asset_id ?? row.image_asset_ids?.[0] ?? null;
-  const ok = candidate ? (await workspaceImages(workspaceId, [candidate])).has(candidate) : false;
-  return { ...row, photoAssetId: ok ? candidate : null };
+  // The main photo first, then the others, each a ready image in this workspace.
+  const ids = [
+    ...new Set(
+      [row.primary_asset_id, ...(row.image_asset_ids ?? [])].filter((id): id is string => !!id),
+    ),
+  ];
+  const ready = await workspaceImages(workspaceId, ids);
+  const photoAssetIds = ids.filter((id) => ready.has(id));
+  return { ...row, photoAssetId: photoAssetIds[0] ?? null, photoAssetIds };
+}
+
+/** The catalogue as the product picker for a new piece sees it (pure rules in feature.ts). */
+export async function featureCandidates(workspaceId: string): Promise<FeatureCandidate[]> {
+  const rows = await readProductRows(workspaceId);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    hasPhoto: Boolean(r.primary_asset_id ?? r.image_asset_ids?.[0]),
+    position: r.position,
+  }));
+}
+
+/**
+ * Products the brand's recent pieces were about, newest first (one entry per
+ * piece), so the next piece can feature another one.
+ */
+export async function recentlyFeaturedProducts(workspaceId: string, limit = 30): Promise<string[]> {
+  const { data, error } = await db
+    .from("content_items")
+    .select("meta->>product_id, created_at")
+    .eq("workspace_id", workspaceId)
+    .not("meta->>product_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return ((data ?? []) as { product_id?: unknown }[])
+    .map((r) => (typeof r.product_id === "string" ? r.product_id : ""))
+    .filter(Boolean);
 }

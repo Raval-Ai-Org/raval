@@ -107,6 +107,8 @@ export const ControlsSchema = z.object({
   recapMotion: z.enum(["camera", "ai"]).optional(),
   /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
   productId: z.string().uuid().optional(),
+  /** The person chose "No product": a product the brief names isn't picked for them. */
+  noProduct: z.boolean().optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
   adFormat: z.string().max(40).optional(),
   /** Variations (src/lib/studio/variations.ts): how many more versions to make. */

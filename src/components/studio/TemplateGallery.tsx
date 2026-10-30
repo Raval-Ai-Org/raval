@@ -393,7 +393,7 @@ export function TemplateThumb({
       initial="rest"
       animate={play && !reduce ? "play" : "rest"}
       className={cn(
-        "relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-gradient-to-br from-[hsl(var(--tone)/0.18)] via-[hsl(var(--tone)/0.06)] to-transparent ring-1 ring-[hsl(var(--tone)/0.16)]",
+        "relative aspect-[16/10] w-full overflow-hidden rounded-[var(--ds-radius-tile)] bg-gradient-to-br from-[hsl(var(--tone)/0.18)] via-[hsl(var(--tone)/0.06)] to-transparent ring-1 ring-[hsl(var(--tone)/0.16)]",
         className,
       )}
     >
@@ -471,26 +471,30 @@ export function TemplateCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.045, type: "spring", stiffness: 320, damping: 28 }}
       whileTap={{ scale: 0.97 }}
+      title={t.tagline}
       className={cn(
-        `studio-tone-${type} group relative flex w-[168px] shrink-0 snap-start flex-col rounded-2xl bg-surface-3 p-2 text-left ring-1`,
-        "transition-[box-shadow,translate] duration-[--motion-duration-base] ease-[--motion-ease-emphasized]",
+        `studio-tone-${type} group relative flex w-[168px] shrink-0 snap-start flex-col rounded-[var(--ds-radius-tile)] text-left`,
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--tone))]",
-        selected
-          ? "shadow-[0_14px_30px_-16px_hsl(var(--tone)/0.6)] ring-2 ring-[hsl(var(--tone))]"
-          : "ring-border/70 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_hsl(var(--tone)/0.5)] hover:ring-[hsl(var(--tone)/0.45)]",
         className,
       )}
     >
-      <TemplateThumb layout={t.thumb} play={hover || intro || !!selected} />
-      <span className="mt-2 px-1 text-[13px] font-semibold leading-tight text-foreground">
+      {/* A pin: the picture is the card, the name sits underneath. */}
+      <TemplateThumb
+        layout={t.thumb}
+        play={hover || intro || !!selected}
+        className={cn(
+          "transition-[box-shadow,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          selected
+            ? "shadow-[0_14px_30px_-16px_hsl(var(--tone)/0.6)] ring-2 ring-[hsl(var(--tone))]"
+            : "group-hover:-translate-y-0.5 group-hover:shadow-[var(--ds-tile-shadow-hover)]",
+        )}
+      />
+      <span className="truncate px-1 pb-1 pt-2 text-[13px] font-medium leading-tight text-foreground">
         {t.label}
-      </span>
-      <span className="mt-0.5 line-clamp-2 px-1 pb-1 text-[11px] leading-snug text-muted-foreground">
-        {t.tagline}
       </span>
       {footer}
       {selected ? (
-        <span className="absolute right-3.5 top-3.5 grid size-5 place-items-center rounded-full bg-[hsl(var(--tone))] text-[hsl(var(--tone-foreground))] shadow-2">
+        <span className="absolute right-2.5 top-2.5 grid size-5 place-items-center rounded-full bg-[hsl(var(--tone))] text-[hsl(var(--tone-foreground))] shadow-2">
           <DrawCheck className="size-3" strokeWidth={3.5} />
         </span>
       ) : null}
@@ -564,13 +568,12 @@ export function TemplateGallery({
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             whileTap={{ scale: 0.97 }}
-            className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border-strong bg-surface-2/40 p-3 text-center transition-colors hover:border-primary-border hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+            className="flex aspect-[16/10] flex-col items-center justify-center gap-2 rounded-[var(--ds-radius-tile)] border border-dashed border-border-strong bg-surface-2/40 p-3 text-center transition-colors hover:border-primary-border hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
           >
             <span className="grid size-9 place-items-center rounded-full bg-surface-3 text-muted-foreground ring-1 ring-border">
               <PenLine className="size-4" />
             </span>
-            <span className="text-[13px] font-semibold text-foreground">Write my own</span>
-            <span className="text-[11px] text-muted-foreground">Start from a blank box</span>
+            <span className="text-[13px] font-medium text-foreground">Write my own</span>
           </motion.button>
         ) : null}
         {visible.map((t, i) => (
@@ -589,7 +592,7 @@ export function TemplateGallery({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mt-2.5 w-full rounded-xl py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="mt-2.5 w-full rounded-full py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
         >
           Show {hidden} more template{hidden === 1 ? "" : "s"}
         </button>

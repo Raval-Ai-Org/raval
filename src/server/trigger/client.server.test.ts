@@ -49,6 +49,7 @@ describe("triggerTask", () => {
 
     const error = await triggerTask("some-task", {}, "key-1").catch((e) => e);
     expect(error.status).toBe(502);
-    expect(error.message).toContain("connection refused");
+    expect(error.detail).toContain("connection refused");
+    expect(error.message).not.toMatch(/trigger/i);
   });
 });

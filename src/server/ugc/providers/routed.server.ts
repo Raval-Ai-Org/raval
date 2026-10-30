@@ -177,7 +177,7 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
           result ?? {
             ok: false,
             code: "provider_model_unavailable",
-            message: "This video model isn't available on any configured provider.",
+            message: "This video style isn't available right now. Try another one.",
             retryable: false,
           }
         );

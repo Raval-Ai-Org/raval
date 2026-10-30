@@ -82,7 +82,8 @@ export type AutopilotPlace =
   | "calendar"
   | "audience"
   | "competitors"
-  | "market";
+  | "market"
+  | "campaigns";
 
 /** Each of these lives elsewhere in Mellox; Autopilot only sends people there. */
 export function useAutopilotOpen(workspaceId: string) {
@@ -94,6 +95,7 @@ export function useAutopilotOpen(workspaceId: string) {
       emitAppEvent("open:settings", { section: "website" });
     else if (target === "brand") emitAppEvent("open:brand-dna");
     else if (target === "style") emitAppEvent("open:inspo", { section: "post" });
+    else if (target === "campaigns") emitAppEvent("open:campaigns", { type: "showcase" });
     else if (target === "audience" || target === "competitors" || target === "market")
       emitAppEvent("open:brain", { section: target });
     else emitAppEvent("open:ai-visibility");

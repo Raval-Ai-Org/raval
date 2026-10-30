@@ -38,16 +38,16 @@ export function photoLimit(mode: string | undefined, type: string): number {
 export function photoModeOptions(type: string) {
   const design = isPhotoDesignType(type);
   return [
-    { value: "preserve" as const, label: "Post as is", hint: "Your photo, unchanged" },
     ...(design
       ? [
           {
             value: "design" as const,
-            label: "Design with my photos",
-            hint: "Words and design around them",
+            label: "Design with them",
+            hint: "Words and design around your photos",
           },
         ]
       : []),
+    { value: "preserve" as const, label: "Post as is", hint: "One photo, unchanged" },
     { value: "edit" as const, label: "Edit details", hint: "Only what you ask to change" },
     { value: "inspire" as const, label: "Inspiration", hint: "Something new in this style" },
   ];

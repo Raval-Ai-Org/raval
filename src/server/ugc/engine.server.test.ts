@@ -498,7 +498,7 @@ describe("Kie provider mapping", () => {
     expect(kieFailure(new KieGatewayError(502, "reset", "network")).definite).toBeUndefined();
     expect(kieFailure(new KieGatewayError(422, "Ratio error", "request", 422))).toMatchObject({
       code: "provider_rejected",
-      message: "Ratio error",
+      message: "That combination of settings didn't work. Try changing one of them.",
       retryable: false,
     });
     expect(kieFailure(new KieGatewayError(503, "x", "configuration")).retryable).toBe(false);

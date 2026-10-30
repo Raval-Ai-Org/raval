@@ -15,7 +15,7 @@ import { consistencySection, memorySection, type HookStyle } from "./memory";
 import { playbookSection } from "./playbook";
 import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
 import { shareSection } from "./viral";
-import { ARCHETYPE_IDS, archetypeMenu } from "./art-direction";
+import { ARCHETYPE_IDS, archetypeMenu, recentLayouts } from "./art-direction";
 import { CONCEPT_METHOD, COVER_TEST, SELF_REVIEW } from "./creative-knowledge";
 import { applyLean } from "@/lib/taste/bias";
 import type { Lean, Taste } from "@/lib/taste/contracts";
@@ -61,6 +61,8 @@ export type StudioContext = {
     design?: { colorway?: string; motif?: string } | null;
     /** Ads: the designed layout it used (ad-formats.ts), so the next one differs. */
     adFormat?: string | null;
+    /** Pictures: the campaign layout it was staged on (art-direction.ts), so the next one differs. */
+    artDirection?: string | null;
     /** Stories: the theme it followed, so the next one rotates. */
     storyTheme?: string | null;
     /** A longer passage of the copy, used only as a voice reference. */
@@ -73,6 +75,8 @@ export type StudioContext = {
   insights: string[];
   performanceSignals: string[];
   moments: MarketingMoment[];
+  /** Campaigns running now and the step each is on (ADR-0039). */
+  campaignsNow?: { name: string; phase: string | null; purpose: string }[];
   /**
    * Current web sources, present only when the brief actually needed them
    * (src/lib/research/triggers.ts). A caption or a visual idea never carries
@@ -831,7 +835,7 @@ export function buildVisualBriefPrompt(
         ...(video
           ? []
           : [
-              `\`artDirection\` is the id of the one campaign layout below that best fits this brand and message; build the concept on it and adapt it, never name other brands.\n${archetypeMenu(args.ctx.taste?.lean.layout)}`,
+              `\`artDirection\` is the id of the one campaign layout below that best fits this brand and message; build the concept on it and adapt it, never name other brands.\n${archetypeMenu(args.ctx.taste?.lean.layout, args.refine ? [] : recentLayouts(args.ctx.recent))}`,
             ]),
         "Ground the visual in the brand's actual product, audience and identity. Choose a recognizable focal subject and a distinct visual treatment; avoid generic stock imagery or fabricated product details.",
         ...(video ? [] : CONCEPT_METHOD),

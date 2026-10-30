@@ -42,7 +42,13 @@ export async function catalogBlockFor(workspaceId: string): Promise<string> {
 export async function productContextFor(
   workspaceId: string,
   productId: string,
-): Promise<{ block: string; photoAssetId: string | null; name: string; price: string } | null> {
+): Promise<{
+  block: string;
+  photoAssetId: string | null;
+  photoAssetIds: string[];
+  name: string;
+  price: string;
+} | null> {
   const { productForGeneration } = await import("./service.server");
   const row = await productForGeneration(workspaceId, productId);
   if (!row) return null;
@@ -60,6 +66,7 @@ export async function productContextFor(
       { hasPhoto: Boolean(row.photoAssetId) },
     ),
     photoAssetId: row.photoAssetId,
+    photoAssetIds: row.photoAssetIds,
     name: row.name,
     price: row.price,
   };

@@ -64,7 +64,8 @@ import { PublishToSite } from "./PublishToSite";
 import { useLookConformance } from "@/components/app/brain/brand/look/use-look-conformance";
 import { conformanceFixInstruction } from "@/lib/brand-look/conformance";
 import { SocialPostPreview } from "./previews/SocialPostPreview";
-import { Burst, DrawCheck } from "./studio-ui";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { Burst, DrawCheck, PlatformLogoGrid } from "./studio-ui";
 import { AudienceInspector, AudienceScoreChip } from "@/components/app/audience/AudienceInspector";
 import { useAudienceEnabled } from "@/components/app/audience/hooks";
 import { studioPriceLabel } from "@/lib/studio/billing";
@@ -1157,7 +1158,6 @@ export function ReviewPanel({
             >
               {platforms.map((p) => {
                 const spec = PLATFORMS[p];
-                const Icon = spec.icon;
                 const selected = p === current;
                 const v = draft.variants?.find((x) => x.platform === p);
                 const over = v ? v.body.length > spec.maxChars : false;
@@ -1168,10 +1168,13 @@ export function ReviewPanel({
                     role="tab"
                     aria-selected={selected}
                     aria-label={spec.label}
+                    title={spec.label}
                     onClick={() => setActive(p)}
                     className={cn(
-                      "relative inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast]",
-                      selected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                      "relative inline-flex h-9 items-center gap-1.5 rounded-full pl-1.5 pr-1.5 text-xs font-medium transition-[color,opacity] duration-[--motion-duration-fast]",
+                      selected
+                        ? "pr-3 text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {selected ? (
@@ -1181,8 +1184,22 @@ export function ReviewPanel({
                         transition={{ duration: duration.medium, ease: ease.emphasized }}
                       />
                     ) : null}
-                    <Icon className="relative size-3.5" />
-                    <span className="relative hidden sm:inline">{spec.label}</span>
+                    <PlatformAppIcon platform={p} size={24} className="relative" />
+                    {/* Only the open version says its name; the others are just their logo. */}
+                    <AnimatePresence initial={false}>
+                      {selected ? (
+                        <motion.span
+                          key="name"
+                          initial={reduce ? false : { opacity: 0, width: 0 }}
+                          animate={{ opacity: 1, width: "auto" }}
+                          exit={reduce ? undefined : { opacity: 0, width: 0 }}
+                          transition={{ duration: duration.medium, ease: ease.emphasized }}
+                          className="relative hidden overflow-hidden whitespace-nowrap sm:inline"
+                        >
+                          {spec.label}
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
                     {over ? (
                       <span
                         aria-label="Over the character limit"
@@ -1196,16 +1213,10 @@ export function ReviewPanel({
           ) : platforms[0] ? (
             // The window header already names the format; only the channel is new here.
             <span
-              className={cn(
-                "pointer-events-auto inline-flex h-10 items-center gap-2 px-4 text-xs font-medium text-foreground",
-                FLOAT,
-              )}
+              className={cn("pointer-events-auto inline-flex h-10 items-center px-1.5", FLOAT)}
+              title={PLATFORMS[platforms[0]].label}
             >
-              {(() => {
-                const Icon = PLATFORMS[platforms[0]].icon;
-                return <Icon className="size-3.5" />;
-              })()}
-              {PLATFORMS[platforms[0]].label}
+              <PlatformAppIcon platform={platforms[0]} size={28} label />
             </span>
           ) : null}
 
@@ -1622,8 +1633,7 @@ export function ReviewPanel({
           ) : canShip ? (
             <InspectorSection title="Publishing">
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Publish all generated versions to your connected accounts, or choose versions and
-                connect accounts in the publishing window.
+                Post every version to your connected accounts.
               </p>
               {rows.length > deliverable.length ? (
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -1637,7 +1647,7 @@ export function ReviewPanel({
           ) : !approvable && shippableType && sdr && !sdr.enabled ? (
             <InspectorSection title="Publishing">
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Direct publishing isn't enabled for this workspace. Copy or download it to post.
+                Copy or download it to post.
               </p>
             </InspectorSection>
           ) : null}
@@ -1648,27 +1658,19 @@ export function ReviewPanel({
                 Adapt this post for more channels while keeping the existing versions.
               </p>
               {showExpand ? (
-                <div className="mt-3 space-y-2">
-                  {morePlatforms.map((platform) => (
-                    <label
-                      key={platform}
-                      className="flex cursor-pointer items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-primary"
-                        checked={expandChoices.includes(platform)}
-                        onChange={() =>
-                          setExpandChoices((current) =>
-                            current.includes(platform)
-                              ? current.filter((item) => item !== platform)
-                              : [...current, platform],
-                          )
-                        }
-                      />
-                      {PLATFORMS[platform].label}
-                    </label>
-                  ))}
+                <div className="mt-3 space-y-3">
+                  <PlatformLogoGrid
+                    platforms={morePlatforms}
+                    size={40}
+                    isSelected={(platform) => expandChoices.includes(platform)}
+                    onToggle={(platform) =>
+                      setExpandChoices((current) =>
+                        current.includes(platform)
+                          ? current.filter((item) => item !== platform)
+                          : [...current, platform],
+                      )
+                    }
+                  />
                   <Button
                     size="sm"
                     onClick={() => expandPlatforms()}

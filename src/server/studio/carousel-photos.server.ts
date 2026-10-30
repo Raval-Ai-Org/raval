@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { MAX_SLIDE_PHOTOS, photoFrame, type SlidePhoto } from "@/lib/studio/carousel/photos";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { safeFetch } from "@/server/safe-fetch";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 import { screenCaptureIds, type StudioReference } from "./references.server";
 
 /** Website captures are screens; anything else is a photo unless its shape says otherwise. */
@@ -29,11 +30,14 @@ export async function carouselPhotos(
     refs.map(async (ref): Promise<SlidePhoto | null> => {
       try {
         const { bytes } = await safeFetch(ref.url, {
-          maxBytes: 25 * 1024 * 1024,
+          maxBytes: 50 * 1024 * 1024,
           timeoutMs: 15_000,
           onOverflow: "error",
         });
-        const meta = await sharp(Buffer.from(bytes), { limitInputPixels: 80_000_000 }).metadata();
+        const meta = await sharp(Buffer.from(bytes), {
+          limitInputPixels: PHOTO_PIXEL_LIMIT,
+          failOn: "none",
+        }).metadata();
         // Phone photos carry their turn in EXIF; the slide draws them upright.
         const turned = (meta.orientation ?? 1) >= 5;
         const width = (turned ? meta.height : meta.width) ?? 0;

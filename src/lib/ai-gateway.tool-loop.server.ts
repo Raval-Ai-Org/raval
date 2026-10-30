@@ -17,6 +17,7 @@ import "server-only";
 import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
 import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.server";
 import { recordUsage } from "@/server/ai/metering";
+import { upstreamDetail } from "@/server/upstream";
 import { planFor, type Effort } from "@/server/ai/task-models";
 import {
   AiGatewayError,
@@ -389,7 +390,7 @@ export async function llmToolLoop(opts: LlmToolLoopOpts): Promise<LlmToolLoopRes
             error instanceof SyntaxError
               ? "The tool arguments were not valid JSON. Call the tool again with valid JSON arguments."
               : error instanceof Error
-                ? error.message
+                ? upstreamDetail(error)
                 : "The tool failed.",
           isError: true,
           summary: `${name} failed`,

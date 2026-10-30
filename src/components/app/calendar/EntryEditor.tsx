@@ -285,8 +285,10 @@ export function EntryEditor({
               <div className="truncate text-[13px] font-semibold">
                 {channel.label} · {entry.format}
               </div>
-              {entry.topic && (
-                <div className="truncate text-[11px] text-muted-foreground">{entry.topic}</div>
+              {(entry.campaign || entry.topic) && (
+                <div className="truncate text-[11px] text-muted-foreground">
+                  {[entry.campaign, entry.topic].filter(Boolean).join(" · ")}
+                </div>
               )}
             </div>
           </div>

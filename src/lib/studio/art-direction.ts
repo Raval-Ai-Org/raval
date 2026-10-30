@@ -716,8 +716,12 @@ export function heroSubject(args: { products?: string | null; physical: boolean 
  * The concept writer's menu: id, name and when to use it. Layouts the team
  * asked for less of are left out, and loved ones are marked (ADR-0038).
  */
-export function archetypeMenu(lean?: { liked: string[]; avoided: string[] } | null): string {
-  const avoided = new Set(lean?.avoided ?? []);
+export function archetypeMenu(
+  lean?: { liked: string[]; avoided: string[] } | null,
+  /** Layouts the brand's last pieces used (recentLayouts): left out so the next one differs. */
+  recent: readonly string[] = [],
+): string {
+  const avoided = new Set([...(lean?.avoided ?? []), ...recent]);
   const liked = new Set(lean?.liked ?? []);
   const menu = ARCHETYPES.filter((a) => !avoided.has(a.id));
   return (menu.length ? menu : ARCHETYPES)
@@ -726,6 +730,26 @@ export function archetypeMenu(lean?: { liked: string[]; avoided: string[] } | nu
         `- ${a.id}: ${a.name}, ${a.summary}. Best for ${a.formats.join(", ")}.${a.physicalOnly ? " Only for a physical product." : ""}${a.screenOnly ? " Only for something used on a screen." : ""}${a.onlyFor ? ` Only for ${a.onlyFor}.` : ""}${a.person === "required" ? " Needs a person." : ""}${liked.has(a.id) ? " The team loved this layout: prefer it when it fits." : ""}`,
     )
     .join("\n");
+}
+
+/** How many of the latest pieces' layouts a new picture stays away from. */
+export const FRESH_LAYOUTS = 2;
+
+/**
+ * The layouts the brand's latest pictures were staged on, newest first, so the
+ * next picture is staged on another one. `recent` is newest first.
+ */
+export function recentLayouts(
+  recent: readonly { artDirection?: string | null }[],
+  n = FRESH_LAYOUTS,
+): ArchetypeId[] {
+  const ids: ArchetypeId[] = [];
+  for (const item of recent) {
+    const layout = archetypeById(item.artDirection);
+    if (layout && !ids.includes(layout.id)) ids.push(layout.id);
+    if (ids.length >= n) break;
+  }
+  return ids;
 }
 
 /**

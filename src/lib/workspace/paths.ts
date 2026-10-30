@@ -66,6 +66,24 @@ export function inspoPath(workspaceId: string, section?: string | null): string 
 }
 
 /**
+ * Campaigns (ADR-0039): planned runs of posts and Stories.
+ *   campaignsPath(id)                       → /w/<id>/app/campaigns
+ *   campaignsPath(id, { c: "<campaign>" })  → one campaign
+ *   campaignsPath(id, { v: "new", type })   → the designer, on a kind
+ */
+export function campaignsPath(
+  workspaceId: string,
+  opts: { c?: string | null; v?: "new" | null; type?: string | null; tab?: string | null } = {},
+): string {
+  return workspacePath(workspaceId, "campaigns", {
+    c: opts.c,
+    v: opts.v,
+    type: opts.type,
+    tab: opts.tab && opts.tab !== "overview" ? opts.tab : undefined,
+  });
+}
+
+/**
  * Re-anchor an in-app path ("/app?settings=connections", "/app/chat/x") inside
  * a workspace. Already-canonical and non-app paths are returned unchanged.
  */

@@ -178,6 +178,33 @@ describe("deleteWorkspace", () => {
     expect(db.rows("workspace_deletions")[0].storage_objects_removed).toBe(0);
   });
 
+  it("gives the deleted brand's free scan back so re-adding it is a full scan", async () => {
+    const db = createMemoryDb({
+      workspaces: [
+        {
+          id: A,
+          name: "Mellox AI",
+          domain: "mellox.ai",
+          owner_id: OWNER,
+          billing_account_id: "acct-1",
+        },
+      ],
+      workspace_members: [{ workspace_id: A, user_id: OWNER, role: "owner" }],
+      workspace_deletions: [],
+    });
+    const restoreFreeScan = vi.fn(async () => undefined);
+    await deleteWorkspace(
+      { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
+      { ...deps(), restoreFreeScan },
+      db as never,
+    );
+    expect(restoreFreeScan).toHaveBeenCalledWith({
+      ownerId: OWNER,
+      accountId: "acct-1",
+      domain: "mellox.ai",
+    });
+  });
+
   it("deletes only that workspace, cleans its storage and provider brand, and records it", async () => {
     const db = seed();
     const d = deps();

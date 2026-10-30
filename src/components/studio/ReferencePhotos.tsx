@@ -3,17 +3,38 @@
 import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/authed-fetch";
 import { toast } from "@/lib/toast";
-import { Button } from "@/components/ui/button";
-import { Upload, X } from "@/components/icons";
-import { Segmented } from "./studio-ui";
+import { cn } from "@/lib/utils";
+import {
+  Check,
+  Image as ImageIcon,
+  Lightbulb,
+  Palette,
+  Pencil,
+  Plus,
+  Spinner,
+  X,
+  type LucideIcon,
+} from "@/components/icons";
+import { FieldLabel, OptionCards, SwitchRow } from "./studio-ui";
 import type { StudioControls } from "@/lib/studio/jobs";
-import { photoLimit, photoModeOptions } from "@/lib/studio/photo-design/mode";
+import { isPhotoDesignType, photoLimit, photoModeOptions } from "@/lib/studio/photo-design/mode";
 
 type Photo = { id: string; filename: string; url: string };
 type Mode = NonNullable<StudioControls["referenceMode"]>;
 type Fidelity = NonNullable<StudioControls["photoFidelity"]>;
 
-/** Uploads are source material. Nothing is generated or charged in this picker. */
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MODE_ICON: Record<Mode, LucideIcon> = {
+  design: Palette,
+  preserve: ImageIcon,
+  edit: Pencil,
+  inspire: Lightbulb,
+};
+
+/**
+ * The brand's own photos: add them first, then choose what Mellox does with
+ * them. Uploads are source material; nothing is generated or charged here.
+ */
 export function ReferencePhotos({
   workspaceId,
   type,
@@ -27,6 +48,9 @@ export function ReferencePhotos({
   onBusyChange,
   limit: fixedLimit,
   hideModes,
+  title = "Your photos",
+  note,
+  bare,
 }: {
   workspaceId: string;
   /** The Studio type, which decides the modes on offer. */
@@ -42,15 +66,24 @@ export function ReferencePhotos({
   /** A recap video takes its own number of photos and no photo modes. */
   limit?: number;
   hideModes?: boolean;
+  title?: string;
+  /** Replaces "Optional" when the photos are needed. */
+  note?: string;
+  bare?: boolean;
 }) {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
-  const limit = fixedLimit ?? photoLimit(mode, type);
+  // A single picture can take more photos once it designs with them, so adding
+  // a second photo is never blocked by "Post as is" (it switches to designing).
+  const limit =
+    fixedLimit ?? (isPhotoDesignType(type) ? photoLimit("design", type) : photoLimit(mode, type));
   const single = limit === 1;
+  const full = !single && value.length >= limit;
 
   useEffect(() => {
     const request = ++generation.current;
@@ -66,7 +99,7 @@ export function ReferencePhotos({
         if (request === generation.current) setPhotos(body.assets);
       } catch {
         if (request === generation.current)
-          setError("Could not load Library photos. You can still upload one.");
+          setError("Could not load Library photos. You can still upload.");
       }
     })();
     return () => {
@@ -75,10 +108,7 @@ export function ReferencePhotos({
   }, [workspaceId]);
 
   const uploadOne = async (file: File): Promise<Photo | null> => {
-    if (
-      !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
-      file.size > 20 * 1024 * 1024
-    ) {
+    if (!PHOTO_TYPES.includes(file.type) || file.size > 20 * 1024 * 1024) {
       toast.error(`${file.name}: choose a JPG, PNG or WebP photo under 20 MB.`);
       return null;
     }
@@ -132,139 +162,185 @@ export function ReferencePhotos({
     }
   };
 
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : single ? [id] : [...value, id]);
+
   return (
-    <section className="space-y-2 rounded-xl border border-border p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium">
-          Your photos <span className="text-muted-foreground">(optional)</span>
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {value.length}/{limit}
-        </span>
+    <div
+      data-no-rhythm
+      className={cn(
+        "space-y-3 rounded-xl transition-colors",
+        // Inside another card (a recap) it drops its own frame.
+        bare ? "-m-1.5 p-1.5" : "border bg-surface-3 p-3.5",
+        dragging ? "bg-primary-surface ring-1 ring-primary-border" : !bare && "border-border",
+      )}
+      onDragOver={(event) => {
+        if (disabled || busy || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(event) => {
+        if (disabled || busy) return;
+        event.preventDefault();
+        setDragging(false);
+        void upload([...event.dataTransfer.files].filter((f) => PHOTO_TYPES.includes(f.type)));
+      }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">
+            {note
+              ? value.length
+                ? `${value.length} of ${limit} · ${note}`
+                : note
+              : value.length
+                ? `${value.length} of ${limit} added`
+                : single
+                  ? "Optional · one photo"
+                  : `Optional · up to ${limit}`}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-expanded={open}
+          disabled={disabled || busy}
+          onClick={() => setOpen(!open)}
+          className="shrink-0 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-50"
+        >
+          {open ? "Done" : "From Library"}
+        </button>
       </div>
-      {!hideModes && (
-        <p className="text-xs text-muted-foreground">
-          Choose how Mellox uses your photos. Uploading is free.
-        </p>
-      )}
-      {!hideModes && (
-        <Segmented
-          label="How to use the photos"
-          className="max-w-full flex-wrap"
-          value={mode}
-          onChange={onModeChange}
-          options={photoModeOptions(type)}
-        />
-      )}
-      {!hideModes && mode === "design" && (
-        <Segmented
-          label="Your photos in the design"
-          className="max-w-full flex-wrap"
-          value={fidelity}
-          onChange={onFidelityChange}
-          options={[
-            { value: "exact", label: "Keep photos exact", hint: "People stay exactly as shot" },
-            { value: "blend", label: "Blend it more", hint: "Faces may change slightly" },
-          ]}
-        />
-      )}
-      <div className="flex flex-wrap gap-2">
-        {value.map((id) => {
+
+      <ul className="flex flex-wrap gap-2">
+        {value.map((id, index) => {
           const photo = photos.find((p) => p.id === id);
           return (
-            <div
+            <li
               key={id}
-              className="relative size-16 overflow-hidden rounded-lg border border-primary"
+              className="relative size-16 overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
             >
               {photo ? (
                 <img src={photo.url} alt={photo.filename} className="size-full object-cover" />
               ) : (
-                <span className="text-xs">Selected photo</span>
+                <ImageIcon className="m-auto mt-5 size-5 text-muted-foreground" />
+              )}
+              {value.length > 1 && (
+                <span className="absolute bottom-1 left-1 grid size-4 place-items-center rounded-full bg-background/85 text-[10px] font-medium">
+                  {index + 1}
+                </span>
               )}
               <button
                 type="button"
                 aria-label={`Remove ${photo?.filename ?? "photo"}`}
                 disabled={disabled || busy}
                 onClick={() => onChange(value.filter((v) => v !== id))}
-                className="absolute right-0 top-0 rounded-full bg-background p-1"
+                className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-background/85 text-foreground hover:bg-background"
               >
                 <X className="size-3" />
               </button>
-            </div>
+            </li>
           );
         })}
-      </div>
+        {!full && (
+          <li>
+            <button
+              type="button"
+              disabled={disabled || busy}
+              onClick={() => fileInput.current?.click()}
+              className="flex size-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border-strong text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-50"
+            >
+              {busy ? <Spinner className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {busy ? "Adding" : value.length && !single ? "Add" : "Upload"}
+            </button>
+          </li>
+        )}
+      </ul>
       <input
         ref={fileInput}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept={PHOTO_TYPES.join(",")}
         multiple={!single}
         className="hidden"
         onChange={(event) => void upload([...(event.target.files ?? [])])}
       />
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled || busy || (!single && value.length >= limit)}
-          onClick={() => fileInput.current?.click()}
-        >
-          <Upload className="size-3" />
-          {busy ? "Uploading…" : single ? "Upload photo" : "Upload photos"}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled || busy}
-          onClick={() => setOpen(!open)}
-        >
-          {open ? "Hide Library" : "Choose from Library"}
-        </Button>
-      </div>
+      {!value.length && !open && (
+        <p className="text-[11px] text-muted-foreground">Drop photos here. Adding them is free.</p>
+      )}
+
       {error && (
         <p role="status" className="text-xs text-muted-foreground">
           {error}
         </p>
       )}
       {open && (
-        <div className="grid max-h-52 grid-cols-4 gap-2 overflow-y-auto">
-          {photos.map((photo) => (
-            <button
-              type="button"
-              key={photo.id}
-              aria-label={`Use ${photo.filename}`}
-              aria-pressed={value.includes(photo.id)}
-              disabled={
-                disabled || busy || (!single && !value.includes(photo.id) && value.length >= limit)
-              }
-              onClick={() =>
-                onChange(
-                  value.includes(photo.id)
-                    ? value.filter((id) => id !== photo.id)
-                    : single
-                      ? [photo.id]
-                      : [...value, photo.id],
-                )
-              }
-              className={`aspect-square overflow-hidden rounded-lg border-2 ${value.includes(photo.id) ? "border-primary" : "border-transparent"}`}
-            >
-              <img
-                src={photo.url}
-                alt={photo.filename}
-                className="size-full object-cover"
-                loading="lazy"
-              />
-            </button>
-          ))}
+        <ul className="grid max-h-56 grid-cols-4 gap-2 overflow-y-auto rounded-lg bg-surface-2 p-2 sm:grid-cols-5">
+          {photos.map((photo) => {
+            const picked = value.includes(photo.id);
+            return (
+              <li key={photo.id}>
+                <button
+                  type="button"
+                  aria-label={`Use ${photo.filename}`}
+                  aria-pressed={picked}
+                  disabled={disabled || busy || (!picked && full)}
+                  onClick={() => toggle(photo.id)}
+                  className={cn(
+                    "relative block aspect-square w-full overflow-hidden rounded-md ring-2 transition disabled:opacity-40",
+                    picked ? "ring-primary" : "ring-transparent hover:ring-border-strong",
+                  )}
+                >
+                  <img src={photo.url} alt="" className="size-full object-cover" loading="lazy" />
+                  {picked && (
+                    <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="size-3" />
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
           {!photos.length && (
-            <p className="col-span-4 text-xs text-muted-foreground">
-              No photos yet. Upload one above.
-            </p>
+            <li className="col-span-full py-3 text-center text-xs text-muted-foreground">
+              No photos in your Library yet.
+            </li>
+          )}
+        </ul>
+      )}
+
+      {/* What to do with them is asked only once there is something to use. */}
+      {!hideModes && value.length > 0 && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <FieldLabel>What should Mellox do?</FieldLabel>
+          <OptionCards
+            label="How to use the photos"
+            value={mode}
+            onChange={onModeChange}
+            options={photoModeOptions(type).map((option) => ({
+              ...option,
+              icon: MODE_ICON[option.value],
+              hint:
+                option.value === "preserve" && value.length > 1
+                  ? "Keeps the first photo"
+                  : option.hint,
+            }))}
+          />
+          {mode === "design" && (
+            <SwitchRow
+              label="Blend photos into the design"
+              hint={
+                fidelity === "blend"
+                  ? "Faces may change slightly"
+                  : "Off: people stay exactly as shot"
+              }
+              checked={fidelity === "blend"}
+              disabled={disabled}
+              onCheckedChange={(on) => onFidelityChange(on ? "blend" : "exact")}
+            />
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

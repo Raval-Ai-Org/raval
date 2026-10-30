@@ -580,6 +580,37 @@ const SCENES: Scene[] = [
       }),
   },
   {
+    id: "brief-own-photos",
+    label: "Brief · Design with my photos",
+    make: () =>
+      session("image", "intent", {
+        brief: "Our team at the launch event, add 'Now open in Lahore'",
+        controls: {
+          platforms: ["instagram"],
+          ratio: "4:5",
+          referenceMode: "design",
+          referenceAssetIds: [
+            "00000000-0000-4000-8000-0000000000a1",
+            "00000000-0000-4000-8000-0000000000a2",
+          ],
+        },
+      }),
+  },
+  {
+    id: "brief-own-recap",
+    label: "Brief · Recap from my photos",
+    make: () =>
+      session("video", "intent", {
+        brief: "Highlights from our launch night",
+        controls: {
+          platforms: ["instagram"],
+          ratio: "9:16",
+          videoMode: "recap",
+          referenceAssetIds: ["00000000-0000-4000-8000-0000000000a1"],
+        },
+      }),
+  },
+  {
     id: "brief-own-clips",
     label: "Brief · Brand my clips",
     make: () =>

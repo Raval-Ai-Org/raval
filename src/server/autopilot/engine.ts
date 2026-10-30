@@ -88,6 +88,7 @@ export type NewAction = Pick<ActionRow, "workspace_id" | "kind" | "dedupe_key"> 
       | "reason"
       | "goal"
       | "opportunity_id"
+      | "campaign_id"
       | "requested_by"
       | "next_attempt_at"
       | "result"
@@ -265,6 +266,13 @@ export interface AutopilotPorts {
   fullEnabled(workspaceId: string): boolean;
   /** The Stories flag: off means Story Autopilot plans no Stories. */
   storiesEnabled(workspaceId: string): boolean;
+  /**
+   * Campaigns (ADR-0039): the flag, and whether a campaign is still running.
+   * A campaign's pieces wait while it is paused and are left alone when it ends.
+   * Optional so engine tests without campaigns need not stub them.
+   */
+  campaignsEnabled?(workspaceId: string): boolean;
+  campaignState?(workspaceId: string, campaignId: string): Promise<"running" | "paused" | "gone">;
   /** The global and per-workspace automation kill switches. */
   automationPaused(workspaceId: string): Promise<boolean>;
   memberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null>;
@@ -276,7 +284,15 @@ export interface AutopilotPorts {
     tag(
       workspaceId: string,
       id: string,
-      tag: { actionId: string; date: string; time: string; pillar?: string | null },
+      tag: {
+        actionId: string;
+        date: string;
+        time: string;
+        pillar?: string | null;
+        campaignId?: string | null;
+        campaignPhase?: string | null;
+        campaignName?: string | null;
+      },
     ): Promise<void>;
     /** pending → approved, compare-and-set. Used only by Full mode. */
     approve(workspaceId: string, id: string): Promise<boolean>;
@@ -419,6 +435,22 @@ function when(iso: string, timeZone: string): string {
   } catch {
     return iso.slice(0, 16).replace("T", " ");
   }
+}
+
+/** A program's time zone; a campaign piece without one keeps its campaign's. */
+function zoneOf(action: ActionRow, program: ProgramRow | null): string {
+  if (program?.timezone) return program.timezone;
+  const campaign = action.result.campaign;
+  const tz =
+    campaign && typeof campaign === "object" ? (campaign as Record<string, unknown>).tz : null;
+  return typeof tz === "string" && tz ? tz : "UTC";
+}
+
+function campaignField(action: ActionRow, key: "phase" | "name"): string | null {
+  const campaign = action.result.campaign;
+  const value =
+    campaign && typeof campaign === "object" ? (campaign as Record<string, unknown>)[key] : null;
+  return typeof value === "string" ? value : null;
 }
 
 function hmInZone(iso: string, timeZone: string): string {
@@ -1122,7 +1154,7 @@ async function onJob(
           action_id: action.id,
           kind: "piece_waiting",
           summary:
-            `Couldn't make the ${describePiece(action)} just now. Trying again ${when(at, program?.timezone ?? "UTC")}: ${action.title}`.slice(
+            `Couldn't make the ${describePiece(action)} just now. Trying again ${when(at, zoneOf(action, program))}: ${action.title}`.slice(
               0,
               480,
             ),
@@ -1150,7 +1182,7 @@ async function onJob(
     await fail(ctx, action, "Nothing was saved. Try again.");
     return;
   }
-  const timeZone = program?.timezone ?? "UTC";
+  const timeZone = zoneOf(action, program);
   const slot = action.planned_for ?? inMs(now, 24 * HOUR);
   for (const id of job.contentItemIds) {
     await ports.content.tag(action.workspace_id, id, {
@@ -1158,6 +1190,9 @@ async function onJob(
       date: ymdInZone(new Date(slot), timeZone),
       time: hmInZone(slot, timeZone),
       pillar: typeof action.result.pillar === "string" ? action.result.pillar : null,
+      campaignId: action.campaign_id,
+      campaignPhase: campaignField(action, "phase"),
+      campaignName: campaignField(action, "name"),
     });
   }
   await finish(
@@ -1344,7 +1379,7 @@ async function awaitApproval(
   const plannedFor = effectiveSlot(
     action.planned_for,
     items.map((i) => i.meta),
-    program?.timezone ?? "UTC",
+    zoneOf(action, program),
   );
   const moved = plannedFor !== action.planned_for ? { planned_for: plannedFor } : {};
   const settled = ["approved", "scheduled", "publishing", "published"];
@@ -1387,9 +1422,14 @@ async function awaitApproval(
     return;
   }
 
-  // Full mode: decide once whether this piece may go without a person.
+  // Full mode: decide once whether this piece may go without a person. A
+  // campaign piece follows the workspace's running program (ADR-0039).
+  const ruling =
+    program ??
+    (action.campaign_id ? await store.liveProgram(action.workspace_id).catch(() => null) : null);
+  const ruled = ruling?.status === "running" ? ruling : null;
   if (
-    program?.mode === "full" &&
+    ruled?.mode === "full" &&
     ports.fullEnabled(action.workspace_id) &&
     !action.result.auto_checked &&
     items.every((i) => i.status === "pending")
@@ -1399,9 +1439,9 @@ async function awaitApproval(
     for (const item of items) invented += await ports.scan.inventedFacts(action.workspace_id, item);
     const story = action.content_type === "story";
     const decision = publishDecision({
-      mode: program?.mode ?? "assist",
+      mode: ruled?.mode ?? "assist",
       fullEnabled: ports.fullEnabled(action.workspace_id),
-      hasProgram: Boolean(program),
+      hasProgram: Boolean(ruled),
       contentType: action.content_type,
       warnings: Number(action.result.warnings ?? 0),
       inventedFacts: invented,
@@ -1411,7 +1451,7 @@ async function awaitApproval(
         inMs(now, -24 * HOUR),
         story ? { contentType: "story" } : { excludeContentType: "story" },
       ),
-      dailyCap: story ? readStorySettings(program?.stories).perDay : undefined,
+      dailyCap: story ? readStorySettings(ruled?.stories).perDay : undefined,
       video: story && items.some((i) => i.meta.media_type === "video"),
       accountConnected: !action.platform || connected.includes(action.platform),
     });
@@ -1532,7 +1572,7 @@ async function scheduleApproved(
     return;
   }
 
-  const timeZone = program?.timezone ?? "UTC";
+  const timeZone = zoneOf(action, program);
   const done = (item: ContentLite) =>
     ["scheduled", "publishing", "published"].includes(item.status);
   let reason: string | null = null;
@@ -1683,7 +1723,28 @@ export async function advance(ctx: Ctx, action: ActionRow): Promise<void> {
   const now = ports.now();
   const workspaceId = action.workspace_id;
 
-  if (!ports.enabled(workspaceId)) {
+  // A campaign's pieces run on this worker with Autopilot's own switch off,
+  // and wait while their campaign is paused or switched off (ADR-0039).
+  if (action.campaign_id) {
+    const flagOn = ports.campaignsEnabled ? ports.campaignsEnabled(workspaceId) : true;
+    const state = flagOn
+      ? ((await ports.campaignState?.(workspaceId, action.campaign_id)) ?? "running")
+      : "paused";
+    if (state === "gone" && (action.status === "planned" || action.status === "proposed")) {
+      await finish(
+        ctx,
+        action,
+        "cancelled",
+        { finished_at: now.toISOString() },
+        { kind: "piece_removed", summary: `The campaign ended: ${action.title}`.slice(0, 480) },
+      );
+      return;
+    }
+    if (state === "paused") {
+      await store.release(action, ctx.worker, { next_attempt_at: inMs(now, 30 * MIN) });
+      return;
+    }
+  } else if (!ports.enabled(workspaceId)) {
     await store.release(action, ctx.worker, { next_attempt_at: inMs(now, 30 * MIN) });
     return;
   }

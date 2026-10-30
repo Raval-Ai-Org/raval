@@ -14,7 +14,15 @@ import {
   WORKSPACES_QUERY_KEY,
   type WorkspaceSummary,
 } from "@/hooks/use-workspaces";
-import { useCreateWorkspace, type CreateWorkspaceOutcome } from "@/hooks/use-create-workspace";
+import {
+  isBrandLimitError,
+  useCreateWorkspace,
+  type CreateWorkspaceOutcome,
+} from "@/hooks/use-create-workspace";
+import { PILL_SELECT } from "@/components/app/pins";
+import { BrandLimitCard } from "@/components/app/billing/BrandLimitCard";
+import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { brandRoom } from "@/lib/workspace/brand-room";
 import { DeleteWorkspaceDialog } from "@/components/workspace/DeleteWorkspaceDialog";
 import { normalizeDomain, toWebsiteUrl } from "@/lib/workspace/domain";
 import { onboardingPath, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
@@ -47,6 +55,7 @@ import {
   Plus,
   Globe,
   ArrowRight,
+  Crown,
   Sparkles,
   Loader2,
   LogOut,
@@ -182,6 +191,22 @@ function ProjectsPage() {
     await signOutAndRedirect();
   };
 
+  // /start sends a site here when the plan had no room for it (?add=<url>),
+  // so the website bar opens with it and the upgrade card.
+  const [pendingAddUrl, setPendingAddUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const add = url.searchParams.get("add");
+    if (!add) return;
+    setPendingAddUrl(add);
+    url.searchParams.delete("add");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, []);
+
+  const showBrandList = () => {
+    document.getElementById("your-brands")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return workspaces.filter((w) => {
@@ -228,7 +253,7 @@ function ProjectsPage() {
       <div className="grid min-h-dvh place-items-center bg-background p-6">
         <ErrorState
           title="Couldn't verify your sign-in"
-          description="Your workspace list cannot load until your session is available."
+          description="Please try again."
           detail={sessionError}
           onRetry={() => {
             setSessionError(null);
@@ -301,8 +326,8 @@ function ProjectsPage() {
           >
             {workspaceListFailed
               ? workspaceRouteMissing
-                ? "The workspace service is unavailable in this app session."
-                : "Retry the request to see your workspace list."
+                ? "Please try again in a moment."
+                : "Please try again."
               : workspaces.length === 0
                 ? copy.firstSubhead
                 : copy.returningSubhead}
@@ -319,8 +344,8 @@ function ProjectsPage() {
                 title="Couldn't load your workspaces"
                 description={
                   workspaceRouteMissing
-                    ? "Refresh the page and retry. If this continues, contact support so your app server can be checked."
-                    : "Your account may already have workspaces. Retry before creating another."
+                    ? "Refresh the page and try again."
+                    : "Try again before adding another brand."
                 }
                 detail={
                   workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null
@@ -330,15 +355,22 @@ function ProjectsPage() {
             ) : (
               <PasteLinkBar
                 existing={workspaces}
+                initialUrl={pendingAddUrl}
                 onCreated={afterCreate}
                 onOpenAdvanced={() => setDialogOpen(true)}
+                onManage={showBrandList}
               />
             )}
             <NewProjectDialog
               open={dialogOpen}
               onOpenChange={setDialogOpen}
               copy={copy}
+              existing={workspaces}
               onCreated={afterCreate}
+              onManage={() => {
+                setDialogOpen(false);
+                showBrandList();
+              }}
             />
           </motion.div>
         </section>
@@ -346,8 +378,11 @@ function ProjectsPage() {
 
       {/* Projects panel — only shown when at least one client exists */}
       {!loading && workspaces.length > 0 && (
-        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-5 backdrop-blur-xl sm:p-7">
+        <section
+          id="your-brands"
+          className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-4 px-5 pb-12 pt-8"
+        >
+          <div>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[12px] font-medium text-foreground">
@@ -356,11 +391,12 @@ function ProjectsPage() {
                 <span className="text-[12px] text-muted-foreground">
                   {workspaces.length} {workspaces.length === 1 ? copy.noun : copy.nounPlural}
                 </span>
+                <BrandPlaces />
                 <select
                   aria-label="Filter by status"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                  className="h-7 rounded-full border border-border/60 bg-background/60 px-2 text-[12px] text-foreground outline-none"
+                  className={PILL_SELECT}
                 >
                   <option value="all">All</option>
                   <option value="attention">Needs attention</option>
@@ -370,7 +406,7 @@ function ProjectsPage() {
               </div>
 
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <div className="flex h-9 flex-1 items-center gap-2 rounded-full border border-border/60 bg-background/60 px-3 backdrop-blur focus-within:border-foreground/30 sm:flex-none">
+                <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-surface-2/80 px-3 ring-1 ring-border/60 focus-within:ring-2 focus-within:ring-ring/55 sm:flex-none">
                   <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <input
                     value={query}
@@ -389,7 +425,7 @@ function ProjectsPage() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="grid place-items-center rounded-2xl border border-dashed border-border/60 bg-background/40 px-6 py-12 text-center">
+              <div className="grid place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2/60 px-6 py-12 text-center">
                 <Search className="h-5 w-5 text-muted-foreground" />
                 <p className="mt-2 text-[13px] text-muted-foreground">
                   No {copy.nounPlural} match {query ? `"${query}"` : "this filter"}
@@ -405,7 +441,10 @@ function ProjectsPage() {
                 </button>
               </div>
             ) : (
-              <motion.div layout className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <motion.div
+                layout
+                className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3"
+              >
                 <AnimatePresence initial={false}>
                   {filtered.map((w, i) => (
                     <ProjectCard
@@ -433,11 +472,11 @@ function ProjectsPage() {
 
       {loading && (
         <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="mx-skel h-[210px] rounded-2xl border border-border/60"
+                className="mx-skel aspect-[16/10] rounded-[var(--ds-radius-tile)]"
                 style={{ ["--mx-skel-delay" as string]: `${i * 0.12}s` }}
               />
             ))}
@@ -684,19 +723,13 @@ export function ProjectCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ delay: 0.04 * index, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4 }}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-background/60 text-left shadow-sm transition hover:border-brand-green/50 hover:shadow-[0_12px_32px_-12px_hsl(var(--brand-green)/0.28)]"
+      className="group relative flex flex-col text-left"
     >
-      {/* Colorful hover aura */}
-      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-green/[0.08] via-transparent to-brand-blue/[0.06]" />
-      </div>
-
       <button
         onClick={onOpen}
-        className="group/thumb relative block w-full overflow-hidden text-left"
+        className="group/thumb relative block w-full rounded-[var(--ds-radius-tile)] text-left transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-0.5 hover:shadow-[var(--ds-tile-shadow-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
-        <div className="relative aspect-[16/9] w-full overflow-hidden bg-secondary/60">
+        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2 ring-1 ring-border/60">
           {/* Monochrome canvas — becomes colorful on hover */}
           <div className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-0 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--foreground)/0.06),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--foreground)/0.05),transparent_55%)]" />
           <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--brand-green)/0.12),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--brand-blue)/0.08),transparent_55%)]" />
@@ -726,19 +759,16 @@ export function ProjectCard({
               onError={() => setShotOk(false)}
               className={cn(
                 "absolute inset-0 h-full w-full object-cover object-top transition-all duration-500",
-                "grayscale contrast-[1.05] opacity-0 group-hover/thumb:scale-[1.02] group-hover/thumb:grayscale-0 group-hover/thumb:contrast-100",
-                shotOk && "opacity-90 group-hover/thumb:opacity-100",
+                "opacity-0 duration-700 group-hover/thumb:scale-[1.015]",
+                shotOk && "opacity-100",
               )}
             />
           )}
-          {/* Soft top/bottom vignette for legibility */}
-          <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-background/40 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background/70 to-transparent" />
 
           {/* Brand mark when no screenshot — clean monochrome lockup */}
           {!shotOk && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-background/80 ring-1 ring-border/70 shadow-sm">
+              <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-full bg-background ring-1 ring-border/70 shadow-sm">
                 {faviconUrl && (
                   <img
                     src={faviconUrl}
@@ -768,7 +798,7 @@ export function ProjectCard({
           {(() => {
             const tag = projectTag(workspace);
             return (
-              <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-foreground/80 backdrop-blur">
+              <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2 py-0.5 text-[10.5px] font-semibold text-neutral-900 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)]">
                 <span className={cn("h-1.5 w-1.5 rounded-full", tag.dot)} />
                 {tag.label}
               </span>
@@ -776,23 +806,23 @@ export function ProjectCard({
           })()}
           {workspace.duplicateOf && (
             <span
-              className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 backdrop-blur dark:text-amber-300"
+              className="absolute right-2.5 top-2.5 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 backdrop-blur dark:text-amber-300"
               title={`Same website as ${duplicateOfName ?? "another workspace"}. Review and delete the copy you don't need.`}
             >
               Possible duplicate
             </span>
           )}
           {!workspace.duplicateOf && lastOpened && (
-            <span className="absolute right-3 top-3 inline-flex items-center rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground backdrop-blur">
+            <span className="absolute right-2.5 top-2.5 inline-flex items-center rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-semibold text-white backdrop-blur">
               Last opened
             </span>
           )}
         </div>
       </button>
 
-      <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex items-center gap-2.5 px-1 pt-2.5">
         <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          <div className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-secondary text-[11px] font-semibold text-foreground ring-1 ring-border/60">
+          <div className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-[11px] font-semibold text-foreground ring-1 ring-border/60">
             {faviconUrl && (
               <img
                 src={faviconUrl}
@@ -809,7 +839,7 @@ export function ProjectCard({
             {!faviconOk && <span>{initials}</span>}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13.5px] font-semibold tracking-tight">
+            <div className="truncate text-[14px] font-semibold tracking-tight">
               {workspace.name || domain || "Untitled"}
             </div>
             <div className="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
@@ -830,7 +860,7 @@ export function ProjectCard({
           <DropdownMenuTrigger asChild>
             <button
               onClick={(e) => e.stopPropagation()}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-0 transition hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition hover:bg-surface-2 hover:text-foreground group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
               aria-label="Project options"
             >
               <MoreHorizontal className="h-4 w-4" />
@@ -899,17 +929,91 @@ function WorkspaceMetrics({ workspace: w }: { workspace: Workspace }) {
   );
 }
 
+/** The owner's own brands, newest first, as the upgrade card names them. */
+function ownedBrandNames(existing: Workspace[]): string[] {
+  return existing
+    .filter((w) => w.isOwner && !w.duplicateOf)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((w) => w.domain || w.name);
+}
+
+/**
+ * Is the owner's plan full? From the plan as soon as it loads, or from the
+ * server's answer to a create. Deleting a brand frees its place: the plan
+ * refreshes and the card goes away.
+ */
+function useBrandsFull() {
+  const { data } = useEntitlements();
+  const room = brandRoom(data);
+  const [refused, setRefused] = useState(false);
+  const roomFull = room?.full;
+  useEffect(() => {
+    if (roomFull === false) setRefused(false);
+  }, [roomFull]);
+  return { full: Boolean(roomFull) || refused, refuse: () => setRefused(true) };
+}
+
+/** A failed create: a full plan (card), another plan block (toast with a button), or an error. */
+function handleCreateError(error: unknown, onFull: () => void, fallback: string) {
+  if (isBrandLimitError(error)) {
+    emitAppEvent("billing:changed");
+    onFull();
+    return;
+  }
+  if (error instanceof ServerFnError && error.status === 402) {
+    if (error.billing) emitAppEvent("billing:blocked", error.billing as never);
+    return;
+  }
+  toast.error(error instanceof Error ? error.message : fallback);
+}
+
+function openBrandUpgrade(used?: number, max?: number) {
+  emitAppEvent("open:upgrade", { code: "limit_reached", limit: "brands", used, max });
+}
+
+/** "1 of 1 brand place" beside the list, with an upgrade link when full. */
+function BrandPlaces() {
+  const { data } = useEntitlements();
+  const room = brandRoom(data);
+  if (!room || !data?.isOwner) return null;
+  return (
+    <span className="text-[12px] text-muted-foreground">
+      · {room.used} of {room.max} brand {room.max === 1 ? "place" : "places"}
+      {room.full && (
+        <>
+          {" · "}
+          <button
+            type="button"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            onClick={() => openBrandUpgrade(room.used, room.max)}
+          >
+            Upgrade
+          </button>
+        </>
+      )}
+    </span>
+  );
+}
+
 export function PasteLinkBar({
   existing,
+  initialUrl,
   onCreated,
   onOpenAdvanced,
+  onManage,
 }: {
   existing: Workspace[];
+  initialUrl?: string | null;
   onCreated: (result: CreateWorkspaceOutcome) => void;
   onOpenAdvanced: () => void;
+  onManage?: () => void;
 }) {
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(initialUrl ?? "");
+  useEffect(() => {
+    if (initialUrl) setUrl(initialUrl);
+  }, [initialUrl]);
   const { create, pending: saving } = useCreateWorkspace();
+  const brands = useBrandsFull();
 
   const isValid = useMemo(() => {
     const v = url.trim();
@@ -923,9 +1027,17 @@ export function PasteLinkBar({
     return domain ? (existing.find((w) => w.domain === domain && !w.duplicateOf) ?? null) : null;
   }, [url, existing]);
 
+  // A new site on a full plan: the button opens the upgrade instead of failing.
+  // The same site as an existing brand still just opens it.
+  const blocked = isValid && !already && brands.full;
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || saving) return;
+    if (blocked) {
+      openBrandUpgrade();
+      return;
+    }
     const normalizedUrl = toWebsiteUrl(url);
     if (!normalizedUrl) return;
     const host = normalizeDomain(normalizedUrl) ?? "";
@@ -941,8 +1053,7 @@ export function PasteLinkBar({
       if (result.created) toast.success("Project created — let's set it up");
       onCreated(result);
     } catch (error) {
-      if (error instanceof ServerFnError && error.status === 402) return;
-      toast.error(error instanceof Error ? error.message : "Couldn't create project");
+      handleCreateError(error, brands.refuse, "Couldn't create project");
     }
   };
 
@@ -990,7 +1101,8 @@ export function PasteLinkBar({
         <button
           type="submit"
           disabled={!isValid || saving}
-          aria-label={already ? `Open ${already.domain}` : "Continue"}
+          aria-label={already ? `Open ${already.domain}` : blocked ? "Upgrade now" : "Continue"}
+          title={blocked ? "Upgrade now" : undefined}
           className={cn(
             "!mt-0 grid h-11 w-11 shrink-0 place-items-center rounded-full transition",
             isValid && !saving
@@ -1000,11 +1112,31 @@ export function PasteLinkBar({
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : blocked ? (
+            <Crown className="h-[18px] w-[18px]" strokeWidth={2.2} />
           ) : (
             <ArrowRight className={cn("h-[18px] w-[18px]", !isValid && "opacity-60")} />
           )}
         </button>
       </form>
+      <AnimatePresence initial={false}>
+        {blocked && (
+          <motion.div
+            key="brand-limit"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2 }}
+            className="mt-3"
+          >
+            <BrandLimitCard
+              usedBy={ownedBrandNames(existing)}
+              wanted={normalizeDomain(url)}
+              onManage={onManage}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       {already && (
         <p className="mt-2 text-center text-[12px] text-muted-foreground" role="status">
           You already have a workspace for <span className="font-medium">{already.domain}</span>
@@ -1020,17 +1152,27 @@ function NewProjectDialog({
   open,
   onOpenChange,
   onCreated,
+  onManage,
+  existing,
   copy,
 }: {
   children?: React.ReactNode;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated: (result: CreateWorkspaceOutcome) => void;
+  onManage?: () => void;
+  existing: Workspace[];
   copy: PersonaCopy;
 }) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const { create, pending: saving } = useCreateWorkspace();
+  const brands = useBrandsFull();
+  const sameSite = useMemo(() => {
+    const domain = normalizeDomain(url);
+    return Boolean(domain && existing.some((w) => w.domain === domain && !w.duplicateOf));
+  }, [url, existing]);
+  const blocked = brands.full && !sameSite;
 
   const reset = () => {
     setName("");
@@ -1058,8 +1200,7 @@ function NewProjectDialog({
       reset();
       onCreated(result);
     } catch (error) {
-      if (error instanceof ServerFnError && error.status === 402) return;
-      toast.error(error instanceof Error ? error.message : `Couldn't create ${copy.noun}`);
+      handleCreateError(error, brands.refuse, `Couldn't create ${copy.noun}`);
     }
   };
 
@@ -1078,6 +1219,13 @@ function NewProjectDialog({
           <DialogDescription>{copy.normalDescription}</DialogDescription>
         </DialogHeader>
 
+        {blocked && (
+          <BrandLimitCard
+            usedBy={ownedBrandNames(existing)}
+            wanted={normalizeDomain(url)}
+            onManage={onManage}
+          />
+        )}
         <form onSubmit={submit} className="space-y-4 pt-1">
           <div className="space-y-1.5">
             <Label htmlFor="np-name">{copy.nameLabel}</Label>
@@ -1108,7 +1256,7 @@ function NewProjectDialog({
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving} className="btn-aura gap-1.5">
+            <Button type="submit" disabled={saving || blocked} className="btn-aura gap-1.5">
               {saving ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (

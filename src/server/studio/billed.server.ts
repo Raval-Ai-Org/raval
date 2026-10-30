@@ -29,6 +29,7 @@ import { quoteStudioVideo } from "./video-quote.server";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { isClipEditEnabled, isPhotoDesignEnabled } from "@/lib/feature-flags";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
+import { pickFeaturedProduct, productPhotoControls } from "@/lib/products/feature";
 
 const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   social: "studio.social",
@@ -58,29 +59,42 @@ export async function createBilledStudioJob(args: {
   userId: string;
   role: WorkspaceRole;
   input: CreateJobInput;
+  /**
+   * Which product to pick when none was chosen: one the brief names
+   * (default, what Studio shows a person before they press Generate), or,
+   * for a worker acting without a person, also one for a selling brief.
+   */
+  autoProduct?: "named" | "any";
 }): Promise<BilledStudioJob> {
   const { client, workspaceId, userId, role, input } = args;
   // A piece about a catalogue product (ADR-0035) must name one of this
-  // workspace's products, and keeps that product's own photo unless the person
-  // chose photos themselves. Decided here, before pricing, so the charge
-  // matches what runs.
+  // workspace's products, and is made with that product's own photos unless
+  // the person chose photos themselves. A product the brief names is picked
+  // for the person too; a worker also features one for a selling brief that
+  // names none (src/lib/products/feature.ts). Decided here, before pricing, so
+  // the charge matches what runs.
+  // An edit keeps what its piece had; "Generate again" is a new take and is
+  // made the same way as the first one.
+  const revision = Boolean(input.refine) || studioTextOnlyRevision(input);
+  if (!input.controls.productId && !input.controls.noProduct && !revision) {
+    const picked = await autoPickProduct(workspaceId, input, args.autoProduct ?? "named");
+    if (picked) input.controls.productId = picked;
+  }
   if (input.controls.productId) {
     const { productForGeneration } = await import("@/server/products/service.server");
     const product = await productForGeneration(workspaceId, input.controls.productId);
     if (!product) throw new HttpError(400, "That product is no longer in this workspace.");
-    const pictured =
-      input.type === "image" ||
-      input.type === "ad" ||
-      (input.type === "social" && Boolean(input.controls.includeImage));
-    if (
-      product.photoAssetId &&
-      pictured &&
-      !input.controls.referenceAssetIds?.length &&
-      !input.parentJobId &&
-      !studioTextOnlyRevision(input)
-    ) {
-      input.controls.referenceAssetIds = [product.photoAssetId];
-      input.controls.referenceMode = "preserve";
+    const photos = productPhotoControls({
+      type: input.type,
+      controls: input.controls,
+      photoIds: product.kind === "product" ? product.photoAssetIds : [],
+      revision,
+      designEnabled: isPhotoDesignEnabled(workspaceId),
+    });
+    if (photos) {
+      input.controls.referenceAssetIds = photos.referenceAssetIds;
+      input.controls.referenceMode = photos.referenceMode;
+      if (photos.referenceMode === "design") input.controls.photoFidelity = "exact";
     }
   }
   // "Post as is" with words or design asked for, a picture edit or more
@@ -306,5 +320,32 @@ export async function createBilledStudioJob(args: {
         job.captionEditsRemaining = await captionEditsRemaining(workspaceId, job.group_id);
     }
     return { job, balance: null, charge: price };
+  }
+}
+
+/** The catalogue product a new piece is about when none was chosen. Fails open. */
+async function autoPickProduct(
+  workspaceId: string,
+  input: CreateJobInput,
+  mode: "named" | "any",
+): Promise<string | null> {
+  try {
+    const { featureCandidates, recentlyFeaturedProducts } =
+      await import("@/server/products/service.server");
+    const products = await featureCandidates(workspaceId);
+    if (!products.length) return null;
+    const rotate = mode === "any";
+    const pick = pickFeaturedProduct({
+      text: [input.intent.brief, input.controls.campaign].filter(Boolean).join("\n"),
+      goal: input.intent.goal,
+      aim: input.intent.aim,
+      products,
+      recent: rotate ? await recentlyFeaturedProducts(workspaceId) : [],
+      rotate,
+    });
+    return pick?.id ?? null;
+  } catch (error) {
+    console.warn("[studio] product pick skipped", error instanceof Error ? error.message : error);
+    return null;
   }
 }

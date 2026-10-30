@@ -578,7 +578,7 @@ export const CREDIT_ACTIONS = {
     unit: "copy + image",
     feature: "studio",
     expectedCostUsd: 0.066,
-    routes: ["studio.captions"],
+    routes: ["studio.captions", "studio.image.brief"],
   },
   // Designing with the brand's own photos: reading the photos, one design
   // layer (a second if the first can't hold them) and the visual check.
@@ -672,7 +672,7 @@ export const CREDIT_ACTIONS = {
     unit: "per batch",
     feature: "studio",
     expectedCostUsd: 0.014,
-    routes: ["studio.prompt", "studio.upload-captions"],
+    routes: ["studio.prompt", "studio.upload-captions", "campaign.write"],
   },
   // /api/ai-generate is priced by what it actually does: normal size = social_multi;
   // size "long" on WORKHORSE = article_standard; escalated to PREMIUM = article_premium
@@ -715,7 +715,7 @@ export const CREDIT_ACTIONS = {
     unit: "per plan",
     feature: "campaigns",
     expectedCostUsd: 0.107,
-    routes: ["campaign-generation"],
+    routes: ["campaign-generation", "campaign.plan"],
   },
   // Brand
   brand_dna_rescan: {
@@ -915,6 +915,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   // Shared social trends snapshot: collected for everyone, charged to no one.
   "studio.trends",
   "studio.image.review",
+  // A video's brief is part of the video, charged in video units.
+  "studio.video.brief",
   // Visual identity review is part of the already charged Studio image action.
   "brand-visuals.review",
   "analytics/insights-auto",

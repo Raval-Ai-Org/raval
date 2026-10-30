@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-const mocks = vi.hoisted(() => ({ sign: vi.fn() }));
+const mocks = vi.hoisted(() => ({ sign: vi.fn(), fetch: vi.fn() }));
 vi.mock("@/server/assets/persist.server", () => ({ signAssetPath: mocks.sign }));
-import { resolveStudioReferences } from "./references.server";
+vi.mock("@/server/safe-fetch", () => ({ safeFetch: mocks.fetch }));
+import sharp from "sharp";
+import { resolveStudioReferences, studioReferenceImages } from "./references.server";
 
 const workspace = "00000000-0000-4000-8000-000000000001";
 const owned = {
@@ -49,5 +51,29 @@ describe("Studio source photo isolation", () => {
       "unavailable",
     );
     expect(mocks.sign).not.toHaveBeenCalled();
+  });
+});
+
+describe("photos read for the writing", () => {
+  const ref = (id: string) => ({
+    id,
+    filename: id,
+    mimeType: "image/png",
+    storagePath: `workspace/${workspace}/assets/${id}/original.png`,
+    url: `https://owned.test/${id}.png`,
+  });
+
+  it("leaves out a photo it cannot read instead of failing the piece", async () => {
+    const png = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "#336699" },
+    })
+      .png()
+      .toBuffer();
+    mocks.fetch.mockImplementation(async (url: string) => ({
+      bytes: url.includes("broken") ? new Uint8Array([1, 2, 3]) : new Uint8Array(png),
+    }));
+    const images = await studioReferenceImages([ref("good"), ref("broken")]);
+    expect(images).toHaveLength(1);
+    expect(images[0].mediaType).toBe("image/webp");
   });
 });

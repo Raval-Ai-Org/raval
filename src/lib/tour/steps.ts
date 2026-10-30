@@ -104,9 +104,9 @@ const STOPS: TourStop[] = [
   {
     id: "calendar",
     icon: "calendar",
-    title: "Plan your week",
-    body: "See every post and when it goes out.",
-    anchors: ["calendar"],
+    title: "Plan your campaigns",
+    body: "Launches, seasons and events, planned post by post. Your calendar is in here too.",
+    anchors: ["campaigns", "calendar"],
     side: "right",
     sidebar: true,
   },

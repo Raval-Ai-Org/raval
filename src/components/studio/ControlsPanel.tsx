@@ -114,6 +114,55 @@ export function ControlsPanel({
     session.type === "video" &&
     (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site");
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
+  const recap = ownFootage && c.videoMode === "recap";
+  // The brand's own photos. A recap shows them inside the video card, where
+  // they are needed; the clips and website reels take none.
+  const photos = (["image", "video", "carousel", "story", "ad"].includes(session.type) ||
+    c.includeImage) &&
+    !(session.type === "video" && (c.videoMode === "brand" || c.videoMode === "site")) && (
+      <ReferencePhotos
+        key={session.workspaceId}
+        {...(recap
+          ? {
+              limit: 6,
+              hideModes: true,
+              bare: true,
+              title: "Photos",
+              note: "2 to 6, in play order",
+            }
+          : {})}
+        workspaceId={session.workspaceId}
+        type={session.type}
+        value={c.referenceAssetIds ?? []}
+        mode={c.referenceMode ?? "preserve"}
+        fidelity={c.photoFidelity ?? "exact"}
+        onChange={(referenceAssetIds) =>
+          set({
+            referenceAssetIds,
+            // Several photos for one picture means designing with them.
+            referenceMode: !referenceAssetIds.length
+              ? undefined
+              : referenceAssetIds.length > 1 &&
+                  (c.referenceMode ?? "preserve") === "preserve" &&
+                  isPhotoDesignType(session.type)
+                ? "design"
+                : (c.referenceMode ?? "preserve"),
+          })
+        }
+        onModeChange={(referenceMode) =>
+          set({
+            referenceMode,
+            referenceAssetIds: (c.referenceAssetIds ?? []).slice(
+              0,
+              photoLimit(referenceMode, session.type),
+            ),
+          })
+        }
+        onFidelityChange={(photoFidelity) => set({ photoFidelity })}
+        onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
+        disabled={disabled}
+      />
+    );
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
@@ -175,6 +224,7 @@ export function ControlsPanel({
           set={set}
           disabled={disabled}
           onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
+          photos={recap ? photos : undefined}
         />
       )}
       {(session.type === "video" || storyVideo) && (!ownFootage || animatedRecap) && (
@@ -192,8 +242,7 @@ export function ControlsPanel({
             ]}
           />
           <p className="mt-2 text-xs text-muted-foreground">
-            The exact Video Credit price is checked before Generate. Longer clips and higher quality
-            use more. Creation points stay available for posts.
+            Longer and higher quality videos cost more.
           </p>
         </div>
       )}
@@ -246,55 +295,20 @@ export function ControlsPanel({
         </label>
       ) : null}
 
+      {!recap && photos}
+
       {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
         <ProductPicker
           workspaceId={session.workspaceId}
           type={session.type}
           value={c.productId}
-          onChange={(productId) => set({ productId })}
+          // "No product" also stops a product the brief names being picked.
+          onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
         />
       )}
       {session.type === "ad" && (
         <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
       )}
-
-      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) &&
-        !(session.type === "video" && c.videoMode === "brand") && (
-          <ReferencePhotos
-            key={session.workspaceId}
-            {...(ownFootage ? { limit: 6, hideModes: true } : {})}
-            workspaceId={session.workspaceId}
-            type={session.type}
-            value={c.referenceAssetIds ?? []}
-            mode={c.referenceMode ?? "preserve"}
-            fidelity={c.photoFidelity ?? "exact"}
-            onChange={(referenceAssetIds) =>
-              set({
-                referenceAssetIds,
-                // Several photos for one picture means designing with them.
-                referenceMode: !referenceAssetIds.length
-                  ? undefined
-                  : referenceAssetIds.length > 1 &&
-                      (c.referenceMode ?? "preserve") === "preserve" &&
-                      isPhotoDesignType(session.type)
-                    ? "design"
-                    : (c.referenceMode ?? "preserve"),
-              })
-            }
-            onModeChange={(referenceMode) =>
-              set({
-                referenceMode,
-                referenceAssetIds: (c.referenceAssetIds ?? []).slice(
-                  0,
-                  photoLimit(referenceMode, session.type),
-                ),
-              })
-            }
-            onFidelityChange={(photoFidelity) => set({ photoFidelity })}
-            onBusyChange={(uploadingReference) => updateSession(session.id, { uploadingReference })}
-            disabled={disabled}
-          />
-        )}
 
       <div className="rounded-xl border border-border bg-surface-3">
         <button
