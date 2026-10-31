@@ -32,7 +32,7 @@ export function MakeMoreFrom({
     <div className="space-y-2.5" data-tour="make-more">
       <ul className="grid grid-cols-2 gap-2">
         {targets.map((target) => (
-          <li key={target.type}>
+          <li key={`${target.type}:${target.videoKind ?? ""}`}>
             <button
               type="button"
               disabled={disabled}

@@ -8,6 +8,8 @@ import type { StageId, StudioType } from "./formats";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import type { AdOnImage } from "./ad-formats";
+import { VIDEO_KIND_IDS, type VideoKindId } from "./video/kinds";
+import type { VideoPlanOutput } from "./video/storyboard";
 
 export const PlatformIdSchema = z.enum([
   "linkedin",
@@ -103,6 +105,11 @@ export const ControlsSchema = z.object({
    * recap from their photos (src/lib/studio/clip-edit.ts).
    */
   videoMode: z.enum(["generate", "brand", "recap", "site"]).optional(),
+  /**
+   * New AI video: the kind it is made as (src/lib/studio/video/kinds.ts).
+   * Absent: picked from the brief and its source by settleVideoControls.
+   */
+  videoKind: z.enum(VIDEO_KIND_IDS as [VideoKindId, ...VideoKindId[]]).optional(),
   /** Brand mode: the person's own clips, checked against this workspace. */
   sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
   /** Brand mode: captions of what is said (absent means on). */
@@ -277,7 +284,9 @@ export const CreateJobSchema = z
     if (
       input.type === "video" &&
       input.controls.videoMode === "recap" &&
-      (input.controls.referenceAssetIds?.length ?? 0) < 2
+      // A motion post moves one finished post's picture.
+      (input.controls.referenceAssetIds?.length ?? 0) <
+        (input.controls.videoKind === "motion-post" ? 1 : 2)
     )
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -442,6 +451,8 @@ export type StudioJobOutput = {
   ads?: AdVariant[];
   /** Image/video: the visual concept the render was built from. */
   concept?: string;
+  /** New AI video: its kind, clips and storyboard, and the checks it passed. */
+  videoPlan?: VideoPlanOutput;
   /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
   artDirection?: string;
   /** Product poster: its staging, colour mood, light, set, idea and words (ADR-0040). */

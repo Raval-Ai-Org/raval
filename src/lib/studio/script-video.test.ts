@@ -84,3 +84,24 @@ describe("reviewed script to video", () => {
     expect(sourceScriptDirection(reviewedScript, false)).not.toContain("The creator says:");
   });
 });
+
+describe("a reviewed script split over storyboard clips", () => {
+  it("sends every scene once, to the clip it falls in, with its exact words", async () => {
+    const { sourceScriptClipDirection } = await import("./script-video");
+    const total = reviewedScript.durationSec;
+    const half = total / 2;
+    const first = sourceScriptClipDirection(reviewedScript, { start: 0, seconds: half }, total)!;
+    const second = sourceScriptClipDirection(
+      reviewedScript,
+      { start: half, seconds: half },
+      total,
+    )!;
+    for (const beat of reviewedScript.beats) {
+      const inFirst = first.includes(beat.voiceover);
+      const inSecond = second.includes(beat.voiceover);
+      expect(inFirst !== inSecond).toBe(true);
+    }
+    expect(first).toContain(reviewedScript.beats[0].voiceover);
+    expect(second).toContain(reviewedScript.beats.at(-1)!.voiceover);
+  });
+});

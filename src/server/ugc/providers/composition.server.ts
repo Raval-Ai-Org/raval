@@ -2,10 +2,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { durationsFor } from "@/lib/ugc/models";
 import { planVideoSegments, segmentVideoPrompt, type VideoSegment } from "@/lib/ugc/duration";
-import type { ProviderCheck, VideoProvider, VideoRenderRequest } from "./types";
+import type { DownloadedVideo, ProviderCheck, VideoProvider, VideoRenderRequest } from "./types";
 
 const PREFIX = "composition:";
 type Clip = VideoSegment & {
+  /** This clip's own prompt (a storyboard clip); absent: cut from the shared prompt. */
+  prompt?: string;
   taskId?: string;
   provider?: string;
   videoUrl?: string;
@@ -13,6 +15,8 @@ type Clip = VideoSegment & {
   submitting?: boolean;
   /** Times this clip was submitted again after an outage-type failure. */
   retries?: number;
+  /** What earlier takes of this clip cost, when the video checks had it made again. */
+  earlierCostUsd?: number;
 };
 
 /** A clip that ended with an outage-type failure is made again this many times. */
@@ -78,6 +82,64 @@ const failure = (message: string): ProviderCheck => ({
   retryable: false,
 });
 
+/** The clips a request is made of: its own storyboard clips, else a split of its length. */
+function planClips(request: VideoRenderRequest): Clip[] {
+  if (!request.clips?.length)
+    return planVideoSegments(
+      request.durationSec,
+      durationsFor(request.model, request.imageUrls.length > 0),
+    );
+  let start = 0;
+  return request.clips.map((clip) => {
+    const out = { start, seconds: clip.seconds, renderSeconds: clip.seconds, prompt: clip.prompt };
+    start += clip.seconds;
+    return out;
+  });
+}
+
+/** The images one clip is sent: a chained clip leads with the frame the clip before ended on. */
+function clipImages(request: VideoRenderRequest, index: number, frameUrl?: string): string[] {
+  if (index === 0 || !request.chain) return request.imageUrls;
+  const rest = request.imageUrls.slice(request.chain.leadImages ?? 0);
+  return frameUrl ? [frameUrl, ...rest] : rest;
+}
+
+export type ChainFrame = (args: {
+  clip: { videoUrl: string; provider?: string; taskId?: string };
+  chain: NonNullable<VideoRenderRequest["chain"]>;
+  index: number;
+  download: (videoUrl: string, provider?: string) => Promise<DownloadedVideo>;
+}) => Promise<string>;
+
+/**
+ * The last frame of a finished clip, stored as an asset of the job's
+ * workspace and signed for the provider. Keyed by the clip's task, so a
+ * clip made again gets its own frame.
+ */
+const storedChainFrame: ChainFrame = async ({ clip, chain, index, download }) => {
+  const [{ lastVideoFrame }, { persistAsset, signAssetPath }] = await Promise.all([
+    import("./assemble.server"),
+    import("@/server/assets/persist.server"),
+  ]);
+  const video = await download(clip.videoUrl, clip.provider);
+  const frame = await lastVideoFrame(video.dataUrl);
+  const saved = await persistAsset({
+    workspaceId: chain.workspaceId,
+    idempotencyKey: `video-chain:${chain.key}:${index}:${clip.taskId ?? clip.videoUrl}`.slice(
+      0,
+      200,
+    ),
+    bytes: frame,
+    assetType: "image",
+    mimeType: "image/jpeg",
+    metadata: { source: "video_chain_frame", clip: index },
+  });
+  if (!saved.ok) throw new Error("Could not keep the clip's last frame.");
+  const url = await signAssetPath(saved.asset.storage_path, 6 * 3600);
+  if (!url) throw new Error("Could not open the clip's last frame.");
+  return url;
+};
+
 /** Persist every accepted clip before the next submit; concurrent polls use revision leases. */
 export function withVideoComposition(
   base: VideoProvider,
@@ -86,25 +148,38 @@ export function withVideoComposition(
     assemble?: (
       clips: { dataUrl: string; seconds: number }[],
       audio: boolean,
+      opts?: { dissolve?: boolean },
     ) => Promise<{ dataUrl: string; bytes: number }>;
+    chainFrame?: ChainFrame;
   } = {},
 ): VideoProvider {
   const jobs = deps.store ?? store;
   const assemble =
     deps.assemble ??
-    (async (clips, audio) => {
+    (async (clips, audio, opts) => {
       const { assembleVideoClips } = await import("./assemble.server");
-      return assembleVideoClips(clips, audio);
+      return assembleVideoClips(clips, audio, opts);
     });
+  const chainFrame = deps.chainFrame ?? storedChainFrame;
+  const downloadClip = async (videoUrl: string, provider?: string): Promise<DownloadedVideo> => {
+    const downloaded = await base.download?.(videoUrl, provider);
+    if (downloaded) return downloaded;
+    const { safeFetch } = await import("@/server/safe-fetch");
+    const response = await safeFetch(videoUrl, {
+      timeoutMs: 30_000,
+      maxBytes: 120 * 1024 * 1024,
+      onOverflow: "error",
+    });
+    if (!response.ok) throw new Error("Could not download a generated clip.");
+    const bytes = Buffer.from(response.bytes);
+    return { dataUrl: `data:video/mp4;base64,${bytes.toString("base64")}`, bytes: bytes.length };
+  };
   return {
     ...base,
     async submit(request) {
-      const clips = planVideoSegments(
-        request.durationSec,
-        durationsFor(request.model, request.imageUrls.length > 0),
-      );
+      const clips = planClips(request);
       if (clips.length === 1 && clips[0].renderSeconds === request.durationSec)
-        return base.submit(request);
+        return base.submit(clips[0].prompt ? { ...request, prompt: clips[0].prompt } : request);
       // Check the required local encoder before spending provider credits.
       if (!deps.assemble) {
         const { assertVideoEncoder } = await import("./assemble.server");
@@ -157,14 +232,35 @@ export function withVideoComposition(
             break;
           }
           if (!clip.taskId) {
+            // A chained clip waits for the one before it to finish.
+            const before = row.state.clips[i - 1];
+            if (request.chain && before && !before.videoUrl) break;
+            const frameUrl =
+              request.chain && before?.videoUrl
+                ? await chainFrame({
+                    clip: {
+                      videoUrl: before.videoUrl,
+                      provider: before.provider,
+                      taskId: before.taskId,
+                    },
+                    chain: request.chain,
+                    index: i,
+                    download: downloadClip,
+                  })
+                : undefined;
             clip.submitting = true;
             await save();
             const submitted = await base.submit({
               ...request,
+              clips: undefined,
+              chain: undefined,
               callbackUrl: undefined,
               durationSec: clip.renderSeconds,
               minimumDurationSec: clip.renderSeconds,
-              prompt: segmentVideoPrompt(request.prompt, clip, request.durationSec),
+              imageUrls: clipImages(request, i, frameUrl),
+              // The frame the clip before ended on must survive routing.
+              requiredReferenceCount: frameUrl ? 1 : request.requiredReferenceCount,
+              prompt: clip.prompt ?? segmentVideoPrompt(request.prompt, clip, request.durationSec),
             });
             if (!submitted.ok) {
               if (submitted.definite && submitted.retryable) {
@@ -209,7 +305,11 @@ export function withVideoComposition(
         }
         if (row.state.error) return failure(row.state.error);
         if (row.state.clips.some((c) => !c.videoUrl)) return pending();
-        const costs = row.state.clips.map((c) => c.costUsd);
+        // A clip made again by the checks is added to the cost, so what Mellox
+        // really paid is metered (the person's price never changes).
+        const costs = row.state.clips.map((c) =>
+          c.costUsd == null ? c.costUsd : c.costUsd + (c.earlierCostUsd ?? 0),
+        );
         return {
           state: "success",
           providerState: "clips_ready",
@@ -231,27 +331,49 @@ export function withVideoComposition(
       const clips = [];
       let totalBytes = 0;
       for (const clip of row.state.clips) {
-        let downloaded = await base.download?.(clip.videoUrl!, clip.provider);
-        if (!downloaded) {
-          const { safeFetch } = await import("@/server/safe-fetch");
-          const response = await safeFetch(clip.videoUrl!, {
-            timeoutMs: 30_000,
-            maxBytes: 120 * 1024 * 1024,
-            onOverflow: "error",
-          });
-          if (!response.ok) throw new Error("Could not download a generated clip.");
-          const bytes = Buffer.from(response.bytes);
-          downloaded = {
-            dataUrl: `data:video/mp4;base64,${bytes.toString("base64")}`,
-            bytes: bytes.length,
-          };
-        }
+        const downloaded = await downloadClip(clip.videoUrl!, clip.provider);
         totalBytes += downloaded.bytes;
         if (totalBytes > 240 * 1024 * 1024)
           throw new Error("Generated clips exceed the video size limit.");
         clips.push({ dataUrl: downloaded.dataUrl, seconds: clip.seconds });
       }
-      return assemble(clips, row.state.request.audio ?? row.state.request.model.nativeAudio);
+      return assemble(clips, row.state.request.audio ?? row.state.request.model.nativeAudio, {
+        dissolve: row.state.request.dissolve,
+      });
     },
   };
+}
+
+export const isComposedTask = (taskId: string) => taskId.startsWith(PREFIX);
+
+/**
+ * Make some clips of a finished composition again, because the video checks
+ * found them wrong (src/lib/studio/video/checks.ts). Each named clip is reset
+ * with the reason added to its prompt; the next check submits it, a chained
+ * clip again from the frame the clip before ended on. False when the
+ * composition is gone or another poll holds it.
+ */
+export async function redoComposedClips(
+  taskId: string,
+  clips: readonly number[],
+  notes: Readonly<Record<number, string>>,
+  jobs: CompositionStore = store,
+): Promise<boolean> {
+  if (!isComposedTask(taskId)) return false;
+  const row = await jobs.get(taskId.slice(PREFIX.length));
+  if (!row || row.state.error) return false;
+  if (row.lease_until && Date.parse(row.lease_until) > Date.now()) return false;
+  for (const index of clips) {
+    const clip = row.state.clips[index];
+    if (!clip) continue;
+    clip.earlierCostUsd = (clip.earlierCostUsd ?? 0) + (clip.costUsd ?? 0);
+    clip.taskId = undefined;
+    clip.provider = undefined;
+    clip.videoUrl = undefined;
+    clip.costUsd = undefined;
+    clip.retries = 0;
+    if (notes[index] && clip.prompt)
+      clip.prompt = `${clip.prompt.replace(/\n\nFIX FROM THE LAST TRY:[\s\S]*$/, "")}\n\nFIX FROM THE LAST TRY: ${notes[index]}`;
+  }
+  return Boolean(await jobs.save(row, null));
 }

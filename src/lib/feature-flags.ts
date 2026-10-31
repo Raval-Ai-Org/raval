@@ -354,6 +354,22 @@ export function isClipEditEnabled(workspaceId?: string): boolean {
   return !isFalsy((process.env.FEATURE_FLAG_CLIP_EDIT_ENABLED ?? "").trim().toLowerCase());
 }
 
+/**
+ * New AI videos planned as a storyboard of whole clips, chained, and checked
+ * before anyone sees them (src/lib/studio/video/). On unless set to "false";
+ * `FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off: one shot plan and one render prompt, as before.
+ */
+export function isVideoStoryboardEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED ?? "").trim().toLowerCase());
+}
+
 export function isProofEngineEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_PROOF_ENGINE_ENABLED_WS_${workspaceId}`] ?? "")

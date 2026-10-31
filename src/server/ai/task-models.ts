@@ -148,6 +148,11 @@ const REGISTRY: Record<string, TaskPlan> = {
   // The visual brief a picture or video is made from (buildVisualBriefPrompt).
   "studio.image.brief": tier(WORKHORSE, "medium"),
   "studio.video.brief": tier(WORKHORSE, "medium"),
+  // A new AI video's storyboard (buildVideoStoryboardPrompt): one text call,
+  // and where a video's story and consistency are won, so the premium tier.
+  "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000 }),
+  // Scores a finished video's sampled frames; code decides (src/lib/studio/video/checks.ts).
+  "studio.video.qa": tier(WORKHORSE, "low", { maxTokens: 1_200 }),
   "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
   "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "campaign-generation": tier(PREMIUM, "low"),

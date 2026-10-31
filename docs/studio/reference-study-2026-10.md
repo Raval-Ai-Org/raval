@@ -27,17 +27,17 @@ A later round should add to this file, not start a new one.
 
 ## Recipes per post kind
 
-| Kind | Structure | Notes |
-| --- | --- | --- |
-| Case study | Cover (the identity on its hero object) → one touchpoint per slide → quiet end card | Caption ends with a credits block: "Client · category", then "Scope: a · b · c". |
-| Agency intro | Hook → what we do (numbered) → who it's for → proof → action that calls back to the cover | Plain words; the proof is real work, not adjectives. |
-| Hiring | A metaphor hook that doesn't say "hiring" → the reveal → roles as a numbered list → one action | The reveal is low-key: a grey line under the big words. |
-| Greeting | One symbol in the brand colour, at least 75% empty space, one line | A brand glyph can replace part of the symbol; no logo lock-up needed. |
-| Teaser | One shape or crop that hides the thing, the date if there is one | Never show what is being teased. |
-| Humour | The same setup and punchline template on every slide; the last slide says why | Topical "what if" pictures are photoreal and impossible. |
-| Collab | "A × B" set as words, both names the same size | Never draw either logo. |
-| Market entry | From → to, as a split picture | Only places and dates the brand gave. |
-| Website showcase | The real capture in a device on a calm set in brand colours | Headline above or beside the device, never on the screen. |
+| Kind             | Structure                                                                                      | Notes                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Case study       | Cover (the identity on its hero object) → one touchpoint per slide → quiet end card            | Caption ends with a credits block: "Client · category", then "Scope: a · b · c". |
+| Agency intro     | Hook → what we do (numbered) → who it's for → proof → action that calls back to the cover      | Plain words; the proof is real work, not adjectives.                             |
+| Hiring           | A metaphor hook that doesn't say "hiring" → the reveal → roles as a numbered list → one action | The reveal is low-key: a grey line under the big words.                          |
+| Greeting         | One symbol in the brand colour, at least 75% empty space, one line                             | A brand glyph can replace part of the symbol; no logo lock-up needed.            |
+| Teaser           | One shape or crop that hides the thing, the date if there is one                               | Never show what is being teased.                                                 |
+| Humour           | The same setup and punchline template on every slide; the last slide says why                  | Topical "what if" pictures are photoreal and impossible.                         |
+| Collab           | "A × B" set as words, both names the same size                                                 | Never draw either logo.                                                          |
+| Market entry     | From → to, as a split picture                                                                  | Only places and dates the brand gave.                                            |
+| Website showcase | The real capture in a device on a calm set in brand colours                                    | Headline above or beside the device, never on the screen.                        |
 
 ## Captions
 
@@ -76,6 +76,38 @@ whole product photo into a rounded card with clip-art around it.
 
 Distilled into `src/lib/studio/product-hero/` (ADR-0040), the `benefit-list`
 art-direction layout for services, and the product-hero deliverable.
+
+## Round 4: campaign poster prompts and caption patterns
+
+About 35 published poster prompts the team collected (giant-object fashion
+ads, product worlds, sports posters, birthday and travel posters, exploded
+infographics), plus a public library of 112 fill-in-the-blank caption, hook
+and carousel prompts. Most poster ideas were already in the library from
+rounds 1–3 (`monument-object`, `hero-world`, `exploded-view`,
+`miniature-diorama`, `portal-pop-out`, `name-on-the-wall`, `peak-action`,
+`pop-collage`, `quiet-editorial`, `literal-metaphor`, `material-swap`,
+`double-exposure`, `film-strip-cutout`); nothing was removed. New:
+
+- Layouts `portrait-backdrop` (a huge profile portrait behind, the same person
+  small in front, one word cut in vertically), `carved-relief` (a number or
+  shape carved into a wall, the subject breaking out), `sculpted-backdrop`
+  (a wide stance in front of glossy inflated shapes, a lowercase word behind)
+  and `annotated-giant` (the product at the size of a seated person, with thin
+  callouts).
+- Craft rule: oversized things look real only through contact (shadow,
+  reflection, fabric folds).
+- Deliverable `milestone` (anniversaries, "turns 5", follower counts): the
+  figure from the copy as a carved or sculpted object, never invented.
+- Carousels: `insights` (what each finding means, most surprising first, only
+  supplied figures) and `soft-sell` (teach first, offer at most a quarter of
+  the slides). Steps may name the usual mistake, comparisons end with a rule
+  for choosing, checklists are specific actions in before/during/after order.
+- Openings `relatable` and `curiosity` (an honest open loop that is paid off).
+- Caption rule: written for a phone, benefits over features, no hype words.
+
+What was left out on purpose: the prompts' model names, "8K" and other
+quality tags (the gateway picks the model), famous people and other brands'
+logos or slogans, and "comment KEYWORD for the link" (still banned bait).
 
 ## Mistakes seen in the set (and guarded against)
 

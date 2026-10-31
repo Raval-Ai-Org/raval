@@ -13,10 +13,62 @@ export async function assertVideoEncoder() {
   await run(ffmpeg(), ["-version"], options);
 }
 
+/** A short dissolve between clips that are not chained (mood pieces). */
+export const DISSOLVE_SECONDS = 0.3;
+
+function videoBytes(dataUrl: string): Buffer {
+  const match = /^data:video\/[a-z0-9.+-]+;base64,([a-z0-9+/=]+)$/i.exec(dataUrl);
+  if (!match) throw new Error("Invalid generated video bytes.");
+  return Buffer.from(match[1], "base64");
+}
+
+/**
+ * The very last frame of a clip, as a JPEG: the next chained clip starts from
+ * it, so the person, product and place carry straight on.
+ */
+export async function lastVideoFrame(dataUrl: string): Promise<Buffer> {
+  const directory = await mkdtemp(join(tmpdir(), "mellox-frame-"));
+  try {
+    const input = join(directory, "clip.mp4");
+    const output = join(directory, "last.jpg");
+    await writeFile(input, videoBytes(dataUrl));
+    await run(
+      ffmpeg(),
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-protocol_whitelist",
+        "file,pipe",
+        "-format_whitelist",
+        "mov,matroska,webm,avi,mpeg,ogg",
+        "-sseof",
+        "-0.25",
+        "-i",
+        input,
+        "-update",
+        "1",
+        "-q:v",
+        "2",
+        output,
+      ],
+      options,
+    );
+    return await readFile(output);
+  } finally {
+    const withinTemp = relative(resolve(tmpdir()), resolve(directory));
+    if (withinTemp && !withinTemp.startsWith("..") && !withinTemp.includes(":"))
+      await rm(directory, { recursive: true, force: true });
+  }
+}
+
 /** Re-encode before concatenation so provider/fallback codecs and audio tracks match. */
 export async function assembleVideoClips(
   clips: { dataUrl: string; seconds: number }[],
   audio: boolean,
+  opts: { dissolve?: boolean } = {},
 ) {
   const directory = await mkdtemp(join(tmpdir(), "mellox-video-"));
   try {
@@ -125,11 +177,71 @@ export async function assembleVideoClips(
         options,
       );
     }
+    const output = join(directory, "output.mp4");
+    if (opts.dissolve && clips.length > 1) {
+      // Each clip overlaps the next by the dissolve; offsets are on the joined timeline.
+      const inputs = clips.flatMap((_, i) => ["-i", join(directory, `clip-${i}.mp4`)]);
+      const parts: string[] = [];
+      let video = "[0:v]";
+      let sound = "[0:a]";
+      let offset = 0;
+      for (let i = 1; i < clips.length; i++) {
+        offset += clips[i - 1].seconds - DISSOLVE_SECONDS;
+        parts.push(
+          `${video}[${i}:v]xfade=transition=fade:duration=${DISSOLVE_SECONDS}:offset=${offset.toFixed(2)}[v${i}]`,
+        );
+        video = `[v${i}]`;
+        if (audio) {
+          parts.push(`${sound}[${i}:a]acrossfade=d=${DISSOLVE_SECONDS}[a${i}]`);
+          sound = `[a${i}]`;
+        }
+      }
+      await run(
+        ffmpeg(),
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-nostdin",
+          "-y",
+          "-threads",
+          "1",
+          "-protocol_whitelist",
+          "file,pipe",
+          ...inputs,
+          "-filter_complex",
+          parts.join(";"),
+          "-map",
+          video,
+          ...(audio ? ["-map", sound, "-c:a", "aac", "-ar", "48000", "-ac", "2"] : ["-an"]),
+          "-r",
+          "30",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-movflags",
+          "+faststart",
+          output,
+        ],
+        options,
+      );
+      const joined = await readFile(output);
+      if (joined.length > 120 * 1024 * 1024)
+        throw new Error("The assembled video exceeds the storage size limit.");
+      return {
+        dataUrl: `data:video/mp4;base64,${joined.toString("base64")}`,
+        bytes: joined.length,
+      };
+    }
     await writeFile(
       join(directory, "clips.txt"),
       clips.map((_, i) => `file 'clip-${i}.mp4'`).join("\n"),
     );
-    const output = join(directory, "output.mp4");
     await run(
       ffmpeg(),
       [

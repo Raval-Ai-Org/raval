@@ -425,6 +425,76 @@ const ROWS: Partial<Record<StudioType, ReviewRow[]>> = {
   ],
 };
 
+/** A storyboarded video that passed its checks (src/lib/studio/video/). */
+const LAB_VIDEO_PLAN: NonNullable<StudioJobOutput["videoPlan"]> = {
+  kind: "product-showcase",
+  model: "standard",
+  clipSeconds: [8, 8],
+  storyboard: {
+    logline:
+      "A frosted can of oat-milk cold brew is opened and poured over ice on a sunny counter.",
+    bible: {
+      cast: [],
+      product: "Matte sage-green 250 ml can with a cream label and the brand's wordmark",
+      setting: "A pale oak kitchen counter by an open window",
+      lighting: "Warm morning sun from the left, soft shadows",
+      palette: "Sage green, cream, honey",
+      camera: "Macro and close shots, slow and steady",
+    },
+    clips: [
+      {
+        opensOn: "Condensation running down the can in macro",
+        shots: [
+          {
+            start: 0,
+            end: 3,
+            camera: "macro push-in",
+            action: "A drop runs down the cold can",
+            cast: [],
+          },
+          {
+            start: 3,
+            end: 8,
+            camera: "slow orbit",
+            action: "A hand lifts the can into the sun",
+            cast: [],
+          },
+        ],
+        endsOn: "The hand cracks the can open, a puff of cold air",
+        sound: "Fizz and a soft click",
+        onScreen: "",
+      },
+      {
+        opensOn: "The open can in the hand, cold air rising",
+        shots: [
+          {
+            start: 0,
+            end: 5,
+            camera: "side close-up",
+            action: "Cold brew pours over clear ice",
+            cast: [],
+          },
+          {
+            start: 5,
+            end: 8,
+            camera: "slow pull-back",
+            action: "The glass and can sit side by side",
+            cast: [],
+          },
+        ],
+        endsOn: "The full glass beside the can, label facing the camera",
+        sound: "Ice settling, a calm beat",
+        onScreen: "Cold brew, made with oat milk",
+      },
+    ],
+  },
+  check: {
+    passed: true,
+    redone: 0,
+    notes: ["Checked: the same subject in every clip, and a clean ending."],
+  },
+};
+
 function session(
   type: StudioType,
   step: SessionStep,
@@ -799,6 +869,57 @@ const SCENES: Scene[] = [
     id: "review-video-rendering",
     label: "Review · Video rendering",
     make: () => session("video", "review"),
+    fixtures: { rows: ROWS.video, distribution: true },
+  },
+  {
+    id: "brief-video-kinds",
+    label: "Brief · Kind of video",
+    make: () =>
+      session("video", "intent", {
+        brief: "Show off our new oat-milk cold brew can for summer",
+        controls: { platforms: ["instagram"], ratio: "9:16", audio: true },
+      }),
+  },
+  {
+    id: "brief-video-motion-post",
+    label: "Brief · Motion post from a picture",
+    make: () =>
+      session("video", "intent", {
+        brief: "Turn my post picture into a short video ad.",
+        sourceContentId: "00000000-0000-4000-8000-0000000000aa",
+        sourceLabel: 'your post "Summer cold brew"',
+        controls: {
+          platforms: ["instagram"],
+          ratio: "9:16",
+          videoKind: "motion-post",
+          videoMode: "recap",
+          recapMotion: "camera",
+        },
+      }),
+  },
+  {
+    id: "review-video-checked",
+    label: "Review · Video checked",
+    make: () => {
+      const base = session("video", "review");
+      const job = {
+        ...base.job!,
+        output: {
+          ...base.job!.output,
+          media: [
+            {
+              slot: "main",
+              kind: "video" as const,
+              ratio: "9:16",
+              status: "ready" as const,
+              url: art(720, 1280, "#1d3b2a", "#c8f25a", "Cold brew"),
+            },
+          ],
+          videoPlan: LAB_VIDEO_PLAN,
+        },
+      } as StudioJob;
+      return { ...base, job, lastGood: job };
+    },
     fixtures: { rows: ROWS.video, distribution: true },
   },
   {

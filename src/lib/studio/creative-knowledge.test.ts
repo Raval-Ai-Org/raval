@@ -59,6 +59,8 @@ describe("deliverables", () => {
     ["Hi, we’re Northwind. We build websites and digital products.", "intro"],
     ["Taking the day off today, so hold your horses", "humour"],
     ["Now open in Lahore: our first store in Pakistan", "market-entry"],
+    ["Our 5th anniversary: thank you for every order", "milestone"],
+    ["Northwind turns 10 this week", "milestone"],
   ])("reads %j as %s", (text, id) => {
     expect(detectDeliverable({ text }).id).toBe(id);
   });

@@ -16,13 +16,33 @@ import { AdFormatPicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { shortClipPlan } from "@/lib/studio/short-clip";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { Crown } from "@/components/icons";
+import { emitAppEvent } from "@/lib/app-events";
+import { isAiVideo, settleVideoControls } from "@/lib/studio/video/settle";
+import { DEFAULT_STUDIO_VIDEO_MODEL, recommendedModel } from "@/lib/studio/video/kinds";
+import { lengthChoices } from "@/lib/studio/video/lengths";
+import { VideoKindPicker } from "./VideoKindPicker";
+
+const MODEL_NAMES: Partial<Record<string, string>> = {
+  draft: "Economy",
+  standard: "Standard",
+  premium: "Premium",
+};
 
 const INPUT =
   "h-9 w-full rounded-lg border border-input bg-surface-3 px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55";
 
 /** One-line description of the settings, for collapsed headers and summaries. */
 export function describeControls(session: StudioSession): string {
-  const c = session.controls;
+  const c = isAiVideo(session.type, session.controls)
+    ? settleVideoControls({
+        type: session.type,
+        controls: session.controls,
+        brief: session.brief,
+        template: session.template,
+        source: { picture: !!session.sourceContentId, script: !!session.sourceScript },
+      })
+    : session.controls;
   const format = STUDIO_FORMATS[session.type];
   const parts: string[] = [];
   if (session.type === "article") {
@@ -156,6 +176,36 @@ export function ControlsPanel({
     session.type === "video" &&
     (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site");
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
+  const motionPost = c.videoMode === "recap" && c.videoKind === "motion-post";
+  const aiVideo = isAiVideo(session.type, c);
+  // What really runs (the same settling as the quote): kind, model, length.
+  const settled = aiVideo
+    ? settleVideoControls({
+        type: session.type,
+        controls: c,
+        brief: session.brief,
+        template: session.template,
+        source: { picture: !!session.sourceContentId, script: !!session.sourceScript },
+      })
+    : c;
+  const settledModel = settled.videoModelKey ?? DEFAULT_STUDIO_VIDEO_MODEL;
+  const settledKind = settled.videoKind ?? "brand-story";
+  const lengths = aiVideo ? lengthChoices(settledModel, settledKind) : [];
+  const premiumAllowed = billing ? billing.features.video_premium.allowed : true;
+  const recommendedKey = aiVideo
+    ? recommendedModel(settledKind, (key) => key !== "premium" || premiumAllowed)
+    : undefined;
+  const chooseModel = (videoModelKey: "draft" | "standard" | "premium") => {
+    if (videoModelKey === "premium" && !premiumAllowed) {
+      emitAppEvent("billing:blocked", {
+        code: "upgrade_required",
+        feature: "video_premium",
+        requiredPlan: "starter",
+      });
+      return;
+    }
+    set({ videoModelKey, videoResolution: "720P" });
+  };
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
@@ -168,7 +218,12 @@ export function ControlsPanel({
           disabled={disabled}
         />
       )}
-      {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
+      {session.type === "video" && (aiVideo || motionPost) ? (
+        <VideoKindPicker controls={c} picked={settled.videoKind} set={set} />
+      ) : null}
+      {session.type === "story" ? (
+        <StoryControls controls={c} set={set} lengths={lengths} length={settled.durationSec} />
+      ) : null}
 
       {format.media === "optional-image" && !storyVideo && !c.seamless ? (
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
@@ -212,18 +267,40 @@ export function ControlsPanel({
           <Segmented
             label="Video option"
             className="flex w-full flex-wrap"
-            value={c.videoModelKey ?? "standard"}
-            onChange={(videoModelKey) => set({ videoModelKey, videoResolution: "720P" })}
-            options={[
-              { value: "draft", label: "Economy" },
-              { value: "standard", label: "Standard" },
-              { value: "premium", label: "Premium" },
-            ]}
+            value={
+              (settled.videoModelKey ?? DEFAULT_STUDIO_VIDEO_MODEL) as
+                "draft" | "standard" | "premium"
+            }
+            onChange={chooseModel}
+            options={(
+              [
+                { value: "draft", label: "Economy" },
+                { value: "standard", label: "Standard" },
+                { value: "premium", label: "Premium" },
+              ] as const
+            ).map((o) => ({
+              value: o.value,
+              label:
+                o.value === "premium" && !premiumAllowed ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Crown className="size-3" aria-hidden />
+                    {o.label}
+                  </span>
+                ) : (
+                  o.label
+                ),
+              hint:
+                o.value === "premium" && !premiumAllowed
+                  ? "On Starter and up"
+                  : o.value === recommendedKey
+                    ? "Recommended for this kind of video"
+                    : undefined,
+            }))}
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {animatedRecap
               ? "Economy and Standard use credits for each photo. Premium uses video credits."
-              : "8 seconds or less on Economy or Standard uses credits. Longer or Premium uses video credits."}
+              : `${recommendedKey && MODEL_NAMES[recommendedKey] ? `${MODEL_NAMES[recommendedKey]} works best for this kind. ` : ""}8 seconds or less on Economy or Standard uses credits. Longer or Premium uses video credits.`}
           </p>
         </div>
       )}
@@ -346,7 +423,7 @@ export function ControlsPanel({
                 <FieldLabel
                   hint={
                     session.type === "video"
-                      ? "Up to 1 minute · longer videos use more credits"
+                      ? "Whole clips, each one finished · longer videos use more credits"
                       : undefined
                   }
                 >
@@ -354,12 +431,14 @@ export function ControlsPanel({
                 </FieldLabel>
                 <Segmented
                   label="Length"
-                  value={c.durationSec ?? (session.type === "video" ? 10 : 30)}
+                  className="max-w-full flex-wrap"
+                  value={
+                    session.type === "video"
+                      ? (settled.durationSec ?? lengths[0])
+                      : (c.durationSec ?? 30)
+                  }
                   onChange={(durationSec) => set({ durationSec })}
-                  options={(session.type === "video"
-                    ? [8, 10, 15, 20, 30, 40, 60]
-                    : [15, 30, 60]
-                  ).map((v) => ({
+                  options={(session.type === "video" ? lengths : [15, 30, 60]).map((v) => ({
                     value: v,
                     label: `${v}s`,
                   }))}
@@ -468,9 +547,14 @@ export function ControlsPanel({
 function StoryControls({
   controls: c,
   set,
+  lengths,
+  length,
 }: {
   controls: StudioControls;
   set: (patch: Partial<StudioControls>) => void;
+  /** Whole-clip lengths for a Story video (src/lib/studio/video/lengths.ts). */
+  lengths: number[];
+  length?: number;
 }) {
   const video = c.storyMode === "video";
   const [mentions, setMentions] = useState((c.mentions ?? []).map((m) => `@${m}`).join(" "));
@@ -497,9 +581,9 @@ function StoryControls({
           <Segmented
             label="Length"
             className="max-w-full flex-wrap"
-            value={c.durationSec ?? 10}
+            value={length ?? lengths[0] ?? 8}
             onChange={(durationSec) => set({ durationSec })}
-            options={[8, 10, 15, 20, 30, 40, 60].map((v) => ({ value: v, label: `${v}s` }))}
+            options={(lengths.length ? lengths : [8]).map((v) => ({ value: v, label: `${v}s` }))}
           />
         </div>
       ) : (

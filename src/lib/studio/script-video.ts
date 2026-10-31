@@ -58,6 +58,36 @@ export function creatorBrief(source: ScriptVideoSource) {
   });
 }
 
+/**
+ * The reviewed script's scenes that fall inside one clip of a storyboarded
+ * video, with the words kept exactly. A scene belongs to the clip its middle
+ * falls in, so every scene is sent once.
+ */
+export function sourceScriptClipDirection(
+  source: ScriptOutput,
+  clip: { start: number; seconds: number },
+  totalSec: number,
+  audio = true,
+): string | null {
+  const scale = totalSec / source.durationSec;
+  const end = clip.start + clip.seconds;
+  const scenes = scriptScenes(source).filter((scene) => {
+    const middle = ((scene.start + scene.end) / 2) * scale;
+    return middle >= clip.start && (middle < end || end >= totalSec);
+  });
+  if (!scenes.length) return null;
+  return [
+    "REVIEWED SCRIPT FOR THIS CLIP — keep these scenes in order and do not change the supplied words.",
+    ...scenes.map(
+      (scene) =>
+        `${scene.action}${audio && scene.dialogue ? ` The creator says: ${JSON.stringify(scene.dialogue)}` : ""}`,
+    ),
+    audio
+      ? "Speak the quoted words exactly once, in their original language."
+      : "No speech. Follow the visual directions from the reviewed script.",
+  ].join("\n");
+}
+
 /** Sent directly to the renderer so a short AI shot-plan cannot drop dialogue. */
 export function sourceScriptDirection(
   source: ScriptOutput,

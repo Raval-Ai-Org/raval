@@ -162,6 +162,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     highlights: [
       "Autopilot writes and schedules your posts",
       "Posts, articles and video ads in your voice",
+      "Premium video with your Video Credits",
       "See what ChatGPT and Gemini say about you",
       "Test posts on your audience first",
       "Competitors and market, checked weekly",
@@ -171,7 +172,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
   growth: {
     id: "growth",
     label: "Growth",
-    tagline: "Up to 3 brands, premium video and website fixes done for you.",
+    tagline: "Up to 3 brands, Full-HD video and website fixes done for you.",
     badge: "Most popular",
     priceMonthlyUsd: 149,
     priceAnnualUsd: 1_490,
@@ -198,7 +199,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     fit: "For growing brands and small teams",
     highlights: [
       "Fix all website issues in one go",
-      "Full-HD and premium video",
+      "Full-HD video",
       "Campaigns, approvals and a client portal",
     ],
   },
@@ -372,7 +373,7 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     module: "UGC video",
     label: "Premium and Long-take video",
     pitch: "Photoreal hero ads from your product photos, and takes up to 15 seconds.",
-    minPlan: "growth",
+    minPlan: "starter",
   },
   video_cinematic: {
     key: "video_cinematic",
@@ -928,6 +929,9 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "studio.image.review",
   // A video's brief is part of the video, charged in video units.
   "studio.video.brief",
+  "studio.video.storyboard",
+  // Checking a video before anyone sees it (and one redo) is Mellox's cost.
+  "studio.video.qa",
   // Visual identity review is part of the already charged Studio image action.
   "brand-visuals.review",
   "analytics/insights-auto",

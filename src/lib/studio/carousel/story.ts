@@ -40,7 +40,7 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     id: "steps",
     label: "Step by step",
     directive:
-      "A sequence someone can follow. Each middle slide is one step in the real order, its heading starts with a verb, and each step only makes sense after the one before it.",
+      "A sequence someone can follow. Each middle slide is one step in the real order, its heading starts with a verb, and each step only makes sense after the one before it. Where it helps, the body ends with the one mistake people make at that step.",
     kickerHint: '"Step 1", "Step 2", …',
   },
   {
@@ -82,7 +82,7 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     id: "comparison",
     label: "This versus that",
     directive:
-      "Two ways of doing the same thing, compared on one point per slide. Keep the same two sides and the same order on every slide so the reader can follow the contrast.",
+      "Two ways of doing the same thing, compared on one point per slide. Keep the same two sides and the same order on every slide so the reader can follow the contrast. Be honest about where each side wins, and before the close give a plain rule for choosing (one side if…, the other if…).",
     kickerHint: 'the point being compared, e.g. "Cost", "Time", "Result"',
   },
   {
@@ -96,7 +96,7 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     id: "checklist",
     label: "A checklist",
     directive:
-      "Things to check, in the order someone would check them. Each heading is the item, each body is the one-line reason it matters. Made to be saved.",
+      "Things to check, in the order someone would check them. Each heading is the item, written as a specific action rather than vague advice; each body is the one-line reason it matters. When the items fall naturally into before, during and after, keep them in that order. Made to be saved.",
     kickerHint: '"Check 1", "Check 2", …',
   },
   {
@@ -105,6 +105,21 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     directive:
       "Each middle slide is one real question in the audience's own words, answered directly in the body. Order the questions the way they come up in a buyer's head.",
     kickerHint: '"Q1", "Q2", …',
+  },
+  // Round 4, from a study of caption and carousel prompt patterns.
+  {
+    id: "insights",
+    label: "What the numbers mean",
+    directive:
+      "One finding per middle slide. The heading says what the finding means, not just the figure; the body gives the supporting figure and one line on what the reader should do about it. Put the most surprising finding first. Use only figures in the brief or the brand's facts; with none, use plain observations and no numbers.",
+    kickerHint: '"Finding 1", "Finding 2", …',
+  },
+  {
+    id: "soft-sell",
+    label: "Teach, then offer",
+    directive:
+      "Useful first, offer second. The first middle slides teach something genuinely useful about the topic so the post is worth saving on its own; then one slide bridges from the lesson to how the brand's offer removes what is still hard; proof only from supplied facts. Keep at least three parts lesson to one part offer, and end with one clear next step.",
+    kickerHint: '"Know this", "Why it\'s hard", "The easy way"',
   },
   // Round 2, from agency portfolio posts (docs/studio/reference-study-2026-10.md).
   {
@@ -148,15 +163,25 @@ const ANGLE_STRUCTURES: Record<string, string[]> = {
   proof: ["breakdown", "story", "list"],
   story: ["story", "breakdown"],
   myth: ["myths", "mistakes"],
-  data: ["list", "breakdown", "comparison"],
-  objection: ["questions", "myths", "comparison"],
+  data: ["insights", "list", "breakdown", "comparison"],
+  objection: ["questions", "myths", "comparison", "soft-sell"],
   "behind-scenes": ["breakdown", "story", "steps"],
   checklist: ["checklist", "steps", "mistakes"],
   comparison: ["comparison", "story", "mistakes"],
 };
 
-/** Made only when asked for (a template or the brief), never picked by rotation. */
-const ON_REQUEST = new Set(["case-study", "intro", "reveal", "running-joke"]);
+/**
+ * Made only when asked for (a template, the brief or, for the last two, an
+ * angle above), never picked by rotation.
+ */
+const ON_REQUEST = new Set([
+  "case-study",
+  "intro",
+  "reveal",
+  "running-joke",
+  "insights",
+  "soft-sell",
+]);
 
 /** A template names its own structure; nothing overrides it. */
 const TEMPLATE_STRUCTURE: Record<string, string> = {
@@ -199,6 +224,8 @@ const ASKED: [RegExp, string][] = [
   ],
   [/\bwe['’]?re hiring\b|\bwe are hiring\b|\bnow hiring\b|\bjob opening/i, "reveal"],
   [/\brunning joke\b|\bmeme carousel\b|\bnot today\b/i, "running-joke"],
+  [/\bsoft[- ]sell\b|\bteach,? then (sell|offer)\b/i, "soft-sell"],
+  [/\bsurvey (results|findings)\b|\bwhat the (data|numbers) (says?|shows?|means?)\b/i, "insights"],
   [/\bchecklist\b/i, "checklist"],
   [/\bmyths?\b/i, "myths"],
   [/\bmistakes?\b/i, "mistakes"],

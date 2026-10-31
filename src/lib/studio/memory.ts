@@ -58,6 +58,18 @@ export const HOOK_STYLES: HookStyle[] = [
     label: "A how-to promise",
     directive: "Open by promising one specific thing the reader will be able to do after reading.",
   },
+  {
+    id: "relatable",
+    label: "A moment they know",
+    directive:
+      "Open with a hyper-specific moment only this audience lives through, so they feel seen; never a scene generic enough to fit any brand.",
+  },
+  {
+    id: "curiosity",
+    label: "An honest open loop",
+    directive:
+      "Open by hinting at one specific, useful thing without giving it away yet, and pay it off fully in the piece; no 'you won't believe' phrasing.",
+  },
 ];
 
 function hash(value: string): number {

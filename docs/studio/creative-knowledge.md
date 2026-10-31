@@ -129,7 +129,9 @@ brand-neutral and put in the module that owns it:
   the website reel ("From my website").
 
 The full notes (recipes per post kind, measured clip timings, mistakes to
-avoid) are in [reference-study-2026-10.md](reference-study-2026-10.md). The
+avoid), including round 4 (four more layouts, the milestone deliverable, the
+`insights` and `soft-sell` carousels and two more openings), are in
+[reference-study-2026-10.md](reference-study-2026-10.md). The
 names seen in the set are in the "never names another company" tests.
 
 ## Checking it

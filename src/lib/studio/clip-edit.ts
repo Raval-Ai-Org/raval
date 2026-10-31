@@ -53,6 +53,14 @@ export function recapSeconds(photos: number, motion: "camera" | "ai"): number {
   return photos * (motion === "ai" ? RECAP_AI_SECONDS : RECAP_PHOTO_SECONDS) + END_CARD_SECONDS;
 }
 
+/** A motion post's one picture is held long enough to read its words. */
+export const MOTION_POST_SECONDS = 7;
+
+/** How long each photo is on screen: a motion post of one picture holds it longer. */
+export function motionPostSeconds(photos: number, post: boolean): number {
+  return post && photos === 1 ? MOTION_POST_SECONDS : RECAP_PHOTO_SECONDS;
+}
+
 /** Output size for a ratio: even numbers, 720 on the short side (light enough to post). */
 export function videoCanvas(ratio: AspectRatio): { width: number; height: number } {
   const sizes: Record<AspectRatio, { width: number; height: number }> = {

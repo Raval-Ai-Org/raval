@@ -56,3 +56,14 @@ describe("billing catalog invariants", () => {
     }
   });
 });
+
+describe("premium video on Starter", () => {
+  it("sells Premium video from Starter up, keeps Cinematic for Agency and Full HD for Growth", async () => {
+    const { planAllows } = await import("./catalog");
+    expect(planAllows("starter", "video_premium")).toBe(true);
+    expect(planAllows("free", "video_premium")).toBe(false);
+    expect(planAllows("starter", "video_cinematic")).toBe(false);
+    expect(planAllows("starter", "video_1080p")).toBe(false);
+    expect(planAllows("growth", "video_1080p")).toBe(true);
+  });
+});

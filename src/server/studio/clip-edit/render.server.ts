@@ -22,7 +22,7 @@ import type { AspectRatio } from "@/lib/studio/aspect";
 import type { CopyLine } from "@/lib/studio/creative-knowledge";
 import {
   END_CARD_SECONDS,
-  RECAP_PHOTO_SECONDS,
+  motionPostSeconds,
   planClips,
   videoCanvas,
 } from "@/lib/studio/clip-edit";
@@ -103,6 +103,12 @@ export type ClipEditTask = {
   emphasisSeed: string;
   /** "Brand my clips": captions of what is said (on unless turned off). */
   captions?: boolean;
+  /**
+   * A motion post (src/lib/studio/video/kinds.ts): the photos are a finished
+   * post that already carries its words, so no design is laid over them and
+   * one picture is held long enough to read.
+   */
+  post?: boolean;
 };
 
 export type ClipEditResult =
@@ -548,9 +554,10 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
           await coverAt(photo, readings[index].focus, canvas.width * 2, canvas.height * 2),
         );
         const out = join(dir, `clip-${index}.mp4`);
-        await stillClip({ image, output: out, ...canvas, seconds: RECAP_PHOTO_SECONDS });
+        const seconds = motionPostSeconds(photos.length, !!task.post);
+        await stillClip({ image, output: out, ...canvas, seconds });
         clips.push(out);
-        lengths.push(RECAP_PHOTO_SECONDS);
+        lengths.push(seconds);
         stills.push(
           await asPhoto(await coverAt(photo, readings[index].focus, canvas.width, canvas.height)),
         );
@@ -560,10 +567,14 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
 
     // The opening design over the start, judged on the first frame.
     const wantCaptions = task.mode === "brand" && task.captions !== false && talky;
-    const overlay = await openingOverlay(task, stills[0], readings[0], canvas, wantCaptions);
-    if (!overlay) throw new Error("The opening design kept covering the footage.");
-    const overlayPath = join(dir, "overlay.png");
-    await writeFile(overlayPath, overlay);
+    // A motion post already carries its own words: nothing is laid over it.
+    let overlayPath: string | null = null;
+    if (!task.post) {
+      const overlay = await openingOverlay(task, stills[0], readings[0], canvas, wantCaptions);
+      if (!overlay) throw new Error("The opening design kept covering the footage.");
+      overlayPath = join(dir, "overlay.png");
+      await writeFile(overlayPath, overlay);
+    }
     await beat();
 
     const card = await endCard(task, stills.slice(0, 3), readings.slice(0, 3), canvas);

@@ -41,8 +41,31 @@ import { studioJobRenders, studioTextOnlyRevision } from "@/lib/studio/billing";
 import { retainStudioMedia } from "@/lib/studio/revisions";
 import { studioJobIsStale, studioProviderTaskIsTimedOut } from "@/lib/studio/recovery";
 import { isCaptionRevision } from "@/lib/billing/creation";
-import { sourceScriptDirection } from "@/lib/studio/script-video";
+import { sourceScriptClipDirection, sourceScriptDirection } from "@/lib/studio/script-video";
 import { animateImageDirection, VIDEO_AD_RULES } from "@/lib/studio/video-ad";
+import { DEFAULT_STUDIO_VIDEO_MODEL, videoKind } from "@/lib/studio/video/kinds";
+import { clipPlan, clipSeconds } from "@/lib/studio/video/lengths";
+import { isAiVideo } from "@/lib/studio/video/settle";
+import {
+  clipPrompt,
+  fitStoryboard,
+  storyboardIssues,
+  storyboardSummary,
+  type VideoStoryboard,
+} from "@/lib/studio/video/storyboard";
+import { NOT_DELIVERED_MESSAGE, passedNote, redoPlan } from "@/lib/studio/video/checks";
+import { platformVideoNote } from "@/lib/studio/video-ad";
+import type { UgcModelKey } from "@/lib/ugc/models";
+import type { VideoRenderRequest } from "@/server/ugc/providers/types";
+import { isComposedTask, redoComposedClips } from "@/server/ugc/providers/composition.server";
+import {
+  endOnStill,
+  frameForVideo,
+  renderEndCard,
+  videoBuffer,
+} from "@/server/studio/video/finish.server";
+import { checkStudioVideo } from "@/server/studio/video/qa.server";
+import { isVideoStoryboardEnabled } from "@/lib/feature-flags";
 import {
   resolveStudioReferences,
   studioReferenceImages,
@@ -243,9 +266,27 @@ type ProviderTask = {
     imagePaths: string[];
     /** Add the brand's saved style references after the person's own images. */
     styleReferences: boolean;
+    /** A storyboard video: one prompt per whole clip, in order. */
+    clipPrompts?: string[];
+    /** Each clip starts from the last frame of the one before. */
+    chain?: boolean;
+    /** Clips joined with a short dissolve. */
+    dissolve?: boolean;
+    /** The post's picture framed for the video: it opens the video and the ending returns to it. */
+    firstFramePath?: string;
+    /** An offer video's code-drawn end card: the brand's name and colours. */
+    endCardStyle?: {
+      brandName: string;
+      background: string;
+      ink: string;
+      accent?: string;
+      font?: string;
+    };
   };
   /** Video only: times the render was submitted again after an outage. */
   resubmits?: number;
+  /** Storyboard video only: rounds of clips made again because the checks failed them. */
+  qaRedos?: number;
   /** Video only: status reads or saves in a row that failed for a passing reason. */
   checkErrors?: number;
 };
@@ -1059,6 +1100,43 @@ function imagePrompt(args: {
     .join("\n\n");
 }
 
+/**
+ * A new AI video planned as a storyboard of whole clips (src/lib/studio/video/),
+ * or null for everything else (and for a workspace with the flag off).
+ */
+function studioVideoPlan(
+  workspaceId: string,
+  type: StudioType,
+  controls: CreateJobInput["controls"],
+) {
+  if (!isAiVideo(type, controls) || !isVideoStoryboardEnabled(workspaceId)) return null;
+  const kind = controls.videoKind;
+  if (!kind || kind === "motion-post") return null;
+  const model = controls.videoModelKey ?? STUDIO_VIDEO_MODEL;
+  return { kind, model, plan: clipPlan(controls.durationSec ?? clipSeconds(model), model) };
+}
+
+/** The model's storyboard fitted to the clips that will be made, and its shot lines. */
+function shapeVideoPlan(
+  workspaceId: string,
+  type: StudioType,
+  input: CreateJobInput,
+  parsed: Record<string, unknown>,
+): { concept: string; videoPlan: NonNullable<StudioJobOutput["videoPlan"]> } | null {
+  const planned = studioVideoPlan(workspaceId, type, input.controls);
+  if (!planned || !parsed.storyboard) return null;
+  const storyboard = fitStoryboard(parsed.storyboard as VideoStoryboard, planned.plan);
+  return {
+    concept: storyboardSummary(storyboard, planned.plan),
+    videoPlan: {
+      kind: planned.kind,
+      model: planned.model,
+      clipSeconds: planned.plan.map((clip) => clip.seconds),
+      storyboard,
+    },
+  };
+}
+
 function videoPrompt(
   concept: string,
   ctx: StudioContext,
@@ -1078,6 +1156,165 @@ function videoPrompt(
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * A new AI video made from its storyboard: one prompt per whole clip, each
+ * carrying the full bible; story kinds chain each clip from the last frame
+ * of the one before; a post's picture is framed whole for the video's shape
+ * and opens the first clip. The checks and the ending run when it finishes.
+ */
+async function startStoryboardVideo(a: {
+  client: Db;
+  job: JobRow;
+  input: CreateJobInput;
+  ctx: StudioContext;
+  plan: NonNullable<StudioJobOutput["videoPlan"]>;
+  platforms: PlatformId[];
+  ratio: AspectRatio;
+  sourceImagePath: string | null;
+  referenceUrl: string | null;
+  referencePath: string | null;
+  supplied: { url: string; storagePath: string }[];
+  approved: string[];
+  notes: (string | undefined)[];
+}): Promise<ProviderTask> {
+  const { job, input, ctx, plan } = a;
+  const kind = videoKind(plan.kind);
+  let start = 0;
+  const clips = plan.clipSeconds.map((seconds) => {
+    const clip = { start, seconds };
+    start += seconds;
+    return clip;
+  });
+  // The picture the video opens on: the post's own, or the photo the person
+  // chose to bring to life. Framed whole for the video's shape.
+  const picturePath =
+    a.sourceImagePath ?? (plan.kind === "living-picture" ? a.supplied[0]?.storagePath : null);
+  let firstFramePath: string | undefined;
+  let firstFrameUrl: string | null = null;
+  if (picturePath) {
+    const downloaded = await downloadAssetObject(a.client, picturePath);
+    if (downloaded.error || !downloaded.data)
+      throw new StudioJobError(503, "Could not open the post's picture. Try again.");
+    const framed = await frameForVideo(Buffer.from(await downloaded.data.arrayBuffer()), a.ratio);
+    const saved = await persistAsset({
+      workspaceId: job.workspace_id,
+      idempotencyKey: `video-first-frame:${job.id}:${job.attempt}`,
+      bytes: framed,
+      assetType: "image",
+      mimeType: "image/jpeg",
+      metadata: { source: "video_first_frame", job_id: job.id },
+    });
+    if (!saved.ok || !saved.asset.storage_path)
+      throw new StudioJobError(503, "Could not prepare the post's picture. Try again.");
+    firstFramePath = saved.asset.storage_path;
+    firstFrameUrl = await signAssetPath(firstFramePath, 6 * 3600);
+    if (!firstFrameUrl) throw new StudioJobError(503, "Could not prepare the post's picture.");
+  }
+  const lead = firstFrameUrl ? [firstFrameUrl] : a.referenceUrl ? [a.referenceUrl] : [];
+  // A living picture keeps to its picture alone; a video from a post adds
+  // only the person's own photos; anything else also gets the brand's
+  // approved style references.
+  const rest =
+    plan.kind === "living-picture"
+      ? []
+      : a.sourceImagePath
+        ? a.supplied.map((reference) => reference.url)
+        : a.approved;
+  const imageUrls = [...new Set([...lead, ...rest])].slice(0, 4);
+  const own = new Set([...lead, ...a.supplied.map((reference) => reference.url)]);
+  const styleReferenceCount = imageUrls.filter((url) => !own.has(url)).length;
+  const audio = input.controls.audio ?? true;
+  const chained = kind.join === "chain" && clips.length > 1;
+  const extra = [
+    ctx.style ? videoStyleBlock(ctx.style) : "",
+    platformVideoNote(a.platforms),
+    ctx.brandText ? `Brand context:\n${(ctx.visualBrandText ?? ctx.brandText).slice(0, 900)}` : "",
+    ctx.visualTaste?.rules ?? ctx.visualFeedbackRules ?? "",
+    ...a.notes,
+  ].filter((note): note is string => !!note);
+  const script = input.intent.sourceScript;
+  const prompts = plan.storyboard.clips.map((_, i) =>
+    clipPrompt(plan.storyboard, i, {
+      kind: plan.kind,
+      plan: clips,
+      brandName: ctx.brandName,
+      ratio: a.ratio,
+      chained,
+      fromPicture: !!firstFrameUrl,
+      productPhoto: !!input.controls.productId && a.supplied.length > 0,
+      audio,
+      // A reviewed script's own words reach the clip they belong to, exactly.
+      extra: [
+        ...(script ? [sourceScriptClipDirection(script, clips[i], start, audio)] : []),
+        ...extra,
+      ].filter((note): note is string => !!note),
+    }),
+  );
+  const settings = {
+    modelKey: (input.controls.videoModelKey ?? STUDIO_VIDEO_MODEL) as UgcModelKey,
+    durationSec: start,
+    aspectRatio: a.ratio,
+    resolution: input.controls.videoQuote?.resolution ?? input.controls.videoResolution ?? "720P",
+    audio,
+  };
+  const composed = {
+    clipPrompts: prompts,
+    chain: chained,
+    dissolve: kind.join === "cut" && clips.length > 1,
+  };
+  const started = await startStudioVideo({
+    ...settings,
+    prompt: prompts[0],
+    imageUrls,
+    styleReferenceCount,
+    clips: prompts.map((prompt, i) => ({ seconds: clips[i].seconds, prompt })),
+    chain: chained
+      ? {
+          workspaceId: job.workspace_id,
+          key: `${job.id}:${job.attempt}`,
+          leadImages: firstFrameUrl ? 1 : 0,
+        }
+      : undefined,
+    dissolve: composed.dissolve,
+  });
+  return {
+    slot: "main",
+    kind: "video",
+    ratio: a.ratio,
+    prompt: prompts.join("\n\n"),
+    startedAt: Date.now(),
+    state: "pending",
+    fallbacks: [],
+    video: {
+      ...settings,
+      imagePaths: [
+        ...new Set(
+          [
+            firstFramePath,
+            a.referencePath,
+            ...(plan.kind === "living-picture" ? [] : a.supplied.map((r) => r.storagePath)),
+          ].filter((path): path is string => !!path),
+        ),
+      ],
+      styleReferences: styleReferenceCount > 0,
+      ...composed,
+      firstFramePath,
+      ...(kind.ending === "end-card"
+        ? {
+            endCardStyle: {
+              brandName: ctx.brandName,
+              background: ctx.style?.visual.palette.primary ?? "#111111",
+              ink: ctx.style?.visual.palette.background ?? "#ffffff",
+              accent: ctx.style?.visual.palette.accent,
+              font: ctx.style?.visual.typography?.heading,
+            },
+          }
+        : {}),
+    },
+    ...started,
+  };
 }
 
 async function startMedia(args: {
@@ -1196,6 +1433,9 @@ async function startMedia(args: {
     const clipEdit: ClipEditTask = {
       mode: videoMode,
       ...(motion ? { motion } : {}),
+      ...(input.controls.videoKind === "motion-post" && videoMode === "recap"
+        ? { post: true }
+        : {}),
       clipAssetIds: input.controls.sourceVideoAssetIds ?? [],
       photoAssetIds: suppliedReferences.map((photo) => photo.id),
       ...(tasks.length ? { waitFor: tasks.map((task) => task.slot) } : {}),
@@ -1254,8 +1494,11 @@ async function startMedia(args: {
   if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
     if (input.controls.videoPreview) {
       const refs = withReferences([], approvedReferences);
+      const board = output.videoPlan?.storyboard;
       const prompt = [
-        `Create one polished first frame for this branded video: ${output.concept ?? input.intent.brief}`,
+        board
+          ? `Create the first frame of this branded video: ${board.clips[0]?.opensOn || board.clips[0]?.shots[0]?.action}. Setting: ${board.bible.setting}. Light: ${board.bible.lighting}. ${board.bible.cast.map((member) => `${member.id}: ${member.look}.`).join(" ")} ${board.bible.product ? `Product: ${board.bible.product}.` : ""}`
+          : `Create one polished first frame for this branded video: ${output.concept ?? input.intent.brief}`,
         ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
         ctx.style ? imageStyleInput(ctx.style)?.block : "",
         "No words, logos, caption boxes or fake interface. Preserve the supplied product identity.",
@@ -1282,6 +1525,25 @@ async function startMedia(args: {
     }
     const seconds = input.controls.durationSec ?? 10;
     if (seconds > 60) throw new StudioJobError(400, "Videos can be up to 60 seconds long.");
+    // A storyboard of whole clips (src/lib/studio/video/): its own path.
+    if (output.videoPlan && isVideoStoryboardEnabled(job.workspace_id))
+      return [
+        await startStoryboardVideo({
+          client: args.client,
+          job,
+          input,
+          ctx,
+          plan: output.videoPlan,
+          platforms,
+          ratio,
+          sourceImagePath: args.sourceImagePath ?? null,
+          referenceUrl: args.referenceUrl ?? null,
+          referencePath: args.referencePath ?? null,
+          supplied: suppliedReferences,
+          approved: approvedReferences,
+          notes: [refineNote, input.intent.sourceScript ? undefined : noveltyNote],
+        }),
+      ];
     // The shot plan written in the brief stage drives the render; the user's
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
@@ -2132,6 +2394,8 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     await patchJob(client, job.id, { output: { ...output, angle: angle.label } });
     const captionOnly =
       !!parent && studioTextOnlyRevision(input) && ["image", "video"].includes(type);
+    const videoPlan =
+      boundedCaption || captionOnly ? null : studioVideoPlan(job.workspace_id, type, controls);
     const promptArgs = {
       ctx,
       intent: input.intent,
@@ -2144,6 +2408,16 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       adFormat,
       refine: input.refine,
       current: parent?.output,
+      video: videoPlan
+        ? {
+            kind: videoPlan.kind,
+            plan: videoPlan.plan,
+            // A post's own picture, or a photo the person chose to bring to life.
+            fromPicture:
+              Boolean(source?.imagePath) ||
+              (videoPlan.kind === "living-picture" && !!controls.referenceAssetIds?.length),
+          }
+        : undefined,
     };
     const built = boundedCaption
       ? buildCreationCaptionEditPrompt(promptArgs)
@@ -2208,15 +2482,30 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       // Same opening as an earlier piece: worth one more try, never a failure.
       const repeatedOpening =
         input.refine || attempt === 1 ? null : findRepeatedOpening(candidate, ctx.recent);
-      const qualityIssue = input.refine
-        ? null
-        : studioOutputQualityIssue(
-            type,
-            candidate,
-            controls,
-            platforms.length,
-            carouselStructure?.id,
-          );
+      // A video's storyboard is checked on every take, edits included: it is
+      // what the paid render is made from.
+      const storyboardIssue =
+        videoPlan && candidate.videoPlan
+          ? storyboardIssues(candidate.videoPlan.storyboard, {
+              kind: videoPlan.kind,
+              plan: videoPlan.plan,
+              knownFacts: `${input.intent.brief}\n${ctx.brandText}\n${source?.body ?? ""}`,
+              fromPicture: promptArgs.video?.fromPicture,
+            }).join(" ") || null
+          : videoPlan && !captionOnly
+            ? "The storyboard is missing."
+            : null;
+      const qualityIssue =
+        storyboardIssue ??
+        (input.refine
+          ? null
+          : studioOutputQualityIssue(
+              type,
+              candidate,
+              controls,
+              platforms.length,
+              carouselStructure?.id,
+            ));
       const uncitedResearch =
         type === "article" &&
         !!ctx.liveResearch?.sources.length &&
@@ -2709,6 +2998,7 @@ async function shapeOutput(args: {
       const theme = args.storyTheme?.id ?? "tip";
       const mentions = cleanMentions(input.controls.mentions ?? []);
       if (input.controls.storyMode === "video") {
+        const planned = shapeVideoPlan(job.workspace_id, type, input, parsed);
         return {
           title,
           story: {
@@ -2719,9 +3009,10 @@ async function shapeOutput(args: {
             ...(args.sourceContentId ? { sourceContentId: args.sourceContentId } : {}),
           },
           ...({
-            concept: String(parsed.concept ?? ""),
+            concept: planned?.concept ?? String(parsed.concept ?? ""),
             altText: String(parsed.altText ?? ""),
           } as object),
+          ...(planned ? { videoPlan: planned.videoPlan } : {}),
         };
       }
       return {
@@ -2748,7 +3039,9 @@ async function shapeOutput(args: {
     case "image":
     case "video": {
       await requireActiveJob(client, job);
-      const concept = String(parsed.concept ?? "");
+      const planned =
+        type === "video" ? shapeVideoPlan(job.workspace_id, type, input, parsed) : null;
+      const concept = planned?.concept ?? String(parsed.concept ?? "");
       const visual = [concept, parsed.onImageText ? `Text in visual: ${parsed.onImageText}` : ""]
         .filter(Boolean)
         .join("\n");
@@ -2790,6 +3083,7 @@ async function shapeOutput(args: {
           onImageText: String(parsed.onImageText ?? "").trim(),
           altText: String(parsed.altText ?? ""),
         } as object),
+        ...(planned ? { videoPlan: planned.videoPlan } : {}),
       };
     }
   }
@@ -2797,8 +3091,11 @@ async function shapeOutput(args: {
 
 /* ───────────────────────── media providers ───────────────────────── */
 
-/** Studio video renders use the `premium` catalog model on the configured provider. */
-const STUDIO_VIDEO_MODEL = "premium" as const;
+/**
+ * A Studio video with no model on its job (one made before settleVideoControls)
+ * is made on the same default the price was quoted for, never on Premium.
+ */
+const STUDIO_VIDEO_MODEL = DEFAULT_STUDIO_VIDEO_MODEL;
 
 async function startStudioVideo(opts: {
   modelKey?: import("@/lib/ugc/models").UgcModelKey;
@@ -2809,6 +3106,9 @@ async function startStudioVideo(opts: {
   audio: boolean;
   imageUrls: string[];
   styleReferenceCount?: number;
+  clips?: VideoRenderRequest["clips"];
+  chain?: VideoRenderRequest["chain"];
+  dissolve?: boolean;
 }): Promise<{
   taskId: string;
   model: string;
@@ -2828,6 +3128,9 @@ async function startStudioVideo(opts: {
     imageUrls: opts.imageUrls,
     requireReferences: opts.imageUrls.length > 0,
     styleReferenceCount: opts.styleReferenceCount,
+    clips: opts.clips,
+    chain: opts.chain,
+    dissolve: opts.dissolve,
   });
   if (!submitted.ok) {
     // A safety answer keeps its own words and category, never "provider".
@@ -2868,6 +3171,8 @@ function keepCollecting(task: ProviderTask): boolean {
 async function resubmitStudioVideo(
   row: JobRow,
   task: ProviderTask,
+  /** The checks' reasons, when a one-clip video is made again because they failed it. */
+  note?: { clips: number[]; text: Record<number, string> },
 ): Promise<Pick<ProviderTask, "taskId" | "model" | "provider"> | null> {
   const video = task.video;
   if (!video) return null;
@@ -2885,16 +3190,147 @@ async function resubmitStudioVideo(
       ? await resolveVisualReferenceUrls(row.workspace_id, row.output.visualTaste)
       : [];
   const imageUrls = [...new Set([...own, ...style])].slice(0, 4);
+  const clipPrompts = video.clipPrompts?.map((prompt, i) =>
+    note && (note.clips.includes(i) || video.clipPrompts!.length === 1) && note.text[i]
+      ? `${prompt}\n\nFIX FROM THE LAST TRY: ${note.text[i]}`
+      : prompt,
+  );
+  const clipSeconds = row.output?.videoPlan?.clipSeconds;
   const started = await startStudioVideo({
     ...video,
-    prompt: task.prompt,
+    prompt: clipPrompts?.[0] ?? task.prompt,
     imageUrls,
     styleReferenceCount: imageUrls.length - Math.min(own.length, imageUrls.length),
+    clips:
+      clipPrompts && clipSeconds?.length === clipPrompts.length
+        ? clipPrompts.map((prompt, i) => ({ seconds: clipSeconds[i], prompt }))
+        : undefined,
+    chain: video.chain
+      ? {
+          workspaceId: row.workspace_id,
+          key: `${row.id}:${row.attempt}:${(task.resubmits ?? 0) + (task.qaRedos ?? 0)}`,
+          leadImages: video.firstFramePath ? 1 : 0,
+        }
+      : undefined,
+    dissolve: video.dissolve,
   });
   return {
     taskId: started.taskId,
     model: started.model,
     provider: started.provider,
+  };
+}
+
+/**
+ * A finished storyboard video: checked (src/lib/studio/video/checks.ts), made
+ * again where it failed (once, at Mellox's cost), or given its ending.
+ */
+async function finishStoryboardVideo(
+  row: JobRow,
+  task: ProviderTask,
+  check: Extract<MediaCheck, { state: "success" }>,
+): Promise<
+  { state: "redo" } | { state: "failed" } | { state: "ok"; dataUrl: string; warnings: string[] }
+> {
+  const plan = row.output.videoPlan!;
+  const video = task.video!;
+  let dataUrl = check.dataUrl;
+  if (!dataUrl) {
+    const { safeFetch } = await import("@/server/safe-fetch");
+    const response = await safeFetch(check.url!, {
+      maxBytes: 120 * 1024 * 1024,
+      timeoutMs: 30_000,
+      onOverflow: "error",
+    });
+    if (!response.ok) throw new Error("Could not download the finished video.");
+    dataUrl = `data:video/mp4;base64,${Buffer.from(response.bytes).toString("base64")}`;
+  }
+  let at = 0;
+  const clips = plan.clipSeconds.map((seconds) => {
+    const clip = { start: at, seconds };
+    at += seconds;
+    return clip;
+  });
+  let reference: Buffer | null = null;
+  if (video.firstFramePath && isWorkspaceStoragePath(video.firstFramePath, row.workspace_id)) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const stored = await downloadAssetObject(
+      supabaseAdmin as unknown as SupabaseClient,
+      video.firstFramePath,
+    );
+    if (stored.data) reference = Buffer.from(await stored.data.arrayBuffer());
+  }
+  const result = await checkStudioVideo({
+    dataUrl,
+    kind: plan.kind,
+    plan: clips,
+    storyboard: plan.storyboard,
+    audio: video.audio,
+    reference,
+  });
+  // The frames the checker saw are kept for staff, never shown as the piece.
+  for (const [index, frame] of result.frames.entries())
+    await persistAsset({
+      workspaceId: row.workspace_id,
+      idempotencyKey: `video-check:${row.id}:${task.taskId}:${task.qaRedos ?? 0}:${index}`,
+      bytes: frame.bytes,
+      assetType: "image",
+      mimeType: "image/jpeg",
+      metadata: { source: "video_review_frame", job_id: row.id, time: frame.time },
+    }).catch(() => null);
+  const redone = task.qaRedos ?? 0;
+  if (result.failures.length) {
+    const redo = redoPlan(result.failures, clips.length, { chained: !!video.chain, redone });
+    if (!redo) {
+      plan.check = { passed: false, redone, notes: result.failures.map((f) => f.reason) };
+      return { state: "failed" };
+    }
+    if (isComposedTask(task.taskId)) {
+      if (!(await redoComposedClips(task.taskId, redo.clips, redo.notes)))
+        return { state: "failed" };
+    } else {
+      const restarted = await resubmitStudioVideo(row, task, {
+        clips: redo.clips,
+        text: redo.notes,
+      });
+      if (!restarted) return { state: "failed" };
+      Object.assign(task, restarted);
+    }
+    task.qaRedos = redone + 1;
+    task.checkErrors = 0;
+    task.startedAt = Date.now();
+    return { state: "redo" };
+  }
+  const kind = videoKind(plan.kind);
+  const still =
+    kind.ending === "back-to-source"
+      ? reference
+      : kind.ending === "end-card" && plan.storyboard.endCard?.headline && video.endCardStyle
+        ? await renderEndCard({
+            ...video.endCardStyle,
+            headline: plan.storyboard.endCard.headline,
+            detail: plan.storyboard.endCard.detail,
+            ratio: task.ratio,
+          })
+        : null;
+  if (still)
+    dataUrl = (
+      await endOnStill(dataUrl, still, {
+        duration: result.probe.duration,
+        width: result.probe.width,
+        height: result.probe.height,
+        audio: video.audio && result.probe.hasAudio,
+      })
+    ).dataUrl;
+  // Make sure what is saved is still a real video file.
+  videoBuffer(dataUrl);
+  plan.check = { passed: true, redone, notes: [passedNote(plan.kind, clips.length)] };
+  return {
+    state: "ok",
+    dataUrl,
+    warnings: result.visualUnavailable
+      ? ["The picture check was unavailable for this video. Watch it before publishing."]
+      : [],
   };
 }
 
@@ -3271,7 +3707,45 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       stage = "save";
       await setStage(c, row.id, "save");
-      if (task.kind === "video" && row.output?.visualTaste && !isMotionSlot(task.slot)) {
+      // A storyboard video is checked before anyone sees it. A bad clip is
+      // made again once at Mellox's cost; a video that still fails is not
+      // delivered, and the person is not charged.
+      const storyboarded =
+        task.kind === "video" && !!task.video?.clipPrompts && !!row.output?.videoPlan;
+      if (storyboarded) {
+        const finished = await finishStoryboardVideo(row, task, check).catch((error: unknown) => {
+          console.warn("[studio] video finishing failed", classify(error).message);
+          return { state: "error" as const };
+        });
+        if (finished.state === "redo") {
+          await requireActiveJob(c, row);
+          continue;
+        }
+        // A passing error (a slow download, a busy encoder) is tried again on the next poll.
+        if (finished.state === "error" && keepCollecting(task)) continue;
+        if (finished.state === "failed" || finished.state === "error") {
+          task.state = "failed";
+          task.failure = {
+            category: "quality",
+            message:
+              finished.state === "failed"
+                ? NOT_DELIVERED_MESSAGE
+                : "The video couldn't be finished. You weren't charged. Please try again.",
+            retryable: true,
+          };
+          setMedia({ status: "failed", error: task.failure.message });
+          continue;
+        }
+        check.dataUrl = finished.dataUrl;
+        check.url = undefined;
+        warnings.push(...finished.warnings);
+      }
+      if (
+        task.kind === "video" &&
+        row.output?.visualTaste &&
+        !isMotionSlot(task.slot) &&
+        !storyboarded
+      ) {
         try {
           const { sampleVideoFrames } = await import("@/server/brand-visuals/video-frames.server");
           const { safeFetch } = await import("@/server/safe-fetch");

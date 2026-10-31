@@ -834,6 +834,35 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   `MarketBrainProgress.tsx`, shown in Brain → Market; routes
   `src/app/api/market/{trends,intelligence,latest}`.
 
+## Studio video (kinds, storyboards, chained clips, checks)
+
+Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
+[ADR-0041](docs/adr/0041-studio-video-kinds.md). Flag
+`FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED` (with `_WS_<id>`), on unless `false`.
+
+- **A video has a kind** (`src/lib/studio/video/kinds.ts`; ids stored: add,
+  never rename). Auto is `pickVideoKind`. A person talking to camera is a
+  Creator (UGC) video, not a kind.
+- **Settle once, the same everywhere:** `settleVideoControls` decides kind,
+  model and length for the composer, the quote and `createBilledStudioJob`.
+  The default model is `DEFAULT_STUDIO_VIDEO_MODEL`; never pick Premium for
+  a person.
+- **Whole clips only** (`lengths.ts`). Never trim a clip to fit a length.
+- **The storyboard decides, code builds the prompts.** One
+  `studio.video.storyboard` call; `storyboardIssues` stops a bad plan before
+  any video spend; `clipPrompt` puts the full bible in every clip. A
+  reviewed script's words reach their clip exactly.
+- **Story kinds chain** (each clip opens on the last frame of the one
+  before); mood clips run in parallel and dissolve.
+- **Bad videos are never delivered.** Every storyboarded video is checked
+  (`checks.ts`, `qa.server.ts`, route `studio.video.qa`); one redo at
+  Mellox's cost, then the job fails and nothing is charged. Never turn a
+  failed check into a warning.
+- A video from a post opens on the whole post (`frameForVideo`, never
+  cropped) and ends on the exact post.
+- Premium video is sold from Starter (`video_premium`); Cinematic stays
+  Agency and up.
+
 ## Studio: carousels, trends and content memory
 
 - **A carousel is one story, drawn by code.** Pure core in

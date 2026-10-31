@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CLIP_RETRIES,
+  redoComposedClips,
   withVideoComposition,
   type CompositionRow,
   type CompositionStore,
@@ -90,6 +91,7 @@ describe("durable video composition", () => {
     expect(f.assemble).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ seconds: 10 })]),
       true,
+      { dissolve: undefined },
     );
     expect(f.current().state.clips.every((clip) => clip.taskId && clip.videoUrl)).toBe(true);
   });
@@ -176,6 +178,98 @@ describe("durable video composition", () => {
       state: "failed",
       message: "Service busy",
     });
+  });
+
+  it("sends each storyboard clip its own prompt at its whole length", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit({
+      ...f.request,
+      durationSec: 20,
+      clips: [
+        { seconds: 10, prompt: "Clip one: the hook" },
+        { seconds: 10, prompt: "Clip two: the ending" },
+      ],
+      dissolve: true,
+    });
+    if (!submitted.ok) throw new Error("Submit failed");
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({ state: "success" });
+    const sent = vi.mocked(f.base.submit).mock.calls.map(([request]) => request);
+    expect(sent.map((request) => request.prompt)).toEqual([
+      "Clip one: the hook",
+      "Clip two: the ending",
+    ]);
+    expect(sent.every((request) => request.durationSec === 10)).toBe(true);
+    await f.provider.download!(submitted.taskId);
+    expect(f.assemble).toHaveBeenCalledWith(expect.any(Array), true, { dissolve: true });
+  });
+
+  it("chains clips: each waits for the one before and opens on its last frame", async () => {
+    const f = fixture();
+    const chainFrame = vi.fn(
+      async ({ index }: { index: number }) => `https://frames.example/${index}.jpg`,
+    );
+    const provider = withVideoComposition(f.base, {
+      store: f.store,
+      assemble: f.assemble,
+      chainFrame,
+    });
+    vi.mocked(f.base.check).mockResolvedValueOnce({
+      state: "pending",
+      providerState: "running",
+    });
+    const submitted = await provider.submit({
+      ...f.request,
+      durationSec: 20,
+      imageUrls: ["https://picture.example/post.jpg", "https://picture.example/style.jpg"],
+      clips: [
+        { seconds: 10, prompt: "First" },
+        { seconds: 10, prompt: "Second" },
+      ],
+      chain: { workspaceId: "ws", key: "job-1", leadImages: 1 },
+    });
+    if (!submitted.ok) throw new Error("Submit failed");
+    expect(await provider.check(submitted.taskId)).toMatchObject({ state: "pending" });
+    // The second clip is not sent while the first is still rendering.
+    expect(f.base.submit).toHaveBeenCalledTimes(1);
+    // The poll that sees the first clip finish; the next one sends the second.
+    expect(await provider.check(submitted.taskId)).toMatchObject({ state: "pending" });
+    expect(f.base.submit).toHaveBeenCalledTimes(1);
+    expect(await provider.check(submitted.taskId)).toMatchObject({ state: "success" });
+    expect(f.base.submit).toHaveBeenCalledTimes(2);
+    const second = vi.mocked(f.base.submit).mock.calls[1][0];
+    expect(second.imageUrls).toEqual([
+      "https://frames.example/1.jpg",
+      "https://picture.example/style.jpg",
+    ]);
+    expect(second.requiredReferenceCount).toBe(1);
+  });
+
+  it("makes a clip again with the reason after the checks fail it, counting both costs", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit({
+      ...f.request,
+      durationSec: 20,
+      clips: [
+        { seconds: 10, prompt: "First" },
+        { seconds: 10, prompt: "Second" },
+      ],
+    });
+    if (!submitted.ok) throw new Error("Submit failed");
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({
+      state: "success",
+      costUsd: 1,
+    });
+    expect(
+      await redoComposedClips(submitted.taskId, [1], { 1: "The cup changed colour" }, f.store),
+    ).toBe(true);
+    expect(await f.provider.check(submitted.taskId)).toMatchObject({
+      state: "success",
+      costUsd: 1.5,
+    });
+    expect(f.base.submit).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(f.base.submit).mock.calls[2][0].prompt).toContain(
+      "FIX FROM THE LAST TRY: The cup changed colour",
+    );
   });
 
   it("propagates a failed clip and prevents downloading an incomplete video", async () => {

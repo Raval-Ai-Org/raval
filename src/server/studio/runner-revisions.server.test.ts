@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
 vi.mock("./job-writer.server", () => ({ studioJobWriter: (client: unknown) => client }));
 vi.mock("@/server/billing/creation.server", () => ({ captionEditsRemaining: async () => 2 }));
-vi.mock("@/lib/feature-flags", () => ({ isAudienceAutoScoreEnabled: () => false }));
+vi.mock("@/lib/feature-flags", () => ({
+  isAudienceAutoScoreEnabled: () => false,
+  isVideoStoryboardEnabled: () => false,
+}));
 vi.mock("@/lib/ai", () => ({
   runStructuredPrompt: mocks.prompt,
   AiOutputError: class extends Error {},

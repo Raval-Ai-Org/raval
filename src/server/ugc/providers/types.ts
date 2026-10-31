@@ -31,6 +31,21 @@ export type VideoRenderRequest = {
   styleReferenceCount?: number;
   /** KIE callback; OpenRouter computes its own (see openRouterVideoCallbackUrl). */
   callbackUrl?: string;
+  /**
+   * Composition only (Studio storyboards): each clip's own prompt and length,
+   * made at that length and used whole. Absent: the length is split and the
+   * prompt's timed beat lines are shared out (UGC).
+   */
+  clips?: { seconds: number; prompt: string }[];
+  /**
+   * Composition only: each clip after the first starts from the last frame of
+   * the clip before (stored as an asset of this workspace, sent as the first
+   * image), so the subject stays the same. The first `leadImages` images (a
+   * post's picture) belong to the first clip only.
+   */
+  chain?: { workspaceId: string; key: string; leadImages?: number };
+  /** Composition only: join clips with a short dissolve instead of a straight cut. */
+  dissolve?: boolean;
 };
 
 export type ProviderFailure = {

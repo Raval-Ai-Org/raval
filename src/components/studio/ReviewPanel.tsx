@@ -114,6 +114,12 @@ const TOOL_ICON =
   "grid size-8 place-items-center rounded-full text-foreground/80 transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
 const FLOAT = "rounded-full bg-surface-3/90 p-1 shadow-2 ring-1 ring-border/70 backdrop-blur";
 
+/** One storyboard line, short enough for a check row. */
+function shortLine(text: string): string {
+  const line = text.trim().replace(/\s+/g, " ");
+  return line.length > 80 ? `${line.slice(0, 79).trimEnd()}…` : line;
+}
+
 function defaultScheduleTime(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -849,6 +855,24 @@ export function ReviewPanel({
               ),
             },
     );
+  }
+  // A planned AI video: the check it passed before anyone saw it, then its clips.
+  const videoPlan =
+    media?.kind === "video" && media.status === "ready" ? draft.videoPlan : undefined;
+  if (videoPlan?.check?.passed)
+    checks.push({
+      key: "video-check",
+      state: "ok",
+      label: videoPlan.check.notes[0] ?? "Checked before you saw it",
+      detail: videoPlan.check.redone ? "A clip was made again to get it right" : undefined,
+    });
+  for (const [index, clip] of (videoPlan?.storyboard.clips ?? []).entries()) {
+    checks.push({
+      key: `video-clip-${index}`,
+      state: "ok",
+      label: `Clip ${index + 1}: ${shortLine(clip.endsOn)}`,
+      detail: `${videoPlan?.clipSeconds[index] ?? ""}s`,
+    });
   }
   for (const [index, warning] of (draft.warnings ?? []).entries()) {
     checks.push({

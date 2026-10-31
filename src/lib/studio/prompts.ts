@@ -23,6 +23,9 @@ import type { Lean, Taste } from "@/lib/taste/contracts";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import { adFormatDirective, type AdFormat } from "./ad-formats";
 import { platformVideoNote, VIDEO_AD_RULES, videoBeatsText, videoCraftRules } from "./video-ad";
+import { videoKind, type VideoKindId } from "./video/kinds";
+import type { ClipPlan } from "./video/lengths";
+import { StoryboardSchema } from "./video/storyboard";
 import type {
   StudioControls,
   StudioIntent,
@@ -566,6 +569,8 @@ type BuildArgs = {
   source?: { title: string; body: string; kind: string } | null;
   /** Ads: the designed layout the picture follows (ad-formats.ts). */
   adFormat?: AdFormat | null;
+  /** New AI video: plan it as a storyboard of whole clips (src/lib/studio/video/). */
+  video?: { kind: VideoKindId; plan: ClipPlan; fromPicture: boolean };
 };
 
 function platformRubric(platforms: PlatformId[]): string {
@@ -884,6 +889,83 @@ export function buildVisualBriefPrompt(
   };
 }
 
+export const VideoStoryboardBriefSchema = z.object({
+  title: Str(120),
+  storyboard: StoryboardSchema,
+  altText: Str(240).default(""),
+});
+
+/**
+ * A new AI video, planned the way a senior social video director would: one
+ * kind of video, one bible of who and what is on screen, then each clip with
+ * the frame it opens on and the frame it ends on, so the clips join into one
+ * finished story. Code checks it (storyboardIssues) before anything is spent.
+ */
+export function buildVideoStoryboardPrompt(
+  args: BuildArgs & { video: NonNullable<BuildArgs["video"]> },
+): BuiltPrompt<z.infer<typeof VideoStoryboardBriefSchema>> {
+  const kind = videoKind(args.video.kind);
+  const plan = args.video.plan;
+  const total = plan.reduce((sum, clip) => sum + clip.seconds, 0);
+  const clips = plan.length;
+  const script = args.source?.kind === "script";
+  const people =
+    kind.people === "none" || kind.people === "hands"
+      ? "No faces: hands at most, so leave `bible.cast` empty."
+      : kind.people === "cast"
+        ? "Put every person in `bible.cast` with an id and a complete look (face, hair, age, build, clothes); a shot lists the ids of the people in it. One to two people at most. Always fictional."
+        : kind.people === "source"
+          ? "People are only those already in the picture; describe them in `bible.cast` so they stay the same."
+          : "People are optional; if any appear, describe each in `bible.cast` and keep them faceless or identical.";
+  return {
+    route: "studio.video.storyboard",
+    system: systemPrompt(
+      "You are Mellox, a senior social video director and social media manager. You plan short videos that stop the scroll, tell one complete story from the first second to a clean ending, and look like one continuous film, never a set of unrelated AI clips.",
+      [
+        `Kind of video: ${kind.label} (${kind.hint}). It is ${total} seconds made of ${clips} clip(s) of ${plan.map((c) => c.seconds).join(" + ")} seconds. Each clip is made separately by a video model${kind.join === "chain" ? ", starting from the exact last frame of the clip before" : ""}, so write exactly ${clips} clip(s).`,
+        `How this kind works:\n${kind.rules.map((rule) => `- ${rule}`).join("\n")}`,
+        "`storyboard.logline` is the whole story in one sentence.",
+        "`storyboard.bible` is what never changes: the product (exactly as the brand sells it), the one setting, the light, the colours (from the brand palette) and the camera look. Every clip is made from this bible alone, so write it completely and concretely.",
+        people,
+        "Each clip has `opensOn` (the first frame; from clip 2 on it is the frame the clip before ended on), 2 to 4 `shots` with times in seconds inside that clip, `endsOn` (the exact final frame, still for half a second), `sound` (natural sound only, no narration) and `onScreen` (at most one phrase of 2-6 words, or empty).",
+        "The story moves forward in every clip: nothing is introduced twice, the hook is only at the very start, and only the last clip resolves. Plan each clip so it ends on a natural pause, never mid-action.",
+        "The first shot of the first clip is the hook: it starts on frame one with motion already happening and the product or the payoff in frame, and lasts 4 seconds at most. No logo intro, no title card, no fade from black.",
+        "Film only what a video model can film well: one subject doing one clear action per shot, real physics, motivated camera moves. No crowds, no text-heavy screens, no fast hand choreography, no shot that needs a face to match a real person.",
+        kind.ending === "end-card"
+          ? "`storyboard.endCard` holds the exact offer words Mellox draws on the last card: `headline` (2-6 words) and `detail` (a short line, or empty), using only offers, prices and dates the brief or Brand DNA states."
+          : "Leave `storyboard.endCard` out.",
+        args.video.fromPicture
+          ? "This video starts from the brand's finished post; its picture is attached. Clip 1 opens on exactly that picture coming to life: describe what moves and never change its product, colours, people or words. The bible describes what is in the picture."
+          : "",
+        script && args.controls.audio !== false
+          ? "Follow the supplied script in order and keep its voiceover lines verbatim in the shots they belong to."
+          : "",
+        platformVideoNote(args.controls.platforms ?? []),
+        "Use only facts, numbers and names from the brief and the brand details. Never name a competitor or another brand.",
+        "`title` names the video in a few words. `altText` describes it for accessibility.",
+      ].filter(Boolean),
+      `{"title": string, "storyboard": {"logline": string, "bible": {"cast": [{"id": string, "look": string}], "product": string, "setting": string, "lighting": string, "palette": string, "camera": string}, "clips": [{"opensOn": string, "shots": [{"start": number, "end": number, "camera": string, "action": string, "cast": string[]}], "endsOn": string, "sound": string, "onScreen": string}], "endCard"?: {"headline": string, "detail": string}}, "altText": string}`,
+    ),
+    user: sections([
+      ...sharedUser(args, "video"),
+      ...(args.source
+        ? [
+            {
+              label: args.video.fromPicture
+                ? "The post this video is made from (its picture is attached; keep its facts and its message)"
+                : "Approved source (preserve its facts and scene order)",
+              body: `${args.source.kind}: ${args.source.title}\n${args.source.body}`,
+            },
+          ]
+        : []),
+      ...refineSections(args.refine, args.current),
+    ]),
+    schema: VideoStoryboardBriefSchema,
+    maxTokens: 4000,
+    temperature: args.refine ? TEMPERATURE.refine : 0.8,
+  };
+}
+
 /** Captions written for a finished visual (image, video, carousel slides). */
 export function buildCaptionPrompt(
   args: BuildArgs & { visual: string },
@@ -947,9 +1029,11 @@ export function buildTextPrompt(type: StudioType, args: BuildArgs) {
     case "carousel":
       return buildCarouselPrompt(args);
     case "story":
-      return args.controls.storyMode === "video"
-        ? buildVisualBriefPrompt({ ...args, medium: "video" })
-        : buildStoryPrompt(args);
+      return args.controls.storyMode !== "video"
+        ? buildStoryPrompt(args)
+        : args.video
+          ? buildVideoStoryboardPrompt({ ...args, video: args.video })
+          : buildVisualBriefPrompt({ ...args, medium: "video" });
     case "article":
       return buildArticlePrompt(args);
     case "script":
@@ -959,7 +1043,9 @@ export function buildTextPrompt(type: StudioType, args: BuildArgs) {
     case "image":
       return buildVisualBriefPrompt({ ...args, medium: "image" });
     case "video":
-      return buildVisualBriefPrompt({ ...args, medium: "video" });
+      return args.video
+        ? buildVideoStoryboardPrompt({ ...args, video: args.video })
+        : buildVisualBriefPrompt({ ...args, medium: "video" });
   }
 }
 

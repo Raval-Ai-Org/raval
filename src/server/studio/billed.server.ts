@@ -41,6 +41,7 @@ import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { isClipEditEnabled, isPhotoDesignEnabled, isProductHeroEnabled } from "@/lib/feature-flags";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { pickFeaturedProduct, productPhotoControls } from "@/lib/products/feature";
+import { settleVideoControls } from "@/lib/studio/video/settle";
 
 const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   social: "studio.social",
@@ -154,6 +155,21 @@ export async function createBilledStudioJob(args: {
       input.controls.durationSec =
         (input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS;
   }
+  // A new AI video's kind, model and length in whole clips, decided before
+  // pricing (src/lib/studio/video/settle.ts). A video with no model chosen is
+  // made on Standard, never silently on Premium.
+  if (!studioTextOnlyRevision(input))
+    input.controls = settleVideoControls({
+      type: input.type,
+      controls: input.controls,
+      brief: input.intent.brief,
+      template: input.intent.template,
+      source: {
+        picture: Boolean(input.intent.sourceContentId),
+        script: Boolean(input.intent.sourceScript),
+        product: Boolean(input.controls.productId),
+      },
+    });
   // Reject foreign/deleted references before reserving credits or starting work.
   if (!studioTextOnlyRevision(input)) {
     await resolveStudioReferences(
@@ -201,9 +217,13 @@ export async function createBilledStudioJob(args: {
     (video || (clip && !recapClips)) && input.controls.videoModelKey
       ? quoteStudioVideo(input.controls)
       : null;
+  // A person's Generate button carries the quote it showed, which must still
+  // hold. A worker (Autopilot, Campaigns, MCP) shows no price and is charged
+  // the server's quote.
   if (
     videoQuote &&
-    (input.controls.videoQuote?.hash !== videoQuote.hash ||
+    input.controls.videoQuote &&
+    (input.controls.videoQuote.hash !== videoQuote.hash ||
       input.controls.videoQuote.units !== videoQuote.units)
   )
     throw new HttpError(

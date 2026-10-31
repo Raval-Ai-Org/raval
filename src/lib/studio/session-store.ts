@@ -325,7 +325,7 @@ export function openComposer(
     /** Photo fidelity, clip and recap settings carried from chat or a place. */
     extraControls?: Pick<
       StudioControls,
-      "photoFidelity" | "videoMode" | "sourceVideoAssetIds" | "recapMotion"
+      "photoFidelity" | "videoMode" | "sourceVideoAssetIds" | "recapMotion" | "videoKind"
     >;
   } = {},
 ): string | null {
@@ -432,7 +432,7 @@ export function startInBackground(opts: {
   referenceMode?: StudioControls["referenceMode"];
   extraControls?: Pick<
     StudioControls,
-    "photoFidelity" | "videoMode" | "sourceVideoAssetIds" | "recapMotion"
+    "photoFidelity" | "videoMode" | "sourceVideoAssetIds" | "recapMotion" | "videoKind"
   >;
   origin?: StudioSession["origin"];
   /** A finished piece to start from (checked against the workspace on the server). */

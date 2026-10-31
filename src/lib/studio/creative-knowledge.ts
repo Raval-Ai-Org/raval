@@ -21,6 +21,7 @@ export type DeliverableId =
   | "hiring"
   | "greeting"
   | "teaser"
+  | "milestone"
   | "collab"
   | "market-entry"
   | "case-study"
@@ -120,6 +121,19 @@ export const DELIVERABLES: readonly Deliverable[] = [
     prefer: ["glossy-macro", "spotlight-noir", "monument-object"],
   },
   {
+    id: "milestone",
+    name: "Milestone or anniversary",
+    signals:
+      /(\banniversary\b|\bmilestone\b|\byears? (of|in business|strong)\b|\b\d+(st|nd|rd|th) (birthday|year)\b|\bturns? \d+\b|\bthank you for \d|\b\d+k? (followers|customers|orders)\b)/i,
+    readingOrder:
+      "first the figure or the shape that marks the moment, then the line that names it, then the thanks",
+    layout:
+      "the figure from the copy as a real carved or sculpted object (carved into a wall, or a huge 3D form) filled or surrounded with things from the brand's world; one person or the product breaking out of it; warm, calm light",
+    copy: "The figure is the headline; one short line names the moment; a small thank-you line at most.",
+    neverInvent: `the figure, the year, follower or customer counts, or ${NO_FACTS}`,
+    prefer: ["carved-relief", "number-monument", "material-lettering"],
+  },
+  {
     id: "collab",
     name: "Partnership announcement",
     signals:
@@ -167,7 +181,7 @@ export const DELIVERABLES: readonly Deliverable[] = [
       "a dark, striking first frame with one bold visual of the brand's shape or colour cropped off two edges and the name set large in the lower left; later frames light and type-led",
     copy: "A short lead word, the name large, one small aside that promises what the reader gets; three type roles at most (statement, warm serif, small label).",
     neverInvent: `services, clients, awards, ratings, testimonials, figures, or ${NO_FACTS}`,
-    prefer: ["glossy-macro", "name-on-the-wall", "quiet-editorial"],
+    prefer: ["glossy-macro", "name-on-the-wall", "portrait-backdrop", "quiet-editorial"],
   },
   {
     id: "humour",
@@ -228,7 +242,7 @@ export const DELIVERABLES: readonly Deliverable[] = [
       "one accurate hero with two or three detail crops or an exploded stack, joined by thin leader lines to the right physical spot",
     copy: "Short labels taken from the copy only; large and unambiguous.",
     neverInvent: `features, test results, percentages, competitor comparisons, or ${NO_FACTS}`,
-    prefer: ["callout-board", "exploded-view", "flat-lay-story"],
+    prefer: ["callout-board", "exploded-view", "annotated-giant", "flat-lay-story"],
   },
   {
     id: "comparison",

@@ -38,7 +38,11 @@ export type ArchetypeId =
   | "sticker-journey"
   | "glossy-macro"
   | "mixed-media-breakout"
-  | "benefit-list";
+  | "benefit-list"
+  | "portrait-backdrop"
+  | "carved-relief"
+  | "sculpted-backdrop"
+  | "annotated-giant";
 
 type Energy = "calm" | "bold" | "playful";
 
@@ -581,6 +585,81 @@ export const ARCHETYPES: readonly Archetype[] = [
     finish: "Clean, trustworthy brand advertising: one colour family plus one accent.",
     avoid: "the hero in a frame or card, more than one icon style, invented benefits, clip-art",
   },
+  // Round 4, from a second set of campaign poster prompts (docs/studio/reference-study-2026-10.md).
+  {
+    id: "portrait-backdrop",
+    name: "Portrait backdrop",
+    summary:
+      "a huge black-and-white side-profile portrait fills the background; the same person, small and full-body, walks forward in front of it; one bold word cuts through vertically",
+    formats: ["founder-led", "cinematic-campaign", "human-lifestyle", "editorial"],
+    energy: ["bold", "calm"],
+    person: "required",
+    scene: (hero) =>
+      `A massive black-and-white side-profile portrait of ${PERSON} fills most of the background, sharp and detailed, with real skin texture. In front of it, the same person, full-body and much smaller, walks confidently toward the camera, styled around ${hero} in a clean outfit. A clean white or light ground, with one bold geometric shape in the brand's accent colour placed with the precision of a magazine cover.`,
+    type: "One bold word from the headline set vertically and cut into the portrait with a clean cut-out technique, so it reads as part of the picture; a small support line at the bottom.",
+    typeWithoutText:
+      "Leave a clean vertical band beside the portrait for a word added later. No letters.",
+    light:
+      "High-contrast cinematic light on both figures from the same side; a soft shadow under the walking figure; everything crisp.",
+    finish: "Premium sports-editorial poster: graphic, confident, one accent colour.",
+    avoid:
+      "two different faces, a muddy grey portrait, more than one accent colour, a real or famous person",
+  },
+  {
+    id: "carved-relief",
+    name: "Carved relief",
+    summary:
+      "one big shape (a number, a symbol or the product's outline) carved deep into a textured wall, filled with things from the occasion; the subject breaks out of it in 3D",
+    formats: ["storytelling", "product-focused", "abstract-metaphorical", "human-lifestyle"],
+    energy: ["playful", "calm"],
+    person: "optional",
+    scene: (hero, people) =>
+      `A warm, textured wall (paper, plaster or stone in a light brand tint) fills the frame. One large shape is carved deep into it with smooth edges and real dimensional shadows: a figure from the supplied copy, a simple symbol, or the outline of ${hero}. Inside the carving, a styled arrangement of things that belong to the message (flowers, materials, ingredients or small objects in the brand palette). ${people ? `${cap(PERSON)} sits inside the carving and leans out of it, an arm, a hand and a foot breaking past the edge in 3D.` : `${cap(hero)} sits inside the carving and breaks past its edge in 3D.`}`,
+    type: "The headline and one or two short lines engraved or set cleanly on the wall beside the carving, in an elegant editorial face.",
+    typeWithoutText: "Keep the wall beside the carving clean for type added later. No letters.",
+    light:
+      "Warm directional sunlight from one side raking across the wall, so the carving casts real shadows; soft rim light on what breaks out.",
+    finish: "Luxury celebration campaign: architectural, tactile, joyful and calm.",
+    avoid:
+      "a number that is not in the supplied copy, flat printed shapes instead of a real carving, clutter spilling everywhere",
+  },
+  {
+    id: "sculpted-backdrop",
+    name: "Sculpted backdrop",
+    summary:
+      "a person in a strong, wide stance in front of large glossy abstract 3D shapes in the brand colour, one huge lowercase word partly behind them",
+    formats: ["human-lifestyle", "cinematic-campaign", "editorial"],
+    energy: ["bold", "playful"],
+    person: "required",
+    scene: (hero) =>
+      `${cap(PERSON)}, full-body in a dynamic wide-leg stance, styled around ${hero} in clean, voluminous clothes, stands in the centre of a smooth neutral gradient studio. Behind them, two or three large glossy organic 3D forms (soft inflated shapes) in the brand's main colour, cropped by the frame's edges.`,
+    type: "One huge word from the headline in lowercase bold type, partly hidden behind the person; a little fine micro-text in one corner only if the copy supplies it.",
+    typeWithoutText: "Keep a wide band behind the person clear for a word added later. No letters.",
+    light:
+      "Ultra-clean diffused studio light, soft shadows, glossy highlights running along the 3D forms; sharp focus on the person.",
+    finish: "Futuristic fashion-campaign magazine cover: polished, minimal, high-energy.",
+    avoid: "more than three shapes, several colours on the shapes, a busy background",
+  },
+  {
+    id: "annotated-giant",
+    name: "Annotated giant",
+    summary:
+      "the product scaled to the size of a seated person who leans on it, with a few thin infographic callouts pointing to what it is made of or what it does",
+    formats: ["product-focused", "educational-visual", "human-lifestyle"],
+    energy: ["calm", "playful"],
+    person: "optional",
+    physicalOnly: true,
+    scene: (hero, people) =>
+      `${cap(hero)}, scaled up to nearly the height of a seated person, stands on a clean studio floor in a soft brand-tinted gradient set, with true materials, crisp details and real reflections.${people ? ` ${cap(PERSON)} sits casually against it, one arm resting on it, styled in minimal clothes that echo its colours.` : ""} Two or three thin annotation lines with small dot markers point to real parts of it.`,
+    type: "A clean headline at the top; each annotation carries one short label taken from the supplied copy, in a small modern sans-serif, like a premium interface.",
+    typeWithoutText:
+      "Annotation lines and dot markers without labels; leave clean space beside each for labels added later.",
+    light:
+      "Soft studio light with controlled highlights; 85mm, slight depth of field, a gentle contact shadow under both.",
+    finish: "High-end product infographic meets commercial portrait: elegant, airy, uncluttered.",
+    avoid:
+      "more than three callouts, labels on the wrong part, invented features, a distorted label",
+  },
 ];
 
 const BY_ID = new Map(ARCHETYPES.map((a) => [a.id, a]));
@@ -696,6 +775,7 @@ export const CRAFT_RULES: readonly string[] = [
   "Palette comes from the brand and the product: one dominant colour, one accent, neutrals; no rainbow gradients.",
   "Accent restraint: the accent colour covers only a few small hits (roughly 3–8% of the frame), so it pops every time it appears.",
   "One grade for the whole picture: a shared shadow tint, one light direction and a fine, even film grain; never a flat digital fill next to a photographic one.",
+  "Scale is believable only through contact: a person who leans, sits or rests a hand on an oversized thing shows its weight in the contact shadow, the reflection and the folds of their clothes.",
   "Where the layout allows, let the subject overlap the headline (type behind, subject in front) so the layers read as real depth.",
   "Type hierarchy of three steps at most (headline, one support line, one tiny detail), in no more than two typefaces, high contrast against what is behind it.",
   "Avoid AI tells: extra or fused fingers, warped faces, duplicated subjects, melted product shapes, gibberish lettering, over-smoothed skin, oversaturated colour.",
