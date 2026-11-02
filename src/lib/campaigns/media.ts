@@ -16,7 +16,7 @@ const RECAP_PHOTOS = 6;
 const CLIPS_PER_VIDEO = 3;
 
 /** Pictures on Instagram, TikTok and YouTube need media; text posts there get a photo too. */
-const PICTURE_PLATFORMS = new Set(["instagram", "tiktok", "youtube"]);
+const PICTURE_PLATFORMS = new Set(["instagram", "tiktok", "youtube", "pinterest"]);
 
 function pool(
   media: readonly CampaignMedia[],

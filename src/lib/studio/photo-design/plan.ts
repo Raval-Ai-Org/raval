@@ -38,6 +38,7 @@ const RATIO_VALUE: Record<AspectRatio, number> = {
   "16:9": 16 / 9,
   "9:16": 9 / 16,
   "3:4": 0.75,
+  "2:3": 2 / 3,
   "4:3": 4 / 3,
 };
 

@@ -64,6 +64,9 @@ export const POST = defineCronRoute({
     if (composioConfigured()) {
       try {
         result.apps = await sweepAccounts();
+        // HubSpot counts for leads goals, twice a day per account.
+        const { refreshLeadCounts } = await import("@/server/integrations/business.server");
+        result.leads = await refreshLeadCounts({ max: 10 });
       } catch (e) {
         failures.push(`apps: ${e instanceof Error ? e.message : String(e)}`);
       }

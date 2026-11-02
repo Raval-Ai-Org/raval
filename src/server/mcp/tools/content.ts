@@ -32,6 +32,7 @@ const Channel = z.enum([
   "tiktok",
   "youtube",
   "threads",
+  "pinterest",
   "blog",
   "email",
   "web",

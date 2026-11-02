@@ -59,6 +59,11 @@ async function goalOverview(
       .gte("delivered_at", goals.startedAt)
       .limit(1000),
   );
+  const leads = goals.targets.some((t) => t.metric === "leads")
+    ? await import("@/server/integrations/business.server")
+        .then(({ leadCountFor }) => leadCountFor(workspaceId, goals.startedAt, db))
+        .catch(() => null)
+    : null;
   const views = published
     .map((p) => Number((p.metrics as Record<string, unknown> | null)?.views))
     .filter((v) => Number.isFinite(v) && v >= 0);
@@ -70,6 +75,7 @@ async function goalOverview(
         postsPublished: published.length,
         views: views.length ? views.reduce((a, b) => a + b, 0) : null,
         connected: [...new Set(published.map((p) => String(p.platform)))],
+        leads,
       },
       new Date(),
     ),

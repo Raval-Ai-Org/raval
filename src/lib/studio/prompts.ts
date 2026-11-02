@@ -961,7 +961,12 @@ export function buildVideoStoryboardPrompt(
     user: sections([
       ...sharedUser(args, "video"),
       ...(args.video.recipe
-        ? [{ label: "REFERENCE RECIPE (the video the brand wants to follow)", body: args.video.recipe }]
+        ? [
+            {
+              label: "REFERENCE RECIPE (the video the brand wants to follow)",
+              body: args.video.recipe,
+            },
+          ]
         : []),
       ...(args.source
         ? [

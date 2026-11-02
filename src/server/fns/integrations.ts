@@ -69,3 +69,53 @@ export const disconnectApp = createServerFn({ method: "POST" })
     await requireWorkspaceRole(context, data.workspaceId, "admin");
     return (await service()).disconnect({ ...data, userId: context.userId });
   });
+
+// ── Business apps (Phase 4) ──────────────────────────────────────────────
+const business = () => import("@/server/integrations/business.server");
+
+export const listMailchimpAudiences = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-read")])
+  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    return (await business()).listMailchimpAudiences({
+      workspaceId: data.workspaceId,
+      caller: { kind: "person", userId: context.userId, role },
+    });
+  });
+
+export const saveEmailDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        contentItemId: uuid,
+        listId: z.string().min(1).max(40).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    return (await business()).saveEmailDraft({ ...data, userId: context.userId, role });
+  });
+
+export const exportCalendarToSheets = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        from: z.string().datetime({ offset: true }),
+        to: z.string().datetime({ offset: true }),
+        ids: z.array(uuid).max(1000).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    return (await business()).exportCalendarToSheets({ ...data, userId: context.userId, role });
+  });

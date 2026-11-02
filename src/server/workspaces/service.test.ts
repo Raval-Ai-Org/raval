@@ -178,6 +178,38 @@ describe("deleteWorkspace", () => {
     expect(db.rows("workspace_deletions")[0].storage_objects_removed).toBe(0);
   });
 
+  it("explains a refusal for a backlink order in progress instead of a generic failure", async () => {
+    const db = seed();
+    const d = deps();
+    const refusing = {
+      from(table: string) {
+        const builder = db.from(table);
+        if (table !== "workspaces") return builder;
+        return {
+          ...builder,
+          delete: () => ({
+            eq: () => ({
+              eq: () => ({
+                select: async () => ({
+                  data: null,
+                  error: { code: "55006", message: "workspace_link_order_in_progress" },
+                }),
+              }),
+            }),
+          }),
+        };
+      },
+    };
+    await expect(
+      deleteWorkspace(
+        { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
+        d,
+        refusing as never,
+      ),
+    ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/backlink order/i) });
+    expect(d.removeObjects).not.toHaveBeenCalled();
+  });
+
   it("gives the deleted brand's free scan back so re-adding it is a full scan", async () => {
     const db = createMemoryDb({
       workspaces: [

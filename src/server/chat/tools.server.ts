@@ -59,6 +59,7 @@ export const CHAT_READ_TOOLS = [
   "get_geo_findings",
   "get_geo_trend",
   "get_tracked_prompts",
+  "list_connected_apps",
 ] as const;
 
 /**
@@ -101,6 +102,8 @@ export const CHAT_ACTION_TOOLS = [
   "set_tracked_prompt_paused",
   "delete_tracked_prompt",
   "check_tracked_prompt_now",
+  "save_email_draft",
+  "export_calendar_to_sheets",
 ] as const;
 
 /** Reads chat has that MCP doesn't expose yet. Same shape, same bridge. */
@@ -319,6 +322,7 @@ const ACTIVITY: Record<string, string> = {
   get_market_updates: "Reading your market updates",
   get_competitors: "Looking at your competitors",
   list_community_threads: "Looking at community threads",
+  list_connected_apps: "Checking connected apps",
   get_community_thread: "Reading a community thread",
   get_analytics_summary: "Reading your numbers",
   list_geo_scans: "Looking at your website scans",

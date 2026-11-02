@@ -13,6 +13,8 @@ export type MeasuredFacts = {
   views: number | null;
   /** Platforms with a connected account. */
   connected: string[];
+  /** New contacts counted by a connected CRM since the goal started (never an estimate). */
+  leads?: { value: number; source: string; measuredAt: string } | null;
 };
 
 export type ProgressRow =
@@ -39,7 +41,7 @@ export type GoalProgress = {
 const UNMEASURABLE: Partial<Record<GoalMetric, string>> = {
   followers: "Mellox can't read follower counts from your accounts yet.",
   subscribers: "Mellox can't read subscriber counts from your accounts yet.",
-  leads: "Mellox doesn't see your enquiries or sign-ups yet.",
+  leads: "Mellox doesn't see your enquiries or sign-ups yet. Connect HubSpot to count them.",
   sales: "Mellox doesn't see your orders yet.",
 };
 
@@ -97,6 +99,18 @@ export function goalProgress(
         fix: measured.connected.length
           ? "Results appear a day or two after posts go out."
           : "Connect an account so Mellox can read post results.",
+      });
+      continue;
+    }
+    if (t.metric === "leads" && measured.leads) {
+      rows.push({
+        id,
+        state: "measured",
+        label: "New contacts",
+        value: measured.leads.value,
+        target: t.target,
+        ratio: Math.min(1, measured.leads.value / t.target),
+        detail: `Added in ${measured.leads.source} since you set the goal`,
       });
       continue;
     }

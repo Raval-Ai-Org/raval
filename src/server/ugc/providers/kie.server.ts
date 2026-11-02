@@ -21,11 +21,7 @@ import type {
 
 const RETRYABLE_CATEGORIES = new Set(["rate_limit", "provider", "network", "timeout"]);
 
-export function kieGenerationType(
-  model: UgcModel,
-  imageCount: number,
-  firstFrame = false,
-): string {
+export function kieGenerationType(model: UgcModel, imageCount: number, firstFrame = false): string {
   if (model.family === "seedance") return imageCount > 0 ? "REFERENCE_IMAGES" : "TEXT";
   if (imageCount === 0 || !model.images) return "TEXT_2_VIDEO";
   // Veo opens on the exact picture (and may settle on a last one) when asked.

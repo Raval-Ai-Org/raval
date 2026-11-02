@@ -1183,8 +1183,55 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   `sdr-reconcile` hook (`sweepAccounts`); no cron job of its own.
 - UI: `connectors/ConnectedApps.tsx` (`AppsList` is presentational, shown in
   `/connections-lab`) under Settings → Connections → Apps.
+- **Social on Composio (Phase 2):** Instagram, Facebook Pages and Pinterest
+  (`COMPOSIO_PUBLISHING`, `src/lib/social/routing.ts`); X, Threads, TikTok,
+  LinkedIn and YouTube stay on Post for Me. The provider is per account.
+  - Connecting looks up where it can post (`syncDestinations`,
+    `src/lib/social/composio/destinations.ts`): each Page, board or business
+    account is one `social_accounts` row (`provider = 'composio'`,
+    `provider_account_id = <integration account id>:<destination>`).
+  - The Post for Me handlers take `deps.composio` (wired in
+    `postforme/workspace.server.ts`): those accounts are listed, sent by
+    `src/server/social/composio/service.server.ts`, cancelled, retried and
+    disconnected there. Post for Me never sees them.
+  - Pinterest is a Studio platform (`PlatformId`), Composio only (never on
+    Post for Me's list; `connectablePlatforms` adds it to the accounts
+    picker). A Pin is one 2:3 picture from the image post: `pinIssue`
+    (`src/lib/social/pinterest.ts`) refuses video, Stories, carousels and
+    words alone before approval.
+  - Requests are pure (`src/lib/social/composio/requests.ts`), matched to the
+    live tool schemas. Stories, LinkedIn media and YouTube uploads are refused
+    with a reason, never guessed.
+  - Mellox keeps their schedule: rows park as `pending` and the **existing**
+    `run-schedules` hook sends them (`runDueComposioPosts`) only while the item
+    still reads `scheduled`. A send is never retried by itself; a cut-off or
+    timed-out publish fails as `unknown_outcome` and Retry is a person's click.
 - GitHub, Slack, Notion, Canva, Google, WordPress, Webflow and Wix stay on
   their own connector code.
+- **Business apps** (`src/lib/integrations/business.ts`, pure;
+  `src/server/integrations/business.server.ts`), each tied to one workflow:
+  - HubSpot only reads: the count of contacts added since the goal started is
+    kept on `integration_accounts.metadata.leads` by the **existing**
+    sdr-reconcile sweep (`refreshLeadCounts`) and shown as measured by
+    `goalProgress`. Never estimate it.
+  - Mailchimp makes a **draft** campaign from a post (`saveEmailDraft`); never
+    add a send or schedule tool.
+  - Google Sheets makes a new sheet from the calendar
+    (`exportCalendarToSheets`); it never edits an existing sheet.
+  - Both writes are chat buttons (`CHAT_ACTION_TOOLS`) and MCP tools
+    (`src/server/mcp/tools/apps.ts`), and a person's click in the app: the
+    calendar's Export menu ("New Google Sheet", exactly the posts on screen,
+    placed by `entryFromContent`) and review's Email section (`EmailDraft`).
+    Both show only when the app is connected (`useConnectedApps`).
+  - The weekly report adds the measured lead count and the week's community
+    threads (`growthFacts` in `autopilot/ports.server.ts`); a missing part is
+    left out. Shopify, Klaviyo and Drive are `later`.
+- **Agents are names for work that exists** (`src/lib/agents/roster.ts`, pure):
+  each has a place, needs, Autopilot automations, control-plane workers and
+  chat reads. `getAgents` (`src/server/fns/agents.ts`) works out the state from
+  stored rows only; Settings → Agents (`AgentsPanel`) shows it above
+  `OperationsInbox`, the one approvals list. Never give an agent its own chatbot
+  or a way to act without a person's click or an approval.
 
 ## MCP server (AI assistants)
 

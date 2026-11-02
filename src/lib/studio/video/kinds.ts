@@ -253,7 +253,8 @@ const BEFORE = /\b(before (and|&) after|transformation|makeover|glow[- ]up)\b/i;
 const OFFER = /\b(sale|discount|offer|deal|% ?off|promo|coupon|free shipping|limited time)\b/i;
 const MOOD = /\b(mood|vibe|atmosphere|aesthetic|b-?roll|ambien\w*|tour)\b/i;
 const STORY = /\b(story|day in the life|customers?|when you|pov)\b/i;
-const ANIMATE = /\b(animate|animation|bring (it|this|my \w+) to life|in motion|moving|spin|rotate|360)\b/i;
+const ANIMATE =
+  /\b(animate|animation|bring (it|this|my \w+) to life|in motion|moving|spin|rotate|360)\b/i;
 /** The brief asks for someone on screen. */
 const ASKS_FOR_PEOPLE =
   /\b(person|people|man|woman|men|women|girl|boy|guy|lady|creator|influencer|face|presenter|talking|testimonial|founder|team|family|friends?|kids?|child(ren)?|couple|someone|customers?|users?|clients?)\b/i;
@@ -303,7 +304,8 @@ export function usableKind(kind: VideoKindId, source: KindSource): VideoKindId {
 
 export type PeopleRule = VideoKind["people"];
 
-const ASKS_FOR_VOICE = /\b(voice ?-?over|vo|narrat\w*|narrator|voice|spoken|explain\w*|tell (them|people|viewers))\b/i;
+const ASKS_FOR_VOICE =
+  /\b(voice ?-?over|vo|narrat\w*|narrator|voice|spoken|explain\w*|tell (them|people|viewers))\b/i;
 
 /** A spoken voiceover is planned only when the brief, a script or the followed reference has one. */
 export function wantsVoiceover(args: {

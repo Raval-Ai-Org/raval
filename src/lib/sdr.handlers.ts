@@ -87,7 +87,7 @@ export type ConnectedAccount = {
   status: "active" | "expired" | "disconnected";
   tokenExpiresAt: string | null;
   /** Provider-specific extras (SocialAPI.ai). Absent for the SDR. */
-  provider?: "postforme" | "socialapi" | "sdr";
+  provider?: "postforme" | "socialapi" | "sdr" | "composio";
   displayName?: string | null;
   avatarUrl?: string | null;
   /** Why the provider needs the account reconnected, when it says. */

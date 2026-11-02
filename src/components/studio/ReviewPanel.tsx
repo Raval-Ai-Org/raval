@@ -72,6 +72,8 @@ import { studioPriceLabel } from "@/lib/studio/billing";
 import { ScriptVideoActions } from "./ScriptVideoActions";
 import { EditChat } from "./EditChat";
 import { MakeMoreFrom } from "./MakeMoreFrom";
+import { EmailDraft } from "./EmailDraft";
+import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
 import { VersionStrip } from "./VersionStrip";
 
 export type ReviewRow = {
@@ -229,6 +231,7 @@ export function ReviewPanel({
   const reduce = useReducedMotion();
   const revising = !!session.pendingKey || !!(session.job && isActiveJob(session.job));
   const sdr = useSdrStatus(fixtureRows ? null : session.workspaceId);
+  const connectedApps = useConnectedApps(fixtureRows ? null : session.workspaceId);
   const distributionReady = fixtureDistribution ?? canDistribute(sdr);
 
   const [rows, setRows] = useState<ReviewRow[]>(fixtureRows ?? []);
@@ -1599,6 +1602,20 @@ export function ReviewPanel({
                 contentItemId={job.content_item_ids[0]}
                 title={draft.title ?? job.title}
                 media={mediaReady ? media : null}
+                disabled={revising || dirty || editing}
+              />
+            </InspectorSection>
+          ) : null}
+
+          {job.status === "succeeded" &&
+          job.content_item_ids?.[0] &&
+          connectedApps.has("mailchimp") &&
+          session.type !== "story" &&
+          session.type !== "video" ? (
+            <InspectorSection title="Email">
+              <EmailDraft
+                workspaceId={session.workspaceId}
+                contentItemId={job.content_item_ids[0]}
                 disabled={revising || dirty || editing}
               />
             </InspectorSection>

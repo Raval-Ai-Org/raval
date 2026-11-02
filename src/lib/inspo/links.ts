@@ -99,7 +99,11 @@ export function pickReelFormat(info: YtdlpInfo): ReelPick | null {
   const best = [...candidates].sort((a, b) => score(b) - score(a))[0];
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(best.http_headers ?? {}))
-    if (SAFE_HEADERS.includes(name.toLowerCase()) && typeof value === "string" && value.length < 500)
+    if (
+      SAFE_HEADERS.includes(name.toLowerCase()) &&
+      typeof value === "string" &&
+      value.length < 500
+    )
       headers[name] = value;
   const height = short(best.height, best.width);
   return {

@@ -328,6 +328,25 @@ export async function completeConnect(args: {
     .eq("status", "pending");
   if (error) throw new Error(`Couldn't save the connection: ${error.message}`);
 
+  // A social network: find where it can post (Pages, boards, the business
+  // account) so it shows up in the publish picker. A failure leaves the
+  // connection on with a plain reason; it never undoes the sign-in.
+  try {
+    const { syncDestinations } = await import("@/server/social/composio/service.server");
+    await syncDestinations({
+      workspaceId: state.workspaceId,
+      integrationAccountId: row.id,
+      app: row.app,
+      connectedBy: args.userId,
+    });
+  } catch (error) {
+    console.warn(
+      "[integrations] destination lookup failed",
+      row.id,
+      error instanceof Error ? error.message : error,
+    );
+  }
+
   const replaces = (row.metadata as { replaces?: string } | null)?.replaces;
   if (replaces) {
     await retire({
@@ -347,7 +366,7 @@ export async function completeConnect(args: {
   return { status: "connected", app: row.app, label, returnPath: state.returnPath };
 }
 
-async function retire(args: {
+export async function retire(args: {
   workspaceId: string;
   accountId: string;
   userId: string | null;

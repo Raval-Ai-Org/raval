@@ -341,8 +341,14 @@ export async function deleteWorkspace(
     .eq("id", args.workspaceId)
     .eq("owner_id", args.userId)
     .select("id");
+  if (deleteError?.message.includes("workspace_link_order_in_progress")) {
+    throw new HttpError(
+      409,
+      "A backlink order for this workspace is still in progress. Try again once it has finished.",
+    );
+  }
   if (deleteError || !deleted?.length) {
-    console.error("[workspaces] delete failed", deleteError?.message);
+    console.error("[workspaces] delete failed", deleteError?.code, deleteError?.message);
     throw new HttpError(500, "Could not delete workspace");
   }
 

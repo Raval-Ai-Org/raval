@@ -7,7 +7,14 @@ import type { VisualProfile, VisualSource } from "@/lib/brand-visuals/contracts"
 import type { InspoCard, InspoChip } from "@/lib/inspo/board";
 import type { InspoSection } from "@/lib/inspo/sections";
 
-export type InspoUpload = { id: string; name: string; previewUrl: string | null; chip: InspoChip };
+export type InspoUpload = {
+  id: string;
+  name: string;
+  previewUrl: string | null;
+  chip: InspoChip;
+  /** 0–1 while the file is being sent; absent while it is being saved. */
+  progress?: number;
+};
 
 export type InspoTaste = {
   available: boolean;

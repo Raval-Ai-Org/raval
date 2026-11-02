@@ -71,6 +71,7 @@ export const OPTIMAL_SIZE_BY_PLATFORM: Record<PlatformId, ImgSize> = {
   threads: "1024x1024",
   tiktok: "1024x1792",
   youtube: "1792x1024",
+  pinterest: "1024x1792",
 };
 
 export const sizeForPlatform = (p?: PlatformId | null): ImgSize =>

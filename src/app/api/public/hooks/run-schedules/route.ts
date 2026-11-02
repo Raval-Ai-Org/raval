@@ -53,7 +53,7 @@ export const POST = defineCronRoute({
         console.error("[memory] clearing ended memories failed", error);
       }
     });
-    const [scheduled, marketBrain, autopilot, audience] = await Promise.all([
+    const [scheduled, marketBrain, autopilot, audience, socialApps] = await Promise.all([
       runDueScheduledJobs({ max: 25 }),
       runDueMarketBrainCollections({ max: 25 }),
       // Never let Autopilot fail the schedules it shares this hook with.
@@ -67,12 +67,21 @@ export const POST = defineCronRoute({
         console.error("[audience] sweep failed", error);
         return { claimed: 0, advanced: 0, failed: 1, deferred: 0 };
       }),
+      // Scheduled posts to Composio-connected accounts (ADR-0042): Mellox
+      // keeps their schedule, since Composio has no queue of its own.
+      import("@/lib/postforme/workspace.server")
+        .then(({ runDueComposioPosts }) => runDueComposioPosts())
+        .catch((error) => {
+          console.error("[composio-social] scheduled sends failed", error);
+          return { sent: 0, failed: 1, cancelled: 0 };
+        }),
     ]);
     return {
       ran: scheduled.ran + marketBrain.ran,
       failed: scheduled.failed,
       autopilot,
       audience,
+      socialApps,
     };
   },
 });

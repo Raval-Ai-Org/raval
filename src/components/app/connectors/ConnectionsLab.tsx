@@ -12,12 +12,21 @@ import { CONNECTOR_PROVIDERS, type ConnectorsOverview } from "@/lib/connectors/t
 import { cn } from "@/lib/utils";
 import { ConnectionCard, ConnectionFact, ConnectionSkeleton } from "./ConnectionCard";
 import { AppsList, type AppsView } from "./ConnectedApps";
+import { AgentsRoster, type AgentRow } from "@/components/app/agents/AgentsPanel";
+import { AGENTS, rosterStates } from "@/lib/agents/roster";
 import { GitHubView } from "./GitHubConnector";
 import { McpScreen, type McpActivityItem, type McpTool } from "./McpScreen";
 import { WebflowView, type WebflowConnection } from "./WebflowConnector";
 import { WordPressView, type WordPressConnection } from "./WordPressConnector";
 
-const SCENES = ["apps", "website", "website-empty", "assistants", "assistants-viewer"] as const;
+const SCENES = [
+  "apps",
+  "agents",
+  "website",
+  "website-empty",
+  "assistants",
+  "assistants-viewer",
+] as const;
 type Scene = (typeof SCENES)[number];
 
 const WS = "00000000-0000-4000-8000-000000000001";
@@ -312,6 +321,26 @@ const APPS: AppsView = {
   ],
 };
 
+// Settings → Agents with a brand that has Brand DNA, Instagram and Autopilot
+// with two weekly jobs, but no website, CRM or community threads yet.
+const SAMPLE_STATES = rosterStates({
+  hasBrandDna: true,
+  socialAccounts: 2,
+  hasWebsite: false,
+  autopilotOn: true,
+  automations: ["repurpose", "weekly_report"],
+  apps: ["instagram"],
+  communityThreads: 0,
+  agentsPaused: false,
+  disabledWorkers: [],
+});
+const SAMPLE_AGENTS: AgentRow[] = AGENTS.map((a, i) => ({
+  name: a.name,
+  does: a.does,
+  place: a.place,
+  ...SAMPLE_STATES[i],
+}));
+
 function Assistants({ viewer }: { viewer: boolean }) {
   const [state, setState] = useState({ enabled: !viewer, allowWrites: false });
   return (
@@ -361,6 +390,7 @@ export function ConnectionsLab() {
       <main key={scene} className="mx-auto w-full max-w-[760px] px-4 pb-16 pt-6 sm:px-7">
         <GroupLabel>{scene}</GroupLabel>
         {scene === "apps" && <Apps />}
+        {scene === "agents" && <AgentsRoster agents={SAMPLE_AGENTS} />}
         {scene === "website" && <Website empty={false} />}
         {scene === "website-empty" && <Website empty />}
         {scene === "assistants" && <Assistants viewer={false} />}

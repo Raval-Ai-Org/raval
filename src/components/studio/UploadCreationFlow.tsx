@@ -68,9 +68,10 @@ const KINDS = [
 ] as const;
 
 function available(kind: UploadKind, platform: PlatformId) {
-  if (kind === "video") return true;
+  // A Pin is one picture: no video or words-only Pins.
+  if (kind === "video") return platform !== "pinterest";
   if (kind === "photo") return platform !== "tiktok" && platform !== "youtube";
-  return !["instagram", "tiktok", "youtube"].includes(platform);
+  return !["instagram", "tiktok", "youtube", "pinterest"].includes(platform);
 }
 
 export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: () => void }) {

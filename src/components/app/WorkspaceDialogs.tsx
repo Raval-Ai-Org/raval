@@ -21,7 +21,9 @@ import {
   SlidersHorizontal,
   Sun,
   Users,
+  Wand,
 } from "@/components/icons";
+import { AgentsPanel } from "@/components/app/agents/AgentsPanel";
 import { MemoryPanel } from "@/components/app/memory/MemoryPanel";
 import { useMemoryAvailable } from "@/components/app/memory/use-memory";
 import { useTheme } from "@/hooks/use-theme";
@@ -46,7 +48,7 @@ import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard"
 import { McpConnector } from "@/components/app/connectors/McpConnector";
 
 type SettingsSection =
-  "accounts" | "analytics" | "website" | "assistants" | "memory" | "preferences";
+  "accounts" | "analytics" | "website" | "assistants" | "agents" | "memory" | "preferences";
 
 /** The GitHub install returns to ?settings=connections, which means the website sources. */
 function sectionFromUrl(value: string | null): SettingsSection | null {
@@ -55,6 +57,7 @@ function sectionFromUrl(value: string | null): SettingsSection | null {
     value === "analytics" ||
     value === "website" ||
     value === "assistants" ||
+    value === "agents" ||
     value === "memory" ||
     value === "preferences"
     ? value
@@ -334,6 +337,7 @@ const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
   { id: "analytics", label: "Analytics", icon: BarChart },
   { id: "website", label: "Website", icon: Globe },
   { id: "assistants", label: "AI assistants", icon: Bot },
+  { id: "agents", label: "Agents", icon: Wand },
   { id: "memory", label: "Memory", icon: Brain },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
@@ -436,6 +440,11 @@ function SettingsDialog({
           {section === "assistants" && (
             <SurfacePage title="AI assistants" width="narrow">
               {workspaceId ? <McpConnector workspaceId={workspaceId} /> : noWorkspace}
+            </SurfacePage>
+          )}
+          {section === "agents" && (
+            <SurfacePage title="Agents" subtitle="Who does what for this brand" width="narrow">
+              {workspaceId ? <AgentsPanel /> : noWorkspace}
             </SurfacePage>
           )}
           {section === "memory" && (

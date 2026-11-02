@@ -148,7 +148,8 @@ export type AppEventMap = {
   /** Settings, optionally on a section (GitHub, Webflow and WordPress live under "website"). */
   "open:settings":
     | {
-        section?: "accounts" | "analytics" | "website" | "assistants" | "memory" | "preferences";
+        section?:
+          "accounts" | "analytics" | "website" | "assistants" | "agents" | "memory" | "preferences";
       }
     | undefined;
   /** Navigates to Backlinks at /w/<id>/app/backlinks. Only ever fired by a button. */

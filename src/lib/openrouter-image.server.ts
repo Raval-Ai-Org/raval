@@ -43,7 +43,7 @@ import {
 } from "./model-router.server";
 
 /** Studio's image sizes, and the legacy /api/generate-image sizes. */
-export type ImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792";
+export type ImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792" | "1024x1536";
 export type ImageQuality = "low" | "medium" | "high";
 
 const IMAGE_TIMEOUT_MS = 150_000;
@@ -71,12 +71,13 @@ export type GeneratedImage = { b64: string; mimeType: string; model: string; cos
 /**
  * The GPT Image 2.5 models take 1:1, 16:9, 9:16, 3:4 (and others) but not
  * 4:5, so Studio's 4:5 portrait (1024x1280) renders as 3:4, the closest
- * supported portrait ratio.
+ * supported portrait ratio. A Pin (1024x1536) is the models' native 2:3.
  */
-export function aspectRatioFor(size: ImageSize): "1:1" | "16:9" | "9:16" | "3:4" {
+export function aspectRatioFor(size: ImageSize): "1:1" | "16:9" | "9:16" | "3:4" | "2:3" {
   if (size === "1792x1024") return "16:9";
   if (size === "1024x1792") return "9:16";
   if (size === "1024x1280") return "3:4";
+  if (size === "1024x1536") return "2:3";
   return "1:1";
 }
 

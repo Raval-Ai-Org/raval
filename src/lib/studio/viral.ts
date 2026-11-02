@@ -120,7 +120,7 @@ export function formatGuide(types: readonly string[]): string {
 }
 
 const VISUAL: readonly StudioType[] = ["image", "carousel", "video", "story"];
-const SEARCHED: readonly PlatformId[] = ["instagram", "tiktok", "youtube"];
+const SEARCHED: readonly PlatformId[] = ["instagram", "tiktok", "youtube", "pinterest"];
 
 /** What every piece needs before it is worth posting, whatever its aim. */
 export function shareRules(type: StudioType, platforms: readonly PlatformId[] = []): string[] {

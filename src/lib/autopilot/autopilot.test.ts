@@ -605,6 +605,19 @@ describe("weekly summary", () => {
     expect(report.text).not.toContain("idea");
   });
 
+  it("adds measured leads and community threads, and only when given", () => {
+    const report = weeklyReport({
+      ...empty,
+      leads: { value: 1250, source: "HubSpot" },
+      communityThreads: 3,
+    })!;
+    expect(report.text).toContain("New contacts in HubSpot since your goal started: 1,250.");
+    expect(report.text).toContain("3 new threads");
+    const plain = weeklyReport({ ...empty, waiting: 1 })!;
+    expect(plain.text).not.toContain("HubSpot");
+    expect(plain.text).not.toContain("Communities");
+  });
+
   it("still writes when nothing went out but something waits", () => {
     const report = weeklyReport({ ...empty, waiting: 1 })!;
     expect(report.subject).toBe("Your week on Autopilot");

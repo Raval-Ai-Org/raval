@@ -28,16 +28,67 @@ import {
 } from "@/lib/inspo/board";
 import { tidyLook } from "@/lib/inspo/look";
 import type { InspoSection } from "@/lib/inspo/sections";
+import {
+  MAX_FILES_PER_BATCH,
+  PARALLEL_UPLOADS,
+  UPLOAD_MESSAGES,
+  finishGroups,
+  uploadProblem,
+  uploadType,
+  type UploadKind,
+} from "@/lib/inspo/uploads";
 import { toast } from "@/lib/toast";
 import { userSafeMessage } from "@/lib/user-errors";
 import { InspoScreen } from "./InspoScreen";
 import type { InspoHandlers, InspoTaste, InspoUpload, InspoView } from "./types";
 
-const MAX_BYTES = 20 * 1024 * 1024;
-const ACCEPTED = /^(image\/(png|jpeg|webp)|video\/(mp4|webm))$/;
-
 function message(cause: unknown, fallback: string) {
   return userSafeMessage(cause instanceof Error ? cause.message : null, fallback);
+}
+
+type Signed = { url: string; method: "PUT"; headers: Record<string, string> };
+type Started =
+  | {
+      id: string;
+      name: string;
+      type: string;
+      size: number;
+      kind: UploadKind;
+      upload: Signed;
+      error?: undefined;
+    }
+  | { name: string; error: string; id?: undefined };
+
+/** Send one file straight to storage, reporting how much has gone. */
+function putFile(file: File, signed: Signed, onProgress: (share: number) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(signed.method, signed.url);
+    for (const [name, value] of Object.entries(signed.headers)) xhr.setRequestHeader(name, value);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(UPLOAD_MESSAGES.missing));
+    xhr.onerror = () => reject(new Error(UPLOAD_MESSAGES.missing));
+    xhr.send(file);
+  });
+}
+
+/** Run `work` over `items`, at most `limit` at a time. */
+async function inTurns<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) await work(items[next++]);
+    }),
+  );
+}
+
+/** One plain line for the files that couldn't be added. */
+function failedLine(failed: { name: string; error: string }[]) {
+  if (failed.length === 1) return `${failed[0].name}: ${failed[0].error}`;
+  return `${failed.length} files couldn't be added. ${failed[0].name}: ${failed[0].error}`;
 }
 
 export function tasteOf(view: VisualView | null, draft: VisualProfile | null): InspoTaste | null {
@@ -146,59 +197,144 @@ export function InspoPanel({
     }
   }, []);
 
-  const send = useCallback(
-    async (body: FormData) => {
+  const call = useCallback(
+    async (path: string, init: { body: BodyInit; json?: boolean }) => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) throw new Error("Sign in again to add this.");
+      const headers: Record<string, string> = { authorization: `Bearer ${session.access_token}` };
+      if (init.json) headers["content-type"] = "application/json";
       const response = await fetch(
-        `/api/brand-visuals/upload?workspaceId=${encodeURIComponent(workspaceId)}`,
-        { method: "POST", headers: { authorization: `Bearer ${session.access_token}` }, body },
+        `/api/brand-visuals/${path}?workspaceId=${encodeURIComponent(workspaceId)}`,
+        { method: "POST", headers, body: init.body },
       );
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error ?? "This could not be added.");
+      return result;
     },
     [workspaceId],
   );
+  const send = useCallback((body: FormData) => call("upload", { body }), [call]);
 
   const upload = useCallback(
-    async (files: File[], chip: InspoChip) => {
-      const ok = files.filter((f) => ACCEPTED.test(f.type) && f.size > 0 && f.size <= MAX_BYTES);
-      if (ok.length < files.length)
-        toast.error("Use PNG, JPEG, WebP, MP4 or WebM, up to 20 MB each.");
-      if (!ok.length) return;
-      const pending = ok.map((file) => ({
-        id: crypto.randomUUID(),
-        name: file.name,
-        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-        chip,
+    async (dropped: File[], chip: InspoChip) => {
+      const purpose = purposeOf(chip);
+      const failed: { name: string; error: string }[] = [];
+      const files = dropped.slice(0, MAX_FILES_PER_BATCH);
+      if (dropped.length > files.length)
+        toast.error(`Add up to ${MAX_FILES_PER_BATCH} files at a time.`);
+      // The browser checks first, so a wrong file never waits for an upload.
+      const typed = files.map((file) => ({ file, type: uploadType(file) }));
+      const ok = typed.filter(({ file, type }) => {
+        const problem = uploadProblem({ name: file.name, type, size: file.size });
+        if (problem) failed.push({ name: file.name, error: problem });
+        return !problem;
+      });
+      const showFailed = () => live.current && failed.length && setError(failedLine(failed));
+      if (!ok.length) return void showFailed();
+
+      const pending = ok.map(({ file, type }) => ({
+        key: crypto.randomUUID(),
         file,
+        type,
+        previewUrl: type.startsWith("image/") ? URL.createObjectURL(file) : null,
       }));
-      setUploads((u) => [...pending.map(({ file: _f, ...p }) => p), ...u]);
+      setUploads((u) => [
+        ...pending.map((p) => ({
+          id: p.key,
+          name: p.file.name,
+          previewUrl: p.previewUrl,
+          chip,
+          progress: 0,
+        })),
+        ...u,
+      ]);
+      const patch = (key: string, progress: number | undefined) =>
+        live.current && setUploads((u) => u.map((x) => (x.id === key ? { ...x, progress } : x)));
+      const done = (key: string) => {
+        const p = pending.find((x) => x.key === key);
+        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        if (live.current) setUploads((u) => u.filter((x) => x.id !== key));
+      };
+
       let added = 0;
-      for (const p of pending) {
-        try {
-          const body = new FormData();
-          body.set("workspaceId", workspaceId);
-          body.set("purpose", purposeOf(chip));
-          body.set("format", "all");
-          body.set("label", p.name.replace(/\.[a-z0-9]+$/i, "").slice(0, 100) || "Inspo");
-          body.set("file", p.file);
-          await send(body);
-          added += 1;
-        } catch (cause) {
-          if (live.current) setError(message(cause, `${p.name} could not be added.`));
-        } finally {
-          if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
-          if (live.current) setUploads((u) => u.filter((x) => x.id !== p.id));
+      try {
+        const { items } = (await call("upload/start", {
+          json: true,
+          body: JSON.stringify({
+            files: pending.map((p) => ({ name: p.file.name, type: p.type, size: p.file.size })),
+          }),
+        })) as { items: Started[] };
+        // The server answers in the order it was asked.
+        const sent: {
+          id: string;
+          name: string;
+          type: string;
+          size: number;
+          kind: UploadKind;
+          key: string;
+        }[] = [];
+        const ready = pending.map((p, i) => ({ p, item: items[i] }));
+        for (const { p, item } of ready)
+          if (!item || !item.id) {
+            failed.push({ name: p.file.name, error: item?.error ?? UPLOAD_MESSAGES.saveFailed });
+            done(p.key);
+          }
+        await inTurns(
+          ready.filter((r) => r.item?.id),
+          PARALLEL_UPLOADS,
+          async ({ p, item }) => {
+            if (!item.id) return;
+            try {
+              await putFile(p.file, item.upload, (share) => patch(p.key, share));
+              patch(p.key, undefined);
+              const { upload: _signed, ...info } = item;
+              sent.push({ ...info, key: p.key });
+            } catch (cause) {
+              failed.push({ name: p.file.name, error: message(cause, UPLOAD_MESSAGES.missing) });
+              done(p.key);
+            }
+          },
+        );
+        for (const group of finishGroups(sent)) {
+          try {
+            const { results } = (await call("upload/finish", {
+              json: true,
+              body: JSON.stringify({
+                purpose,
+                items: group.map(({ id, name, type, size }) => ({ id, name, type, size })),
+              }),
+            })) as { results: { id: string; assetId?: string; error?: string }[] };
+            for (const item of group) {
+              const result = results.find((r) => r.id === item.id);
+              if (result?.assetId) added += 1;
+              else
+                failed.push({
+                  name: item.name,
+                  error: result?.error ?? UPLOAD_MESSAGES.saveFailed,
+                });
+            }
+          } catch (cause) {
+            for (const item of group)
+              failed.push({ name: item.name, error: message(cause, UPLOAD_MESSAGES.saveFailed) });
+          } finally {
+            group.forEach((item) => done(item.key));
+            // Show each group as soon as it is saved.
+            await reload();
+          }
         }
-        // Show each one as soon as it is saved.
-        await reload();
+      } catch (cause) {
+        for (const p of pending) {
+          if (!failed.some((f) => f.name === p.file.name))
+            failed.push({ name: p.file.name, error: message(cause, UPLOAD_MESSAGES.saveFailed) });
+          done(p.key);
+        }
       }
+      showFailed();
       if (added && live.current) toast.success(added > 1 ? `${added} added` : "Added");
     },
-    [workspaceId, send, reload],
+    [call, reload],
   );
 
   const addLink = useCallback(

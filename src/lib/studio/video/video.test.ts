@@ -249,9 +249,9 @@ describe("storyboard", () => {
   it("refuses a cast when nobody may be on screen", () => {
     const issues = storyboardIssues(fitStoryboard(board(), plan16), { ...ctx, people: "none" });
     expect(issues.join(" ")).toMatch(/no people at all/);
-    expect(
-      storyboardIssues(fitStoryboard(board(), plan16), { ...ctx, people: "cast" }),
-    ).toEqual([]);
+    expect(storyboardIssues(fitStoryboard(board(), plan16), { ...ctx, people: "cast" })).toEqual(
+      [],
+    );
   });
 
   it("keeps a voiceover short enough to say and true to the brand", () => {

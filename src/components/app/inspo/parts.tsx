@@ -18,6 +18,7 @@ import {
 import { dsFocus, dsIconBtn } from "@/components/app/surface/buttons";
 import { PinButton } from "@/components/app/pins";
 import { CHIPS, type InspoCard, type InspoChip } from "@/lib/inspo/board";
+import { ACCEPT_ATTRIBUTE } from "@/lib/inspo/uploads";
 import { cn } from "@/lib/utils";
 import type { InspoUpload } from "./types";
 
@@ -289,7 +290,7 @@ export function InspoDrop({
         type="file"
         hidden
         multiple
-        accept="image/png,image/jpeg,image/webp,video/mp4,video/webm"
+        accept={`${ACCEPT_ATTRIBUTE},.mov`}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
@@ -434,7 +435,9 @@ export function UploadCardView({ upload }: { upload: InspoUpload }) {
       )}
       <span className="skeleton-shimmer pointer-events-none absolute inset-0" aria-hidden />
       <span className="absolute inset-x-2 bottom-2 truncate rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
-        Adding…
+        {upload.progress === undefined
+          ? "Adding…"
+          : `Uploading ${Math.round(upload.progress * 100)}%`}
       </span>
     </motion.div>
   );

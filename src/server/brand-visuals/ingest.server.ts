@@ -5,7 +5,7 @@
 // those stills. If any part fails, everything this file made is removed, so a
 // video never stays without its frames.
 import "server-only";
-import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -292,7 +292,8 @@ export async function finishUpload(
   const kind = uploadKind(item.type);
   if (!kind) throw new UploadProblem(UPLOAD_MESSAGES.type);
   const path = inboxPath(c.workspaceId, item.id, item.type);
-  if (!isWorkspaceStoragePath(path, c.workspaceId)) throw new UploadProblem(UPLOAD_MESSAGES.missing);
+  if (!isWorkspaceStoragePath(path, c.workspaceId))
+    throw new UploadProblem(UPLOAD_MESSAGES.missing);
   const limit = kind === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
   const size = await assetObjectSize(path).catch(() => null);
   if (size === null || size === 0) throw new UploadProblem(UPLOAD_MESSAGES.missing);
@@ -307,7 +308,6 @@ export async function finishUpload(
     const file = join(directory, `original.${uploadExtension(item.type)}`);
     await downloadAssetObjectToFile(path, file, limit);
     if (kind === "image") {
-      const { readFile } = await import("node:fs/promises");
       const result = await ingestImage(c, await readFile(file), item.type, target);
       // The photo was saved as its own PNG; the raw upload isn't needed.
       await removeAssetObjects([path]).catch(() => {});

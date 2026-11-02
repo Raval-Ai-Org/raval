@@ -425,6 +425,31 @@ const ROWS: Partial<Record<StudioType, ReviewRow[]>> = {
   ],
 };
 
+/** One Pin: a single tall picture (src/lib/social/pinterest.ts). */
+const PIN_ROW: ReviewRow = {
+  id: "r-pin",
+  status: "pending",
+  title: "Three ways to brew cold brew at home",
+  body: "",
+  meta: { platform: "pinterest" },
+  scheduled_at: null,
+};
+
+const PIN_OUTPUT: StudioJobOutput = {
+  title: "Three ways to brew cold brew at home",
+  angle: "How-to people save",
+  variants: [
+    {
+      platform: "pinterest",
+      title: "Cold brew at home: 3 easy ways",
+      body: "Cold brew at home in three easy ways: a jar, a French press or a pitcher. Coarse grounds, cold water, 12 to 18 hours, then strain. Save this for your next batch.",
+      hashtags: [],
+      chars: 165,
+    },
+  ],
+  media: [ready(art(1024, 1536, "#2b1d14", "#e8c79a", "Cold brew 3 ways"), "2:3")],
+};
+
 /** A storyboarded video that passed its checks (src/lib/studio/video/). */
 const LAB_VIDEO_PLAN: NonNullable<StudioJobOutput["videoPlan"]> = {
   kind: "product-showcase",
@@ -866,6 +891,36 @@ const SCENES: Scene[] = [
     label: "Review · Image 9:16",
     make: () => session("image", "review"),
     fixtures: { rows: ROWS.image, distribution: true },
+  },
+  {
+    id: "brief-pin",
+    label: "Brief · Pinterest Pin",
+    make: () => {
+      const base = session("image", "intent", {
+        brief: "Three ways to brew cold brew at home, as a Pin people save",
+      });
+      return { ...base, controls: { ...base.controls, platforms: ["pinterest"], ratio: "2:3" } };
+    },
+  },
+  {
+    id: "review-pin",
+    label: "Review · Pinterest Pin 2:3",
+    make: () => {
+      const base = session("image", "review");
+      const job = base.job && {
+        ...base.job,
+        title: PIN_OUTPUT.title ?? null,
+        output: PIN_OUTPUT,
+        content_item_ids: [PIN_ROW.id],
+      };
+      return {
+        ...base,
+        controls: { ...base.controls, platforms: ["pinterest"], ratio: "2:3" },
+        job,
+        lastGood: job,
+      };
+    },
+    fixtures: { rows: [PIN_ROW], distribution: true },
   },
   {
     id: "review-video-rendering",

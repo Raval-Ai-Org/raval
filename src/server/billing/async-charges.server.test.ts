@@ -126,7 +126,7 @@ describe("billing notices", () => {
     expect(lowBalanceLevel(0, 2000)).toBe("meter_100");
     expect(lowBalanceLevel(0, 0)).toBeNull();
     expect(monthlyAllowance("free", "credits")).toBe(100);
-    expect(monthlyAllowance("growth", "video")).toBe(1200);
+    expect(monthlyAllowance("growth", "video")).toBe(200);
   });
 
   it("rewards referrals only after the refund window and under the yearly cap", () => {

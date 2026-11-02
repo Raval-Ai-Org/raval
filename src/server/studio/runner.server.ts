@@ -220,6 +220,7 @@ import {
 } from "./product-hero/hero.server";
 import { assignPhotos } from "@/lib/studio/carousel/photos";
 import { carouselPhotos } from "./carousel-photos.server";
+import { pinIssue } from "@/lib/social/pinterest";
 
 type Db = SupabaseClient;
 
@@ -779,11 +780,20 @@ async function revealDrafts(
   if (!ids.length) return;
   const { data } = await client
     .from("content_items")
-    .select("id, status, meta")
+    .select("id, status, meta, kind, channel, media_url")
     .in("id", ids)
     .eq("workspace_id", workspaceId);
-  for (const row of (data ?? []) as Array<{ id: string; status: string; meta: unknown }>) {
+  for (const row of (data ?? []) as Array<{
+    id: string;
+    status: string;
+    meta: unknown;
+    kind: string | null;
+    channel: string | null;
+    media_url: string | null;
+  }>) {
     const existingMeta = row.meta as Record<string, unknown> | null;
+    // A Pin that isn't one picture waits in Review instead of being approved.
+    const canApprove = approve && !pinIssue({ ...row, meta: existingMeta });
     const meta = mergeMeta(row.meta, {
       studio_state: "ready",
       ...(finishedVideo && existingMeta?.asset_id === finishedVideo.assetId
@@ -794,7 +804,7 @@ async function revealDrafts(
       .from("content_items")
       .update({
         meta,
-        ...(approve && (row.status === "draft" || row.status === "pending")
+        ...(canApprove && (row.status === "draft" || row.status === "pending")
           ? { status: "approved" }
           : row.status === "draft"
             ? { status: "pending" }
@@ -2458,8 +2468,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
             kind: videoPlan.kind,
             plan: videoPlan.plan,
             // A post's own picture, or a photo the person chose to bring to life.
-            fromPicture:
-              Boolean(source?.imagePath) || opensOnChosenPhoto(videoPlan.kind, controls),
+            fromPicture: Boolean(source?.imagePath) || opensOnChosenPhoto(videoPlan.kind, controls),
             people: videoPlan.people,
             voice: videoVoice(input),
           }

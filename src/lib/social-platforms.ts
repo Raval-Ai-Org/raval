@@ -2,6 +2,7 @@ import {
   FacebookIcon,
   InstagramIcon,
   LinkedinIcon,
+  PinterestIcon,
   ThreadsIcon,
   TiktokIcon,
   XIcon,
@@ -10,7 +11,14 @@ import {
 } from "@/components/icons";
 
 export type PlatformId =
-  "linkedin" | "twitter" | "instagram" | "facebook" | "threads" | "tiktok" | "youtube";
+  | "linkedin"
+  | "twitter"
+  | "instagram"
+  | "facebook"
+  | "threads"
+  | "tiktok"
+  | "youtube"
+  | "pinterest";
 
 export type PlatformSpec = {
   id: PlatformId;
@@ -105,6 +113,17 @@ export const PLATFORMS: Record<PlatformId, PlatformSpec> = {
     style:
       "Community-post / Shorts caption. Start with the value proposition in line 1. 2-4 sentences. Optional one link CTA. 3-5 relevant hashtags at the end (one with the channel/brand).",
   },
+  pinterest: {
+    id: "pinterest",
+    label: "Pinterest",
+    icon: PinterestIcon,
+    color: "#E60023",
+    maxChars: 500,
+    optimalChars: 220,
+    hashtags: [0, 2],
+    style:
+      "Pin description. Pinterest is a search engine for ideas: name the topic in the first sentence in the words people would type, then say what the Pin helps them do or make. 1-3 plain sentences, no slang, no emoji walls. Put the main keyword in the title too (100 characters max). 0-2 hashtags.",
+  },
 };
 
 export const PLATFORM_ORDER: PlatformId[] = [
@@ -115,6 +134,7 @@ export const PLATFORM_ORDER: PlatformId[] = [
   "threads",
   "tiktok",
   "youtube",
+  "pinterest",
 ];
 
 export const DEFAULT_PLATFORMS: PlatformId[] = ["linkedin", "twitter", "instagram"];

@@ -2,7 +2,7 @@
 // one for the user. Pure — shared by the composer, previews, and the server.
 import type { PlatformId } from "@/lib/social-platforms";
 
-export type AspectRatio = "1:1" | "4:5" | "16:9" | "9:16" | "3:4" | "4:3";
+export type AspectRatio = "1:1" | "4:5" | "16:9" | "9:16" | "3:4" | "4:3" | "2:3";
 
 export type RatioMeta = {
   id: AspectRatio;
@@ -18,21 +18,23 @@ export const RATIOS: Record<AspectRatio, RatioMeta> = {
   "4:5": { id: "4:5", label: "Portrait", w: 4, h: 5, use: "Instagram & Facebook feed" },
   "16:9": { id: "16:9", label: "Landscape", w: 16, h: 9, use: "LinkedIn, X, YouTube" },
   "9:16": { id: "9:16", label: "Vertical", w: 9, h: 16, use: "Stories, Reels, TikTok" },
-  "3:4": { id: "3:4", label: "Portrait 3:4", w: 3, h: 4, use: "Pinterest-style tall" },
+  "3:4": { id: "3:4", label: "Portrait 3:4", w: 3, h: 4, use: "Tall portrait" },
   "4:3": { id: "4:3", label: "Classic", w: 4, h: 3, use: "Presentations" },
+  "2:3": { id: "2:3", label: "Tall", w: 2, h: 3, use: "Pinterest" },
 };
 
 /** Image sizes the generation route accepts, keyed by ratio. */
-export type StudioImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792";
+export type StudioImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792" | "1024x1536";
 
 export const IMAGE_SIZE_BY_RATIO: Partial<Record<AspectRatio, StudioImageSize>> = {
   "1:1": "1024x1024",
   "4:5": "1024x1280",
   "16:9": "1792x1024",
   "9:16": "1024x1792",
+  "2:3": "1024x1536",
 };
 
-export const IMAGE_RATIOS: AspectRatio[] = ["1:1", "4:5", "16:9", "9:16"];
+export const IMAGE_RATIOS: AspectRatio[] = ["1:1", "4:5", "16:9", "9:16", "2:3"];
 export const VIDEO_RATIOS: AspectRatio[] = ["9:16", "1:1", "16:9", "4:3", "3:4"];
 
 /** The best-performing in-feed ratio per platform. */
@@ -44,6 +46,7 @@ export const FEED_RATIO_BY_PLATFORM: Record<PlatformId, AspectRatio> = {
   threads: "4:5",
   tiktok: "9:16",
   youtube: "16:9",
+  pinterest: "2:3",
 };
 
 /** Short-form video default per platform. */
@@ -55,6 +58,7 @@ export const VIDEO_RATIO_BY_PLATFORM: Record<PlatformId, AspectRatio> = {
   threads: "9:16",
   linkedin: "1:1",
   twitter: "16:9",
+  pinterest: "2:3",
 };
 
 /**

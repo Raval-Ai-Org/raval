@@ -140,4 +140,37 @@ describe("goalProgress", () => {
     const reach = p.rows.find((r) => r.id.startsWith("reach"))!;
     expect(reach.state === "measured" && reach.ratio).toBeCloseTo(0.24);
   });
+
+  it("counts leads only from a connected CRM, never estimated", () => {
+    const leadsGoal = decideGoals(
+      {
+        focus: "leads",
+        targets: [{ metric: "leads", target: 40 }],
+        timeframeWeeks: 8,
+        postsPerWeek: 3,
+      },
+      NOW,
+    );
+    if (!leadsGoal.ok) throw new Error("expected ok");
+    const at = new Date("2026-11-15T00:00:00Z");
+    const without = goalProgress(
+      leadsGoal.goals,
+      { postsPublished: 0, views: null, connected: [] },
+      at,
+    );
+    expect(without.rows.find((r) => r.id.startsWith("leads"))!.state).toBe("not_measured");
+    const withCrm = goalProgress(
+      leadsGoal.goals,
+      {
+        postsPublished: 0,
+        views: null,
+        connected: [],
+        leads: { value: 10, source: "HubSpot", measuredAt: "2026-11-14T00:00:00Z" },
+      },
+      at,
+    );
+    const row = withCrm.rows.find((r) => r.id.startsWith("leads"))!;
+    expect(row.state === "measured" && row.ratio).toBe(0.25);
+    expect(row.state === "measured" && row.detail).toBe("Added in HubSpot since you set the goal");
+  });
 });

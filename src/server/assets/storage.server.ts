@@ -1,4 +1,8 @@
 import "server-only";
+import { createWriteStream } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -224,7 +228,6 @@ export async function downloadAssetObjectToFile(
   maxBytes: number,
   supabase: SupabaseClient = supabaseAdmin as unknown as SupabaseClient,
 ): Promise<number> {
-  const { writeFile } = await import("node:fs/promises");
   if (!isMarkedR2Path(path)) {
     const { data, error } = await supabase.storage.from(ASSET_BUCKET).download(path);
     if (error || !data) throw new Error("Stored object could not be read");
@@ -243,9 +246,6 @@ export async function downloadAssetObjectToFile(
     (response.Body as { destroy?: () => void }).destroy?.();
     throw new Error("Stored object is too large");
   }
-  const { createWriteStream } = await import("node:fs");
-  const { pipeline } = await import("node:stream/promises");
-  const { Readable, Transform } = await import("node:stream");
   let size = 0;
   const cap = new Transform({
     transform(chunk: Buffer, _encoding, done) {

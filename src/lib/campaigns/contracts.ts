@@ -71,6 +71,7 @@ const platform = z.enum([
   "threads",
   "tiktok",
   "youtube",
+  "pinterest",
 ]);
 const text = (max: number) => z.string().trim().max(max);
 

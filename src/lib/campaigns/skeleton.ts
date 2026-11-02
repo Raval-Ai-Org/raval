@@ -36,6 +36,7 @@ const TIMES: Record<PlatformId, string[]> = {
   threads: ["19:00", "12:00"],
   tiktok: ["19:00", "21:00"],
   youtube: ["17:00", "12:00"],
+  pinterest: ["20:00", "14:00"],
 };
 const STORY_TIMES = ["11:30", "16:30", "20:00"];
 

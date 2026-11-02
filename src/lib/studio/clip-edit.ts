@@ -69,6 +69,7 @@ export function videoCanvas(ratio: AspectRatio): { width: number; height: number
     "1:1": { width: 720, height: 720 },
     "4:5": { width: 720, height: 900 },
     "3:4": { width: 720, height: 960 },
+    "2:3": { width: 720, height: 1080 },
     "4:3": { width: 960, height: 720 },
   };
   return sizes[ratio];

@@ -19,9 +19,10 @@ export const PlatformIdSchema = z.enum([
   "threads",
   "tiktok",
   "youtube",
+  "pinterest",
 ]);
 
-export const AspectRatioSchema = z.enum(["1:1", "4:5", "16:9", "9:16", "3:4", "4:3"]);
+export const AspectRatioSchema = z.enum(["1:1", "4:5", "16:9", "9:16", "3:4", "4:3", "2:3"]);
 
 export const StudioTypeSchema = z.enum([
   "social",

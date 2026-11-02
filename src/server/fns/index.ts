@@ -27,6 +27,7 @@ import * as goals from "./goals";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
 import * as integrations from "./integrations";
+import * as agents from "./agents";
 import * as links from "./links";
 import * as mcp from "./mcp";
 import * as memory from "./memory";
@@ -75,6 +76,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "google-analytics": googleAnalytics,
   insights,
   integrations,
+  agents,
   links,
   mcp,
   memory,

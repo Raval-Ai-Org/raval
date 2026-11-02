@@ -37,6 +37,8 @@ import { CreateJobSchema, type GoalId, type StudioJob } from "@/lib/studio/jobs"
 import type { StudioType } from "@/lib/studio/formats";
 import { summarizeLearnings, type MeasuredPiece } from "@/lib/autopilot/learn";
 import { weeklyReport } from "@/lib/autopilot/report";
+import { GoalsSchema } from "@/lib/goals/contracts";
+import { leadCountFor } from "@/server/integrations/business.server";
 import { underperformers } from "@/lib/studio/performance";
 import { agentsGloballyDisabled } from "@/server/agents/policy";
 import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
@@ -53,6 +55,7 @@ import type { PlatformId } from "@/lib/social-platforms";
 import { advanceStudioJob, getJobRow } from "@/server/studio/runner.server";
 import { bestHours } from "@/lib/stories/schedule";
 import { getStoryTheme } from "@/lib/stories/frames";
+import { pinIssue } from "@/lib/social/pinterest";
 import type { AutopilotPorts, ContentLite, JobLite, PlanInput } from "./engine";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
@@ -123,6 +126,14 @@ export async function approveContent(
   id: string,
   from: string[] = ["pending"],
 ): Promise<boolean> {
+  // A Pin that isn't one picture is never approved; it waits for a person.
+  const { data: row } = await db
+    .from("content_items")
+    .select("kind, channel, media_url, meta")
+    .eq("workspace_id", workspaceId)
+    .eq("id", id)
+    .maybeSingle();
+  if (row && pinIssue(row as Parameters<typeof pinIssue>[0])) return false;
   const { data, error } = await db
     .from("content_items")
     .update({ status: "approved" })
@@ -423,6 +434,36 @@ export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece
 /* ───────────────────────── the weekly summary ───────────────────────── */
 
 /**
+ * What the Growth and Community agents add to the summary, from stored rows
+ * only: HubSpot's measured lead count for the current goal, and community
+ * threads found this week. Either part missing (no CRM, no goal, no table yet)
+ * is simply left out.
+ */
+async function growthFacts(workspaceId: string, since: string) {
+  const [{ data: goalRow }, threads] = await Promise.all([
+    db.from("workspace_goals").select("goals").eq("workspace_id", workspaceId).maybeSingle(),
+    db
+      .from("community_threads")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .gte("found_at", since)
+      .then(
+        (r: { count: number | null; error: unknown }) => (r.error ? 0 : (r.count ?? 0)),
+        () => 0,
+      ),
+  ]);
+  const goals = GoalsSchema.safeParse((goalRow as { goals?: unknown } | null)?.goals);
+  const leads =
+    goals.success && goals.data.targets.some((t) => t.metric === "leads")
+      ? await leadCountFor(workspaceId, goals.data.startedAt).catch(() => null)
+      : null;
+  return {
+    leads: leads ? { value: leads.value, source: leads.source } : null,
+    communityThreads: threads,
+  };
+}
+
+/**
  * One email to the member the program acts for: what went out in the last
  * seven days, how it did, and what waits for them. Read from rows Mellox
  * already holds; nothing is generated and nothing is charged.
@@ -485,6 +526,7 @@ async function sendWeeklySummary(workspaceId: string, userId: string) {
     ideas: ideas ?? 0,
     visibilityScore: (scan as { overall_score?: number } | null)?.overall_score ?? null,
     learnings: summarizeLearnings(await measuredPieces(workspaceId)),
+    ...(await growthFacts(workspaceId, weekAgo)),
   });
   if (!report) {
     return { status: "skipped" as const, summary: "Nothing to report this week.", quiet: true };

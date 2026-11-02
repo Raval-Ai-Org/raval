@@ -12,7 +12,6 @@ import { z } from "zod";
 import { videoKind, type PeopleRule, type VideoKindId } from "./kinds";
 import type { ClipPlan } from "./lengths";
 
-
 /** The people line every prompt carries, from the decided rule. */
 export function peopleDirection(people: PeopleRule): string {
   switch (people) {

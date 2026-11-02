@@ -12,3 +12,12 @@ export const completeAppConnect = serverFn<typeof Handlers.completeAppConnect>(
   "integrations/completeAppConnect",
 );
 export const disconnectApp = serverFn<typeof Handlers.disconnectApp>("integrations/disconnectApp");
+export const listMailchimpAudiences = serverFn<typeof Handlers.listMailchimpAudiences>(
+  "integrations/listMailchimpAudiences",
+);
+export const saveEmailDraft = serverFn<typeof Handlers.saveEmailDraft>(
+  "integrations/saveEmailDraft",
+);
+export const exportCalendarToSheets = serverFn<typeof Handlers.exportCalendarToSheets>(
+  "integrations/exportCalendarToSheets",
+);

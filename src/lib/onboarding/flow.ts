@@ -124,7 +124,13 @@ const STUDIO_GOAL: Record<GoalFocus, "awareness" | "engagement" | "leads" | "lau
 };
 
 /** Platforms where a post is a picture first, so the first post gets one. */
-const VISUAL_FIRST = new Set<PlatformId>(["instagram", "tiktok", "youtube", "facebook"]);
+const VISUAL_FIRST = new Set<PlatformId>([
+  "instagram",
+  "tiktok",
+  "youtube",
+  "facebook",
+  "pinterest",
+]);
 
 export type FirstPostBrief = {
   n: 1 | 2 | 3;
