@@ -29,6 +29,14 @@ export type VideoRenderRequest = {
    * failing the render.
    */
   styleReferenceCount?: number;
+  /**
+   * The first image is the exact opening frame (a post's picture, or the
+   * frame the clip before ended on), not a loose reference. A model that can
+   * start from a frame does; one that can't keeps it as a reference.
+   */
+  firstFrame?: boolean;
+  /** With `firstFrame`: the picture the clip settles on (a living picture loops back to its post). */
+  lastFrameUrl?: string;
   /** KIE callback; OpenRouter computes its own (see openRouterVideoCallbackUrl). */
   callbackUrl?: string;
   /**

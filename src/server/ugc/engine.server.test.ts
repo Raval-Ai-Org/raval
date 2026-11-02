@@ -431,6 +431,26 @@ describe("Kie provider mapping", () => {
     });
   });
 
+  it("opens Veo on the exact picture, and settles on the last one, when asked", () => {
+    expect(
+      buildKieInput({
+        ...base,
+        model: UGC_MODELS.standard,
+        imageUrls: ["post", "style"],
+        firstFrame: true,
+        lastFrameUrl: "post-again",
+      }),
+    ).toMatchObject({
+      generation_type: "FIRST_AND_LAST_FRAMES_2_VIDEO",
+      image_urls: ["post", "post-again"],
+    });
+    expect(
+      buildKieInput({ ...base, model: UGC_MODELS.draft, imageUrls: ["frame"], firstFrame: true }),
+    ).toMatchObject({ generation_type: "FIRST_AND_LAST_FRAMES_2_VIDEO", image_urls: ["frame"] });
+    // Without the flag a picture is still a reference.
+    expect(kieGenerationType(UGC_MODELS.standard, 1)).toBe("REFERENCE_2_VIDEO");
+  });
+
   it("builds Gemini Omni input: references only, string duration, 7 images max", () => {
     const refs = Array.from({ length: 9 }, (_, i) => `i${i}`);
     const input = buildKieInput({ ...base, model: UGC_MODELS.premium, imageUrls: refs });

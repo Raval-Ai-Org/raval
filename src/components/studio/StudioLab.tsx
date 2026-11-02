@@ -463,6 +463,7 @@ const LAB_VIDEO_PLAN: NonNullable<StudioJobOutput["videoPlan"]> = {
         endsOn: "The hand cracks the can open, a puff of cold air",
         sound: "Fizz and a soft click",
         onScreen: "",
+        voiceover: "",
       },
       {
         opensOn: "The open can in the hand, cold air rising",
@@ -485,6 +486,7 @@ const LAB_VIDEO_PLAN: NonNullable<StudioJobOutput["videoPlan"]> = {
         endsOn: "The full glass beside the can, label facing the camera",
         sound: "Ice settling, a calm beat",
         onScreen: "Cold brew, made with oat milk",
+        voiceover: "",
       },
     ],
   },

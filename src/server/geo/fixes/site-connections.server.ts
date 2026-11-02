@@ -71,7 +71,7 @@ export async function getSiteConnections(ctx: FixContext, host: string): Promise
         siteName:
           candidate.provider === "github"
             ? candidate.fullName
-            : candidate.provider === "webflow"
+            : candidate.provider === "webflow" || candidate.provider === "wix"
               ? candidate.siteName
               : hostOf(candidate.siteUrl),
       };

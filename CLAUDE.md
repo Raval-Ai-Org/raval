@@ -1153,6 +1153,39 @@ record [ADR-0011](docs/adr/0011-github-app-website-connector.md).
   base branch. The one merge path is an admin pressing "Merge now" on a GEO fix
   (see AI Visibility). Every write is audited (`src/server/audit.server.ts`).
 
+## Connected apps (Composio)
+
+Decision record [ADR-0042](docs/adr/0042-composio-integration-layer.md);
+capability checks in [docs/integrations/capability-matrix.md](docs/integrations/capability-matrix.md).
+Flags `FEATURE_FLAG_INTEGRATIONS_ENABLED` (on unless `false`, with `_WS_<id>`)
+and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
+
+- **One gateway:** `src/server/integrations/composio/gateway.server.ts` is the
+  only file that reads `COMPOSIO_API_KEY` or calls Composio. Writes are never
+  retried; an unclear write is `unknown_outcome` and is resolved by reading.
+- **One guard:** every tool runs through `runIntegrationTool`
+  (`src/server/integrations/execute.server.ts`): account belongs to the
+  verified workspace and is active → tool is on the catalog allow-list → role →
+  a write needs an `approvalRef` → rate limit (`integration-read` / `-write`)
+  → `integration_tool_calls` (append-only) + audit. Never call the gateway's
+  `executeTool` from anywhere else.
+- **One catalog:** `src/lib/integrations/catalog.ts` lists every app, its
+  method, availability (`live | testing | needs_approval | later`), what Mellox
+  does with it and the exact tool slugs. Never list a destructive tool (a test
+  enforces it); only OAuth apps, never a pasted key. An app is shown only once
+  its workflow exists.
+- **Identity is the workspace:** Composio user `mellox_ws_<workspaceId>`
+  (`composioUserId`), derived, never stored or taken from a request.
+  `completeConnect` re-reads Composio before trusting an account.
+- Accounts: `integration_accounts` (Composio ids only, no tokens); connect →
+  `/api/integrations/apps/callback` → `AppConnectCallback` with
+  `useConnectWindow("apps")`. Status is swept every 6 h from the **existing**
+  `sdr-reconcile` hook (`sweepAccounts`); no cron job of its own.
+- UI: `connectors/ConnectedApps.tsx` (`AppsList` is presentational, shown in
+  `/connections-lab`) under Settings → Connections → Apps.
+- GitHub, Slack, Notion, Canva, Google, WordPress, Webflow and Wix stay on
+  their own connector code.
+
 ## MCP server (AI assistants)
 
 Full reference: [docs/mcp.md](docs/mcp.md), decision record

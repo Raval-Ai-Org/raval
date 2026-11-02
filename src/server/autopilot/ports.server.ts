@@ -30,7 +30,7 @@ import {
   type BrainEntry,
   type BrainLists,
 } from "@/lib/autopilot/brief";
-import { isAudienceEnabled } from "@/lib/feature-flags";
+import { isAudienceEnabled, isCommunityEnabled } from "@/lib/feature-flags";
 import { HOOK_STYLES } from "@/lib/studio/memory";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { CreateJobSchema, type GoalId, type StudioJob } from "@/lib/studio/jobs";
@@ -1152,6 +1152,36 @@ export const realPorts: AutopilotPorts = {
             sourceId: market.result.collectionId,
             significance: "minor",
             date: s.publishedDate,
+          });
+        }
+      }
+
+      // 2b. Questions people asked in communities, found by Community
+      //     Intelligence. The thread's own link is the evidence.
+      if (isCommunityEnabled(workspaceId)) {
+        const { data: threads } = await db
+          .from("community_threads")
+          .select("id, url, title, summary, snippet, matched_on, relevance, posted_at, found_at")
+          .eq("workspace_id", workspaceId)
+          .neq("status", "hidden")
+          .gte("relevance", 60)
+          .gte("found_at", new Date(now - 14 * DAY).toISOString())
+          .order("relevance", { ascending: false })
+          .limit(8);
+        for (const t of (threads ?? []) as Record<string, string | number | null>[]) {
+          if (!t.url || !t.title) continue;
+          candidates.push({
+            kind: "customer",
+            title: String(t.title).slice(0, 200),
+            summary: String(t.summary || t.snippet || ""),
+            evidence: [
+              { title: String(t.title), url: String(t.url), date: (t.posted_at as string) ?? null },
+            ],
+            sourceKind: "community_thread",
+            sourceId: String(t.id),
+            significance:
+              t.matched_on === "alternative" || t.matched_on === "problem" ? "notable" : "minor",
+            date: (t.posted_at as string) ?? (t.found_at as string),
           });
         }
       }

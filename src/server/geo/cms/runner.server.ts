@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import { createTwoFilesPatch } from "diff";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Json } from "@/integrations/supabase/types";
-import { targetLabel, type CmsChange } from "@/lib/geo/cms-fixes";
+import { targetLabel, type CmsChange, type CmsProvider } from "@/lib/geo/cms-fixes";
 import { displayValue } from "@/lib/geo/cms-fixes";
 import { RULE_BY_ID } from "@/lib/geo/rules";
 import type { SiteArtifacts } from "@/lib/geo/types";
@@ -63,7 +63,8 @@ export type CmsRunDeps = {
   ) => Promise<void>;
 };
 
-const providerName = (p: string) => (p === "webflow" ? "Webflow" : "WordPress");
+const providerName = (p: string) =>
+  p === "webflow" ? "Webflow" : p === "wix" ? "Wix" : "WordPress";
 
 /** Content hash that binds approval to exactly these changes. */
 export function cmsContentHash(changes: CmsChange[]): string {
@@ -149,7 +150,7 @@ async function scanFacts(run: RunLike): Promise<{
 }
 
 export async function runCmsInvestigation(run: RunLike, deps: CmsRunDeps): Promise<void> {
-  const provider = (run.provider ?? "wordpress") as "wordpress" | "webflow";
+  const provider = (run.provider ?? "wordpress") as CmsProvider;
   const name = providerName(provider);
   let current = run;
   if (current.status === "queued") {

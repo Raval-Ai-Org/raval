@@ -49,7 +49,7 @@ export type ProposalRow = {
   fix_id: string;
   page_url: string | null;
   site_origin: string;
-  provider: "github" | "wordpress" | "webflow";
+  provider: "github" | "wordpress" | "webflow" | "wix";
   connection_id: string | null;
   source_id: string | null;
   repo_full_name: string | null;

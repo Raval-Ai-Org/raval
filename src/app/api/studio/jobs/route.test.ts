@@ -313,6 +313,92 @@ describe("Studio async billing", () => {
     expect(mocked.saveLink).not.toHaveBeenCalled();
   });
 
+  describe("2 free videos a month, then credits", () => {
+    const videoRequest = (controls: Record<string, unknown> = {}) =>
+      new Request("http://localhost/api/studio/jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "00000000-0000-4000-8000-000000000002",
+          type: "video",
+          idempotencyKey: "video-click-001",
+          intent: { brief: "A calm video of our new candle" },
+          controls: {
+            platforms: ["instagram"],
+            videoModelKey: "standard",
+            durationSec: 24,
+            ...controls,
+          },
+        }),
+      });
+    const withVideos = (available: number) =>
+      mocked.getEntitlements.mockResolvedValue({
+        accountId: "account-1",
+        enforcement: "on",
+        role: "editor",
+        frozen: false,
+        entitledPlan: "starter",
+        features: {
+          studio: { allowed: true, requiredPlan: "free" },
+          ugc: { allowed: true, requiredPlan: "starter" },
+          video_1080p: { allowed: true, requiredPlan: "growth" },
+        },
+        meters: { credits: { available: 5_000 }, video: { available } },
+      });
+    beforeEach(() => {
+      vi.stubEnv("VIDEO_PROVIDER_STANDARD", "kie");
+      mocked.createJob.mockImplementation(async ({ onCreated }) => {
+        await onCreated({ id: "job-1", status: "running" });
+        return { id: "job-1", status: "running" };
+      });
+    });
+
+    it("uses one free video while one is left", async () => {
+      withVideos(200);
+      expect((await POST(videoRequest())).status).toBe(200);
+      expect(mocked.hold).toHaveBeenCalledOnce();
+      expect(mocked.hold).toHaveBeenCalledWith(
+        expect.objectContaining({ meter: "video", amount: 100 }),
+      );
+    });
+
+    it("takes credits when the free videos are used", async () => {
+      withVideos(0);
+      expect((await POST(videoRequest())).status).toBe(200);
+      expect(mocked.hold).toHaveBeenCalledWith(expect.objectContaining({ meter: "credits" }));
+    });
+
+    it("asks a person to look again when the free video shown is gone", async () => {
+      withVideos(0);
+      const response = await POST(
+        videoRequest({ videoQuote: { hash: "a".repeat(64), units: 100, meter: "video" } }),
+      );
+      expect(response.status).toBe(409);
+      expect(mocked.hold).not.toHaveBeenCalled();
+      expect(mocked.createJob).not.toHaveBeenCalled();
+    });
+
+    it("charges credits when the last free video goes between the quote and the hold", async () => {
+      withVideos(100);
+      mocked.hold.mockImplementation(async (args: { meter: string }) => {
+        if (args.meter === "video")
+          throw new InsufficientBalanceError({
+            meter: "video",
+            needed: 100,
+            available: 0,
+            options: ["upgrade"],
+          });
+        return { ok: true, id: "hold-2" };
+      });
+      expect((await POST(videoRequest())).status).toBe(200);
+      expect(mocked.hold).toHaveBeenCalledTimes(2);
+      expect(mocked.hold).toHaveBeenLastCalledWith(expect.objectContaining({ meter: "credits" }));
+      expect(mocked.saveLink).toHaveBeenCalledWith(
+        expect.objectContaining({ meter: "credits", hold_id: "hold-2" }),
+      );
+    });
+  });
+
   it("keeps a render hold linked to the job instead of capturing on submission", async () => {
     mocked.createJob.mockImplementation(async ({ onCreated }) => {
       await onCreated({ id: "job-1", status: "running" });

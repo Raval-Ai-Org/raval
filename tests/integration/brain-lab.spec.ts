@@ -92,3 +92,50 @@ for (const vp of VIEWPORTS) {
     });
   });
 }
+
+for (const vp of VIEWPORTS) {
+  test.describe(`Brain lab communities — ${vp.name}`, () => {
+    test.use({ viewport: { width: vp.width, height: vp.height } });
+    test.setTimeout(180_000);
+
+    test("community threads show their links, counts and a priced reply", async ({ page }) => {
+      await openScene(page, "community");
+      const frame = page.getByTestId("brain-lab-frame");
+      await expect(frame.getByRole("heading", { name: "Communities" })).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(frame.getByTestId("community-thread")).toHaveCount(5);
+      // Every title is the thread's own link, opened in a new tab.
+      const first = frame.getByRole("link", { name: /Their minimums are killing us/ });
+      await expect(first).toHaveAttribute("href", "https://www.reddit.com/r/cafe/comments/abc123/");
+      await expect(first).toHaveAttribute("target", "_blank");
+      // Counts of rows that exist.
+      await expect(frame.getByTestId("community-signals").getByText("2 threads")).toBeVisible();
+      // A draft is a click with its price on the button.
+      const draft = frame.getByRole("button", { name: /Draft a reply/ }).first();
+      await expect(draft).toContainText("credits");
+      await draft.click();
+      await expect(page.getByTestId("lab-last")).toHaveText("community:draft:c001");
+      // A written reply says who wrote it and is copied, never posted.
+      const reply = frame.getByTestId("community-reply");
+      await expect(reply).toContainText("Full disclosure: I work at Northside Roasters.");
+      await frame.getByRole("button", { name: "Copy" }).click();
+      await expect(page.getByTestId("lab-last")).toHaveText(/^community:copy:\d+$/);
+      // Filters narrow the list.
+      await frame.getByRole("tab", { name: /^Saved/ }).click();
+      await expect(frame.getByTestId("community-thread")).toHaveCount(1);
+      await noSidewaysScroll(page);
+    });
+
+    test("a new workspace is asked before anything is looked up", async ({ page }) => {
+      await openScene(page, "community-empty");
+      const frame = page.getByTestId("brain-lab-frame");
+      await expect(frame.getByText("Find people asking about what you do")).toBeVisible({
+        timeout: 30_000,
+      });
+      await frame.getByRole("button", { name: /Start looking/ }).click();
+      await expect(page.getByTestId("lab-last")).toHaveText("community:refresh");
+      await noSidewaysScroll(page);
+    });
+  });
+}

@@ -5,7 +5,13 @@
 
 import type { StudioControls } from "../jobs";
 import type { StudioType } from "../formats";
-import { pickVideoKind, studioVideoModelFor, usableKind, type KindSource } from "./kinds";
+import {
+  peoplePolicy,
+  pickVideoKind,
+  studioVideoModelFor,
+  usableKind,
+  type KindSource,
+} from "./kinds";
 import { snapLength } from "./lengths";
 
 /** A new AI video (not the brand's own clips, photos or website). */
@@ -23,6 +29,8 @@ export type SettleArgs = {
   brief?: string;
   template?: string;
   source?: KindSource;
+  /** Whether the Inspo reference the video follows shows people. */
+  reference?: "none" | "people";
 };
 
 /**
@@ -51,5 +59,15 @@ export function settleVideoControls(args: SettleArgs): StudioControls {
     videoKind: kind,
     videoModelKey,
     durationSec: snapLength(controls.durationSec, videoModelKey, kind),
+    // Settled once (the composer, then the server again): an earlier decision
+    // for the same kind is kept, so a picked-for-you kind never reads as chosen.
+    videoPeople:
+      controls.videoPeople && kind === controls.videoKind
+        ? controls.videoPeople
+        : peoplePolicy(kind, {
+            brief: args.brief,
+            chosen: kind === controls.videoKind || !!source.script,
+            reference: args.reference,
+          }),
   };
 }

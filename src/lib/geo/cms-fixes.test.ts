@@ -88,4 +88,27 @@ describe("fieldSupport", () => {
       fieldSupport("jsonld_site", { provider: "webflow", pageKind: "webflow_page" }).mode,
     ).toBe("assisted");
   });
+
+  it("writes only the head tags Wix's SEO API holds, and only on a matched page or post", () => {
+    for (const field of [
+      "seo_title",
+      "meta_description",
+      "canonical",
+      "noindex",
+      "og",
+      "jsonld_page",
+    ] as const) {
+      expect(fieldSupport(field, { provider: "wix", pageKind: "wix_page" }).mode).toBe("apply");
+      expect(fieldSupport(field, { provider: "wix", pageKind: "wix_post" }).mode).toBe("apply");
+      expect(fieldSupport(field, { provider: "wix", pageKind: "unknown" }).mode).toBe("assisted");
+    }
+    for (const field of [
+      "jsonld_site",
+      "robots_txt",
+      "llms_txt",
+      "content_html",
+      "image_alt",
+    ] as const)
+      expect(fieldSupport(field, { provider: "wix", pageKind: "wix_page" }).mode).toBe("assisted");
+  });
 });

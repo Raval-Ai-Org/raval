@@ -40,7 +40,11 @@ export function describeControls(session: StudioSession): string {
         controls: session.controls,
         brief: session.brief,
         template: session.template,
-        source: { picture: !!session.sourceContentId, script: !!session.sourceScript },
+        source: {
+          picture: !!session.sourceContentId,
+          script: !!session.sourceScript,
+          product: !!session.controls.productId,
+        },
       })
     : session.controls;
   const format = STUDIO_FORMATS[session.type];
@@ -185,11 +189,15 @@ export function ControlsPanel({
         controls: c,
         brief: session.brief,
         template: session.template,
-        source: { picture: !!session.sourceContentId, script: !!session.sourceScript },
+        source: {
+          picture: !!session.sourceContentId,
+          script: !!session.sourceScript,
+          product: !!c.productId,
+        },
       })
     : c;
   const settledModel = settled.videoModelKey ?? DEFAULT_STUDIO_VIDEO_MODEL;
-  const settledKind = settled.videoKind ?? "brand-story";
+  const settledKind = settled.videoKind ?? "product-motion";
   const lengths = aiVideo ? lengthChoices(settledModel, settledKind) : [];
   const premiumAllowed = billing ? billing.features.video_premium.allowed : true;
   const recommendedKey = aiVideo

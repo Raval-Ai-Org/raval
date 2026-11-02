@@ -135,7 +135,7 @@ export type VerificationView = {
 };
 
 /** Which platform a fix changes: a repository (pull request) or a CMS (direct write). */
-export type SiteProviderId = "github" | "wordpress" | "webflow";
+export type SiteProviderId = "github" | "wordpress" | "webflow" | "wix";
 
 /** One field a CMS fix changes, as the person reviews it. */
 export type CmsChangeView = {
@@ -394,7 +394,7 @@ export type CmsFixAllItem = {
 export type CmsFixAllView = {
   scanId: string;
   host: string;
-  provider: "wordpress" | "webflow";
+  provider: "wordpress" | "webflow" | "wix";
   items: CmsFixAllItem[];
   /** Findings of the same kind left for a later run (one change per field and page at a time). */
   deferred: number;

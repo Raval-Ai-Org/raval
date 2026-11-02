@@ -71,6 +71,8 @@ export type BrainOverview = {
   needs: BrainNeed[];
   /** The team's goal and its progress from stored rows only (ADR-0035). Null until set. */
   goal?: { line: string; progress: GoalProgress } | null;
+  /** Community Intelligence is on (Brain → Market → Communities). */
+  community?: boolean;
   generatedAt: string;
 };
 

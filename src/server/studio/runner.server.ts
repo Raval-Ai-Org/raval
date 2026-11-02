@@ -43,7 +43,12 @@ import { studioJobIsStale, studioProviderTaskIsTimedOut } from "@/lib/studio/rec
 import { isCaptionRevision } from "@/lib/billing/creation";
 import { sourceScriptClipDirection, sourceScriptDirection } from "@/lib/studio/script-video";
 import { animateImageDirection, VIDEO_AD_RULES } from "@/lib/studio/video-ad";
-import { DEFAULT_STUDIO_VIDEO_MODEL, videoKind } from "@/lib/studio/video/kinds";
+import {
+  DEFAULT_STUDIO_VIDEO_MODEL,
+  videoKind,
+  wantsVoiceover,
+  type VideoKindId,
+} from "@/lib/studio/video/kinds";
 import { clipPlan, clipSeconds } from "@/lib/studio/video/lengths";
 import { isAiVideo } from "@/lib/studio/video/settle";
 import {
@@ -274,6 +279,8 @@ type ProviderTask = {
     dissolve?: boolean;
     /** The post's picture framed for the video: it opens the video and the ending returns to it. */
     firstFramePath?: string;
+    /** The last clip settles back on the framed picture (a kind that ends on its source). */
+    loopsToSource?: boolean;
     /** An offer video's code-drawn end card: the brand's name and colours. */
     endCardStyle?: {
       brandName: string;
@@ -1113,7 +1120,26 @@ function studioVideoPlan(
   const kind = controls.videoKind;
   if (!kind || kind === "motion-post") return null;
   const model = controls.videoModelKey ?? STUDIO_VIDEO_MODEL;
-  return { kind, model, plan: clipPlan(controls.durationSec ?? clipSeconds(model), model) };
+  return {
+    kind,
+    model,
+    plan: clipPlan(controls.durationSec ?? clipSeconds(model), model),
+    people: controls.videoPeople ?? videoKind(kind).people,
+  };
+}
+
+/** A video job's voiceover is planned only when someone asked for a voice. */
+function videoVoice(input: CreateJobInput): boolean {
+  return (
+    input.controls.audio !== false &&
+    wantsVoiceover({ brief: input.intent.brief, script: !!input.intent.sourceScript })
+  );
+}
+
+/** The video opens on a photo the person chose (not a catalogue product's reference). */
+function opensOnChosenPhoto(kind: VideoKindId, controls: CreateJobInput["controls"]): boolean {
+  if (!controls.referenceAssetIds?.length) return false;
+  return kind === "living-picture" || (kind === "product-motion" && !controls.productId);
 }
 
 /** The model's storyboard fitted to the clips that will be made, and its shot lines. */
@@ -1125,7 +1151,12 @@ function shapeVideoPlan(
 ): { concept: string; videoPlan: NonNullable<StudioJobOutput["videoPlan"]> } | null {
   const planned = studioVideoPlan(workspaceId, type, input.controls);
   if (!planned || !parsed.storyboard) return null;
-  const storyboard = fitStoryboard(parsed.storyboard as VideoStoryboard, planned.plan);
+  const voice = videoVoice(input);
+  const fitted = fitStoryboard(parsed.storyboard as VideoStoryboard, planned.plan);
+  // Code decides whether anything is spoken: unasked voiceover words are dropped.
+  const storyboard = voice
+    ? fitted
+    : { ...fitted, clips: fitted.clips.map((clip) => ({ ...clip, voiceover: "" })) };
   return {
     concept: storyboardSummary(storyboard, planned.plan),
     videoPlan: {
@@ -1133,6 +1164,8 @@ function shapeVideoPlan(
       model: planned.model,
       clipSeconds: planned.plan.map((clip) => clip.seconds),
       storyboard,
+      people: planned.people,
+      voice,
     },
   };
 }
@@ -1189,8 +1222,11 @@ async function startStoryboardVideo(a: {
   });
   // The picture the video opens on: the post's own, or the photo the person
   // chose to bring to life. Framed whole for the video's shape.
+  // A product film opens on a chosen photo only when it is not a catalogue
+  // product's (those are references for the product's look, not the opening).
   const picturePath =
-    a.sourceImagePath ?? (plan.kind === "living-picture" ? a.supplied[0]?.storagePath : null);
+    a.sourceImagePath ??
+    (opensOnChosenPhoto(plan.kind, input.controls) ? a.supplied[0]?.storagePath : null);
   let firstFramePath: string | undefined;
   let firstFrameUrl: string | null = null;
   if (picturePath) {
@@ -1245,6 +1281,9 @@ async function startStoryboardVideo(a: {
       fromPicture: !!firstFrameUrl,
       productPhoto: !!input.controls.productId && a.supplied.length > 0,
       audio,
+      people: plan.people,
+      voice: plan.voice,
+      soundLook: ctx.style?.video.music,
       // A reviewed script's own words reach the clip they belong to, exactly.
       extra: [
         ...(script ? [sourceScriptClipDirection(script, clips[i], start, audio)] : []),
@@ -1264,11 +1303,16 @@ async function startStoryboardVideo(a: {
     chain: chained,
     dissolve: kind.join === "cut" && clips.length > 1,
   };
+  // The picture is the real first frame, not a look-alike reference; a kind
+  // that ends on its source settles back on it, so the ending meets it exactly.
+  const loopsToSource = !!firstFrameUrl && kind.ending === "back-to-source";
   const started = await startStudioVideo({
     ...settings,
     prompt: prompts[0],
     imageUrls,
     styleReferenceCount,
+    firstFrame: !!firstFrameUrl,
+    lastFrameUrl: loopsToSource ? firstFrameUrl! : undefined,
     clips: prompts.map((prompt, i) => ({ seconds: clips[i].seconds, prompt })),
     chain: chained
       ? {
@@ -1301,6 +1345,7 @@ async function startStoryboardVideo(a: {
       styleReferences: styleReferenceCount > 0,
       ...composed,
       firstFramePath,
+      loopsToSource,
       ...(kind.ending === "end-card"
         ? {
             endCardStyle: {
@@ -2414,8 +2459,9 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
             plan: videoPlan.plan,
             // A post's own picture, or a photo the person chose to bring to life.
             fromPicture:
-              Boolean(source?.imagePath) ||
-              (videoPlan.kind === "living-picture" && !!controls.referenceAssetIds?.length),
+              Boolean(source?.imagePath) || opensOnChosenPhoto(videoPlan.kind, controls),
+            people: videoPlan.people,
+            voice: videoVoice(input),
           }
         : undefined,
     };
@@ -2491,6 +2537,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
               plan: videoPlan.plan,
               knownFacts: `${input.intent.brief}\n${ctx.brandText}\n${source?.body ?? ""}`,
               fromPicture: promptArgs.video?.fromPicture,
+              people: videoPlan.people,
             }).join(" ") || null
           : videoPlan && !captionOnly
             ? "The storyboard is missing."
@@ -3109,6 +3156,9 @@ async function startStudioVideo(opts: {
   clips?: VideoRenderRequest["clips"];
   chain?: VideoRenderRequest["chain"];
   dissolve?: boolean;
+  /** The first image opens the video exactly (a post's framed picture). */
+  firstFrame?: boolean;
+  lastFrameUrl?: string;
 }): Promise<{
   taskId: string;
   model: string;
@@ -3131,6 +3181,8 @@ async function startStudioVideo(opts: {
     clips: opts.clips,
     chain: opts.chain,
     dissolve: opts.dissolve,
+    firstFrame: opts.firstFrame,
+    lastFrameUrl: opts.lastFrameUrl,
   });
   if (!submitted.ok) {
     // A safety answer keeps its own words and category, never "provider".
@@ -3196,8 +3248,11 @@ async function resubmitStudioVideo(
       : prompt,
   );
   const clipSeconds = row.output?.videoPlan?.clipSeconds;
+  const firstFrameUrl = video.firstFramePath ? own[0] : undefined;
   const started = await startStudioVideo({
     ...video,
+    firstFrame: !!firstFrameUrl,
+    lastFrameUrl: video.loopsToSource ? firstFrameUrl : undefined,
     prompt: clipPrompts?.[0] ?? task.prompt,
     imageUrls,
     styleReferenceCount: imageUrls.length - Math.min(own.length, imageUrls.length),

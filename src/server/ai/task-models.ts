@@ -191,6 +191,9 @@ const REGISTRY: Record<string, TaskPlan> = {
   "competitors.discovery": tier(WORKHORSE, "low"),
   "competitors.profile": tier(WORKHORSE, "low"),
   "competitors.updates": tier(ECONOMY, "low"),
+  // Community Intelligence: label and summarise supplied threads; draft one reply.
+  "community.classify": tier(ECONOMY, "low", { maxTokens: 4_000 }),
+  "community.reply": tier(WORKHORSE, "low", { maxTokens: 2_000 }),
   // Autopilot: a week's plan over fixed slots, and a relevance read of
   // signals that were already collected.
   "autopilot.plan": tier(WORKHORSE, "medium"),
@@ -263,6 +266,7 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "competitors.discovery.resolve",
   "competitors.resolve-name",
   "competitors.advance",
+  "community.refresh",
   "market-brain.scheduled",
   "autopilot.run",
   "audience.run",

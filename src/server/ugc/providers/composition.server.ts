@@ -258,8 +258,11 @@ export function withVideoComposition(
               durationSec: clip.renderSeconds,
               minimumDurationSec: clip.renderSeconds,
               imageUrls: clipImages(request, i, frameUrl),
-              // The frame the clip before ended on must survive routing.
+              // The frame the clip before ended on must survive routing, and
+              // the clip opens on it exactly (a reference would only resemble it).
               requiredReferenceCount: frameUrl ? 1 : request.requiredReferenceCount,
+              firstFrame: frameUrl ? true : i === 0 ? request.firstFrame : false,
+              lastFrameUrl: i === row.state.clips.length - 1 ? request.lastFrameUrl : undefined,
               prompt: clip.prompt ?? segmentVideoPrompt(request.prompt, clip, request.durationSec),
             });
             if (!submitted.ok) {

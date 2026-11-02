@@ -18,7 +18,8 @@ export type VideoKindId =
   | "how-it-works"
   | "before-after"
   | "mood-broll"
-  | "offer-teaser";
+  | "offer-teaser"
+  | "product-motion";
 
 /** How a kind's clips are put together. */
 export type VideoJoin =
@@ -64,10 +65,11 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     id: "living-picture",
     label: "Bring a post to life",
     hint: "Your post, gently moving",
-    join: "single",
+    // Longer takes continue from the exact last frame and settle back on the post.
+    join: "chain",
     people: "source",
     defaultClips: 1,
-    maxClips: 1,
+    maxClips: 3,
     ending: "back-to-source",
     needsSource: true,
     models: ["standard", "premium", "draft"],
@@ -77,6 +79,25 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
       "Words, logos and packaging text stay perfectly still and readable. Never re-letter, morph or add text.",
       "The camera never reveals a side of the product the picture does not show.",
       "The last second settles back to the opening framing, so the video ends on the post and loops.",
+      "In a longer video each clip finds one new, gentle moment in the same picture (a closer detail, light moving, a slow drift) and the last clip returns to the post.",
+    ],
+  },
+  {
+    id: "product-motion",
+    label: "Animate the product",
+    hint: "Your product in motion, no people",
+    join: "chain",
+    people: "none",
+    defaultClips: 3,
+    maxClips: 4,
+    ending: "back-to-source",
+    models: ["standard", "draft"],
+    rules: [
+      "The product is the only subject: the same shape, colour, label and proportions as in the picture or product photo, in every shot. No people, faces or hands.",
+      "Move like a premium product ad: a slow orbit that stops before the unseen side, a push in to a detail, light sweeping across the surface, the product turning on a surface, a rack focus from a texture to the whole product.",
+      "Between hero shots, cut away to B-roll that belongs to the product's world: a macro of its texture or material, an ingredient or part, the place it is used, steam, water, fabric or light reacting to it. Every B-roll shot keeps the same palette and light.",
+      "Labels, logos and printed words stay perfectly still and readable; never re-letter or add text.",
+      "End on the hero frame: the product centred and still, matching the opening picture, so the video can loop.",
     ],
   },
   {
@@ -98,8 +119,8 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     hint: "Close-ups and reveals of one product",
     join: "chain",
     people: "hands",
-    defaultClips: 2,
-    maxClips: 3,
+    defaultClips: 3,
+    maxClips: 4,
     ending: "hero-frame",
     models: ["premium", "standard", "draft"],
     rules: [
@@ -116,7 +137,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     hint: "A tiny story with one person and one place",
     join: "chain",
     people: "cast",
-    defaultClips: 2,
+    defaultClips: 3,
     maxClips: 4,
     ending: "hero-frame",
     models: ["premium", "standard", "draft"],
@@ -134,7 +155,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     hint: "Three to five clear steps",
     join: "chain",
     people: "hands",
-    defaultClips: 2,
+    defaultClips: 3,
     maxClips: 4,
     ending: "hero-frame",
     models: ["standard", "premium", "draft"],
@@ -168,7 +189,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     hint: "The feeling of your brand, shot by shot",
     join: "cut",
     people: "optional",
-    defaultClips: 2,
+    defaultClips: 3,
     maxClips: 4,
     ending: "hero-frame",
     models: ["standard", "premium", "draft"],
@@ -185,8 +206,8 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     hint: "Moving shots, then your offer in exact words",
     join: "chain",
     people: "optional",
-    defaultClips: 1,
-    maxClips: 2,
+    defaultClips: 2,
+    maxClips: 3,
     ending: "end-card",
     models: ["standard", "premium", "draft"],
     rules: [
@@ -225,12 +246,17 @@ export function kindForTemplate(template: string | undefined): VideoKindId | nul
   return (template && TEMPLATE_KIND[template]) || null;
 }
 
-const HOW =
-  /\b(how to|how it works|step[- ]by[- ]step|steps?|tutorial|recipe|process|made|making)\b/i;
-const BEFORE = /\b(before (and|&) after|transformation|makeover|glow[- ]up|result)\b/i;
+// Narrow on purpose: "handmade", "made with love", "bring it to life" or
+// "the result" must never turn a product video into a tutorial or a story.
+const HOW = /\b(how to|how it works|step[- ]by[- ]step|steps|tutorial|recipe|process)\b/i;
+const BEFORE = /\b(before (and|&) after|transformation|makeover|glow[- ]up)\b/i;
 const OFFER = /\b(sale|discount|offer|deal|% ?off|promo|coupon|free shipping|limited time)\b/i;
-const MOOD = /\b(mood|vibe|atmosphere|aesthetic|b-?roll|feeling|ambien|tour|place|space)\b/i;
-const STORY = /\b(story|day in|customer|moment|when you|pov|life)\b/i;
+const MOOD = /\b(mood|vibe|atmosphere|aesthetic|b-?roll|ambien\w*|tour)\b/i;
+const STORY = /\b(story|day in the life|customers?|when you|pov)\b/i;
+const ANIMATE = /\b(animate|animation|bring (it|this|my \w+) to life|in motion|moving|spin|rotate|360)\b/i;
+/** The brief asks for someone on screen. */
+const ASKS_FOR_PEOPLE =
+  /\b(person|people|man|woman|men|women|girl|boy|guy|lady|creator|influencer|face|presenter|talking|testimonial|founder|team|family|friends?|kids?|child(ren)?|couple|someone|customers?|users?|clients?)\b/i;
 
 export type KindSource = {
   /** The video starts from a finished post picture. */
@@ -255,22 +281,62 @@ export function pickVideoKind(
   const fromTemplate = kindForTemplate(template);
   if (fromTemplate) return fromTemplate;
   if (source.carousel) return "motion-post";
-  if (source.picture) return "living-picture";
+  // A product's picture becomes a product film; any other picture comes alive.
+  if (source.picture) return source.product ? "product-motion" : "living-picture";
   if (source.script) return "brand-story";
   if (OFFER.test(brief)) return "offer-teaser";
   if (BEFORE.test(brief)) return "before-after";
   if (HOW.test(brief)) return "how-it-works";
-  if (source.product) return "product-showcase";
+  if (ANIMATE.test(brief)) return "product-motion";
   if (STORY.test(brief)) return "brand-story";
   if (MOOD.test(brief)) return "mood-broll";
-  return "product-showcase";
+  if (source.product && ASKS_FOR_PEOPLE.test(brief)) return "product-showcase";
+  return "product-motion";
 }
 
-/** A chosen kind that can't run without its source falls back to one that can. */
+/** A chosen kind that can't run without its source falls back to one that can (never a cast story). */
 export function usableKind(kind: VideoKindId, source: KindSource): VideoKindId {
   const spec = videoKind(kind);
   if (!spec.needsSource || source.picture || source.carousel) return kind;
-  return source.product ? "product-showcase" : "brand-story";
+  return "product-motion";
+}
+
+export type PeopleRule = VideoKind["people"];
+
+const ASKS_FOR_VOICE = /\b(voice ?-?over|vo|narrat\w*|narrator|voice|spoken|explain\w*|tell (them|people|viewers))\b/i;
+
+/** A spoken voiceover is planned only when the brief, a script or the followed reference has one. */
+export function wantsVoiceover(args: {
+  brief?: string;
+  script?: boolean;
+  reference?: { voice?: boolean };
+}): boolean {
+  return Boolean(args.script || args.reference?.voice || ASKS_FOR_VOICE.test(args.brief ?? ""));
+}
+
+/**
+ * Who may be on screen. Nobody is added unless someone asked: the person
+ * chose the kind, the brief names a person, the picture already has them, or
+ * the Inspo reference the video follows shows people. Code decides; the
+ * storyboard and the render only follow.
+ */
+export function peoplePolicy(
+  kind: VideoKindId,
+  args: {
+    brief?: string;
+    /** The person picked this kind themselves (not Auto). */
+    chosen?: boolean;
+    /** The Inspo reference video's own rule, when the video follows one. */
+    reference?: "none" | "people";
+  } = {},
+): PeopleRule {
+  const spec = videoKind(kind);
+  if (spec.people === "none" || spec.people === "source") return spec.people;
+  if (args.reference === "none") return spec.people === "cast" ? "hands" : "none";
+  const asked = ASKS_FOR_PEOPLE.test(args.brief ?? "") || args.reference === "people";
+  if (spec.people === "hands") return "hands";
+  if (spec.people === "cast") return asked || args.chosen ? "cast" : "hands";
+  return asked ? "optional" : "hands";
 }
 
 /** Economy, Standard and Premium are the Studio choices; the rest belong to UGC. */

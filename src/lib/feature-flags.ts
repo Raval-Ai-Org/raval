@@ -218,6 +218,33 @@ export function isMcpEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Connected apps through Composio (ADR-0042). On unless set to "false";
+ * `FEATURE_FLAG_INTEGRATIONS_ENABLED_WS_<id>` overrides it for one workspace.
+ * Off means the Apps section is hidden, RPCs answer 404 and no app tool runs.
+ */
+export function isIntegrationsEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_INTEGRATIONS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_INTEGRATIONS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Apps still in their capability check (`availability: "testing"` in
+ * src/lib/integrations/catalog.ts). Off unless set to "true", globally or with
+ * `FEATURE_FLAG_INTEGRATIONS_TESTING_WS_<id>` for one workspace.
+ */
+export function isIntegrationsTesting(workspaceId: string): boolean {
+  const local = process.env[`FEATURE_FLAG_INTEGRATIONS_TESTING_WS_${workspaceId}`];
+  return isTruthy(
+    (local ?? process.env.FEATURE_FLAG_INTEGRATIONS_TESTING ?? "").trim().toLowerCase(),
+  );
+}
+
+/**
  * Audience (ADR-0031): audience groups, the Mellox Score, deeper checks and
  * version comparisons. On unless set to "false"; `FEATURE_FLAG_AUDIENCE_ENABLED_WS_<id>`
  * overrides it for one workspace. Off means the sidebar entry is hidden, RPCs
@@ -408,4 +435,48 @@ export function isEntitlementOverridesEnabled(): boolean {
   return !isFalsy(
     (process.env.FEATURE_FLAG_ENTITLEMENT_OVERRIDES_ENABLED ?? "").trim().toLowerCase(),
   );
+}
+
+/**
+ * Inspo reel links: a public Instagram, TikTok or YouTube link is read with
+ * yt-dlp and downloaded through safeFetch (src/server/brand-visuals/link-media.server.ts).
+ * OFF unless set, because these platforms' terms may not allow it;
+ * `FEATURE_FLAG_INSPO_LINKS_ENABLED_WS_<id>` overrides it for one workspace.
+ * Off, such a link answers with the plain "upload it instead" message.
+ */
+export function isInspoLinksEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_INSPO_LINKS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return isTruthy(perWs);
+  }
+  return isTruthy((process.env.FEATURE_FLAG_INSPO_LINKS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Community Intelligence (Brain → Market → Communities): threads on Reddit,
+ * Quora, Hacker News and Stack Exchange, and reply drafts a person posts
+ * themselves. On unless set to "false"; `FEATURE_FLAG_COMMUNITY_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off: the view is hidden, RPCs answer 404,
+ * the worker skips the workspace and chat/MCP tools answer nothing.
+ */
+export function isCommunityEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_COMMUNITY_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_COMMUNITY_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Reddit's own API. OFF, and a placeholder only: Reddit requires written
+ * approval for commercial use, which Mellox does not have yet. Until then
+ * Reddit threads are found through web search and replies are posted by the
+ * person. Nothing reads this flag to call Reddit; it only changes the note.
+ */
+export function isRedditApiEnabled(): boolean {
+  return isTruthy((process.env.FEATURE_FLAG_REDDIT_API_ENABLED ?? "").trim().toLowerCase());
 }

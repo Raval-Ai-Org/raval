@@ -37,7 +37,23 @@ describe("fingerprintPage", () => {
       placeholder: false,
       webflow: null,
       wordpress: null,
+      wix: null,
     });
+  });
+
+  it("recognises a Wix page and reads its site GUID", () => {
+    const html = `<html lang="en"><head><meta name="generator" content="Wix.com Website Builder"/>
+      <script src="https://static.parastorage.com/services/wix-thunderbolt/dist/main.js"></script>
+      <script type="application/json" id="wix-viewer-model">{"site":{"metaSiteId":"9F1B2C3D-4E5F-4a6b-8c7d-0123456789ab","siteId":"x"}}</script>
+    </head></html>`;
+    const f = fingerprintPage(html);
+    expect(f.platform).toBe("wix");
+    expect(f.wix).toEqual({ metaSiteId: "9f1b2c3d-4e5f-4a6b-8c7d-0123456789ab" });
+  });
+
+  it("does not take a page that only links to Wix images for a Wix site", () => {
+    const html = `<html><head></head><body><img src="https://static.wixstatic.com/media/a.jpg"></body></html>`;
+    expect(fingerprintPage(html).platform).toBeNull();
   });
 
   it("flags a WordPress.com Coming Soon placeholder", () => {

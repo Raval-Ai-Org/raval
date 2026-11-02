@@ -80,7 +80,7 @@ export type PlanDef = {
     maxConcurrentExperiments: number;
     maxConcurrentRenders: number;
   };
-  /** Annual plans roll unused plan credits and VC over for this many months (capped at one month of allowance). */
+  /** Annual plans roll unused plan credits over for this many months (capped at one month of allowance). Free videos never roll over. */
   rolloverMonthsAnnual: number;
   /** Circuit breaker on ALL metered provider spend for the billing account (USD). Not the product allowance. */
   safety: { dailyUsd: number; monthlyUsd: number };
@@ -140,7 +140,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 490,
     brands: 1,
     seats: 2,
-    allowances: { credits: 2_000, videoUnits: 400, proMessages: 30, flashMessages: 800 },
+    allowances: { credits: 2_000, videoUnits: 200, proMessages: 30, flashMessages: 800 },
     limits: {
       trackedPrompts: 25,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -162,7 +162,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     highlights: [
       "Autopilot writes and schedules your posts",
       "Posts, articles and video ads in your voice",
-      "Premium video with your Video Credits",
+      "2 free videos a month, then credits",
       "See what ChatGPT and Gemini say about you",
       "Test posts on your audience first",
       "Competitors and market, checked weekly",
@@ -178,7 +178,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 1_490,
     brands: 3,
     seats: 5,
-    allowances: { credits: 6_000, videoUnits: 1_200, proMessages: 150, flashMessages: 2_000 },
+    allowances: { credits: 6_000, videoUnits: 200, proMessages: 150, flashMessages: 2_000 },
     limits: {
       trackedPrompts: 100,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -211,7 +211,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 4_490,
     brands: 10,
     seats: null,
-    allowances: { credits: 18_000, videoUnits: 4_000, proMessages: 400, flashMessages: 5_000 },
+    allowances: { credits: 18_000, videoUnits: 200, proMessages: 400, flashMessages: 5_000 },
     limits: {
       trackedPrompts: 300,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -246,7 +246,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 11_990,
     brands: 30,
     seats: null,
-    allowances: { credits: 50_000, videoUnits: 10_000, proMessages: 1_200, flashMessages: 12_000 },
+    allowances: { credits: 50_000, videoUnits: 200, proMessages: 1_200, flashMessages: 12_000 },
     limits: {
       trackedPrompts: 1_000,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -803,6 +803,16 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.057,
     routes: ["competitor-intel"],
   },
+  // Community Intelligence: finding and reading threads is included; a reply
+  // draft is a person's click.
+  community_reply: {
+    credits: 6,
+    label: "Community reply draft",
+    unit: "per draft",
+    feature: "market_brain",
+    expectedCostUsd: 0.012,
+    routes: ["community.reply"],
+  },
   insights_refresh: {
     credits: 8,
     label: "Analytics insights",
@@ -938,6 +948,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "agent.content-fit",
   "agent.distribution-reliability",
   "competitors.updates",
+  // Reading community threads found by the daily refresh (economy, bounded).
+  "community.classify",
   // Autopilot plans and reads signals for free; each piece it makes is
   // charged at the normal Studio price.
   "autopilot.plan",
@@ -1180,6 +1192,32 @@ export function videoUnitsFor(args: {
   return Math.max(proportional, floorUnits, durationFloor);
 }
 
+/**
+ * Paid plans get 2 free videos a month (`videoUnits: 200`); one free video is
+ * one whole Draft or Standard video, any offered length
+ * (src/lib/billing/video-charge.ts). After that, and always on Premium and
+ * Cinematic, a video takes credits at the short-clip rate (Standard 8 s = 120).
+ */
+export const FREE_VIDEO_UNITS = 100;
+export const VIDEO_CREDITS_PER_VC = 120;
+
+/** Video units in credits, rounded up to 5. */
+export function creditsForVideoUnits(units: number): number {
+  return Math.ceil((Math.max(0, units) * VIDEO_CREDITS_PER_VC) / VIDEO_UNITS_PER_VC / 5) * 5;
+}
+
+/** A video's price in credits: `videoUnitsFor` (with its provider-cost floor) at 120 credits per VC. */
+export function videoCreditsFor(
+  option: UgcModelKey,
+  seconds: number,
+  resolution: VideoResolution,
+  providerCostUsd?: number,
+): number {
+  return creditsForVideoUnits(
+    videoUnitsFor({ ugcKey: option, seconds, resolution, providerCostUsd }),
+  );
+}
+
 /** The feature a render needs. The video router must receive the plan and never pick a locked option. */
 export function videoFeatureFor(ugcKey: UgcModelKey, resolution: VideoResolution): FeatureKey {
   if (ugcKey === "cinematic") return "video_cinematic";
@@ -1265,13 +1303,19 @@ export const CREDIT_PACKS: CreditPackDef[] = [
   { key: "credits_500", usd: 500, credits: 50_000, bonusCredits: 7_500 },
 ];
 
-export type VideoPackDef = { key: string; usd: number; videoUnits: number };
+export type VideoPackDef = {
+  key: string;
+  usd: number;
+  videoUnits: number;
+  /** "later" = off sale: videos past the free ones take credits. */
+  availability: "launch" | "later";
+};
 
-/** Never expire. */
+/** Never expire. Off sale; balances already held still pay 100 units per video. */
 export const VIDEO_PACKS: VideoPackDef[] = [
-  { key: "video_10", usd: 29, videoUnits: 1_000 },
-  { key: "video_30", usd: 79, videoUnits: 3_000 },
-  { key: "video_100", usd: 249, videoUnits: 10_000 },
+  { key: "video_10", usd: 29, videoUnits: 1_000, availability: "later" },
+  { key: "video_30", usd: 79, videoUnits: 3_000, availability: "later" },
+  { key: "video_100", usd: 249, videoUnits: 10_000, availability: "later" },
 ];
 
 export type AddonKey =

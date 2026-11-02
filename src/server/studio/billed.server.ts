@@ -16,9 +16,11 @@ import { beginDeferredMetered } from "@/server/billing/metered.server";
 import {
   CREDIT_ACTIONS,
   creditsFor,
+  creditsForVideoUnits,
   videoFeatureFor,
   type CreditAction,
 } from "@/lib/billing/catalog";
+import { InsufficientBalanceError } from "@/server/billing/errors";
 import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
 import type { WorkspaceRole } from "@/server/api-auth";
@@ -55,6 +57,9 @@ const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
 };
 
 export { studioJobRenders } from "@/lib/studio/billing";
+
+const FREE_VIDEOS_USED =
+  "Your free videos for this month are used. Check the price in credits and generate again.";
 
 export type BilledStudioJob = {
   job: StudioJob;
@@ -213,31 +218,39 @@ export async function createBilledStudioJob(args: {
   // An AI clip of 8 s or less on Economy or Standard: credits, not Video Credits.
   const clip = action === "studio_short_clip" ? shortClipPlan(input) : null;
   const recapClips = clip && input.controls.videoMode === "recap";
-  const videoQuote =
-    (video || (clip && !recapClips)) && input.controls.videoModelKey
-      ? quoteStudioVideo(input.controls)
-      : null;
+  const quoted = Boolean((video || (clip && !recapClips)) && input.controls.videoModelKey);
+  // A whole video is one of the month's free videos while one is left, then
+  // credits (src/lib/billing/video-charge.ts).
+  const videoBalance =
+    video && quoted
+      ? (await getEntitlements({ workspaceId, userId, role })).meters.video.available
+      : 0;
+  let videoQuote = quoted ? quoteStudioVideo(input.controls, { videoBalance }) : null;
   // A person's Generate button carries the quote it showed, which must still
   // hold. A worker (Autopilot, Campaigns, MCP) shows no price and is charged
   // the server's quote.
+  const shownQuote = input.controls.videoQuote;
   if (
     videoQuote &&
-    input.controls.videoQuote &&
-    (input.controls.videoQuote.hash !== videoQuote.hash ||
-      input.controls.videoQuote.units !== videoQuote.units)
+    shownQuote &&
+    (shownQuote.hash !== videoQuote.hash || shownQuote.units !== videoQuote.units)
   )
     throw new HttpError(
       409,
-      "Video settings or prices changed. Refresh the quote before generating.",
+      shownQuote.meter === "video" && videoQuote.meter === "credits"
+        ? FREE_VIDEOS_USED
+        : "Video settings or prices changed. Refresh the quote before generating.",
     );
-  if (videoQuote)
+  const keepQuote = (quote: NonNullable<typeof videoQuote>) => {
     input.controls.videoQuote = {
-      hash: videoQuote.hash,
-      units: videoQuote.units,
-      meter: videoQuote.meter,
-      resolution: videoQuote.resolution,
-      aspectRatio: videoQuote.aspectRatio,
+      hash: quote.hash,
+      units: quote.units,
+      meter: quote.meter,
+      resolution: quote.resolution,
+      aspectRatio: quote.aspectRatio,
     };
+  };
+  if (videoQuote) keepQuote(videoQuote);
   const useCreation = input.controls.paymentSource === "creation" && !video;
   const entitlements = useCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
   if (useCreation && !entitlements?.creation?.active)
@@ -277,11 +290,11 @@ export async function createBilledStudioJob(args: {
         "The included caption edits have been used. Refresh this creation to see the next edit's price.",
       );
   }
-  const amount = captionEditId
+  let amount = captionEditId
     ? 0
     : (points ??
       (video
-        ? (videoQuote?.units ?? studioVideoUnits(input.controls.durationSec))
+        ? (videoQuote?.units ?? creditsForVideoUnits(studioVideoUnits(input.controls.durationSec)))
         : clip
           ? (videoQuote?.units ?? shortClipCreditsForRecap(input.controls, clip.clips))
           : creditsFor(action as CreditAction) *
@@ -289,14 +302,50 @@ export async function createBilledStudioJob(args: {
   const meter = useCreation
     ? ("creation" as const)
     : video
-      ? ("video" as const)
+      ? (videoQuote?.meter ?? ("credits" as const))
       : ("credits" as const);
-  const price = { meter, amount };
+  const price: { meter: "credits" | "video" | "creation"; amount: number } = { meter, amount };
   const actionName = captionEditId
     ? "studio_caption_included"
     : useCreation
       ? `creation:${action}`
       : (action as string);
+
+  const holdCharge = async () => {
+    const begin = (keySuffix = "") =>
+      beginDeferredMetered({
+        workspaceId,
+        userId,
+        role,
+        actionName,
+        meter: price.meter,
+        amount,
+        feature:
+          video || clip
+            ? (videoQuote?.feature ??
+              (clip ? videoFeatureFor(clip.ugcKey, clip.resolution) : "ugc"))
+            : CREDIT_ACTIONS[action as CreditAction].feature,
+        idempotencyKey: `${input.idempotencyKey}${keySuffix}`,
+        route: billingRoute,
+        expiresAt: new Date(
+          Date.now() + (studioJobRenders(input) ? VIDEO_BILLING_HOLD_MS : 15 * 60_000),
+        ).toISOString(),
+      });
+    try {
+      return await begin();
+    } catch (error) {
+      // The last free video went between the quote and the hold. A person sees
+      // the credit price before paying; a worker is charged the server's quote.
+      if (!(error instanceof InsufficientBalanceError) || price.meter !== "video" || !videoQuote)
+        throw error;
+      if (shownQuote) throw new HttpError(409, FREE_VIDEOS_USED);
+      videoQuote = quoteStudioVideo(input.controls, { videoBalance: 0 });
+      keepQuote(videoQuote);
+      price.meter = videoQuote.meter;
+      price.amount = amount = videoQuote.units;
+      return begin(":credits");
+    }
+  };
 
   // All jobs have a durable billing link, including inline text work. This
   // makes cancellation, crash recovery and settlement use the same hold.
@@ -310,24 +359,7 @@ export async function createBilledStudioJob(args: {
           shadowDecision: "included",
           release: () => settleCaptionEdit(captionEditId!, "released"),
         }
-      : await beginDeferredMetered({
-          workspaceId,
-          userId,
-          role,
-          actionName,
-          meter: price.meter,
-          amount,
-          feature:
-            video || clip
-              ? (videoQuote?.feature ??
-                (clip ? videoFeatureFor(clip.ugcKey, clip.resolution) : "ugc"))
-              : CREDIT_ACTIONS[action as CreditAction].feature,
-          idempotencyKey: input.idempotencyKey,
-          route: billingRoute,
-          expiresAt: new Date(
-            Date.now() + (studioJobRenders(input) ? VIDEO_BILLING_HOLD_MS : 15 * 60_000),
-          ).toISOString(),
-        });
+      : await holdCharge();
     let job: StudioJob;
     let createdHere = false;
     let billingLinked = false;

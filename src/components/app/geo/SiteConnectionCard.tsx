@@ -9,12 +9,19 @@ import { Button } from "@/components/ui/button";
 import { emitAppEvent } from "@/lib/app-events";
 import type { SiteBindingView } from "@/lib/geo/fix-contracts";
 
-const NAME = { github: "GitHub", wordpress: "WordPress", webflow: "Webflow" } as const;
+const NAME = {
+  github: "GitHub",
+  wordpress: "WordPress",
+  webflow: "Webflow",
+  wix: "Wix",
+} as const;
 
 function canChange(site: SiteBindingView): string {
   if (site.provider === "github") return "Mellox opens pull requests you review and merge.";
   if (site.provider === "webflow")
     return "Mellox can change page titles, descriptions, social previews and CMS item text, and publish articles to your blog collection.";
+  if (site.provider === "wix")
+    return "Mellox can change page titles, descriptions, canonical links, indexing, social previews and structured data, and publish articles to Wix Blog.";
   switch (site.seoBackend) {
     case "mellox":
       return "Mellox can change titles, descriptions, canonical links, structured data, robots.txt, llms.txt and page content, and publish articles.";

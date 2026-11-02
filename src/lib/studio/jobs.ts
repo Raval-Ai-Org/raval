@@ -66,8 +66,11 @@ export const ControlsSchema = z.object({
     .object({
       hash: z.string().length(64),
       units: z.number().int().positive(),
-      /** "credits" for a short clip (src/lib/studio/short-clip.ts); video units otherwise. */
+      /** "video" is one of the month's free videos; "credits" otherwise (src/lib/billing/video-charge.ts). */
       meter: z.enum(["video", "credits"]).optional(),
+      /** For the price chip only: free videos left, and how many a month the plan gives. */
+      freeLeft: z.number().int().min(0).optional(),
+      freeMonthly: z.number().int().min(0).optional(),
       resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(),
       aspectRatio: AspectRatioSchema.optional(),
     })
@@ -110,6 +113,11 @@ export const ControlsSchema = z.object({
    * Absent: picked from the brief and its source by settleVideoControls.
    */
   videoKind: z.enum(VIDEO_KIND_IDS as [VideoKindId, ...VideoKindId[]]).optional(),
+  /**
+   * New AI video: who may be on screen, decided by settleVideoControls
+   * (`peoplePolicy`): nobody unless the brief, the picture or the kind asks.
+   */
+  videoPeople: z.enum(["none", "hands", "cast", "source", "optional"]).optional(),
   /** Brand mode: the person's own clips, checked against this workspace. */
   sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
   /** Brand mode: captions of what is said (absent means on). */

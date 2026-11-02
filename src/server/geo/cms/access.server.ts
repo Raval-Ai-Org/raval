@@ -1,15 +1,31 @@
 import "server-only";
-// access.server.ts — read and write one field of a WordPress or Webflow object.
+// access.server.ts — read and write one field of a WordPress, Webflow or Wix object.
 //
 // The only place a CMS fix touches a site. Each field has one key per
 // backend (the Mellox GEO plugin, Rank Math, Jetpack SEO, Webflow page
-// settings, a CMS item's rich text). Reads return what the platform stores now,
+// settings, a CMS item's rich text, a Wix item's SEO tags). Reads return what
+// the platform stores now,
 // so an apply can refuse when the value changed since the person approved it
 // (drift) and an undo can refuse when someone edited it after Mellox.
-import type { CmsChange, CmsField, CmsTarget, WordPressSeoBackend } from "@/lib/geo/cms-fixes";
+import type {
+  CmsChange,
+  CmsField,
+  CmsProvider,
+  CmsTarget,
+  WordPressSeoBackend,
+} from "@/lib/geo/cms-fixes";
+import {
+  jsonLdPayload,
+  readWixTag,
+  WIX_SEO_KEYS,
+  writeWixTag,
+  isWixSeoKey,
+  type WixSeoKey,
+} from "@/lib/sites/wix-seo";
 import { HttpError } from "@/server/http-error";
 import type { WordPressClient } from "@/server/connectors/wordpress/client.server";
 import type { WebflowSite } from "@/server/connectors/webflow/api.server";
+import type { WixSiteView } from "@/server/connectors/wix/service.server";
 
 export type CmsSession =
   | {
@@ -25,6 +41,12 @@ export type CmsSession =
       token: string;
       site: WebflowSite;
       domains: string[];
+    }
+  | {
+      provider: "wix";
+      workspaceId: string;
+      token: string;
+      site: WixSiteView;
     };
 
 export class CmsAccessError extends HttpError {
@@ -36,9 +58,14 @@ export class CmsAccessError extends HttpError {
 
 export async function openCmsSession(
   workspaceId: string,
-  provider: "wordpress" | "webflow",
+  provider: CmsProvider,
   opts: { write?: boolean; seo?: WordPressSeoBackend } = {},
 ): Promise<CmsSession> {
+  if (provider === "wix") {
+    const { wixAccess } = await import("@/server/connectors/wix/service.server");
+    const access = await wixAccess(workspaceId);
+    return { provider, workspaceId, token: access.token, site: access.site };
+  }
   if (provider === "wordpress") {
     const { clientFor } = await import("@/server/connectors/wordpress/service.server");
     const { client, siteUrl, authType } = await clientFor(workspaceId);
@@ -109,6 +136,26 @@ export function webflowKey(field: CmsField, part?: "title" | "description"): str
       return part === "description" ? "openGraph.description" : "openGraph.title";
     case "content_html":
       return "fieldData";
+    default:
+      return null;
+  }
+}
+
+/** The Wix head tag a field is written to. */
+export function wixKey(field: CmsField, part?: "title" | "description"): WixSeoKey | null {
+  switch (field) {
+    case "seo_title":
+      return WIX_SEO_KEYS.title;
+    case "meta_description":
+      return WIX_SEO_KEYS.description;
+    case "canonical":
+      return WIX_SEO_KEYS.canonical;
+    case "noindex":
+      return WIX_SEO_KEYS.robots;
+    case "og":
+      return part === "description" ? WIX_SEO_KEYS.ogDescription : WIX_SEO_KEYS.ogTitle;
+    case "jsonld_page":
+      return WIX_SEO_KEYS.jsonld;
     default:
       return null;
   }
@@ -298,9 +345,73 @@ async function writeWebflow(
   throw new CmsAccessError("Wrong target for Webflow.");
 }
 
+/* ───────────────────────── Wix ───────────────────────── */
+
+async function wixApi() {
+  return import("@/server/connectors/wix/api.server");
+}
+
+function wixTarget(target: CmsTarget, key: string) {
+  if (target.kind !== "wix_item" || !isWixSeoKey(key))
+    throw new CmsAccessError("Wrong target for Wix.");
+  return { target, key };
+}
+
+/** What the item shows now: its own tag, else what Wix renders for it. */
+async function readWix(
+  s: Extract<CmsSession, { provider: "wix" }>,
+  t: CmsTarget,
+  k: string,
+): Promise<string | boolean | null> {
+  const { target, key } = wixTarget(t, k);
+  const api = await wixApi();
+  const item = await api.getItemSeoTags(s.token, target.itemType, target.itemId);
+  const v =
+    readWixTag(item.tags ?? [], key) ??
+    readWixTag(
+      (item.resolvedTags ?? []).map((r) => r.tag),
+      key,
+    );
+  if (key === WIX_SEO_KEYS.robots) return v === true;
+  return typeof v === "string" ? v : "";
+}
+
+/**
+ * Wix replaces an item's whole tag list on a write, so the current list is
+ * read right before and sent back with one tag changed. A static page keeps a
+ * draft and a published revision: both are written, so the next publish from
+ * the Wix editor doesn't undo the change.
+ */
+async function writeWix(
+  s: Extract<CmsSession, { provider: "wix" }>,
+  t: CmsTarget,
+  k: string,
+  value: string | boolean | null,
+): Promise<void> {
+  const { target, key } = wixTarget(t, k);
+  const api = await wixApi();
+  let v = value;
+  if (key === WIX_SEO_KEYS.jsonld && typeof v === "string" && v.trim()) {
+    v = jsonLdPayload(v);
+    JSON.parse(v); // refuse anything that isn't JSON before Wix sees it
+  }
+  const revisions = target.itemType === "STATIC_PAGE" ? [false, true] : [false];
+  for (const publish of revisions) {
+    const item = await api.getItemSeoTags(s.token, target.itemType, target.itemId);
+    await api.setItemSeoTags(
+      s.token,
+      target.itemType,
+      target.itemId,
+      writeWixTag(item.tags ?? [], key, v),
+      publish,
+    );
+  }
+}
+
 /* ───────────────────────── public ───────────────────────── */
 
 export function readField(s: CmsSession, change: Pick<CmsChange, "target" | "key">) {
+  if (s.provider === "wix") return readWix(s, change.target, change.key);
   return s.provider === "wordpress"
     ? readWordPress(s, change.target, change.key)
     : readWebflow(s, change.target, change.key);
@@ -311,6 +422,7 @@ export function writeField(
   change: Pick<CmsChange, "target" | "key">,
   value: string | boolean | null,
 ) {
+  if (s.provider === "wix") return writeWix(s, change.target, change.key, value);
   return s.provider === "wordpress"
     ? writeWordPress(s, change.target, change.key, value)
     : writeWebflow(s, change.target, change.key, value);

@@ -12,6 +12,7 @@ import * as campaigns from "./campaigns";
 import * as canva from "./canva";
 import * as chatActions from "./chat-actions";
 import * as coach from "./coach";
+import * as community from "./community";
 import * as competitorIntel from "./competitor-intel";
 import * as competitors from "./competitors";
 import * as competitorWatch from "./competitor-watch";
@@ -25,6 +26,7 @@ import * as geoFixes from "./geo-fixes";
 import * as goals from "./goals";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
+import * as integrations from "./integrations";
 import * as links from "./links";
 import * as mcp from "./mcp";
 import * as memory from "./memory";
@@ -41,6 +43,7 @@ import * as taste from "./taste";
 import * as trackedPrompts from "./tracked-prompts";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
+import * as wix from "./wix";
 import * as wordpress from "./wordpress";
 
 // Registry the /api/rpc/[...fn] route dispatches against. Keys mirror the paths
@@ -57,6 +60,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   campaigns,
   "chat-actions": chatActions,
   coach,
+  community,
   "competitor-intel": competitorIntel,
   competitors,
   "competitor-watch": competitorWatch,
@@ -70,6 +74,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   goals,
   "google-analytics": googleAnalytics,
   insights,
+  integrations,
   links,
   mcp,
   memory,
@@ -86,6 +91,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "tracked-prompts": trackedPrompts,
   workspaces,
   webflow,
+  wix,
   wordpress,
 };
 

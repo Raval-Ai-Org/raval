@@ -14,6 +14,7 @@ import { asObject, cleanOutput, workspaceIdInput, type McpTool } from "./tool";
 import { audienceTools } from "./tools/audience";
 import { autopilotTools } from "./tools/autopilot";
 import { campaignTools } from "./tools/campaigns";
+import { communityTools } from "./tools/community";
 import { contentTools } from "./tools/content";
 import { geoTools } from "./tools/geo";
 import { intelligenceTools } from "./tools/intelligence";
@@ -26,6 +27,7 @@ export const MCP_TOOLS: readonly McpTool[] = [
   ...campaignTools,
   ...audienceTools,
   ...intelligenceTools,
+  ...communityTools,
   ...geoTools,
 ];
 

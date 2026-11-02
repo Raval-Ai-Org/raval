@@ -40,6 +40,9 @@ const CompetitorsPanel = lazy(() =>
 const MarketBrainPanel = lazy(() =>
   import("@/components/app/MarketBrainPanel").then((m) => ({ default: m.MarketBrainPanel })),
 );
+const CommunityPanel = lazy(() =>
+  import("./community/CommunityPanel").then((m) => ({ default: m.CommunityPanel })),
+);
 const StrategyPanel = lazy(() =>
   import("./strategy/StrategyPanel").then((m) => ({ default: m.StrategyPanel })),
 );
@@ -52,6 +55,12 @@ const BRAIN_FEATURE: Partial<Record<BrainId, FeatureKey>> = {
   competitors: "competitors",
   market: "market_brain",
 };
+
+/** Market's two places: what's moving, and the threads people are writing. */
+const MARKET_TABS = [
+  { id: null, label: "Trends" },
+  { id: "community", label: "Communities" },
+] as const;
 
 const HOME_TABS = ["overview", "today", "notes"] as const;
 type HomeTab = (typeof HOME_TABS)[number];
@@ -216,7 +225,13 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
       <div className="relative min-h-0 min-w-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={section === "audience" && tab === "customers" ? "audience-customers" : section}
+            key={
+              section === "audience" && tab === "customers"
+                ? "audience-customers"
+                : section === "market" && tab === "community"
+                  ? "market-community"
+                  : section
+            }
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
@@ -331,8 +346,43 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
 
               {section === "market" && (
                 <div className="h-full overflow-y-auto scrollbar-thin">
+                  {overview.data?.community !== false && (
+                    <div className="flex justify-center px-4 pt-4">
+                      <div
+                        role="tablist"
+                        aria-label="Market"
+                        className="ds-well inline-flex max-w-full gap-0.5 rounded-full p-1"
+                      >
+                        {MARKET_TABS.map((m) => {
+                          const active = (tab === "community" ? "community" : null) === m.id;
+                          return (
+                            <button
+                              key={m.label}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              onClick={() => onNavigate("market", m.id)}
+                              className={cn(
+                                "h-8 min-w-0 flex-1 rounded-full px-3 text-[13px] font-medium transition-all duration-200 sm:min-w-[110px] sm:px-4",
+                                active
+                                  ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
+                                  : "text-muted-foreground hover:text-foreground",
+                                dsFocus,
+                              )}
+                            >
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <SurfacePage width="wide">
-                    <MarketBrainPanel workspaceId={workspaceId} brandKeywords={dna.keywords} />
+                    {tab === "community" && overview.data?.community !== false ? (
+                      <CommunityPanel workspaceId={workspaceId} />
+                    ) : (
+                      <MarketBrainPanel workspaceId={workspaceId} brandKeywords={dna.keywords} />
+                    )}
                   </SurfacePage>
                 </div>
               )}

@@ -970,7 +970,11 @@ function StudioPrice({ session }: { session: StudioSession }) {
     setQuoteError(false);
     const timer = setTimeout(() => {
       void studioApi
-        .videoQuote(session.workspaceId, session.controls)
+        .videoQuote(session.workspaceId, session.controls, {
+          brief: session.brief,
+          template: session.template,
+          source: { picture: !!session.sourceContentId, script: !!session.sourceScript },
+        })
         .then((videoQuote) => {
           const latest = getSession(session.id);
           if (!cancelled && latest)

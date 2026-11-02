@@ -43,6 +43,8 @@ const TILES: Record<
   pinterest: { bg: "#FFFFFF", glyph: "brand", scale: 0.68, glow: "#E60023" },
   reddit: { bg: "#FF4500", glyph: "white", scale: 0.66, glow: "#FF4500" },
   quora: { bg: "#B92B27", glyph: "white", scale: 0.56, glow: "#B92B27" },
+  hackernews: { bg: "#FF6600", glyph: "white", scale: 0.9, glow: "#FF6600" },
+  stackexchange: { bg: "#1E5397", glyph: "white", scale: 0.6, glow: "#1E5397" },
   meta: { bg: "#FFFFFF", glyph: "brand", scale: 0.68, glow: "#0081FB" },
   google: { bg: "#FFFFFF", glyph: "brand", scale: 0.56, glow: "#4285F4" },
   openai: { bg: "#000000", glyph: "white", scale: 0.58, glow: "#71767B" },

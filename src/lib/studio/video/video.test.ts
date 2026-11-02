@@ -3,6 +3,7 @@ import { UGC_MODEL_KEYS } from "@/lib/ugc/models";
 import { STUDIO_TEMPLATES } from "../templates";
 import {
   kindForTemplate,
+  peoplePolicy,
   pickVideoKind,
   recommendedModel,
   studioVideoModelFor,
@@ -10,6 +11,7 @@ import {
   VIDEO_KINDS,
   videoKind,
 } from "./kinds";
+import { settleVideoControls } from "./settle";
 import { clipPlan, defaultLength, lengthChoices, snapLength, CLIP_SECONDS } from "./lengths";
 import {
   clipPrompt,
@@ -52,8 +54,13 @@ describe("video kinds", () => {
     ["Before and after a deep clean", {}, "before-after"],
     ["The vibe of our cafe on a rainy morning", {}, "mood-broll"],
     ["A customer's morning with our app", {}, "brand-story"],
-    ["Show off the new bottle", { product: true }, "product-showcase"],
+    ["Show off the new bottle", { product: true }, "product-motion"],
+    ["A woman holding the new bottle", { product: true }, "product-showcase"],
+    ["Bring my candle to life", {}, "product-motion"],
+    ["Handmade soap, made with love", {}, "product-motion"],
+    ["Our serum and its results", {}, "product-motion"],
     ["Anything", { picture: true }, "living-picture"],
+    ["Anything", { picture: true, product: true }, "product-motion"],
     ["Anything", { carousel: true }, "motion-post"],
   ] as const)("picks %s", (brief, source, kind) => {
     expect(pickVideoKind(brief, source)).toBe(kind);
@@ -63,10 +70,36 @@ describe("video kinds", () => {
     expect(pickVideoKind("sale", {}, "video-process")).toBe("how-it-works");
   });
 
-  it("a kind that needs a post falls back without one", () => {
-    expect(usableKind("living-picture", {})).toBe("brand-story");
-    expect(usableKind("living-picture", { product: true })).toBe("product-showcase");
+  it("a kind that needs a post falls back to a product film, never a cast story", () => {
+    expect(usableKind("living-picture", {})).toBe("product-motion");
+    expect(usableKind("living-picture", { product: true })).toBe("product-motion");
     expect(usableKind("living-picture", { picture: true })).toBe("living-picture");
+  });
+
+  it("adds people only when someone asked", () => {
+    expect(peoplePolicy("product-motion", { brief: "a woman using it" })).toBe("none");
+    expect(peoplePolicy("mood-broll", { brief: "our cafe at dawn" })).toBe("hands");
+    expect(peoplePolicy("mood-broll", { brief: "friends laughing in our cafe" })).toBe("optional");
+    expect(peoplePolicy("brand-story", { brief: "the story of our kettle" })).toBe("hands");
+    expect(peoplePolicy("brand-story", { brief: "the story of our kettle", chosen: true })).toBe(
+      "cast",
+    );
+    expect(peoplePolicy("brand-story", { chosen: true, reference: "none" })).toBe("hands");
+    expect(peoplePolicy("offer-teaser", { reference: "people" })).toBe("optional");
+    expect(peoplePolicy("living-picture")).toBe("source");
+  });
+
+  it("settles once: a picked-for-you kind keeps its people rule on the server", () => {
+    const first = settleVideoControls({
+      type: "video",
+      controls: { platforms: ["instagram"] },
+      brief: "The story of our kettle",
+    });
+    expect(first.videoKind).toBe("brand-story");
+    expect(first.videoPeople).toBe("hands");
+    expect(settleVideoControls({ type: "video", controls: first, brief: "x" }).videoPeople).toBe(
+      "hands",
+    );
   });
 
   it("never picks Premium on its own, but recommends it where it shines", () => {
@@ -80,16 +113,18 @@ describe("video kinds", () => {
 describe("video lengths", () => {
   it("offers whole clips only", () => {
     expect(lengthChoices("standard", "brand-story")).toEqual([8, 16, 24, 32]);
-    expect(lengthChoices("premium", "product-showcase")).toEqual([10, 20, 30]);
-    expect(lengthChoices("standard", "living-picture")).toEqual([8]);
+    expect(lengthChoices("premium", "product-showcase")).toEqual([10, 20, 30, 40]);
+    expect(lengthChoices("standard", "living-picture")).toEqual([8, 16, 24]);
+    expect(lengthChoices("standard", "product-motion")).toEqual([8, 16, 24, 32]);
     for (const key of UGC_MODEL_KEYS)
       for (const kind of VIDEO_KINDS)
         for (const n of lengthChoices(key, kind.id)) expect(n % CLIP_SECONDS[key]).toBe(0);
   });
 
-  it("defaults to a full story, not a short clip", () => {
-    expect(defaultLength("standard", "brand-story")).toBe(16);
-    expect(defaultLength("premium", "brand-story")).toBe(20);
+  it("defaults to a full ad of about 24 seconds, not a short clip", () => {
+    expect(defaultLength("standard", "brand-story")).toBe(24);
+    expect(defaultLength("standard", "product-motion")).toBe(24);
+    expect(defaultLength("premium", "brand-story")).toBe(30);
     expect(defaultLength("standard", "living-picture")).toBe(8);
   });
 
@@ -97,7 +132,7 @@ describe("video lengths", () => {
     expect(snapLength(10, "standard", "brand-story")).toBe(8);
     expect(snapLength(12, "standard", "brand-story")).toBe(16);
     expect(snapLength(60, "standard", "brand-story")).toBe(32);
-    expect(snapLength(undefined, "standard", "brand-story")).toBe(16);
+    expect(snapLength(undefined, "standard", "brand-story")).toBe(24);
   });
 
   it("never plans a clip shorter than the model makes", () => {
@@ -198,6 +233,7 @@ describe("storyboard", () => {
           endsOn: "",
           sound: "",
           onScreen: "Now 50% off for everyone today only",
+          voiceover: "",
         },
       ],
     });
@@ -208,6 +244,45 @@ describe("storyboard", () => {
     expect(issues.join(" ")).toMatch(/ghost/);
     expect(issues.join(" ")).toMatch(/6 words/);
     expect(issues.join(" ")).toMatch(/"50"/);
+  });
+
+  it("refuses a cast when nobody may be on screen", () => {
+    const issues = storyboardIssues(fitStoryboard(board(), plan16), { ...ctx, people: "none" });
+    expect(issues.join(" ")).toMatch(/no people at all/);
+    expect(
+      storyboardIssues(fitStoryboard(board(), plan16), { ...ctx, people: "cast" }),
+    ).toEqual([]);
+  });
+
+  it("keeps a voiceover short enough to say and true to the brand", () => {
+    const sb = fitStoryboard(board(), plan16);
+    sb.clips[0].voiceover = "Since 2015 we pour every cup by hand.";
+    expect(storyboardIssues(sb, ctx)).toEqual([]);
+    sb.clips[1].voiceover = `Now ${"really ".repeat(25)}calm, rated 99 by everyone.`;
+    const issues = storyboardIssues(sb, ctx).join(" ");
+    expect(issues).toMatch(/20 words or fewer/);
+    expect(issues).toMatch(/"99"/);
+  });
+
+  it("speaks only a planned voiceover, and draws no words when code draws them", () => {
+    const sb = fitStoryboard(board(), plan16);
+    sb.clips[0].voiceover = "Every cup, by hand.";
+    sb.clips[0].onScreen = "First pour";
+    const opts = {
+      kind: "product-motion" as const,
+      plan: plan16,
+      brandName: "Calm Cup",
+      ratio: "9:16",
+      chained: true,
+      audio: true,
+    };
+    expect(clipPrompt(sb, 0, opts)).toMatch(/No narration/);
+    const voiced = clipPrompt(sb, 0, { ...opts, voice: true, wordsByCode: true });
+    expect(voiced).toContain('says, exactly: "Every cup, by hand."');
+    expect(voiced).toMatch(/No words, captions or logos drawn on screen/);
+    expect(clipPrompt(sb, 0, { ...opts, kind: "mood-broll", people: "none" })).toMatch(
+      /PEOPLE \(this overrides/,
+    );
   });
 
   it("refuses faces in a product showcase and competitor names", () => {

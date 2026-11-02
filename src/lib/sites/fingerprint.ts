@@ -7,6 +7,8 @@
 //   WordPress  <link rel="https://api.w.org/" href="<site>/wp-json/"> and
 //              <link rel="alternate" type="application/json"
 //                    href="<site>/wp-json/wp/v2/posts/123">
+//   Wix        <meta name="generator" content="Wix.com Website Builder"> and
+//              the site's GUID as "metaSiteId" in the page's viewer data
 //
 // Those ids are the proof that a connected CMS site really is the scanned
 // host (a site id from the provider's API must equal the one the live page
@@ -16,7 +18,7 @@
 export type WordPressObjectRef = { type: "post" | "page"; id: number };
 
 export type PageFingerprint = {
-  platform: "webflow" | "wordpress" | null;
+  platform: "webflow" | "wordpress" | "wix" | null;
   /**
    * The site shows visitors a placeholder (WordPress.com "Coming soon",
    * a maintenance page): crawlers and AI engines can't see its content.
@@ -33,6 +35,10 @@ export type PageFingerprint = {
     apiRoot: string | null;
     object: WordPressObjectRef | null;
     generator: string | null;
+  } | null;
+  wix: {
+    /** Wix's site GUID, the same id its API reports for the connected site. */
+    metaSiteId: string | null;
   } | null;
 };
 
@@ -103,6 +109,7 @@ export function fingerprintPage(html: string): PageFingerprint {
         itemSlug: attr(tag, "data-wf-item-slug"),
       },
       wordpress: null,
+      wix: null,
     };
   }
   let apiRoot: string | null = null;
@@ -122,9 +129,28 @@ export function fingerprintPage(html: string): PageFingerprint {
       placeholder,
       webflow: null,
       wordpress: { apiRoot, object: wordpressObjectFromHtml(html), generator },
+      wix: null,
     };
   }
-  return { platform: null, placeholder, webflow: null, wordpress: null };
+  const wix = wixFromHtml(html);
+  if (wix) return { platform: "wix", placeholder, webflow: null, wordpress: null, wix };
+  return { platform: null, placeholder, webflow: null, wordpress: null, wix: null };
+}
+
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Wix's stamp: its generator tag, or its static hosts plus a site GUID. Null when not Wix. */
+export function wixFromHtml(html: string): { metaSiteId: string | null } | null {
+  const generator = (html.match(/<meta\b[^>]*name\s*=\s*["']generator["'][^>]*>/gi) ?? []).some(
+    (m) => /wix\.com/i.test(attr(m, "content") ?? ""),
+  );
+  const raw = /["']metaSiteId["']\s*:\s*["']([0-9a-f-]{36})["']/i.exec(
+    html.slice(0, 2_000_000),
+  )?.[1];
+  const metaSiteId = raw && GUID.test(raw) ? raw.toLowerCase() : null;
+  const assets = /https:\/\/static\.(parastorage|wixstatic)\.com\//i.test(html);
+  if (!generator && !(assets && metaSiteId)) return null;
+  return { metaSiteId };
 }
 
 /** Host of a REST root / site URL without `www.`, or null. */

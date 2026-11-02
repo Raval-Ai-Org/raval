@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CONNECTOR_PROVIDERS, type ConnectorsOverview } from "@/lib/connectors/types";
 import { cn } from "@/lib/utils";
 import { ConnectionCard, ConnectionFact, ConnectionSkeleton } from "./ConnectionCard";
+import { AppsList, type AppsView } from "./ConnectedApps";
 import { GitHubView } from "./GitHubConnector";
 import { McpScreen, type McpActivityItem, type McpTool } from "./McpScreen";
 import { WebflowView, type WebflowConnection } from "./WebflowConnector";
@@ -274,9 +275,42 @@ function Apps() {
           <p className="text-[13px] text-muted-foreground">The setup steps open here.</p>
         )}
       </ConnectionCard>
+      <AppsList
+        view={APPS}
+        canEdit
+        busy={null}
+        onConnect={() => {}}
+        onReconnect={() => {}}
+        onDisconnect={() => {}}
+      />
     </div>
   );
 }
+
+// Apps connected through Composio, with apps still in their check shown.
+const APPS: AppsView = {
+  enabled: true,
+  configured: true,
+  testing: true,
+  accounts: [
+    {
+      id: "a1",
+      app: "instagram",
+      label: "@northwind.co",
+      status: "active",
+      connectedAt: ago(60 * 24 * 3),
+      problem: null,
+    },
+    {
+      id: "a2",
+      app: "linkedin",
+      label: "Northwind",
+      status: "reconnect_required",
+      connectedAt: ago(60 * 24 * 40),
+      problem: "Mellox can't reach this account any more. Connect it again.",
+    },
+  ],
+};
 
 function Assistants({ viewer }: { viewer: boolean }) {
   const [state, setState] = useState({ enabled: !viewer, allowWrites: false });

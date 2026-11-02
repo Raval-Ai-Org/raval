@@ -5,16 +5,20 @@ import "server-only";
 //              (fingerprint.ts), else the slug, else the static front page
 //   Webflow    the live page's data-wf-page (static page) or data-wf-collection
 //              + data-wf-item-slug (CMS item), checked against the connected site
+//   Wix        a blog post by its /post/<slug> address (Wix Blog API); a static
+//              page by the canonical address Wix itself renders for it (SEO API)
 //
 // Never guessed from titles: when the live page doesn't say which object it
 // is, the page is "other" and per-page fixes become assisted, not applied.
 import { fingerprintPage } from "@/lib/sites/fingerprint";
+import { matchStaticPage, wixPostSlug } from "@/lib/sites/wix-seo";
 import type { CmsTarget } from "@/lib/geo/cms-fixes";
 import { safeFetch } from "@/server/safe-fetch";
 import type { CmsSession } from "./access.server";
 import { CmsAccessError } from "./access.server";
 
-export type PageKind = "wp_object" | "wp_other" | "webflow_page" | "webflow_item" | "unknown";
+export type PageKind =
+  "wp_object" | "wp_other" | "webflow_page" | "webflow_item" | "wix_page" | "wix_post" | "unknown";
 
 export type ResolvedPage = {
   pageKind: PageKind;
@@ -109,6 +113,8 @@ export async function resolvePageTarget(s: CmsSession, pageUrl: string): Promise
     };
   }
 
+  if (s.provider === "wix") return resolveWixPage(s, f, html, finalUrl);
+
   // Webflow
   const wf = f.webflow;
   if (!wf?.siteId || wf.siteId !== s.site.id.toLowerCase())
@@ -155,4 +161,45 @@ export async function resolvePageTarget(s: CmsSession, pageUrl: string): Promise
     html,
     wordpress: null,
   };
+}
+
+async function resolveWixPage(
+  s: Extract<CmsSession, { provider: "wix" }>,
+  f: ReturnType<typeof fingerprintPage>,
+  html: string,
+  finalUrl: string,
+): Promise<ResolvedPage> {
+  if (f.platform !== "wix" || (f.wix?.metaSiteId && f.wix.metaSiteId !== s.site.id.toLowerCase()))
+    throw new CmsAccessError(
+      "This page isn't served by the connected Wix site, so Mellox won't change it.",
+    );
+  const api = await import("@/server/connectors/wix/api.server");
+  const none: ResolvedPage = {
+    pageKind: "unknown",
+    target: null,
+    siteTarget: null,
+    url: finalUrl,
+    html,
+    wordpress: null,
+  };
+  const slug = wixPostSlug(finalUrl);
+  if (slug) {
+    const post = await api.getPostBySlug(s.token, slug).catch(() => null);
+    return post?.id
+      ? {
+          ...none,
+          pageKind: "wix_post",
+          target: { kind: "wix_item", itemType: "BLOG_POST", itemId: post.id, url: finalUrl },
+        }
+      : none;
+  }
+  const pages = await api.listItemSeoTags(s.token, "STATIC_PAGE").catch(() => []);
+  const itemId = matchStaticPage(pages, finalUrl, s.site.domains);
+  return itemId
+    ? {
+        ...none,
+        pageKind: "wix_page",
+        target: { kind: "wix_item", itemType: "STATIC_PAGE", itemId, url: finalUrl },
+      }
+    : none;
 }

@@ -12,6 +12,8 @@ import { BrainHome } from "./BrainHome";
 import { BrainIcon, BrainMark } from "./BrainMark";
 import { BrainPulseView } from "./BrainPulse";
 import { ScanSteps } from "./brand/ScanSteps";
+import { CommunityScreen, type CommunityHandlers } from "./community/CommunityScreen";
+import { communityHome, communityHomeEmpty } from "./community/community-lab.fixtures";
 import { NotesBoard } from "./home/NotesBoard";
 import { StrategyScreen, type StrategyHandlers } from "./strategy/StrategyScreen";
 
@@ -297,6 +299,8 @@ const SCENES = [
   "notes",
   "scan",
   "marks",
+  "community",
+  "community-empty",
 ] as const;
 type Scene = (typeof SCENES)[number];
 
@@ -323,6 +327,15 @@ export function BrainLab() {
     saving: false,
   };
   const seenAt = Date.now() - 10 * HOUR;
+  const community: CommunityHandlers = {
+    refresh: () => setLast("community:refresh"),
+    pause: () => setLast("community:pause"),
+    setStatus: (id, status) => setLast(`community:status:${id.slice(-4)}:${status}`),
+    addWatch: (kind, value) => setLast(`community:watch:${kind}:${value}`),
+    removeWatch: (id) => setLast(`community:unwatch:${id.slice(-4)}`),
+    draftReply: (id) => setLast(`community:draft:${id.slice(-4)}`),
+    copy: (text) => setLast(`community:copy:${text.length}`),
+  };
 
   return (
     <div data-mellox-app className="min-h-dvh bg-background text-foreground">
@@ -403,6 +416,16 @@ export function BrainLab() {
             <ScanSteps brand="done" audience="running" competitors="running" />
             <ScanSteps brand="done" audience="done" competitors="done" />
             <ScanSteps brand="done" audience="skipped" competitors="done" />
+          </div>
+        )}
+        {scene === "community" && (
+          <div className="px-4 py-5 sm:px-6">
+            <CommunityScreen home={communityHome} handlers={community} />
+          </div>
+        )}
+        {scene === "community-empty" && (
+          <div className="px-4 py-5 sm:px-6">
+            <CommunityScreen home={communityHomeEmpty} handlers={community} />
           </div>
         )}
         {scene === "marks" && (

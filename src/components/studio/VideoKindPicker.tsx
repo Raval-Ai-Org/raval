@@ -6,6 +6,7 @@ import {
   Megaphone,
   Palette,
   Repeat2,
+  RotateCcw,
   ShoppingBag,
   Sparkles,
   UserCircle2,
@@ -27,6 +28,7 @@ const ICONS: Record<VideoKindId, LucideIcon> = {
   "before-after": Repeat2,
   "mood-broll": Palette,
   "offer-teaser": Megaphone,
+  "product-motion": RotateCcw,
 };
 
 type Choice = VideoKindId | "auto";
@@ -56,11 +58,14 @@ export function VideoKindPicker({
         videoMode: "recap",
         recapMotion: "camera",
         durationSec: undefined,
+        videoPeople: undefined,
       });
+    // Who is on screen is decided again for the new kind.
     set({
       videoKind: next === "auto" ? undefined : next,
       ...(c.videoMode === "recap" ? { videoMode: "generate", recapMotion: undefined } : {}),
       durationSec: undefined,
+      videoPeople: undefined,
     });
   };
   const autoName = picked ? VIDEO_KINDS.find((k) => k.id === picked)?.label : undefined;

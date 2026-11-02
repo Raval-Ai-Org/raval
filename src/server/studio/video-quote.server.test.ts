@@ -28,6 +28,30 @@ it("quotes from the runtime provider and model without starting a render", () =>
     }).units,
   ).toBeGreaterThanOrEqual(standard.units);
 });
+it("quotes a free video while one is left, then credits, with the meter in the hash", () => {
+  vi.stubEnv("VIDEO_PROVIDER_STANDARD", "kie");
+  const controls = {
+    platforms: [],
+    videoModelKey: "standard" as const,
+    durationSec: 24,
+    videoResolution: "720P" as const,
+  };
+  const free = quoteStudioVideo(controls, { videoBalance: 200 });
+  expect(free).toMatchObject({ meter: "video", units: 100, freeLeft: 2 });
+  const paid = quoteStudioVideo(controls, { videoBalance: 50 });
+  expect(paid.meter).toBe("credits");
+  expect(paid.units % 5).toBe(0);
+  expect(paid.freeLeft).toBe(0);
+  expect(paid.hash).not.toBe(free.hash);
+  // Premium never uses a free video.
+  vi.stubEnv("UGC_MODEL_PREMIUM_ENABLED", "true");
+  expect(
+    quoteStudioVideo(
+      { platforms: [], videoModelKey: "premium", durationSec: 10, videoResolution: "1080P" },
+      { videoBalance: 1_000 },
+    ).meter,
+  ).toBe("credits");
+});
 it("changes the quote when routed provider prices change", () => {
   vi.stubEnv("VIDEO_PROVIDER_STANDARD", "kie");
   const controls = {

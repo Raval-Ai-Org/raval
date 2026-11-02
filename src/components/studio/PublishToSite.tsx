@@ -36,7 +36,12 @@ import {
 } from "@/lib/site-publishing.functions";
 import { cn } from "@/lib/utils";
 
-const PLATFORM = { wordpress: "WordPress", webflow: "Webflow", github: "GitHub" } as const;
+const PLATFORM = {
+  wordpress: "WordPress",
+  webflow: "Webflow",
+  github: "GitHub",
+  wix: "Wix",
+} as const;
 
 const STATUS: Record<
   PublicationView["status"],

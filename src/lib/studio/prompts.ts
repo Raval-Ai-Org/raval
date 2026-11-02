@@ -23,9 +23,9 @@ import type { Lean, Taste } from "@/lib/taste/contracts";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import { adFormatDirective, type AdFormat } from "./ad-formats";
 import { platformVideoNote, VIDEO_AD_RULES, videoBeatsText, videoCraftRules } from "./video-ad";
-import { videoKind, type VideoKindId } from "./video/kinds";
+import { videoKind, type PeopleRule, type VideoKindId } from "./video/kinds";
 import type { ClipPlan } from "./video/lengths";
-import { StoryboardSchema } from "./video/storyboard";
+import { peopleDirection, StoryboardSchema } from "./video/storyboard";
 import type {
   StudioControls,
   StudioIntent,
@@ -570,7 +570,17 @@ type BuildArgs = {
   /** Ads: the designed layout the picture follows (ad-formats.ts). */
   adFormat?: AdFormat | null;
   /** New AI video: plan it as a storyboard of whole clips (src/lib/studio/video/). */
-  video?: { kind: VideoKindId; plan: ClipPlan; fromPicture: boolean };
+  video?: {
+    kind: VideoKindId;
+    plan: ClipPlan;
+    fromPicture: boolean;
+    /** Who may be on screen (`peoplePolicy`); absent: the kind's own rule. */
+    people?: PeopleRule;
+    /** Plan voiceover words (`wantsVoiceover`). */
+    voice?: boolean;
+    /** The followed Inspo reference as a structured recipe block, when there is one. */
+    recipe?: string;
+  };
 };
 
 function platformRubric(platforms: PlatformId[]): string {
@@ -909,14 +919,9 @@ export function buildVideoStoryboardPrompt(
   const total = plan.reduce((sum, clip) => sum + clip.seconds, 0);
   const clips = plan.length;
   const script = args.source?.kind === "script";
-  const people =
-    kind.people === "none" || kind.people === "hands"
-      ? "No faces: hands at most, so leave `bible.cast` empty."
-      : kind.people === "cast"
-        ? "Put every person in `bible.cast` with an id and a complete look (face, hair, age, build, clothes); a shot lists the ids of the people in it. One to two people at most. Always fictional."
-        : kind.people === "source"
-          ? "People are only those already in the picture; describe them in `bible.cast` so they stay the same."
-          : "People are optional; if any appear, describe each in `bible.cast` and keep them faceless or identical.";
+  const decided = args.video.people ?? kind.people;
+  const people = `${peopleDirection(decided)}${decided !== kind.people ? " This overrides anything about people in the rules above." : ""}`;
+  const voice = args.video.voice && args.controls.audio !== false;
   return {
     route: "studio.video.storyboard",
     system: systemPrompt(
@@ -927,7 +932,14 @@ export function buildVideoStoryboardPrompt(
         "`storyboard.logline` is the whole story in one sentence.",
         "`storyboard.bible` is what never changes: the product (exactly as the brand sells it), the one setting, the light, the colours (from the brand palette) and the camera look. Every clip is made from this bible alone, so write it completely and concretely.",
         people,
-        "Each clip has `opensOn` (the first frame; from clip 2 on it is the frame the clip before ended on), 2 to 4 `shots` with times in seconds inside that clip, `endsOn` (the exact final frame, still for half a second), `sound` (natural sound only, no narration) and `onScreen` (at most one phrase of 2-6 words, or empty).",
+        "Each clip has `opensOn` (the first frame; from clip 2 on it is the frame the clip before ended on), 2 to 4 `shots` with times in seconds inside that clip, `endsOn` (the exact final frame, still for half a second), `sound` (the scene's own sound and the music feel) and `onScreen` (at most one phrase of 2-6 words, or empty; Mellox draws these words on the finished video, so the footage itself carries none).",
+        voice
+          ? "A voiceover was asked for: each clip's `voiceover` is the exact words spoken over it, about two words a second, in the brand's voice, using only facts from the brief and brand details. Together they read as one message that lands on the last clip."
+          : "Leave every `voiceover` empty: no narration.",
+        "Mix hero shots of the subject with B-roll cutaways from its world (a macro of a texture or detail, a material or ingredient, the place it lives, light or motion reacting to it), so the video feels like an edited ad, not one long take. Keep the bible's palette and light in every B-roll shot.",
+        args.video.recipe
+          ? "Follow the REFERENCE RECIPE below closely: its order of shots, their roles and rhythm, its hook, its people rule, its text and sound. Make it about this brand and product; never copy another brand's name, words or logo."
+          : "",
         "The story moves forward in every clip: nothing is introduced twice, the hook is only at the very start, and only the last clip resolves. Plan each clip so it ends on a natural pause, never mid-action.",
         "The first shot of the first clip is the hook: it starts on frame one with motion already happening and the product or the payoff in frame, and lasts 4 seconds at most. No logo intro, no title card, no fade from black.",
         "Film only what a video model can film well: one subject doing one clear action per shot, real physics, motivated camera moves. No crowds, no text-heavy screens, no fast hand choreography, no shot that needs a face to match a real person.",
@@ -944,10 +956,13 @@ export function buildVideoStoryboardPrompt(
         "Use only facts, numbers and names from the brief and the brand details. Never name a competitor or another brand.",
         "`title` names the video in a few words. `altText` describes it for accessibility.",
       ].filter(Boolean),
-      `{"title": string, "storyboard": {"logline": string, "bible": {"cast": [{"id": string, "look": string}], "product": string, "setting": string, "lighting": string, "palette": string, "camera": string}, "clips": [{"opensOn": string, "shots": [{"start": number, "end": number, "camera": string, "action": string, "cast": string[]}], "endsOn": string, "sound": string, "onScreen": string}], "endCard"?: {"headline": string, "detail": string}}, "altText": string}`,
+      `{"title": string, "storyboard": {"logline": string, "bible": {"cast": [{"id": string, "look": string}], "product": string, "setting": string, "lighting": string, "palette": string, "camera": string}, "clips": [{"opensOn": string, "shots": [{"start": number, "end": number, "camera": string, "action": string, "cast": string[]}], "endsOn": string, "sound": string, "onScreen": string, "voiceover": string}], "endCard"?: {"headline": string, "detail": string}}, "altText": string}`,
     ),
     user: sections([
       ...sharedUser(args, "video"),
+      ...(args.video.recipe
+        ? [{ label: "REFERENCE RECIPE (the video the brand wants to follow)", body: args.video.recipe }]
+        : []),
       ...(args.source
         ? [
             {

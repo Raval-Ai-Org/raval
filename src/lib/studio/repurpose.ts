@@ -22,25 +22,44 @@ export type RepurposeTarget = {
 };
 
 /**
- * A finished picture becomes one of three videos: the post itself gently
- * moving (AI), the post with camera moves and nothing redrawn (code, no AI),
- * or a short story that opens on the post and ends back on it.
+ * A finished picture becomes one of four videos: the product animated with
+ * B-roll and no people (AI), the post itself gently moving (AI), the post
+ * with camera moves and nothing redrawn (code, no AI), or a short story that
+ * opens on the post and ends back on it. Nobody is added to any of them: a
+ * person appears only if the post already shows one.
  */
-const PICTURE_VIDEOS: { kind: VideoKindId; label: string; hint: string; seconds?: number }[] = [
+const PICTURE_VIDEOS: {
+  kind: VideoKindId;
+  label: string;
+  hint: string;
+  seconds?: number;
+}[] = [
+  {
+    kind: "product-motion",
+    label: "Animate the product",
+    hint: "Your product in motion, no people",
+    seconds: 24,
+  },
   {
     kind: "living-picture",
     label: "Bring it to life",
     hint: "Your post, gently moving",
-    seconds: 8,
+    seconds: 16,
   },
   { kind: "motion-post", label: "Motion post", hint: "Smooth moves over your post, no AI" },
   {
     kind: "brand-story",
     label: "Story video",
     hint: "A short story that starts from this post",
-    seconds: 16,
+    seconds: 24,
   },
 ];
+
+/** A product film from the finished picture: the product moves, nobody is added. */
+function productFromPictureBrief(from: StudioType, title: string | null | undefined): string {
+  const name = title?.trim() ? ` "${title.trim().slice(0, 100)}"` : "";
+  return `Animate the product from my ${STUDIO_FORMATS[from].noun}${name} into a video ad. No people: the product turns, light moves across it, close-ups of its details and B-roll from its world, then it ends back on the picture. Keep the product, colours and words exactly as they are.`;
+}
 
 const HINTS: Record<StudioType, string> = {
   social: "A caption for each channel",
@@ -129,7 +148,7 @@ export type RepurposeOpen = {
   referenceMode?: "preserve";
   durationSec?: number;
   ratio?: "9:16" | "1:1" | "16:9";
-  extraControls?: Pick<StudioControls, "videoKind" | "videoMode" | "recapMotion">;
+  extraControls?: Pick<StudioControls, "videoKind" | "videoMode" | "recapMotion" | "videoPeople">;
 };
 
 /** Everything `openComposer` needs for one target. */
@@ -156,7 +175,9 @@ export function repurposeOpen(args: {
       brief:
         kind === "brand-story"
           ? storyFromPictureBrief(args.from, args.title)
-          : animateBrief({ type: args.from, title: args.title }),
+          : kind === "product-motion"
+            ? productFromPictureBrief(args.from, args.title)
+            : animateBrief({ type: args.from, title: args.title }),
       referenceAssetIds: [args.picture.assetId],
       referenceMode: "preserve",
       ...(video?.seconds ? { durationSec: video.seconds } : {}),
@@ -164,7 +185,10 @@ export function repurposeOpen(args: {
       extraControls:
         kind === "motion-post"
           ? { videoKind: kind, videoMode: "recap", recapMotion: "camera" }
-          : { videoKind: kind },
+          : kind === "brand-story"
+            ? // Only the people already in the post; nobody new is cast.
+              { videoKind: kind, videoPeople: "source" }
+            : { videoKind: kind },
     };
   }
   return { ...base, brief: repurposeBrief(args.from, target.type, args.title) };

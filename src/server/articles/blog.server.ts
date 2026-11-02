@@ -5,6 +5,8 @@ import "server-only";
 //   Webflow    the CMS collection that looks like a blog (lib/articles/blog.ts);
 //              none → Mellox can create "Blog Posts" in one click, after which
 //              the person designs its template page in Webflow (needs_design)
+//   Wix        the Wix Blog app on the site (posts go there through its API);
+//              none → the person adds Wix Blog in the Wix editor
 //   GitHub     the folder existing posts live in, their format and frontmatter,
 //              or the blog Mellox added earlier (mellox-blog.json);
 //              none → Mellox can add one with a pull request on the frameworks
@@ -48,7 +50,7 @@ export type BlogSettingsRow = {
   id: string;
   workspace_id: string;
   host: string;
-  provider: "github" | "wordpress" | "webflow";
+  provider: "github" | "wordpress" | "webflow" | "wix";
   status: BlogStatus;
   status_detail: string | null;
   blog_url: string | null;
@@ -62,11 +64,13 @@ export type BlogSettingsRow = {
   route_prefix: string | null;
   frontmatter: { keys: string[] } | null;
   setup: BlogSetup | null;
+  /** Wix: the site member posts are written as (Wix requires one for app-made posts). */
+  wix_member_id: string | null;
   detected_at: string | null;
 };
 
 const COLS =
-  "id, workspace_id, host, provider, status, status_detail, blog_url, wp_posts_page_id, wp_category_id, webflow_collection_id, webflow_field_map, source_id, content_dir, post_format, route_prefix, frontmatter, setup, detected_at";
+  "id, workspace_id, host, provider, status, status_detail, blog_url, wp_posts_page_id, wp_category_id, webflow_collection_id, webflow_field_map, source_id, content_dir, post_format, route_prefix, frontmatter, setup, wix_member_id, detected_at";
 
 const DETECT_TTL_MS = 30 * 60_000;
 const READY: BlogStatus[] = ["detected", "created"];
@@ -122,7 +126,9 @@ export function blogView(b: BlogSettingsRow): BlogView {
         ? b.webflow_field_map
           ? `the “${b.webflow_field_map.collectionName}” collection`
           : null
-        : b.content_dir;
+        : b.provider === "wix"
+          ? "Wix Blog"
+          : b.content_dir;
   return {
     provider: b.provider,
     status: b.status,
@@ -297,6 +303,39 @@ async function detectGithub(
 }
 
 /** Where articles go on this site; re-detected when stale or forced. */
+/** Wix: the blog is the Wix Blog app; Mellox can't add it, the person does in the Wix editor. */
+async function detectWix(workspaceId: string, host: string) {
+  const { wixAccess, refreshSite } = await import("@/server/connectors/wix/service.server");
+  const api = await import("@/server/connectors/wix/api.server");
+  await refreshSite(workspaceId).catch(() => null);
+  const { token, site } = await wixAccess(workspaceId);
+  // Wix lists its own apps on the site; reading posts also proves the blog is there.
+  let posts: Awaited<ReturnType<typeof api.listPosts>>["posts"] | null = null;
+  try {
+    posts = (await api.listPosts(token, 5)).posts ?? [];
+  } catch {
+    posts = null;
+  }
+  if (!site.hasBlog && posts === null)
+    return saveBlogSettings(workspaceId, host, {
+      provider: "wix",
+      status: "missing",
+      status_detail:
+        "Your Wix site has no blog yet. Add Wix Blog in the Wix editor (Add Apps → Wix Blog), publish your site, then check again.",
+      blog_url: null,
+      wix_member_id: null,
+    });
+  return saveBlogSettings(workspaceId, host, {
+    provider: "wix",
+    status: "detected",
+    status_detail: null,
+    // Wix decides where its blog page lives; posts report their own address.
+    blog_url: null,
+    // An author who already writes on this blog; found again on publish when missing.
+    wix_member_id: posts?.find((p) => p.memberId)?.memberId ?? null,
+  });
+}
+
 export { detectGithub as detectGithubBlogSettings };
 
 export async function ensureBlogSettings(
@@ -323,6 +362,7 @@ export async function ensureBlogSettings(
   try {
     if (binding.provider === "wordpress") return await detectWordPress(workspaceId, host);
     if (binding.provider === "webflow") return await detectWebflow(workspaceId, host);
+    if (binding.provider === "wix") return await detectWix(workspaceId, host);
     return await detectGithub(workspaceId, host, binding);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Couldn't check the blog.";

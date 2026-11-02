@@ -21,10 +21,22 @@ import type {
 
 const RETRYABLE_CATEGORIES = new Set(["rate_limit", "provider", "network", "timeout"]);
 
-export function kieGenerationType(model: UgcModel, imageCount: number): string {
+export function kieGenerationType(
+  model: UgcModel,
+  imageCount: number,
+  firstFrame = false,
+): string {
   if (model.family === "seedance") return imageCount > 0 ? "REFERENCE_IMAGES" : "TEXT";
   if (imageCount === 0 || !model.images) return "TEXT_2_VIDEO";
+  // Veo opens on the exact picture (and may settle on a last one) when asked.
+  if (firstFrame && model.family === "veo") return "FIRST_AND_LAST_FRAMES_2_VIDEO";
   return model.images.mode === "references" ? "REFERENCE_2_VIDEO" : "FIRST_AND_LAST_FRAMES_2_VIDEO";
+}
+
+/** Veo's frame images: the opening frame, then the closing one when there is one. */
+function veoImages(req: VideoRenderRequest, images: string[]): string[] {
+  if (!req.firstFrame || !images.length) return images;
+  return req.lastFrameUrl ? [images[0], req.lastFrameUrl] : [images[0]];
 }
 
 /** The Kie model id for a render (MiniMax H3 has one id per input kind). */
@@ -44,18 +56,20 @@ export function buildKieInput(req: VideoRenderRequest): Record<string, unknown> 
   const images = model.images ? req.imageUrls.slice(0, model.images.max) : [];
   const audio = req.audio ?? model.nativeAudio;
   switch (model.family) {
-    case "veo":
+    case "veo": {
+      const frames = veoImages(req, images);
       return {
         prompt: req.prompt,
         ...(model.providerVariant ? { model: model.providerVariant } : {}),
-        generation_type: kieGenerationType(model, images.length),
-        ...(images.length ? { image_urls: images } : {}),
+        generation_type: kieGenerationType(model, frames.length, req.firstFrame),
+        ...(frames.length ? { image_urls: frames } : {}),
         aspect_ratio: req.aspectRatio,
         resolution: req.resolution,
         duration: req.durationSec,
         // Dialogue is written in the chosen language; translating it would change the words spoken.
         enable_translation: false,
       };
+    }
     case "gemini":
       // Gemini Omni 1.1 Flash: up to 7 quota units (1 per image); duration is
       // a string enum; a first frame can't be combined with references, so

@@ -48,7 +48,8 @@ function isPaidPlan(key: string): key is PaidPlanId {
 export function validPurchase(kind: PurchaseRequestKind, key: string): boolean {
   if (kind === "plan") return isPaidPlan(key);
   if (kind === "credit_pack") return CREDIT_PACKS.some((pack) => pack.key === key);
-  return VIDEO_PACKS.some((pack) => pack.key === key);
+  // Video packs are off sale; requests already made can still be handled.
+  return VIDEO_PACKS.some((pack) => pack.key === key && pack.availability === "launch");
 }
 
 function mapRequest(row: Record<string, unknown>): PurchaseRequest {

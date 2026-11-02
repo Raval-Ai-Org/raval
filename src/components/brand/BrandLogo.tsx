@@ -21,6 +21,8 @@ export type BrandKey =
   | "instagram"
   | "reddit"
   | "quora"
+  | "hackernews"
+  | "stackexchange"
   | "youtube";
 
 interface Props {
@@ -54,6 +56,8 @@ const BRAND_COLORS: Record<BrandKey, string> = {
   instagram: "#E1306C",
   reddit: "#FF4500",
   quora: "#B92B27",
+  hackernews: "#FF6600",
+  stackexchange: "#1E5397",
   youtube: "#FF0000",
 };
 
@@ -194,6 +198,20 @@ export function BrandLogo({ name, className, brand = false, size = 16 }: Props) 
           <path d="M12.738 18.701c-.831-1.635-1.805-3.27-3.732-3.27-.368 0-.736.063-1.073.21l-.652-1.288c.79-.679 2.062-1.21 3.69-1.21 2.535 0 3.84 1.21 4.882 2.756.62-1.366.926-3.196.926-5.484 0-5.715-1.79-8.65-5.95-8.65-4.105 0-5.894 2.935-5.894 8.65 0 5.687 1.789 8.594 5.894 8.594.673 0 1.283-.07 1.81-.245v-.063h.099zM14.222 21A11.444 11.444 0 0 1 12 21.218C5.79 21.218 1.79 16.93 1.79 10.415 1.79 3.844 5.79-.5 12-.5c6.318 0 10.262 4.344 10.262 10.915 0 3.696-1.252 6.717-3.428 8.65 1.116 1.633 2.249 2.703 4.011 2.703.18 0 .369 0 .549-.024v.022c-.18 1.66-1.583 3.234-3.717 3.234-2.71 0-4.142-1.578-5.456-4z" />
         </svg>
       );
+    case "hackernews":
+      // Y Combinator's "Y" (the app tile supplies the orange square).
+      return (
+        <svg {...common} fill={color}>
+          <path d="M6.951 5.896h2.155l1.542 3.069c.27.534.64 1.395.877 1.937.241-.542.587-1.403.886-1.937l1.583-3.069h2.07l-3.547 6.39v4.818h-1.859v-4.818z" />
+        </svg>
+      );
+    case "stackexchange":
+      // Stack Exchange's stacked speech bubble.
+      return (
+        <svg {...common} fill={color}>
+          <path d="M21.728 15.577v1.036c0 1.754-1.395 3.191-3.1 3.191h-.904L13.731 24v-4.196H5.355c-1.705 0-3.1-1.437-3.1-3.19v-1.037zM2.27 10.832h19.456v3.21H2.27zm0-4.79h19.456v3.21H2.27zm16.358-6.04c1.705 0 3.1 1.437 3.1 3.19v1.08H2.27v-1.08C2.27 1.438 3.665 0 5.37 0z" />
+        </svg>
+      );
     case "youtube":
       return (
         <svg {...common} fill={color}>
@@ -218,5 +236,7 @@ export const BRAND_LABEL: Record<BrandKey, string> = {
   instagram: "Instagram",
   reddit: "Reddit",
   quora: "Quora",
+  hackernews: "Hacker News",
+  stackexchange: "Stack Exchange",
   youtube: "YouTube",
 };

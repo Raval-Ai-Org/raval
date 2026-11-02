@@ -236,7 +236,7 @@ export type TimelineInput = {
   /** Step reached before a failure/cancel (for failed runs). */
   failedAtStep?: TimelineStepId | null;
   /** CMS runs relabel the plan and pull-request steps. */
-  provider?: "github" | "wordpress" | "webflow";
+  provider?: "github" | "wordpress" | "webflow" | "wix";
   statusDetail?: string | null;
 };
 

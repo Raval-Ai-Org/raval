@@ -136,7 +136,8 @@ export async function grantPlanWindow(args: {
   ];
   if (args.annualRollover) {
     for (const [meter, cap] of amounts) {
-      if ((meter === "credits" || meter === "video") && cap > 0) {
+      // Free videos are per month: they never roll over.
+      if (meter === "credits" && cap > 0) {
         let rolloverCap = cap;
         if (creation && meter === "credits") {
           const { data: old, error: oldError } = await admin

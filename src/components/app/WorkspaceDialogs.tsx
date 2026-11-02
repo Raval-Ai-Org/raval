@@ -37,8 +37,10 @@ import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
 import { NotionConnection } from "@/components/app/connectors/NotionConnection";
 import { SlackConnection } from "@/components/app/connectors/SlackConnection";
+import { ConnectedApps } from "@/components/app/connectors/ConnectedApps";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
+import { WixConnector } from "@/components/app/connectors/WixConnector";
 import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
 import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
 import { McpConnector } from "@/components/app/connectors/McpConnector";
@@ -402,6 +404,7 @@ function SettingsDialog({
                     <CanvaConnection />
                     <NotionConnection workspaceId={workspaceId} />
                     <SlackConnection workspaceId={workspaceId} />
+                    <ConnectedApps />
                   </div>
                 </>
               )}
@@ -422,6 +425,7 @@ function SettingsDialog({
                 <div className="space-y-3">
                   <GitHubConnector workspaceId={workspaceId} />
                   <WebflowConnector workspaceId={workspaceId} />
+                  <WixConnector workspaceId={workspaceId} />
                   <WordPressConnector workspaceId={workspaceId} />
                 </div>
               ) : (

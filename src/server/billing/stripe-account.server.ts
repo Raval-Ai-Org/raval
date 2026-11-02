@@ -70,7 +70,11 @@ export async function stripeAccountReady(): Promise<boolean> {
       key: pack.key,
       interval: null,
     })),
-    ...VIDEO_PACKS.map((pack) => ({ kind: "video_pack" as const, key: pack.key, interval: null })),
+    ...VIDEO_PACKS.filter((pack) => pack.availability === "launch").map((pack) => ({
+      kind: "video_pack" as const,
+      key: pack.key,
+      interval: null,
+    })),
   ];
   try {
     await Promise.all(required.map((item) => mappedPrice(item.kind, item.key, item.interval)));
@@ -313,6 +317,12 @@ export async function createAccountCheckout(args: {
   if (!Number.isInteger(args.quantity) || args.quantity < 1 || args.quantity > 20) {
     throw new HttpError(400, "Invalid purchase quantity.");
   }
+  // Video packs are off sale: videos past the free ones take credits.
+  if (
+    args.kind === "video_pack" &&
+    VIDEO_PACKS.find((pack) => pack.key === args.key)?.availability !== "launch"
+  )
+    throw new HttpError(400, "Video packs are no longer sold. Videos use credits.");
   const interval = args.interval ?? null;
   const priceId = await mappedPrice(args.kind, args.key, interval);
   const customer = await customerFor(account, args.email);

@@ -15,7 +15,7 @@ import {
   type BrainUpdate,
 } from "@/lib/brain/brain";
 import { parseLook } from "@/lib/brand-look/spec";
-import { isAudienceEnabled } from "@/lib/feature-flags";
+import { isAudienceEnabled, isCommunityEnabled } from "@/lib/feature-flags";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { StrategySchema } from "@/lib/strategy/contracts";
 import { GoalsSchema } from "@/lib/goals/contracts";
@@ -346,6 +346,7 @@ export async function loadBrainOverview(
       strategy: status,
       strategyStale: false,
     }),
+    community: isCommunityEnabled(workspaceId),
     generatedAt: new Date().toISOString(),
   };
 }

@@ -226,6 +226,8 @@ describe("durable video composition", () => {
         { seconds: 10, prompt: "Second" },
       ],
       chain: { workspaceId: "ws", key: "job-1", leadImages: 1 },
+      firstFrame: true,
+      lastFrameUrl: "https://picture.example/post.jpg",
     });
     if (!submitted.ok) throw new Error("Submit failed");
     expect(await provider.check(submitted.taskId)).toMatchObject({ state: "pending" });
@@ -242,6 +244,12 @@ describe("durable video composition", () => {
       "https://picture.example/style.jpg",
     ]);
     expect(second.requiredReferenceCount).toBe(1);
+    // Each clip opens on its frame; only the last one settles on the closing picture.
+    const first = vi.mocked(f.base.submit).mock.calls[0][0];
+    expect(first.firstFrame).toBe(true);
+    expect(first.lastFrameUrl).toBeUndefined();
+    expect(second.firstFrame).toBe(true);
+    expect(second.lastFrameUrl).toBe("https://picture.example/post.jpg");
   });
 
   it("makes a clip again with the reason after the checks fail it, counting both costs", async () => {

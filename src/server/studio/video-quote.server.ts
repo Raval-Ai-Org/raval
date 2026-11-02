@@ -5,9 +5,9 @@ import {
   isShortClipKey,
   shortClipCredits,
   videoFeatureFor,
-  videoUnitsFor,
   type VideoResolution,
 } from "@/lib/billing/catalog";
+import { freeVideosLeft, videoChargePlan } from "@/lib/billing/video-charge";
 import { activeModel, estimateRender, isModelEnabled } from "@/server/ugc/models.server";
 import { HttpError } from "@/server/http-error";
 import type { StudioControls } from "@/lib/studio/jobs";
@@ -16,9 +16,18 @@ import type { AspectRatio } from "@/lib/studio/aspect";
 
 /**
  * Same price rule and runtime provider registry used by UGC. No provider call.
- * A short clip (Economy or Standard, 8 s or less) is quoted in credits.
+ * A short clip (Economy or Standard, 8 s or less) is quoted in credits. A
+ * longer video is one of the month's free videos while one is left (Draft or
+ * Standard), otherwise credits (`videoChargePlan`). The meter is in the hash,
+ * so a quote shown as free no longer holds once the free videos are used.
  */
-export function quoteStudioVideo(controls: StudioControls) {
+export function quoteStudioVideo(
+  controls: StudioControls,
+  opts: {
+    /** The account's video balance in units; none means no free video. */
+    videoBalance?: number;
+  } = {},
+) {
   const key = controls.videoModelKey ?? "standard";
   if (!isModelEnabled(key)) throw new HttpError(400, "This video option is unavailable.");
   const model = activeModel(key);
@@ -32,10 +41,21 @@ export function quoteStudioVideo(controls: StudioControls) {
   const referenceCount = Math.min(4, controls.referenceAssetIds?.length ?? 0);
   const estimate = estimateRender(model, resolution, seconds, referenceCount);
   const short = isShortClipKey(key) && seconds <= SHORT_CLIP_MAX_SECONDS;
-  const meter = short ? ("credits" as const) : ("video" as const);
-  const units = short
-    ? shortClipCredits({ ugcKey: key, resolution, providerCostUsd: estimate.usd })
-    : videoUnitsFor({ ugcKey: key, seconds, resolution, providerCostUsd: estimate.usd });
+  const videoBalance = Math.max(0, opts.videoBalance ?? 0);
+  const charge = short
+    ? {
+        meter: "credits" as const,
+        amount: shortClipCredits({ ugcKey: key, resolution, providerCostUsd: estimate.usd }),
+      }
+    : videoChargePlan({
+        videoBalance,
+        option: key,
+        seconds,
+        resolution,
+        providerCostUsd: estimate.usd,
+      });
+  const meter = charge.meter;
+  const units = charge.amount;
   const hash = createHash("sha256")
     .update(
       JSON.stringify({
@@ -60,6 +80,8 @@ export function quoteStudioVideo(controls: StudioControls) {
     resolution,
     aspectRatio,
     feature: videoFeatureFor(key, resolution),
+    /** Whole free videos left before this one (shown as "N of 2 left"). */
+    freeLeft: freeVideosLeft(videoBalance),
   };
 }
 

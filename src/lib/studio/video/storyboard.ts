@@ -9,8 +9,25 @@
 // and place stay the same from the first clip to the last.
 
 import { z } from "zod";
-import { videoKind, type VideoKindId } from "./kinds";
+import { videoKind, type PeopleRule, type VideoKindId } from "./kinds";
 import type { ClipPlan } from "./lengths";
+
+
+/** The people line every prompt carries, from the decided rule. */
+export function peopleDirection(people: PeopleRule): string {
+  switch (people) {
+    case "none":
+      return "No people at all: no faces, bodies or hands. The product and its world are the only subjects.";
+    case "hands":
+      return "No faces: hands at most, so leave `bible.cast` empty.";
+    case "cast":
+      return "Put every person in `bible.cast` with an id and a complete look (face, hair, age, build, clothes); a shot lists the ids of the people in it. One to two people at most. Always fictional.";
+    case "source":
+      return "People are only those already in the picture; describe them in `bible.cast` so they stay the same. Add nobody.";
+    default:
+      return "People are optional; if any appear, describe each in `bible.cast` and keep them faceless or identical.";
+  }
+}
 
 const text = (max: number) =>
   z
@@ -32,6 +49,8 @@ const ClipSchema = z.object({
   endsOn: text(300),
   sound: text(200),
   onScreen: text(60),
+  /** Words a voiceover speaks in this clip, only when a voice was asked for. */
+  voiceover: text(160),
 });
 
 /** What the storyboard call returns (validated, then fitted and checked by code). */
@@ -62,6 +81,10 @@ export type VideoPlanOutput = {
   model: string;
   clipSeconds: number[];
   storyboard: VideoStoryboard;
+  /** Who may be on screen, as decided before the storyboard was written. */
+  people?: PeopleRule;
+  /** A voiceover was planned (its words are on the clips). */
+  voice?: boolean;
   /** The checks after rendering, once they ran. */
   check?: { passed: boolean; redone: number; notes: string[] };
 };
@@ -111,6 +134,8 @@ export type StoryboardCheckContext = {
   competitors?: readonly string[];
   /** The video starts from a finished post picture. */
   fromPicture?: boolean;
+  /** Who may be on screen (`peoplePolicy`); absent: the kind's own rule. */
+  people?: PeopleRule;
 };
 
 const words = (value: string) => value.split(/\s+/).filter(Boolean).length;
@@ -142,14 +167,19 @@ export function storyboardIssues(sb: VideoStoryboard, ctx: StoryboardCheckContex
   if (!sb.bible.setting) issues.push("Describe the one setting every clip happens in.");
   if (!sb.bible.lighting) issues.push("Describe the light that stays the same in every clip.");
   const castIds = new Set(sb.bible.cast.map((member) => member.id));
-  if (kind.people === "cast" && !ctx.fromPicture && castIds.size === 0)
+  const people = ctx.people ?? kind.people;
+  if (people === "cast" && !ctx.fromPicture && castIds.size === 0)
     issues.push(
       "A short story needs its cast in the bible: who they are and exactly how they look.",
     );
-  if ((kind.people === "none" || kind.people === "hands") && castIds.size > 0)
+  if (people === "none" && castIds.size > 0)
+    issues.push("This video shows no people at all: remove the cast, hands and faces.");
+  else if (people === "hands" && castIds.size > 0)
     issues.push(
       `A ${kind.label.toLowerCase()} shows no faces: remove the cast and use hands only.`,
     );
+  if (people === "none" && sb.clips.some((clip) => clip.shots.some((shot) => shot.cast.length)))
+    issues.push("Nobody asked for people: keep every shot on the product, with no hands or faces.");
   for (const member of sb.bible.cast)
     if (words(member.look) < 6)
       issues.push(
@@ -177,6 +207,14 @@ export function storyboardIssues(sb: VideoStoryboard, ctx: StoryboardCheckContex
       if (!shot.action) issues.push(`Every shot in clip ${n} needs an action.`);
       for (const id of shot.cast)
         if (!castIds.has(id)) issues.push(`Clip ${n} uses "${id}", who is not in the cast.`);
+    }
+    if (clip.voiceover) {
+      // About 2.5 spoken words a second, with room to breathe.
+      const most = Math.floor((ctx.plan[i]?.seconds ?? 8) * 2.5);
+      if (words(clip.voiceover) > most)
+        issues.push(`Clip ${n}'s voiceover must be ${most} words or fewer to be said in time.`);
+      for (const number of unknownNumbers(clip.voiceover, ctx.knownFacts))
+        issues.push(`Clip ${n}'s voiceover says "${number}", which the brand never said.`);
     }
     if (clip.onScreen) {
       if (kind.id === "offer-teaser")
@@ -235,11 +273,38 @@ export type ClipPromptOptions = {
   /** A product photo is among the images. */
   productPhoto?: boolean;
   audio: boolean;
+  /** Who may be on screen (`peoplePolicy`); absent: the kind's own rule. */
+  people?: PeopleRule;
+  /** A spoken voiceover line is wanted (the brief, script or reference has a voice). */
+  voice?: boolean;
+  /** The sound the brand's video look asks for (music feel, ambience). */
+  soundLook?: string;
+  /** Words are drawn on the finished video by code, so the model draws none. */
+  wordsByCode?: boolean;
   /** Brand look, taste, platform and other blocks every clip carries. */
   extra?: readonly string[];
   /** The checker's reason, when this clip is being made again. */
   redoNote?: string;
 };
+
+/**
+ * The clip's sound: the scene's own sound and the look's music feel, and a
+ * spoken line only when a voice was asked for (its words come from the plan).
+ */
+function soundLine(
+  clip: VideoStoryboard["clips"][number],
+  index: number,
+  opts: ClipPromptOptions,
+): string {
+  const { sound } = clip;
+  const look = opts.soundLook ? ` The brand's sound: ${opts.soundLook}.` : "";
+  const voice =
+    opts.voice && clip.voiceover
+      ? ` A calm off-screen voiceover says, exactly: "${clip.voiceover}". Nobody on screen speaks.`
+      : " No narration.";
+  const joined = index > 0 ? " Keep the sound continuous with the clip before." : "";
+  return `SOUND: ${sound || "natural sound of the scene"}.${look}${voice} No music with lyrics.${joined}`;
+}
 
 /** The render prompt for one clip: the whole bible, then only this clip. */
 export function clipPrompt(sb: VideoStoryboard, index: number, opts: ClipPromptOptions): string {
@@ -294,13 +359,14 @@ export function clipPrompt(sb: VideoStoryboard, index: number, opts: ClipPromptO
       ? "This is the end of the footage: settle on a calm frame with empty space. A card with the offer follows it."
       : "",
     !last ? "This clip is not the end: do not wrap up, fade out or show a final pose." : "",
-    opts.audio
-      ? `SOUND: ${clip.sound || "natural sound of the scene"}. No narration, no music with lyrics${index > 0 ? ", and keep the sound continuous with the clip before" : ""}.`
-      : "No sound needed.",
-    clip.onScreen
+    opts.audio ? soundLine(clip, index, opts) : "No sound needed.",
+    clip.onScreen && !opts.wordsByCode
       ? `On-screen words, spelled exactly: "${clip.onScreen}". Large, high-contrast and away from the top and bottom edges. If they can't be spelled perfectly, show none.`
       : "No words, captions or logos drawn on screen.",
     `How this kind of video works:\n${kind.rules.map((rule) => `- ${rule}`).join("\n")}`,
+    opts.people && opts.people !== kind.people
+      ? `PEOPLE (this overrides any rule above): ${peopleDirection(opts.people).replace(/, so leave `bible.cast` empty/, "")}`
+      : "",
     index === 0 && kind.id !== "living-picture"
       ? "The first second is the hook: open on motion already happening. No logo intro, no title card, no fade from black."
       : "",

@@ -56,10 +56,18 @@ async function call<T>(path: string, init?: AuthedFetchInit): Promise<T> {
 }
 
 export const studioApi = {
-  videoQuote(workspaceId: string, controls: StudioControls) {
+  videoQuote(
+    workspaceId: string,
+    controls: StudioControls,
+    context: {
+      brief?: string;
+      template?: string;
+      source?: { picture?: boolean; script?: boolean };
+    } = {},
+  ) {
     return call<NonNullable<StudioControls["videoQuote"]>>("/api/studio/video-quote", {
       method: "POST",
-      body: JSON.stringify({ workspaceId, controls }),
+      body: JSON.stringify({ workspaceId, controls, ...context }),
       workspaceId,
     });
   },
