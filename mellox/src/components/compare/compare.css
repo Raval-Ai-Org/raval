@@ -17,7 +17,7 @@
   gap: 10px;
   border-radius: 999px;
   padding: 10px 20px;
-  background: rgb(var(--mx-bg-rgb) / 0.5);
+  background: rgb(5 6 8 / 0.5);
   border: 1px solid rgb(var(--mx-w) / 0.12);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -26,7 +26,7 @@
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .cx-stat span {
   font-size: 14px;
@@ -90,7 +90,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .cx-land h3 {
   margin-top: 12px;
@@ -210,7 +210,7 @@
   transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .cx-bar-track span + span {
-  border-left: 2px solid var(--mx-panel);
+  border-left: 2px solid #07090b;
 }
 .cx-bar-score {
   text-align: right;
@@ -218,7 +218,7 @@
   color: var(--mx-t1);
 }
 .cx-bar-row.self .cx-bar-score {
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 @media (max-width: 640px) {
   .cx-bar-row {
@@ -253,7 +253,7 @@
   min-width: 210px;
   padding-left: 22px;
   text-align: left;
-  background: var(--mx-panel);
+  background: #07090b;
 }
 .cx-mx thead th {
   border-top: 0;
@@ -280,7 +280,7 @@
   background: var(--mx-bg2);
   border-bottom: 0;
 }
-.cx-mx thead tr.cx-groups th.cx-g-create { box-shadow: inset 0 -2px 0 var(--brand-lime); color: var(--mx-lime-text); }
+.cx-mx thead tr.cx-groups th.cx-g-create { box-shadow: inset 0 -2px 0 var(--brand-lime); color: var(--brand-lime); }
 .cx-mx thead tr.cx-groups th.cx-g-monitor { box-shadow: inset 0 -2px 0 var(--brain-blue); color: #6c9bff; }
 .cx-mx thead tr.cx-groups th.cx-g-scale { box-shadow: inset 0 -2px 0 var(--brain-purple); color: var(--brain-purple); }
 .cx-mx thead tr.cx-groups th:first-child { box-shadow: none; }
@@ -293,7 +293,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--mx-t2);
-  background: var(--mx-panel);
+  background: #0c1016;
 }
 .cx-mx td.name b {
   display: block;
@@ -311,17 +311,17 @@
   background: rgb(203 233 96 / 0.09);
 }
 .cx-mx tr.self td:first-child {
-  background: color-mix(in srgb, var(--brand-lime) 14%, var(--mx-panel));
+  background: #0f1608;
   box-shadow: inset 3px 0 0 var(--brand-lime);
 }
 .cx-mx tr.self td.name b {
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .cx-mx tbody tr:not(.cat):not(.self):hover td {
   background: rgb(var(--mx-w) / 0.03);
 }
 .cx-mx tbody tr:not(.cat):not(.self):hover td:first-child {
-  background: var(--mx-panel);
+  background: #0c1016;
 }
 
 /* ---------- Head to head ---------- */
@@ -334,7 +334,7 @@
   color: var(--mx-fg);
 }
 .cx-h2h td.hl.price {
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 
 .cx-honest {
@@ -417,7 +417,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .cx-example {
   margin-top: 12px;
@@ -470,7 +470,7 @@
   letter-spacing: -0.04em;
 }
 .cx-stack .lime .cx-s-total {
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .cx-stack ul {
   display: flex;
@@ -492,7 +492,7 @@
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .cx-verdict p {
   max-width: 34ch;
@@ -505,5 +505,5 @@
 }
 .cx-verdict p b {
   font-weight: 500;
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }

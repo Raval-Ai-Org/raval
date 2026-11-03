@@ -25,7 +25,7 @@
 .ct-ch { padding: 20px 0; border-top: 1px solid rgb(var(--mx-w) / 0.08); }
 .ct-ch:first-of-type { margin-top: 18px; }
 .ct-ch b { display: block; font-size: 18px; font-weight: 500; }
-.ct-ch a { color: var(--mx-lime-text); text-decoration: underline; text-underline-offset: 4px; }
+.ct-ch a { color: var(--brand-lime); text-decoration: underline; text-underline-offset: 4px; }
 .ct-ch span { display: block; margin-top: 6px; font-size: 15px; line-height: 1.55; color: var(--mx-t1); }
 
 /* ---------- Path cards ---------- */
@@ -71,9 +71,7 @@
 .ct-form button.px-cta:disabled { opacity: 0.6; cursor: progress; }
 .ct-err { color: #ff8a80; }
 .ct-done { align-items: center; text-align: center; padding-block: 56px; }
-.ct-done svg { color: var(--mx-lime-text); }
+.ct-done svg { color: var(--brand-lime); }
 .ct-done h3 { margin-top: 18px; }
 .ct-done p { max-width: 42ch; margin-top: 10px; font-size: 17px; line-height: 1.6; color: var(--mx-t1); }
 .ct-done .px-cta { margin-top: 28px; padding-inline: 32px; cursor: pointer; }
-
-:root[data-theme="light"] .ct-err { color: #c62828; }

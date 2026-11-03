@@ -1,68 +1,50 @@
 "use client";
 
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-type Preference = "system" | "light" | "dark";
-
-const ORDER: Preference[] = ["system", "light", "dark"];
-const LABEL: Record<Preference, string> = { system: "System", light: "Light", dark: "Dark" };
-const KEY = "mx-theme";
-
-function stored(): Preference {
-  try {
-    const v = localStorage.getItem(KEY);
-    return v === "light" || v === "dark" ? v : "system";
-  } catch {
-    return "system";
-  }
-}
-
-function apply(pref: Preference) {
-  const resolved = pref === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : pref;
-  document.documentElement.setAttribute("data-theme", resolved);
-}
+type Theme = "light" | "dark";
 
 /**
- * Theme switch with three choices: follow the system, always light, always dark. The theme starts from a saved choice,
- * else the visitor's system setting (see THEME_SCRIPT in layout.tsx, which runs before first paint). While "System" is
- * selected the page follows the system if it changes. Clicking cycles System, Light, Dark.
+ * Light/dark switch. The theme starts from the visitor's system setting (see THEME_SCRIPT in layout.tsx);
+ * clicking this stores an explicit choice, which then wins over the system.
  */
 export default function ThemeToggle({ className = "" }: { className?: string }) {
-  const [pref, setPref] = useState<Preference | null>(null);
+  const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    setPref(stored());
+    const read = () => setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+    read();
     const mq = matchMedia("(prefers-color-scheme: light)");
     const onSystem = () => {
-      if (stored() === "system") apply("system");
+      try {
+        if (localStorage.getItem("mx-theme")) return;
+      } catch {}
+      document.documentElement.setAttribute("data-theme", mq.matches ? "light" : "dark");
+      read();
     };
     mq.addEventListener("change", onSystem);
     return () => mq.removeEventListener("change", onSystem);
   }, []);
 
-  function cycle() {
-    const next = ORDER[(ORDER.indexOf(pref ?? "system") + 1) % ORDER.length];
+  function toggle() {
+    const next: Theme = theme === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
     try {
-      if (next === "system") localStorage.removeItem(KEY);
-      else localStorage.setItem(KEY, next);
+      localStorage.setItem("mx-theme", next);
     } catch {}
-    apply(next);
-    setPref(next);
+    setTheme(next);
   }
 
-  const current = pref ?? "system";
-  const next = ORDER[(ORDER.indexOf(current) + 1) % ORDER.length];
-  const Icon = current === "light" ? Sun : current === "dark" ? Moon : Monitor;
+  const isLight = theme === "light";
   return (
     <button
       type="button"
-      onClick={cycle}
-      aria-label={`Theme: ${LABEL[current]}. Switch to ${LABEL[next]}`}
-      title={`Theme: ${LABEL[current]}`}
+      onClick={toggle}
+      aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
       className={`glass glass-interactive flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${className}`}
     >
-      {pref === null ? null : <Icon size={18} aria-hidden="true" />}
+      {theme === null ? null : isLight ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
     </button>
   );
 }

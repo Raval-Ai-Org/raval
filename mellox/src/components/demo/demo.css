@@ -28,7 +28,7 @@
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
   background: rgb(203 233 96 / 0.1);
   border: 1px solid rgb(203 233 96 / 0.3);
 }
@@ -39,8 +39,8 @@
 .dm-see h3 { font-size: 1.5rem; font-weight: 500; letter-spacing: -0.03em; color: var(--mx-fg); }
 .dm-see ul { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .dm-see li { display: flex; align-items: flex-start; gap: 12px; font-size: 16.5px; line-height: 1.5; color: var(--mx-t6); }
-.dm-see li svg { flex: none; margin-top: 3px; color: var(--mx-lime-text); }
+.dm-see li svg { flex: none; margin-top: 3px; color: var(--brand-lime); }
 
 .dm-alt { font-size: 16px; line-height: 1.65; color: var(--mx-t1); }
-.dm-alt a { color: var(--mx-lime-text); text-decoration: underline; text-underline-offset: 4px; }
+.dm-alt a { color: var(--brand-lime); text-decoration: underline; text-underline-offset: 4px; }
 

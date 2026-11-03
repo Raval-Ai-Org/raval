@@ -86,7 +86,7 @@
 .faq-item {
   border-radius: 30px; /* constant: a radius that changes on open makes the corners jump */
   border: 1px solid rgb(var(--mx-w) / 0.09);
-  background: var(--mx-panel);
+  background: #0b0e14;
   transition: border-color 0.4s ease, background-color 0.4s ease;
 }
 .faq-item:hover {
@@ -118,7 +118,7 @@
 }
 .faq-item.is-open .plus {
   transform: rotate(135deg);
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
 }
 .faq-panel {
   display: grid;
@@ -135,7 +135,7 @@
   padding: 0 clamp(22px, 2.2vw, 34px) clamp(22px, 2vw, 30px);
   font-size: clamp(15px, 1.2vw, 18px);
   line-height: 1.65;
-  color: var(--mx-t4);
+  color: #98a3c4;
   opacity: 0;
   transform: translateY(-4px);
   /* closing: the text goes first and quickly, so it never lingers over a collapsing box */

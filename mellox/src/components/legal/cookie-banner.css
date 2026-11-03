@@ -12,7 +12,7 @@
   padding: 20px 24px;
   border-radius: 26px;
   color: var(--mx-fg);
-  background: rgb(var(--mx-bg-rgb) / 0.94);
+  background: rgb(8 11 16 / 0.92);
   border: 1px solid rgb(var(--mx-w) / 0.14);
   box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.9), 0 0 60px -30px rgb(203 233 96 / 0.5);
   -webkit-backdrop-filter: blur(18px);
@@ -27,7 +27,7 @@
 }
 .ck-text { flex: 1; }
 .ck-text b { font-size: 17px; font-weight: 600; }
-.ck-text p { margin-top: 6px; font-size: 14.5px; line-height: 1.55; color: var(--mx-t2); }
+.ck-text p { margin-top: 6px; font-size: 14.5px; line-height: 1.55; color: #a4aed3; }
 .ck-text a, .ck-lede a { color: var(--brand-lime, #cbe960); text-decoration: underline; text-underline-offset: 3px; }
 
 .ck-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }

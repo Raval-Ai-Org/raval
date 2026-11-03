@@ -22,15 +22,15 @@
 .uc-plan { flex: 1 1 340px; max-width: 460px; gap: 16px; }
 .uc-plan-top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .uc-plan h3 { font-size: 1.6rem; font-weight: 500; letter-spacing: -0.03em; color: var(--mx-fg); }
-.uc-price { font-size: 2rem; font-weight: 500; letter-spacing: -0.04em; color: var(--mx-lime-text); }
+.uc-price { font-size: 2rem; font-weight: 500; letter-spacing: -0.04em; color: var(--brand-lime); }
 .uc-price small { font-size: 1rem; font-weight: 400; color: var(--mx-t1); }
 .uc-tag { font-size: 16px; color: var(--mx-t2); }
 .uc-feats { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 0; padding: 0; list-style: none; }
 .uc-feats li { display: flex; gap: 10px; font-size: 15.5px; line-height: 1.45; color: var(--mx-t6); }
-.uc-feats svg { flex: none; margin-top: 2px; color: var(--mx-lime-text); }
+.uc-feats svg { flex: none; margin-top: 2px; color: var(--brand-lime); }
 .uc-plan .px-cta { margin-top: auto; }
 .uc-plan-side { flex: 1 1 260px; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 8px 4px; font-size: 17px; line-height: 1.6; color: var(--mx-t2); }
-.uc-plan-side a { align-self: flex-start; font-weight: 600; color: var(--mx-lime-text); text-decoration: underline; text-underline-offset: 4px; }
+.uc-plan-side a { align-self: flex-start; font-weight: 600; color: var(--brand-lime); text-decoration: underline; text-underline-offset: 4px; }
 
 .uc-others { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 560px) { .uc-others { grid-template-columns: 1fr; } }
@@ -47,6 +47,6 @@
 .uc-by { display: flex; flex-direction: column; gap: 2px; font-size: 15px; color: var(--mx-t1); }
 .uc-by b { font-weight: 500; color: var(--mx-fg); }
 .uc-results { display: flex; flex-wrap: wrap; gap: 14px 40px; }
-.uc-results b { display: block; font-size: clamp(2rem, 4vw, 3rem); font-weight: 500; line-height: 1; letter-spacing: -0.05em; color: var(--mx-lime-text); }
+.uc-results b { display: block; font-size: clamp(2rem, 4vw, 3rem); font-weight: 500; line-height: 1; letter-spacing: -0.05em; color: var(--brand-lime); }
 .uc-results span { display: block; margin-top: 6px; font-size: 14.5px; color: var(--mx-t1); }
-.uc-more { align-self: flex-start; font-weight: 600; color: var(--mx-lime-text); text-decoration: underline; text-underline-offset: 4px; }
+.uc-more { align-self: flex-start; font-weight: 600; color: var(--brand-lime); text-decoration: underline; text-underline-offset: 4px; }

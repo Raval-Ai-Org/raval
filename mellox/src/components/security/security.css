@@ -9,7 +9,7 @@
 }
 .sc-note a,
 .ft-head p a {
-  color: var(--mx-lime-text);
+  color: var(--brand-lime);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -26,7 +26,7 @@
 .sc-ent h2 { font-size: clamp(1.7rem, 3.4vw, 2.8rem); font-weight: 500; letter-spacing: -0.04em; line-height: 1.1; }
 .sc-ent ul { display: flex; flex-direction: column; gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; }
 .sc-ent li { display: flex; align-items: center; gap: 12px; font-size: 17px; color: var(--mx-t6); }
-.sc-ent li svg { flex: none; color: var(--mx-lime-text); }
+.sc-ent li svg { flex: none; color: var(--brand-lime); }
 .sc-ent .px-cta { margin-top: 0; padding-inline: 40px; }
 
 .sc-docs {
