@@ -104,29 +104,45 @@ function deps() {
 }
 
 describe("deleteWorkspace", () => {
-  it("disconnects Canva before deleting its grant and blocks deletion on cleanup failure", async () => {
+  it("disconnects Canva while the workspace still exists", async () => {
     const db = seed();
     const disconnectCanva = vi.fn(async (): Promise<void> => {
       expect(db.rows("workspaces")).toHaveLength(2);
-      throw new Error("Canva cleanup unavailable");
     });
-    await expect(
-      deleteWorkspace(
-        { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
-        { ...deps(), disconnectCanva },
-        db as never,
-      ),
-    ).rejects.toThrow("Canva cleanup unavailable");
-    expect(disconnectCanva).toHaveBeenCalledWith(A, OWNER);
-    expect(db.rows("workspaces")).toHaveLength(2);
-    disconnectCanva.mockImplementation(async () => undefined);
     await deleteWorkspace(
       { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
       { ...deps(), disconnectCanva },
       db as never,
     );
+    expect(disconnectCanva).toHaveBeenCalledWith(A, OWNER);
     expect(db.rows("workspaces")).toHaveLength(1);
   });
+
+  it("still deletes when storage, Canva and the social provider all fail", async () => {
+    const db = seed();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const disconnectPostForMeAccounts = vi.fn(async (): Promise<void> => {
+      throw new Error("Could not list connected social accounts (HTTP 402)");
+    });
+    const disconnectCanva = vi.fn(async (): Promise<void> => {
+      throw new Error("Canva cleanup unavailable");
+    });
+    const listObjects = vi.fn(async (): Promise<string[]> => {
+      throw new Error("storage down");
+    });
+    const result = await deleteWorkspace(
+      { workspaceId: A, userId: OWNER, confirmation: "CONFIRM" },
+      { ...deps(), listObjects, disconnectCanva, disconnectPostForMeAccounts },
+      db as never,
+    );
+    expect(result.storageObjectsRemoved).toBe(0);
+    expect(disconnectPostForMeAccounts).toHaveBeenCalledWith(A);
+    expect(disconnectCanva).toHaveBeenCalledWith(A, OWNER);
+    expect(db.rows("workspaces").map((w) => w.id)).toEqual([B]);
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
   it("requires the exact typed confirmation", async () => {
     const db = seed();
     for (const confirmation of ["", "confirm", "CONFIRM ", "Confirm"]) {
@@ -150,17 +166,6 @@ describe("deleteWorkspace", () => {
         db as never,
       ),
     ).rejects.toThrow(/not found/i);
-    expect(db.rows("workspaces")).toHaveLength(2);
-    expect(d.removeObjects).not.toHaveBeenCalled();
-  });
-
-  it("preserves the workspace when media enumeration fails", async () => {
-    const db = seed();
-    const d = deps();
-    d.listObjects.mockRejectedValueOnce(new Error("R2 unavailable"));
-    await expect(
-      deleteWorkspace({ workspaceId: A, userId: OWNER, confirmation: "CONFIRM" }, d, db as never),
-    ).rejects.toThrow(/stored media/i);
     expect(db.rows("workspaces")).toHaveLength(2);
     expect(d.removeObjects).not.toHaveBeenCalled();
   });

@@ -379,7 +379,7 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
                   )}
                   <SurfacePage width="wide">
                     {tab === "community" && overview.data?.community !== false ? (
-                      // Communities has its own place now (sidebar → Grow).
+                      // The Reddit agent has its own page (sidebar → Create).
                       <div className="flex flex-col items-start gap-4 rounded-3xl border border-border/70 bg-[var(--ds-tile-bg)] p-6 sm:flex-row sm:items-center">
                         <div className="flex -space-x-2">
                           {(["reddit", "quora", "hackernews", "stackexchange"] as const).map(
@@ -393,19 +393,14 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
                             ),
                           )}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[15px] font-medium text-foreground">
-                            Communities moved to its own page
-                          </p>
-                          <p className="text-[13px] text-muted-foreground">
-                            Threads where people ask about what you do, one click from the sidebar.
-                          </p>
-                        </div>
+                        <p className="min-w-0 flex-1 text-[15px] font-medium text-foreground">
+                          Threads where people ask about what you do
+                        </p>
                         <Link
                           href={communitiesPath(workspaceId)}
                           className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
                         >
-                          Open Communities
+                          Open Reddit agent
                         </Link>
                       </div>
                     ) : (

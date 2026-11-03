@@ -352,7 +352,8 @@ export async function tavilySearch(
       startedAt: started,
       units: 1,
       status: "error",
-      costUsd,
+      // Tavily bills answered requests only; a failed call is not spend.
+      costUsd: 0,
     });
     throw wrapUnknown(error, "search");
   }
@@ -444,7 +445,8 @@ export async function tavilyExtract(
       startedAt: started,
       units: safe.length,
       status: "error",
-      costUsd,
+      // Tavily bills answered requests only; a failed call is not spend.
+      costUsd: 0,
     });
     throw wrapUnknown(error, "extract");
   }

@@ -2,7 +2,8 @@
 
 // Channels is a real route rendered as the shared modal surface over AppShell,
 // like Inspo. The section comes from the URL (?s=…), so each part can be linked to.
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
+import { emitAppEvent } from "@/lib/app-events";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Megaphone } from "@/components/icons";
@@ -15,11 +16,29 @@ const ChannelsPanel = lazy(() =>
   import("@/components/app/channels/ChannelsPanel").then((m) => ({ default: m.ChannelsPanel })),
 );
 
+/**
+ * Channels moved into Settings (Social accounts and Connectors). Old links
+ * land on the workspace with the matching Settings section open.
+ */
 function Inner() {
   const router = useRouter();
   const params = useSearchParams();
   const workspaceId = useOptionalWorkspaceId();
   const section = parseChannelSection(params.get("s"));
+  useEffect(() => {
+    if (!workspaceId) return;
+    router.replace(workspacePath(workspaceId));
+    const target =
+      section === "social"
+        ? { section: "accounts" as const }
+        : section === "analytics"
+          ? { section: "connectors" as const, connector: "google" }
+          : { section: "connectors" as const };
+    // Settings mounts with the shell; give it a moment to listen.
+    const t = window.setTimeout(() => emitAppEvent("open:settings", target), 150);
+    return () => window.clearTimeout(t);
+  }, [router, section, workspaceId]);
+  if (workspaceId) return <PageLoader />;
   return (
     <AppModalShell
       open

@@ -267,20 +267,23 @@ const defaultDeleteDeps: DeleteDeps = {
     const listed = await call<{ data: Array<{ id: string; status: string; brand_id?: string }> }>({
       path: "/accounts",
     });
-    if (listed.status !== 200) throw new Error("Could not list connected social accounts");
+    if (listed.status !== 200) {
+      throw new Error(`Could not list connected social accounts (HTTP ${listed.status})`);
+    }
+    const failed: string[] = [];
     for (const account of listed.data.data) {
-      if (account.status !== "active") continue;
-      if (account.brand_id !== workspaceId) {
-        throw new Error("A connected account is outside this workspace");
-      }
+      // Never touch an account that belongs to another workspace.
+      if (account.status !== "active" || account.brand_id !== workspaceId) continue;
       const removed = await call({
         method: "DELETE",
         path: `/accounts/${encodeURIComponent(account.id)}`,
       });
       if (removed.status !== 204 && removed.status !== 200 && removed.status !== 404) {
-        throw new Error("Could not disconnect a social account");
+        failed.push(`${account.id} (HTTP ${removed.status})`);
       }
     }
+    if (failed.length)
+      throw new Error(`Could not disconnect social accounts: ${failed.join(", ")}`);
   },
 };
 
@@ -322,17 +325,25 @@ export async function deleteWorkspace(
     .eq("workspace_id", args.workspaceId)
     .maybeSingle();
 
-  const objects = await deps.listObjects(args.workspaceId).catch(() => {
-    throw new HttpError(503, "Could not list this workspace's stored media. Try again.");
-  });
-  if (deps.disconnectCanva) await deps.disconnectCanva(args.workspaceId, args.userId);
-
+  // Cleanup before the delete is best effort: storage, Canva or a social
+  // provider that is down, out of credits or rejects Mellox's key must never
+  // keep a person from deleting their workspace. What is left behind is tagged
+  // with this workspace's id, which no other workspace can ever read.
+  const cleanupFailed = (step: string) => (error: unknown) => {
+    console.error(
+      `[workspaces] ${step} cleanup requires retry`,
+      args.workspaceId,
+      error instanceof Error ? error.message : error,
+    );
+  };
+  const objects = await deps
+    .listObjects(args.workspaceId)
+    .catch((error: unknown): string[] => (cleanupFailed("storage")(error), []));
+  if (deps.disconnectCanva) {
+    await deps.disconnectCanva(args.workspaceId, args.userId).catch(cleanupFailed("Canva"));
+  }
   if (deps.disconnectPostForMeAccounts) {
-    try {
-      await deps.disconnectPostForMeAccounts(args.workspaceId);
-    } catch {
-      throw new HttpError(503, "Could not disconnect this workspace's social accounts. Try again.");
-    }
+    await deps.disconnectPostForMeAccounts(args.workspaceId).catch(cleanupFailed("social account"));
   }
 
   const { error: deleteError, data: deleted } = await db

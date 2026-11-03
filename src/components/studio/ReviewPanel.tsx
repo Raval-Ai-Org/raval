@@ -75,6 +75,7 @@ import { MakeMoreFrom } from "./MakeMoreFrom";
 import { EmailDraft } from "./EmailDraft";
 import { SendToApps } from "./SendToApps";
 import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
+import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { VersionStrip } from "./VersionStrip";
 
 export type ReviewRow = {
@@ -233,6 +234,7 @@ export function ReviewPanel({
   const revising = !!session.pendingKey || !!(session.job && isActiveJob(session.job));
   const sdr = useSdrStatus(fixtureRows ? null : session.workspaceId);
   const connectedApps = useConnectedApps(fixtureRows ? null : session.workspaceId);
+  const workspaceRole = useOptionalWorkspaceRole();
   const distributionReady = fixtureDistribution ?? canDistribute(sdr);
 
   const [rows, setRows] = useState<ReviewRow[]>(fixtureRows ?? []);
@@ -1626,7 +1628,9 @@ export function ReviewPanel({
           job.content_item_ids?.[0] &&
           (connectedApps.has("googledrive") ||
             connectedApps.has("gmail") ||
-            (session.type === "ad" && connectedApps.has("googleads"))) ? (
+            ((workspaceRole === "owner" || workspaceRole === "admin") &&
+              (connectedApps.canConnect ||
+                (session.type === "ad" && connectedApps.has("googleads"))))) ? (
             <InspectorSection title="Send to">
               <SendToApps
                 workspaceId={session.workspaceId}

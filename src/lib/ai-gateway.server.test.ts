@@ -21,7 +21,18 @@ import {
   withJsonMention,
   withPromptCache,
 } from "./ai-gateway.server";
-import { ECONOMY, planFor, PREMIUM, WORKHORSE } from "@/server/ai/task-models";
+import {
+  ANALYST,
+  BUDGET,
+  ECONOMY,
+  LABELLER,
+  planFor,
+  PREMIUM,
+  SUMMARY,
+  WORKHORSE,
+} from "@/server/ai/task-models";
+
+const FULL_PRECISION = ["fp8", "fp16", "bf16", "fp32", "unknown"];
 
 type Reply = { content?: string | null; finish?: string; model?: string; refusal?: string };
 
@@ -62,35 +73,42 @@ const msgs = [
 
 describe("chatCompletion request body", () => {
   it.each([
-    { route: "chat", primary: WORKHORSE, fallback: "openai/gpt-6.1-sol" },
-    { route: "competitors.updates", primary: ECONOMY, fallback: "openai/gpt-6-luna" },
-  ])("sends and meters the upgraded fallback for $route", async ({ route, primary, fallback }) => {
-    const s = scripted([{ content: "{}", model: fallback }]);
-    restore = s.restore;
-    const json = await chatCompletion({
-      route,
-      messages: msgs,
-      noCache: true,
-      temperature: 0.2,
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "x", strict: true, schema: { type: "object" } },
-      },
-    });
-    expect(s.bodies[0].models).toEqual([primary, fallback]);
-    expect(s.bodies[0]).not.toHaveProperty("temperature");
-    expect(s.bodies[0].reasoning).toEqual({ effort: "low", exclude: true });
-    expect(s.bodies[0].provider).toEqual({ data_collection: "deny", require_parameters: true });
-    expect(json._model).toBe(fallback);
-    expect(usage.rows[0]).toMatchObject({ model: fallback, route, estCostUsd: 0.0042 });
-  });
+    { route: "chat", primary: WORKHORSE, fallback: SUMMARY, openWeight: false },
+    { route: "competitors.updates", primary: LABELLER, fallback: ECONOMY, openWeight: true },
+  ])(
+    "sends and meters the fallback for $route",
+    async ({ route, primary, fallback, openWeight }) => {
+      const s = scripted([{ content: "{}", model: fallback }]);
+      restore = s.restore;
+      const json = await chatCompletion({
+        route,
+        messages: msgs,
+        noCache: true,
+        temperature: 0.2,
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "x", strict: true, schema: { type: "object" } },
+        },
+      });
+      expect(s.bodies[0].models).toEqual([primary, fallback]);
+      expect(s.bodies[0]).not.toHaveProperty("temperature");
+      expect(s.bodies[0].reasoning).toEqual({ effort: "low", exclude: true });
+      expect(s.bodies[0].provider).toEqual({
+        data_collection: "deny",
+        require_parameters: true,
+        ...(openWeight ? { quantizations: FULL_PRECISION } : {}),
+      });
+      expect(json._model).toBe(fallback);
+      expect(usage.rows[0]).toMatchObject({ model: fallback, route, estCostUsd: 0.0042 });
+    },
+  );
 
   it("sends the plan's models as a fallback array, its effort and the privacy setting", async () => {
     const s = scripted([{ content: "hello" }]);
     restore = s.restore;
     await chatCompletion({ route: "brand-extract", messages: msgs, noCache: true });
     const body = s.bodies[0];
-    expect(body.models).toEqual([PREMIUM, WORKHORSE]);
+    expect(body.models).toEqual([ANALYST, WORKHORSE]);
     expect(body).not.toHaveProperty("model");
     expect(body.reasoning).toEqual({ effort: "medium", exclude: true });
     expect(body.provider).toEqual({ data_collection: "deny" });
@@ -125,7 +143,13 @@ describe("chatCompletion request body", () => {
         json_schema: { name: "x", strict: true, schema: { type: "object" } },
       },
     });
-    expect(s.bodies[0].provider).toEqual({ data_collection: "deny", require_parameters: true });
+    // studio.ideas runs on an open-weight model: full-precision hosts only.
+    expect(s.bodies[0].models).toEqual([BUDGET, WORKHORSE]);
+    expect(s.bodies[0].provider).toEqual({
+      data_collection: "deny",
+      require_parameters: true,
+      quantizations: FULL_PRECISION,
+    });
     expect(s.bodies[0]).not.toHaveProperty("temperature");
 
     await chatCompletion({

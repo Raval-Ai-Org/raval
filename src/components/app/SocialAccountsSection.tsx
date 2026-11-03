@@ -24,6 +24,9 @@ import {
   type SdrStatus,
 } from "@/lib/sdr.functions";
 import type { ConnectedAccount } from "@/lib/sdr.handlers";
+import { onConnectResult, openConnectWindow } from "@/lib/connectors/connect-window";
+import { SocialGrid } from "@/components/app/SocialGrid";
+import { DisconnectDialog } from "@/components/app/connectors/DisconnectDialog";
 import {
   DISTRIBUTION_PLATFORMS,
   isDistributionPlatform,
@@ -61,6 +64,7 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
   const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<ConnectedAccount | null>(null);
   const [chooserOpen, setChooserOpen] = useState(false);
+  const [openNetwork, setOpenNetwork] = useState<string | null>(null);
   const connectStartedAt = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -96,6 +100,15 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
       void refresh();
       emitAppEvent("connections:changed");
     });
+    // Networks that sign in through Composio come back to the apps callback,
+    // which announces on the connect-window channel instead.
+    const offApps = onConnectResult((result) => {
+      if (result.provider !== "apps") return;
+      if (result.workspaceId && workspaceId && result.workspaceId !== workspaceId) return;
+      connectStartedAt.current = 0;
+      void refresh();
+      emitAppEvent("connections:changed");
+    });
     // Fallback when BroadcastChannel is unavailable: re-check on return from
     // the popup, but only shortly after a connection was started.
     const onFocus = () => {
@@ -107,27 +120,23 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
     return () => {
       removeAppEventListener("connections:changed", onChange);
       unsubscribe();
+      offApps();
       window.removeEventListener("focus", onFocus);
     };
-  }, [refresh]);
+  }, [refresh, workspaceId]);
 
   const connect = async (platform: string) => {
     if (!workspaceId) return;
-    const oauthWindow = window.open("about:blank", "_blank", "width=600,height=760");
-    if (!oauthWindow) {
-      setError(
-        "Your browser blocked the social account window. Allow popups for this app and try again.",
-      );
-      return;
-    }
+    // A marked sign-in window, so whichever callback it lands on closes it and
+    // tells this tab, instead of loading Mellox inside the pop-up.
+    const oauthWindow = openConnectWindow("apps");
     setBusy(platform);
     setError(null);
     try {
       const result = await oauthStart(workspaceId, platform);
       if (result.authorizationUrl) {
         connectStartedAt.current = Date.now();
-        oauthWindow.location.href = result.authorizationUrl;
-        oauthWindow.focus();
+        oauthWindow.go(result.authorizationUrl);
       } else {
         oauthWindow.close();
         await refresh();
@@ -182,6 +191,71 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
     if (visible.length > 0 && needsReconnect === 0) return null;
   }
 
+  // Settings → Social accounts: the same tiles and opened view as Connectors.
+  if (variant === "channels") {
+    const networks = [
+      ...platforms,
+      ...[...connectedPlatforms]
+        .filter((id) => !platforms.some((p) => p.id === id))
+        .map((id) => metaFor(id))
+        .filter((m): m is DistributionPlatformMeta => !!m),
+    ];
+    return (
+      <section aria-label="Social accounts">
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3"
+          >
+            <p className="min-w-0 text-[13px] text-destructive">{error}</p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="shrink-0 text-[12.5px] font-medium underline underline-offset-2"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+        {!loading && !status?.enabled ? (
+          <p className="ds-tile px-5 py-8 text-center text-[13px] text-muted-foreground">
+            Posting to social accounts isn&apos;t on for this workspace
+          </p>
+        ) : (
+          <SocialGrid
+            platforms={networks}
+            accounts={visible}
+            loading={loading && !status}
+            canEdit={!!status?.canPublish}
+            busy={busy}
+            open={openNetwork}
+            onOpen={setOpenNetwork}
+            onConnect={(platform) => void connect(platform)}
+            onDisconnect={setConfirmDisconnect}
+          />
+        )}
+        <DisconnectDialog
+          open={confirmDisconnect !== null}
+          onOpenChange={(next) => !next && setConfirmDisconnect(null)}
+          name={
+            confirmDisconnect
+              ? confirmDisconnect.displayName ||
+                confirmDisconnect.platformUsername ||
+                "this account"
+              : "this account"
+          }
+          description={
+            confirmDisconnect && NO_REMOTE_REVOKE.has(confirmDisconnect.platform)
+              ? "Scheduled posts to it stop. Also remove Mellox in your LinkedIn settings."
+              : "Scheduled posts to it stop. Published posts stay."
+          }
+          busy={busy !== null}
+          onConfirm={() => confirmDisconnect && void disconnect(confirmDisconnect)}
+        />
+      </section>
+    );
+  }
+
   return (
     <section
       className={cn(variant === "studio" ? "space-y-3 px-2 py-1" : "space-y-4")}
@@ -191,8 +265,6 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
         className={cn(
           "flex items-start justify-between gap-3",
           variant === "onboarding" && "sr-only",
-          // Channels' page already says what this is; only Refresh shows.
-          variant === "channels" && "justify-end [&>div:first-child]:sr-only",
         )}
       >
         <div>
@@ -213,7 +285,7 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
             </p>
           )}
         </div>
-        {(variant === "settings" || variant === "channels") && (
+        {variant === "settings" && (
           <button
             type="button"
             onClick={() => void refresh()}
@@ -312,160 +384,6 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
             </li>
           ) : null}
         </ul>
-      ) : variant === "channels" ? (
-        // One tile per network: its app icon, what it's for, the accounts
-        // connected there and one button. Which provider sits behind a
-        // network is the server's choice and isn't shown.
-        <div className="@container">
-          <ul className="grid grid-cols-1 gap-3 @md:grid-cols-2 @4xl:grid-cols-3">
-            {[
-              ...platforms,
-              ...[...connectedPlatforms]
-                .filter((id) => !platforms.some((p) => p.id === id))
-                .map((id) => metaFor(id))
-                .filter((m): m is DistributionPlatformMeta => !!m),
-            ].map((platform) => {
-              const owned = visible.filter((a) => a.platform === platform.id);
-              const attention = owned.some((a) => a.status !== "active");
-              return (
-                <li
-                  key={platform.id}
-                  className={cn(
-                    "ds-tile ds-enter flex min-w-0 flex-col gap-4 p-4 transition-colors",
-                    owned.length && !attention && "border-primary/30",
-                    attention && "border-warning/40",
-                  )}
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    {isPlatformAppIconId(platform.id) ? (
-                      <PlatformAppIcon platform={platform.id} size={44} />
-                    ) : (
-                      <span
-                        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-secondary"
-                        style={{ color: platform.tint }}
-                      >
-                        <BrandLogo name={platform.logo} brand size={22} />
-                      </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-semibold leading-tight text-foreground">
-                        {platform.label}
-                      </p>
-                      <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-muted-foreground">
-                        {platform.description}
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                        attention
-                          ? "bg-warning-surface text-warning"
-                          : owned.length
-                            ? "bg-success-surface text-success"
-                            : "bg-secondary text-muted-foreground",
-                      )}
-                    >
-                      {attention ? "Reconnect" : owned.length ? "Connected" : "Not connected"}
-                    </span>
-                  </div>
-
-                  {owned.length > 0 ? (
-                    <ul className="space-y-2">
-                      {owned.map((account) => {
-                        const active = account.status === "active";
-                        const reason = account.reconnectReason
-                          ? (RECONNECT_COPY[account.reconnectReason] ?? account.reconnectReason)
-                          : null;
-                        return (
-                          <li
-                            key={account.accountId}
-                            className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl bg-[var(--ds-well-bg,hsl(var(--secondary)/0.5))] px-3 py-2"
-                          >
-                            <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-full bg-secondary">
-                              {account.avatarUrl ? (
-                                <img
-                                  src={account.avatarUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                <span className="text-[12px] font-semibold text-muted-foreground">
-                                  {(account.displayName || account.platformUsername || "?").slice(
-                                    0,
-                                    1,
-                                  )}
-                                </span>
-                              )}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                              {account.displayName ||
-                                account.platformUsername ||
-                                "Connected account"}
-                            </span>
-                            {status.canPublish ? (
-                              <span className="flex shrink-0 items-center gap-1">
-                                {!active ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => setPendingPlatform(account.platform)}
-                                    disabled={busy === account.platform}
-                                    className={cn(dsPrimaryBtn, "h-8 px-3 text-[12px]")}
-                                  >
-                                    Reconnect
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDisconnect(account)}
-                                  disabled={busy === account.accountId}
-                                  className={cn(dsGhostBtn, "h-8 px-3 text-[12px]")}
-                                >
-                                  Disconnect
-                                </button>
-                              </span>
-                            ) : null}
-                            {reason && !active ? (
-                              <p className="w-full text-[11.5px] text-muted-foreground">{reason}</p>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : null}
-
-                  {status.canPublish && platforms.some((p) => p.id === platform.id) ? (
-                    <button
-                      type="button"
-                      onClick={() => setPendingPlatform(platform.id)}
-                      disabled={busy === platform.id}
-                      className={cn(
-                        owned.length ? dsGhostBtn : dsPrimaryBtn,
-                        "mt-auto h-9 w-full justify-center text-[13px]",
-                      )}
-                    >
-                      {busy === platform.id ? (
-                        <Spinner className="h-4 w-4 animate-spin" aria-hidden />
-                      ) : owned.length ? (
-                        <>
-                          <Plus className="h-4 w-4" aria-hidden="true" />
-                          Add another
-                        </>
-                      ) : (
-                        "Connect"
-                      )}
-                    </button>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-          {!status.canPublish ? (
-            <p className="mt-3 text-[12px] text-muted-foreground">
-              Only editors, admins and owners can change connected accounts.
-            </p>
-          ) : null}
-        </div>
       ) : variant === "settings" ? (
         <div className="space-y-2">
           {visible.length === 0 ? (

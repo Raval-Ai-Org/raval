@@ -50,6 +50,7 @@ export function AppsList({
   onDisconnect,
   exclude = [],
   grouped = false,
+  only,
 }: {
   view: AppsView;
   canEdit: boolean;
@@ -62,6 +63,8 @@ export function AppsList({
   exclude?: IntegrationCategory[];
   /** Under a heading per kind of app. */
   grouped?: boolean;
+  /** Just this app (the Connectors gallery opens one at a time). */
+  only?: string;
 }) {
   const shown = connectableApps({ testing: view.testing });
   // An account stays visible (to reconnect or disconnect) even if its app
@@ -70,7 +73,7 @@ export function AppsList({
     const app = integrationApp(account.app);
     if (app && !shown.includes(app)) shown.push(app);
   }
-  const apps = shown.filter((app) => !exclude.includes(app.category));
+  const apps = shown.filter((app) => !exclude.includes(app.category) && (!only || app.id === only));
   if (!view.enabled || apps.length === 0) return null;
   if (grouped) {
     return (
@@ -174,9 +177,11 @@ export function AppsList({
 export function ConnectedApps({
   exclude,
   grouped,
+  only,
 }: {
   exclude?: IntegrationCategory[];
   grouped?: boolean;
+  only?: string;
 } = {}) {
   const workspaceId = useOptionalWorkspaceId();
   const role = useOptionalWorkspaceRole();
@@ -266,6 +271,7 @@ export function ConnectedApps({
         onDisconnect={setLeaving}
         exclude={exclude}
         grouped={grouped}
+        only={only}
       />
       <DisconnectDialog
         open={leaving !== null}

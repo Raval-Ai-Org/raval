@@ -145,11 +145,23 @@ export type AppEventMap = {
   "open:publish": undefined;
   "open:rename": undefined;
   "open:schedule": undefined;
-  /** Settings, optionally on a section (GitHub, Webflow and WordPress live under "website"). */
+  /**
+   * Settings, optionally on a section. "analytics" and "website" are older
+   * names: both open Connectors (on Google Analytics / the website connectors).
+   * `connector` opens one connector in the gallery (`canva`, `googleads`, ...).
+   */
   "open:settings":
     | {
         section?:
-          "accounts" | "analytics" | "website" | "assistants" | "agents" | "memory" | "preferences";
+          | "accounts"
+          | "connectors"
+          | "analytics"
+          | "website"
+          | "assistants"
+          | "agents"
+          | "memory"
+          | "preferences";
+        connector?: string;
       }
     | undefined;
   /** Navigates to Backlinks at /w/<id>/app/backlinks. Only ever fired by a button. */

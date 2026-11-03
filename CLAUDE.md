@@ -80,14 +80,29 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 
 - **No Anthropic API.** Text, vision, tool use and images all go through
   OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
-  `anthropic/claude-opus-5.5` via OpenRouter.
+  `anthropic/claude-opus-5.5` (and Sonnet / Haiku 5.5) via OpenRouter.
 - **The model comes from the route label.** `src/server/ai/task-models.ts`
   maps every metering `route` to a plan (models + fallbacks, reasoning effort,
-  token ceiling, escalation, degraded plan). Tiers: PREMIUM Opus 5.5,
-  WORKHORSE Gemini 3.8 Flash, ECONOMY Gemini 3.1 Flash-Lite. A new `route:`
-  label needs an entry (a test enforces it). Override per route with
-  `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`.
-- Every call sends `provider.data_collection: "deny"`, `tool_choice: "auto"`
+  token ceiling, escalation, degraded plan). Tiers, each the cheapest model
+  that does its kind of work well (cost review 2026-11-03):
+  - PREMIUM Opus 5.5: only rare, high-stakes work (GEO Engineer and fixes,
+    experiment code, published articles, video storyboards, escalations);
+  - ANALYST GPT-6.1 Sol: Brand DNA, strategy, audience groups, campaign plans;
+  - CONVERSATION Sonnet 5.5: Mellox Pro chat and Coach;
+  - SUMMARY GPT-6.1 Terra: briefings and small structured jobs, and
+    WORKHORSE's fallback (a fallback never costs more than its primary);
+  - WORKHORSE Gemini 3.8 Flash: everything people see from Studio, chat,
+    pictures and audio, Market Brain;
+  - BUDGET DeepSeek V4.1 Flash and LABELLER GLM-5.3 Flash: text-only
+    internal work and labelling;
+  - CAREFUL Haiku 5.5 (safety checks, caption edits), LUNA GPT-6 Luna,
+    ECONOMY Gemini 3.1 Flash-Lite (files, audience scores).
+    A new `route:` label needs an entry (a test enforces it). Override per
+    route with `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`; that is also
+    the instant rollback for a route.
+- Every call sends `provider.data_collection: "deny"`; a request with an
+  open-weight model (`isOpenWeightModel`) also sends `provider.quantizations`
+  so 4-bit hosts never answer. `tool_choice: "auto"`
   only (Opus rejects forced tools), and meters the model that actually
   answered from `usage.cost`. The tool loop replays `reasoning_details`
   unchanged and is append-only.
@@ -827,9 +842,11 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   `market_intelligence_cache`, keyed on the sources' own content so identical
   evidence never bills twice). Sources are wrapped as untrusted data
   (`src/server/guardrails/untrusted.ts`) before they reach the prompt.
-- **Daily re-collection** is a `scheduled_jobs` row (`task_type:
+- **Re-collection** is a `scheduled_jobs` row (`task_type:
 "market-brain"`) driven by `market-brain-scheduler.server.ts`, advanced by
-  `runDueMarketBrainCollections()`.
+  `runDueMarketBrainCollections()`: daily for a workspace a person used in
+  the last 7 days, weekly otherwise. A failed web search is metered at $0
+  (Tavily bills answered requests only).
 - UI: `MarketBrainPanel.tsx` + `MarketBrainInsights.tsx` +
   `MarketBrainProgress.tsx`, shown in Brain → Market; routes
   `src/app/api/market/{trends,intelligence,latest}`.
@@ -1181,14 +1198,29 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   `/api/integrations/apps/callback` → `AppConnectCallback` with
   `useConnectWindow("apps")`. Status is swept every 6 h from the **existing**
   `sdr-reconcile` hook (`sweepAccounts`); no cron job of its own.
-- UI: `connectors/ConnectedApps.tsx` (`AppsList` is presentational, shown in
-  `/connections-lab`) in **Channels** (sidebar → Grow → Channels,
-  `/w/<id>/app/channels?s=social|apps|website|analytics`, `channelsPath`),
-  the one place for accounts and apps; Settings → Connections only links
-  there. App marks are `brand/AppLogo.tsx`.
-- **Communities** (the Reddit agent) has its own sidebar entry under Grow
-  (`/w/<id>/app/communities`, `communitiesPath`); Brain → Market →
-  Communities links there. These two are agreed sidebar exceptions.
+- UI lives in **Settings**, three places only: **Social accounts**
+  (`SocialAccountsSection`, every network the same, whichever provider is
+  behind it), **Connectors** (`connectors/ConnectorsGallery.tsx`: one
+  searchable grid of real logos; a tile opens that app's own connector, Canva
+  shown once) and **AI assistants** (MCP, unchanged). Open one with
+  `open:settings` `{ section, connector }`; the old `analytics` / `website`
+  sections and `/channels` links land in Connectors. App marks are the real
+  logos in `brand/AppLogo.tsx`; never draw a look-alike.
+  Both pages share `connectors/ConnectorParts.tsx` (hero, square logo tiles,
+  opened view) and are presentational (`SocialGrid`, `ConnectorsView`), shown
+  in `/connections-lab` (scenes `social`, `connectors`).
+- **Offer an app where it's needed**, not as another page: Canva in a
+  picture's edit tools (`CanvaEditButton`); a finished piece's "Send to" row
+  (`studio/SendToApps.tsx`, `sendAppsFor`) shows the apps that fit it (ads →
+  Google Ads, Drive; posts and articles → Drive, Gmail), connected ones as
+  actions and the rest as dashed chips that connect in a sign-in window
+  (admins); Sheets in the calendar's Export menu.
+- **The Reddit agent** (`/w/<id>/app/communities`, `communitiesPath`) is in
+  the sidebar under Create; Brain → Market → Communities links there. It is
+  the agreed sidebar exception.
+- A social network that signs in through Composio opens a marked window
+  (`openConnectWindow("apps")`); `SocialAccountsSection` hears the result on
+  the connect-window channel as well as Post for Me's, so no refresh is needed.
 - **Social on Composio (Phase 2):** Instagram, Facebook Pages, Pinterest,
   LinkedIn and YouTube, every network Composio signs in to without an app of
   Mellox's own (`COMPOSIO_PUBLISHING`, `src/lib/social/routing.ts`); X,

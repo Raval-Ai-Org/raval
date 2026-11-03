@@ -20,7 +20,6 @@ import { useWorkspace, useWorkspaceActions } from "@/components/workspace/Worksp
 import {
   brainPath,
   campaignsPath,
-  channelsPath,
   communitiesPath,
   conversationIdFromPath,
   inspoPath,
@@ -566,22 +565,10 @@ function AppShell() {
             feature: "publishing",
             onClick: () => emitAppEvent("open:schedule"),
           })}
-        </SidebarSection>
-
-        <div className="h-px bg-border/50" />
-
-        {/* Where the brand shows up: its accounts and apps, and the
-            conversations it can join. */}
-        <SidebarSection label="Grow">
-          {sidebarAction({
-            icon: Link2,
-            label: "Channels",
-            tour: "channels",
-            onClick: () => navigate({ to: channelsPath(workspaceId) }),
-          })}
+          {/* The Reddit agent: threads worth joining, with replies to approve. */}
           {sidebarAction({
             icon: MessageCircle,
-            label: "Communities",
+            label: "Reddit agent",
             tour: "communities",
             onClick: () => navigate({ to: communitiesPath(workspaceId) }),
           })}
@@ -760,13 +747,8 @@ function AppShell() {
                   onClick: () => navigate({ to: campaignsPath(workspaceId) }),
                 },
                 {
-                  icon: Link2,
-                  label: "Channels",
-                  onClick: () => navigate({ to: channelsPath(workspaceId) }),
-                },
-                {
                   icon: MessageCircle,
-                  label: "Communities",
+                  label: "Reddit agent",
                   onClick: () => navigate({ to: communitiesPath(workspaceId) }),
                 },
                 {

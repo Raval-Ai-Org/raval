@@ -14,14 +14,21 @@ import "server-only";
 type TokenPrice = { inPerM: number; outPerM: number };
 
 // USD per 1M tokens: OpenRouter list prices confirmed from /api/v1/models on
-// 2026-09-25; GPT-6 replacements verified 2026-10-14. OpenRouter's own
-// usage.cost is always preferred over these.
+// 2026-09-25; GPT-6 replacements verified 2026-10-14; the cost-review tiers
+// and Gemini 3.8 Flash's new rate verified 2026-11-03. OpenRouter's own
+// usage.cost is always preferred over these. Open-weight models list the
+// dearest full-precision host, so an estimate never under-counts.
 const TOKEN_PRICES: Record<string, TokenPrice> = {
   "anthropic/claude-opus-5.5": { inPerM: 4, outPerM: 20 },
-  "google/gemini-3.8-flash": { inPerM: 0.75, outPerM: 3.75 },
+  "anthropic/claude-sonnet-5.5": { inPerM: 2, outPerM: 10 },
+  "anthropic/claude-haiku-5.5": { inPerM: 0.1, outPerM: 0.5 },
+  "google/gemini-3.8-flash": { inPerM: 0.825, outPerM: 4.13 },
   "google/gemini-3.1-flash-lite": { inPerM: 0.25, outPerM: 1.5 },
   "openai/gpt-6.1-sol": { inPerM: 2, outPerM: 10 },
+  "openai/gpt-6.1-terra": { inPerM: 1, outPerM: 5 },
   "openai/gpt-6-luna": { inPerM: 0.1, outPerM: 0.5 },
+  "deepseek/deepseek-v4.1-flash": { inPerM: 0.3, outPerM: 1.2 },
+  "z-ai/glm-5.3-flash": { inPerM: 0.15, outPerM: 0.6 },
   // Retain estimates for historical calls and explicit model overrides.
   "openai/gpt-5.6-terra": { inPerM: 2, outPerM: 12 },
   "openai/gpt-5.6-luna": { inPerM: 0.2, outPerM: 1.2 },

@@ -100,9 +100,11 @@ async function canvaGrant(
 }
 
 export async function canvaStatus(workspaceId: string) {
-  // Without Mellox's own Canva app, Canva is the workspace's Composio account.
-  if (!canvaConfigured()) {
-    const { composioConfigured } = await import("@/server/integrations/composio/gateway.server");
+  // Canva is the workspace's Composio account. Mellox's own Canva app is only
+  // used for a workspace that already has an active direct connection.
+  const { composioConfigured } = await import("@/server/integrations/composio/gateway.server");
+  const legacy = canvaConfigured() ? await connection(workspaceId) : null;
+  if (!canvaConfigured() || (composioConfigured() && legacy?.status !== "active")) {
     const account = await composioCanva(workspaceId);
     return {
       configured: composioConfigured(),

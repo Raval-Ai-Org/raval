@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ExternalLink, Folder, Mail, Megaphone } from "@/components/icons";
+import { useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, Plus } from "@/components/icons";
+import { AppLogo } from "@/components/brand/AppLogo";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
-import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
+import { connectedAppsKey, useConnectedApps } from "@/components/app/connectors/use-connected-apps";
+import { useConnectWindow } from "@/components/app/connectors/useConnectWindow";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
-import { saveGmailDraft, savePostToDrive, sendAdToGoogleAds } from "@/lib/integrations.functions";
+import {
+  saveGmailDraft,
+  savePostToDrive,
+  sendAdToGoogleAds,
+  startAppConnect,
+} from "@/lib/integrations.functions";
 import { ServerFnError } from "@/lib/rpc-client";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -15,11 +23,27 @@ const message = (error: unknown, fallback: string) =>
 
 type Done = { label: string; url: string };
 
+const APP_NAMES: Record<string, string> = {
+  googleads: "Google Ads",
+  googledrive: "Google Drive",
+  gmail: "Gmail",
+};
+
+/** The apps a finished piece can go on to, best fit first. */
+export function sendAppsFor(isAd: boolean): string[] {
+  return isAd ? ["googleads", "googledrive"] : ["googledrive", "gmail"];
+}
+
+/** The app's own mark, small, in place of a generic icon. */
+const logo = (app: string) => <AppLogo app={app} name={app} size={16} className="shadow-none" />;
+
 /**
- * One row of "send it on" buttons under a finished post, each shown only when
- * its app is connected: save to Google Drive, save as a Gmail draft, and for
- * an ad, make it a paused Google Ads campaign. Every one is a person's click,
- * and nothing is sent, published or switched on from here.
+ * One row of "send it on" buttons under a finished post: save to Google
+ * Drive, save as a Gmail draft, and for an ad, make it a paused Google Ads
+ * campaign. A fitting app that isn't connected yet is a dashed chip that
+ * connects it in a sign-in window, so the person never leaves the post.
+ * Every one is a person's click; nothing is sent, published or switched on
+ * from here.
  */
 export function SendToApps({
   workspaceId,
@@ -34,13 +58,45 @@ export function SendToApps({
 }) {
   const apps = useConnectedApps(workspaceId);
   const role = useOptionalWorkspaceRole();
+  const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [done, setDone] = useState<Record<string, Done>>({});
   const [adsOpen, setAdsOpen] = useState(false);
   const [budget, setBudget] = useState("10");
 
-  const canAds = isAd && apps.has("googleads") && (role === "owner" || role === "admin");
-  if (!apps.has("googledrive") && !apps.has("gmail") && !canAds) return null;
+  const admin = role === "owner" || role === "admin";
+  const canAds = isAd && apps.has("googleads") && admin;
+  // The apps that fit this piece and aren't connected yet: offered to connect
+  // right here (admins connect apps), in a sign-in window, never a new page.
+  const offers = sendAppsFor(isAd).filter((id) => admin && apps.canConnect && !apps.has(id));
+  const appWindow = useConnectWindow("apps", workspaceId, (result) => {
+    setBusy(null);
+    if (result?.status === "connected") toast.success("Connected");
+    void qc.invalidateQueries({ queryKey: connectedAppsKey(workspaceId) });
+  });
+  if (!apps.has("googledrive") && !apps.has("gmail") && !canAds && !offers.length) return null;
+
+  const connectApp = async (app: string) => {
+    setBusy(`connect-${app}`);
+    try {
+      await appWindow.connect(
+        async () =>
+          (
+            await startAppConnect({
+              data: {
+                workspaceId,
+                app,
+                returnOrigin: window.location.origin,
+                returnPath: `${window.location.pathname}${window.location.search}`,
+              },
+            })
+          ).url,
+      );
+    } catch (error) {
+      setBusy(null);
+      toast.error(message(error, `Couldn't open ${APP_NAMES[app] ?? "the app"}.`));
+    }
+  };
 
   const run = async (key: string, fn: () => Promise<Done>, fallback: string) => {
     setBusy(key);
@@ -135,16 +191,31 @@ export function SendToApps({
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         {apps.has("googledrive")
-          ? button("drive", <Folder className="h-3.5 w-3.5" />, "Save to Drive", () => void drive())
+          ? button("drive", logo("googledrive"), "Save to Drive", () => void drive())
           : null}
         {apps.has("gmail")
-          ? button("gmail", <Mail className="h-3.5 w-3.5" />, "Gmail draft", () => void gmail())
+          ? button("gmail", logo("gmail"), "Gmail draft", () => void gmail())
           : null}
         {canAds && !adsOpen
-          ? button("ads", <Megaphone className="h-3.5 w-3.5" />, "Google Ads", () =>
-              setAdsOpen(true),
-            )
+          ? button("ads", logo("googleads"), "Google Ads", () => setAdsOpen(true))
           : null}
+        {offers.map((app) => (
+          <button
+            key={app}
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void connectApp(app)}
+            title={`Connect ${APP_NAMES[app]}`}
+            className={cn(
+              dsGhostBtn,
+              "h-8 border-dashed px-3 text-[12.5px] text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {logo(app)}
+            {busy === `connect-${app}` ? "Waiting…" : APP_NAMES[app]}
+            <Plus className="h-3.5 w-3.5 opacity-70" aria-hidden />
+          </button>
+        ))}
       </div>
       {canAds && adsOpen && !done.ads ? (
         <div className="space-y-2 rounded-2xl border border-border/70 bg-[var(--ds-tile-bg)] p-3">

@@ -3,16 +3,22 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_GEO_PROBE_MODELS,
+  ANALYST,
+  BUDGET,
   ECONOMY,
   effectivePlan,
   escalatedPlan,
   geoProbeModels,
   hasTaskPlan,
+  isOpenWeightModel,
+  knownModels,
+  LABELLER,
   NON_MODEL_ROUTES,
   planFor,
   PREMIUM,
   registeredRoutes,
   routeEnvKey,
+  SUMMARY,
   WORKHORSE,
 } from "./task-models";
 
@@ -79,18 +85,34 @@ describe("task model registry", () => {
 
   it("uses the table's tiers, efforts and fallbacks", () => {
     expect(planFor("brand-extract")).toMatchObject({
-      models: [PREMIUM, WORKHORSE],
+      models: [ANALYST, WORKHORSE],
       effort: "medium",
       maxTokens: 12_000,
     });
-    expect(planFor("chat").models).toEqual([WORKHORSE, "openai/gpt-6.1-sol"]);
-    expect(planFor("competitors.updates").models).toEqual([ECONOMY, "openai/gpt-6-luna"]);
+    // Rare, high-stakes work stays on the premium tier.
+    expect(planFor("studio.article").models[0]).toBe(PREMIUM);
+    expect(planFor("studio.video.storyboard").models[0]).toBe(PREMIUM);
+    expect(planFor("geo.agent.implement").models[0]).toBe(PREMIUM);
+    expect(planFor("studio.ideas").models).toEqual([BUDGET, WORKHORSE]);
+    expect(planFor("chat").models).toEqual([WORKHORSE, SUMMARY]);
+    expect(planFor("competitors.updates").models).toEqual([LABELLER, ECONOMY]);
     expect(planFor("ai-generate.caption").models[0]).toBe(WORKHORSE);
     expect(planFor("studio.upload-captions")).toMatchObject({
-      models: [WORKHORSE, "openai/gpt-6.1-sol"],
+      models: [WORKHORSE, SUMMARY],
       effort: "medium",
     });
     expect(planFor("schedule.weekly").effort).toBe("medium");
+  });
+
+  it("lets an admin override choose any tier model, and knows which are open-weight", () => {
+    const known = knownModels();
+    for (const model of [ANALYST, SUMMARY, BUDGET, LABELLER, "anthropic/claude-haiku-5.5"]) {
+      expect(known.has(model), model).toBe(true);
+    }
+    expect(isOpenWeightModel(BUDGET)).toBe(true);
+    expect(isOpenWeightModel(LABELLER)).toBe(true);
+    expect(isOpenWeightModel(PREMIUM)).toBe(false);
+    expect(isOpenWeightModel(WORKHORSE)).toBe(false);
   });
 
   it("throws on an unknown route outside production and falls back in production", () => {
@@ -128,7 +150,7 @@ describe("task model registry", () => {
     expect(effectivePlan(planFor("brand-extract"), true).models[0]).toBe(WORKHORSE);
     expect(effectivePlan(planFor("chat"), true).models[0]).toBe(ECONOMY);
     expect(effectivePlan(planFor("chat"), true).models).toEqual([ECONOMY, "openai/gpt-6-luna"]);
-    expect(effectivePlan(planFor("competitors.updates"), true).models[0]).toBe(ECONOMY);
+    expect(effectivePlan(planFor("competitors.updates"), true).models[0]).toBe(LABELLER);
     expect(effectivePlan(planFor("geo.agent.investigate"), true).effort).toBe("medium");
     expect(effectivePlan(planFor("chat"), false)).toEqual(planFor("chat"));
     // Escalation never survives the ceiling.

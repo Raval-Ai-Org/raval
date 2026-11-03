@@ -22,21 +22,62 @@ import { routingOverrideFor } from "@/server/platform/routing-overrides.server";
 
 /* ─────────────────────────── tiers (one-line swaps) ─────────────────────────── */
 
+// Each tier is the cheapest model that does its kind of work well (cost
+// review 2026-11-03, prices from OpenRouter /api/v1/models). Opus stays where
+// the work is rare and high-stakes: code in customer repos, published
+// articles, video storyboards.
 export const PREMIUM = "anthropic/claude-opus-5.5";
+/** Analysis and structured reading (Brand DNA, strategy); reads images. Half Opus's price. */
+export const ANALYST = "openai/gpt-6.1-sol";
+/** Conversation with tools (Mellox Pro chat, Coach). */
+export const CONVERSATION = "anthropic/claude-sonnet-5.5";
+/** Summaries and small structured jobs. A quarter of Opus's price. */
+export const SUMMARY = "openai/gpt-6.1-terra";
 export const WORKHORSE = "google/gemini-3.8-flash";
+/** Text-only internal work (ideas, competitor reads). Full-precision hosts only. */
+export const BUDGET = "deepseek/deepseek-v4.1-flash";
+/** Labelling and yes/no sorting. Full-precision hosts only. */
+export const LABELLER = "z-ai/glm-5.3-flash";
+/** Small careful jobs that may read a picture (safety checks, caption edits). */
+export const CAREFUL = "anthropic/claude-haiku-5.5";
+export const LUNA = "openai/gpt-6-luna";
 export const ECONOMY = "google/gemini-3.1-flash-lite";
+
+/**
+ * Open-weight models are served by many hosts, some of them 4-bit copies that
+ * answer worse than the published model. The gateway keeps such a request on
+ * full-precision hosts (see OPEN_WEIGHT_QUANTIZATIONS in the gateway).
+ */
+export function isOpenWeightModel(model: string): boolean {
+  return /^(deepseek|z-ai|qwen|moonshotai|minimax|xiaomi|meta-llama|mistralai)\//.test(model);
+}
 
 /** What each tier falls back to when its providers fail (OpenRouter `models`). */
 const FALLBACKS: Record<string, string[]> = {
   [PREMIUM]: [WORKHORSE],
-  [WORKHORSE]: ["openai/gpt-6.1-sol"],
-  [ECONOMY]: ["openai/gpt-6-luna"],
+  [ANALYST]: [WORKHORSE],
+  [CONVERSATION]: [WORKHORSE],
+  [SUMMARY]: [WORKHORSE],
+  // A fallback should not cost more than the model it stands in for.
+  [WORKHORSE]: [SUMMARY],
+  [BUDGET]: [WORKHORSE],
+  [LABELLER]: [ECONOMY],
+  [CAREFUL]: [ECONOMY],
+  [LUNA]: [ECONOMY],
+  [ECONOMY]: [LUNA],
 };
 
 /** Past a workspace's spend ceiling each tier steps down one. */
 const DEGRADE_TO: Record<string, string> = {
   [PREMIUM]: WORKHORSE,
+  [ANALYST]: WORKHORSE,
+  [CONVERSATION]: WORKHORSE,
+  [SUMMARY]: WORKHORSE,
   [WORKHORSE]: ECONOMY,
+  [BUDGET]: ECONOMY,
+  [LABELLER]: LABELLER,
+  [CAREFUL]: ECONOMY,
+  [LUNA]: LUNA,
   [ECONOMY]: ECONOMY,
 };
 
@@ -86,9 +127,9 @@ function toTier(when: string, primary: string, effort?: Effort): NonNullable<Tas
 // prefix (for labels built at runtime, e.g. `ai-generate.${task}`).
 const REGISTRY: Record<string, TaskPlan> = {
   // Brand DNA runs once per brand and everything builds on it.
-  "brand-extract": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
+  "brand-extract": tier(ANALYST, "medium", { maxTokens: 12_000 }),
   "brand-extract.search": tier(ECONOMY, "low"),
-  "brand-visuals.analyze": tier(PREMIUM, "medium", { maxTokens: 6_000 }),
+  "brand-visuals.analyze": tier(ANALYST, "medium", { maxTokens: 6_000 }),
 
   "memory-extract": tier(WORKHORSE, "low"),
   "file-extract": tier(ECONOMY, "low", {
@@ -97,7 +138,7 @@ const REGISTRY: Record<string, TaskPlan> = {
 
   // Chat: "mellox-flash" is `chat`, "mellox-pro" is `chat.pro`.
   chat: tier(WORKHORSE, "low", { maxTokens: 6_000 }),
-  "chat.pro": tier(PREMIUM, "low", {
+  "chat.pro": tier(CONVERSATION, "low", {
     maxTokens: 8_000,
     escalate: {
       when: "chat-intent classifies the turn as strategy/analysis",
@@ -106,7 +147,7 @@ const REGISTRY: Record<string, TaskPlan> = {
     },
   }),
   "chat.research": tier(WORKHORSE, "medium"),
-  "chat.history-summary": tier(ECONOMY, "low"),
+  "chat.history-summary": tier(LUNA, "low"),
   // tool_choice is always "auto" (Opus rejects forced tools; see the gateway).
   clarify: tier(WORKHORSE, "low"),
 
@@ -133,7 +174,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.ad": tier(WORKHORSE, "medium"),
   "studio.upload-captions": tier(WORKHORSE, "medium"),
   "studio.captions": tier(WORKHORSE, "medium"),
-  "studio.caption.edit": tier(ECONOMY, "low", { maxTokens: 1800 }),
+  "studio.caption.edit": tier(CAREFUL, "low", { maxTokens: 1800 }),
   "studio.naturalize": tier(WORKHORSE, "low"),
   // Reads the brand's own photos (faces, calm areas, colours) before a design.
   "studio.photo-read": tier(WORKHORSE, "low", { maxTokens: 2400 }),
@@ -141,8 +182,8 @@ const REGISTRY: Record<string, TaskPlan> = {
   // Hears a branded clip's sound for its captions (Gemini Flash takes audio).
   // Not used when a local whisper.cpp is configured.
   "studio.transcribe": tier(WORKHORSE, "low", { maxTokens: 6000, temperature: 0 }),
-  "studio.ideas": tier(WORKHORSE, "low", { temperature: 0.9 }),
-  "studio.prompt": tier(WORKHORSE, "low"),
+  "studio.ideas": tier(BUDGET, "low", { temperature: 0.9 }),
+  "studio.prompt": tier(BUDGET, "low"),
   "studio.research": tier(WORKHORSE, "medium"),
   "studio.trends": tier(WORKHORSE, "low"),
   // The visual brief a picture or video is made from (buildVisualBriefPrompt).
@@ -155,22 +196,22 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.video.qa": tier(WORKHORSE, "low", { maxTokens: 1_200 }),
   "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
   "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
-  "campaign-generation": tier(PREMIUM, "low"),
+  "campaign-generation": tier(ANALYST, "low"),
   // Campaigns (ADR-0039): the words for a laid-out campaign, and the brief
   // the designer's "Write it for me" fills in.
-  "campaign.plan": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
-  "campaign.write": tier(ECONOMY, "low"),
+  "campaign.plan": tier(ANALYST, "medium", { maxTokens: 12_000 }),
+  "campaign.write": tier(CAREFUL, "low"),
   "schedule.*": tier(WORKHORSE, "medium"),
 
   // Marketing Coach and Market Brain.
-  coach: tier(PREMIUM, "low", {
+  coach: tier(CONVERSATION, "low", {
     escalate: {
       when: "deep strategy, isComplexStrategy or forced premium",
       models: withFallbacks(PREMIUM),
       effort: "high",
     },
   }),
-  "coach.briefing": tier(PREMIUM, "low", {
+  "coach.briefing": tier(SUMMARY, "low", {
     maxTokens: 8_000,
     escalate: {
       when: "deep strategy, isComplexStrategy or forced premium",
@@ -180,32 +221,32 @@ const REGISTRY: Record<string, TaskPlan> = {
   }),
   "coach.research": tier(WORKHORSE, "low"),
   "coach.trends": tier(WORKHORSE, "low"),
-  "market-intelligence": tier(PREMIUM, "medium", { maxTokens: 10_000 }),
+  "market-intelligence": tier(WORKHORSE, "medium", { maxTokens: 10_000 }),
 
-  "analytics/insights": tier(WORKHORSE, "medium"),
-  "analytics/insights-auto": tier(WORKHORSE, "low"),
-  "agent.content-fit": tier(WORKHORSE, "low"),
-  "agent.distribution-reliability": tier(ECONOMY, "low"),
+  "analytics/insights": tier(BUDGET, "medium"),
+  "analytics/insights-auto": tier(BUDGET, "low"),
+  "agent.content-fit": tier(BUDGET, "low"),
+  "agent.distribution-reliability": tier(LABELLER, "low"),
 
   // Competitors: grounded classification only; updates are high volume.
-  "competitors.discovery": tier(WORKHORSE, "low"),
-  "competitors.profile": tier(WORKHORSE, "low"),
-  "competitors.updates": tier(ECONOMY, "low"),
+  "competitors.discovery": tier(BUDGET, "low"),
+  "competitors.profile": tier(BUDGET, "low"),
+  "competitors.updates": tier(LABELLER, "low"),
   // Community Intelligence: label and summarise supplied threads; draft one reply.
-  "community.classify": tier(ECONOMY, "low", { maxTokens: 4_000 }),
+  "community.classify": tier(LABELLER, "low", { maxTokens: 4_000 }),
   "community.reply": tier(WORKHORSE, "low", { maxTokens: 2_000 }),
   // Autopilot: a week's plan over fixed slots, and a relevance read of
   // signals that were already collected.
   "autopilot.plan": tier(WORKHORSE, "medium"),
   "autopilot.strategy": tier(WORKHORSE, "low"),
   // The workspace marketing strategy, written from all four brains (ADR-0032).
-  "strategy.generate": tier(PREMIUM, "medium", { maxTokens: 12_000 }),
-  "autopilot.opportunities": tier(ECONOMY, "low"),
-  "competitor-intel": tier(WORKHORSE, "medium"),
+  "strategy.generate": tier(ANALYST, "medium", { maxTokens: 12_000 }),
+  "autopilot.opportunities": tier(LABELLER, "low"),
+  "competitor-intel": tier(BUDGET, "medium"),
 
   // Audience (ADR-0031). Building the groups is rare and everything reads
   // them; scoring and simulated answers are high volume, so they stay cheap.
-  "audience.twins": tier(PREMIUM, "low", { maxTokens: 6_000 }),
+  "audience.twins": tier(ANALYST, "low", { maxTokens: 6_000 }),
   "audience.score": tier(ECONOMY, "low", { maxTokens: 1_200 }),
   "audience.react": tier(ECONOMY, "low", { maxTokens: 2_400, temperature: 0.8 }),
   "audience.synthesize": tier(WORKHORSE, "low", { maxTokens: 2_400 }),
@@ -226,31 +267,31 @@ const REGISTRY: Record<string, TaskPlan> = {
 
   // Adding a blog to a site: which of the site's own class names suit it (rare,
   // once per site; the pages themselves come from fixed templates).
-  "articles.blog-design": tier(PREMIUM, "low", { maxTokens: 4_000 }),
+  "articles.blog-design": tier(SUMMARY, "low", { maxTokens: 4_000 }),
 
   // Proof Engine.
-  "experiments.hypotheses": tier(PREMIUM, "low"),
+  "experiments.hypotheses": tier(SUMMARY, "low"),
   "experiments.values": tier(WORKHORSE, "medium"),
   "experiments.integration": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
 
   // Backlink Growth.
-  "links-topical-fit": tier(ECONOMY, "low"),
-  "links-relevance-pick": tier(WORKHORSE, "low"),
-  "links-profile": tier(WORKHORSE, "low"),
+  "links-topical-fit": tier(LABELLER, "low"),
+  "links-relevance-pick": tier(BUDGET, "low"),
+  "links-profile": tier(BUDGET, "low"),
   "links-article-brief": tier(WORKHORSE, "medium"),
 
   // UGC video ads.
-  "ugc.product.extract": tier(WORKHORSE, "low"),
+  "ugc.product.extract": tier(BUDGET, "low"),
   "ugc.concepts": tier(WORKHORSE, "medium"),
-  "ugc.notes": tier(WORKHORSE, "low"),
+  "ugc.notes": tier(BUDGET, "low"),
 
   // Safety review: the economy read clears ordinary media; anything it would
   // not clear is re-read by a stronger model, so one cheap mistake can never
   // confirm itself.
-  "guardrails.image-moderation": tier(ECONOMY, "low", {
+  "guardrails.image-moderation": tier(CAREFUL, "low", {
     escalate: toTier("the first read did not clear the image", WORKHORSE, "low"),
   }),
-  "guardrails.media-safety": tier(ECONOMY, "low", {
+  "guardrails.media-safety": tier(CAREFUL, "low", {
     escalate: toTier("the first read did not clear the prompt", WORKHORSE, "low"),
   }),
 };
@@ -423,7 +464,7 @@ export function geoProbeModels(): string[] {
 
 /** Every model the registry uses, which is all an admin override may choose from. */
 export function knownModels(): Set<string> {
-  const out = new Set<string>([PREMIUM, WORKHORSE, ECONOMY]);
+  const out = new Set<string>([PREMIUM, WORKHORSE, ECONOMY, ...Object.keys(FALLBACKS)]);
   for (const list of Object.values(FALLBACKS)) for (const model of list) out.add(model);
   for (const plan of Object.values(REGISTRY)) {
     for (const model of plan.models) out.add(model);

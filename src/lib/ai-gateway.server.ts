@@ -27,6 +27,7 @@ import { estimateTextCost, round6 } from "@/server/ai/pricing";
 import {
   effectivePlan,
   escalatedPlan,
+  isOpenWeightModel,
   planFor,
   type Effort,
   type TaskPlan,
@@ -470,9 +471,17 @@ type BodyArgs = {
  *   reasoning  — effort only. Claude Opus 5.5 rejects a disabled or manual
  *                thinking budget, so neither is ever sent.
  *   provider   — data_collection "deny" always (customer brand data);
- *                require_parameters whenever a schema or tools must be honoured.
+ *                require_parameters whenever a schema or tools must be honoured;
+ *                full-precision hosts only when the list has an open-weight model.
  *   tool_choice — "auto" only: Opus 5.5 rejects forced tool use.
  */
+
+/**
+ * Open-weight models are also served as 4-bit copies (fp4, nvfp4, mxfp4, int4)
+ * that answer worse. Closed models report "unknown", so they stay eligible.
+ */
+export const OPEN_WEIGHT_QUANTIZATIONS = ["fp8", "fp16", "bf16", "fp32", "unknown"] as const;
+
 const JSON_MENTION = "Answer with one valid JSON object.";
 
 /**
@@ -507,7 +516,13 @@ export function buildRequestBody(args: BodyArgs): Record<string, unknown> {
     stream: args.stream,
     max_tokens: args.maxTokens,
     usage: { include: true },
-    provider: { data_collection: "deny", ...(strict ? { require_parameters: true } : {}) },
+    provider: {
+      data_collection: "deny",
+      ...(strict ? { require_parameters: true } : {}),
+      ...(args.plan.models.some(isOpenWeightModel)
+        ? { quantizations: [...OPEN_WEIGHT_QUANTIZATIONS] }
+        : {}),
+    },
   };
   if (args.plan.effort) {
     body.reasoning = {

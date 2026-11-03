@@ -204,7 +204,7 @@ describe("pricing", () => {
         outputTokens: 100_000,
       }),
     ).toBe(6);
-    expect(tokenPrice("google/gemini-3.8-flash")).toEqual({ inPerM: 0.75, outPerM: 3.75 });
+    expect(tokenPrice("google/gemini-3.8-flash")).toEqual({ inPerM: 0.825, outPerM: 4.13 });
   });
   it("prices an unknown model conservatively rather than as free", () => {
     expect(

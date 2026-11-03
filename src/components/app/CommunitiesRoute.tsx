@@ -1,6 +1,6 @@
 "use client";
 
-// Communities (sidebar → Grow → Communities): the threads where people ask
+// Reddit agent (sidebar → Create): the threads where people ask
 // about what the brand does, on Reddit, Quora, Hacker News and Stack Exchange.
 // Its own route so it's one click away; Brain → Market links here too.
 import { Suspense, lazy } from "react";
@@ -27,7 +27,7 @@ function Inner() {
       onOpenChange={(next: boolean) => {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
-      title="Communities"
+      title="Reddit agent"
       Icon={MessageCircle}
       size="2xl"
       bodyClassName="overflow-y-auto"

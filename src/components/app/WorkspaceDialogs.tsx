@@ -11,13 +11,13 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/lib/toast";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
-import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
+import { Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import {
-  BarChart,
   Bot,
   Brain,
   Monitor,
   Moon,
+  Plug,
   SlidersHorizontal,
   Sun,
   Users,
@@ -35,31 +35,26 @@ import {
   Tile,
   type SurfaceNavItem,
 } from "@/components/app/surface/SurfaceLayout";
-import Link from "next/link";
-import { AppLogo } from "@/components/brand/AppLogo";
-import { dsPrimaryBtn } from "@/components/app/surface/buttons";
-import { channelsPath } from "@/lib/workspace/paths";
-import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
-import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
-import { WixConnector } from "@/components/app/connectors/WixConnector";
-import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
-import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
+import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
+import { ConnectorsGallery } from "@/components/app/connectors/ConnectorsGallery";
 import { McpConnector } from "@/components/app/connectors/McpConnector";
 
 type SettingsSection =
-  "accounts" | "analytics" | "website" | "assistants" | "agents" | "memory" | "preferences";
+  "accounts" | "connectors" | "assistants" | "agents" | "memory" | "preferences";
 
-/** The GitHub install returns to ?settings=connections, which means the website sources. */
-function sectionFromUrl(value: string | null): SettingsSection | null {
-  if (value === "connections") return "website";
+type SettingsTarget = { section: SettingsSection; connector: string | null };
+
+/** Older names land in Connectors: "analytics" on Google, "website" and "connections" on the list. */
+function targetFor(value: string | null | undefined): SettingsTarget | null {
+  if (value === "analytics") return { section: "connectors", connector: "google" };
+  if (value === "website" || value === "connections" || value === "connectors")
+    return { section: "connectors", connector: null };
   return value === "accounts" ||
-    value === "analytics" ||
-    value === "website" ||
     value === "assistants" ||
     value === "agents" ||
     value === "memory" ||
     value === "preferences"
-    ? value
+    ? { section: value, connector: null }
     : null;
 }
 
@@ -74,12 +69,15 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("accounts");
+  const [connector, setConnector] = useState<string | null>(null);
 
   useEffect(() => {
     const openRename = () => setRenameOpen(true);
     const openDetails = () => setDetailsOpen(true);
     const openSettings = (e: AppEvent<"open:settings">) => {
-      setSettingsSection(e.detail?.section ?? "accounts");
+      const target = targetFor(e.detail?.section) ?? { section: "accounts", connector: null };
+      setSettingsSection(target.section);
+      setConnector(e.detail?.connector ?? target.connector);
       setSettingsOpen(true);
     };
     addAppEventListener("open:rename", openRename);
@@ -87,9 +85,10 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
     addAppEventListener("open:settings", openSettings);
     // Deep link: /app?settings=connections (the GitHub install returns here).
     const url = new URL(window.location.href);
-    const section = sectionFromUrl(url.searchParams.get("settings"));
-    if (section) {
-      setSettingsSection(section);
+    const target = targetFor(url.searchParams.get("settings"));
+    if (target) {
+      setSettingsSection(target.section);
+      setConnector(target.connector);
       setSettingsOpen(true);
       url.searchParams.delete("settings");
       url.searchParams.delete("github");
@@ -117,7 +116,11 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
         onOpenChange={setSettingsOpen}
         workspaceId={workspaceId}
         section={settingsSection}
-        onSectionChange={setSettingsSection}
+        connector={connector}
+        onSectionChange={(next) => {
+          setConnector(null);
+          setSettingsSection(next);
+        }}
       />
     </>
   );
@@ -332,9 +335,8 @@ function DetailsDialog({
 }
 
 const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
-  { id: "accounts", label: "Connections", icon: Users },
-  { id: "analytics", label: "Analytics", icon: BarChart },
-  { id: "website", label: "Website", icon: Globe },
+  { id: "accounts", label: "Social accounts", icon: Users },
+  { id: "connectors", label: "Connectors", icon: Plug },
   { id: "assistants", label: "AI assistants", icon: Bot },
   { id: "agents", label: "Agents", icon: Wand },
   { id: "memory", label: "Memory", icon: Brain },
@@ -352,12 +354,14 @@ function SettingsDialog({
   onOpenChange,
   workspaceId,
   section,
+  connector,
   onSectionChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   workspaceId: string | null;
   section: SettingsSection;
+  connector: string | null;
   onSectionChange: (s: SettingsSection) => void;
 }) {
   const [notifications, setNotifications] = useState(true);
@@ -392,66 +396,20 @@ function SettingsDialog({
       size="xl"
       Icon={Settings2}
       title="Settings"
-      srDescription="Connected accounts, analytics, website sources and device preferences"
+      srDescription="Social accounts, connectors, AI assistants and preferences"
       bodyClassName="overflow-hidden"
     >
       <SurfaceLayout label="Settings" items={nav} value={section} onChange={onSectionChange}>
         <div key={section} className="animate-in fade-in duration-300">
           {section === "accounts" && (
-            <SurfacePage title="Connections" width="narrow">
-              {workspaceId ? (
-                // Every account and app now lives in Channels (sidebar → Grow).
-                <div className="flex flex-col items-start gap-4 rounded-3xl border border-border/70 bg-[var(--ds-tile-bg)] p-5 sm:flex-row sm:items-center">
-                  <div className="flex -space-x-2">
-                    {(["instagram", "linkedin", "youtube", "gmail"] as const).map((app) => (
-                      <AppLogo
-                        key={app}
-                        app={app}
-                        name={app}
-                        size={36}
-                        className="ring-2 ring-background"
-                      />
-                    ))}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-medium text-foreground">
-                      Your accounts and apps are in Channels
-                    </p>
-                    <p className="text-[13px] text-muted-foreground">
-                      Social accounts, apps, your website and analytics, all in one place.
-                    </p>
-                  </div>
-                  <Link
-                    href={channelsPath(workspaceId)}
-                    onClick={() => onOpenChange(false)}
-                    className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                  >
-                    Open Channels
-                  </Link>
-                </div>
-              ) : (
-                noWorkspace
-              )}
+            <SurfacePage title="Social accounts" width="narrow">
+              {workspaceId ? <SocialAccountsSection variant="channels" /> : noWorkspace}
             </SurfacePage>
           )}
-          {section === "analytics" && (
-            <SurfacePage title="Analytics" width="narrow">
-              {workspaceId ? <GoogleConnectCard /> : noWorkspace}
-            </SurfacePage>
-          )}
-          {section === "website" && (
-            <SurfacePage
-              title="Website"
-              subtitle="Your live site and the code behind it"
-              width="narrow"
-            >
+          {section === "connectors" && (
+            <SurfacePage title="Connectors" width="narrow">
               {workspaceId ? (
-                <div className="space-y-3">
-                  <GitHubConnector workspaceId={workspaceId} />
-                  <WebflowConnector workspaceId={workspaceId} />
-                  <WixConnector workspaceId={workspaceId} />
-                  <WordPressConnector workspaceId={workspaceId} />
-                </div>
+                <ConnectorsGallery workspaceId={workspaceId} initial={connector} />
               ) : (
                 noWorkspace
               )}

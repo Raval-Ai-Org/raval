@@ -18,8 +18,15 @@ import { GitHubView } from "./GitHubConnector";
 import { McpScreen, type McpActivityItem, type McpTool } from "./McpScreen";
 import { WebflowView, type WebflowConnection } from "./WebflowConnector";
 import { WordPressView, type WordPressConnection } from "./WordPressConnector";
+import { CONNECTOR_GROUPS, ConnectorsView } from "./ConnectorsGallery";
+import { SocialGrid } from "../SocialGrid";
+import { DISTRIBUTION_PLATFORMS } from "@/lib/distribution-platforms";
+import type { ConnectedAccount } from "@/lib/sdr.handlers";
 
 const SCENES = [
+  "social",
+  "social-empty",
+  "connectors",
   "apps",
   "agents",
   "website",
@@ -341,6 +348,90 @@ const SAMPLE_AGENTS: AgentRow[] = AGENTS.map((a, i) => ({
   ...SAMPLE_STATES[i],
 }));
 
+const SOCIAL_ACCOUNTS: ConnectedAccount[] = [
+  {
+    accountId: "s1",
+    platform: "instagram",
+    platformUsername: "northwind.co",
+    displayName: "Northwind",
+    status: "active",
+    tokenExpiresAt: null,
+  },
+  {
+    accountId: "s2",
+    platform: "linkedin",
+    platformUsername: "sam-rivera",
+    displayName: "Sam Rivera",
+    status: "expired",
+    tokenExpiresAt: null,
+    reconnectReason: "access_revoked",
+  },
+  {
+    accountId: "s3",
+    platform: "twitter",
+    platformUsername: "northwind",
+    displayName: "Northwind",
+    status: "active",
+    tokenExpiresAt: null,
+  },
+  {
+    accountId: "s4",
+    platform: "twitter",
+    platformUsername: "northwind_help",
+    displayName: "Northwind Help",
+    status: "active",
+    tokenExpiresAt: null,
+  },
+];
+
+function Social({ empty }: { empty: boolean }) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <SocialGrid
+      platforms={Object.values(DISTRIBUTION_PLATFORMS)}
+      accounts={empty ? [] : SOCIAL_ACCOUNTS}
+      loading={false}
+      canEdit
+      busy={null}
+      open={open}
+      onOpen={setOpen}
+      onConnect={() => {}}
+      onDisconnect={() => {}}
+    />
+  );
+}
+
+function Connectors() {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <ConnectorsView
+      state={{
+        available: CONNECTOR_GROUPS.flatMap((g) => [...g.ids]),
+        tones: { canva: "on", notion: "on", gmail: "on", slack: "attention", github: "on" },
+      }}
+      open={open}
+      onOpen={setOpen}
+      renderDetail={(id) =>
+        id === "notion" || id === "slack" || id === "canva" ? (
+          <Apps />
+        ) : id === "github" || id === "webflow" || id === "wordpress" ? (
+          <Website empty={false} />
+        ) : (
+          <AppsList
+            view={APPS}
+            canEdit
+            busy={null}
+            only={id}
+            onConnect={() => {}}
+            onReconnect={() => {}}
+            onDisconnect={() => {}}
+          />
+        )
+      }
+    />
+  );
+}
+
 function Assistants({ viewer }: { viewer: boolean }) {
   const [state, setState] = useState({ enabled: !viewer, allowWrites: false });
   return (
@@ -359,7 +450,7 @@ function Assistants({ viewer }: { viewer: boolean }) {
 }
 
 export function ConnectionsLab() {
-  const [scene, setScene] = useState<Scene>("website");
+  const [scene, setScene] = useState<Scene>("social");
   return (
     <div data-mellox-app className="min-h-dvh bg-background text-foreground">
       <nav className="sticky top-0 z-10 flex flex-wrap items-center gap-1.5 border-b border-border/60 bg-background px-4 py-2">
@@ -389,6 +480,9 @@ export function ConnectionsLab() {
       </nav>
       <main key={scene} className="mx-auto w-full max-w-[760px] px-4 pb-16 pt-6 sm:px-7">
         <GroupLabel>{scene}</GroupLabel>
+        {scene === "social" && <Social empty={false} />}
+        {scene === "social-empty" && <Social empty />}
+        {scene === "connectors" && <Connectors />}
         {scene === "apps" && <Apps />}
         {scene === "agents" && <AgentsRoster agents={SAMPLE_AGENTS} />}
         {scene === "website" && <Website empty={false} />}
