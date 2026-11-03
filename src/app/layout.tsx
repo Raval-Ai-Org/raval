@@ -1,3 +1,4 @@
+import { InspectGuard } from "@/components/InspectGuard";
 import type { Metadata, Viewport } from "next";
 import { Google_Sans_Flex, Michroma } from "next/font/google";
 import { BASE_URL, BRAND_NAME } from "@/lib/seo";
@@ -118,6 +119,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to main content
         </a>
+        <InspectGuard />
         <Providers>{children}</Providers>
       </body>
     </html>
