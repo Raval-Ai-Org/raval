@@ -5,7 +5,13 @@
 
 import "server-only";
 import type { ZodType, ZodTypeDef } from "zod";
-import { chatCompletion, AiGatewayError, type TokenTask } from "@/lib/ai-gateway.server";
+import {
+  chatCompletion,
+  AiGatewayError,
+  type TokenTask,
+  type LlmImageInput,
+  type ContentPart,
+} from "@/lib/ai-gateway.server";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import { AiOutputError, parseStructured, runStructured } from "@/server/ai/structured";
 import { humanizeText } from "./humanize-text";
@@ -29,6 +35,7 @@ type Common = {
   /** User asked for a new take — bypass the cached answer. */
   regenerate?: boolean;
   task?: TokenTask;
+  images?: LlmImageInput[];
 };
 
 export type RunJsonOpts<T> = Common & { fallback: T };
@@ -39,7 +46,18 @@ async function callJson(
 ): Promise<{ text: string; truncated: boolean }> {
   const messages = [
     { role: "system" as const, content: overrides.system },
-    { role: "user" as const, content: overrides.user },
+    {
+      role: "user" as const,
+      content: opts.images?.length
+        ? ([
+            { type: "text", text: overrides.user },
+            ...opts.images.map((image) => ({
+              type: "image_url",
+              image_url: { url: `data:${image.mediaType};base64,${image.data}` },
+            })),
+          ] as ContentPart[])
+        : overrides.user,
+    },
   ];
   const isExtraction = opts.extraction === true;
   const json = await chatCompletion({

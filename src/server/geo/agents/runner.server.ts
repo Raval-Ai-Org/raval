@@ -80,7 +80,7 @@ export type AgentRunRow = {
   workspace_id: string;
   kind: "finding" | "batch" | "blog_setup" | "article";
   /** github = repository + pull request; wordpress / webflow = direct CMS change. */
-  provider: "github" | "wordpress" | "webflow";
+  provider: "github" | "wordpress" | "webflow" | "wix";
   site_ref: Record<string, unknown> | null;
   scan_id: string | null;
   finding_id: string | null;

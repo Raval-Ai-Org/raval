@@ -4,7 +4,6 @@
 // never show a price, an allowance or a feature the product doesn't really sell. Change a number there, not here.
 import {
   ADDONS as CATALOG_ADDONS,
-  CREDIT_ACTIONS,
   CREDIT_PACKS as CATALOG_CREDIT_PACKS,
   PLANS as CATALOG_PLANS,
   VIDEO_PACKS as CATALOG_VIDEO_PACKS,
@@ -14,6 +13,7 @@ import {
 } from "@/lib/billing/catalog";
 import type { Faq } from "./faqs";
 import { NEW_FAQS } from "./whats-new";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 
 const n = (value: number) => Math.round(value).toLocaleString("en-US");
 
@@ -49,10 +49,10 @@ export const PLANS: Plan[] = PAID_PLANS.map((id, i) => {
     badge: def.badge,
     tagline: def.fit,
     monthly: def.priceMonthlyUsd,
-    credits: `${n(def.allowances.credits)} credits/mo`,
-    imagePosts: `~ ${n(Math.floor(def.allowances.credits / CREDIT_ACTIONS.image_post.credits))} image posts`,
-    articles: `~ ${n(Math.floor(def.allowances.credits / CREDIT_ACTIONS.article_premium.credits))} premium articles`,
-    video: `+ ${n(videos)} videos a month`,
+    credits: `${n(CREATION_PLANS[id].points)} creation points + ${n(CREATION_PLANS[id].flexCredits)} wallet credits/mo`,
+    imagePosts: `up to ${n(CREATION_PLANS[id].points / 2)} standard image posts, or a mix`,
+    articles: "Articles share your creation allowance",
+    video: `+ ${n(videos)} Video Credits a month; clip count varies`,
     chips: [
       `${n(def.brands)} ${def.brands === 1 ? "brand" : "brands"}`,
       def.seats === null ? "Unlimited seats" : `${n(def.seats)} seats`,
@@ -108,14 +108,32 @@ export const VIDEO_PACKS = CATALOG_VIDEO_PACKS.map((pack) => {
 // What each add-on is, in a sentence. Only add-ons the product sells today are listed: one the catalog marks
 // "later" is never promised here.
 const ADDON_TEXT: Record<AddonKey, { name: string; desc: string }> = {
-  extra_brand: { name: "Extra brand", desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale." },
-  prompts_100: { name: "+100 tracked prompts", desc: "One hundred more prompts, checked weekly on your plan's engines." },
-  daily_tracking_100: { name: "Daily tracking", desc: "Moves 100 prompts from weekly checks to daily checks." },
-  ai_overviews_100: { name: "Google AI Overviews engine", desc: "Adds real AI Overview capture, per 100 prompts." },
-  daily_market_brain: { name: "Daily Market Brain", desc: "Refreshes market intelligence every day instead of weekly, per brand." },
+  extra_brand: {
+    name: "Extra brand",
+    desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale.",
+  },
+  prompts_100: {
+    name: "+100 tracked prompts",
+    desc: "One hundred more prompts, checked weekly on your plan's engines.",
+  },
+  daily_tracking_100: {
+    name: "Daily tracking",
+    desc: "Moves 100 prompts from weekly checks to daily checks.",
+  },
+  ai_overviews_100: {
+    name: "Google AI Overviews engine",
+    desc: "Adds real AI Overview capture, per 100 prompts.",
+  },
+  daily_market_brain: {
+    name: "Daily Market Brain",
+    desc: "Refreshes market intelligence every day instead of weekly, per brand.",
+  },
   pro_200: { name: "+200 Mellox Pro messages", desc: "Extra Pro chat for strategy heavy months." },
   extra_seat: { name: "Extra seat", desc: "One more teammate. Starter and Growth." },
-  white_label_domain: { name: "White label domain", desc: "Serve the client portal on your agency's own domain. Agency and Scale." },
+  white_label_domain: {
+    name: "White label domain",
+    desc: "Serve the client portal on your agency's own domain. Agency and Scale.",
+  },
 };
 
 export const ADDONS = Object.values(CATALOG_ADDONS)
@@ -149,6 +167,10 @@ export const VIDEO_MENU: [string, string][] = [
 
 export const PRICING_FAQS: Faq[] = [
   {
+    q: "How do creation points work?",
+    a: "Creation points are protected for making content. A text post set or an unchanged uploaded-photo post uses 1 point, a standard AI image post 2, and a template carousel with one shared background 3. Up to three platform versions are included. Three short caption edits are included on paid social, image, ad and video creations. New artwork has its own quote. These are alternative uses of one monthly allowance, not separate cumulative quotas. Existing wallet balances keep their value, and current grant windows retain their terms until renewal.",
+  },
+  {
     q: "What is a credit?",
     a: "Credits pay for AI work: posts, images, articles, research and audits. One credit is worth $0.01 at face value. A social post set costs 12 credits, an image post 30 and a premium article 100. The full list is on this page.",
   },
@@ -158,7 +180,7 @@ export const PRICING_FAQS: Faq[] = [
   },
   {
     q: "Do unused credits roll over?",
-    a: "Not on monthly plans. On annual plans, up to one month of your allowance carries over. Credit packs and video packs you buy never expire.",
+    a: "Creation points expire at the end of each monthly grant window. Wallet credits and Video Credits from annual plans can roll over once, capped at one month of their allowance. Purchased credit and video packs never expire. Existing balances retain their original expiry dates.",
   },
   {
     q: "What happens when I run out?",
@@ -178,7 +200,7 @@ export const PRICING_FAQS: Faq[] = [
   },
   {
     q: "What does Scale include?",
-    a: `Scale is for large teams: ${n(CATALOG_PLANS.scale.brands)} brands, ${n(CATALOG_PLANS.scale.allowances.credits)} credits and ${n(CATALOG_PLANS.scale.allowances.videoUnits / VIDEO_UNITS_PER_VC)} videos a month, a dedicated account manager and support with a guaranteed response time. It is $${n(CATALOG_PLANS.scale.priceMonthlyUsd)} a month, or $${n(CATALOG_PLANS.scale.priceAnnualUsd)} a year. SSO and API access are coming soon.`,
+    a: `Scale is for large teams: ${n(CATALOG_PLANS.scale.brands)} brands, ${n(CREATION_PLANS.scale.points)} monthly creation points, ${n(CREATION_PLANS.scale.flexCredits)} wallet credits and ${n(CATALOG_PLANS.scale.allowances.videoUnits / VIDEO_UNITS_PER_VC)} Video Credits. Clip count depends on model and duration. It includes a dedicated account manager and support with a guaranteed response time. It is $${n(CATALOG_PLANS.scale.priceMonthlyUsd)} a month, or $${n(CATALOG_PLANS.scale.priceAnnualUsd)} a year. SSO and API access are coming soon.`,
   },
   ...NEW_FAQS,
 ];

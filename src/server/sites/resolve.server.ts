@@ -11,6 +11,9 @@ import "server-only";
 //              page is served by WordPress
 //   webflow    the selected site's domains — as reported by Webflow's API — include
 //              this host, and the live page carries data-wf-site = that site id
+//   wix        the connected site's address — as reported by Wix's API — has this
+//              host, and the live page is served by Wix (with that site's GUID
+//              when the page carries one)
 //
 // A live page that contradicts the connection (another platform, another
 // Webflow site) blocks every change: Mellox never edits a site it can't prove.
@@ -20,7 +23,7 @@ import { safeFetch } from "@/server/safe-fetch";
 import { ownershipIsCurrent, type OwnershipStatus } from "@/lib/connectors/ownership";
 import type { SiteBindingView } from "@/lib/geo/fix-contracts";
 
-export type SiteProvider = "github" | "wordpress" | "webflow";
+export type SiteProvider = "github" | "wordpress" | "webflow" | "wix";
 
 /** Where WordPress head tags (title, description, canonical, schema) can be written. */
 export type WordPressSeoBackend = "mellox" | "rankmath" | "jetpack" | "none";
@@ -53,6 +56,12 @@ export type SiteBinding =
       siteName: string;
       domains: string[];
       missingWriteScopes: string[];
+    })
+  | (BindingBase & {
+      provider: "wix";
+      siteId: string;
+      siteName: string;
+      domains: string[];
     });
 
 export type SiteResolution = {
@@ -286,6 +295,44 @@ async function webflowCandidate(workspaceId: string, host: string): Promise<Site
   };
 }
 
+async function wixCandidate(workspaceId: string, host: string): Promise<SiteBinding | null> {
+  const { data: connection } = await supabaseAdmin
+    .from("workspace_connections")
+    .select("id, status")
+    .eq("workspace_id", workspaceId)
+    .eq("provider", "wix")
+    .neq("status", "revoked")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!connection) return null;
+  const { data: sites } = await db
+    .from("wix_sites")
+    .select("site_id, site_name, site_url, domains, selected, status")
+    .eq("workspace_id", workspaceId)
+    .eq("connection_id", connection.id);
+  const site = (sites ?? []).find(
+    (s: { domains: string[] | null; site_url: string | null; selected: boolean; status: string }) =>
+      s.selected &&
+      s.status === "active" &&
+      [...(s.domains ?? []), hostOf(s.site_url)].some((d) => d && norm(d) === host),
+  );
+  if (!site) return null;
+  return {
+    provider: "wix",
+    host,
+    connectionId: connection.id,
+    siteId: site.site_id,
+    siteName: site.site_name,
+    domains: site.domains ?? [],
+    verified: connection.status === "active",
+    proof:
+      connection.status === "active"
+        ? `Wix lists ${host} as the address of “${site.site_name}”.`
+        : "The Wix connection needs to be renewed.",
+  };
+}
+
 /** Browser-safe view of a binding (no connection internals). */
 export function bindingView(b: SiteBinding, placeholder = false): SiteBindingView {
   return {
@@ -307,6 +354,26 @@ export function reconcileWithLive(
   live: PageFingerprint | null,
 ): SiteBinding {
   if (!live || candidate.provider === "github") return candidate;
+  if (candidate.provider === "wix") {
+    if (live.platform !== "wix")
+      return {
+        ...candidate,
+        verified: false,
+        proof: `${candidate.host} isn't served by Wix right now, so Mellox won't change it through Wix.`,
+      };
+    if (live.wix?.metaSiteId && live.wix.metaSiteId !== candidate.siteId.toLowerCase())
+      return {
+        ...candidate,
+        verified: false,
+        proof: `${candidate.host} is served by a different Wix site than the one connected.`,
+      };
+    return {
+      ...candidate,
+      proof: live.wix?.metaSiteId
+        ? `${candidate.host} is served by the connected Wix site (site id matches the live page).`
+        : `${candidate.host} is served by Wix at the address of the connected site.`,
+    };
+  }
   if (candidate.provider === "webflow") {
     if (live.platform !== "webflow")
       return {
@@ -325,11 +392,11 @@ export function reconcileWithLive(
       proof: `${candidate.host} is served by the connected Webflow site (site id matches the live page).`,
     };
   }
-  if (live.platform === "webflow")
+  if (live.platform === "webflow" || live.platform === "wix")
     return {
       ...candidate,
       verified: false,
-      proof: `${candidate.host} is served by Webflow, not the connected WordPress site.`,
+      proof: `${candidate.host} is served by ${live.platform === "wix" ? "Wix" : "Webflow"}, not the connected WordPress site.`,
     };
   if (live.platform === "wordpress" && live.wordpress?.apiRoot) {
     const apiHost = hostOf(live.wordpress.apiRoot);
@@ -353,16 +420,18 @@ export async function resolveSite(
   opts: { live?: boolean } = {},
 ): Promise<SiteResolution> {
   const host = norm(rawHost);
-  const [github, wordpress, webflow] = await Promise.all([
+  const [github, wordpress, webflow, wix] = await Promise.all([
     githubCandidates(workspaceId, host),
     wordpressCandidate(workspaceId, host).catch(() => null),
     webflowCandidate(workspaceId, host).catch(() => null),
+    wixCandidate(workspaceId, host).catch(() => null),
   ]);
   const fingerprint = opts.live ? await liveFingerprint(host) : null;
   const candidates: SiteBinding[] = [
     ...github,
     ...(wordpress ? [reconcileWithLive(wordpress, fingerprint)] : []),
     ...(webflow ? [reconcileWithLive(webflow, fingerprint)] : []),
+    ...(wix ? [reconcileWithLive(wix, fingerprint)] : []),
   ];
   // Prefer the platform the live page says serves the site; then a proven repository.
   const byLive = fingerprint?.platform

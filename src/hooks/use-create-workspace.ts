@@ -4,10 +4,13 @@
 // double click, a retry after a timeout, a refresh-and-resubmit or React
 // Strict Mode can never make two workspaces; the database also returns the
 // owner's existing workspace for the same brand domain instead of a copy.
+// A full plan (402 limit_reached) is shown by the caller as BrandLimitCard,
+// so the global upgrade toast is skipped.
 
 import { useCallback, useRef, useState } from "react";
 import { createWorkspace } from "@/lib/workspaces.functions";
 import { useInvalidateWorkspaces } from "@/hooks/use-workspaces";
+import { ServerFnError } from "@/lib/rpc-client";
 
 export type CreateWorkspaceOutcome = {
   id: string;
@@ -60,6 +63,7 @@ export function useCreateWorkspace() {
       setPending(true);
       const run = createWorkspace({
         data: { name: input.name, websiteUrl: input.websiteUrl, idempotencyKey },
+        billingInline: true,
       })
         .then((result) => {
           clearAttempt();
@@ -77,4 +81,14 @@ export function useCreateWorkspace() {
   );
 
   return { create, pending };
+}
+
+/** True when a create was refused because the plan has no room for another brand. */
+export function isBrandLimitError(error: unknown): boolean {
+  return (
+    error instanceof ServerFnError &&
+    error.status === 402 &&
+    error.billing?.code === "limit_reached" &&
+    error.billing.limit === "brands"
+  );
 }

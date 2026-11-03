@@ -73,7 +73,7 @@ import {
 } from "./present";
 import { fixKindForRule, frameworkKind, planFixTarget, type TargetPlan } from "./targets";
 import { isAgentFixable } from "./strategies";
-import { cmsFieldsForRule } from "@/lib/geo/cms-fixes";
+import { cmsFieldsForRule, type CmsProvider } from "@/lib/geo/cms-fixes";
 import { geoAgentEnabled } from "@/server/geo/agents/flags";
 import type { CrawledPageFacts } from "./text-artifacts";
 import { validateProposal } from "./validate";
@@ -1038,7 +1038,8 @@ function cmsVerifyDelaysMinutes(): number[] {
   return [2, 10, 30];
 }
 
-const cmsName = (provider: string) => (provider === "webflow" ? "Webflow" : "WordPress");
+const cmsName = (provider: string) =>
+  provider === "webflow" ? "Webflow" : provider === "wix" ? "Wix" : "WordPress";
 
 /**
  * Write an approved WordPress / Webflow change. The live site must still be
@@ -1052,7 +1053,7 @@ async function approveCmsProposal(
 ): Promise<FixProposalView> {
   const changes = row.cms_changes?.changes ?? [];
   if (!changes.length) throw new FixWorkflowError("This proposal has nothing to apply.", 409);
-  const provider = row.provider as "wordpress" | "webflow";
+  const provider = row.provider as CmsProvider;
   const name = cmsName(provider);
   const host = new URL(row.site_origin).hostname;
   const { resolveSite } = await import("@/server/sites/resolve.server");
@@ -1188,7 +1189,7 @@ export async function undoCmsProposal(
     !["applied", "verifying", "verified", "not_verified"].includes(row.status)
   )
     throw new FixWorkflowError("This change can't be undone.", 409);
-  const provider = row.provider as "wordpress" | "webflow";
+  const provider = row.provider as CmsProvider;
   const { openCmsSession } = await import("@/server/geo/cms/access.server");
   const { rollbackCmsChanges } = await import("@/server/geo/cms/apply.server");
   const session = await openCmsSession(ctx.workspaceId, provider, { write: true });

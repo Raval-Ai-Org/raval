@@ -9,7 +9,7 @@ import { weightedSequence } from "@/lib/studio/viral";
 import { isAutopilotType, type AutopilotType } from "./contracts";
 
 /** Channels that cannot publish words alone: a post there always has a picture or a video. */
-export const PICTURE_PLATFORMS: readonly string[] = ["instagram", "tiktok", "youtube"];
+export const PICTURE_PLATFORMS: readonly string[] = ["instagram", "tiktok", "youtube", "pinterest"];
 
 export function needsPicture(platform: string | null | undefined): boolean {
   return Boolean(platform) && PICTURE_PLATFORMS.includes(platform as string);
@@ -35,6 +35,8 @@ const FORMAT_FIT: Record<PlatformId, Partial<Record<AutopilotType, number>>> = {
   facebook: { image: 3, social: 2, video: 2, carousel: 1 },
   twitter: { social: 3, image: 2, video: 1 },
   threads: { social: 3, image: 2 },
+  // A Pin is one picture; a text piece is made with one (withPicture).
+  pinterest: { image: 3, social: 1 },
 };
 
 /** The formats a program allows that this channel can carry (never an article). */

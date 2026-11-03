@@ -124,6 +124,7 @@ export async function signOutAndRedirect(queryClient?: QueryClient) {
         for (const key of WORKSPACE_STORAGE_KEYS) storage.removeItem(key);
         clearAccountData(storage);
         storage.removeItem(AUTH_NEXT_KEY);
+        storage.removeItem("mellox:email-confirmation");
       } catch {}
     }
     emitAppEvent("workspace:changed", { id: null });

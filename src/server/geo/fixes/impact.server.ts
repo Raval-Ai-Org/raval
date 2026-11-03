@@ -10,9 +10,21 @@ import {
   type FixImpact,
   type ImpactFix,
 } from "@/lib/geo/fix-impact";
+import type { FieldHistory } from "@/lib/geo/types";
 import { FixWorkflowError, type FixContext } from "./service.server";
 
 const DAY = 86_400_000;
+
+function isFieldHistory(v: unknown): v is FieldHistory {
+  const h = v as FieldHistory | null;
+  return Boolean(
+    h &&
+    Array.isArray(h.dates) &&
+    Array.isArray(h.lcp) &&
+    Array.isArray(h.inp) &&
+    Array.isArray(h.cls),
+  );
+}
 
 function fixState(status: string): ImpactFix["state"] {
   if (status === "verified") return "verified";
@@ -50,7 +62,7 @@ export async function getFixImpact(ctx: FixContext, scanId: string): Promise<Fix
   if (!fixes.length) return computeFixImpact({ scans: [], fixes: [], checks: [] });
 
   const first = Math.min(...fixes.map((f) => Date.parse(f.liveAt)));
-  const [scans, checks] = await Promise.all([
+  const [scans, checks, latest] = await Promise.all([
     db
       .from("geo_scans")
       .select("completed_at, overall_score, score_version:report->scoreVersion")
@@ -71,11 +83,24 @@ export async function getFixImpact(ctx: FixContext, scanId: string): Promise<Fix
       .gte("checked_at", new Date(first - WINDOW_DAYS * DAY).toISOString())
       .order("checked_at", { ascending: false })
       .limit(5000),
+    // The newest full scan carries the Chrome UX Report history (weekly p75s).
+    db
+      .from("geo_scans")
+      .select("field_history:site->performance->field->history")
+      .eq("workspace_id", ctx.workspaceId)
+      .eq("host", scan.host)
+      .eq("status", "succeeded")
+      .neq("mode", "targeted")
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
   if (scans.error) throw new Error(scans.error.message);
 
+  const history = (latest.data as { field_history?: unknown } | null)?.field_history;
   return computeFixImpact({
     fixes,
+    fieldHistory: isFieldHistory(history) ? history : null,
     scans: (scans.data ?? []).map((s) => ({
       at: String(s.completed_at),
       score: Number(s.overall_score),

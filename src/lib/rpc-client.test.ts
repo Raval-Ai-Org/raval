@@ -5,6 +5,7 @@ const authedFetch = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/authed-fetch", () => ({ authedFetch }));
 
 import { ServerFnError, serverFn } from "./rpc-client";
+import { GENERIC_ERROR } from "./user-errors";
 
 const list = serverFn<ServerFn<null, unknown>>("workspaces/listWorkspaces");
 
@@ -24,6 +25,6 @@ describe("RPC client errors", () => {
 
   it("identifies a missing route even if Next returns HTML", async () => {
     authedFetch.mockResolvedValueOnce(new Response("<html>Not found</html>", { status: 404 }));
-    await expect(list()).rejects.toEqual(new ServerFnError(404, "Request failed with status 404"));
+    await expect(list()).rejects.toEqual(new ServerFnError(404, GENERIC_ERROR));
   });
 });

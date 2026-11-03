@@ -34,7 +34,6 @@ import {
   type LucideIcon,
 } from "@/components/icons";
 import {
-  CREDIT_ACTIONS,
   CREDIT_PACKS,
   FEATURES,
   PLANS,
@@ -58,7 +57,8 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
-import { DoneNote, GhostButton, IntervalToggle, PrimaryButton } from "./billing-ui";
+import { CREATION_PLANS } from "@/lib/billing/creation";
+import { GhostButton, IntervalToggle, PrimaryButton } from "./billing-ui";
 import type { PurchaseKind } from "./use-billing-actions";
 
 export type UpgradeView = "plans" | "credits";
@@ -83,13 +83,6 @@ function featureIcon(feature: FeatureKey): LucideIcon {
   return MODULE_ICON[FEATURES[feature].module];
 }
 
-/** Roughly how many posts a month of credits makes, rounded down. */
-function postsFrom(credits: number): number {
-  const posts = Math.floor(credits / CREDIT_ACTIONS.post_set.credits);
-  const step = 10 ** Math.max(0, String(posts).length - 2);
-  return Math.floor(posts / step) * step;
-}
-
 export type UpgradeScreenProps = {
   current: PlanId;
   /** Why the window opened (a lock, a limit, an empty balance), if anything. */
@@ -101,6 +94,8 @@ export type UpgradeScreenProps = {
   onIntervalChange: (interval: BillingInterval) => void;
   /** Only the account owner buys; everyone else can ask the owner. */
   canBuy: boolean;
+  /** Stripe Checkout has passed the server-side readiness checks. */
+  paymentsAvailable: boolean;
   busy: string | null;
   askSent: boolean;
   /** Credits left right now. */
@@ -140,6 +135,8 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
       </div>
 
       <Hero {...props} feature={feature} />
+
+      {props.canBuy && <CheckoutNotice available={props.paymentsAvailable} />}
 
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <Segmented
@@ -207,6 +204,38 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
   );
 }
 
+function CheckoutNotice({ available }: { available: boolean }) {
+  return (
+    <div
+      className={cn(
+        "relative flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[12.5px]",
+        available
+          ? "border-primary/20 bg-primary/[0.055] text-muted-foreground"
+          : "border-warning/25 bg-warning/[0.07] text-foreground",
+      )}
+      role={available ? undefined : "status"}
+    >
+      <ShieldCheck
+        className={cn("mt-0.5 h-4 w-4 shrink-0", available ? "text-primary" : "text-warning")}
+        strokeWidth={2.3}
+      />
+      <span>
+        {available ? (
+          <>
+            <span className="font-semibold text-foreground">Secure checkout by Stripe.</span> Pay
+            with a card or an available wallet. Your purchase activates automatically.
+          </>
+        ) : (
+          <>
+            <span className="font-semibold">Payments are temporarily unavailable.</span> Please try
+            again shortly. You will not be charged.
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 /* ───────────────────────────── the reason ───────────────────────────── */
 
 function Glow() {
@@ -238,7 +267,7 @@ function Hero({
   let tag: string | null = null;
   let title = free ? "Do more with Mellox" : "Get more room to grow";
   let text = free
-    ? `Free gives you ${formatNumber(SIGNUP_GRANT.credits)} credits once. A plan gives you ${formatNumber(PLANS.starter.allowances.credits)} or more every month, plus the tools that do the work for you.`
+    ? `Free gives you ${formatNumber(SIGNUP_GRANT.credits)} credits once. Paid plans start with ${CREATION_PLANS.starter.points} monthly creation points plus wallet credits for extras.`
     : "More brands, more credits and more of the tools that do the work for you.";
 
   const empty = block?.code === "insufficient_balance";
@@ -247,7 +276,12 @@ function Hero({
     empty && block?.needed
       ? `This needs ${formatMeter(meter, block.needed)}. You have ${formatMeter(meter, block.available ?? 0)} left. `
       : "";
-  const outOf = meter === "video" ? "You're out of videos" : "You're out of credits";
+  const outOf =
+    meter === "creation"
+      ? "Your creation points are used"
+      : meter === "video"
+        ? "You're out of Video Credits"
+        : "You're out of credits";
 
   if (view === "credits") {
     Icon = Wallet;
@@ -256,13 +290,18 @@ function Hero({
   } else if (empty) {
     Icon = Bolt;
     title = free && meter === "credits" ? "You've used your free credits" : outOf;
-    text = `${need}A plan refills your credits every month, so you never have to stop.`;
+    text = `${need}${meter === "creation" ? "Points refill at renewal. Choose Wallet credits in Studio to review an extra generation's price, or upgrade for more monthly points." : "Your plan allowance refills monthly. Packs add wallet credits for extra work."}`;
   } else if (feature) {
     const min = FEATURES[feature].minPlan;
     Icon = featureIcon(feature);
     tag = min === "scale" ? "On the Scale plan" : `On ${PLANS[min].label} and above`;
     title = `Unlock ${FEATURES[feature].label}`;
     text = FEATURES[feature].pitch;
+  } else if (block?.code === "limit_reached" && block.limit === "brands") {
+    Icon = Gauge;
+    title = "Add another brand";
+    const max = typeof block.max === "number" ? block.max : PLANS[current].brands;
+    text = `${PLANS[current].label} includes ${max === 1 ? "1 brand" : `${formatNumber(max)} brands`}. A bigger plan gives each brand its own workspace and a full scan.`;
   } else if (block?.code === "limit_reached") {
     Icon = Gauge;
     title = "You've reached your limit";
@@ -320,8 +359,13 @@ function planNumbers(plan: PlanId): Array<{ Icon: LucideIcon; main: string; note
   return [
     {
       Icon: Bolt,
-      main: `${formatNumber(def.allowances.credits)} credits a month`,
-      note: `about ${formatNumber(postsFrom(def.allowances.credits))} posts`,
+      main: `${formatNumber(CREATION_PLANS[plan].points)} creation points a month`,
+      note: `up to ${formatNumber(Math.floor(CREATION_PLANS[plan].points / 2))} standard image posts, or a mix. Three caption edits per creation included.`,
+    },
+    {
+      Icon: Wallet,
+      main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras`,
+      note: "Existing wallet balances keep their value. New allocation begins at renewal.",
     },
     {
       Icon: Video,
@@ -341,6 +385,7 @@ function BuyButton({
   current,
   interval,
   canBuy,
+  paymentsAvailable,
   busy,
   askSent,
   onChoose,
@@ -371,7 +416,7 @@ function BuyButton({
   return (
     <Button
       className={className}
-      disabled={busy !== null}
+      disabled={busy !== null || !paymentsAvailable}
       onClick={() =>
         onChoose({
           kind: "plan",
@@ -381,8 +426,12 @@ function BuyButton({
         })
       }
     >
-      {busy === plan ? "One moment…" : `Upgrade to ${def.label}`}
-      {busy !== plan && featured && <ArrowRight className="h-4 w-4" />}
+      {busy === plan
+        ? "Opening secure checkout…"
+        : paymentsAvailable
+          ? `Upgrade to ${def.label}`
+          : "Payments unavailable"}
+      {busy !== plan && paymentsAvailable && featured && <ArrowRight className="h-4 w-4" />}
     </Button>
   );
 }
@@ -515,8 +564,9 @@ function PlanStrip(props: UpgradeScreenProps & { plan: PaidPlanId }) {
           <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">{def.fit}</span>
         </p>
         <p className="text-[12.5px] text-muted-foreground">
-          {formatNumber(def.brands)} brands · {formatNumber(def.allowances.credits)} credits and{" "}
-          {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account manager
+          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[def.id].points)} creation
+          points and {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account
+          manager
         </p>
       </div>
       <p className="text-[14px] font-semibold tabular-nums">
@@ -721,6 +771,7 @@ function PackGrid({
 function PackAction({
   row,
   canBuy,
+  paymentsAvailable,
   busy,
   askSent,
   onChoose,
@@ -733,14 +784,18 @@ function PackAction({
     <div className="flex flex-col gap-2.5">
       <PrimaryButton
         className="h-12 w-full text-[15px]"
-        disabled={busy !== null}
+        disabled={busy !== null || !paymentsAvailable}
         onClick={() =>
           onChoose({ kind: row.kind, key: row.key, label: row.label, price: row.price })
         }
       >
-        {busy === row.key ? "One moment…" : `Buy ${row.title} · ${row.price}`}
+        {busy === row.key
+          ? "Opening secure checkout…"
+          : paymentsAvailable
+            ? `Buy ${row.title} · ${row.price}`
+            : "Payments unavailable"}
       </PrimaryButton>
-      <Promises items={["One-time payment", "Never expires"]} />
+      <Promises items={["One-time payment", "Never expires", "Secure Stripe checkout"]} />
     </div>
   );
 }
@@ -752,35 +807,17 @@ export type UpgradeWindowProps = {
   onOpenChange: (open: boolean) => void;
   /** Null while the plan is loading. */
   screen: UpgradeScreenProps | null;
-  /** The request step, used until card payment is connected. */
-  pending: UpgradeChoice | null;
-  sent: UpgradeChoice | null;
-  contact: string;
-  onContactChange: (value: string) => void;
-  onBack: () => void;
-  onSend: () => void;
 };
 
-export function UpgradeWindow({
-  open,
-  onOpenChange,
-  screen,
-  pending,
-  sent,
-  contact,
-  onContactChange,
-  onBack,
-  onSend,
-}: UpgradeWindowProps) {
-  const small = Boolean(screen && (pending || sent));
+export function UpgradeWindow({ open, onOpenChange, screen }: UpgradeWindowProps) {
   return (
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      title={sent ? "Request sent" : screen?.view === "credits" ? "Get credits" : "Upgrade"}
+      title={screen?.view === "credits" ? "Get credits" : "Upgrade"}
       srDescription="Choose a plan or a credit pack."
       Icon={screen?.view === "credits" ? Wallet : Crown}
-      size={small ? "sm" : "xl"}
+      size="xl"
       allowMaximize={false}
       // Fit the content instead of the tall fixed window.
       contentClassName="sm:h-fit sm:max-h-[92dvh]"
@@ -796,56 +833,7 @@ export function UpgradeWindow({
         </div>
       )}
 
-      {screen && sent && (
-        <div className="space-y-4 px-5 pb-6 pt-4 sm:px-6">
-          <DoneNote title={`We got your request for the ${sent.label}`}>
-            We'll email you to finish payment.{" "}
-            {sent.kind === "plan" ? "Your plan switches on" : "It's added"} as soon as it's paid.
-          </DoneNote>
-          <PrimaryButton className="w-full" onClick={() => onOpenChange(false)}>
-            Done
-          </PrimaryButton>
-        </div>
-      )}
-
-      {screen && pending && !sent && (
-        <div className="space-y-4 px-5 pb-6 pt-4 sm:px-6">
-          <div className="ds-tile flex items-center justify-between gap-3 border-primary/40 bg-primary/[0.07] p-4">
-            <p className="text-[15px] font-semibold">{pending.label}</p>
-            <p className="text-[15px] font-semibold tabular-nums">{pending.price}</p>
-          </div>
-          <ol className="grid grid-cols-3 gap-2 text-[12.5px]">
-            {[
-              "Send your request",
-              "We email you to pay",
-              pending.kind === "plan" ? "Your plan switches on" : "Your pack is added",
-            ].map((step, index) => (
-              <li key={step} className="ds-well flex flex-col gap-1.5 p-3">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
-                  {index + 1}
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-          <input
-            value={contact}
-            onChange={(event) => onContactChange(event.target.value)}
-            maxLength={120}
-            placeholder="Phone or WhatsApp (optional)"
-            aria-label="Phone or WhatsApp (optional)"
-            className="h-10 w-full rounded-full bg-[var(--ds-well-bg)] px-4 text-[13.5px] outline-none ring-primary/40 placeholder:text-muted-foreground focus-visible:ring-2"
-          />
-          <div className="flex gap-2">
-            <GhostButton onClick={onBack}>Back</GhostButton>
-            <PrimaryButton className="flex-1" disabled={screen.busy !== null} onClick={onSend}>
-              {screen.busy ? "Sending…" : "Send request"}
-            </PrimaryButton>
-          </div>
-        </div>
-      )}
-
-      {screen && !pending && !sent && (
+      {screen && (
         // A new reason or plan starts from that reason's own pick.
         <UpgradeScreen
           key={`${screen.block?.code ?? ""}:${screen.block?.feature ?? ""}:${screen.current}`}

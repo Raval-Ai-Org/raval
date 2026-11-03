@@ -5,6 +5,7 @@ import { runMetered } from "@/server/billing/metered.server";
 import { PlatformIdSchema } from "@/lib/studio/jobs";
 import { wrapUntrusted } from "@/server/guardrails/untrusted";
 import { loadStudioContext } from "@/server/studio/context.server";
+import { resolveStudioReferences, studioReferenceImages } from "@/server/studio/references.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,6 +18,7 @@ const Body = z.object({
   direction: z.string().max(1000),
   platforms: z.array(PlatformIdSchema).min(1).max(7),
   existing: z.record(z.string(), z.string().max(4000)).optional(),
+  assetId: z.string().uuid().optional(),
 });
 
 const Result = z.object({
@@ -31,6 +33,10 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   rateLimit: "generate",
   handler: async ({ body, workspaceId, userId, role, request, supabase }) => {
+    const references =
+      body.mediaKind === "photo" && body.assetId
+        ? await resolveStudioReferences(supabase, workspaceId, [body.assetId])
+        : [];
     const metered = await runMetered(
       {
         workspaceId,
@@ -65,6 +71,7 @@ export const POST = defineRoute({
           maxTokens: 1800,
           temperature: 0.7,
           noCache: true,
+          images: await studioReferenceImages(references),
         });
       },
     );

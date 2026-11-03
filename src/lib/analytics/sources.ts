@@ -1,7 +1,7 @@
-// sources.ts — the four analytics data sources. Every metric, chart and
+// sources.ts — the five analytics data sources. Every metric, chart and
 // insight carries exactly one source; values from different sources are never
 // summed, averaged or plotted on one axis (GA4 sessions ≠ Search Console
-// clicks ≠ an AI Visibility score).
+// clicks ≠ social post views ≠ an AI Visibility score).
 
 export const DATA_SOURCES = {
   mellox: { label: "Mellox", short: "Mellox", hint: "Content and activity inside Mellox" },
@@ -10,6 +10,11 @@ export const DATA_SOURCES = {
     label: "Google Search Console",
     short: "Search Console",
     hint: "How your site shows up in Google Search",
+  },
+  social: {
+    label: "Your social accounts",
+    short: "Social",
+    hint: "Views and interactions the networks report for your posts",
   },
   geo: {
     label: "Mellox AI Visibility scan",

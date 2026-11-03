@@ -24,7 +24,7 @@ The preview command requires the repository’s Playwright Chromium browser. It 
 
 Use `--check-only` to run layout, text contrast, font, and fallback checks without writing preview artifacts. Text is checked for a minimum 4.5:1 contrast ratio against its solid background fallback.
 
-No deployment or live Supabase settings change is performed by either script. The following Dashboard instructions are for a future, separately authorized rollout.
+Neither script deploys the app or updates Supabase. Apply and verify Dashboard settings separately; the complete incident rollout and validation checklist is in [ROLLOUT-2026-10-21.md](./ROLLOUT-2026-10-21.md).
 
 | Dashboard template   | HTML file               | Subject                             |
 | -------------------- | ----------------------- | ----------------------------------- |
@@ -41,6 +41,6 @@ No deployment or live Supabase settings change is performed by either script. Th
 2. Save each body and subject in **Authentication → Email Templates**. Send a test email for each enabled flow after the app code and `public/assets/mellox-email-mark.png` are on the production domain. The new confirmation page must be live before saving the templates.
 3. Keep your current **Authentication → SMTP** settings and Resend sender. If Resend click tracking is enabled for auth mail, disable it so the one-time fragment link is delivered intact. No Resend API setting or code change is needed here.
 
-The five action emails link to the production domain used throughout this codebase. Their token hash is in the URL fragment, which browsers do not send to the server. The page removes it from browser history and waits for the recipient to press a button before calling `verifyOtp`. This prevents ordinary email link prefetchers from consuming the token. The reauthentication email contains only Supabase’s `{{ .Token }}` code for the reauthentication prompt. The page accepts only the five fixed Supabase email OTP types and redirects only to a safe stored workspace path, `/projects`, or `/reset-password`; it does not trust an email-supplied redirect.
+The five action emails link to the production domain used throughout this codebase. Their token hash is in the URL fragment, which browsers do not send to the server. Preserve `{{ .TokenHash }}` exactly, including Supabase's `pkce_` prefix. The page removes it from browser history and waits for the recipient to press a button before calling `verifyOtp`. Ordinary GET/HEAD requests and JavaScript page loads never verify a token. The reauthentication email contains only Supabase’s `{{ .Token }}` code for the reauthentication prompt. The page accepts only fixed Supabase email OTP types (`email`, legacy `signup`, `recovery`, `invite`, `magiclink`, `email_change`) and redirects only to a safe stored path, `/projects`, or `/reset-password`; it does not trust an email-supplied redirect. Pending confirmation state is kept in tab-only sessionStorage for up to one hour so refresh/mobile suspension can resume; successful confirmation/navigation and sign-out clear it. Supabase remains authoritative about expiry and single use.
 
 The PNG logo is copied unchanged from the existing Mellox brand kit. It is served by the app at `https://mellox.ai/assets/mellox-email-mark.png`; some clients block remote images by default, so the text wordmark remains visible.

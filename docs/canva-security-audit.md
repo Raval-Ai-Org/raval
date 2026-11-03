@@ -43,7 +43,7 @@ No storage country, Supabase project region, hosting region, replica location, s
 ## Remaining controls and operator confirmations
 
 1. Verify the actual deployed revision, Supabase migrations/RPC grants/RLS/private bucket, production APP_URL, secrets, HTTPS termination and Canva Portal settings. Local .env has the public HTTPS APP_URL, while .env.local uses localhost; production must not inherit the localhost override. Presence checks did not print secret values or establish that configured credentials are valid.
-2. Apply 20261012090000_canva_atomic_authorization.sql **before** the matching server deployment. Existing integrations will not function with the changed server if the new RPCs are missing. No migration was applied remotely.
+2. Apply 20261012090100_canva_atomic_authorization.sql **before** the matching server deployment. Existing integrations will not function with the changed server if the new RPCs are missing. No migration was applied remotely.
 3. Set FEATURE_FLAG_CANVA_MAGIC_LAYERS_ENABLED=false for public submission; register exactly https://mellox.ai/api/integrations/canva/callback and enable the five used scopes. Development loopback callback is only for a development integration/environment. Confirm no Canva webhook subscriptions exist externally.
 4. Confirm storage countries, regional replicas, hosting provider and all processors receiving Canva data. Provide operational evidence of backup encryption, schedule, retention, restore testing and deletion handling after restoration. No backup jobs or restore-drill evidence were found in this audit.
 5. Establish and implement retention rules for abandoned OAuth states, retained design metadata/assets, audit logs, and backups. Policy claims must distinguish authorization expiry from data deletion. Do not invent a days-based retention period.
@@ -85,6 +85,6 @@ Use [the form drafts](canva-security-form-answers.md) only with their deployment
 - src/server/fns/canva.ts and src/components/app/connectors/CanvaConnection.tsx: return and show unconfirmed revocation accurately.
 - src/server/safe-fetch.ts and safe-fetch.test.ts: optional provider restriction checked before each redirect connection.
 - src/server/workspaces/service.server.ts and service.test.ts: Canva withdrawal before owner-authorized workspace deletion.
-- supabase/migrations/20261012090000_canva_atomic_authorization.sql and tests/db/canva-authorization.test.ts: service-only transactions and real SQL regression tests.
+- supabase/migrations/20261012090100_canva_atomic_authorization.sql and tests/db/canva-authorization.test.ts: service-only transactions and real SQL regression tests.
 - .github/workflows/sast.yml: pending Semgrep SAST workflow.
 - docs/canva-integration.md, canva-security-audit.md, canva-security-form-answers.{json,md} and scripts/validate-canva-security-answers.mjs: audit evidence, operator gaps, form drafts and character-limit validation.

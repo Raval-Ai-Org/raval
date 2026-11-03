@@ -40,6 +40,8 @@ export type Group = {
   platforms: PlatformId[];
   storagePath: string | null;
   mediaType: "image" | "video" | null;
+  /** The picture's shape as stored ("4:5"), so the Library never crops it. */
+  ratio?: string | null;
   createdAt: string;
   jobId: string | null;
   /** The least-advanced status across the group's versions. */
@@ -52,6 +54,8 @@ export type Group = {
   problem: boolean;
   /** Studio job currently turning this text draft into a finished post. */
   convertingJobId: string | null;
+  /** The campaign it was made for (ADR-0039), when there is one. */
+  campaign?: { id: string; name: string } | null;
 };
 
 export const CONTENT_COLUMNS =
@@ -139,7 +143,7 @@ export function ago(iso: string): string {
 }
 
 const GENERIC_TITLE =
-  /^(untitled( post| draft)?|draft|new post|(linkedin|instagram|x|twitter|x \/ twitter|facebook|threads|tiktok|youtube)( post)?)$/i;
+  /^(undefined|null|untitled( post| draft)?|draft|new post|(linkedin|instagram|x|twitter|x \/ twitter|facebook|threads|tiktok|youtube)( post)?)$/i;
 
 /** Caption text without hashtags or markdown. */
 function plain(value: string | null | undefined): string {
@@ -177,7 +181,7 @@ function excerptOf(body: string | null, title: string): string {
 /** A title candidate for one row, and how trustworthy it is. */
 function titleOf(row: ContentRow): { text: string; rank: number } {
   const jobTitle = cleanText(typeof row.meta?.job_title === "string" ? row.meta.job_title : "");
-  if (jobTitle) return { text: clip(jobTitle, 90), rank: 3 };
+  if (jobTitle && !GENERIC_TITLE.test(jobTitle)) return { text: clip(jobTitle, 90), rank: 3 };
   const title = cleanText(row.title);
   if (title && !GENERIC_TITLE.test(title)) return { text: clip(title, 90), rank: 2 };
   const sentence = firstSentence(row.body);
@@ -222,6 +226,8 @@ export function groupRows(rows: ContentRow[]): Group[] {
         existing.storagePath = storagePath;
         existing.mediaType = meta.media_type === "video" ? "video" : "image";
       }
+      if (!existing.ratio && typeof meta.aspect_ratio === "string")
+        existing.ratio = meta.aspect_ratio;
       if (r.scheduled_at && (!existing.scheduledAt || r.scheduled_at < existing.scheduledAt))
         existing.scheduledAt = r.scheduled_at;
       continue;
@@ -239,6 +245,7 @@ export function groupRows(rows: ContentRow[]): Group[] {
       platforms: platform ? [platform] : [],
       storagePath,
       mediaType: meta.media_type === "video" ? "video" : storagePath ? "image" : null,
+      ratio: typeof meta.aspect_ratio === "string" ? meta.aspect_ratio : null,
       createdAt: r.created_at,
       jobId: typeof meta.job_id === "string" ? meta.job_id : null,
       status: r.status,
@@ -247,6 +254,13 @@ export function groupRows(rows: ContentRow[]): Group[] {
       scheduledAt: r.scheduled_at,
       problem: r.status === "failed" || r.status === "partial_failed",
       convertingJobId: typeof meta.converting_job === "string" ? meta.converting_job : null,
+      campaign:
+        typeof meta.campaign_id === "string"
+          ? {
+              id: meta.campaign_id,
+              name: typeof meta.campaign_name === "string" ? meta.campaign_name : "Campaign",
+            }
+          : null,
     });
   }
   return [...map.values()].map(({ titleRank: _rank, bodies, ...g }) => {

@@ -153,7 +153,8 @@ approve in the existing review queue), each role-checked for that workspace.
 - `FEATURE_FLAG_AUTOPILOT_ENABLED` (+ `_WS_<id>`), on unless set to `false`
   (changed on 2026-10-03 at the product owner's request). Off means the
   sidebar entry is hidden, RPCs answer 404 and the worker skips the workspace.
-- Plan feature `autopilot` (Growth and above).
+- Plan feature `autopilot` (Starter and above; was Growth and above until
+  2026-10-30, opened to Starter at the product owner's request).
 - Planning and reading signals are included (`autopilot.plan`,
   `autopilot.opportunities` in `INCLUDED_ROUTES`). Each piece costs the normal
   Studio price, held and captured exactly as when a person makes it.

@@ -77,6 +77,9 @@ say at each stage, how to win against each tracked competitor, market moves, a
 
 ### 3. One look per brand, inside Brand DNA
 
+> Since ADR-0037 the look is edited in Inspo, not in a Brand DNA tile. It is
+> still one look on `dna.look`.
+
 Brand Styles, the Brand Kit library and every style picker are removed. A brand
 has one look, stored on its Brand DNA as `dna.look` and edited in
 Brain → Brand → Look & voice (colours by role, fonts, image look, logo placement,

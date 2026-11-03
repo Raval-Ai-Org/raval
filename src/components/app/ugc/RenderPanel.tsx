@@ -515,7 +515,10 @@ function RenderingScreen({ render }: { render: RenderView }) {
           <span className="text-lg font-semibold tabular-nums">{Math.round(pct)}%</span>
         </div>
         <span className="rounded-full bg-black/55 px-2.5 py-1 text-[11px] tabular-nums text-white/80 backdrop-blur">
-          {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} · ~1–3 min
+          {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} ·{" "}
+          {elapsed > TYPICAL_RENDER_SECONDS * 2
+            ? "Still rendering safely in background"
+            : "Usually a few minutes"}
         </span>
       </div>
       <p className="absolute inset-x-3 bottom-3 text-center text-[10.5px] text-white/60">

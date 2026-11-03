@@ -39,11 +39,11 @@ function prompt(signals: Signal[], brand: { name: string | null; website: string
     "- Use ONLY the facts given. Do not guess causes you can't see; say 'likely' when inferring.",
     "- Each insight covers ONE data source and cites the ids of the signals it explains (signalIds).",
     "- Never add, compare or combine numbers across sources. Google Analytics 4 visits, Google Search Console clicks,",
-    "  the Mellox AI Visibility score and Mellox content counts are different things.",
+    "  social post views and interactions, the Mellox AI Visibility score and Mellox content counts are different things.",
     "- Do not write numbers unless they are copied exactly from a cited fact. Prefer no numbers — they are shown next to your text.",
-    "- recommendation: one concrete next step the user can take (e.g. refresh a page, publish on a topic, run an AI Visibility scan, fix a search snippet).",
+    "- recommendation: one concrete next step the user can take (e.g. refresh a page, publish on a topic, post more of a format that works, run an AI Visibility scan, fix a search snippet).",
     `- At most ${MAX_INSIGHTS} insights, most important first. Short titles.`,
-    'Return JSON: {"insights":[{"title","summary","source":"mellox|ga4|gsc|geo","signalIds":[...],"severity":"positive|watch|negative","recommendation"}]}',
+    'Return JSON: {"insights":[{"title","summary","source":"mellox|ga4|gsc|geo|social","signalIds":[...],"severity":"positive|watch|negative","recommendation"}]}',
   ].join("\n");
   const lines = signals.map(
     (s) =>

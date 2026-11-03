@@ -5,8 +5,14 @@
 import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { roleAtLeast } from "@/server/api-auth";
-import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
+import {
+  getDistributionProviderForWorkspace,
+  isIntegrationsEnabled,
+  isIntegrationsTesting,
+} from "@/lib/feature-flags";
 import { PROVIDER_PLATFORMS } from "@/lib/distribution-platforms";
+import { connectablePlatforms } from "@/lib/social/routing";
+import { composioConfigured } from "@/server/integrations/composio/gateway.server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +23,23 @@ export const GET = defineRoute({
   workspaceId: ({ query }) => query.workspaceId,
   handler: ({ workspaceId, role }) => {
     const provider = getDistributionProviderForWorkspace(workspaceId);
+    // On Post for Me, networks only Composio publishes (Pinterest) are listed
+    // once they connect there; /api/sdr/oauth/start routes them the same way.
+    const platforms =
+      provider === "postforme"
+        ? connectablePlatforms(PROVIDER_PLATFORMS.postforme, {
+            composioReady: composioConfigured() && isIntegrationsEnabled(workspaceId),
+            testing: isIntegrationsTesting(workspaceId),
+          })
+        : provider
+          ? PROVIDER_PLATFORMS[provider]
+          : [];
     return {
       enabled: provider !== null,
       canPublish: roleAtLeast(role, "editor"),
       role,
       provider,
-      platforms: provider ? PROVIDER_PLATFORMS[provider] : [],
+      platforms,
     };
   },
 });

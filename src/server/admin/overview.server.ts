@@ -3,6 +3,8 @@
 import "server-only";
 import type { AdminOverview } from "@/lib/admin/types";
 import { adminRpc } from "./db.server";
+import { getOverviewActivity } from "./activity.server";
+import { getFundingOverview } from "./funding.server";
 
 type Raw = {
   generated_at: string;
@@ -15,8 +17,12 @@ type Raw = {
 
 const n = (value: unknown) => Number(value ?? 0);
 
-export async function getOverview(): Promise<AdminOverview> {
-  const raw = await adminRpc<Raw>("admin_overview", {}, "The overview is unavailable.");
+export async function getOverview(pii = false): Promise<AdminOverview> {
+  const [raw, funding, activity] = await Promise.all([
+    adminRpc<Raw>("admin_overview", {}, "The overview is unavailable."),
+    getFundingOverview(pii),
+    getOverviewActivity(pii),
+  ]);
   return {
     generatedAt: raw.generated_at,
     users: {
@@ -42,5 +48,7 @@ export async function getOverview(): Promise<AdminOverview> {
       studioRunning: n(raw.jobs.studio_running),
     },
     admins: { active: n(raw.admins.active) },
+    activity,
+    funding,
   };
 }

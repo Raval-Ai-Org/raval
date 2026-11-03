@@ -1,0 +1,21 @@
+{
+  "version": "Mellox brand film v2",
+  "fps": 60,
+  "duration": 40.85,
+  "width": 1920,
+  "height": 1080,
+  "palette": { "background": "#000000", "card": "#080808", "border": "#262626", "white": "#F6F6F4", "muted": "#92928E", "lime": "#CBE960" },
+  "finalText": "Mellox AI",
+  "website": "mellox.ai",
+  "scenes": [
+    { "start": 0, "end": 4.333333, "type": "hero", "eyebrow": "YOUR NEXT CHAPTER", "lines": ["Your brand.", "Built to grow."], "accent": "grow.", "body": "A new way to move your marketing forward." },
+    { "start": 4.333333, "end": 8.3, "type": "introduce", "eyebrow": "MEET MELLOX AI", "lines": ["Your AI", "marketing team."], "accent": "marketing team.", "body": "Strategy. Content. Visibility. One workspace." },
+    { "start": 8.3, "end": 13.166667, "type": "dna", "eyebrow": "01 / BRAND DNA", "lines": ["It starts", "with your DNA."], "accent": "DNA.", "body": "Your voice. Your audience. Your point of view." },
+    { "start": 13.166667, "end": 18, "type": "brains", "eyebrow": "02 / CONNECTED INTELLIGENCE", "lines": ["Four brains.", "One direction."], "accent": "One direction.", "body": "Brand. Customer. Competitor. Market." },
+    { "start": 18, "end": 22.8, "type": "create", "eyebrow": "03 / CONTENT STUDIO", "lines": ["One idea.", "So many", "possibilities."], "accent": "possibilities.", "body": "Posts, visuals and videos. Created in your voice." },
+    { "start": 22.8, "end": 26.7, "type": "publish", "eyebrow": "04 / DISTRIBUTION", "lines": ["Make every", "channel count."], "accent": "count.", "body": "Create. Approve. Schedule. Publish." },
+    { "start": 26.7, "end": 31.7, "type": "visibility", "eyebrow": "05 / AI VISIBILITY", "lines": ["Show up in", "the AI", "conversation."], "accent": "conversation.", "body": "Track mentions. Find gaps. Make your next move." },
+    { "start": 31.7, "end": 36.766667, "type": "autopilot", "eyebrow": "06 / AUTOPILOT", "lines": ["Less busywork.", "More", "momentum."], "accent": "momentum.", "body": "You set the direction. Mellox moves the work." },
+    { "start": 36.766667, "end": 40.85, "type": "end", "eyebrow": "THE NEXT MOVE IS YOURS", "lines": ["Your AI marketing team."], "accent": "", "body": "Meet Mellox." }
+  ]
+}

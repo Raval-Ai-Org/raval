@@ -97,6 +97,7 @@ export function createMemoryAutopilotStore(
           reason: "",
           goal: null,
           opportunity_id: null,
+          campaign_id: null,
           requested_by: null,
           studio_job_id: null,
           content_item_ids: [],

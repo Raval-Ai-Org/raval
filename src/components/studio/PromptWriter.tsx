@@ -1,5 +1,7 @@
 "use client";
 
+import { creditsFor } from "@/lib/billing/catalog";
+
 // "Write it for me" on the Studio description box. Writes a long, detailed,
 // timely description for the current format (or expands what the person
 // wrote), reveals it into the box, and remembers what it gave so the next
@@ -164,9 +166,24 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
     }
   };
 
+  // With the person's own photos or clips attached, the writing starts from them.
+  const c = session.controls;
+  const clips = session.type === "video" && c.videoMode === "brand";
+  const looking =
+    session.type === "video" && c.videoMode === "site"
+      ? null
+      : clips
+        ? c.sourceVideoAssetIds?.length
+          ? "Watching your clips"
+          : null
+        : c.referenceAssetIds?.length
+          ? "Looking at your photos"
+          : null;
+  const statuses = looking ? [looking, ...STATUS.slice(1)] : STATUS;
+
   return {
     busy,
-    status: STATUS[statusIndex],
+    status: statuses[statusIndex],
     result: isOurs ? result : null,
     label,
     write: () => void write(),
@@ -203,7 +220,9 @@ export function WriteForMeButton({
         />
       ) : null}
       <Icon className={cn("relative size-3.5", writer.busy && "animate-spin")} />
-      <span className="relative">{writer.label}</span>
+      <span className="relative">
+        {writer.label} · {creditsFor("ideas")} credits
+      </span>
     </motion.button>
   );
 }

@@ -2,7 +2,7 @@
 
 AI Visibility answers one question for a Mellox workspace: *can ChatGPT, Claude,
 Gemini and Perplexity read, understand and cite this site — and what should we
-fix first?* It crawls a site, scores it on 60+ explainable checks, stores
+fix first?* It crawls a site, scores it on 80+ explainable checks, stores
 page-level evidence and findings, recommends prioritised fixes with copy-paste
 recipes, compares scans over time and re-scans on a schedule.
 
@@ -93,6 +93,32 @@ Overview delta and History mark the change as "New scoring".
   and broken links are verified by re-reading the other pages involved
   (`comparisonUrls` in `verify.ts`); without them the result is inconclusive.
 
+## Score version 3 — HTTP, citability and speed
+
+Decision record [ADR-0035](adr/0035-geo-engine-v3-http-citability-speed.md).
+Adapted (MIT) from SiteOne Crawler, GEO Optimizer and Unlighthouse; credit
+lines sit in the files that adapt them.
+
+| Area | Rules | Evidence collected |
+|---|---|---|
+| HTTP & crawling | `tech.redirects`, `tech.soft_404`, `tech.https_redirect`, `tech.compression`, `tech.http_caching`, `tech.mixed_content`, `tech.security_headers`, `tech.sitemap_quality`, `tech.hreflang_targets` | `analysis.http` (`http.ts`: encoding, validators, security headers, redirect hops), `site.http` (homepage headers, what `http://` does, a missing-page probe) |
+| Citability | `content.self_contained`, `content.quotable_passages`, `content.readability`, `content.agent_usable` | `analysis.citability` (`analyze/citability.ts`), `analysis.hygiene` (`analyze/hygiene.ts`) |
+| Trust | `trust.hidden_instructions`, `trust.headline_year`, `trust.date_consistency` | hidden text addressed to AI (inline-hidden, `aria-hidden`, comments, `data-ai-*`), headline years, visible "Updated" dates |
+| Speed | `perf.core_web_vitals` (real users), `perf.lab_score` (Lighthouse), `perf.render_blocking`, `perf.image_dimensions`, `perf.dom_size` | `site.performance` (`performance.server.ts` → PageSpeed Insights + Chrome UX Report) |
+
+- **N/A, never a penalty,** when evidence is missing: older scans, quick scans
+  (no multi-page or lab checks), speed switched off or Chrome without data.
+- **Speed** runs inside the `crawling` stage after the frontier empties:
+  real-user data once, then Lighthouse on route-sampled pages (one per
+  template, most important first), each saved as it lands so a slice resumes.
+  The Overview shows it (`PerformanceCard.tsx`); "Since your fixes went live"
+  shows real-user change once 28-day windows have settled after the fix.
+- **Priority** weighs page importance (homepage, depth, inbound links,
+  sitemap) — it orders findings, never changes a score.
+- **Fixes:** content rewrites through the CMS `content_html` path; code changes
+  through the GEO Engineer; response headers are hosting configuration
+  Mellox never writes, so they come with exact manual steps.
+
 ## Database (migration `20260914120000_add_geo_intelligence.sql`)
 
 | Table | Purpose | Access |
@@ -170,6 +196,9 @@ No new infrastructure — the `studio_jobs` / `scheduled_jobs` pattern:
 | `FEATURE_FLAG_GEO_AI_PROBES_ENABLED_WS_<id>` | — | Per-workspace override |
 | `GEO_PROBE_MODELS` | `perplexity/sonar,openai/gpt-4o-mini` | OpenRouter models to probe |
 | `GEO_PROBE_MAX_QUERIES` | 4 (max 10) | Questions per model per scan |
+| `FEATURE_FLAG_GEO_PERFORMANCE_ENABLED` | on | Lighthouse + real-user speed in scans |
+| `GOOGLE_PAGESPEED_API_KEY` | — | Mellox's Google key (PageSpeed Insights + CrUX); falls back to `GOOGLE_API_KEY` |
+| `GEO_LAB_PAGES` | 4 (max 10) | Lighthouse pages per full scan |
 
 Existing requirements apply: `SUPABASE_*`, `CRON_SECRET`, `OPENROUTER_API_KEY`
 (probes only), `APP_URL` (crawler user agent).
@@ -311,8 +340,9 @@ JavaScript. When rendering is unavailable the report says so.
 - Rendering needs Chromium (in the Docker image, or Playwright's in development)
   and the flag; without it client-rendered pages are analysed from server HTML and
   the report says rendering was unavailable.
-- Authority is on-page only — no backlink data, Search Console, Analytics or
-  PageSpeed/Core Web Vitals integration (none existed in the GEO-Module either).
+- Authority is on-page only — no backlink data, Search Console or Analytics in
+  the score. Speed comes from PageSpeed Insights (lab) and the Chrome UX Report
+  (origin-level real users); sites with little Chrome traffic have no field data.
 - Heuristic NLP (topic, entities, questions) is English-centric.
 - Probes sample a few questions on a few models; answers vary by user and time.
 - Response time is measured from Mellox's server, not real-user performance.

@@ -51,6 +51,13 @@ export const PLATFORM_PLAYBOOK: Record<PlatformId, string[]> = {
     "Say what the viewer gets before anything about the brand.",
     "Up to 3 hashtags that match what people search for.",
   ],
+  pinterest: [
+    "People search Pinterest to plan and make things: the title and first sentence name the topic in the words they would type.",
+    "A Pin is saved for later, so it should be useful on its own: a how-to, an idea to try, a list, a look to copy.",
+    "Tall pictures (2:3) take more room in the feed. Short, readable words on the picture help it get saved.",
+    "Every Pin needs a picture. One clear subject beats a busy collage.",
+    "Hashtags matter little here; 0 to 2 at most.",
+  ],
 };
 
 export const FORMAT_PLAYBOOK: Partial<Record<StudioType, string[]>> = {

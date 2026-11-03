@@ -13,6 +13,9 @@ import { recordToolCall } from "./settings.server";
 import { asObject, cleanOutput, workspaceIdInput, type McpTool } from "./tool";
 import { audienceTools } from "./tools/audience";
 import { autopilotTools } from "./tools/autopilot";
+import { campaignTools } from "./tools/campaigns";
+import { communityTools } from "./tools/community";
+import { appsTools } from "./tools/apps";
 import { contentTools } from "./tools/content";
 import { geoTools } from "./tools/geo";
 import { intelligenceTools } from "./tools/intelligence";
@@ -22,8 +25,11 @@ export const MCP_TOOLS: readonly McpTool[] = [
   ...workspaceTools,
   ...contentTools,
   ...autopilotTools,
+  ...campaignTools,
   ...audienceTools,
   ...intelligenceTools,
+  ...communityTools,
+  ...appsTools,
   ...geoTools,
 ];
 

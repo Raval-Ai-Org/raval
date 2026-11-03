@@ -1,11 +1,16 @@
 // The Studio job contract shared by the browser and the server: what a
 // generation request contains and what a finished job returns. Pure + zod.
+import type { HeroLook } from "./product-hero/variety";
 import { z } from "zod";
 import type { PlatformId } from "@/lib/social-platforms";
 import type { AspectRatio } from "./aspect";
 import type { StageId, StudioType } from "./formats";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
+import type { AdOnImage } from "./ad-formats";
+import { AD_OBJECTIVE_IDS } from "./ad-objectives";
+import { VIDEO_KIND_IDS, type VideoKindId } from "./video/kinds";
+import type { VideoPlanOutput } from "./video/storyboard";
 
 export const PlatformIdSchema = z.enum([
   "linkedin",
@@ -15,9 +20,10 @@ export const PlatformIdSchema = z.enum([
   "threads",
   "tiktok",
   "youtube",
+  "pinterest",
 ]);
 
-export const AspectRatioSchema = z.enum(["1:1", "4:5", "16:9", "9:16", "3:4", "4:3"]);
+export const AspectRatioSchema = z.enum(["1:1", "4:5", "16:9", "9:16", "3:4", "4:3", "2:3"]);
 
 export const StudioTypeSchema = z.enum([
   "social",
@@ -42,6 +48,10 @@ export const GOALS = [
 export type GoalId = (typeof GOALS)[number]["id"];
 
 export const ControlsSchema = z.object({
+  paymentSource: z.enum(["creation", "credits"]).optional(),
+  paymentSourceExplicit: z.boolean().optional(),
+  articleQuality: z.enum(["standard", "premium"]).optional(),
+  artworkMode: z.enum(["template", "full"]).optional(),
   platforms: z.array(PlatformIdSchema).max(7).default([]),
   ratio: AspectRatioSchema.optional(),
   tone: z.string().max(80).optional(),
@@ -51,6 +61,22 @@ export const ControlsSchema = z.object({
   seamless: z.boolean().optional(),
   durationSec: z.number().int().min(4).max(90).optional(),
   videoResolution: z.enum(["480P", "720P", "1080P"]).optional(),
+  videoModelKey: z
+    .enum(["standard", "draft", "premium", "long", "cinematic", "variation"])
+    .optional(),
+  videoQuote: z
+    .object({
+      hash: z.string().length(64),
+      units: z.number().int().positive(),
+      /** "video" is one of the month's free videos; "credits" otherwise (src/lib/billing/video-charge.ts). */
+      meter: z.enum(["video", "credits"]).optional(),
+      /** For the price chip only: free videos left, and how many a month the plan gives. */
+      freeLeft: z.number().int().min(0).optional(),
+      freeMonthly: z.number().int().min(0).optional(),
+      resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(),
+      aspectRatio: AspectRatioSchema.optional(),
+    })
+    .optional(),
   audio: z.boolean().optional(),
   includeImage: z.boolean().optional(),
   cta: z.string().max(140).optional(),
@@ -65,15 +91,82 @@ export const ControlsSchema = z.object({
   /** Build a still storyboard before spending video credits. */
   videoPreview: z.boolean().optional(),
   campaign: z.string().trim().max(120).optional(),
+  /**
+   * Explicit source photos selected for this generation, checked against this
+   * workspace. Up to six when designing with them, four otherwise.
+   */
+  referenceAssetIds: z.array(z.string().uuid()).max(6).optional(),
+  /**
+   * Whether source photos stay intact ("preserve"), get a design built around
+   * them ("design", src/lib/studio/photo-design/), receive a targeted edit, or
+   * only inspire a new image. "hero" is a catalogue product cut out of its
+   * own photo and staged as a poster (ADR-0040); set by the server only.
+   */
+  referenceMode: z.enum(["preserve", "design", "edit", "inspire", "hero"]).optional(),
+  /** Design mode: keep the photos exact (default) or let the model blend them in. */
+  photoFidelity: z.enum(["exact", "blend"]).optional(),
+  /**
+   * Video: make a new one (default), brand the person's own clips, or make a
+   * recap from their photos (src/lib/studio/clip-edit.ts).
+   */
+  videoMode: z.enum(["generate", "brand", "recap", "site"]).optional(),
+  /**
+   * New AI video: the kind it is made as (src/lib/studio/video/kinds.ts).
+   * Absent: picked from the brief and its source by settleVideoControls.
+   */
+  videoKind: z.enum(VIDEO_KIND_IDS as [VideoKindId, ...VideoKindId[]]).optional(),
+  /**
+   * New AI video: who may be on screen, decided by settleVideoControls
+   * (`peoplePolicy`): nobody unless the brief, the picture or the kind asks.
+   */
+  videoPeople: z.enum(["none", "hands", "cast", "source", "optional"]).optional(),
+  /** Brand mode: the person's own clips, checked against this workspace. */
+  sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
+  /** Brand mode: captions of what is said (absent means on). */
+  clipCaptions: z.boolean().optional(),
+  /** Recap mode: camera moves over the exact photos, or AI motion per photo. */
+  recapMotion: z.enum(["camera", "ai"]).optional(),
+  /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
+  productId: z.string().uuid().optional(),
+  /** The person chose "No product": a product the brief names isn't picked for them. */
+  noProduct: z.boolean().optional(),
+  /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
+  adFormat: z.string().max(40).optional(),
+  /** Ads: what the ad is for (src/lib/studio/ad-objectives.ts). Absent: from the brief and goal. */
+  adObjective: z.enum(AD_OBJECTIVE_IDS).optional(),
+  /** Variations (src/lib/studio/variations.ts): how many more versions to make. */
+  variationCount: z.number().int().min(2).max(4).optional(),
 });
 
 export type StudioControls = z.infer<typeof ControlsSchema>;
+
+/** Snapshot of the reviewed script, independent of brief and content-row limits. */
+export const SourceScriptSchema = z.object({
+  title: z.string().max(120),
+  hook: z.string().max(200),
+  beats: z
+    .array(
+      z.object({
+        time: z.string().max(20),
+        visual: z.string().max(240),
+        voiceover: z.string().max(320),
+        onScreen: z.string().max(90).optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+  cta: z.string().max(160),
+  caption: z.string().max(10000),
+  durationSec: z.number().int().min(4).max(60),
+});
 
 export const IntentSchema = z.object({
   brief: z.string().trim().min(3).max(4000),
   goal: z.enum(["awareness", "engagement", "leads", "launch", "education", "offer"]).optional(),
   ideaId: z.string().max(80).optional(),
   ideaSource: z.string().max(40).optional(),
+  /** A running Autopilot program must still be active before each paid step. */
+  autopilotProgramId: z.string().uuid().optional(),
   /** A StudioTemplate id; the prompt follows its structure. */
   template: z.string().max(40).optional(),
   /**
@@ -88,6 +181,7 @@ export const IntentSchema = z.object({
    * into a Story). Read on the server through the job's own workspace.
    */
   sourceContentId: z.string().uuid().optional(),
+  sourceScript: SourceScriptSchema.optional(),
 });
 
 export type StudioIntent = z.infer<typeof IntentSchema>;
@@ -139,26 +233,99 @@ export type StudioRefine = z.infer<typeof RefineSchema>;
 /** Brand DNA sent by the client (it lives in the browser). Loosely typed, size-capped. */
 export const BrandPayloadSchema = z.record(z.string(), z.unknown()).nullable().optional();
 
-export const CreateJobSchema = z.object({
-  workspaceId: z.string().uuid(),
-  type: StudioTypeSchema,
-  idempotencyKey: z.string().min(8).max(120),
-  intent: IntentSchema,
-  controls: ControlsSchema,
-  brand: BrandPayloadSchema,
-  /**
-   * Brand Kit Style: a style id, "none" for Brand DNA only, or absent for the
-   * workspace default. Checked on the server against the job's workspace.
-   */
-  parentJobId: z.string().uuid().optional(),
-  refine: RefineSchema.optional(),
-  /** Regenerate: same brief, a new take. */
-  regenerate: z.boolean().optional(),
-  /** The user already approved the draft this comes from: land the result in Ready. */
-  approve: z.boolean().optional(),
-  /** A text draft being turned into this post; retired once the post is ready. */
-  fromContentId: z.string().uuid().optional(),
-});
+export const CreateJobSchema = z
+  .object({
+    workspaceId: z.string().uuid(),
+    type: StudioTypeSchema,
+    idempotencyKey: z.string().min(8).max(120),
+    includedCaptionEdit: z.boolean().optional(),
+    intent: IntentSchema,
+    controls: ControlsSchema,
+    brand: BrandPayloadSchema,
+    /**
+     * Brand Kit Style: a style id, "none" for Brand DNA only, or absent for the
+     * workspace default. Checked on the server against the job's workspace.
+     */
+    parentJobId: z.string().uuid().optional(),
+    refine: RefineSchema.optional(),
+    /** Regenerate: same brief, a new take. */
+    regenerate: z.boolean().optional(),
+    /** The user already approved the draft this comes from: land the result in Ready. */
+    approve: z.boolean().optional(),
+    /** A text draft being turned into this post; retired once the post is ready. */
+    fromContentId: z.string().uuid().optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.controls.paymentSource === "creation" && input.controls.platforms.length > 3)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "platforms"],
+        message: "Choose up to three platform versions for one creation.",
+      });
+    if (
+      ["social", "image", "ad"].includes(input.type) &&
+      (input.controls.referenceMode ?? "preserve") === "preserve" &&
+      (input.controls.referenceAssetIds?.length ?? 0) > 1
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose one photo to post as is, or design with several photos instead.",
+      });
+    }
+    if (
+      input.controls.referenceMode !== "design" &&
+      input.controls.videoMode !== "recap" &&
+      (input.controls.referenceAssetIds?.length ?? 0) > 4
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose up to four photos, or design with up to six.",
+      });
+    if (
+      input.type === "video" &&
+      input.controls.videoMode === "brand" &&
+      !input.controls.sourceVideoAssetIds?.length
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "sourceVideoAssetIds"],
+        message: "Add at least one of your clips to brand.",
+      });
+    if (
+      input.type === "video" &&
+      input.controls.videoMode === "recap" &&
+      // A motion post moves one finished post's picture.
+      (input.controls.referenceAssetIds?.length ?? 0) <
+        (input.controls.videoKind === "motion-post" ? 1 : 2)
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose at least two photos for a recap.",
+      });
+    if (
+      input.type === "video" &&
+      input.controls.videoMode === "site" &&
+      input.controls.referenceAssetIds?.length !== 1
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "referenceAssetIds"],
+        message: "Choose one capture of your website.",
+      });
+    if (
+      (input.type === "video" ||
+        (input.type === "story" && input.controls.storyMode === "video")) &&
+      (input.controls.durationSec ?? 10) > 60
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controls", "durationSec"],
+        message: "Videos can be up to 60 seconds long.",
+      });
+  });
 
 export type CreateJobInput = z.infer<typeof CreateJobSchema>;
 
@@ -185,6 +352,8 @@ export type CarouselSlide = {
   kicker?: string;
   /** Words from the heading to highlight. */
   emphasis?: string;
+  /** Index into the carousel's own photos (carousel/photos.ts), placed by code. */
+  photo?: number;
 };
 
 /** A Story: its frames and the look they share (the carousel design system). */
@@ -219,6 +388,8 @@ export type CarouselSpecOutput = {
   brand: string;
   site?: string;
   ratio?: string;
+  /** The brand's own photos and screenshots shown on slides, in order. */
+  photos?: import("./carousel/photos").SlidePhoto[];
 };
 
 export type ArticleOutput = {
@@ -292,9 +463,24 @@ export type StudioJobOutput = {
   ads?: AdVariant[];
   /** Image/video: the visual concept the render was built from. */
   concept?: string;
+  /** New AI video: its kind, clips and storyboard, and the checks it passed. */
+  videoPlan?: VideoPlanOutput;
+  /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
+  artDirection?: string;
+  /** Product poster: its staging, colour mood, light, set, idea and words (ADR-0040). */
+  heroLook?: HeroLook;
+  /** Exact short copy selected for an image layer, kept separate from art direction. */
+  onImageText?: string;
   altText?: string;
   /** Ad: the shared visual direction. */
   visualConcept?: string;
+  /** Ad: the designed layout the picture follows, and the words typeset on it. */
+  adFormat?: string;
+  adOnImage?: AdOnImage;
+  /** Ad: what it is for (ad-objectives.ts id). */
+  adObjective?: string;
+  /** Ad: Google search lines, written to Google's limits for the Google Ads connector. */
+  adSearch?: { headlines: string[]; descriptions: string[] };
   media?: MediaOutput[];
   /** Per-part failures that did not fail the whole job. */
   partial?: { target: string; error: string }[];
@@ -304,6 +490,7 @@ export type StudioJobOutput = {
 export type StudioJobError = { category: string; message: string; retryable: boolean };
 
 export type StudioJob = {
+  captionEditsRemaining?: number;
   id: string;
   workspace_id: string;
   type: StudioType;

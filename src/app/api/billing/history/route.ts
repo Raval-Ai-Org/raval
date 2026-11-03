@@ -29,13 +29,44 @@ export const GET = defineRoute({
     }
     let rows = admin
       .from("meter_ledger")
-      .select("id,meter,kind,delta_available,delta_held,action,reason,workspace_id,created_at")
+      .select(
+        "id,meter,kind,delta_available,delta_held,action,reason,workspace_id,created_at,hold_id",
+      )
       .eq("account_id", account.id)
       .order("created_at", { ascending: false })
       .limit(50);
     if (!ownAccount && query.workspaceId) rows = rows.eq("workspace_id", query.workspaceId);
     const { data, error } = await rows;
     if (error) throw new HttpError(503, "Could not load billing history.");
+    const holdIds = [...new Set((data ?? []).flatMap((row) => (row.hold_id ? [row.hold_id] : [])))];
+    const jobsByHold = new Map<string, { id: string; title: string | null; workspaceId: string }>();
+    if (holdIds.length) {
+      const { data: links, error: linkError } = await admin
+        .from("billing_studio_jobs")
+        .select("hold_id,job_id,workspace_id")
+        .eq("account_id", account.id)
+        .in("hold_id", holdIds);
+      if (linkError) throw new HttpError(503, "Could not load billing job details.");
+      if (links?.length) {
+        const { data: jobs, error: jobError } = await admin
+          .from("studio_jobs")
+          .select("id,title")
+          .in(
+            "id",
+            links.map((link) => link.job_id),
+          );
+        if (jobError) throw new HttpError(503, "Could not load billing job details.");
+        for (const link of links) {
+          const job = jobs?.find((job) => job.id === link.job_id);
+          if (link.hold_id && job)
+            jobsByHold.set(link.hold_id, {
+              id: job.id,
+              title: job.title,
+              workspaceId: link.workspace_id,
+            });
+        }
+      }
+    }
     return {
       entries: (data ?? []).map((row) => ({
         id: row.id,
@@ -45,6 +76,7 @@ export const GET = defineRoute({
         heldDelta: row.delta_held,
         action: row.action,
         reason: ownAccount ? row.reason : null,
+        job: row.hold_id ? (jobsByHold.get(row.hold_id) ?? null) : null,
         at: row.created_at,
       })),
     };

@@ -8,9 +8,11 @@ import * as brain from "./brain";
 import * as brandDna from "./brand-dna";
 import * as brandVisuals from "./brand-visuals";
 import * as campaignGeneration from "./campaign-generation";
+import * as campaigns from "./campaigns";
 import * as canva from "./canva";
 import * as chatActions from "./chat-actions";
 import * as coach from "./coach";
+import * as community from "./community";
 import * as competitorIntel from "./competitor-intel";
 import * as competitors from "./competitors";
 import * as competitorWatch from "./competitor-watch";
@@ -21,21 +23,28 @@ import * as geo from "./geo";
 import * as geoAeoAudit from "./geo-aeo-audit";
 import * as geoAgent from "./geo-agent";
 import * as geoFixes from "./geo-fixes";
+import * as goals from "./goals";
 import * as googleAnalytics from "./google-analytics";
 import * as insights from "./insights";
+import * as integrations from "./integrations";
+import * as agents from "./agents";
 import * as links from "./links";
 import * as mcp from "./mcp";
 import * as memory from "./memory";
 import * as notion from "./notion";
+import * as products from "./products";
 import * as publish from "./publish";
+import * as pulse from "./pulse";
 import * as schedules from "./schedules";
 import * as slack from "./slack";
 import * as sitePublishing from "./site-publishing";
 import * as stories from "./stories";
 import * as strategy from "./strategy";
+import * as taste from "./taste";
 import * as trackedPrompts from "./tracked-prompts";
 import * as workspaces from "./workspaces";
 import * as webflow from "./webflow";
+import * as wix from "./wix";
 import * as wordpress from "./wordpress";
 
 // Registry the /api/rpc/[...fn] route dispatches against. Keys mirror the paths
@@ -49,8 +58,10 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "brand-dna": brandDna,
   "brand-visuals": brandVisuals,
   "campaign-generation": campaignGeneration,
+  campaigns,
   "chat-actions": chatActions,
   coach,
+  community,
   "competitor-intel": competitorIntel,
   competitors,
   "competitor-watch": competitorWatch,
@@ -61,21 +72,28 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "geo-aeo-audit": geoAeoAudit,
   "geo-agent": geoAgent,
   "geo-fixes": geoFixes,
+  goals,
   "google-analytics": googleAnalytics,
   insights,
+  integrations,
+  agents,
   links,
   mcp,
   memory,
   notion,
+  products,
   publish,
+  pulse,
   schedules,
   slack,
   "site-publishing": sitePublishing,
   stories,
   strategy,
+  taste,
   "tracked-prompts": trackedPrompts,
   workspaces,
   webflow,
+  wix,
   wordpress,
 };
 

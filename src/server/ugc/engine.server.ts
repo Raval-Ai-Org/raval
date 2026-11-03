@@ -24,7 +24,6 @@ import type { RenderPatch, RenderRow, UgcRenderStore } from "./store";
 
 export const MAX_SUBMIT_ATTEMPTS = 4;
 export const MAX_PERSIST_ATTEMPTS = 5;
-export const RENDER_TIMEOUT_MS = 30 * 60_000;
 export const LEASE_SECONDS = 120;
 /** Reference image links must outlive a slow provider queue. */
 const IMAGE_URL_TTL_SECONDS = 6 * 60 * 60;
@@ -71,7 +70,10 @@ export function createRenderEngine(deps: EngineDeps) {
     if (!isKnownUgcModelKey(row.model_key))
       return fail(row, "model_unavailable", "This model is no longer available.");
     // A legacy key resolves to its current equivalent; the provider adapts it.
-    const model = resolveUgcModel(row.model_key);
+    const model = resolveUgcModel(
+      row.model_key,
+      row.provider === "openrouter" ? "openrouter" : "kie",
+    );
     if (row.submit_attempts >= MAX_SUBMIT_ATTEMPTS) {
       return fail(
         row,
@@ -123,6 +125,7 @@ export function createRenderEngine(deps: EngineDeps) {
       if (!frozen) return (await store.getRender(current.id)) ?? current;
       current.provider_meta = frozen.provider_meta;
     }
+    const images = visual ? [...new Set([...imageUrls, ...visual.urls])] : imageUrls;
     const result = await provider.submit({
       model,
       prompt: [current.prompt, visual?.rules].filter(Boolean).join("\n\n"),
@@ -130,9 +133,11 @@ export function createRenderEngine(deps: EngineDeps) {
       aspectRatio: current.aspect_ratio as UgcAspectRatio,
       resolution: current.resolution as UgcResolution,
       audio: current.audio,
-      imageUrls: visual ? [...new Set([...imageUrls, ...visual.urls])] : imageUrls,
+      imageUrls: images,
       // Legacy requests retain their provider's existing reference/fallback limits.
       ...(visual?.urls.length ? { requireReferences: true, requiredReferenceCount: 1 } : {}),
+      // The brand's style references come after the person's own photos.
+      styleReferenceCount: images.length - imageUrls.length,
       callbackUrl: deps.callbackUrl?.(),
     });
     const t = now();
@@ -179,13 +184,6 @@ export function createRenderEngine(deps: EngineDeps) {
     const t = now();
     if (!row.provider_task_id)
       return fail(row, "missing_task", "The render lost its provider task.");
-    if (row.submitted_at && t - Date.parse(row.submitted_at) > RENDER_TIMEOUT_MS) {
-      return fail(
-        row,
-        "timeout",
-        "The render took too long and was stopped. Your allowance was returned.",
-      );
-    }
     let result;
     try {
       result = await provider.check(row.provider_task_id, row.provider);
@@ -211,10 +209,31 @@ export function createRenderEngine(deps: EngineDeps) {
       );
     }
     if (result.state === "failed") {
-      await store.transition(row.id, ["processing"], {
+      const failed = await store.transition(row.id, ["processing"], {
         provider_state: result.providerState,
         provider_meta: { ...row.provider_meta, result: result.meta },
       });
+      // The provider's task has ended, so submitting again can never run the
+      // same render twice. Only an outage-type failure is retried, never a
+      // refusal, and within the same submission allowance as submit errors.
+      if (failed && result.retryable && row.submit_attempts < MAX_SUBMIT_ATTEMPTS) {
+        log.warn("ugc.render.resubmit", {
+          renderId: row.id,
+          code: result.code,
+          attempt: row.submit_attempts,
+        });
+        return (
+          (await store.transition(row.id, ["processing"], {
+            status: "submitting",
+            provider_task_id: null,
+            submitted_at: null,
+            error_code: result.code,
+            error_message: result.message,
+            next_attempt_at: iso(t + 30_000 * 2 ** Math.max(0, row.submit_attempts - 1)),
+            lease_until: null,
+          })) ?? row
+        );
+      }
       return fail(row, result.code, result.message);
     }
     const persisting = await store.transition(row.id, ["processing"], {

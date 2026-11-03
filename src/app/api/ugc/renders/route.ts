@@ -24,6 +24,7 @@ import {
 } from "@/lib/billing/catalog";
 import { isUgcModelKey } from "@/lib/ugc/models";
 import { HttpError } from "@/server/http-error";
+import { VIDEO_BILLING_HOLD_MS } from "@/lib/ugc/duration";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -92,7 +93,7 @@ export const POST = defineRoute({
         feature,
         idempotencyKey: body.idempotencyKey,
         route: "ugc/renders:create",
-        expiresAt: new Date(Date.now() + 3 * 60 * 60_000).toISOString(),
+        expiresAt: new Date(Date.now() + VIDEO_BILLING_HOLD_MS).toISOString(),
       });
     } catch (error) {
       await cancelRender(supabase, workspaceId, render.id);

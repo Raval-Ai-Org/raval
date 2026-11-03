@@ -20,6 +20,8 @@ import { DEFAULT_STORY_SETTINGS, type StorySettings } from "@/lib/stories/schedu
 import { isStoryPlatform } from "@/lib/stories/placement";
 import { isValidTimeZone } from "@/lib/autopilot/time";
 import { isFullAutopilotEnabled } from "@/lib/feature-flags";
+import { toAutopilotGoal } from "@/lib/goals/decide";
+import { readGoals } from "@/server/goals/service.server";
 import type { PlatformId } from "@/lib/social-platforms";
 import { runWithScope } from "@/server/request-context";
 import { loadStudioContext } from "@/server/studio/context.server";
@@ -86,9 +88,11 @@ export async function suggestStrategy(args: {
   timezone: string;
 }): Promise<StrategySuggestion> {
   const { workspaceId, userId } = args;
-  const [ctx, connected] = await Promise.all([
+  const [ctx, connected, goals] = await Promise.all([
     loadStudioContext(db, workspaceId, null),
     connectedPlatforms(workspaceId).catch(() => [] as string[]),
+    // The person's goal (ADR-0035): its pace and channels are the defaults.
+    readGoals(workspaceId).catch(() => null),
   ]);
   const hasBrand = ctx.brandText.trim().length > 120;
 
@@ -142,8 +146,17 @@ export async function suggestStrategy(args: {
     }
   }
 
-  const platforms = (connected.length ? connected.slice(0, 3) : ["linkedin"]) as PlatformId[];
-  const postsPerWeek = 5;
+  // Channels the person chose that are connected come first, then the rest connected.
+  const wanted = (goals?.channels ?? []).filter((c) => connected.includes(c));
+  const platforms = (
+    connected.length
+      ? [...new Set([...wanted, ...connected])].slice(0, 3)
+      : (goals?.channels.slice(0, 3) ?? []).length
+        ? goals!.channels.slice(0, 3)
+        : ["linkedin"]
+  ) as PlatformId[];
+  const postsPerWeek = goals?.postsPerWeek ?? 5;
+  if (goals && !confirmed) goal = toAutopilotGoal(goals.focus);
   // A daily Story when an Instagram or Facebook account is connected: it's
   // where Stories live, and one a day is the habit that works.
   const storyPlatforms = connected.filter(isStoryPlatform);

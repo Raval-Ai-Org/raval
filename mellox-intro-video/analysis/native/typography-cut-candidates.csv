@@ -1,0 +1,92 @@
+source_frame_0based,source_image_1based,seconds,milliseconds,background_delta,foreground_text_delta,center_delta,foreground_fraction,reason,score,verification
+40,41,1.333333,1333,0.043266,0.003896,0.062708,0.011482,center glyph/animation change,0.30904,Candidate only; inspect before/at/after images for semantic timing
+55,56,1.833333,1833,0.040617,0.006028,0.058834,0.003277,center glyph/animation change,0.29012,Candidate only; inspect before/at/after images for semantic timing
+90,91,3.0,3000,0.018519,0.005936,0.027273,0.004446,center glyph/animation change,0.24733,Candidate only; inspect before/at/after images for semantic timing
+103,104,3.433333,3433,0.005908,0.020558,0.017528,0.021108,center glyph/animation change,0.85658,Candidate only; inspect before/at/after images for semantic timing
+112,113,3.733333,3733,0.010794,0.040108,0.032055,0.034447,center glyph/animation change,1.67117,Candidate only; inspect before/at/after images for semantic timing
+126,127,4.2,4200,0.010434,0.037083,0.030921,0.028397,center glyph/animation change,1.54512,Candidate only; inspect before/at/after images for semantic timing
+130,131,4.333333,4333,0.564364,0.0,0.737032,0.0,backdrop cut/flash,4.03117,Candidate only; inspect before/at/after images for semantic timing
+147,148,4.9,4900,0.047735,0.02136,0.069103,0.022529,center glyph/animation change,0.89,Candidate only; inspect before/at/after images for semantic timing
+162,163,5.4,5400,0.065608,0.043202,0.096637,0.051499,center glyph/animation change,1.80008,Candidate only; inspect before/at/after images for semantic timing
+172,173,5.733333,5733,0.022208,0.050032,0.046611,0.04648,center glyph/animation change,2.08467,Candidate only; inspect before/at/after images for semantic timing
+176,177,5.866667,5867,0.560403,0.009213,0.727922,0.009213,backdrop cut/flash,4.00288,Candidate only; inspect before/at/after images for semantic timing
+183,184,6.1,6100,0.765567,0.01845,0.938788,0.0,backdrop cut/flash,5.46834,Candidate only; inspect before/at/after images for semantic timing
+193,194,6.433333,6433,0.760128,0.030138,0.923595,0.03745,backdrop cut/flash,5.42949,Candidate only; inspect before/at/after images for semantic timing
+204,205,6.8,6800,0.003701,0.012032,0.010993,0.017648,center glyph/animation change,0.50133,Candidate only; inspect before/at/after images for semantic timing
+212,213,7.066667,7067,0.003719,0.014187,0.011045,0.009007,center glyph/animation change,0.59113,Candidate only; inspect before/at/after images for semantic timing
+220,221,7.333333,7333,0.003372,0.011184,0.010015,0.014072,center glyph/animation change,0.466,Candidate only; inspect before/at/after images for semantic timing
+230,231,7.666667,7667,0.762721,0.028763,0.931235,0.018198,backdrop cut/flash,5.44801,Candidate only; inspect before/at/after images for semantic timing
+238,239,7.933333,7933,0.009784,0.039764,0.029062,0.010611,center glyph/animation change,1.65683,Candidate only; inspect before/at/after images for semantic timing
+249,250,8.3,8300,0.763999,0.019069,0.934829,0.019114,backdrop cut/flash,5.45714,Candidate only; inspect before/at/after images for semantic timing
+259,260,8.633333,8633,0.012826,0.042331,0.038095,0.064838,center glyph/animation change,1.76379,Candidate only; inspect before/at/after images for semantic timing
+268,269,8.933333,8933,0.013465,0.041254,0.039993,0.085786,center glyph/animation change,1.71892,Candidate only; inspect before/at/after images for semantic timing
+278,279,9.266667,9267,0.028592,0.097726,0.084917,0.066992,center glyph/animation change,4.07192,Candidate only; inspect before/at/after images for semantic timing
+287,288,9.566667,9567,0.739968,0.104671,0.863598,0.037679,backdrop cut/flash,5.28549,Candidate only; inspect before/at/after images for semantic timing
+297,298,9.9,9900,0.021631,0.066098,0.06425,0.092707,center glyph/animation change,2.75408,Candidate only; inspect before/at/after images for semantic timing
+306,307,10.2,10200,0.010786,0.022208,0.032037,0.098001,center glyph/animation change,0.92533,Candidate only; inspect before/at/after images for semantic timing
+313,314,10.433333,10433,0.008375,0.029749,0.024876,0.115237,center glyph/animation change,1.23954,Candidate only; inspect before/at/after images for semantic timing
+322,323,10.733333,10733,0.734595,0.122685,0.847494,0.109003,backdrop cut/flash,5.24711,Candidate only; inspect before/at/after images for semantic timing
+331,332,11.033333,11033,0.00338,0.011116,0.010038,0.013018,center glyph/animation change,0.46317,Candidate only; inspect before/at/after images for semantic timing
+340,341,11.333333,11333,0.009688,0.0369,0.028774,0.03965,center glyph/animation change,1.5375,Candidate only; inspect before/at/after images for semantic timing
+349,350,11.633333,11633,0.011589,0.039306,0.034415,0.038206,center glyph/animation change,1.63775,Candidate only; inspect before/at/after images for semantic timing
+358,359,11.933333,11933,0.759013,0.039329,0.919998,0.011437,backdrop cut/flash,5.42152,Candidate only; inspect before/at/after images for semantic timing
+367,368,12.233333,12233,0.766048,0.012605,0.940395,0.013041,backdrop cut/flash,5.47177,Candidate only; inspect before/at/after images for semantic timing
+376,377,12.533333,12533,0.766246,0.016777,0.940988,0.003736,backdrop cut/flash,5.47319,Candidate only; inspect before/at/after images for semantic timing
+383,384,12.766667,12767,0.002047,0.012078,0.006079,0.018816,center glyph/animation change,0.50325,Candidate only; inspect before/at/after images for semantic timing
+390,391,13.0,13000,0.003859,0.01861,0.011461,0.03855,center glyph/animation change,0.77542,Candidate only; inspect before/at/after images for semantic timing
+395,396,13.166667,13167,0.636144,0.051797,0.751437,0.0,backdrop cut/flash,4.54389,Candidate only; inspect before/at/after images for semantic timing
+406,407,13.533333,13533,0.045269,0.017877,0.064735,0.012949,center glyph/animation change,0.74487,Candidate only; inspect before/at/after images for semantic timing
+418,419,13.933333,13933,0.041785,0.015058,0.058522,0.014554,center glyph/animation change,0.62742,Candidate only; inspect before/at/after images for semantic timing
+427,428,14.233333,14233,0.033234,0.015379,0.047849,0.017923,center glyph/animation change,0.64079,Candidate only; inspect before/at/after images for semantic timing
+437,438,14.566667,14567,0.125739,0.016456,0.173781,0.007334,center glyph/animation change,0.89814,Candidate only; inspect before/at/after images for semantic timing
+442,443,14.733333,14733,0.002351,0.007197,0.006978,0.011597,center glyph/animation change,0.29988,Candidate only; inspect before/at/after images for semantic timing
+451,452,15.033333,15033,0.005764,0.017923,0.017116,0.019779,center glyph/animation change,0.74679,Candidate only; inspect before/at/after images for semantic timing
+455,456,15.166667,15167,0.764299,0.019848,0.93606,0.005661,backdrop cut/flash,5.45928,Candidate only; inspect before/at/after images for semantic timing
+460,461,15.333333,15333,0.002766,0.008434,0.008206,0.010382,center glyph/animation change,0.35142,Candidate only; inspect before/at/after images for semantic timing
+464,465,15.466667,15467,0.766952,0.009282,0.943789,0.0044,backdrop cut/flash,5.47823,Candidate only; inspect before/at/after images for semantic timing
+469,470,15.633333,15633,0.003755,0.011666,0.011155,0.014095,center glyph/animation change,0.48608,Candidate only; inspect before/at/after images for semantic timing
+473,474,15.766667,15767,0.00383,0.013912,0.011376,0.008343,center glyph/animation change,0.57967,Candidate only; inspect before/at/after images for semantic timing
+478,479,15.933333,15933,0.0057,0.018037,0.016928,0.02081,center glyph/animation change,0.75154,Candidate only; inspect before/at/after images for semantic timing
+483,484,16.1,16100,0.168248,0.589361,0.38015,0.560689,backdrop cut/flash,24.55671,Candidate only; inspect before/at/after images for semantic timing
+488,489,16.266667,16267,0.008502,0.029405,0.02523,0.047534,center glyph/animation change,1.22521,Candidate only; inspect before/at/after images for semantic timing
+492,493,16.4,16400,0.212069,0.555991,0.441576,0.45006,backdrop cut/flash,23.16629,Candidate only; inspect before/at/after images for semantic timing
+501,502,16.7,16700,0.187698,0.624702,0.417023,0.526471,backdrop cut/flash,26.02925,Candidate only; inspect before/at/after images for semantic timing
+510,511,17.0,17000,0.194947,0.403053,0.468813,0.319697,backdrop cut/flash,16.79387,Candidate only; inspect before/at/after images for semantic timing
+518,519,17.266667,17267,0.70945,0.1908,0.80704,0.199326,backdrop cut/flash,7.95,Candidate only; inspect before/at/after images for semantic timing
+527,528,17.566667,17567,0.008402,0.037564,0.024956,0.037404,center glyph/animation change,1.56517,Candidate only; inspect before/at/after images for semantic timing
+536,537,17.866667,17867,0.00851,0.036556,0.025279,0.036258,center glyph/animation change,1.52317,Candidate only; inspect before/at/after images for semantic timing
+540,541,18.0,18000,0.736512,0.10953,0.853117,0.118331,backdrop cut/flash,5.2608,Candidate only; inspect before/at/after images for semantic timing
+549,550,18.3,18300,0.005761,0.021063,0.017111,0.006784,center glyph/animation change,0.87762,Candidate only; inspect before/at/after images for semantic timing
+558,559,18.6,18600,0.003608,0.013568,0.010618,0.015402,center glyph/animation change,0.56533,Candidate only; inspect before/at/after images for semantic timing
+567,568,18.9,18900,0.763933,0.019802,0.93457,0.019619,backdrop cut/flash,5.45666,Candidate only; inspect before/at/after images for semantic timing
+576,577,19.2,19200,0.004381,0.017464,0.013012,0.009878,center glyph/animation change,0.72767,Candidate only; inspect before/at/after images for semantic timing
+585,586,19.5,19500,0.003603,0.013912,0.010703,0.015539,center glyph/animation change,0.57967,Candidate only; inspect before/at/after images for semantic timing
+594,595,19.8,19800,0.764695,0.024248,0.936869,0.008709,backdrop cut/flash,5.46211,Candidate only; inspect before/at/after images for semantic timing
+603,604,20.1,20100,0.005669,0.020948,0.016835,0.051636,center glyph/animation change,0.87283,Candidate only; inspect before/at/after images for semantic timing
+608,609,20.266667,20267,0.007649,0.020535,0.0227,0.056197,center glyph/animation change,0.85563,Candidate only; inspect before/at/after images for semantic timing
+616,617,20.533333,20533,0.2056,0.063738,0.282458,0.005546,backdrop cut/flash,2.65575,Candidate only; inspect before/at/after images for semantic timing
+636,637,21.2,21200,0.44757,0.062844,0.492129,0.022369,backdrop cut/flash,3.19693,Candidate only; inspect before/at/after images for semantic timing
+639,640,21.3,21300,0.005426,0.022988,0.016117,0.042561,center glyph/animation change,0.95783,Candidate only; inspect before/at/after images for semantic timing
+644,645,21.466667,21467,0.749827,0.074235,0.892778,0.06305,backdrop cut/flash,5.35591,Candidate only; inspect before/at/after images for semantic timing
+655,656,21.833333,21833,0.011365,0.044279,0.033757,0.010909,center glyph/animation change,1.84496,Candidate only; inspect before/at/after images for semantic timing
+662,663,22.066667,22067,0.764717,0.019917,0.937011,0.0,backdrop cut/flash,5.46226,Candidate only; inspect before/at/after images for semantic timing
+665,666,22.166667,22167,0.007232,0.024088,0.021482,0.0369,center glyph/animation change,1.00367,Candidate only; inspect before/at/after images for semantic timing
+669,670,22.3,22300,0.760283,0.036693,0.923402,0.00848,backdrop cut/flash,5.43059,Candidate only; inspect before/at/after images for semantic timing
+676,677,22.533333,22533,0.765957,0.015745,0.940314,0.0,backdrop cut/flash,5.47112,Candidate only; inspect before/at/after images for semantic timing
+684,685,22.8,22800,0.760554,0.037564,0.924385,0.005913,backdrop cut/flash,5.43253,Candidate only; inspect before/at/after images for semantic timing
+689,690,22.966667,22967,0.002408,0.007357,0.007145,0.01052,center glyph/animation change,0.30654,Candidate only; inspect before/at/after images for semantic timing
+693,694,23.1,23100,0.002711,0.010543,0.008052,0.0,center glyph/animation change,0.43929,Candidate only; inspect before/at/after images for semantic timing
+696,697,23.2,23200,0.002847,0.009786,0.008451,0.012835,center glyph/animation change,0.40775,Candidate only; inspect before/at/after images for semantic timing
+702,703,23.4,23400,0.003734,0.015127,0.011089,0.004446,center glyph/animation change,0.63029,Candidate only; inspect before/at/after images for semantic timing
+707,708,23.566667,23567,0.003684,0.011597,0.010942,0.012949,center glyph/animation change,0.48321,Candidate only; inspect before/at/after images for semantic timing
+711,712,23.7,23700,0.004188,0.016708,0.01244,0.011116,center glyph/animation change,0.69617,Candidate only; inspect before/at/after images for semantic timing
+716,717,23.866667,23867,0.006323,0.019,0.01878,0.025876,center glyph/animation change,0.79167,Candidate only; inspect before/at/after images for semantic timing
+720,721,24.0,24000,0.00657,0.025348,0.019379,0.004515,center glyph/animation change,1.05617,Candidate only; inspect before/at/after images for semantic timing
+725,726,24.166667,24167,0.002816,0.008847,0.008366,0.01178,center glyph/animation change,0.36863,Candidate only; inspect before/at/after images for semantic timing
+731,732,24.366667,24367,0.094547,0.52764,0.245334,0.116337,center glyph/animation change,21.985,Candidate only; inspect before/at/after images for semantic timing
+735,736,24.5,24500,0.013601,0.04758,0.0404,0.066098,center glyph/animation change,1.9825,Candidate only; inspect before/at/after images for semantic timing
+739,740,24.633333,24633,0.197935,0.501558,0.447543,0.352264,backdrop cut/flash,20.89825,Candidate only; inspect before/at/after images for semantic timing
+748,749,24.933333,24933,0.194101,0.544898,0.399192,0.548909,backdrop cut/flash,22.70408,Candidate only; inspect before/at/after images for semantic timing
+757,758,25.233333,25233,0.161888,0.383411,0.374304,0.267648,backdrop cut/flash,15.97546,Candidate only; inspect before/at/after images for semantic timing
+766,767,25.533333,25533,0.179092,0.617483,0.400559,0.594816,backdrop cut/flash,25.72846,Candidate only; inspect before/at/after images for semantic timing
+772,773,25.733333,25733,0.336493,0.164719,0.227651,0.080927,backdrop cut/flash,6.86329,Candidate only; inspect before/at/after images for semantic timing

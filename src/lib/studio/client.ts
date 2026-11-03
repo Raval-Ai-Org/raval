@@ -56,6 +56,26 @@ async function call<T>(path: string, init?: AuthedFetchInit): Promise<T> {
 }
 
 export const studioApi = {
+  videoQuote(
+    workspaceId: string,
+    controls: StudioControls,
+    context: {
+      brief?: string;
+      template?: string;
+      source?: { picture?: boolean; script?: boolean };
+    } = {},
+  ) {
+    return call<NonNullable<StudioControls["videoQuote"]>>("/api/studio/video-quote", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, controls, ...context }),
+      workspaceId,
+    });
+  },
+  paymentSource(workspaceId: string) {
+    return call<{ creation?: { active: boolean } }>(
+      `/api/billing/entitlements?workspaceId=${encodeURIComponent(workspaceId)}`,
+    ).then((result) => (result.creation?.active ? ("creation" as const) : ("credits" as const)));
+  },
   createJob(input: CreateJobInput) {
     return call<{ job: StudioJob }>("/api/studio/jobs", {
       method: "POST",
@@ -73,6 +93,25 @@ export const studioApi = {
     return call<{ jobs: StudioJob[] }>(
       `/api/studio/jobs?workspaceId=${encodeURIComponent(workspaceId)}`,
     ).then((r) => r.jobs);
+  },
+  findJob(workspaceId: string, requestKey: string) {
+    return call<{ jobs: StudioJob[] }>(
+      `/api/studio/jobs?workspaceId=${encodeURIComponent(workspaceId)}&requestKey=${encodeURIComponent(requestKey)}`,
+    ).then((result) => result.jobs[0] ?? null);
+  },
+  /** Make one of a job's versions the post's picture (free). */
+  chooseVariation(workspaceId: string, id: string, slot: string) {
+    return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/choose`, {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, slot }),
+    }).then((r) => r.job);
+  },
+  /** Undo: put the post back to an earlier version of the same piece (free). */
+  restoreVersion(workspaceId: string, id: string, versionJobId: string) {
+    return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ workspaceId, versionJobId }),
+    }).then((r) => r.job);
   },
   cancelJob(workspaceId: string, id: string) {
     return call<{ job: StudioJob }>(`/api/studio/jobs/${id}/cancel`, {

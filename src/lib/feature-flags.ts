@@ -87,6 +87,24 @@ export function isGeoProbesEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Speed measurement in AI Visibility scans: Lighthouse lab runs through Google's
+ * PageSpeed Insights API on a few route-sampled pages, plus Chrome UX Report
+ * real-user data. Free Google APIs under Mellox's own key
+ * (GOOGLE_PAGESPEED_API_KEY, falling back to GOOGLE_API_KEY); real-user data
+ * needs the key, lab runs work without one at a low quota. On unless
+ * FEATURE_FLAG_GEO_PERFORMANCE_ENABLED=false; _WS_<id> overrides per workspace.
+ */
+export function isGeoPerformanceEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_GEO_PERFORMANCE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_GEO_PERFORMANCE_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * Google Analytics 4 + Search Console connector. On whenever the OAuth client
  * id is set, unless FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED=false;
  * FEATURE_FLAG_GOOGLE_ANALYTICS_ENABLED_WS_<id> overrides per workspace.
@@ -200,6 +218,33 @@ export function isMcpEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Connected apps through Composio (ADR-0042). On unless set to "false";
+ * `FEATURE_FLAG_INTEGRATIONS_ENABLED_WS_<id>` overrides it for one workspace.
+ * Off means the Apps section is hidden, RPCs answer 404 and no app tool runs.
+ */
+export function isIntegrationsEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_INTEGRATIONS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_INTEGRATIONS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Apps still in their capability check (`availability: "testing"` in
+ * src/lib/integrations/catalog.ts). Off unless set to "true", globally or with
+ * `FEATURE_FLAG_INTEGRATIONS_TESTING_WS_<id>` for one workspace.
+ */
+export function isIntegrationsTesting(workspaceId: string): boolean {
+  const local = process.env[`FEATURE_FLAG_INTEGRATIONS_TESTING_WS_${workspaceId}`];
+  return isTruthy(
+    (local ?? process.env.FEATURE_FLAG_INTEGRATIONS_TESTING ?? "").trim().toLowerCase(),
+  );
+}
+
+/**
  * Audience (ADR-0031): audience groups, the Mellox Score, deeper checks and
  * version comparisons. On unless set to "false"; `FEATURE_FLAG_AUDIENCE_ENABLED_WS_<id>`
  * overrides it for one workspace. Off means the sidebar entry is hidden, RPCs
@@ -243,6 +288,38 @@ export function isMemoryEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * Library hearts (ADR-0038): what a brand's team loved, so the next posts lean
+ * toward it. On unless set to "false"; `FEATURE_FLAG_TASTE_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off means no hearts in the Library, RPCs
+ * answer 404 and generators get no taste block or lean.
+ */
+export function isTasteEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_TASTE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_TASTE_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Campaigns (ADR-0039): planned runs of posts and Stories. On unless set to
+ * "false"; `FEATURE_FLAG_CAMPAIGNS_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off hides the sidebar entry, RPCs answer 404 and the worker
+ * leaves campaign pieces alone.
+ */
+export function isCampaignsEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_CAMPAIGNS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_CAMPAIGNS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * Chat tools (ADR-0033): chat reads the workspace's own data to answer and
  * offers changes as buttons. On unless set to "false"; off falls back to a
  * plain reply with no tools.
@@ -255,6 +332,69 @@ export function isChatToolsEnabled(workspaceId?: string): boolean {
     if (perWs) return !isFalsy(perWs);
   }
   return !isFalsy((process.env.FEATURE_FLAG_CHAT_TOOLS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Designing with a brand's own photos (src/lib/studio/photo-design/). On
+ * unless set to "false"; `FEATURE_FLAG_PHOTO_DESIGN_ENABLED_WS_<id>` overrides
+ * it for one workspace. Off means a design request answers 404; "post as is"
+ * still works.
+ */
+export function isPhotoDesignEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_PHOTO_DESIGN_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_PHOTO_DESIGN_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * A catalogue product's single picture as a product hero poster: the product
+ * cut out of its photo and staged (ADR-0040). On unless set to "false";
+ * `FEATURE_FLAG_PRODUCT_HERO_ENABLED_WS_<id>` overrides it for one workspace.
+ * Off, a product picture is designed around its photo as before.
+ */
+export function isProductHeroEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_PRODUCT_HERO_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_PRODUCT_HERO_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Branding a brand's own video clips and turning its photos into a recap
+ * video (src/lib/studio/clip-edit.ts). On unless set to "false";
+ * `FEATURE_FLAG_CLIP_EDIT_ENABLED_WS_<id>` overrides it for one workspace.
+ */
+export function isClipEditEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_CLIP_EDIT_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_CLIP_EDIT_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * New AI videos planned as a storyboard of whole clips, chained, and checked
+ * before anyone sees them (src/lib/studio/video/). On unless set to "false";
+ * `FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off: one shot plan and one render prompt, as before.
+ */
+export function isVideoStoryboardEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED ?? "").trim().toLowerCase());
 }
 
 export function isProofEngineEnabled(workspaceId?: string): boolean {
@@ -295,4 +435,48 @@ export function isEntitlementOverridesEnabled(): boolean {
   return !isFalsy(
     (process.env.FEATURE_FLAG_ENTITLEMENT_OVERRIDES_ENABLED ?? "").trim().toLowerCase(),
   );
+}
+
+/**
+ * Inspo reel links: a public Instagram, TikTok or YouTube link is read with
+ * yt-dlp and downloaded through safeFetch (src/server/brand-visuals/link-media.server.ts).
+ * OFF unless set, because these platforms' terms may not allow it;
+ * `FEATURE_FLAG_INSPO_LINKS_ENABLED_WS_<id>` overrides it for one workspace.
+ * Off, such a link answers with the plain "upload it instead" message.
+ */
+export function isInspoLinksEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_INSPO_LINKS_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return isTruthy(perWs);
+  }
+  return isTruthy((process.env.FEATURE_FLAG_INSPO_LINKS_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Community Intelligence (Brain → Market → Communities): threads on Reddit,
+ * Quora, Hacker News and Stack Exchange, and reply drafts a person posts
+ * themselves. On unless set to "false"; `FEATURE_FLAG_COMMUNITY_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off: the view is hidden, RPCs answer 404,
+ * the worker skips the workspace and chat/MCP tools answer nothing.
+ */
+export function isCommunityEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_COMMUNITY_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_COMMUNITY_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Reddit's own API. OFF, and a placeholder only: Reddit requires written
+ * approval for commercial use, which Mellox does not have yet. Until then
+ * Reddit threads are found through web search and replies are posted by the
+ * person. Nothing reads this flag to call Reddit; it only changes the note.
+ */
+export function isRedditApiEnabled(): boolean {
+  return isTruthy((process.env.FEATURE_FLAG_REDDIT_API_ENABLED ?? "").trim().toLowerCase());
 }

@@ -5,6 +5,8 @@ import { HttpError } from "@/server/http-error";
 import { paidTargetForUserRoute } from "@/server/billing/accounts.server";
 import { runMetered } from "@/server/billing/metered.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DEFAULT_VIDEO_DURATION, MAX_VIDEO_DURATION, studioVideoUnits } from "@/lib/ugc/duration";
+import { STUDIO_VIDEO_UNITS } from "@/lib/billing/catalog";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -15,10 +17,9 @@ const BodySchema = z.object({
   duration: z
     .number()
     .int()
-    .refine((value) => [4, 6, 8].includes(value), {
-      message: "Video duration must be 4, 6, or 8 seconds.",
-    })
-    .default(6),
+    .min(4)
+    .max(MAX_VIDEO_DURATION, "Videos can be up to 60 seconds long.")
+    .default(DEFAULT_VIDEO_DURATION),
   resolution: z.enum(["480P", "720P", "1080P"]).default("720P"),
   audio: z.boolean().default(true),
   seed: z.number().int().min(0).max(2_147_483_647).default(0),
@@ -52,6 +53,7 @@ export const POST = defineRoute({
         ...target,
         userId,
         action: "studio_video",
+        quantity: studioVideoUnits(body.duration) / STUDIO_VIDEO_UNITS,
         idempotencyKey: request.headers.get("Idempotency-Key") ?? randomUUID(),
         route: "video",
       },

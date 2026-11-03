@@ -454,6 +454,72 @@ export async function persistAsset(input: PersistAssetInput): Promise<PersistRes
 }
 
 /**
+ * Record media already written to storage (a browser's direct upload, or a
+ * large video Mellox stored itself), without reading it again. Larger than
+ * persistAsset's limit by design; the caller has checked the type, size and
+ * that the path is in this workspace. Idempotent per (workspace, key).
+ */
+export async function registerStoredAsset(input: {
+  workspaceId: string;
+  assetId: string;
+  idempotencyKey: string;
+  storagePath: string;
+  assetType: "image" | "video";
+  mimeType: string;
+  filename: string;
+  provider?: string;
+  parentAssetId?: string | null;
+  width?: number;
+  height?: number;
+  metadata?: Record<string, unknown>;
+}): Promise<PersistResult> {
+  if (!isWorkspaceStoragePath(input.storagePath, input.workspaceId))
+    return { ok: false, status: 403, message: "Stored media is outside this workspace" };
+  const supabase = supabaseAdmin as unknown as SupabaseClient;
+  const columns =
+    "id, workspace_id, content_item_id, status, storage_path, public_url, filename, mime_type, created_at, updated_at";
+  const { data, error } = await supabase
+    .from("assets")
+    .insert({
+      id: input.assetId,
+      workspace_id: input.workspaceId,
+      parent_asset_id: input.parentAssetId ?? null,
+      generation_id: input.idempotencyKey,
+      idempotency_key: input.idempotencyKey,
+      asset_type: input.assetType,
+      status: "ready",
+      storage_path: input.storagePath,
+      public_url: null,
+      filename: safeName(input.filename),
+      mime_type: input.mimeType,
+      width: input.width ?? null,
+      height: input.height ?? null,
+      provider: input.provider ?? "user-upload",
+      attempt: 1,
+      metadata: input.metadata ?? {},
+    })
+    .select(columns)
+    .single();
+  if (!error && data) return { ok: true, asset: data as PersistedAsset, deduplicated: false };
+  if (error?.code !== "23505")
+    return {
+      ok: false,
+      status: 500,
+      message: `Could not create persistent asset record: ${errorMessage(error)}`,
+    };
+  const { data: existing } = await supabase
+    .from("assets")
+    .select(columns)
+    .eq("workspace_id", input.workspaceId)
+    .eq("idempotency_key", input.idempotencyKey)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!existing || existing.storage_path !== input.storagePath)
+    return { ok: false, status: 409, message: "This upload was already saved." };
+  return { ok: true, asset: existing as PersistedAsset, deduplicated: true };
+}
+
+/**
  * Point content items at a stored asset. The durable Storage path lives in
  * meta; media_url stays null because a signed URL is presentation, not identity.
  */

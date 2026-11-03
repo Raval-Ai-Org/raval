@@ -1,14 +1,15 @@
 "use client";
 
-// Per-source states inside an unlocked analytics surface. Connecting is handled
-// once by AnalyticsGate, so nothing here ever asks for a connection again — a
-// panel whose own source is missing (only Search Console chosen, say) says so
-// quietly and points at Settings.
+// Per-source states for Google reports. Overview shows these in place of a
+// Google card that has no data yet: with no Google account connected (or
+// access expired) it offers "Connect Google" right there; a missing property
+// or site (only Search Console chosen, say) points at Settings.
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Clock, Loader2, Settings } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
 import type { SourceStatus } from "@/lib/analytics/types";
+import { ConnectGoogleButton } from "./GoogleConnectCard";
 
 export function ReportSkeleton() {
   return (
@@ -50,8 +51,8 @@ const COPY: Record<SourceStatus["state"], { title: string; body: string }> = {
     body: "Pick the property Mellox should read in Settings → Connections.",
   },
   not_connected: {
-    title: "Nothing chosen yet",
-    body: "Pick the property Mellox should read in Settings → Connections.",
+    title: "Connect Google",
+    body: "Read-only. Mellox never changes anything in Google.",
   },
   not_configured: {
     title: "Not available",
@@ -59,7 +60,7 @@ const COPY: Record<SourceStatus["state"], { title: string; body: string }> = {
   },
   reconnect: {
     title: "Google access expired",
-    body: "Sign in with Google again in Settings → Connections.",
+    body: "Sign in with Google again to keep these numbers up to date.",
   },
   error: {
     title: "The last sync didn't finish",
@@ -87,7 +88,13 @@ export function SourceNotice({ status }: { status: SourceStatus }) {
       <p className="max-w-xs text-[12px] leading-relaxed text-muted-foreground">
         {status.message ?? copy.body}
       </p>
-      {!syncing && (
+      {status.state === "not_connected" || status.state === "reconnect" ? (
+        <div className="mt-2">
+          <ConnectGoogleButton
+            label={status.state === "reconnect" ? "Reconnect Google" : "Connect Google"}
+          />
+        </div>
+      ) : !syncing && status.state !== "not_configured" ? (
         <button
           type="button"
           onClick={() => emitAppEvent("open:settings", { section: "analytics" })}
@@ -95,7 +102,7 @@ export function SourceNotice({ status }: { status: SourceStatus }) {
         >
           <Settings className="size-3.5" aria-hidden /> Open connections
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

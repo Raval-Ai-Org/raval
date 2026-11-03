@@ -432,6 +432,29 @@ export function createPostForMeAdapter(
             message: "Post for Me does not provide a retry operation. Create a new post instead.",
           },
         });
+      // Every post on one account (made in Mellox or not), with the network's
+      // numbers. The account must belong to this workspace.
+      const feedId = /^\/accounts\/([^/]+)\/feed$/.exec(path)?.[1];
+      if (feedId && method === "GET") {
+        const id = decodeURIComponent(feedId);
+        const account = await client.socialAccounts.retrieve(id, options);
+        if (account.external_id !== workspaceId)
+          return ok(404, { error: { message: "Account not found" } });
+        const max = Math.min(Math.max(Number(req.query?.limit ?? 60) || 60, 1), 200);
+        const posts: any[] = [];
+        let cursor: string | undefined;
+        while (posts.length < max) {
+          const page = await client.socialAccountFeeds.list(
+            id,
+            { expand: ["metrics"], limit: Math.min(50, max - posts.length), cursor },
+            options,
+          );
+          posts.push(...page.data);
+          if (!page.meta.next || !page.meta.cursor || page.data.length === 0) break;
+          cursor = page.meta.cursor;
+        }
+        return ok(200, { data: posts.slice(0, max) });
+      }
       const metricsId = /^\/posts\/([^/]+)\/metrics$/.exec(path)?.[1];
       if (metricsId)
         return ok(200, { data: { targets: await metricsFor(decodeURIComponent(metricsId)) } });

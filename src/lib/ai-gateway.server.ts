@@ -27,6 +27,7 @@ import { estimateTextCost, round6 } from "@/server/ai/pricing";
 import {
   effectivePlan,
   escalatedPlan,
+  isOpenWeightModel,
   planFor,
   type Effort,
   type TaskPlan,
@@ -55,6 +56,7 @@ export type ContentPart = {
   type: string;
   text?: string;
   image_url?: { url: string };
+  input_audio?: { data: string; format: LlmAudioInput["format"] };
   cache_control?: { type: "ephemeral" };
 };
 
@@ -269,7 +271,7 @@ export function withPromptCache(
 
 export class AiGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(status, message, { provider: "openrouter", code });
+    super(status, message, { provider: "openrouter", code, internal: true });
     this.name = "AiGatewayError";
   }
 }
@@ -354,7 +356,15 @@ export function mapOpenRouterError(status: number, raw: string): AiGatewayError 
       "context_exceeded",
     );
   }
-  if (errorType === "refusal" || errorType === "content_policy_violation") {
+  if (
+    errorType === "refusal" ||
+    errorType === "content_policy_violation" ||
+    // Image models answer a refused request with a plain 400 and these words.
+    (status === 400 &&
+      /safety system|moderation_blocked|content[ _]policy|safety_violations|rejected by the safety/i.test(
+        detail,
+      ))
+  ) {
     return new AiGatewayError(422, "The AI model declined this request.", "refusal");
   }
   if (status === 403) {
@@ -461,18 +471,58 @@ type BodyArgs = {
  *   reasoning  — effort only. Claude Opus 5.5 rejects a disabled or manual
  *                thinking budget, so neither is ever sent.
  *   provider   — data_collection "deny" always (customer brand data);
- *                require_parameters whenever a schema or tools must be honoured.
+ *                require_parameters whenever a schema or tools must be honoured;
+ *                full-precision hosts only when the list has an open-weight model.
  *   tool_choice — "auto" only: Opus 5.5 rejects forced tool use.
  */
+
+/**
+ * Open-weight models are also served as 4-bit copies (fp4, nvfp4, mxfp4, int4)
+ * that answer worse. Closed models report "unknown", so they stay eligible.
+ */
+export const OPEN_WEIGHT_QUANTIZATIONS = ["fp8", "fp16", "bf16", "fp32", "unknown"] as const;
+
+const JSON_MENTION = "Answer with one valid JSON object.";
+
+/**
+ * JSON mode on an OpenAI fallback refuses a request whose messages never say
+ * "json" (400), so a slow primary would turn into a failed piece. Says it
+ * once, in the system message, when the prompt does not already.
+ */
+export function withJsonMention(messages: ChatMessage[] | unknown[]): ChatMessage[] | unknown[] {
+  const list = messages as ChatMessage[];
+  const says = list.some((message) =>
+    typeof message?.content === "string"
+      ? /json/i.test(message.content)
+      : Array.isArray(message?.content) &&
+        message.content.some((part) => part?.type === "text" && /json/i.test(part.text ?? "")),
+  );
+  if (says) return messages;
+  const system = list.findIndex(
+    (message) => message?.role === "system" && typeof message.content === "string",
+  );
+  if (system < 0) return [{ role: "system", content: JSON_MENTION }, ...list];
+  return list.map((message, index) =>
+    index === system ? { ...message, content: `${message.content}\n\n${JSON_MENTION}` } : message,
+  );
+}
+
 export function buildRequestBody(args: BodyArgs): Record<string, unknown> {
   const strict = Boolean(args.tools?.length) || args.responseFormat?.type === "json_schema";
   const body: Record<string, unknown> = {
     models: args.plan.models,
-    messages: args.messages,
+    messages:
+      args.responseFormat?.type === "json_object" ? withJsonMention(args.messages) : args.messages,
     stream: args.stream,
     max_tokens: args.maxTokens,
     usage: { include: true },
-    provider: { data_collection: "deny", ...(strict ? { require_parameters: true } : {}) },
+    provider: {
+      data_collection: "deny",
+      ...(strict ? { require_parameters: true } : {}),
+      ...(args.plan.models.some(isOpenWeightModel)
+        ? { quantizations: [...OPEN_WEIGHT_QUANTIZATIONS] }
+        : {}),
+    },
   };
   if (args.plan.effort) {
     body.reasoning = {
@@ -693,7 +743,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
     try {
       return await attempt();
     } catch (error) {
-      if (error instanceof AiGatewayError && error.message.startsWith(MID_ANSWER_FAILURE)) {
+      if (error instanceof AiGatewayError && error.detail.startsWith(MID_ANSWER_FAILURE)) {
         return attempt();
       }
       throw error;
@@ -897,13 +947,38 @@ export type LlmImageInput = {
   data: string;
 };
 
+/** Sound heard by a model that takes audio (OpenRouter `input_audio`, base64 only). */
+export type LlmAudioInput = {
+  format: "mp3" | "wav";
+  /** Base64 data, no data: prefix. */
+  data: string;
+};
+
 /** Per-image and per-request limits that every tier accepts. */
 export const LLM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const LLM_MAX_IMAGES = 20;
+/** About ten minutes of the small mono MP3 Studio sends. */
+export const LLM_MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 /** llmText callers assemble and cap their own prompts; this only stops abuse. */
 const PROMPT_MAX_INPUT_CHARS = 400_000;
 
-function userContent(user: string, images?: LlmImageInput[]): string | ContentPart[] {
+function userContent(
+  user: string,
+  images?: LlmImageInput[],
+  audio?: LlmAudioInput[],
+): string | ContentPart[] {
+  if (audio?.length) {
+    if (audio.length > 1 || images?.length) {
+      throw new AiGatewayError(400, "Send one sound file on its own.", "too_many_inputs");
+    }
+    if (Math.floor((audio[0].data.length * 3) / 4) > LLM_MAX_AUDIO_BYTES) {
+      throw new AiGatewayError(400, "The sound is too long to transcribe.", "audio_too_large");
+    }
+    return [
+      { type: "input_audio", input_audio: { data: audio[0].data, format: audio[0].format } },
+      { type: "text", text: user },
+    ];
+  }
   if (!images?.length) return user;
   if (images.length > LLM_MAX_IMAGES) {
     throw new AiGatewayError(400, "Too many images for one request.", "too_many_images");
@@ -928,6 +1003,8 @@ export type LlmTextOpts = {
   user: string;
   /** Images shown to the model before the user text (vision). */
   images?: LlmImageInput[];
+  /** One sound file heard before the user text (the route's model must take audio). */
+  audio?: LlmAudioInput[];
   /**
    * Total output ceiling (reasoning + answer). The route plan's ceiling is the
    * floor, so a caller only raises it.
@@ -966,7 +1043,7 @@ export async function llmText(opts: LlmTextOpts): Promise<LlmTextResult> {
     route: opts.route,
     messages: [
       { role: "system", content: opts.system },
-      { role: "user", content: userContent(opts.user, opts.images) },
+      { role: "user", content: userContent(opts.user, opts.images, opts.audio) },
     ],
     task: "generate",
     // System + user prompts are built and bounded by their callers.

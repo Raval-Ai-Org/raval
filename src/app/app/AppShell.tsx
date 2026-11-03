@@ -17,7 +17,14 @@ import { autopilotPath } from "@/components/app/autopilot/composer/useComposerAu
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWorkspace, useWorkspaceActions } from "@/components/workspace/WorkspaceProvider";
-import { brainPath, conversationIdFromPath, workspacePath } from "@/lib/workspace/paths";
+import {
+  brainPath,
+  campaignsPath,
+  communitiesPath,
+  conversationIdFromPath,
+  inspoPath,
+  workspacePath,
+} from "@/lib/workspace/paths";
 import { BrainIcon } from "@/components/app/brain/BrainMark";
 import { useBrainOverview, useBrainSeen } from "@/components/app/brain/use-brain";
 import type { BrainSection } from "@/lib/brain/brain";
@@ -27,8 +34,11 @@ import {
   BookOpen,
   Calendar as CalendarIcon,
   ChevronDown,
-  Link2,
+  LayoutGrid,
+  Megaphone,
   Menu,
+  MessageCircle,
+  Palette,
   PanelRightOpen,
   Plus,
   Rocket,
@@ -42,7 +52,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -99,7 +108,8 @@ const AppTour = lazy(() =>
 );
 
 import { useStudioEntry } from "@/hooks/use-studio";
-import { StudioDock } from "@/components/studio/StudioDock";
+import { StudioActivityWatcher, StudioButton } from "@/components/studio/StudioButton";
+import { setStudioRailOpen } from "@/lib/studio/rail-state";
 import { useStudioStore } from "@/lib/studio/session-store";
 import { useIsCompact } from "@/hooks/use-mobile";
 import { Logo } from "@/components/brand/Logo";
@@ -184,18 +194,32 @@ function AppShell() {
     },
   });
 
-  // Hydrate persisted sidebar state after mount (avoids SSR hydration mismatch).
+  // On a computer the sidebar starts open and stays open until the person
+  // minimizes it; that choice is remembered. Read after mount (avoids SSR
+  // hydration mismatch). On a phone it is a drawer and starts closed.
+  const navHydrated = useRef(false);
   useEffect(() => {
     try {
       const v = localStorage.getItem("app:navOpen");
-      if (v === "1" && window.innerWidth >= 1024) setNavOpen(true);
-    } catch {}
+      if (v !== "0" && window.innerWidth >= 1024) setNavOpen(true);
+    } catch {
+      if (window.innerWidth >= 1024) setNavOpen(true);
+    }
   }, []);
   useEffect(() => {
+    // Skip the first pass, before the stored choice has been applied.
+    if (!navHydrated.current) {
+      navHydrated.current = true;
+      return;
+    }
     try {
       if (!isCompact) localStorage.setItem("app:navOpen", navOpen ? "1" : "0");
     } catch {}
   }, [navOpen, isCompact]);
+  // Going somewhere from the sidebar closes it only where it is a drawer.
+  const closeNavOnPhone = useCallback(() => {
+    if (isCompact) setNavOpen(false);
+  }, [isCompact]);
   useEffect(() => {
     if (isCompact) setNavOpen(false);
   }, [isCompact]);
@@ -282,6 +306,22 @@ function AppShell() {
     // Chat's buttons and the "/" menu reach these two routes the same way.
     const onOpenBacklinks = () => navigate({ to: workspacePath(workspaceId, "backlinks") });
     const onOpenExperiments = () => navigate({ to: workspacePath(workspaceId, "experiments") });
+    const onOpenInspo = (event: CustomEvent<{ section?: string } | null>) => {
+      navigate({ to: inspoPath(workspaceId, event.detail?.section) });
+      closeNavOnPhone();
+    };
+    const onOpenCampaigns = (event: CustomEvent<{ campaignId?: string; type?: string } | null>) => {
+      navigate({
+        to: campaignsPath(workspaceId, {
+          c: event.detail?.campaignId,
+          v: event.detail?.type ? "new" : null,
+          type: event.detail?.type,
+        }),
+      });
+      closeNavOnPhone();
+    };
+    addAppEventListener("open:inspo", onOpenInspo);
+    addAppEventListener("open:campaigns", onOpenCampaigns);
     addAppEventListener("open:autopilot", onOpenAutopilot);
     addAppEventListener("open:backlinks", onOpenBacklinks);
     addAppEventListener("open:experiments", onOpenExperiments);
@@ -289,8 +329,10 @@ function AppShell() {
       removeAppEventListener("open:autopilot", onOpenAutopilot);
       removeAppEventListener("open:backlinks", onOpenBacklinks);
       removeAppEventListener("open:experiments", onOpenExperiments);
+      removeAppEventListener("open:inspo", onOpenInspo);
+      removeAppEventListener("open:campaigns", onOpenCampaigns);
     };
-  }, [navigate, workspaceId]);
+  }, [navigate, workspaceId, closeNavOnPhone]);
 
   // Brain (ADR-0032) holds the four brains and the strategy. Older buttons and
   // chat actions still name the place they used to open; each lands on its
@@ -298,9 +340,9 @@ function AppShell() {
   const openBrain = useCallback(
     (section?: BrainSection | null, tab?: string | null) => {
       navigate({ to: brainPath(workspaceId, section, tab) });
-      setNavOpen(false);
+      closeNavOnPhone();
     },
-    [navigate, workspaceId],
+    [navigate, workspaceId, closeNavOnPhone],
   );
   useEffect(() => {
     const onBrain = (event: CustomEvent<{ section?: BrainSection; tab?: string } | null>) =>
@@ -308,6 +350,7 @@ function AppShell() {
     const onBrandDna = (event: CustomEvent<{ tab?: string } | null>) => {
       const tab = event.detail?.tab;
       if (tab === "competitors") openBrain("competitors");
+      else if (tab === "look" || tab === "assets") navigate({ to: inspoPath(workspaceId, tab) });
       else if (tab === "customers") openBrain("audience", "customers");
       else openBrain("brand", tab);
     };
@@ -323,7 +366,7 @@ function AppShell() {
       removeAppEventListener("open:audience", onAudience);
       removeAppEventListener("open:competitors", onCompetitors);
     };
-  }, [openBrain]);
+  }, [openBrain, navigate, workspaceId]);
 
   useEffect(() => {
     setChatOpen(false);
@@ -414,7 +457,7 @@ function AppShell() {
         onClick={() => {
           if (lock && opts.feature) openFeatureUpgrade(opts.feature);
           else opts.onClick();
-          setNavOpen(false);
+          closeNavOnPhone();
         }}
         aria-label={lock ? `${opts.label} (needs the ${PLANS[lock].label} plan)` : undefined}
         className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -430,7 +473,7 @@ function AppShell() {
           <PlanLock plan={lock} />
         ) : (
           opts.hint && (
-            <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/80">
+            <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
               {opts.hint}
             </span>
           )
@@ -440,10 +483,14 @@ function AppShell() {
   };
 
   const SidebarSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="space-y-0.5">
-      <div className="mb-1 px-3 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">
+    // A small group name so people can tell what each block is for.
+    <div role="group" aria-label={label} className="space-y-0.5">
+      <p
+        aria-hidden
+        className="px-2.5 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70"
+      >
         {label}
-      </div>
+      </p>
       <div className="space-y-0.5">{children}</div>
     </div>
   );
@@ -454,10 +501,10 @@ function AppShell() {
       <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
         <Link
           to={homeHref}
-          onClick={() => setNavOpen(false)}
+          onClick={closeNavOnPhone}
           aria-label="Mellox AI — workspace home"
           title="Workspace home"
-          className="group flex h-9 items-center gap-1 rounded-md pl-1 pr-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="group flex h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <Logo height={28} markOnly />
           <span
@@ -476,7 +523,7 @@ function AppShell() {
           onClick={() => setNavOpen(false)}
           aria-label="Collapse sidebar"
           title="Collapse sidebar"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
         >
           <PanelRightOpen className="h-4 w-4" aria-hidden />
         </button>
@@ -488,7 +535,7 @@ function AppShell() {
           workspaceId={workspaceId}
           workspaceName={workspaceName}
           workspaceWebsite={workspaceWebsite}
-          onSwitch={() => setNavOpen(false)}
+          onSwitch={closeNavOnPhone}
         />
 
         <div className="h-px bg-border/50" />
@@ -497,30 +544,15 @@ function AppShell() {
         <RecentChats
           workspaceId={workspaceId}
           activeConversationId={activeConversationId}
-          onNavigate={() => setNavOpen(false)}
+          onNavigate={closeNavOnPhone}
         />
-
-        <div className="pt-1">
-          <button
-            type="button"
-            data-tour="library"
-            onClick={() => {
-              setNavOpen(false);
-              emitAppEvent("open:library");
-            }}
-            className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground transition-colors group-hover:bg-primary/12 group-hover:text-primary">
-              <BookOpen className="h-4 w-4" aria-hidden />
-            </span>
-            <span className="flex-1 truncate leading-none">Library</span>
-          </button>
-        </div>
 
         <div className="h-px bg-border/50" />
 
-        {/* Workspace actions */}
-        <SidebarSection label="Workspace">
+        {/* Ordered by priority: the brand comes first (everything Mellox makes
+            reads it), then making and posting, then growth and results, then
+            the team. The rail below keeps the same order. */}
+        <SidebarSection label="Brand">
           {sidebarAction({
             icon: BrainIcon,
             label: "Brain",
@@ -529,57 +561,27 @@ function AppShell() {
             onClick: () => openBrain(),
           })}
           {sidebarAction({
-            icon: BarChart3,
-            label: "Analytics",
-            hint: "⌘.",
-            accent: "hsl(var(--brand-green))",
-            tour: "analytics",
-            onClick: () => setAnalyticsOpen(true),
-          })}
-          {sidebarAction({
-            icon: CalendarIcon,
-            label: "Content calendar",
-            accent: "hsl(var(--brand-blue))",
-            tour: "calendar",
-            onClick: () => emitAppEvent("open:content-calendar"),
+            icon: Palette,
+            label: "Inspo",
+            tour: "inspo",
+            onClick: () => navigate({ to: inspoPath(workspaceId) }),
           })}
         </SidebarSection>
 
-        <div className="h-px bg-border/50" />
-
-        {/* Intelligence */}
-        <SidebarSection label="Intelligence">
+        <SidebarSection label="Create">
           {sidebarAction({
-            icon: Sparkles,
-            label: "AI Visibility",
-            hint: "GEO · AEO",
-            accent: "hsl(var(--brand-blue))",
-            tour: "visibility",
-            onClick: () => {
-              emitAppEvent("open:ai-visibility");
-              setNavOpen(false);
-            },
+            icon: BookOpen,
+            label: "Library",
+            tour: "library",
+            onClick: () => emitAppEvent("open:library"),
           })}
+          {/* Campaigns (ADR-0039) holds the content calendar: its header opens it. */}
           {sidebarAction({
-            icon: Link2,
-            label: "Backlinks",
-            hint: "SEO",
-            accent: "hsl(var(--brand-green))",
-            feature: "backlinks",
-            onClick: () => navigate({ to: workspacePath(workspaceId, "backlinks") }),
+            icon: Megaphone,
+            label: "Campaigns",
+            tour: "campaigns",
+            onClick: () => navigate({ to: campaignsPath(workspaceId) }),
           })}
-          {proofEngine?.enabled &&
-            sidebarAction({
-              icon: Trophy,
-              label: "Experiments",
-              hint: "Prove what works",
-              accent: "hsl(var(--brand-green))",
-              feature: "experiments",
-              onClick: () => {
-                navigate({ to: workspacePath(workspaceId, "experiments") });
-                setNavOpen(false);
-              },
-            })}
           {sidebarAction({
             icon: CalendarIcon,
             label: "Schedule",
@@ -588,21 +590,50 @@ function AppShell() {
           })}
         </SidebarSection>
 
-        <div className="h-px bg-border/50" />
-
-        {/* Collaborate */}
-        <SidebarSection label="Collaborate">
+        <SidebarSection label="Grow">
           {sidebarAction({
-            icon: Rocket,
-            label: "Client Portal",
-            feature: "client_portal",
-            onClick: () => emitAppEvent("open:client-portal"),
+            icon: BarChart3,
+            label: "Analytics",
+            accent: "hsl(var(--brand-green))",
+            tour: "analytics",
+            onClick: () => setAnalyticsOpen(true),
           })}
+          {sidebarAction({
+            icon: Sparkles,
+            label: "AI Visibility",
+            accent: "hsl(var(--brand-blue))",
+            tour: "visibility",
+            onClick: () => emitAppEvent("open:ai-visibility"),
+          })}
+          {/* The Reddit agent: threads worth joining, with replies to approve. */}
+          {sidebarAction({
+            icon: MessageCircle,
+            label: "Reddit agent",
+            tour: "communities",
+            onClick: () => navigate({ to: communitiesPath(workspaceId) }),
+          })}
+          {proofEngine?.enabled &&
+            sidebarAction({
+              icon: Trophy,
+              label: "Experiments",
+              accent: "hsl(var(--brand-green))",
+              feature: "experiments",
+              onClick: () => navigate({ to: workspacePath(workspaceId, "experiments") }),
+            })}
+        </SidebarSection>
+
+        <SidebarSection label="Team">
           {sidebarAction({
             icon: Share2,
             label: "Share",
             accent: "hsl(var(--brand-green))",
             onClick: () => emitAppEvent("open:share"),
+          })}
+          {sidebarAction({
+            icon: Rocket,
+            label: "Client Portal",
+            feature: "client_portal",
+            onClick: () => emitAppEvent("open:client-portal"),
           })}
         </SidebarSection>
 
@@ -618,7 +649,7 @@ function AppShell() {
         <div data-tour="account" className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu
             onOpenSettings={() => emitAppEvent("open:settings")}
-            onClose={() => setNavOpen(false)}
+            onClose={closeNavOnPhone}
           />
         </div>
       </div>
@@ -676,7 +707,10 @@ function AppShell() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => setNavOpen(true)}
+                    onClick={() => {
+                      navigate({ to: homeHref });
+                      emitAppEvent("chat:focus");
+                    }}
                     aria-label="New Chat"
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition hover:-translate-y-px hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
@@ -691,6 +725,8 @@ function AppShell() {
               {/* Divider between primary and quick actions */}
               <div aria-hidden className="my-1 h-px w-6 bg-border/50" />
 
+              {/* The most used places only, in the open sidebar's order;
+                  "More" opens the full sidebar for the rest. */}
               {[
                 {
                   icon: BrainIcon,
@@ -698,9 +734,14 @@ function AppShell() {
                   onClick: () => openBrain(),
                 },
                 {
-                  icon: Sparkles,
-                  label: "AI Visibility",
-                  onClick: () => emitAppEvent("open:ai-visibility"),
+                  icon: BookOpen,
+                  label: "Library",
+                  onClick: () => emitAppEvent("open:library"),
+                },
+                {
+                  icon: Megaphone,
+                  label: "Campaigns",
+                  onClick: () => navigate({ to: campaignsPath(workspaceId) }),
                 },
                 {
                   icon: BarChart3,
@@ -708,9 +749,9 @@ function AppShell() {
                   onClick: () => emitAppEvent("open:analytics"),
                 },
                 {
-                  icon: CalendarIcon,
-                  label: "Calendar",
-                  onClick: () => emitAppEvent("open:content-calendar"),
+                  icon: LayoutGrid,
+                  label: "More",
+                  onClick: () => setNavOpen(true),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
@@ -795,7 +836,7 @@ function AppShell() {
               aria-label="Open sidebar"
               aria-controls="app-inline-nav"
               aria-expanded={navOpen}
-              className="grid size-11 shrink-0 place-items-center rounded-xl text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+              className="grid size-11 shrink-0 place-items-center rounded-full text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             >
               <Menu className="size-5" aria-hidden />
             </button>
@@ -811,7 +852,7 @@ function AppShell() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                   title="Workspace menu"
-                  className="group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                  className="group flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
                 >
                   {brandLogo ? (
                     <img
@@ -885,17 +926,7 @@ function AppShell() {
                 </Suspense>
                 <WalletPill />
               </div>
-              <button
-                type="button"
-                onClick={() => emitAppEvent("toggle:studio")}
-                aria-label="Open Studio"
-                title="Open Studio"
-                data-tour="studio"
-                className="group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-primary-border bg-primary-surface px-3 text-[12px] font-semibold tracking-tight text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] transition-all hover:bg-primary-surface hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)] active:scale-[0.97] sm:h-8 sm:rounded-md sm:px-2.5"
-              >
-                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
-                <span className="hidden sm:inline">Studio</span>
-              </button>
+              <StudioButton />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -903,7 +934,7 @@ function AppShell() {
                     aria-label="Share"
                     title="Share"
                     data-tour="share"
-                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-primary px-2.5 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-8 sm:min-w-8 sm:rounded-md sm:px-3"
+                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-primary px-3 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-9 sm:min-w-9 sm:px-4"
                   >
                     <span
                       aria-hidden
@@ -917,39 +948,26 @@ function AppShell() {
                     />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5">
-                  <DropdownMenuLabel className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Share
-                  </DropdownMenuLabel>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-52 p-1.5">
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
                       emitAppEvent("open:share");
                     }}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Share2 className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-green))]" />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-tight">Invite teammates</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                        Share workspace access with your team
-                      </div>
-                    </div>
+                    <Share2 className="h-4 w-4 text-[hsl(var(--brand-green))]" />
+                    <span className="text-[13px] font-medium">Invite teammates</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={(e) => {
                       e.preventDefault();
                       emitAppEvent("open:client-portal");
                     }}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Users className="mt-0.5 h-4 w-4 text-[hsl(var(--brand-blue))]" />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-tight">Client portal</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                        Share plans with clients for approval
-                      </div>
-                    </div>
+                    <Users className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
+                    <span className="text-[13px] font-medium">Client portal</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -957,15 +975,10 @@ function AppShell() {
                       e.preventDefault();
                       emitAppEvent("open:publish");
                     }}
-                    className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-2"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Rocket className="mt-0.5 h-4 w-4 text-foreground/80" />
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium leading-tight">Publish</div>
-                      <div className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                        Deploy the latest version live
-                      </div>
-                    </div>
+                    <Rocket className="h-4 w-4 text-foreground/80" />
+                    <span className="text-[13px] font-medium">Publish</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1032,12 +1045,12 @@ function AppShell() {
           </button>
           <button
             type="button"
-            onClick={() => setAnalyticsOpen(true)}
+            onClick={() => openBrain()}
             className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="Open Analytics"
+            aria-label="Open Brain"
           >
-            <BarChart3 className="size-5" aria-hidden />
-            <span className="text-[10px] font-medium">Analytics</span>
+            <BrainIcon className="size-5" />
+            <span className="text-[10px] font-medium">Brain</span>
           </button>
           <button
             type="button"
@@ -1052,7 +1065,7 @@ function AppShell() {
       </div>
 
       <CommandBar />
-      <StudioDock />
+      <StudioActivityWatcher />
       <Suspense fallback={<OpeningPill />}>
         {analyticsOpen && (
           <AnalyticsModal
@@ -1101,15 +1114,23 @@ function WorkspaceSurface({
 }) {
   const isCompact = useIsCompact();
   const [studioOpen, setStudioOpen] = useState(false);
+  // Like the sidebar: open on a computer until the person closes it, and that
+  // choice is remembered. On a phone it is a drawer and starts closed.
+  const studioHydrated = useRef(false);
   useEffect(() => {
     try {
-      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") === "1")
+      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") !== "0")
         setStudioOpen(true);
     } catch {
-      /* ignore */
+      if (window.innerWidth >= 1024) setStudioOpen(true);
     }
   }, []);
   useEffect(() => {
+    // Skip the first pass, before the stored choice has been applied.
+    if (!studioHydrated.current) {
+      studioHydrated.current = true;
+      return;
+    }
     try {
       if (!isCompact) window.localStorage.setItem("mellox:studioOpen", studioOpen ? "1" : "0");
     } catch {
@@ -1119,6 +1140,10 @@ function WorkspaceSurface({
   useEffect(() => {
     if (isCompact) setStudioOpen(false);
   }, [isCompact]);
+  // The Studio button shows progress only while the panel is closed.
+  useEffect(() => {
+    setStudioRailOpen(studioOpen);
+  }, [studioOpen]);
   useEffect(() => {
     if (!isCompact || !studioOpen) return;
     const onKey = (event: KeyboardEvent) => {

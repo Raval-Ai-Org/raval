@@ -87,6 +87,8 @@ export function DeleteWorkspaceDialog({
     clearWorkspaceLocalData(target.id);
     await queryClient.invalidateQueries({ queryKey: WORKSPACES_QUERY_KEY });
     emitAppEvent("workspace:changed", { id: null });
+    // Its brand place is free again: the plan's count and the upgrade card refresh.
+    emitAppEvent("billing:changed");
 
     toast.success(`Deleted ${target.domain || target.name}`, {
       description: "The workspace and its data were permanently removed.",
@@ -133,7 +135,8 @@ export function DeleteWorkspaceDialog({
               </DialogPrimitive.Title>
               <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
                 This permanently removes the workspace and everything in it. It can't be undone.
-                Your account and other workspaces stay as they are.
+                Your account and other workspaces stay as they are. Its place on your plan is free
+                again, so you can add a brand (or this one) with a full scan.
               </p>
 
               <details className="group mt-4 rounded-2xl bg-secondary/50 px-4 py-3 text-[13px]">

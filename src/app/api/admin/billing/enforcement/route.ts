@@ -22,7 +22,7 @@ export const POST = defineRoute({
   body: Body,
   rateLimit: "billing-admin",
   handler: async ({ userId, body }) => {
-    requireBillingAdmin(userId);
+    await requireBillingAdmin(userId);
     const { data, error } = await admin.rpc("set_billing_enforcement_override", {
       p_action: body.id,
       p_account: body.accountId,

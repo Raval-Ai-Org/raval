@@ -6,6 +6,13 @@
 // in time, not proof that the fixes caused the change, so the UI words it as
 // "since your first fix". Nothing is claimed from too little data: a side with
 // fewer than MIN_CHECKS answers shows no number at all.
+//
+// Real-user speed comes from the Chrome UX Report's weekly history (stored on
+// the newest scan): p75 before the first fix against settled weeks after it
+// (`fieldChangeSince`), so a 28-day window never mixes the two sides.
+
+import { fieldChangeSince, type FieldChange } from "./performance";
+import type { FieldHistory } from "./types";
 
 /** Answers needed on each side before a mention rate or a position is shown. */
 export const MIN_CHECKS = 5;
@@ -31,6 +38,11 @@ export type FixImpact = {
   mentions: { before: number; after: number; checksBefore: number; checksAfter: number } | null;
   /** Average place in the answer when the brand was named (1 is first). */
   position: { before: number; after: number } | null;
+  /**
+   * Real-user speed (p75) before and after, per vital that moved by 5% or more.
+   * null when there is no real-user history; [] when nothing settled has changed yet.
+   */
+  speed?: FieldChange[] | null;
   /** What is still missing for a comparison, so the UI can say what to do. */
   waiting: { scan: boolean; checks: boolean };
 };
@@ -51,6 +63,8 @@ export function computeFixImpact(input: {
   scans: ImpactScan[];
   fixes: ImpactFix[];
   checks: ImpactCheck[];
+  /** CrUX weekly history from the newest scan, when measured. */
+  fieldHistory?: FieldHistory | null;
   now?: number;
 }): FixImpact {
   const now = input.now ?? Date.now();
@@ -117,5 +131,8 @@ export function computeFixImpact(input: {
         ? { before: positionBefore, after: positionAfter }
         : null,
     waiting: { scan: !after, checks: !enough },
+    speed: input.fieldHistory
+      ? fieldChangeSince(input.fieldHistory, new Date(first).toISOString())
+      : null,
   };
 }

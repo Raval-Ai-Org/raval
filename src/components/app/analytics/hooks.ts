@@ -18,6 +18,7 @@ import type {
   InsightsView,
   OverviewReport,
   SearchReport,
+  SocialReport,
   WebsiteReport,
 } from "@/lib/analytics/types";
 import { useServerFn } from "@/lib/use-server-fn";
@@ -28,6 +29,7 @@ type SectionMap = {
   website: WebsiteReport;
   search: SearchReport;
   "ai-visibility": AiVisibilityReport;
+  social: SocialReport;
 };
 
 export const analyticsKeys = {

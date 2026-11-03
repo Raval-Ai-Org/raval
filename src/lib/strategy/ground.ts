@@ -4,6 +4,8 @@
 // track, or a market play with no source Market Brain really collected, is
 // dropped — the same rule as competitor discovery and opportunities.
 import type { Strategy as AutopilotStrategy } from "@/lib/autopilot/contracts";
+import { METRIC_LABELS, type WorkspaceGoals } from "@/lib/goals/contracts";
+import { goalTargetText, platformLabel, toAutopilotGoal } from "@/lib/goals/decide";
 import {
   STAGE_LABELS,
   STRATEGY_STAGES,
@@ -173,7 +175,49 @@ export function groundStrategy(raw: unknown, facts: StrategyFacts): MarketingStr
       .slice(0, 5),
     rules: { do: strings(rules.do, 5, 160), dont: strings(rules.dont, 5, 160) },
   });
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  return facts.goals ? followGoals(parsed.data, facts.goals) : parsed.data;
+}
+
+/**
+ * The person's goal (ADR-0035) decides the strategy's goal and pace: its type
+ * and number come from what they set, the first KPI is their target, and the
+ * posts a week across social channels never exceed what they said they can
+ * look over. The model's words for the summary stay.
+ */
+export function followGoals(s: MarketingStrategy, goals: WorkspaceGoals): MarketingStrategy {
+  const target = goalTargetText(goals);
+  const first = goals.targets[0];
+  const metric = first
+    ? `${first.platform ? `${platformLabel(first.platform)} ` : ""}${METRIC_LABELS[first.metric]}`
+    : s.goal.metric;
+  const social = (platform: string) => platform !== "website" && platform !== "email";
+  const total = s.channels.filter((c) => social(c.platform)).reduce((n, c) => n + c.perWeek, 0);
+  const scale = total > goals.postsPerWeek ? goals.postsPerWeek / total : 1;
+  let left = goals.postsPerWeek;
+  const channels = s.channels.map((c) => {
+    if (!social(c.platform) || scale === 1) return c;
+    const perWeek = Math.min(left, Math.max(c.perWeek > 0 ? 1 : 0, Math.floor(c.perWeek * scale)));
+    left -= perWeek;
+    return { ...c, perWeek };
+  });
+  const pinned = first
+    ? [
+        { label: metric.slice(0, 60), target: target.slice(0, 60), why: "The goal you set" },
+        ...s.kpis.filter((k) => k.label.toLowerCase() !== metric.toLowerCase()),
+      ].slice(0, 5)
+    : s.kpis;
+  return {
+    ...s,
+    goal: {
+      ...s.goal,
+      type: toAutopilotGoal(goals.focus),
+      metric: metric.slice(0, 80),
+      target: (target || s.goal.target).slice(0, 80),
+    },
+    channels,
+    kpis: pinned,
+  };
 }
 
 /** A person's edit: same shape, same grounding, never a new competitor or source. */

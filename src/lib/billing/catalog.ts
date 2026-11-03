@@ -2,6 +2,8 @@
 //
 // Mellox pricing catalog v2. The single source of truth for plans, features,
 // credit prices, video credits, packs, add-ons and offers.
+// Legacy grant amounts remain here for replay and grandfathered windows.
+// New monthly creation/flex allocations are versioned in ./creation.ts.
 //
 // Source: CFO pricing review 2026-09-25 (docs/pricing/v2/Mellox_AI_Pricing_Model_v2.xlsx),
 // on the OpenRouter model stack in src/server/ai/task-models.ts.
@@ -33,7 +35,7 @@ export function planRank(plan: PlanId): number {
  *   pro_messages    1 unit = 1 Mellox Pro (Claude Opus 5.5) chat message
  *   flash_messages  1 unit = 1 Mellox Flash chat message (fair-use counter)
  */
-export type Meter = "credits" | "video" | "pro_messages" | "flash_messages";
+export type Meter = "credits" | "video" | "pro_messages" | "flash_messages" | "creation";
 export const VIDEO_UNITS_PER_VC = 100;
 
 export type ProbeEngine = "perplexity" | "chatgpt" | "gemini" | "google_aio";
@@ -78,7 +80,7 @@ export type PlanDef = {
     maxConcurrentExperiments: number;
     maxConcurrentRenders: number;
   };
-  /** Annual plans roll unused plan credits and VC over for this many months (capped at one month of allowance). */
+  /** Annual plans roll unused plan credits over for this many months (capped at one month of allowance). Free videos never roll over. */
   rolloverMonthsAnnual: number;
   /** Circuit breaker on ALL metered provider spend for the billing account (USD). Not the product allowance. */
   safety: { dailyUsd: number; monthlyUsd: number };
@@ -138,7 +140,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 490,
     brands: 1,
     seats: 2,
-    allowances: { credits: 2_000, videoUnits: 400, proMessages: 30, flashMessages: 800 },
+    allowances: { credits: 2_000, videoUnits: 200, proMessages: 30, flashMessages: 800 },
     limits: {
       trackedPrompts: 25,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -158,7 +160,9 @@ export const PLANS: Record<PlanId, PlanDef> = {
     support: "Email",
     fit: "For one brand getting started",
     highlights: [
+      "Autopilot writes and schedules your posts",
       "Posts, articles and video ads in your voice",
+      "2 free videos a month, then credits",
       "See what ChatGPT and Gemini say about you",
       "Test posts on your audience first",
       "Competitors and market, checked weekly",
@@ -168,13 +172,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
   growth: {
     id: "growth",
     label: "Growth",
-    tagline: "Up to 3 brands, premium video and website fixes done for you.",
+    tagline: "Up to 3 brands, Full-HD video and website fixes done for you.",
     badge: "Most popular",
     priceMonthlyUsd: 149,
     priceAnnualUsd: 1_490,
     brands: 3,
     seats: 5,
-    allowances: { credits: 6_000, videoUnits: 1_200, proMessages: 150, flashMessages: 2_000 },
+    allowances: { credits: 6_000, videoUnits: 200, proMessages: 150, flashMessages: 2_000 },
     limits: {
       trackedPrompts: 100,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -194,11 +198,9 @@ export const PLANS: Record<PlanId, PlanDef> = {
     support: "Email, 24 h",
     fit: "For growing brands and small teams",
     highlights: [
-      "Autopilot writes and schedules your posts",
       "Fix all website issues in one go",
-      "Full-HD and premium video",
+      "Full-HD video",
       "Campaigns, approvals and a client portal",
-      "Backlinks on real, relevant sites",
     ],
   },
   agency: {
@@ -209,7 +211,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 4_490,
     brands: 10,
     seats: null,
-    allowances: { credits: 18_000, videoUnits: 4_000, proMessages: 400, flashMessages: 5_000 },
+    allowances: { credits: 18_000, videoUnits: 200, proMessages: 400, flashMessages: 5_000 },
     limits: {
       trackedPrompts: 300,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -244,7 +246,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 11_990,
     brands: 30,
     seats: null,
-    allowances: { credits: 50_000, videoUnits: 10_000, proMessages: 1_200, flashMessages: 12_000 },
+    allowances: { credits: 50_000, videoUnits: 200, proMessages: 1_200, flashMessages: 12_000 },
     limits: {
       trackedPrompts: 1_000,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -371,7 +373,7 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     module: "UGC video",
     label: "Premium and Long-take video",
     pitch: "Photoreal hero ads from your product photos, and takes up to 15 seconds.",
-    minPlan: "growth",
+    minPlan: "starter",
   },
   video_cinematic: {
     key: "video_cinematic",
@@ -467,6 +469,9 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     label: "Backlink marketplace",
     pitch: "Buy real placements on relevant sites, verified live on the page.",
     minPlan: "growth",
+    // Paused while it is reworked ("coming soon" in the app). Set back to
+    // "launch" and restore the Growth highlight and pricing row to sell it again.
+    availability: "later",
   },
   client_portal: {
     key: "client_portal",
@@ -488,7 +493,7 @@ export const FEATURES: Record<FeatureKey, FeatureDef> = {
     label: "Autopilot",
     pitch:
       "Mellox plans, writes and schedules your marketing. You approve before anything goes out.",
-    minPlan: "growth",
+    minPlan: "starter",
   },
   white_label: {
     key: "white_label",
@@ -574,7 +579,48 @@ export const CREDIT_ACTIONS = {
     unit: "copy + image",
     feature: "studio",
     expectedCostUsd: 0.066,
-    routes: ["studio.captions"],
+    routes: ["studio.captions", "studio.image.brief"],
+  },
+  // Designing with the brand's own photos: reading the photos, one design
+  // layer (a second if the first can't hold them) and the visual check.
+  photo_design: {
+    credits: 35,
+    label: "Design with your photos",
+    unit: "copy + designed picture",
+    feature: "studio",
+    expectedCostUsd: 0.09,
+    routes: ["studio.photo-read"],
+  },
+  // A product hero poster (ADR-0040): the product cut out of its photo once
+  // (kept for later posts), this poster's own idea and headline, one premium
+  // staged render and the visual check.
+  product_hero: {
+    credits: 40,
+    label: "Product poster",
+    unit: "copy + product poster",
+    feature: "studio",
+    expectedCostUsd: 0.12,
+    routes: ["studio.hero.concept"],
+  },
+  // The brand's own clips (or photos with camera moves) put together into a
+  // video: reading frames, the opening design, the end card, and hearing the
+  // sound once for captions. The footage is the brand's, so no video units
+  // are used.
+  clip_brand: {
+    credits: 45,
+    label: "Brand your clips",
+    unit: "branded video",
+    feature: "studio",
+    expectedCostUsd: 0.125,
+    routes: ["studio.photo-read", "studio.transcribe"],
+  },
+  photo_recap: {
+    credits: 45,
+    label: "Recap from your photos",
+    unit: "recap video",
+    feature: "studio",
+    expectedCostUsd: 0.12,
+    routes: ["studio.photo-read"],
   },
   carousel: {
     credits: 30,
@@ -638,7 +684,7 @@ export const CREDIT_ACTIONS = {
     unit: "per batch",
     feature: "studio",
     expectedCostUsd: 0.014,
-    routes: ["studio.ideas", "studio.prompt", "studio.upload-captions"],
+    routes: ["studio.prompt", "studio.upload-captions", "campaign.write"],
   },
   // /api/ai-generate is priced by what it actually does: normal size = social_multi;
   // size "long" on WORKHORSE = article_standard; escalated to PREMIUM = article_premium
@@ -681,7 +727,7 @@ export const CREDIT_ACTIONS = {
     unit: "per plan",
     feature: "campaigns",
     expectedCostUsd: 0.107,
-    routes: ["campaign-generation"],
+    routes: ["campaign-generation", "campaign.plan"],
   },
   // Brand
   brand_dna_rescan: {
@@ -756,6 +802,16 @@ export const CREDIT_ACTIONS = {
     feature: "competitors",
     expectedCostUsd: 0.057,
     routes: ["competitor-intel"],
+  },
+  // Community Intelligence: finding and reading threads is included; a reply
+  // draft is a person's click.
+  community_reply: {
+    credits: 6,
+    label: "Community reply draft",
+    unit: "per draft",
+    feature: "market_brain",
+    expectedCostUsd: 0.012,
+    routes: ["community.reply"],
   },
   insights_refresh: {
     credits: 8,
@@ -874,16 +930,26 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "clarify",
   "memory-extract",
   "studio.naturalize",
+  "studio.caption.edit",
+  // Suggestions are loaded automatically while browsing and saving; included in Studio.
+  "studio.ideas",
   "studio.research",
   // Shared social trends snapshot: collected for everyone, charged to no one.
   "studio.trends",
   "studio.image.review",
+  // A video's brief is part of the video, charged in video units.
+  "studio.video.brief",
+  "studio.video.storyboard",
+  // Checking a video before anyone sees it (and one redo) is Mellox's cost.
+  "studio.video.qa",
   // Visual identity review is part of the already charged Studio image action.
   "brand-visuals.review",
   "analytics/insights-auto",
   "agent.content-fit",
   "agent.distribution-reliability",
   "competitors.updates",
+  // Reading community threads found by the daily refresh (economy, bounded).
+  "community.classify",
   // Autopilot plans and reads signals for free; each piece it makes is
   // charged at the normal Studio price.
   "autopilot.plan",
@@ -1078,10 +1144,10 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
 ];
 
 /**
- * Studio "Generate video" (/api/generate-video, 6s on the premium key). Deliberately
- * gated by "ugc" (all paid plans): a 6s clip costs ~$0.82, covered by 1 VC.
+ * Studio's default 10-second premium video. Longer outputs scale this quote.
+ * Gated by "ugc" (all paid plans).
  */
-export const STUDIO_VIDEO_UNITS = 100;
+export const STUDIO_VIDEO_UNITS = 200;
 
 /** Studio clip provider. */
 export const STUDIO_VIDEO_PROVIDER: VideoProviderId = "openrouter";
@@ -1117,7 +1183,39 @@ export function videoUnitsFor(args: {
   const floorUnits = Math.max(1, Math.ceil((cost / MAX_USD_PER_VC) * 4)) * 25;
   if (exact) return Math.max(exact.videoUnits, floorUnits);
   const proportional = Math.max(1, Math.ceil((cost / USD_PER_VC_REFERENCE) * 4)) * 25;
-  return Math.max(proportional, floorUnits);
+  const base = VIDEO_OPTIONS.filter((o) => o.ugcKey === args.ugcKey && o.resolution === band).sort(
+    (a, b) => a.seconds - b.seconds,
+  )[0];
+  const durationFloor = base
+    ? Math.ceil(((args.seconds / base.seconds) * base.videoUnits) / 25) * 25
+    : 0;
+  return Math.max(proportional, floorUnits, durationFloor);
+}
+
+/**
+ * Paid plans get 2 free videos a month (`videoUnits: 200`); one free video is
+ * one whole Draft or Standard video, any offered length
+ * (src/lib/billing/video-charge.ts). After that, and always on Premium and
+ * Cinematic, a video takes credits at the short-clip rate (Standard 8 s = 120).
+ */
+export const FREE_VIDEO_UNITS = 100;
+export const VIDEO_CREDITS_PER_VC = 120;
+
+/** Video units in credits, rounded up to 5. */
+export function creditsForVideoUnits(units: number): number {
+  return Math.ceil((Math.max(0, units) * VIDEO_CREDITS_PER_VC) / VIDEO_UNITS_PER_VC / 5) * 5;
+}
+
+/** A video's price in credits: `videoUnitsFor` (with its provider-cost floor) at 120 credits per VC. */
+export function videoCreditsFor(
+  option: UgcModelKey,
+  seconds: number,
+  resolution: VideoResolution,
+  providerCostUsd?: number,
+): number {
+  return creditsForVideoUnits(
+    videoUnitsFor({ ugcKey: option, seconds, resolution, providerCostUsd }),
+  );
 }
 
 /** The feature a render needs. The video router must receive the plan and never pick a locked option. */
@@ -1127,6 +1225,58 @@ export function videoFeatureFor(ugcKey: UgcModelKey, resolution: VideoResolution
   const band = priceBand(resolution);
   if (band === "1080p" || band === "2k") return "video_1080p";
   return "ugc";
+}
+
+/* ─────────────────────────── short clips ─────────────────────────── */
+
+/**
+ * A short clip is one AI clip of 8 seconds or less on Economy (Veo 3.1 Lite) or
+ * Standard (Veo 3.1 Fast): a picture brought to life, one animated photo in a
+ * recap, a short video or video Story. It is priced in ordinary credits (or
+ * creation points), so animating pictures never uses up the plan's few Video
+ * Credits. Longer videos, Premium, Cinematic and UGC renders stay on Video
+ * Credits.
+ *
+ * Costed per clip (KIE primary, OpenRouter fallback incl. 5.5% fee, one 8 s render):
+ *   Economy  720p $0.15 / $0.42    1080p $0.175 / $0.68
+ *   Standard 720p $0.30 / $0.84    1080p $0.325 / $1.01
+ * so even the fallback is covered at the prices below.
+ */
+export const SHORT_CLIP_MAX_SECONDS = 8;
+export const SHORT_CLIP_CREDITS = {
+  draft: { "720p": 60, "1080p": 80 },
+  standard: { "720p": 120, "1080p": 150 },
+} as const;
+export type ShortClipKey = keyof typeof SHORT_CLIP_CREDITS;
+
+export function isShortClipKey(key: string | undefined): key is ShortClipKey {
+  return !!key && key in SHORT_CLIP_CREDITS;
+}
+
+/** Guard like MAX_USD_PER_VC: a clip may never cost Mellox more than this per credit charged. */
+export const MAX_USD_PER_CREDIT = 0.0085;
+
+/**
+ * Credits for `clips` short clips. The server passes the routed provider's cost
+ * for one clip; with today's routes the catalog price is always higher.
+ */
+export function shortClipCredits(args: {
+  ugcKey: ShortClipKey;
+  resolution: VideoResolution;
+  clips?: number;
+  providerCostUsd?: number;
+}): number {
+  const band = priceBand(args.resolution) === "1080p" ? "1080p" : "720p";
+  const each = Math.max(
+    SHORT_CLIP_CREDITS[args.ugcKey][band],
+    Math.ceil(Math.max(0, args.providerCostUsd ?? 0) / MAX_USD_PER_CREDIT / 5) * 5,
+  );
+  return each * Math.max(1, args.clips ?? 1);
+}
+
+/** The same clips in creation points (a picture is 2 points, about 15 credits each). */
+export function shortClipPoints(credits: number): number {
+  return Math.ceil(credits / 12);
 }
 
 export function formatVc(videoUnits: number): string {
@@ -1153,13 +1303,19 @@ export const CREDIT_PACKS: CreditPackDef[] = [
   { key: "credits_500", usd: 500, credits: 50_000, bonusCredits: 7_500 },
 ];
 
-export type VideoPackDef = { key: string; usd: number; videoUnits: number };
+export type VideoPackDef = {
+  key: string;
+  usd: number;
+  videoUnits: number;
+  /** "later" = off sale: videos past the free ones take credits. */
+  availability: "launch" | "later";
+};
 
-/** Never expire. */
+/** Never expire. Off sale; balances already held still pay 100 units per video. */
 export const VIDEO_PACKS: VideoPackDef[] = [
-  { key: "video_10", usd: 29, videoUnits: 1_000 },
-  { key: "video_30", usd: 79, videoUnits: 3_000 },
-  { key: "video_100", usd: 249, videoUnits: 10_000 },
+  { key: "video_10", usd: 29, videoUnits: 1_000, availability: "later" },
+  { key: "video_30", usd: 79, videoUnits: 3_000, availability: "later" },
+  { key: "video_100", usd: 249, videoUnits: 10_000, availability: "later" },
 ];
 
 export type AddonKey =

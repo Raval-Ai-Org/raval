@@ -37,11 +37,31 @@ export async function overlayBrandLogo(
     const match = DATA_URL.exec(dataUrl);
     if (!match) return dataUrl;
     const base = Buffer.from(match[1], "base64");
+    const layers = await logoLayers(base, logoUrl, corner);
+    if (!layers) return dataUrl;
+    const out = await sharp(base).composite(layers).png().toBuffer();
+    return `data:image/png;base64,${out.toString("base64")}`;
+  } catch {
+    return dataUrl;
+  }
+}
+
+/**
+ * The logo (and its chip, when it would vanish into `base`) as layers for a
+ * picture the size of `base`. A video lays them on every frame, judged on one
+ * frame of it. Null when there is no usable logo.
+ */
+export async function logoLayers(
+  base: Buffer,
+  logoUrl: string,
+  corner: LogoCorner,
+): Promise<OverlayOptions[] | null> {
+  try {
     const source = await logoBytes(logoUrl);
-    if (!source) return dataUrl;
+    if (!source) return null;
 
     const { width: w, height: h } = await sharp(base).metadata();
-    if (!w || !h) return dataUrl;
+    if (!w || !h) return null;
 
     const logo = await sharp(source, { density: 300 })
       .resize({ width: Math.round(w * 0.16), height: Math.round(h * 0.1), fit: "inside" })
@@ -53,7 +73,7 @@ export async function overlayBrandLogo(
     const inset = Math.round(w * 0.04);
     const left = corner.endsWith("left") ? inset : w - lw - inset;
     const top = corner.startsWith("top") ? inset : h - lh - inset;
-    if (left < 0 || top < 0) return dataUrl;
+    if (left < 0 || top < 0) return null;
 
     // A transparent mark that would vanish into the picture gets a soft chip.
     let lum = 0;
@@ -89,10 +109,8 @@ export async function overlayBrandLogo(
       left,
       top,
     });
-
-    const out = await sharp(base).composite(layers).png().toBuffer();
-    return `data:image/png;base64,${out.toString("base64")}`;
+    return layers;
   } catch {
-    return dataUrl;
+    return null;
   }
 }

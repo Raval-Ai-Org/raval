@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineRoute } from "@/server/route";
 import { StudioTypeSchema, BrandPayloadSchema } from "@/lib/studio/jobs";
 import { generateStudioIdeas } from "@/server/studio/ideas.server";
-import { runMetered } from "@/server/billing/metered.server";
+import { requireBillingFeature } from "@/server/billing/feature.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,37 +24,18 @@ export const POST = defineRoute({
   body: Body,
   workspaceId: ({ body }) => body.workspaceId,
   rateLimit: "generate",
-  handler: async ({ body, workspaceId, userId, role, request, supabase }) => {
-    const metered = await runMetered(
-      {
-        workspaceId,
-        userId,
-        role,
-        action: "ideas",
-        idempotencyKey: request.headers.get("Idempotency-Key") ?? crypto.randomUUID(),
-        route: "studio.ideas",
-      },
-      async (charge) => {
-        const result = await generateStudioIdeas({
-          client: supabase,
-          workspaceId,
-          brand: body.brand,
-          type: body.type,
-          dismissed: body.dismissed,
-          refresh: body.refresh,
-          limit: body.limit,
-        });
-        if (result.generated !== "model" || result.cached) charge.setCapturedAmount(0);
-        return result;
-      },
-    );
-    return Response.json(
-      metered.result,
-      metered.balance === null
-        ? undefined
-        : {
-            headers: { "X-Billing-Balance": String(metered.balance) },
-          },
-    );
+  handler: async ({ body, workspaceId, userId, role, supabase }) => {
+    // This endpoint is also called on mount and after saving content. Suggestions
+    // are included: browsing and saving must never create a wallet reservation.
+    await requireBillingFeature({ workspaceId, userId, role, feature: "studio", spending: true });
+    return generateStudioIdeas({
+      client: supabase,
+      workspaceId,
+      brand: body.brand,
+      type: body.type,
+      dismissed: body.dismissed,
+      refresh: body.refresh,
+      limit: body.limit,
+    });
   },
 });

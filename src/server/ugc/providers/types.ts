@@ -11,6 +11,8 @@ export type VideoRenderRequest = {
   model: UgcModel;
   prompt: string;
   durationSec: number;
+  /** A composed clip cannot fall back to a shorter provider duration. */
+  minimumDurationSec?: number;
   aspectRatio: UgcAspectRatio;
   resolution: UgcResolution;
   /** Generate sound (for models that can). Default: the model's native audio. */
@@ -21,8 +23,37 @@ export type VideoRenderRequest = {
   requireReferences?: boolean;
   /** Leading identity images that cannot be omitted; style references may be limited. */
   requiredReferenceCount?: number;
+  /**
+   * The last N images are brand style references the person did not pick for
+   * this render. One that does not pass safety review is left out instead of
+   * failing the render.
+   */
+  styleReferenceCount?: number;
+  /**
+   * The first image is the exact opening frame (a post's picture, or the
+   * frame the clip before ended on), not a loose reference. A model that can
+   * start from a frame does; one that can't keeps it as a reference.
+   */
+  firstFrame?: boolean;
+  /** With `firstFrame`: the picture the clip settles on (a living picture loops back to its post). */
+  lastFrameUrl?: string;
   /** KIE callback; OpenRouter computes its own (see openRouterVideoCallbackUrl). */
   callbackUrl?: string;
+  /**
+   * Composition only (Studio storyboards): each clip's own prompt and length,
+   * made at that length and used whole. Absent: the length is split and the
+   * prompt's timed beat lines are shared out (UGC).
+   */
+  clips?: { seconds: number; prompt: string }[];
+  /**
+   * Composition only: each clip after the first starts from the last frame of
+   * the clip before (stored as an asset of this workspace, sent as the first
+   * image), so the subject stays the same. The first `leadImages` images (a
+   * post's picture) belong to the first clip only.
+   */
+  chain?: { workspaceId: string; key: string; leadImages?: number };
+  /** Composition only: join clips with a short dissolve instead of a straight cut. */
+  dissolve?: boolean;
 };
 
 export type ProviderFailure = {
@@ -48,6 +79,11 @@ export type ProviderCheck =
       thumbnailUrl?: string;
       costUsd: number | null;
       meta: Record<string, unknown>;
+      /**
+       * The file, when this check already downloaded it (a provider whose URL
+       * needs its key, read for the safety review). Saves a second download.
+       */
+      downloaded?: DownloadedVideo;
     }
   | ({ state: "failed"; providerState: string; meta: Record<string, unknown> } & ProviderFailure);
 

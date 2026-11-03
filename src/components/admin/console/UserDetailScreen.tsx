@@ -199,18 +199,23 @@ export function UserDetailScreen({ id }: { id: string }) {
           <GroupLabel>Billing accounts</GroupLabel>
           <div className="grid gap-3 sm:grid-cols-2">
             {billing.map((account) => (
-              <Tile key={account.id} className="space-y-1">
-                <p className="text-[14px] font-medium capitalize">
-                  {account.planId} · {account.status.replace("_", " ")}
-                  {account.comped && " · comped"}
-                </p>
-                <p className="text-[12.5px] text-muted-foreground">
-                  {account.trialEndsAt ? `Trial ends ${fmtDate(account.trialEndsAt)} · ` : ""}
-                  {account.currentPeriodEnd
-                    ? `Renews ${fmtDate(account.currentPeriodEnd)}`
-                    : "No billing period"}
-                </p>
-              </Tile>
+              <Link
+                key={account.id}
+                href={`/admin/billing?account=${encodeURIComponent(account.id)}`}
+              >
+                <Tile interactive className="space-y-1">
+                  <p className="text-[14px] font-medium capitalize">
+                    {account.planId} · {account.status.replace("_", " ")}
+                    {account.comped && " · comped"}
+                  </p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    {account.trialEndsAt ? `Trial ends ${fmtDate(account.trialEndsAt)} · ` : ""}
+                    {account.currentPeriodEnd
+                      ? `Renews ${fmtDate(account.currentPeriodEnd)}`
+                      : "No billing period"}
+                  </p>
+                </Tile>
+              </Link>
             ))}
           </div>
         </>

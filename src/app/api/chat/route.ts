@@ -209,17 +209,21 @@ export const POST = defineRoute({
       const lastUser = [...turns].reverse().find((turn) => turn.role === "user")?.content ?? "";
       // Older turns are summarised (decisions, facts, open questions) instead of
       // clipped to first sentences; the newest 12 stay verbatim.
-      const [history, research, style, memory, audience, strategy] = await Promise.all([
-        summarizeHistory(turns as never),
-        researchBlock(lastUser),
-        styleBlock(workspaceId),
-        memoryBlock(workspaceId),
-        // Who the brand talks to (ADR-0031), by the verified workspace id.
-        // Empty when Audience is off or not set up; never throws.
-        import("@/server/audience/context.server").then((m) => m.audienceBlockFor(workspaceId)),
-        // The confirmed marketing strategy (ADR-0032); empty until one is confirmed.
-        import("@/server/strategy/context.server").then((m) => m.strategyBlockFor(workspaceId)),
-      ]);
+      const [history, research, style, memory, audience, strategy, goal, catalog] =
+        await Promise.all([
+          summarizeHistory(turns as never),
+          researchBlock(lastUser),
+          styleBlock(workspaceId),
+          memoryBlock(workspaceId),
+          // Who the brand talks to (ADR-0031), by the verified workspace id.
+          // Empty when Audience is off or not set up; never throws.
+          import("@/server/audience/context.server").then((m) => m.audienceBlockFor(workspaceId)),
+          // The confirmed marketing strategy (ADR-0032); empty until one is confirmed.
+          import("@/server/strategy/context.server").then((m) => m.strategyBlockFor(workspaceId)),
+          // The team's goal and what the brand sells (ADR-0035); empty until set.
+          import("@/server/goals/context.server").then((m) => m.goalBlockFor(workspaceId)),
+          import("@/server/products/context.server").then((m) => m.catalogBlockFor(workspaceId)),
+        ]);
 
       // Chat tools (ADR-0033): the reply can read this workspace's data, save
       // to memory and prepare changes as buttons. Off: one plain reply, as before.
@@ -246,7 +250,9 @@ export const POST = defineRoute({
           content: chatContextBlock(
             wrapUntrusted(
               "brand-dna",
-              [identity, body.context, audience, strategy].filter(Boolean).join("\n\n"),
+              [identity, body.context, catalog, audience, strategy, goal]
+                .filter(Boolean)
+                .join("\n\n"),
               {
                 route: "chat",
               },

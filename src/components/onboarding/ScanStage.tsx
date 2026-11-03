@@ -6,7 +6,9 @@ import { AlertCircle, ArrowLeft, Check, RefreshCw, Spinner } from "@/components/
 import type { Discoveries } from "@/lib/brand-extract-events";
 import type { CompetitorView } from "@/lib/competitors.functions";
 import { normalizeHex, relLuminance } from "@/lib/color";
+import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { duration, ease } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { faviconFor } from "@/lib/site-screenshot";
 import { SCAN_PHASES } from "./phases";
 import { BrandMark } from "./ui";
@@ -149,14 +151,14 @@ export function ScanStage({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-[13px] font-medium transition hover:bg-secondary"
+              className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
             >
               <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Edit URL
             </button>
             <button
               type="button"
               onClick={onRetry}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-semibold text-primary-foreground transition hover:brightness-110"
+              className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
             >
               <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Try again
             </button>
@@ -182,7 +184,7 @@ export function ScanStage({
           onClick={onSkip}
           className="mx-auto mt-4 block text-[12px] text-muted-foreground underline-offset-4 transition hover:text-foreground hover:underline"
         >
-          Skip for now and enter Mellox
+          Skip the scan and type it in
         </button>
       )}
     </div>

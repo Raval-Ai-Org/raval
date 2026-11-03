@@ -33,7 +33,9 @@ describe("billing catalog against the v2 workbook", () => {
       expect(plan.brands).toBe(numberAt("Plans", 8, column));
       expect(plan.seats ?? 9999).toBe(numberAt("Plans", 9, column));
       expect(plan.allowances.credits).toBe(numberAt("Plans", 10, column));
-      expect(plan.allowances.videoUnits).toBe(numberAt("Plans", 11, column) * 100);
+      // Not from the workbook: every paid plan gets 2 free videos a month, then
+      // videos are paid in credits (videoCreditsFor in catalog.ts).
+      expect(plan.allowances.videoUnits).toBe(200);
       expect(plan.allowances.proMessages).toBe(numberAt("Plans", 12, column));
       expect(plan.allowances.flashMessages).toBe(numberAt("Plans", 13, column));
       expect(plan.limits.trackedPrompts).toBe(numberAt("Plans", 15, column));

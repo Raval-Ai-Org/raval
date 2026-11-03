@@ -17,6 +17,7 @@ import {
   ArrowUp,
   Globe,
   GoogleIcon,
+  Heart,
   Info,
   MessageSquare,
   Minus,
@@ -37,6 +38,7 @@ const SOURCE_ICON: Record<DataSource, React.ComponentType<{ className?: string }
   mellox: Sparkles,
   ga4: GoogleIcon,
   gsc: Search,
+  social: Heart,
   geo: Target,
 };
 

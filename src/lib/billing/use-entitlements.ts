@@ -11,8 +11,8 @@ export type BillingView = Omit<Entitlements, "accountId" | "ownerUserId"> & {
   accountId: string | null;
   ownerUserId: string | null;
   purchasesAvailable?: boolean;
-  /** "card" opens Stripe checkout; "request" sends an Upgrade now request to Mellox. */
-  checkoutMode?: "card" | "request";
+  /** "card" opens Stripe Checkout; "unavailable" disables purchasing. */
+  checkoutMode?: "card" | "unavailable";
   isBillingAdmin?: boolean;
 };
 

@@ -12,7 +12,8 @@ import { STUDIO_FORMATS, STUDIO_TYPE_ORDER, type StudioType } from "./formats";
 import type { GoalId } from "./jobs";
 import type { StudioContext } from "./prompts";
 
-export type IdeaSource = "season" | "trend" | "competitor" | "gap" | "pillar" | "momentum";
+export type IdeaSource =
+  "season" | "trend" | "competitor" | "gap" | "pillar" | "momentum" | "campaign";
 
 export const IDEA_SOURCE_LABEL: Record<IdeaSource, string> = {
   season: "Timely",
@@ -21,6 +22,7 @@ export const IDEA_SOURCE_LABEL: Record<IdeaSource, string> = {
   gap: "Gap",
   pillar: "Brand pillar",
   momentum: "Momentum",
+  campaign: "Campaign",
 };
 
 export type StudioIdea = {
@@ -148,6 +150,16 @@ export function collectSignals(
       weight: 78,
       suggestedType: "social",
       goal: "engagement",
+    });
+  }
+  // A campaign that's on: an extra piece that supports the step it's on.
+  for (const c of (ctx.campaignsNow ?? []).slice(0, 2)) {
+    if (!c.phase) continue;
+    signals.push({
+      source: "campaign",
+      headline: `${c.name}: ${c.phase}`,
+      detail: (c.purpose || `Supports "${c.name}" while it's on.`).slice(0, 160),
+      weight: 88,
     });
   }
   if (!ctx.upcoming.length) {
@@ -423,7 +435,15 @@ export function sanitizeIdea(
   const platforms = (raw.platforms ?? []).filter((p): p is PlatformId =>
     allowed.includes(p as PlatformId),
   );
-  const sources: IdeaSource[] = ["season", "trend", "competitor", "gap", "pillar", "momentum"];
+  const sources: IdeaSource[] = [
+    "season",
+    "trend",
+    "competitor",
+    "gap",
+    "pillar",
+    "momentum",
+    "campaign",
+  ];
   return {
     id: ideaId(type, title),
     type,

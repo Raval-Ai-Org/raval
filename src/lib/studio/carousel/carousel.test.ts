@@ -152,6 +152,26 @@ describe("carousel story", () => {
     );
     expect(new Set(CAROUSEL_STRUCTURES.map((s) => s.id)).size).toBe(CAROUSEL_STRUCTURES.length);
   });
+
+  it("makes insights and soft-sell only from an angle or the brief, never by rotation", () => {
+    for (let i = 0; i < 40; i++) {
+      const picked = pickCarouselStructure({ seed: `r${i}` }).id;
+      expect(["insights", "soft-sell"]).not.toContain(picked);
+    }
+    expect(
+      pickCarouselStructure({ seed: "a", brief: "A soft-sell carousel on meal prep" }).id,
+    ).toBe("soft-sell");
+    expect(
+      pickCarouselStructure({ seed: "a", brief: "What the numbers mean from our survey" }).id,
+    ).toBe("insights");
+    const fromData = new Set(
+      Array.from(
+        { length: 30 },
+        (_, i) => pickCarouselStructure({ seed: `d${i}`, angleId: "data" }).id,
+      ),
+    );
+    expect(fromData.has("insights")).toBe(true);
+  });
 });
 
 describe("carousel design", () => {

@@ -32,6 +32,7 @@ import {
 import { Tile } from "../surface/SurfaceLayout";
 import { FixDrawer } from "./FixDrawer";
 import { FixImpactCard } from "./FixImpactCard";
+import { PerformanceView } from "./PerformanceCard";
 import { useScanFindings } from "./use-scan-findings";
 import {
   CATEGORY_ICON,
@@ -827,6 +828,14 @@ export function OverviewTab({
               {scan.stage === "probing" ? "Asking AI engines now…" : "No answers were recorded."}
             </Tile>
           )}
+        </div>
+      )}
+
+      {/* Speed — real-user data and Lighthouse, when this scan measured them */}
+      {report.performance && (
+        <div>
+          <SectionTitle>Speed</SectionTitle>
+          <PerformanceView performance={report.performance} />
         </div>
       )}
 

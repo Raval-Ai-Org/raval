@@ -1,6 +1,9 @@
 // The ideas under the message box in a new chat. Pure: they are written from
-// what Brand DNA already holds in the browser, so showing them costs no
-// request, and they change a little every day.
+// what Brand DNA already holds in the browser and, when it has loaded, the
+// workspace pulse (src/lib/pulse/pulse.ts: running campaigns, products, the
+// goal, posts waiting), so they name what is really going on. They change a
+// little every day.
+import type { WorkspacePulse } from "@/lib/pulse/pulse";
 
 export type StarterGroupId = "create" | "plan" | "found" | "competitors" | "audience";
 
@@ -19,6 +22,12 @@ export type StarterFacts = {
   competitor?: string;
   platform: string;
   hasWebsite: boolean;
+  /** The first running campaign and the phase it is in. */
+  campaign?: { name: string; phase: string | null };
+  /** Posts that wait for a person's OK. */
+  waiting?: number;
+  /** The brand's goal, as the person picked it ("Sell more"). */
+  goal?: string;
 };
 
 /** The parts of Brand DNA the ideas are written from. */
@@ -53,12 +62,18 @@ function phrase(value: string | null | undefined): string | undefined {
   return first.length >= 2 && first.length <= MAX_FACT ? first : undefined;
 }
 
-export function starterFacts(source: StarterSource): StarterFacts {
+export function starterFacts(source: StarterSource, pulse?: WorkspacePulse | null): StarterFacts {
   const social = (source.socials ?? []).map((s) => s.platform ?? "");
   const platform = PLATFORMS.find(([match]) => social.some((s) => match.test(s)))?.[1];
+  const campaign = pulse?.campaigns.find((c) => phrase(c.name));
   return {
     brand: phrase(source.brandName),
-    product: phrase(source.products),
+    // A product from the catalogue names one real thing; Brand DNA's summary
+    // is the fallback.
+    product: phrase(pulse?.products[0]) ?? phrase(source.products),
+    campaign: campaign ? { name: phrase(campaign.name)!, phase: campaign.phase } : undefined,
+    waiting: pulse?.waiting || undefined,
+    goal: pulse?.goal?.label,
     audience: phrase(source.audienceTags?.[0]),
     competitor: phrase(source.competitors?.[0]?.name),
     platform: platform ?? "LinkedIn",
@@ -79,7 +94,8 @@ function pick(named: (StarterIdea | null)[], general: StarterIdea[], day: number
 
 /** `day` is a whole number that changes once a day (days since 1970). */
 export function buildStarters(facts: StarterFacts, day = 0): StarterGroup[] {
-  const { brand, product, audience, competitor, platform, hasWebsite } = facts;
+  const { brand, product, audience, competitor, platform, hasWebsite, campaign, waiting, goal } =
+    facts;
   const us = brand ?? "us";
   const we = brand ?? "we";
   const our = brand ? `${brand}'s` : "our";
@@ -91,6 +107,7 @@ export function buildStarters(facts: StarterFacts, day = 0): StarterGroup[] {
       label: "Create",
       ideas: pick(
         [
+          campaign ? send(`Write ${post} for our "${campaign.name}" campaign`) : null,
           product ? send(`Write ${post} about ${product}`) : null,
           audience ? send(`Write ${post} that speaks to ${audience}`) : null,
         ],
@@ -109,7 +126,15 @@ export function buildStarters(facts: StarterFacts, day = 0): StarterGroup[] {
       id: "plan",
       label: "Plan",
       ideas: pick(
-        [send(`Plan next week's posts for ${us}`)],
+        [
+          waiting ? send("What is waiting for my approval right now?") : null,
+          campaign ? send(`How is the "${campaign.name}" campaign going, and what's next?`) : null,
+          goal
+            ? send(
+                `What should ${we} post this week to ${goal.charAt(0).toLowerCase()}${goal.slice(1)}?`,
+              )
+            : send(`Plan next week's posts for ${us}`),
+        ],
         [
           send("What is waiting for my approval right now?"),
           send("What is planned and scheduled for the next 7 days?"),

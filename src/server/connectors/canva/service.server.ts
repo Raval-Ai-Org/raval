@@ -28,6 +28,7 @@ import {
   createSingleImageDesign,
   importPptx,
   exportPngPages,
+  type CanvaAuth,
 } from "./api.server";
 import { buildCarouselPptx } from "./carousel-pptx.server";
 import { validCanvaDownloadUrl } from "./download-url";
@@ -59,7 +60,60 @@ async function connection(workspaceId: string) {
   return data as { id: string; status: string; account_login: string; updated_at: string } | null;
 }
 
+/** The workspace's active Canva account on Composio, if any. */
+async function composioCanva(workspaceId: string) {
+  const { data, error } = await db
+    .from("integration_accounts")
+    .select("id, status, label")
+    .eq("workspace_id", workspaceId)
+    .eq("app", "canva")
+    .eq("status", "active")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new HttpError(503, "Canva connections are unavailable. Try again.");
+  return data as { id: string; status: string; label: string | null } | null;
+}
+
+/**
+ * How this workspace's Canva calls are signed. Mellox's own Canva app when it
+ * is set up and connected; otherwise the workspace's Canva account on
+ * Composio. `key` identifies the grant, so a new connection opens new designs.
+ */
+async function canvaGrant(
+  workspaceId: string,
+  userId: string,
+  approvalRef: string,
+): Promise<{ auth: CanvaAuth; key: string }> {
+  if (canvaConfigured()) {
+    const direct = await connection(workspaceId);
+    if (direct?.status === "active")
+      return { auth: await canvaAccessToken(workspaceId), key: direct.updated_at };
+  }
+  const account = await composioCanva(workspaceId);
+  if (account)
+    return {
+      auth: { kind: "composio", workspaceId, accountId: account.id, userId, approvalRef },
+      key: `composio:${account.id}`,
+    };
+  throw new HttpError(409, "Connect Canva to edit this image.");
+}
+
 export async function canvaStatus(workspaceId: string) {
+  // Canva is the workspace's Composio account. Mellox's own Canva app is only
+  // used for a workspace that already has an active direct connection.
+  const { composioConfigured } = await import("@/server/integrations/composio/gateway.server");
+  const legacy = canvaConfigured() ? await connection(workspaceId) : null;
+  if (!canvaConfigured() || (composioConfigured() && legacy?.status !== "active")) {
+    const account = await composioCanva(workspaceId);
+    return {
+      configured: composioConfigured(),
+      configurationMessage: null,
+      status: account ? "active" : "disconnected",
+      accountName: account?.label ?? null,
+      via: "composio" as const,
+    };
+  }
   const row = await connection(workspaceId);
   const configured = canvaConfigured();
   let status = row?.status ?? "disconnected";
@@ -95,6 +149,7 @@ export async function canvaStatus(workspaceId: string) {
     configurationMessage: configured ? null : canvaConfigurationMessage(),
     status,
     accountName: row?.account_login ?? null,
+    via: "direct" as const,
   };
 }
 
@@ -427,7 +482,12 @@ async function slideDesignRows(workspaceId: string, mappingId: string) {
   return (data ?? []) as Array<{ page_number: number; canva_design_id: string }>;
 }
 
-async function openExisting(workspaceId: string, token: string, mapping: Mapping, pages: number) {
+async function openExisting(
+  workspaceId: string,
+  token: CanvaAuth,
+  mapping: Mapping,
+  pages: number,
+) {
   const editUrl = await getDesignEditUrl(token, mapping.canva_design_id);
   const rows = await slideDesignRows(workspaceId, mapping.id);
   const slideDesigns = await inBatches(rows, 3, async (row) => ({
@@ -456,11 +516,14 @@ async function createOrOpenCanvaEdit(args: {
   contentId?: string;
 }) {
   const source = await sourceImages(args.workspaceId, args);
-  const token = await canvaAccessToken(args.workspaceId);
-  const grant = await connection(args.workspaceId);
-  if (!grant) throw new HttpError(409, "Reconnect Canva to continue.");
+  const grant = await canvaGrant(
+    args.workspaceId,
+    args.userId,
+    args.contentId ? `content:${args.contentId}` : `asset:${args.assetId}`,
+  );
+  const token = grant.auth;
   const sourceKey = createHash("sha256")
-    .update(JSON.stringify([SOURCE_VERSION, source.paths, grant.updated_at]))
+    .update(JSON.stringify([SOURCE_VERSION, source.paths, grant.key]))
     .digest("hex");
   const found = await mappingForAsset(args.workspaceId, source.ids[0]);
   // An image brought back from Canva reopens the design it came from.
@@ -864,7 +927,7 @@ export async function importCanvaChanges(args: {
   mappingId: string;
 }) {
   const mapping = await loadMapping(args.workspaceId, args.mappingId);
-  const token = await canvaAccessToken(args.workspaceId);
+  const token = (await canvaGrant(args.workspaceId, args.userId, `canva:${mapping.id}`)).auth;
   const slides = await slideDesignRows(args.workspaceId, mapping.id);
   const { data: sources } = await db
     .from("canva_design_source_pages")

@@ -29,7 +29,6 @@ With Mellox you can:
 - let **Autopilot** plan and prepare a full week of marketing for you;
 - check how AI assistants such as ChatGPT, Perplexity and Google AI Overviews see your website (**AI Visibility**) and fix problems;
 - track competitors and market news (**Brain**);
-- buy verified backlinks from real websites (**Backlinks**);
 - see website, search and social results in **Analytics**;
 - manage many clients from one **Command Center** if you are an agency.
 
@@ -100,7 +99,7 @@ With Mellox you can:
 After opening a brand, you will see:
 
 - **The chat box** in the middle. This is the main way to work with Mellox.
-- **The sidebar** with places such as **Brain**, **Studio**, **Library**, **Calendar**, **AI Visibility**, **Backlinks** and **Analytics**.
+- **The sidebar** with places such as **Brain**, **Studio**, **Library**, **Calendar**, **AI Visibility** and **Analytics**. Backlinks is coming soon.
 - **The top bar** with the workspace switcher, Autopilot status, and your account menu (profile, theme, sign out).
 
 ## 5. Workspaces (brands)

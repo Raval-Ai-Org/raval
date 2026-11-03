@@ -1899,6 +1899,7 @@ export type Database = {
           approved_via: string | null;
           attempts: number;
           brief: string;
+          campaign_id: string | null;
           content_item_ids: string[];
           content_type: string | null;
           created_at: string;
@@ -1933,6 +1934,7 @@ export type Database = {
           approved_via?: string | null;
           attempts?: number;
           brief?: string;
+          campaign_id?: string | null;
           content_item_ids?: string[];
           content_type?: string | null;
           created_at?: string;
@@ -1967,6 +1969,7 @@ export type Database = {
           approved_via?: string | null;
           attempts?: number;
           brief?: string;
+          campaign_id?: string | null;
           content_item_ids?: string[];
           content_type?: string | null;
           created_at?: string;
@@ -1997,6 +2000,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "autopilot_actions_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_campaigns";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "autopilot_actions_opportunity_id_fkey";
             columns: ["opportunity_id"];
@@ -2802,6 +2812,38 @@ export type Database = {
           },
         ];
       };
+      billing_creation_windows: {
+        Row: {
+          account_id: string;
+          cost_warning_at: string | null;
+          expires_at: string;
+          policy: string;
+          window_start: string;
+        };
+        Insert: {
+          account_id: string;
+          cost_warning_at?: string | null;
+          expires_at: string;
+          policy: string;
+          window_start: string;
+        };
+        Update: {
+          account_id?: string;
+          cost_warning_at?: string | null;
+          expires_at?: string;
+          policy?: string;
+          window_start?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_creation_windows_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       billing_customers: {
         Row: {
           created_at: string;
@@ -3228,6 +3270,7 @@ export type Database = {
           account_id: string;
           action: string;
           amount: number;
+          caption_edit_id: string | null;
           charge_id: string | null;
           charge_key: string;
           created_at: string;
@@ -3244,6 +3287,7 @@ export type Database = {
           account_id: string;
           action: string;
           amount: number;
+          caption_edit_id?: string | null;
           charge_id?: string | null;
           charge_key: string;
           created_at?: string;
@@ -3260,6 +3304,7 @@ export type Database = {
           account_id?: string;
           action?: string;
           amount?: number;
+          caption_edit_id?: string | null;
           charge_id?: string | null;
           charge_key?: string;
           created_at?: string;
@@ -3278,6 +3323,13 @@ export type Database = {
             columns: ["account_id"];
             isOneToOne: false;
             referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_studio_jobs_caption_edit_id_fkey";
+            columns: ["caption_edit_id"];
+            isOneToOne: false;
+            referencedRelation: "studio_caption_edits";
             referencedColumns: ["id"];
           },
           {
@@ -4876,6 +4928,80 @@ export type Database = {
           },
           {
             foreignKeyName: "content_publications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      content_reactions: {
+        Row: {
+          asset_id: string | null;
+          caption_sample: string;
+          content_item_id: string | null;
+          created_at: string;
+          id: string;
+          reaction: string;
+          set_by: string | null;
+          subject_key: string;
+          traits: Json;
+          updated_at: string;
+          visual_source_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          asset_id?: string | null;
+          caption_sample?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          id?: string;
+          reaction: string;
+          set_by?: string | null;
+          subject_key: string;
+          traits?: Json;
+          updated_at?: string;
+          visual_source_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          asset_id?: string | null;
+          caption_sample?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          id?: string;
+          reaction?: string;
+          set_by?: string | null;
+          subject_key?: string;
+          traits?: Json;
+          updated_at?: string;
+          visual_source_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "content_reactions_asset_id_fkey";
+            columns: ["asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "content_reactions_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "content_reactions_visual_source_id_fkey";
+            columns: ["visual_source_id"];
+            isOneToOne: false;
+            referencedRelation: "brand_visual_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "content_reactions_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -9521,6 +9647,53 @@ export type Database = {
           },
         ];
       };
+      studio_caption_edits: {
+        Row: {
+          account_id: string;
+          created_at: string;
+          group_id: string;
+          id: string;
+          job_id: string | null;
+          request_key: string;
+          slot: number;
+          state: string;
+          user_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id: string;
+          created_at?: string;
+          group_id: string;
+          id?: string;
+          job_id?: string | null;
+          request_key: string;
+          slot: number;
+          state?: string;
+          user_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string;
+          created_at?: string;
+          group_id?: string;
+          id?: string;
+          job_id?: string | null;
+          request_key?: string;
+          slot?: number;
+          state?: string;
+          user_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "studio_caption_edits_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       studio_jobs: {
         Row: {
           asset_ids: string[];
@@ -9874,6 +10047,30 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      video_compositions: {
+        Row: {
+          created_at: string;
+          id: string;
+          lease_until: string | null;
+          revision: number;
+          state: Json;
+        };
+        Insert: {
+          created_at?: string;
+          id: string;
+          lease_until?: string | null;
+          revision?: number;
+          state: Json;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          lease_until?: string | null;
+          revision?: number;
+          state?: Json;
+        };
+        Relationships: [];
       };
       webflow_oauth_credentials: {
         Row: {
@@ -10274,6 +10471,77 @@ export type Database = {
           },
         ];
       };
+      workspace_campaigns: {
+        Row: {
+          acting_user_id: string | null;
+          brief: Json;
+          created_at: string;
+          created_by: string | null;
+          ended_at: string | null;
+          ends_on: string;
+          goal: Json;
+          id: string;
+          key_date: string | null;
+          name: string;
+          plan: Json;
+          started_at: string | null;
+          starts_on: string;
+          status: string;
+          type: string;
+          updated_at: string;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          acting_user_id?: string | null;
+          brief?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          ended_at?: string | null;
+          ends_on: string;
+          goal?: Json;
+          id?: string;
+          key_date?: string | null;
+          name: string;
+          plan?: Json;
+          started_at?: string | null;
+          starts_on: string;
+          status?: string;
+          type: string;
+          updated_at?: string;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          acting_user_id?: string | null;
+          brief?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          ended_at?: string | null;
+          ends_on?: string;
+          goal?: Json;
+          id?: string;
+          key_date?: string | null;
+          name?: string;
+          plan?: Json;
+          started_at?: string | null;
+          starts_on?: string;
+          status?: string;
+          type?: string;
+          updated_at?: string;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_campaigns_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_competitors: {
         Row: {
           attempt_count: number;
@@ -10590,6 +10858,41 @@ export type Database = {
         };
         Relationships: [];
       };
+      workspace_goals: {
+        Row: {
+          created_at: string;
+          goals: Json;
+          updated_at: string;
+          updated_by: string | null;
+          version: number;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          goals?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          goals?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+          version?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_goals_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_invites: {
         Row: {
           accepted_at: string | null;
@@ -10812,6 +11115,87 @@ export type Database = {
             foreignKeyName: "workspace_memory_settings_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_products: {
+        Row: {
+          benefits: string[];
+          category: string;
+          created_at: string;
+          created_by: string | null;
+          description: string;
+          facts: Json;
+          fingerprint: string;
+          id: string;
+          image_asset_ids: string[];
+          kind: string;
+          name: string;
+          position: number;
+          price: string;
+          primary_asset_id: string | null;
+          source: string;
+          status: string;
+          updated_at: string;
+          url: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          benefits?: string[];
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          facts?: Json;
+          fingerprint: string;
+          id?: string;
+          image_asset_ids?: string[];
+          kind?: string;
+          name: string;
+          position?: number;
+          price?: string;
+          primary_asset_id?: string | null;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+          url?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          benefits?: string[];
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          facts?: Json;
+          fingerprint?: string;
+          id?: string;
+          image_asset_ids?: string[];
+          kind?: string;
+          name?: string;
+          position?: number;
+          price?: string;
+          primary_asset_id?: string | null;
+          source?: string;
+          status?: string;
+          updated_at?: string;
+          url?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_products_primary_asset_id_fkey";
+            columns: ["primary_asset_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workspace_products_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
@@ -11597,6 +11981,8 @@ export type Database = {
         };
         Returns: { workspace_id: string; created: boolean }[];
       };
+      creation_cost_report: { Args: never; Returns: Json };
+      creation_plan_window: { Args: { p: Json }; Returns: string };
       ensure_billing_account: { Args: { p_user: string }; Returns: string };
       experiment_overview: {
         Args: never;
@@ -11677,6 +12063,7 @@ export type Database = {
         Args: { p_workspace: string; p_limit: number };
         Returns: undefined;
       };
+      reserve_studio_caption_edit: { Args: { p: Json }; Returns: Json };
       resolve_media_storage_paths: {
         Args: { paths: string[] };
         Returns: { source_path: string; target_path: string; status: string }[];
@@ -11708,6 +12095,10 @@ export type Database = {
       set_persona_once: {
         Args: { _persona: string };
         Returns: { persona: string; persona_set_at: string }[];
+      };
+      studio_caption_edits_remaining: {
+        Args: { p_workspace: string; p_group: string };
+        Returns: number;
       };
       sweep_rixot_donors: { Args: { p_before: string }; Returns: number };
       tombstone_migrated_media: { Args: { paths: string[] }; Returns: undefined };

@@ -43,6 +43,7 @@ import {
   readField,
   wordpressKey,
   webflowKey,
+  wixKey,
   richTextFieldSlug,
   type CmsSession,
 } from "./access.server";
@@ -222,6 +223,12 @@ const CONTENT_TASK: Record<string, string> = {
     "Make the content easier to scan: split paragraphs longer than ~120 words at sentence boundaries and turn inline lists of three or more items into <ul> lists. Keep all text identical.",
   "content.internal_links":
     "Add up to 3 links to the site's own pages listed below, on phrases that already exist in the content and match those pages' topics. Don't add new sentences.",
+  "content.self_contained":
+    'Where a paragraph opens with "This", "It", "They" or "As mentioned above", replace that opening reference with the noun phrase it refers to, copied from the previous sentence or heading. Change only those opening words.',
+  "content.readability":
+    "Split sentences longer than about 30 words into two at an existing comma, semicolon or conjunction. Keep every word; only add sentence breaks.",
+  "tech.mixed_content":
+    "Change http:// to https:// in the src, srcset and href attributes of images, scripts, frames and media in this content. Change nothing else.",
 };
 
 async function contentEdits(
@@ -336,7 +343,24 @@ async function altTexts(
 
 /* ───────────────────────── assisted placement ───────────────────────── */
 
-function whereFor(provider: "wordpress" | "webflow", field: CmsField): string {
+const PLATFORM_NAME = { wordpress: "WordPress", webflow: "Webflow", wix: "Wix" } as const;
+
+function whereFor(provider: CmsSession["provider"], field: CmsField): string {
+  if (provider === "wix")
+    switch (field) {
+      case "jsonld_site":
+        return "Wix dashboard → Marketing & SEO → SEO settings (structured data for the home page)";
+      case "robots_txt":
+        return "Wix dashboard → Marketing & SEO → SEO → robots.txt Editor";
+      case "llms_txt":
+        return "Host this file at /llms.txt (Wix doesn't serve custom files at the site root)";
+      case "image_alt":
+        return "Wix editor → select each image → its settings → alt text";
+      case "content_html":
+        return "Wix editor → edit the text on this page";
+      default:
+        return "Wix editor → Pages & Menu → this page → SEO basics / Advanced SEO";
+    }
   if (provider === "webflow")
     switch (field) {
       case "jsonld_page":
@@ -438,7 +462,11 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
     const wpKey = (part?: "title" | "description") =>
       wpSeo ? wordpressKey(field, wpSeo, part) : null;
     const key = (part?: "title" | "description") =>
-      provider === "wordpress" ? wpKey(part) : webflowKey(field, part);
+      provider === "wordpress"
+        ? wpKey(part)
+        : provider === "wix"
+          ? wixKey(field, part)
+          : webflowKey(field, part);
 
     switch (field) {
       case "seo_title":
@@ -533,6 +561,9 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
             JSON.stringify(merged.length === 1 ? merged[0] : merged, null, 2),
             why,
           );
+        } else if (provider === "wix" && pageTarget) {
+          // Wix renders the payload inside its own <script> tag.
+          await add(field, pageTarget, key(), JSON.stringify(entity, null, 2), why);
         } else {
           await add(field, null, null, script(entity), why);
         }
@@ -592,7 +623,9 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
           notes.push(
             provider === "webflow"
               ? "This page's text is edited in the Webflow Designer, which Mellox can't reach. Make the change there:"
-              : "This page's text isn't stored in a place Mellox can edit. Make the change in your theme or page builder:",
+              : provider === "wix"
+                ? "This page's text is edited in the Wix editor, which Mellox can't reach. Make the change there:"
+                : "This page's text isn't stored in a place Mellox can edit. Make the change in your theme or page builder:",
             CONTENT_TASK[input.ruleId] ?? input.finding.detail,
           );
           break;
@@ -740,13 +773,13 @@ export async function planCmsFix(input: CmsFixInput): Promise<CmsFixPlan> {
 
   const fieldNames = [...new Set(real.map((c) => c.label))];
   const explanation = real.length
-    ? `Mellox will change ${fieldNames.join(", ").toLowerCase()} on ${provider === "wordpress" ? "WordPress" : "Webflow"}${
+    ? `Mellox will change ${fieldNames.join(", ").toLowerCase()} on ${PLATFORM_NAME[provider]}${
         assisted.length
           ? `, and shows ${assisted.length} value(s) to paste where the API can't reach`
           : ""
       }.`
     : assisted.length
-      ? `${provider === "wordpress" ? "WordPress" : "Webflow"} doesn't let Mellox change this directly. Paste the value${assisted.length > 1 ? "s" : ""} below where shown.`
+      ? `${PLATFORM_NAME[provider]} doesn't let Mellox change this directly. Paste the value${assisted.length > 1 ? "s" : ""} below where shown.`
       : "";
   return {
     changes: real,

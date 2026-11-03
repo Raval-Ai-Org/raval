@@ -18,9 +18,21 @@ import {
   mapOpenRouterError,
   setLlmTransport,
   tokenCeiling,
+  withJsonMention,
   withPromptCache,
 } from "./ai-gateway.server";
-import { ECONOMY, planFor, PREMIUM, WORKHORSE } from "@/server/ai/task-models";
+import {
+  ANALYST,
+  BUDGET,
+  ECONOMY,
+  LABELLER,
+  planFor,
+  PREMIUM,
+  SUMMARY,
+  WORKHORSE,
+} from "@/server/ai/task-models";
+
+const FULL_PRECISION = ["fp8", "fp16", "bf16", "fp32", "unknown"];
 
 type Reply = { content?: string | null; finish?: string; model?: string; refusal?: string };
 
@@ -61,35 +73,42 @@ const msgs = [
 
 describe("chatCompletion request body", () => {
   it.each([
-    { route: "chat", primary: WORKHORSE, fallback: "openai/gpt-6.1-sol" },
-    { route: "competitors.updates", primary: ECONOMY, fallback: "openai/gpt-6-luna" },
-  ])("sends and meters the upgraded fallback for $route", async ({ route, primary, fallback }) => {
-    const s = scripted([{ content: "{}", model: fallback }]);
-    restore = s.restore;
-    const json = await chatCompletion({
-      route,
-      messages: msgs,
-      noCache: true,
-      temperature: 0.2,
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "x", strict: true, schema: { type: "object" } },
-      },
-    });
-    expect(s.bodies[0].models).toEqual([primary, fallback]);
-    expect(s.bodies[0]).not.toHaveProperty("temperature");
-    expect(s.bodies[0].reasoning).toEqual({ effort: "low", exclude: true });
-    expect(s.bodies[0].provider).toEqual({ data_collection: "deny", require_parameters: true });
-    expect(json._model).toBe(fallback);
-    expect(usage.rows[0]).toMatchObject({ model: fallback, route, estCostUsd: 0.0042 });
-  });
+    { route: "chat", primary: WORKHORSE, fallback: SUMMARY, openWeight: false },
+    { route: "competitors.updates", primary: LABELLER, fallback: ECONOMY, openWeight: true },
+  ])(
+    "sends and meters the fallback for $route",
+    async ({ route, primary, fallback, openWeight }) => {
+      const s = scripted([{ content: "{}", model: fallback }]);
+      restore = s.restore;
+      const json = await chatCompletion({
+        route,
+        messages: msgs,
+        noCache: true,
+        temperature: 0.2,
+        response_format: {
+          type: "json_schema",
+          json_schema: { name: "x", strict: true, schema: { type: "object" } },
+        },
+      });
+      expect(s.bodies[0].models).toEqual([primary, fallback]);
+      expect(s.bodies[0]).not.toHaveProperty("temperature");
+      expect(s.bodies[0].reasoning).toEqual({ effort: "low", exclude: true });
+      expect(s.bodies[0].provider).toEqual({
+        data_collection: "deny",
+        require_parameters: true,
+        ...(openWeight ? { quantizations: FULL_PRECISION } : {}),
+      });
+      expect(json._model).toBe(fallback);
+      expect(usage.rows[0]).toMatchObject({ model: fallback, route, estCostUsd: 0.0042 });
+    },
+  );
 
   it("sends the plan's models as a fallback array, its effort and the privacy setting", async () => {
     const s = scripted([{ content: "hello" }]);
     restore = s.restore;
     await chatCompletion({ route: "brand-extract", messages: msgs, noCache: true });
     const body = s.bodies[0];
-    expect(body.models).toEqual([PREMIUM, WORKHORSE]);
+    expect(body.models).toEqual([ANALYST, WORKHORSE]);
     expect(body).not.toHaveProperty("model");
     expect(body.reasoning).toEqual({ effort: "medium", exclude: true });
     expect(body.provider).toEqual({ data_collection: "deny" });
@@ -124,7 +143,13 @@ describe("chatCompletion request body", () => {
         json_schema: { name: "x", strict: true, schema: { type: "object" } },
       },
     });
-    expect(s.bodies[0].provider).toEqual({ data_collection: "deny", require_parameters: true });
+    // studio.ideas runs on an open-weight model: full-precision hosts only.
+    expect(s.bodies[0].models).toEqual([BUDGET, WORKHORSE]);
+    expect(s.bodies[0].provider).toEqual({
+      data_collection: "deny",
+      require_parameters: true,
+      quantizations: FULL_PRECISION,
+    });
     expect(s.bodies[0]).not.toHaveProperty("temperature");
 
     await chatCompletion({
@@ -255,7 +280,9 @@ describe("mapOpenRouterError", () => {
     expect(mapOpenRouterError(401, "").code).toBe("invalid_api_key");
     const credits = mapOpenRouterError(402, '{"error":{"message":"Insufficient credits"}}');
     expect(credits.code).toBe("insufficient_credits");
-    expect(credits.message).toMatch(/add credits in OpenRouter/i);
+    // The wording that names the supplier stays in the log; a person reads a plain sentence.
+    expect(credits.detail).toMatch(/add credits in OpenRouter/i);
+    expect(credits.message).not.toMatch(/openrouter|credits/i);
     expect(mapOpenRouterError(429, "").code).toBe("rate_limited");
     expect(
       mapOpenRouterError(
@@ -276,6 +303,33 @@ describe("mapOpenRouterError", () => {
         '{"error":{"message":"too long","metadata":{"error_type":"context_length_exceeded"}}}',
       ).code,
     ).toBe("context_exceeded");
+  });
+
+  it("reads an image model safety refusal sent as a plain 400", () => {
+    const raw = JSON.stringify({
+      error: { message: "Your request was rejected as a result of our safety system." },
+    });
+    expect(mapOpenRouterError(400, raw).code).toBe("refusal");
+    expect(mapOpenRouterError(400, '{"error":{"message":"bad size"}}').code).toBe(
+      "invalid_request",
+    );
+  });
+});
+
+describe("withJsonMention", () => {
+  it("says json once when the prompt never does, so an OpenAI fallback accepts JSON mode", () => {
+    const out = withJsonMention([
+      { role: "system", content: "Write the brief." },
+      { role: "user", content: "Cold brew launch" },
+    ]) as { role: string; content: string }[];
+    expect(out[0].content).toMatch(/JSON/);
+    expect(out[1].content).toBe("Cold brew launch");
+    const already = [{ role: "user" as const, content: "Return json." }];
+    expect(withJsonMention(already)).toBe(already);
+    const parts = withJsonMention([
+      { role: "user", content: [{ type: "text", text: "Describe this" }] },
+    ]) as { role: string }[];
+    expect(parts[0].role).toBe("system");
   });
 });
 

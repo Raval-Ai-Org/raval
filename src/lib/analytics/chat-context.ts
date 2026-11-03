@@ -1,6 +1,7 @@
 // chat-context.ts — the analytics snapshot the Mellox chat sees. Every line
 // names its data source, and sources are listed separately so the assistant
-// never adds GA4 visits to Search Console clicks or to the AI Visibility score.
+// never adds GA4 visits to Search Console clicks, social views or the AI
+// Visibility score.
 import type { Comparison } from "./compare";
 import { formatMetric, METRICS, type MetricKey } from "./metrics";
 import { formatWindow } from "./ranges";
@@ -72,7 +73,25 @@ export function buildChatContext(report: OverviewReport): string {
     lines.push("  - No scan yet.");
   }
 
+  const social = report.social;
+  lines.push(
+    `${DATA_SOURCES.social.label} (numbers the networks report for posts that went out in the period)${social.window ? ` — ${formatWindow(social.window.current)}` : ""}:`,
+  );
+  if (social.status.state !== "ready") {
+    lines.push(
+      social.status.state === "syncing"
+        ? "  - Accounts connected; posts are still being read."
+        : "  - No social account connected.",
+    );
+  } else {
+    lines.push(...kpiLines(social.kpis.filter((k) => k.value !== null)));
+    for (const p of social.byPlatform.slice(0, 5))
+      lines.push(
+        `  - ${p.platform}: ${p.posts} posts${p.views !== null ? `, ${formatMetric("social.views", p.views)} views` : ""}${p.engagement !== null ? `, ${formatMetric("social.engagement", p.engagement)} interactions` : ""}`,
+      );
+  }
+
   lines.push(`${DATA_SOURCES.mellox.label} (activity in Mellox):`);
   lines.push(...kpiLines(report.mellox.kpis));
-  return lines.join("\n").slice(0, 2400);
+  return lines.join("\n").slice(0, 3200);
 }

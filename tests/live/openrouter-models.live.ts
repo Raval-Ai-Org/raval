@@ -32,8 +32,9 @@ describeLive("OpenRouter models (live)", () => {
   afterAll(() => restoreSink?.());
 
   it.each([
-    ["economy", "competitors.updates", "google/gemini-3.1-flash-lite"],
-    ["workhorse", "ugc.notes", "google/gemini-3.8-flash"],
+    ["economy", "audience.score", "google/gemini-3.1-flash-lite"],
+    ["workhorse", "studio.social", "google/gemini-3.8-flash"],
+    ["luna", "chat.history-summary", "openai/gpt-6-luna"],
   ])(
     "answers on the %s tier",
     async (_tier, route, expected) => {
@@ -70,6 +71,41 @@ describeLive("OpenRouter models (live)", () => {
     });
     expect(out).toMatchObject({ name: expect.stringContaining("Acme"), city: "Porto" });
   }, 90_000);
+
+  // Every cost-review tier through the real path its routes use: a strict JSON
+  // schema with reasoning effort, data_collection deny and, for open-weight
+  // models, full-precision hosts only.
+  it.each([
+    ["analyst", "brand-extract", "openai/gpt-6.1-sol"],
+    ["conversation", "chat.pro", "anthropic/claude-sonnet-5.5"],
+    ["summary", "coach.briefing", "openai/gpt-6.1-terra"],
+    ["budget", "studio.ideas", "deepseek/deepseek-v4.1-flash"],
+    ["labeller", "competitors.updates", "z-ai/glm-5.3-flash"],
+    ["careful", "guardrails.media-safety", "anthropic/claude-haiku-5.5"],
+  ])(
+    "returns schema-valid JSON on the %s tier",
+    async (_tier, route, expected) => {
+      const { llmJson } = await import("@/lib/ai-gateway.server");
+      const before = rows.length;
+      const out = await llmJson<{ name: string; city: string } | null>({
+        route,
+        system: "Extract the company and its city.",
+        user: "Acme Shoes has made red trainers in Porto since 1998.",
+        outputSchema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name", "city"],
+          properties: { name: { type: "string" }, city: { type: "string" } },
+        },
+        fallback: null,
+      });
+      const row = rows.slice(before).find((r) => r.route === route);
+      console.info(`[live] ${route} → ${row?.model} $${row?.est_cost_usd}`, JSON.stringify(out));
+      expect(out).toMatchObject({ name: expect.stringContaining("Acme"), city: "Porto" });
+      expect(row?.model, `${route} should answer on its own tier`).toBe(expected);
+    },
+    120_000,
+  );
 
   it("runs a two-turn tool loop on the premium tier, replaying reasoning", async () => {
     const { llmToolLoop } = await import("@/lib/ai-gateway.tool-loop.server");

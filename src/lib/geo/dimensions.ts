@@ -172,6 +172,28 @@ export const RULE_DIMENSIONS: Readonly<Record<string, Share[]>> = {
   "perf.html_size": split("technical_seo", 0.5, "crawlability"),
   "perf.response_time": split("technical_seo", 0.5, "crawlability"),
   "perf.text_ratio": split("technical_seo", 0.5, "crawlability"),
+  /* score version 3 */
+  "tech.redirects": split("crawlability", 0.6, "technical_seo"),
+  "tech.soft_404": split("indexability", 0.6, "crawlability"),
+  "tech.https_redirect": split("technical_seo", 0.5, "indexability"),
+  "tech.compression": split("crawlability", 0.5, "technical_seo"),
+  "tech.http_caching": one("crawlability"),
+  "tech.mixed_content": split("technical_seo", 0.6, "authority_trust"),
+  "tech.security_headers": split("technical_seo", 0.5, "authority_trust"),
+  "tech.sitemap_quality": split("crawlability", 0.5, "indexability"),
+  "tech.hreflang_targets": split("indexability", 0.5, "technical_seo"),
+  "content.self_contained": split("extractability", 0.6, "answer_readiness"),
+  "content.quotable_passages": split("answer_readiness", 0.6, "extractability"),
+  "content.readability": split("answer_readiness", 0.5, "extractability"),
+  "content.agent_usable": split("ai_search", 0.5, "extractability"),
+  "trust.hidden_instructions": split("authority_trust", 0.6, "ai_search"),
+  "trust.headline_year": one("authority_trust"),
+  "trust.date_consistency": split("authority_trust", 0.5, "structured_data"),
+  "perf.core_web_vitals": split("technical_seo", 0.5, "crawlability"),
+  "perf.lab_score": one("technical_seo"),
+  "perf.render_blocking": one("technical_seo"),
+  "perf.image_dimensions": one("technical_seo"),
+  "perf.dom_size": split("technical_seo", 0.5, "extractability"),
 };
 
 export function sharesForRule(ruleId: string): Share[] | null {

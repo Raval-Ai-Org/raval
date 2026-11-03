@@ -1,5 +1,5 @@
-// cms-fixes.ts — how each AI Visibility rule is fixed on a WordPress or
-// Webflow site, where there is no repository and no pull request.
+// cms-fixes.ts — how each AI Visibility rule is fixed on a WordPress,
+// Webflow or Wix site, where there is no repository and no pull request.
 //
 // A CMS fix is a set of field changes (before → after) on real objects: a
 // post's meta description, a Webflow page's SEO title, a site's robots.txt.
@@ -8,13 +8,17 @@
 //   apply     write the change through the platform's API after approval
 //   assisted  build the exact snippet and show where to paste it (the API
 //             can't reach that setting, e.g. Webflow's head custom code)
+//
+// Wix: its SEO API writes a static page's or blog post's own head tags
+// (title, description, canonical, robots, Open Graph, JSON-LD). Site-wide
+// files and page text aren't reachable, so those are assisted.
 //   manual    it needs a person's judgement or facts only the business has
 //
 // Pure and browser-safe. A test enforces that every rule has an entry.
 
 import { GEO_RULES } from "./rules";
 
-export type CmsProvider = "wordpress" | "webflow";
+export type CmsProvider = "wordpress" | "webflow" | "wix";
 
 /** Where WordPress head tags can be written (see src/server/sites/resolve.server.ts). */
 export type WordPressSeoBackend = "mellox" | "rankmath" | "jetpack" | "none";
@@ -37,7 +41,8 @@ export type CmsTarget =
   | { kind: "wp_site"; url: string }
   | { kind: "wp_media"; id: number; url: string }
   | { kind: "webflow_page"; siteId: string; pageId: string; url: string }
-  | { kind: "webflow_item"; siteId: string; collectionId: string; itemId: string; url: string };
+  | { kind: "webflow_item"; siteId: string; collectionId: string; itemId: string; url: string }
+  | { kind: "wix_item"; itemType: "STATIC_PAGE" | "BLOG_POST"; itemId: string; url: string };
 
 /** One field on one object, exactly as it will be written. */
 export type CmsChange = {
@@ -90,6 +95,9 @@ const RULE_FIELDS: Record<string, Entry> = {
   "content.scannable": { fields: ["content_html"], scope: "page" },
   "content.image_alt": { fields: ["image_alt"], scope: "page" },
   "content.internal_links": { fields: ["content_html"], scope: "page" },
+  "content.self_contained": { fields: ["content_html"], scope: "page" },
+  "content.readability": { fields: ["content_html"], scope: "page" },
+  "tech.mixed_content": { fields: ["content_html"], scope: "page" },
 };
 
 /** The fields a rule's fix writes, or [] when it can't be fixed by writing fields. */
@@ -148,6 +156,24 @@ export const CMS_MANUAL_RULES: ReadonlySet<string> = new Set([
   "perf.html_size",
   "perf.response_time",
   "perf.text_ratio",
+  "tech.redirects",
+  "tech.soft_404",
+  "tech.https_redirect",
+  "tech.compression",
+  "tech.http_caching",
+  "tech.security_headers",
+  "tech.sitemap_quality",
+  "tech.hreflang_targets",
+  "content.quotable_passages",
+  "content.agent_usable",
+  "trust.hidden_instructions",
+  "trust.headline_year",
+  "trust.date_consistency",
+  "perf.core_web_vitals",
+  "perf.lab_score",
+  "perf.render_blocking",
+  "perf.image_dimensions",
+  "perf.dom_size",
 ]);
 
 /** Rule ids that have neither a field mapping nor an explicit manual entry. */
@@ -169,10 +195,18 @@ export function fieldSupport(
   ctx: {
     provider: CmsProvider;
     wpSeo?: WordPressSeoBackend;
-    pageKind: "wp_object" | "wp_other" | "webflow_page" | "webflow_item" | "unknown";
+    pageKind:
+      | "wp_object"
+      | "wp_other"
+      | "webflow_page"
+      | "webflow_item"
+      | "wix_page"
+      | "wix_post"
+      | "unknown";
   },
 ): { mode: CmsFixMode; reason: string } {
   const { provider, wpSeo = "none", pageKind } = ctx;
+  if (provider === "wix") return wixFieldSupport(field, pageKind);
   if (provider === "wordpress") {
     const needsObject = (what: string) =>
       pageKind === "wp_object"
@@ -285,6 +319,38 @@ export function fieldSupport(
   }
 }
 
+function wixFieldSupport(field: CmsField, pageKind: string): { mode: CmsFixMode; reason: string } {
+  const item = pageKind === "wix_page" || pageKind === "wix_post";
+  switch (field) {
+    case "seo_title":
+    case "meta_description":
+    case "canonical":
+    case "noindex":
+    case "og":
+    case "jsonld_page":
+      return item
+        ? { mode: "apply", reason: "Mellox updates this page's SEO settings in Wix." }
+        : {
+            mode: "assisted",
+            reason:
+              "Mellox couldn't match this address to one Wix page, so the value is set by hand in Wix.",
+          };
+    case "jsonld_site":
+    case "robots_txt":
+    case "llms_txt":
+      return {
+        mode: "assisted",
+        reason: "Wix's API can't change this site-wide setting; Mellox gives you the exact value.",
+      };
+    case "content_html":
+    case "image_alt":
+      return {
+        mode: "assisted",
+        reason: "Page text and images are edited in the Wix editor.",
+      };
+  }
+}
+
 function seoName(b: WordPressSeoBackend): string {
   return b === "mellox"
     ? "the Mellox GEO plugin"
@@ -321,6 +387,8 @@ export function targetLabel(t: CmsTarget): string {
       return "Webflow page";
     case "webflow_item":
       return "Webflow CMS item";
+    case "wix_item":
+      return t.itemType === "BLOG_POST" ? "Wix blog post" : "Wix page";
   }
 }
 

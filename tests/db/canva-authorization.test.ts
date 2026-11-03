@@ -19,7 +19,7 @@ async function install(access: string | null = "encrypted-access") {
 
 beforeAll(async () => {
   db = await createMigratedDb();
-  await db.exec(readMigration("20261012090000_canva_atomic_authorization.sql"));
+  await db.exec(readMigration("20261012090100_canva_atomic_authorization.sql"));
   for (const id of [owner, stranger])
     await db.query("insert into auth.users (id) values ($1)", [id]);
   const { rows } = await db.query<{ id: string }>(

@@ -13,6 +13,7 @@ import "server-only";
 //               GitHub: publishing → pr_open → (merged) → published → …
 //             WordPress: a post (+ SEO description and, with the Mellox GEO
 //             plugin, the article's JSON-LD). Webflow: a live CMS item.
+//             Wix: a Wix Blog post (created and published in one call).
 //             GitHub: a post file on a new mellox/post- branch + pull request.
 //             An article approved while the site's blog is still being added
 //             waits, and goes out when the blog's pull request is merged.
@@ -20,8 +21,8 @@ import "server-only";
 //             and structured data (lib/articles/verify.ts). Only this marks a
 //             publication verified.
 //
-// Provider writes are never blindly retried: an interrupted WordPress/Webflow
-// create is found again by slug; a GitHub branch name is stored before commit.
+// Provider writes are never blindly retried: an interrupted WordPress/Webflow/
+// Wix create is found again by slug; a GitHub branch name is stored before commit.
 
 import { createHash, randomBytes } from "node:crypto";
 import { after } from "next/server";
@@ -37,6 +38,7 @@ import {
   type PublishableArticle,
 } from "@/lib/articles/render";
 import { verifyArticleHtml } from "@/lib/articles/verify";
+import { articleRicos } from "@/lib/articles/wix-ricos";
 import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
 import { safeFetch } from "@/server/safe-fetch";
@@ -64,7 +66,7 @@ type PublicationRow = {
   workspace_id: string;
   content_item_id: string;
   host: string;
-  provider: "github" | "wordpress" | "webflow";
+  provider: "github" | "wordpress" | "webflow" | "wix";
   slug: string;
   title: string;
   status: PublicationStatus;
@@ -174,7 +176,7 @@ export async function publishTargets(
   workspaceId: string,
   domain: string | null,
 ): Promise<string[]> {
-  const [wp, wf, gh] = await Promise.all([
+  const [wp, wf, gh, wx] = await Promise.all([
     db
       .from("wordpress_sites")
       .select("site_url")
@@ -192,6 +194,12 @@ export async function publishTargets(
       .select("site_host")
       .eq("workspace_id", workspaceId)
       .eq("status", "active"),
+    db
+      .from("wix_sites")
+      .select("domains")
+      .eq("workspace_id", workspaceId)
+      .eq("selected", true)
+      .eq("status", "active"),
   ]);
   const hosts = new Set<string>();
   if (domain) hosts.add(normHost(domain));
@@ -207,6 +215,8 @@ export async function publishTargets(
       hosts.add(normHost(d));
   for (const r of (gh.data ?? []) as { site_host: string | null }[])
     if (r.site_host) hosts.add(normHost(r.site_host));
+  for (const r of (wx.data ?? []) as { domains: string[] | null }[])
+    for (const d of r.domains ?? []) hosts.add(normHost(d));
   return [...hosts];
 }
 
@@ -238,6 +248,7 @@ function predictedUrl(blog: BlogSettingsRow | null, host: string, slug: string):
     return webflowItemUrl(`https://${host}`, blog.webflow_field_map.collectionSlug, slug);
   if (blog.provider === "github" && blog.route_prefix)
     return `https://${host}${blog.route_prefix}/${slug}`;
+  if (blog.provider === "wix") return `https://${host}/post/${slug}`;
   return null; // WordPress decides from its permalink settings.
 }
 
@@ -344,7 +355,7 @@ export async function previewPublication(
       canPublish: false,
       reason:
         resolution.problems[0] ??
-        `Connect the WordPress, Webflow or GitHub account that builds ${host} first (Settings → Connections).`,
+        `Connect the WordPress, Webflow, Wix or GitHub account that builds ${host} first (Settings → Connections).`,
       publication: existing ? publicationView(existing) : null,
     };
   }
@@ -641,6 +652,90 @@ async function publishWebflow(p: PublicationRow, a: PublishableArticle, blog: Bl
   return { url, externalId: item.id };
 }
 
+/** The site member a Wix Blog post is written as: the blog's own author, else the site owner. */
+async function wixAuthor(
+  p: PublicationRow,
+  blog: BlogSettingsRow,
+  token: string,
+  ownerEmail: string | null,
+) {
+  if (blog.wix_member_id) return blog.wix_member_id;
+  const api = await import("@/server/connectors/wix/api.server");
+  const fromPosts = (await api.listPosts(token, 5).catch(() => ({ posts: [] }))).posts?.find(
+    (x) => x.memberId,
+  )?.memberId;
+  const memberId =
+    fromPosts ??
+    (ownerEmail
+      ? (await api.findMemberByEmail(token, ownerEmail).catch(() => ({ members: [] }))).members?.[0]
+          ?.id
+      : undefined);
+  if (!memberId)
+    throw new NeedsAttention(
+      "Wix needs an author for blog posts. Write one post on your Wix blog yourself (or join your site as a member), then publish again.",
+    );
+  await db
+    .from("site_blog_settings")
+    .update({ wix_member_id: memberId })
+    .eq("workspace_id", p.workspace_id)
+    .eq("host", p.host);
+  return memberId;
+}
+
+async function publishWix(p: PublicationRow, a: PublishableArticle, blog: BlogSettingsRow) {
+  const { wixAccess } = await import("@/server/connectors/wix/service.server");
+  const api = await import("@/server/connectors/wix/api.server");
+  const { token, ownerEmail } = await wixAccess(p.workspace_id);
+  const postUrl = (post: { url?: { base?: string; path?: string } }) =>
+    post.url?.base && post.url.path
+      ? `${post.url.base.replace(/\/+$/, "")}${post.url.path}`
+      : `https://${p.host}/post/${a.slug}`;
+
+  // A draft Mellox created earlier: publishing it again is safe (Wix updates the post).
+  if (p.external_id) {
+    let post = await api.getPostBySlug(token, a.slug);
+    if (!post) {
+      await api.publishDraft(token, p.external_id);
+      post = await api.getPostBySlug(token, a.slug);
+    }
+    if (!post) throw new Error("Wix hasn't listed the post yet.");
+    const url = postUrl(post);
+    await update(p.id, { url });
+    return { url, externalId: p.external_id };
+  }
+  // An interrupted create shows up here as a live post with this slug.
+  const existing = await api.getPostBySlug(token, a.slug);
+  if (existing) {
+    if ((existing.title ?? "").trim() !== a.title.trim())
+      throw new NeedsAttention(
+        `A blog post at “${a.slug}” already exists on Wix. Change the address and publish again.`,
+      );
+    const url = postUrl(existing);
+    await update(p.id, { external_id: existing.id, url });
+    return { url, externalId: existing.id };
+  }
+  const memberId = await wixAuthor(p, blog, token, ownerEmail);
+  const created = await api.createPublishedPost(token, {
+    title: a.title.slice(0, 200),
+    memberId,
+    excerpt: (a.dek || a.metaDescription).slice(0, 500),
+    seoSlug: a.slug.slice(0, 100),
+    hashtags: a.tags.slice(0, 30).map((t) => t.slice(0, 100)),
+    richContent: articleRicos(a),
+    seoData: {
+      tags: [{ type: "meta", props: { name: "description", content: a.metaDescription } }],
+    },
+  });
+  const draftId = created.draftPost?.id ?? null;
+  if (draftId) await update(p.id, { external_id: draftId });
+  const post = await api.getPostBySlug(token, a.slug);
+  // Not listed yet: the next attempt finds it by slug (or publishes the stored draft).
+  if (!post) throw new Error("Wix hasn't listed the post yet.");
+  const url = postUrl(post);
+  await update(p.id, { external_id: draftId ?? post.id, url });
+  return { url, externalId: draftId ?? post.id };
+}
+
 const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -769,6 +864,7 @@ async function publishOne(p: PublicationRow) {
     return;
   }
   if (p.provider === "wordpress") await publishWordPress(p, article, blog, binding);
+  else if (p.provider === "wix") await publishWix(p, article, blog);
   else await publishWebflow(p, article, blog);
   await update(p.id, {
     status: "published",

@@ -31,7 +31,7 @@ async function mockConfirmation(page: Page, workspaceFails = false, verifyFails 
       if (verifyFails && calls.verifies === 1)
         return route.fulfill({
           status: 400,
-          json: { code: "otp_expired", message: "private-otp-diagnostics" },
+          json: { code: "unexpected_failure", message: "private-otp-diagnostics" },
         });
       return route.fulfill({ json: authSession });
     }
@@ -102,4 +102,149 @@ test("recovery confirmation opens the password form without workspace setup", as
   await expect(page.getByLabel("New password", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/reset-password$/);
   expect(calls).toEqual({ verifies: 1, workspaces: 0 });
+});
+
+test("PKCE link survives scanner loads and mobile reload without verifying until confirmation", async ({
+  page,
+  request,
+}) => {
+  const calls = await mockConfirmation(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  const token = `pkce_${"c".repeat(56)}`;
+  await request.head("/auth/confirm");
+  await request.get("/auth/confirm");
+  await page.goto(`/auth/confirm#token_hash=${token}&type=email`);
+  const confirm = page.getByRole("button", { name: "Confirm email", exact: true });
+  await expect(confirm).toBeVisible();
+  await expect(page).toHaveURL(/\/auth\/confirm$/);
+  expect(calls).toEqual({ verifies: 0, workspaces: 0 });
+  await page.reload();
+  await expect(confirm).toBeVisible();
+  expect(calls.verifies).toBe(0);
+  const verified = page.waitForRequest((req) => new URL(req.url()).pathname.endsWith("/verify"));
+  await confirm.click();
+  expect((await verified).postDataJSON()).toMatchObject({ token_hash: token, type: "email" });
+  await expect(page).toHaveURL(/\/reset-password\?confirmed=1$/);
+  expect(calls).toEqual({ verifies: 1, workspaces: 1 });
+});
+
+test("verified session resumes setup after reload without using the token twice", async ({
+  page,
+}) => {
+  const calls = await mockConfirmation(page, true);
+  await page.goto(`/auth/confirm#token_hash=pkce_${"d".repeat(56)}&type=email`);
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
+  await expect(page.getByText(/Your email is confirmed, but/)).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
+  await expect(page).toHaveURL(/\/reset-password\?confirmed=1$/);
+  expect(calls).toEqual({ verifies: 1, workspaces: 2 });
+});
+
+test("expired or used links offer a working resend without creating a session", async ({
+  page,
+}) => {
+  const calls = await mockConfirmation(page);
+  await page.route(`https://${SUPABASE_HOST}/auth/v1/verify`, (route) =>
+    route.fulfill({
+      status: 403,
+      headers: {
+        "x-supabase-api-version": "2024-01-01",
+        "access-control-expose-headers": "x-supabase-api-version",
+      },
+      json: { code: "otp_expired", msg: "Token has expired or is invalid" },
+    }),
+  );
+  let resends = 0;
+  await page.route(`https://${SUPABASE_HOST}/auth/v1/resend**`, (route) => {
+    resends++;
+    expect(route.request().postDataJSON()).toMatchObject({
+      type: "signup",
+      email: "confirm@example.test",
+    });
+    return route.fulfill({ json: {} });
+  });
+  await page.goto(`/auth/confirm#token_hash=pkce_${"e".repeat(56)}&type=email`);
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
+  await expect(page.getByText(/This link has expired or was already used/)).toBeVisible();
+  await page.getByLabel("Resend signup confirmation").fill("confirm@example.test");
+  await page.getByRole("button", { name: "Resend confirmation email" }).click();
+  await expect(page.getByRole("status")).toContainText("a new email has been sent");
+  expect(resends).toBe(1);
+  expect(calls.workspaces).toBe(0);
+});
+
+test("secure email change first confirmation does not reuse an unrelated existing session", async ({
+  page,
+}) => {
+  const calls = await mockConfirmation(page);
+  await page.route(`https://${SUPABASE_HOST}/auth/v1/verify`, (route) =>
+    route.fulfill({
+      json: {
+        message:
+          "Confirmation link accepted. Please proceed to confirm at the other email address.",
+      },
+    }),
+  );
+  await page.goto(`/auth/confirm#token_hash=pkce_${"f".repeat(56)}&type=email_change`);
+  await page.getByRole("button", { name: "Confirm email change", exact: true }).click();
+  await expect(page.getByText(/open the other email too/)).toBeVisible();
+  expect(calls.workspaces).toBe(0);
+});
+
+test("opening a resent email in the same mobile document replaces the old token", async ({
+  page,
+}) => {
+  const calls = await mockConfirmation(page);
+  await page.goto(`/auth/confirm#token_hash=pkce_${"a".repeat(56)}&type=email`);
+  await expect(page.getByRole("button", { name: "Confirm email", exact: true })).toBeVisible();
+  const token = `pkce_${"b".repeat(56)}`;
+  await page.evaluate((hash) => {
+    window.location.hash = hash;
+  }, `token_hash=${token}&type=email`);
+  await expect(page).toHaveURL(/\/auth\/confirm$/);
+  const verified = page.waitForRequest((req) => new URL(req.url()).pathname.endsWith("/verify"));
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
+  expect((await verified).postDataJSON()).toMatchObject({ token_hash: token, type: "email" });
+  await expect(page).toHaveURL(/\/reset-password\?confirmed=1$/);
+  expect(calls).toEqual({ verifies: 1, workspaces: 1 });
+});
+
+test("expired recovery offers another recovery email instead of signup confirmation", async ({
+  page,
+}) => {
+  const calls = await mockConfirmation(page);
+  await page.route(`https://${SUPABASE_HOST}/auth/v1/verify`, (route) =>
+    route.fulfill({
+      status: 403,
+      json: { error_code: "otp_expired", msg: "Token has expired or is invalid" },
+    }),
+  );
+  let recoveries = 0;
+  await page.route(`https://${SUPABASE_HOST}/auth/v1/recover**`, (route) => {
+    recoveries++;
+    expect(route.request().postDataJSON()).toMatchObject({ email: "recover@example.test" });
+    return route.fulfill({ json: {} });
+  });
+  await page.goto(`/auth/confirm#token_hash=pkce_${"c".repeat(56)}&type=recovery`);
+  await page.getByRole("button", { name: "Continue to password reset" }).click();
+  await page.getByLabel("Send a new password reset email").fill("recover@example.test");
+  await page.getByRole("button", { name: "Send password reset email", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("password reset email has been sent");
+  expect(recoveries).toBe(1);
+  expect(calls.workspaces).toBe(0);
+});
+
+test("a verification response without a session cannot complete account setup", async ({
+  page,
+}) => {
+  const calls = await mockConfirmation(page);
+  await page.route(`https://${SUPABASE_HOST}/auth/v1/verify`, (route) =>
+    route.fulfill({ json: { user: session().user } }),
+  );
+  await page.goto(`/auth/confirm#token_hash=pkce_${"d".repeat(56)}&type=email`);
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
+  await expect(page.getByText(/This link could not be confirmed/)).toBeVisible();
+  expect(calls.workspaces).toBe(0);
+  await expect(page).toHaveURL(/\/auth\/confirm$/);
 });

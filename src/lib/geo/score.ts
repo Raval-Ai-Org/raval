@@ -9,6 +9,9 @@
 //   overall score    Σ(category score × category weight)
 //   points lost      (1 − credit) × weight / Σweight × 100 × category weight
 //   priority         0.5·impact + 0.25·confidence + 0.25·(1 − effort)
+//   page impact      severity × (0.7 + 0.3 × page importance) — a problem on the
+//                    homepage or a well-linked page outranks the same one on a
+//                    deep, rarely linked page (priority only; never the score)
 //
 // Every deduction is traceable: finding → rule → evidence → points lost. A
 // rule can only cost points once per page, and N/A never penalises.
@@ -42,7 +45,7 @@ import {
 } from "./types";
 
 /** Bumped when scoring changes enough that old and new scores aren't comparable. */
-export const SCORE_VERSION = 2;
+export const SCORE_VERSION = 3;
 
 const CREDIT: Record<Exclude<RuleStatus, "na">, number> = { pass: 1, warn: 0.5, fail: 0 };
 const SEVERITY_IMPACT: Record<Severity, number> = {
@@ -78,6 +81,34 @@ export function priorityFor(
   const priority: Priority =
     score >= 0.8 ? "critical" : score >= 0.6 ? "high" : score >= 0.4 ? "medium" : "low";
   return { score, priority };
+}
+
+/**
+ * How much a page matters to the site, 0..1: the homepage is 1; otherwise
+ * shallow, often-linked pages listed in the sitemap rank higher. Explainable
+ * on purpose — it only orders work, it never changes a score.
+ */
+export function pageImportance(ctx: SiteContext, url: string): number {
+  const entry = ctx.analyzed.find(({ a }) => a.url === url);
+  if (!entry) return 0.5;
+  if (entry === ctx.home || entry.a.pageType === "home") return 1;
+  let maxInbound = 0;
+  for (const n of ctx.inbound.values()) maxInbound = Math.max(maxInbound, n);
+  const depth = entry.page.depth;
+  let key = url;
+  try {
+    const u = new URL(url);
+    key = `${u.pathname.replace(/\/+$/, "") || "/"}${u.search}`;
+  } catch {
+    /* keep url */
+  }
+  const score =
+    0.35 +
+    (depth <= 1 ? 0.25 : depth === 2 ? 0.1 : 0) +
+    (maxInbound ? 0.25 * ((ctx.inbound.get(url) ?? 0) / maxInbound) : 0) +
+    (ctx.sitemapPaths?.has(key) ? 0.05 : 0) +
+    (entry.a.pageType === "product" || entry.a.pageType === "about" ? 0.05 : 0);
+  return Math.round(Math.min(1, score) * 100) / 100;
 }
 
 /** Stable finding identity across scans: rule + host + path (+ query). */
@@ -307,6 +338,11 @@ export function scoreScan(
 
   /* ── Findings ── */
   const findings: GeoFinding[] = [];
+  const importance = new Map<string, number>();
+  const importanceOf = (url: string) => {
+    if (!importance.has(url)) importance.set(url, pageImportance(ctx, url));
+    return importance.get(url)!;
+  };
   for (const ev of evaluations) {
     const summary = ruleSummaryById.get(ev.rule.id);
     if (!summary || summary.status === "na") continue;
@@ -318,8 +354,9 @@ export function scoreScan(
     for (const { pageUrl, outcome } of bad) {
       const status = outcome.status as "warn" | "fail";
       const severity = status === "fail" ? ev.rule.severity : DOWNGRADE[ev.rule.severity];
+      const weight = pageUrl ? 0.7 + 0.3 * importanceOf(pageUrl) : 1;
       const { score, priority } = priorityFor(
-        SEVERITY_IMPACT[severity],
+        SEVERITY_IMPACT[severity] * weight,
         ev.rule.confidence,
         ev.rule.effort,
       );
@@ -451,6 +488,7 @@ export function scoreScan(
       .slice(0, 500),
     scoreVersion: SCORE_VERSION,
     ...(site.agent ? { agent: site.agent } : {}),
+    ...(site.performance ? { performance: site.performance } : {}),
   };
 
   return { report, findings, pageScores };

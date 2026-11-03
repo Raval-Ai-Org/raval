@@ -17,6 +17,7 @@ import { assertSafeVideo } from "@/server/guardrails/video-safety.server";
 import {
   assertSafeMediaPrompt,
   assertSafeMediaImages,
+  clearedMediaImages,
   MediaSafetyError,
 } from "@/server/guardrails/media-safety.server";
 import {
@@ -31,6 +32,7 @@ import { videoFallbackProvider, videoProvider } from "../models.server";
 import { kieVideoProvider } from "./kie.server";
 import { openRouterVideoProvider } from "./openrouter.server";
 import type { ProviderCheck, SubmitResult, VideoProvider, VideoRenderRequest } from "./types";
+import { withVideoComposition } from "./composition.server";
 
 /** The only refusals that move a job to the fallback provider. */
 const FALLBACK_CODES = new Set([
@@ -66,6 +68,7 @@ function requestFor(req: VideoRenderRequest, provider: VideoProviderId): VideoRe
     resolution: req.resolution,
     imageCount: req.imageUrls.length,
   });
+  if (settings.durationSec < (req.minimumDurationSec ?? 0)) return null;
   return {
     ...req,
     model,
@@ -73,6 +76,22 @@ function requestFor(req: VideoRenderRequest, provider: VideoProviderId): VideoRe
     aspectRatio: settings.aspectRatio,
     resolution: settings.resolution,
     imageUrls: req.imageUrls.slice(0, usableImageCount(model, req.imageUrls.length)),
+  };
+}
+
+/** The request without the style references that were left out. */
+function withImages(req: VideoRenderRequest, own: string[], style: string[]): VideoRenderRequest {
+  const imageUrls = [...own, ...style];
+  const required = Math.min(
+    req.requiredReferenceCount ?? (req.requireReferences ? 1 : 0),
+    imageUrls.length,
+  );
+  return {
+    ...req,
+    imageUrls,
+    styleReferenceCount: style.length,
+    requireReferences: Boolean(req.requireReferences && imageUrls.length),
+    requiredReferenceCount: required || undefined,
   };
 }
 
@@ -92,10 +111,19 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
       return pick(model.provider).generationType(model, imageCount);
     },
 
-    async submit(req: VideoRenderRequest): Promise<SubmitResult> {
+    async submit(request: VideoRenderRequest): Promise<SubmitResult> {
+      let req = request;
       try {
         await assertSafeMediaPrompt(req.prompt);
-        await assertSafeMediaImages(req.imageUrls);
+        const style = Math.min(req.styleReferenceCount ?? 0, req.imageUrls.length);
+        const own = req.imageUrls.slice(0, req.imageUrls.length - style);
+        await assertSafeMediaImages(own);
+        if (style) {
+          // Brand style references the person did not pick: one that is not
+          // cleared is left out, never a reason to fail their render.
+          const kept = await clearedMediaImages(req.imageUrls.slice(own.length));
+          if (kept.length < style) req = withImages(req, own, kept);
+        }
       } catch (error) {
         if (!(error instanceof MediaSafetyError)) throw error;
         return {
@@ -149,7 +177,7 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
           result ?? {
             ok: false,
             code: "provider_model_unavailable",
-            message: "This video model isn't available on any configured provider.",
+            message: "This video style isn't available right now. Try another one.",
             retryable: false,
           }
         );
@@ -189,7 +217,7 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
       try {
         const downloaded = await chosen.download?.(result.videoUrl, provider);
         await assertSafeVideo(downloaded?.dataUrl ?? result.videoUrl);
-        return result;
+        return downloaded ? { ...result, downloaded } : result;
       } catch (error) {
         if (!(error instanceof MediaSafetyError)) throw error;
         if (error.code === "safety_unavailable")
@@ -212,4 +240,4 @@ export function createRoutedVideoProvider(deps: RoutedProviderDeps = {}): VideoP
   };
 }
 
-export const routedVideoProvider = createRoutedVideoProvider();
+export const routedVideoProvider = withVideoComposition(createRoutedVideoProvider());

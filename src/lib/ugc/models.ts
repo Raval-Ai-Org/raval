@@ -16,6 +16,8 @@
 // or OpenRouter USD, all overridable without a deploy (src/server/ugc/models.server.ts).
 // The provider's own reported cost on the finished task is what is metered.
 
+import { outputDurations } from "./duration";
+
 export type UgcAspectRatio = "9:16" | "1:1" | "16:9" | "4:3" | "3:4";
 export type UgcResolution = "480p" | "720p" | "768p" | "1080p" | "2k";
 export type VideoProviderId = "kie" | "openrouter";
@@ -347,7 +349,7 @@ export const UGC_MODELS: Record<UgcModelKey, UgcModel> = Object.fromEntries(
 
 export const UGC_MODEL_KEYS = Object.keys(ENTRIES) as UgcModelKey[];
 export const LEGACY_UGC_MODEL_KEYS = Object.keys(LEGACY) as LegacyUgcModelKey[];
-export const DEFAULT_UGC_MODEL: UgcModelKey = "standard";
+export const DEFAULT_UGC_MODEL: UgcModelKey = "long";
 
 /** A key a new job may use. */
 export function isUgcModelKey(value: unknown): value is UgcModelKey {
@@ -430,13 +432,13 @@ export function checkRenderSettings(model: UgcModel, s: RenderSettings): Setting
     });
   }
   const durations = durationsFor(model, images > 0);
-  if (!durations.includes(s.durationSec)) {
+  if (!outputDurations(durations).includes(s.durationSec)) {
     problems.push({
       field: "durationSec",
       message:
         images > 0 && model.images?.durations
-          ? `${model.displayName} with product photos renders ${durations.join(", ")}s videos.`
-          : `${model.displayName} renders ${durations[0]}–${durations[durations.length - 1]}s videos.`,
+          ? `${model.displayName} with product photos supports ${outputDurations(durations).join(", ")}s videos.`
+          : `Choose a supported video length up to 60 seconds.`,
     });
   }
   return problems;

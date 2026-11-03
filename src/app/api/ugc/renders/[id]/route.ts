@@ -6,7 +6,7 @@ import { idAfter } from "@/server/ugc/route-helpers";
 import { getRenderView } from "@/server/ugc/service.server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export const GET = defineRoute({
   name: "ugc/renders:get",

@@ -45,16 +45,21 @@ export const CHAT_READ_TOOLS = [
   "list_social_accounts",
   "get_autopilot_status",
   "get_opportunities",
+  "list_campaigns",
+  "get_campaign",
   "get_audience",
   "list_predictions",
   "get_market_updates",
   "get_competitors",
+  "list_community_threads",
+  "get_community_thread",
   "get_analytics_summary",
   "list_geo_scans",
   "get_geo_scan",
   "get_geo_findings",
   "get_geo_trend",
   "get_tracked_prompts",
+  "list_connected_apps",
 ] as const;
 
 /**
@@ -97,6 +102,8 @@ export const CHAT_ACTION_TOOLS = [
   "set_tracked_prompt_paused",
   "delete_tracked_prompt",
   "check_tracked_prompt_now",
+  "save_email_draft",
+  "export_calendar_to_sheets",
 ] as const;
 
 /** Reads chat has that MCP doesn't expose yet. Same shape, same bridge. */
@@ -308,10 +315,15 @@ const ACTIVITY: Record<string, string> = {
   list_social_accounts: "Checking your connected accounts",
   get_autopilot_status: "Checking Autopilot",
   get_opportunities: "Looking at opportunities",
+  list_campaigns: "Looking at your campaigns",
+  get_campaign: "Reading the campaign",
   get_audience: "Looking at your audience",
   list_predictions: "Looking at recent scores",
   get_market_updates: "Reading your market updates",
   get_competitors: "Looking at your competitors",
+  list_community_threads: "Looking at community threads",
+  list_connected_apps: "Checking connected apps",
+  get_community_thread: "Reading a community thread",
   get_analytics_summary: "Reading your numbers",
   list_geo_scans: "Looking at your website scans",
   get_geo_scan: "Checking that scan",

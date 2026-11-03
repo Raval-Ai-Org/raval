@@ -8,6 +8,9 @@ FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# next build's type check needs more than Node's default heap on this codebase;
+# without this it dies silently right after "Running TypeScript".
+ENV NODE_OPTIONS=--max-old-space-size=6144
 
 # Railway automatically passes UI Variables as matching ARGs during build time
 ARG NEXT_PUBLIC_SUPABASE_URL

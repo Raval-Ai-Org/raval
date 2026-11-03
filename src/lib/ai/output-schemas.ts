@@ -58,6 +58,17 @@ export const BRAND_EXTRACT_OUTPUT_SCHEMA = object({
     feedback: str,
   }),
   insights: { type: "array", items: object({ title: str, body: str }) },
+  // Every product or service the crawled pages name; checked by groundCatalog.
+  catalog: {
+    type: "array",
+    items: object({
+      name: str,
+      kind: { type: "string", enum: ["product", "service"] },
+      description: str,
+      price: str,
+      url: str,
+    }),
+  },
   missing: strList,
 });
 

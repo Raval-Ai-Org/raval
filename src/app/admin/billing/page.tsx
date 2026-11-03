@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { SessionGate } from "@/components/auth/SessionGate";
 import { BillingAdmin } from "@/components/admin/BillingAdmin";
 
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <SessionGate>
-      <BillingAdmin />
+      <Suspense fallback={<p className="p-6">Loading billing…</p>}>
+        <BillingAdmin />
+      </Suspense>
     </SessionGate>
   );
 }

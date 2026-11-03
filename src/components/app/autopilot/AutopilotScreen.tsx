@@ -64,7 +64,8 @@ export type OpenTarget =
   | "calendar"
   | "audience"
   | "competitors"
-  | "market";
+  | "market"
+  | "campaigns";
 
 export type AutopilotHandlers = {
   start: (settings: ProgramSettings) => void;
@@ -175,7 +176,7 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
         <EmptyState
           icon={ListChecks}
           title="You're all caught up"
-          description="New posts show up here a few days before they're due."
+          description="New posts show up here before they're due."
         />
       )}
       <div className="space-y-3">
@@ -214,7 +215,7 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
                         src={src}
                         alt={`Frame ${k + 1}`}
                         loading="lazy"
-                        className="aspect-[9/16] w-[104px] rounded-xl object-cover ring-1 ring-border/60"
+                        className="aspect-[9/16] w-[112px] rounded-2xl object-cover ring-1 ring-border/60"
                       />
                     </li>
                   ))}
@@ -226,7 +227,7 @@ function Approvals({ view, handlers }: { view: AutopilotView; handlers: Autopilo
               ) : null}
               {a.reason && (
                 <p className="mt-3 text-[12.5px] text-muted-foreground">
-                  <span className="font-medium text-foreground/80">Why this: </span>
+                  <span className="font-medium text-foreground/80">Why: </span>
                   {a.reason}
                 </p>
               )}
@@ -364,6 +365,15 @@ function OpportunityCard({
                 Create {FORMAT_LABEL[format].toLowerCase()}
               </button>
             )}
+            {format === "campaign" && !visibility && (
+              <button
+                type="button"
+                onClick={() => handlers.open("campaigns")}
+                className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
+              >
+                Plan as a campaign
+              </button>
+            )}
             {!picking && !visibility && (
               <button
                 type="button"
@@ -405,7 +415,7 @@ function Ideas({ view, handlers }: { view: AutopilotView; handlers: AutopilotHan
         <EmptyState
           icon={Lightbulb}
           title="Nothing new right now"
-          description="Mellox watches your market and competitors and only shows what fits your brand."
+          description="Ideas that fit your brand show up here."
         />
       )}
     </SurfacePage>

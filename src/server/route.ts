@@ -36,7 +36,7 @@ import { HttpError } from "./http-error";
 import { BillingError } from "./billing/errors";
 import { SsrfBlockedError } from "./safe-fetch";
 import { UpstreamError } from "./upstream";
-import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
+import { messageForFailure, messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import { readJsonBody, RequestBodyTooLargeError } from "./request-body";
 
 type Schema<T> = ZodType<T, ZodTypeDef, unknown>;
@@ -110,9 +110,9 @@ export function knownErrorResponse(error: unknown): Response | null {
   if (error instanceof UpstreamError) {
     // Provider text (balances, keys, model names) stays in the log, never the response.
     console.warn(
-      `[upstream] ${error.provider} ${error.status} ${error.code ?? ""}: ${error.message}`,
+      `[upstream] ${error.provider} ${error.status} ${error.code ?? ""}: ${error.detail}`,
     );
-    return jsonError(error.status, messageForStatus(error.status));
+    return jsonError(error.status, messageForFailure(error.status, error.code));
   }
   if (error instanceof HttpError) {
     return jsonError(error.status, userSafeMessage(error.message, messageForStatus(error.status)));

@@ -114,7 +114,7 @@ export function GenerationProgress({
 
   const typical = TYPICAL_SECONDS[session.type];
   const perStage = typical / stages.length;
-  const slow = elapsed > typical * 2 && !(session.type === "video" && stage?.id === "render");
+  const slow = elapsed > typical * 2;
   const starting = !job;
   const CaptionIcon = stage ? STAGE_ICON[stage.id] : Sparkles;
 
@@ -250,7 +250,9 @@ export function GenerationProgress({
               animate={{ opacity: 1, height: "auto" }}
               className="mt-5 text-xs leading-relaxed text-muted-foreground"
             >
-              Taking longer than usual. You can keep working — we'll tell you when it's ready.
+              {session.type === "video" && stage?.id === "render"
+                ? "The provider is still rendering your video. It will continue safely in the background, even if you leave this screen."
+                : "Taking longer than usual. You can keep working — we'll tell you when it's ready."}
             </motion.p>
           ) : null}
         </AnimatePresence>

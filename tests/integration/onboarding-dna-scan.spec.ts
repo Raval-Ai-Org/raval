@@ -24,7 +24,7 @@ function session() {
 }
 
 test.describe("Onboarding URL to Brand DNA", () => {
-  test("uses one URL, streams the real scan, supports review, and completes", async ({
+  test("asks the goal during the scan, then review, products and channels", async ({
     page,
     context,
   }) => {
@@ -75,6 +75,64 @@ test.describe("Onboarding URL to Brand DNA", () => {
       },
     );
 
+    const rpcCalls: { fn: string; data: Record<string, unknown> }[] = [];
+    const product = {
+      id: "00000000-0000-4000-8000-0000000000aa",
+      kind: "product",
+      name: "Example Pro",
+      description: "",
+      price: "USD 49",
+      url: "https://example.com/products/pro",
+      category: "",
+      benefits: [],
+      images: [],
+      primaryAssetId: null,
+      source: "shopify",
+      position: 0,
+      status: "active",
+    };
+    await context.route("**/api/rpc/**", async (route) => {
+      const fn = new URL(route.request().url()).pathname.replace("/api/rpc/", "");
+      const data = (JSON.parse(route.request().postData() || "{}").data ?? {}) as Record<
+        string,
+        unknown
+      >;
+      rpcCalls.push({ fn, data });
+      const goals = {
+        focus: "leads",
+        targets: [],
+        timeframeWeeks: 12,
+        postsPerWeek: 3,
+        channels: ["linkedin"],
+        startedAt: "2026-11-01T00:00:00.000Z",
+        note: "",
+      };
+      const result =
+        fn === "goals/getGoals"
+          ? { goals: null, version: 0, updatedAt: null }
+          : fn === "goals/saveGoals"
+            ? { goals, version: 1, updatedAt: "2026-11-01T00:00:00Z", warnings: [] }
+            : fn === "products/listProducts"
+              ? []
+              : fn === "products/importProducts"
+                ? [product]
+                : fn.startsWith("competitors/")
+                  ? { competitors: [] }
+                  : null;
+      return route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ result }),
+      });
+    });
+    await context.route("**/api/sdr/**", (route) =>
+      route.fulfill({
+        status: 200,
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ enabled: false, canPublish: false, platforms: [] }),
+      }),
+    );
+
     await context.route("**/api/brand-extract", async (route) => {
       extractionAttempts += 1;
       scanBodies.push(route.request().postData() || "");
@@ -115,6 +173,24 @@ test.describe("Onboarding URL to Brand DNA", () => {
             structuredData: 1,
             headings: 6,
             socialPlatforms: ["linkedin"],
+          },
+        },
+        {
+          type: "discovery",
+          kind: "products",
+          data: {
+            products: [
+              {
+                name: "Example Pro",
+                description: "",
+                price: "USD 49",
+                url: "https://example.com/products/pro",
+                category: "",
+                images: [],
+                source: "shopify",
+                fingerprint: "url:example.com/products/pro",
+              },
+            ],
           },
         },
         { type: "progress", stage: "analyze", message: "Analyzing with AI", pct: 80 },
@@ -161,6 +237,17 @@ test.describe("Onboarding URL to Brand DNA", () => {
     await input.fill(URL);
     await page.getByRole("button", { name: "Scan my brand" }).click();
 
+    // The goal is asked while the scan runs.
+    await expect(page.getByText("What should your marketing do first?")).toBeVisible();
+    await page.getByRole("radio", { name: /Get new customers/ }).click();
+    await page.getByRole("button", { name: "LinkedIn" }).click();
+    await page.getByRole("button", { name: /Set my goal/ }).click();
+    await expect.poll(() => rpcCalls.some((c) => c.fn === "goals/saveGoals")).toBe(true);
+    expect(rpcCalls.find((c) => c.fn === "goals/saveGoals")!.data.goals).toMatchObject({
+      focus: "leads",
+      channels: ["linkedin"],
+    });
+
     await expect(page.getByText("Review your Brand DNA.")).toBeVisible({ timeout: 15_000 });
     expect(scanBodies).toHaveLength(2);
     expect(JSON.parse(scanBodies[0]).url).toBe(URL);
@@ -172,9 +259,25 @@ test.describe("Onboarding URL to Brand DNA", () => {
     await expect(page.getByText("Globex")).toBeVisible();
     await expect(page.getByText("Targets small teams")).toBeVisible();
     await page.getByLabel("Industry").fill("Developer tools");
-    await page.getByRole("button", { name: /Enter Mellox/ }).click();
-    await expect(page.getByText("Your workspace is ready.")).toBeVisible();
-    await expect(page.getByText("Mellox now understands Example")).toBeVisible();
+    await page.getByRole("button", { name: /Looks right, continue/ }).click();
+
+    // Products found on the site; at least one is needed to go on.
+    await expect(page.getByText("Found on your site")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled();
+    await page.getByRole("button", { name: /Keep 1/ }).click();
+    await expect(page.getByRole("heading", { name: "Example Pro" })).toBeVisible();
+    expect(
+      (rpcCalls.find((c) => c.fn === "products/importProducts")!.data.candidates as unknown[])
+        .length,
+    ).toBe(1);
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.getByText("Where should your posts go?")).toBeVisible();
+    await page
+      .getByRole("button", { name: /Skip for now/ })
+      .last()
+      .click();
+    await expect(page.getByText(/first three posts/)).toBeVisible();
 
     const stored = await page.evaluate(
       (id) => ({
@@ -185,6 +288,8 @@ test.describe("Onboarding URL to Brand DNA", () => {
     );
     expect(stored.url).toBeNull();
     expect(stored.dna.industry).toBe("Developer tools");
+    // Brand DNA's products line comes from the catalogue the person kept.
+    expect(stored.dna.products).toBe("Example Pro");
     expect(stored.dna.customer.painPoints).toBe("Manual reporting");
     expect(stored.dna.competitors[0]).toMatchObject({ name: "Globex", id: expect.any(String) });
     expect(stored.dna).not.toHaveProperty("customerSignals");

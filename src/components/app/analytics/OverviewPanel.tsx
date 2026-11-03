@@ -1,14 +1,18 @@
 "use client";
 
-// Overview — the two headline numbers (visits and Google clicks), then the
-// trend, the pages and terms behind them, and what changed. Sources are never
-// blended: every card names the one source it came from.
+// Overview — the headline numbers (social views, website visits, Google
+// clicks), then the trend, the posts, pages and terms behind them, and what
+// changed. Sources are never blended: every card names the one source it came
+// from. Social numbers need no Google; with Google not connected its cards
+// fold into one "Connect Google" card.
 import { useState } from "react";
 import { ArrowRight, Target } from "@/components/icons";
 import { Segmented } from "@/components/app/geo/geo-ui";
 import type { AnalyticsTab } from "@/components/app/AnalyticsTabs";
 import type { Kpi, SourceStatus } from "@/lib/analytics/types";
+import { GoogleConnectBanner } from "./AnalyticsLock";
 import { useAnalyticsReport, useInsights } from "./hooks";
+import { PlatformCell, PostRow, SocialStatusNotice } from "./SocialPanel";
 import { ReportError, ReportSkeleton, SourceNotice } from "./SourceGate";
 import {
   askMellox,
@@ -16,6 +20,7 @@ import {
   HeroStat,
   KpiTile,
   kpiPrompt,
+  fmt,
   PageLink,
   RankedTable,
   SourceBadge,
@@ -69,8 +74,20 @@ export function OverviewPanel({ onTabChange }: { onTabChange: (t: AnalyticsTab) 
 
   const web = data.website;
   const sea = data.search;
+  const social = data.social;
   const webReady = web.status.state === "ready";
   const seaReady = sea.status.state === "ready";
+  const socialReady = social.status.state === "ready";
+  // No Google account (or expired access): one card instead of six empty ones.
+  const googleState = web.status.state;
+  const googleOff =
+    !webReady &&
+    !seaReady &&
+    ["not_connected", "not_configured", "reconnect"].includes(googleState);
+  const socialHero =
+    findKpi(social.kpis, "social.views")?.value != null
+      ? findKpi(social.kpis, "social.views")
+      : findKpi(social.kpis, "social.engagement");
   const webActive = WEBSITE_TREND.find((t) => t.id === webTrend)!;
   const seaActive = SEARCH_TREND.find((t) => t.id === seaTrend)!;
   const webSeries =
@@ -88,15 +105,29 @@ export function OverviewPanel({ onTabChange }: { onTabChange: (t: AnalyticsTab) 
   const topInsights =
     insights.data?.insight?.items.slice(0, 3) ?? insights.data?.stale?.items.slice(0, 3) ?? [];
   const secondary = [
+    ...(socialReady
+      ? social.kpis.filter((k) => k.key !== socialHero?.key && k.value !== null)
+      : []),
     ...web.kpis.filter((k) => k.key !== "ga4.sessions"),
     ...sea.kpis.filter((k) => k.key !== "gsc.clicks"),
   ];
+  const heroCount = 1 + (googleOff ? 0 : 2);
 
   return (
     <div className="space-y-4">
       {/* Headline */}
-      <div className="grid gap-3 lg:grid-cols-2">
-        {webReady ? (
+      <div className={heroCount === 3 ? "grid gap-3 lg:grid-cols-3" : "grid gap-3"}>
+        {socialReady && socialHero ? (
+          <HeroStat
+            kpi={socialHero}
+            caption="vs the period before"
+            points={socialHero.key === "social.views" ? social.series : undefined}
+            action={<SourceBadge source="social" short />}
+          />
+        ) : (
+          <SocialStatusNotice status={social.status} />
+        )}
+        {googleOff ? null : webReady ? (
           <HeroStat
             kpi={findKpi(web.kpis, "ga4.sessions") ?? blank("ga4.sessions")}
             caption="vs the period before"
@@ -106,7 +137,7 @@ export function OverviewPanel({ onTabChange }: { onTabChange: (t: AnalyticsTab) 
         ) : (
           <SourceNotice status={web.status} />
         )}
-        {seaReady ? (
+        {googleOff ? null : seaReady ? (
           <HeroStat
             kpi={findKpi(sea.kpis, "gsc.clicks") ?? blank("gsc.clicks")}
             caption="vs the period before"
@@ -127,100 +158,155 @@ export function OverviewPanel({ onTabChange }: { onTabChange: (t: AnalyticsTab) 
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card
-          title="Visits over time"
-          source="ga4"
-          window={web.window}
-          action={
-            webReady ? (
-              <Segmented
-                label="Website metric"
-                value={webTrend}
-                onChange={setWebTrend}
-                options={WEBSITE_TREND.map((t) => ({ value: t.id, label: t.label }))}
-              />
-            ) : null
-          }
-        >
-          <Sourced status={web.status}>
-            <TrendChart metric={webActive.metric} points={webSeries ?? []} />
-          </Sourced>
-        </Card>
-        <Card
-          title="Google Search over time"
-          source="gsc"
-          window={sea.window}
-          action={
-            seaReady ? (
-              <Segmented
-                label="Search metric"
-                value={seaTrend}
-                onChange={setSeaTrend}
-                options={SEARCH_TREND.map((t) => ({ value: t.id, label: t.label }))}
-              />
-            ) : null
-          }
-        >
-          <Sourced status={sea.status}>
-            <TrendChart metric={seaActive.metric} points={seaSeries ?? []} />
-          </Sourced>
-        </Card>
-      </div>
+      {socialReady && (social.topPosts.length > 0 || social.byPlatform.length > 0) && (
+        <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+          <Card
+            title="Best posts"
+            source="social"
+            window={social.window}
+            action={
+              <button
+                type="button"
+                onClick={() => onTabChange("social")}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                All posts <ArrowRight className="size-3" />
+              </button>
+            }
+          >
+            {social.topPosts.length ? (
+              <ul className="divide-y divide-border">
+                {social.topPosts.map((p) => (
+                  <PostRow key={p.id} post={p} />
+                ))}
+              </ul>
+            ) : (
+              <p className="py-8 text-center text-[12px] text-muted-foreground">
+                No numbers for this period yet.
+              </p>
+            )}
+          </Card>
+          <Card title="By network" source="social">
+            <ul className="space-y-2.5">
+              {social.byPlatform.slice(0, 6).map((p) => (
+                <li
+                  key={p.platform}
+                  className="flex items-center justify-between gap-3 text-[12px]"
+                >
+                  <PlatformCell platform={p.platform} />
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {p.posts} post{p.posts === 1 ? "" : "s"}
+                    {p.views !== null ? ` · ${fmt.count(p.views)} views` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card
-          title="Top landing pages"
-          source="ga4"
-          action={
-            webReady ? (
-              <button
-                type="button"
-                onClick={() => onTabChange("website")}
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                All pages <ArrowRight className="size-3" />
-              </button>
-            ) : null
-          }
-        >
-          <Sourced status={web.status}>
-            <RankedTable
-              rows={web.landingPages ?? []}
-              primaryLabel="Visits"
-              primaryMetric="ga4.sessions"
-              limit={5}
-              renderValue={(v) => <PageLink value={v} />}
-              empty="No pages with visits in this period."
-            />
-          </Sourced>
-        </Card>
-        <Card
-          title="Top search terms"
-          source="gsc"
-          action={
-            seaReady ? (
-              <button
-                type="button"
-                onClick={() => onTabChange("search")}
-                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                All terms <ArrowRight className="size-3" />
-              </button>
-            ) : null
-          }
-        >
-          <Sourced status={sea.status}>
-            <RankedTable
-              rows={sea.queries ?? []}
-              primaryLabel="Clicks"
-              primaryMetric="gsc.clicks"
-              limit={5}
-              empty="No search terms yet. Google hides rare searches."
-            />
-          </Sourced>
-        </Card>
-      </div>
+      {googleOff ? (
+        googleState === "not_configured" ? null : (
+          <GoogleConnectBanner reconnect={googleState === "reconnect"} />
+        )
+      ) : (
+        <>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card
+              title="Visits over time"
+              source="ga4"
+              window={web.window}
+              action={
+                webReady ? (
+                  <Segmented
+                    label="Website metric"
+                    value={webTrend}
+                    onChange={setWebTrend}
+                    options={WEBSITE_TREND.map((t) => ({ value: t.id, label: t.label }))}
+                  />
+                ) : null
+              }
+            >
+              <Sourced status={web.status}>
+                <TrendChart metric={webActive.metric} points={webSeries ?? []} />
+              </Sourced>
+            </Card>
+            <Card
+              title="Google Search over time"
+              source="gsc"
+              window={sea.window}
+              action={
+                seaReady ? (
+                  <Segmented
+                    label="Search metric"
+                    value={seaTrend}
+                    onChange={setSeaTrend}
+                    options={SEARCH_TREND.map((t) => ({ value: t.id, label: t.label }))}
+                  />
+                ) : null
+              }
+            >
+              <Sourced status={sea.status}>
+                <TrendChart metric={seaActive.metric} points={seaSeries ?? []} />
+              </Sourced>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card
+              title="Top landing pages"
+              source="ga4"
+              action={
+                webReady ? (
+                  <button
+                    type="button"
+                    onClick={() => onTabChange("website")}
+                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    All pages <ArrowRight className="size-3" />
+                  </button>
+                ) : null
+              }
+            >
+              <Sourced status={web.status}>
+                <RankedTable
+                  rows={web.landingPages ?? []}
+                  primaryLabel="Visits"
+                  primaryMetric="ga4.sessions"
+                  limit={5}
+                  renderValue={(v) => <PageLink value={v} />}
+                  empty="No pages with visits in this period."
+                />
+              </Sourced>
+            </Card>
+            <Card
+              title="Top search terms"
+              source="gsc"
+              action={
+                seaReady ? (
+                  <button
+                    type="button"
+                    onClick={() => onTabChange("search")}
+                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    All terms <ArrowRight className="size-3" />
+                  </button>
+                ) : null
+              }
+            >
+              <Sourced status={sea.status}>
+                <RankedTable
+                  rows={sea.queries ?? []}
+                  primaryLabel="Clicks"
+                  primaryMetric="gsc.clicks"
+                  limit={5}
+                  empty="No search terms yet. Google hides rare searches."
+                />
+              </Sourced>
+            </Card>
+          </div>
+        </>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title="Made in Mellox" source="mellox" window={data.mellox.window}>
@@ -283,7 +369,8 @@ export function OverviewPanel({ onTabChange }: { onTabChange: (t: AnalyticsTab) 
 
       <p className="px-1 text-[10.5px] text-muted-foreground">
         Every number is compared with the period just before it. Google Search data can lag by two
-        to three days. A source with nothing to show says so — it is never estimated.
+        to three days, and networks up to two days. A source with nothing to show says so — it is
+        never estimated.
       </p>
     </div>
   );

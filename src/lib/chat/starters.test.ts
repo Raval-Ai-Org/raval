@@ -85,3 +85,35 @@ describe("buildStarters", () => {
     expect(texts(facts, 0)).not.toEqual(texts(facts, 1));
   });
 });
+
+describe("starters from the workspace pulse", () => {
+  const pulse = {
+    waiting: 2,
+    autopilot: { status: null, waiting: 0 },
+    campaigns: [{ id: "c1", name: "Spring launch", phase: "Build-up", keyDate: null, waiting: 2 }],
+    products: ["Oat latte kit"],
+    goal: { focus: "sales" as const, label: "Sell more" },
+  };
+
+  it("names the running campaign, a catalogue product, the goal and what waits", () => {
+    const facts = starterFacts({ brandName: "Acme", products: "Coffee" }, pulse);
+    expect(facts.product).toBe("Oat latte kit");
+    expect(facts.campaign).toEqual({ name: "Spring launch", phase: "Build-up" });
+    const all = texts(facts);
+    expect(all).toContain('Write a LinkedIn post for our "Spring launch" campaign');
+    expect(all).toContain("Write a LinkedIn post about Oat latte kit");
+    expect(all).toContain("What is waiting for my approval right now?");
+    expect(all).toContain('How is the "Spring launch" campaign going, and what\'s next?');
+    expect(all).toContain("What should Acme post this week to sell more?");
+  });
+
+  it("keeps the plain ideas when nothing is running", () => {
+    const facts = starterFacts(
+      { brandName: "Acme" },
+      { ...pulse, waiting: 0, campaigns: [], products: [], goal: null },
+    );
+    expect(facts.campaign).toBeUndefined();
+    expect(texts(facts)).toContain("Plan next week's posts for Acme");
+    for (const group of buildStarters(facts)) expect(group.ideas).toHaveLength(IDEAS_PER_GROUP);
+  });
+});

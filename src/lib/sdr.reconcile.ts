@@ -43,6 +43,8 @@ export async function reconcileStalePublications(deps: ReconcileDeps) {
   const touchedItems = new Set<string>();
   let unreachable = 0;
   for (const row of stale ?? []) {
+    // Composio rows are Mellox's own sends (ADR-0042); never ask an SDR about them.
+    if (row.provider === "composio") continue;
     // SocialAPI.ai deliveries share this table; they reconcile via src/lib/socialapi/reconcile.ts.
     if (row.provider && row.provider !== "sdr") continue;
     try {

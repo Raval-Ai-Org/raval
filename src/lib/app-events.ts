@@ -82,8 +82,13 @@ export type AppEventMap = {
         tab?: string;
       }
     | undefined;
-  /** Opens Brain → Brand, optionally on one editor ("look", "voice", "colors"…). */
+  /** Opens Brain → Brand, optionally on one editor ("colors"…). "look" / "assets" open Inspo. */
   "open:brand-dna": { tab?: string } | undefined;
+  /**
+   * Navigates to Inspo (ADR-0037) at /w/<id>/app/inspo, optionally on a
+   * section (board, post, video, voice, media). Only ever fired by a button.
+   */
+  "open:inspo": { section?: string } | undefined;
   /** Open a Studio canvas. `type` is validated by the listener (use-studio). */
   "open:canvas":
     | {
@@ -95,6 +100,12 @@ export type AppEventMap = {
         ideaId?: string;
         ideaSource?: string;
         platforms?: string[];
+        /** The brand's own photos (asset ids, checked again on the server). */
+        referenceAssetIds?: string[];
+        referenceMode?: "preserve" | "design" | "edit" | "inspire";
+        /** The brand's own clips, for "Brand my clips". */
+        sourceVideoAssetIds?: string[];
+        videoMode?: "generate" | "brand" | "recap";
       }
     | undefined;
   /** Review a single content item outside a Studio job (legacy or chat-created). */
@@ -102,14 +113,16 @@ export type AppEventMap = {
   /** Open the Library pop-up, optionally on a tab. */
   "open:library":
     | {
-        tab?: "all" | "posts" | "media";
+        tab?: "all" | "posts" | "media" | "loved";
         /** Preselect a pipeline stage filter. */
         status?: "review" | "ready" | "scheduled" | "published" | "scheduled-published";
       }
     | undefined;
   "open:ai-visibility": undefined;
   /** UGC Video Ads studio, optionally on one ad project. */
-  "open:ugc-studio": { projectId?: string } | undefined;
+  "open:ugc-studio":
+    | { projectId?: string; source?: import("@/lib/studio/script-video").ScriptVideoSource }
+    | undefined;
   /** The "Create" launcher: pick a category (Video/Picture/Text/Ads), then a format. */
   "open:create-launcher": undefined;
   "open:client-portal": undefined;
@@ -121,16 +134,34 @@ export type AppEventMap = {
   /** Opens Brain → Audience. Only ever fired by a button. */
   "open:audience": undefined;
   "open:content-calendar": undefined;
+  /**
+   * Navigates to Campaigns (ADR-0039) at /w/<id>/app/campaigns, optionally on
+   * one campaign or the designer for a kind. Only ever fired by a button.
+   */
+  "open:campaigns": { campaignId?: string; type?: string } | undefined;
   "open:details": undefined;
   /** Opens Brain → Home → Today (the day's plan). */
   "open:marketing-coach": undefined;
   "open:publish": undefined;
   "open:rename": undefined;
   "open:schedule": undefined;
-  /** Settings, optionally on a section (GitHub, Webflow and WordPress live under "website"). */
+  /**
+   * Settings, optionally on a section. "analytics" and "website" are older
+   * names: both open Connectors (on Google Analytics / the website connectors).
+   * `connector` opens one connector in the gallery (`canva`, `googleads`, ...).
+   */
   "open:settings":
     | {
-        section?: "accounts" | "analytics" | "website" | "assistants" | "memory" | "preferences";
+        section?:
+          | "accounts"
+          | "connectors"
+          | "analytics"
+          | "website"
+          | "assistants"
+          | "agents"
+          | "memory"
+          | "preferences";
+        connector?: string;
       }
     | undefined;
   /** Navigates to Backlinks at /w/<id>/app/backlinks. Only ever fired by a button. */

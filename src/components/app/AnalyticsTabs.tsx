@@ -1,8 +1,8 @@
 "use client";
 
-import { FileText, Globe, LayoutDashboard, Lightbulb, Search } from "@/components/icons";
+import { FileText, Globe, Heart, LayoutDashboard, Lightbulb, Search } from "@/components/icons";
 
-export type AnalyticsTab = "overview" | "website" | "search" | "content" | "insights";
+export type AnalyticsTab = "overview" | "social" | "website" | "search" | "content" | "insights";
 
 export const TABS: {
   id: AnalyticsTab;
@@ -11,6 +11,7 @@ export const TABS: {
   blurb: string;
 }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, blurb: "Everything at a glance" },
+  { id: "social", label: "Social", icon: Heart, blurb: "How your posts do" },
   { id: "website", label: "Website", icon: Globe, blurb: "Visits to your site" },
   { id: "search", label: "Search", icon: Search, blurb: "How you show up in Google" },
   { id: "content", label: "Content", icon: FileText, blurb: "What you made and posted" },
@@ -20,7 +21,6 @@ export const TABS: {
 /** Old ?tab= values keep working. */
 const LEGACY: Record<string, AnalyticsTab> = {
   organic: "search",
-  social: "content",
   audience: "website",
   geo: "overview",
   "ai-visibility": "overview",

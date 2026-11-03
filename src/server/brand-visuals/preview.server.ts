@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { uploadAssetObject } from "@/server/assets/storage.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 
 /** A light gallery preview; the complete source stays unchanged for inspection/vision. */
 export async function createVisualPreview(
@@ -14,7 +15,7 @@ export async function createVisualPreview(
 ) {
   if (!asset.storage_path || !isWorkspaceStoragePath(asset.storage_path, workspaceId)) return;
   try {
-    const image = sharp(bytes, { limitInputPixels: 30_000_000 });
+    const image = sharp(bytes, { limitInputPixels: PHOTO_PIXEL_LIMIT, failOn: "none" });
     const dimensions = await image.metadata();
     if (!dimensions.width || !dimensions.height) return;
     const cropped = cropHero

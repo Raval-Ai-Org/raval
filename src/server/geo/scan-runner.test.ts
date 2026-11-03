@@ -227,3 +227,98 @@ describe("crawler helpers", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("speed measurement", () => {
+  const meter = () => {
+    const lab = vi.fn(async (url: string, group: string) => ({
+      url,
+      group,
+      ok: true,
+      scores: { performance: 48, accessibility: 95, bestPractices: 100, seo: 92 },
+    }));
+    const field = vi.fn(async () => ({
+      origin: {
+        scope: "origin" as const,
+        key: "https://acme.io",
+        lcp: { p75: 4800, rating: "poor" as const },
+        inp: null,
+        cls: null,
+        fcp: null,
+        ttfb: null,
+        periodEnd: "2026-10-20",
+      },
+      history: null,
+      reason: null,
+    }));
+    return { lab, field };
+  };
+
+  it("measures real-user data once and Lighthouse on route-sampled pages, then scores them", async () => {
+    const store = createMemoryGeoStore();
+    const { fetcher } = fakeFetcher(SITE);
+    const scan = seedScan(store);
+    const performance = meter();
+    const done = await runToEnd(store, scan.id, {
+      fetcher,
+      performance,
+      labPages: 2,
+      deadline: Date.now() + 120_000,
+    });
+    expect(done.status).toBe("succeeded");
+    expect(performance.field).toHaveBeenCalledTimes(1);
+    expect(performance.lab).toHaveBeenCalledTimes(2);
+    const report = done.report as {
+      performance?: { lab: unknown[] };
+      categories: { rules: { ruleId: string; status: string }[] }[];
+    };
+    expect(report.performance?.lab).toHaveLength(2);
+    const rules = report.categories.flatMap((c) => c.rules);
+    expect(rules.find((r) => r.ruleId === "perf.core_web_vitals")?.status).toBe("fail");
+    expect(rules.find((r) => r.ruleId === "perf.lab_score")?.status).not.toBe("na");
+  });
+
+  it("yields instead of starting a lab run without enough time, and resumes later", async () => {
+    const store = createMemoryGeoStore();
+    const { fetcher } = fakeFetcher(SITE);
+    const scan = seedScan(store);
+    const performance = meter();
+    const [claimed] = await store.claimScans("w1", 1, 150, scan.id);
+    const result = await advanceScan(claimed!, {
+      store,
+      fetcher,
+      worker: "w1",
+      deadline: Date.now() + 33_000,
+      performance,
+      labPages: 2,
+    });
+    expect(result).toBe("yield");
+    expect(performance.lab).not.toHaveBeenCalled();
+    const resumed = await runToEnd(store, scan.id, {
+      fetcher,
+      performance,
+      labPages: 2,
+      deadline: Date.now() + 120_000,
+    });
+    expect(resumed.status).toBe("succeeded");
+    expect(performance.field).toHaveBeenCalledTimes(1);
+    expect(performance.lab).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips speed checks on verification scans and quick scans don't run Lighthouse", async () => {
+    const store = createMemoryGeoStore();
+    const { fetcher } = fakeFetcher(SITE);
+    const scan = seedScan(store, {
+      mode: "quick",
+      config: { maxPages: 1, maxDepth: 0, probes: false },
+    });
+    const performance = meter();
+    const done = await runToEnd(store, scan.id, {
+      fetcher,
+      performance,
+      deadline: Date.now() + 120_000,
+    });
+    expect(done.status).toBe("succeeded");
+    expect(performance.field).toHaveBeenCalledTimes(1);
+    expect(performance.lab).not.toHaveBeenCalled();
+  });
+});

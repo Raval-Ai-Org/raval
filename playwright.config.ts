@@ -30,6 +30,22 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "email-auth-mobile-chromium",
+      testMatch: /integration\/email-confirmation-retry\.spec\.ts$/,
+      use: {
+        ...devices["Pixel 7"],
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_CHROMIUM_EXECUTABLE"),
+      },
+    },
+    {
+      name: "email-auth-mobile-webkit",
+      testMatch: /integration\/email-confirmation-retry\.spec\.ts$/,
+      use: {
+        ...devices["iPhone 13"],
+        launchOptions: browserLaunchOptions("PLAYWRIGHT_WEBKIT_EXECUTABLE"),
+      },
+    },
+    {
       name: "chromium",
       testMatch: /visual\/.*\.spec\.ts$/,
       use: {

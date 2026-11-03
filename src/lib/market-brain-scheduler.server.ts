@@ -16,6 +16,9 @@ export type MarketBrainScheduleConfig = {
 };
 
 const DAILY_COLLECTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+/** A workspace nobody has used for a week is re-collected weekly, not daily. */
+const IDLE_COLLECTION_INTERVAL_MS = 7 * DAILY_COLLECTION_INTERVAL_MS;
+const ACTIVE_WINDOW_MS = 7 * DAILY_COLLECTION_INTERVAL_MS;
 const PENDING_RETRY_INTERVAL_MS = 10 * 60 * 1000;
 const STALE_PENDING_MS = 40 * 60 * 1000;
 const MARKET_BRAIN_TASK_TYPE = "market-brain";
@@ -121,6 +124,22 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+/**
+ * True when a member did something in the workspace this week (any metered
+ * call made by a person; cron work carries no user). A failed read counts as
+ * active, so a hiccup never makes a used workspace's market data go stale.
+ */
+async function recentlyUsed(workspaceId: string): Promise<boolean> {
+  const { count, error } = await supabaseAdmin
+    .from("ai_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .not("user_id", "is", null)
+    .gte("created_at", new Date(Date.now() - ACTIVE_WINDOW_MS).toISOString());
+  if (error) return true;
+  return (count ?? 0) > 0;
+}
+
 async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pending" | "failed"> {
   const started = await requestMarketSignalsCollection(
     {
@@ -201,6 +220,11 @@ export async function runDueMarketBrainCollections(
     }
 
     const pending = status === "pending";
+    const interval = pending
+      ? PENDING_RETRY_INTERVAL_MS
+      : (await recentlyUsed(job.workspace_id))
+        ? DAILY_COLLECTION_INTERVAL_MS
+        : IDLE_COLLECTION_INTERVAL_MS;
     const { error: updateError } = await supabaseAdmin
       .from("scheduled_jobs")
       .update({
@@ -208,7 +232,7 @@ export async function runDueMarketBrainCollections(
         last_run_status: status === "completed" ? "ok" : pending ? "pending" : "error",
         last_run_error: errorMessage,
         run_count: 1,
-        next_run_at: nextRunAt(pending ? PENDING_RETRY_INTERVAL_MS : DAILY_COLLECTION_INTERVAL_MS),
+        next_run_at: nextRunAt(interval),
         ...(leased ? { locked_at: null, locked_by: null } : {}),
       })
       .eq("id", job.id);

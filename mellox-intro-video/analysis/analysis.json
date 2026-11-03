@@ -1,0 +1,2700 @@
+{
+  "metadata": {
+    "ffmpeg_version": "7.1-essentials_build-www.gyan.dev built with gcc 14.2.0 (Rev1, Built by MSYS2 project)",
+    "codec": "h264",
+    "pix_fmt": "yuv420p(tv, bt709, progressive)",
+    "audio_codec": "aac",
+    "fps": 30.0,
+    "source_size": [
+      1920,
+      1080
+    ],
+    "size": [
+      1920,
+      1080
+    ],
+    "rotate": 0,
+    "duration": 40.84,
+    "source": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\ref.mp4",
+    "ffmpeg": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\tools\\imageio_ffmpeg\\binaries\\ffmpeg-win-x86_64-v7.1.exe",
+    "review_fps": 4,
+    "frame_timestamp_formula": "(frame_number - 1) / review_fps",
+    "review_precision_note": "Output timestamps are 250 ms apart; selected native source frames are on or before each output timestamp. Use frame-index.csv source_seconds for actual source-image time.",
+    "review_rounding": "up",
+    "review_sampling_round": "up"
+  },
+  "frame_count": 164,
+  "contact_sheets": [
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_001.jpg",
+      "start_seconds": 0.0,
+      "end_seconds": 4.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_002.jpg",
+      "start_seconds": 5.0,
+      "end_seconds": 9.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_003.jpg",
+      "start_seconds": 10.0,
+      "end_seconds": 14.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_004.jpg",
+      "start_seconds": 15.0,
+      "end_seconds": 19.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_005.jpg",
+      "start_seconds": 20.0,
+      "end_seconds": 24.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_006.jpg",
+      "start_seconds": 25.0,
+      "end_seconds": 29.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_007.jpg",
+      "start_seconds": 30.0,
+      "end_seconds": 34.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_008.jpg",
+      "start_seconds": 35.0,
+      "end_seconds": 39.75
+    },
+    {
+      "file": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\video-clone\\temp\\contact-sheets\\sheet_009.jpg",
+      "start_seconds": 40.0,
+      "end_seconds": 40.75
+    }
+  ],
+  "scene_cut_candidates": [
+    {
+      "seconds": 4.333333,
+      "milliseconds": 4333,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 5.866667,
+      "milliseconds": 5867,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 6.1,
+      "milliseconds": 6100,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 6.433333,
+      "milliseconds": 6433,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 7.666667,
+      "milliseconds": 7667,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 8.3,
+      "milliseconds": 8300,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 9.566667,
+      "milliseconds": 9567,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 10.733333,
+      "milliseconds": 10733,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 11.933333,
+      "milliseconds": 11933,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 12.233333,
+      "milliseconds": 12233,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 12.533333,
+      "milliseconds": 12533,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 13.166667,
+      "milliseconds": 13167,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 14.566667,
+      "milliseconds": 14567,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 15.166667,
+      "milliseconds": 15167,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 15.466667,
+      "milliseconds": 15467,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.066667,
+      "milliseconds": 16067,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.1,
+      "milliseconds": 16100,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.366667,
+      "milliseconds": 16367,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.4,
+      "milliseconds": 16400,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.666667,
+      "milliseconds": 16667,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.7,
+      "milliseconds": 16700,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 16.966667,
+      "milliseconds": 16967,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 17.0,
+      "milliseconds": 17000,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 17.266667,
+      "milliseconds": 17267,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 18.0,
+      "milliseconds": 18000,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 18.9,
+      "milliseconds": 18900,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 19.8,
+      "milliseconds": 19800,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 20.533333,
+      "milliseconds": 20533,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 21.2,
+      "milliseconds": 21200,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 21.466667,
+      "milliseconds": 21467,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 22.066667,
+      "milliseconds": 22067,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 22.3,
+      "milliseconds": 22300,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 22.533333,
+      "milliseconds": 22533,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 22.8,
+      "milliseconds": 22800,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 24.3,
+      "milliseconds": 24300,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 24.333333,
+      "milliseconds": 24333,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 24.6,
+      "milliseconds": 24600,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 24.633333,
+      "milliseconds": 24633,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 24.9,
+      "milliseconds": 24900,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 24.933333,
+      "milliseconds": 24933,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 25.2,
+      "milliseconds": 25200,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 25.233333,
+      "milliseconds": 25233,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 25.5,
+      "milliseconds": 25500,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 25.533333,
+      "milliseconds": 25533,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 25.733333,
+      "milliseconds": 25733,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    },
+    {
+      "seconds": 36.766667,
+      "milliseconds": 36767,
+      "threshold": 0.22,
+      "label": "visual change candidate; manual review needed"
+    }
+  ],
+  "audio": {
+    "sample_rate": 16000,
+    "duration_seconds": 40.8439375,
+    "onset_count": 258,
+    "onsets": [
+      {
+        "id": 1,
+        "seconds": 1.395,
+        "milliseconds": 1395,
+        "novelty_peak_seconds": 1.4,
+        "relative_strength": 0.47027,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 2,
+        "seconds": 2.005,
+        "milliseconds": 2005,
+        "novelty_peak_seconds": 2.015,
+        "relative_strength": 0.51893,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 3,
+        "seconds": 2.615,
+        "milliseconds": 2615,
+        "novelty_peak_seconds": 2.625,
+        "relative_strength": 0.49457,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 4,
+        "seconds": 3.075,
+        "milliseconds": 3075,
+        "novelty_peak_seconds": 3.085,
+        "relative_strength": 0.50185,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 5,
+        "seconds": 3.535,
+        "milliseconds": 3535,
+        "novelty_peak_seconds": 3.545,
+        "relative_strength": 0.65012,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 6,
+        "seconds": 3.63,
+        "milliseconds": 3630,
+        "novelty_peak_seconds": 3.635,
+        "relative_strength": 0.2779,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 7,
+        "seconds": 3.845,
+        "milliseconds": 3845,
+        "novelty_peak_seconds": 3.85,
+        "relative_strength": 0.42896,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 8,
+        "seconds": 3.965,
+        "milliseconds": 3965,
+        "novelty_peak_seconds": 3.975,
+        "relative_strength": 0.17087,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 9,
+        "seconds": 4.085,
+        "milliseconds": 4085,
+        "novelty_peak_seconds": 4.085,
+        "relative_strength": 0.34391,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 10,
+        "seconds": 4.18,
+        "milliseconds": 4180,
+        "novelty_peak_seconds": 4.185,
+        "relative_strength": 0.16187,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 11,
+        "seconds": 4.27,
+        "milliseconds": 4270,
+        "novelty_peak_seconds": 4.275,
+        "relative_strength": 0.21451,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 12,
+        "seconds": 4.415,
+        "milliseconds": 4415,
+        "novelty_peak_seconds": 4.415,
+        "relative_strength": 0.24375,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 13,
+        "seconds": 5.065,
+        "milliseconds": 5065,
+        "novelty_peak_seconds": 5.075,
+        "relative_strength": 0.46059,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 14,
+        "seconds": 5.525,
+        "milliseconds": 5525,
+        "novelty_peak_seconds": 5.535,
+        "relative_strength": 0.45851,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 15,
+        "seconds": 5.985,
+        "milliseconds": 5985,
+        "novelty_peak_seconds": 5.995,
+        "relative_strength": 0.76109,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 16,
+        "seconds": 6.13,
+        "milliseconds": 6130,
+        "novelty_peak_seconds": 6.135,
+        "relative_strength": 0.34902,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 17,
+        "seconds": 6.225,
+        "milliseconds": 6225,
+        "novelty_peak_seconds": 6.225,
+        "relative_strength": 0.40591,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 18,
+        "seconds": 6.3,
+        "milliseconds": 6300,
+        "novelty_peak_seconds": 6.305,
+        "relative_strength": 0.53844,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 19,
+        "seconds": 6.385,
+        "milliseconds": 6385,
+        "novelty_peak_seconds": 6.39,
+        "relative_strength": 0.2635,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 20,
+        "seconds": 6.535,
+        "milliseconds": 6535,
+        "novelty_peak_seconds": 6.54,
+        "relative_strength": 0.35059,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 21,
+        "seconds": 6.725,
+        "milliseconds": 6725,
+        "novelty_peak_seconds": 6.73,
+        "relative_strength": 0.16748,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 22,
+        "seconds": 6.83,
+        "milliseconds": 6830,
+        "novelty_peak_seconds": 6.83,
+        "relative_strength": 0.21278,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 23,
+        "seconds": 6.9,
+        "milliseconds": 6900,
+        "novelty_peak_seconds": 6.915,
+        "relative_strength": 0.56466,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 24,
+        "seconds": 7.0,
+        "milliseconds": 7000,
+        "novelty_peak_seconds": 7.0,
+        "relative_strength": 0.26665,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 25,
+        "seconds": 7.14,
+        "milliseconds": 7140,
+        "novelty_peak_seconds": 7.145,
+        "relative_strength": 0.32985,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 26,
+        "seconds": 7.515,
+        "milliseconds": 7515,
+        "novelty_peak_seconds": 7.525,
+        "relative_strength": 0.52968,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 27,
+        "seconds": 7.695,
+        "milliseconds": 7695,
+        "novelty_peak_seconds": 7.7,
+        "relative_strength": 0.19793,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 28,
+        "seconds": 7.825,
+        "milliseconds": 7825,
+        "novelty_peak_seconds": 7.83,
+        "relative_strength": 0.38128,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 29,
+        "seconds": 7.97,
+        "milliseconds": 7970,
+        "novelty_peak_seconds": 7.99,
+        "relative_strength": 0.57272,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 30,
+        "seconds": 8.12,
+        "milliseconds": 8120,
+        "novelty_peak_seconds": 8.12,
+        "relative_strength": 0.23148,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 31,
+        "seconds": 8.215,
+        "milliseconds": 8215,
+        "novelty_peak_seconds": 8.225,
+        "relative_strength": 0.29885,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 32,
+        "seconds": 8.43,
+        "milliseconds": 8430,
+        "novelty_peak_seconds": 8.435,
+        "relative_strength": 0.38074,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 33,
+        "seconds": 8.575,
+        "milliseconds": 8575,
+        "novelty_peak_seconds": 8.585,
+        "relative_strength": 0.17183,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 34,
+        "seconds": 8.745,
+        "milliseconds": 8745,
+        "novelty_peak_seconds": 8.75,
+        "relative_strength": 0.5806,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 35,
+        "seconds": 8.835,
+        "milliseconds": 8835,
+        "novelty_peak_seconds": 8.84,
+        "relative_strength": 0.2231,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 36,
+        "seconds": 8.98,
+        "milliseconds": 8980,
+        "novelty_peak_seconds": 8.985,
+        "relative_strength": 0.35809,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 37,
+        "seconds": 9.1,
+        "milliseconds": 9100,
+        "novelty_peak_seconds": 9.1,
+        "relative_strength": 0.2243,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 38,
+        "seconds": 9.2,
+        "milliseconds": 9200,
+        "novelty_peak_seconds": 9.2,
+        "relative_strength": 0.19484,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 39,
+        "seconds": 9.355,
+        "milliseconds": 9355,
+        "novelty_peak_seconds": 9.365,
+        "relative_strength": 0.69576,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 40,
+        "seconds": 9.475,
+        "milliseconds": 9475,
+        "novelty_peak_seconds": 9.485,
+        "relative_strength": 0.22434,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 41,
+        "seconds": 9.635,
+        "milliseconds": 9635,
+        "novelty_peak_seconds": 9.64,
+        "relative_strength": 0.49219,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 42,
+        "seconds": 9.78,
+        "milliseconds": 9780,
+        "novelty_peak_seconds": 9.785,
+        "relative_strength": 0.27048,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 43,
+        "seconds": 9.965,
+        "milliseconds": 9965,
+        "novelty_peak_seconds": 9.975,
+        "relative_strength": 0.43832,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 44,
+        "seconds": 10.06,
+        "milliseconds": 10060,
+        "novelty_peak_seconds": 10.065,
+        "relative_strength": 0.21093,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 45,
+        "seconds": 10.275,
+        "milliseconds": 10275,
+        "novelty_peak_seconds": 10.28,
+        "relative_strength": 0.37156,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 46,
+        "seconds": 10.425,
+        "milliseconds": 10425,
+        "novelty_peak_seconds": 10.44,
+        "relative_strength": 0.52609,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 47,
+        "seconds": 10.575,
+        "milliseconds": 10575,
+        "novelty_peak_seconds": 10.575,
+        "relative_strength": 0.24231,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 48,
+        "seconds": 10.665,
+        "milliseconds": 10665,
+        "novelty_peak_seconds": 10.67,
+        "relative_strength": 0.33599,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 49,
+        "seconds": 10.885,
+        "milliseconds": 10885,
+        "novelty_peak_seconds": 10.895,
+        "relative_strength": 0.64241,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 50,
+        "seconds": 11.03,
+        "milliseconds": 11030,
+        "novelty_peak_seconds": 11.035,
+        "relative_strength": 0.42046,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 51,
+        "seconds": 11.19,
+        "milliseconds": 11190,
+        "novelty_peak_seconds": 11.2,
+        "relative_strength": 0.52738,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 52,
+        "seconds": 11.285,
+        "milliseconds": 11285,
+        "novelty_peak_seconds": 11.29,
+        "relative_strength": 0.31438,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 53,
+        "seconds": 11.37,
+        "milliseconds": 11370,
+        "novelty_peak_seconds": 11.375,
+        "relative_strength": 0.25499,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 54,
+        "seconds": 11.475,
+        "milliseconds": 11475,
+        "novelty_peak_seconds": 11.475,
+        "relative_strength": 0.33996,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 55,
+        "seconds": 11.585,
+        "milliseconds": 11585,
+        "novelty_peak_seconds": 11.59,
+        "relative_strength": 0.33521,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 56,
+        "seconds": 11.8,
+        "milliseconds": 11800,
+        "novelty_peak_seconds": 11.815,
+        "relative_strength": 0.56041,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 57,
+        "seconds": 11.9,
+        "milliseconds": 11900,
+        "novelty_peak_seconds": 11.9,
+        "relative_strength": 0.32297,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 58,
+        "seconds": 12.04,
+        "milliseconds": 12040,
+        "novelty_peak_seconds": 12.045,
+        "relative_strength": 0.36567,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 59,
+        "seconds": 12.26,
+        "milliseconds": 12260,
+        "novelty_peak_seconds": 12.265,
+        "relative_strength": 0.14429,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 60,
+        "seconds": 12.41,
+        "milliseconds": 12410,
+        "novelty_peak_seconds": 12.42,
+        "relative_strength": 0.41686,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 61,
+        "seconds": 12.595,
+        "milliseconds": 12595,
+        "novelty_peak_seconds": 12.6,
+        "relative_strength": 0.23531,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 62,
+        "seconds": 12.725,
+        "milliseconds": 12725,
+        "novelty_peak_seconds": 12.73,
+        "relative_strength": 0.35829,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 63,
+        "seconds": 12.87,
+        "milliseconds": 12870,
+        "novelty_peak_seconds": 12.89,
+        "relative_strength": 0.56696,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 64,
+        "seconds": 13.02,
+        "milliseconds": 13020,
+        "novelty_peak_seconds": 13.025,
+        "relative_strength": 0.29125,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 65,
+        "seconds": 13.155,
+        "milliseconds": 13155,
+        "novelty_peak_seconds": 13.16,
+        "relative_strength": 0.34771,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 66,
+        "seconds": 13.33,
+        "milliseconds": 13330,
+        "novelty_peak_seconds": 13.335,
+        "relative_strength": 0.39462,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 67,
+        "seconds": 13.48,
+        "milliseconds": 13480,
+        "novelty_peak_seconds": 13.485,
+        "relative_strength": 0.20503,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 68,
+        "seconds": 13.64,
+        "milliseconds": 13640,
+        "novelty_peak_seconds": 13.65,
+        "relative_strength": 0.46284,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 69,
+        "seconds": 13.735,
+        "milliseconds": 13735,
+        "novelty_peak_seconds": 13.735,
+        "relative_strength": 0.24334,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 70,
+        "seconds": 13.815,
+        "milliseconds": 13815,
+        "novelty_peak_seconds": 13.82,
+        "relative_strength": 0.36874,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 71,
+        "seconds": 13.92,
+        "milliseconds": 13920,
+        "novelty_peak_seconds": 13.925,
+        "relative_strength": 0.37771,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 72,
+        "seconds": 14.0,
+        "milliseconds": 14000,
+        "novelty_peak_seconds": 14.005,
+        "relative_strength": 0.42079,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 73,
+        "seconds": 14.095,
+        "milliseconds": 14095,
+        "novelty_peak_seconds": 14.1,
+        "relative_strength": 0.17284,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 74,
+        "seconds": 14.25,
+        "milliseconds": 14250,
+        "novelty_peak_seconds": 14.26,
+        "relative_strength": 0.6619,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 75,
+        "seconds": 14.35,
+        "milliseconds": 14350,
+        "novelty_peak_seconds": 14.35,
+        "relative_strength": 0.1579,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 76,
+        "seconds": 14.43,
+        "milliseconds": 14430,
+        "novelty_peak_seconds": 14.44,
+        "relative_strength": 0.1593,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 77,
+        "seconds": 14.56,
+        "milliseconds": 14560,
+        "novelty_peak_seconds": 14.565,
+        "relative_strength": 0.47034,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 78,
+        "seconds": 14.68,
+        "milliseconds": 14680,
+        "novelty_peak_seconds": 14.685,
+        "relative_strength": 0.23953,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 79,
+        "seconds": 14.865,
+        "milliseconds": 14865,
+        "novelty_peak_seconds": 14.875,
+        "relative_strength": 0.34094,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 80,
+        "seconds": 14.96,
+        "milliseconds": 14960,
+        "novelty_peak_seconds": 14.96,
+        "relative_strength": 0.24149,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 81,
+        "seconds": 15.145,
+        "milliseconds": 15145,
+        "novelty_peak_seconds": 15.15,
+        "relative_strength": 0.29319,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 82,
+        "seconds": 15.325,
+        "milliseconds": 15325,
+        "novelty_peak_seconds": 15.34,
+        "relative_strength": 0.61297,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 83,
+        "seconds": 15.47,
+        "milliseconds": 15470,
+        "novelty_peak_seconds": 15.475,
+        "relative_strength": 0.26435,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 84,
+        "seconds": 15.56,
+        "milliseconds": 15560,
+        "novelty_peak_seconds": 15.565,
+        "relative_strength": 0.31949,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 85,
+        "seconds": 15.78,
+        "milliseconds": 15780,
+        "novelty_peak_seconds": 15.79,
+        "relative_strength": 0.65458,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 86,
+        "seconds": 15.925,
+        "milliseconds": 15925,
+        "novelty_peak_seconds": 15.93,
+        "relative_strength": 0.3425,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 87,
+        "seconds": 16.06,
+        "milliseconds": 16060,
+        "novelty_peak_seconds": 16.065,
+        "relative_strength": 0.4332,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 88,
+        "seconds": 16.215,
+        "milliseconds": 16215,
+        "novelty_peak_seconds": 16.22,
+        "relative_strength": 0.38779,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 89,
+        "seconds": 16.375,
+        "milliseconds": 16375,
+        "novelty_peak_seconds": 16.375,
+        "relative_strength": 0.44252,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 90,
+        "seconds": 16.45,
+        "milliseconds": 16450,
+        "novelty_peak_seconds": 16.455,
+        "relative_strength": 0.47562,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 91,
+        "seconds": 16.55,
+        "milliseconds": 16550,
+        "novelty_peak_seconds": 16.555,
+        "relative_strength": 0.1471,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 92,
+        "seconds": 16.7,
+        "milliseconds": 16700,
+        "novelty_peak_seconds": 16.705,
+        "relative_strength": 0.60605,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 93,
+        "seconds": 16.795,
+        "milliseconds": 16795,
+        "novelty_peak_seconds": 16.8,
+        "relative_strength": 0.35179,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 94,
+        "seconds": 16.88,
+        "milliseconds": 16880,
+        "novelty_peak_seconds": 16.9,
+        "relative_strength": 0.25305,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 95,
+        "seconds": 17.01,
+        "milliseconds": 17010,
+        "novelty_peak_seconds": 17.015,
+        "relative_strength": 0.2763,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 96,
+        "seconds": 17.16,
+        "milliseconds": 17160,
+        "novelty_peak_seconds": 17.165,
+        "relative_strength": 0.15558,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 97,
+        "seconds": 17.31,
+        "milliseconds": 17310,
+        "novelty_peak_seconds": 17.32,
+        "relative_strength": 0.4775,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 98,
+        "seconds": 17.41,
+        "milliseconds": 17410,
+        "novelty_peak_seconds": 17.41,
+        "relative_strength": 0.36871,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 99,
+        "seconds": 17.495,
+        "milliseconds": 17495,
+        "novelty_peak_seconds": 17.5,
+        "relative_strength": 0.21981,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 100,
+        "seconds": 17.62,
+        "milliseconds": 17620,
+        "novelty_peak_seconds": 17.625,
+        "relative_strength": 0.47522,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 101,
+        "seconds": 17.77,
+        "milliseconds": 17770,
+        "novelty_peak_seconds": 17.785,
+        "relative_strength": 0.57972,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 102,
+        "seconds": 17.87,
+        "milliseconds": 17870,
+        "novelty_peak_seconds": 17.875,
+        "relative_strength": 0.14931,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 103,
+        "seconds": 17.95,
+        "milliseconds": 17950,
+        "novelty_peak_seconds": 17.955,
+        "relative_strength": 0.3701,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 104,
+        "seconds": 18.055,
+        "milliseconds": 18055,
+        "novelty_peak_seconds": 18.06,
+        "relative_strength": 0.22681,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 105,
+        "seconds": 18.23,
+        "milliseconds": 18230,
+        "novelty_peak_seconds": 18.235,
+        "relative_strength": 0.38335,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 106,
+        "seconds": 18.325,
+        "milliseconds": 18325,
+        "novelty_peak_seconds": 18.33,
+        "relative_strength": 0.15559,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 107,
+        "seconds": 18.41,
+        "milliseconds": 18410,
+        "novelty_peak_seconds": 18.415,
+        "relative_strength": 0.24266,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 108,
+        "seconds": 18.54,
+        "milliseconds": 18540,
+        "novelty_peak_seconds": 18.545,
+        "relative_strength": 0.59344,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 109,
+        "seconds": 18.63,
+        "milliseconds": 18630,
+        "novelty_peak_seconds": 18.635,
+        "relative_strength": 0.32467,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 110,
+        "seconds": 18.715,
+        "milliseconds": 18715,
+        "novelty_peak_seconds": 18.715,
+        "relative_strength": 0.31865,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 111,
+        "seconds": 18.845,
+        "milliseconds": 18845,
+        "novelty_peak_seconds": 18.85,
+        "relative_strength": 0.34089,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 112,
+        "seconds": 19.035,
+        "milliseconds": 19035,
+        "novelty_peak_seconds": 19.035,
+        "relative_strength": 0.23774,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 113,
+        "seconds": 19.145,
+        "milliseconds": 19145,
+        "novelty_peak_seconds": 19.155,
+        "relative_strength": 0.48467,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 114,
+        "seconds": 19.245,
+        "milliseconds": 19245,
+        "novelty_peak_seconds": 19.25,
+        "relative_strength": 0.27366,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 115,
+        "seconds": 19.325,
+        "milliseconds": 19325,
+        "novelty_peak_seconds": 19.335,
+        "relative_strength": 0.35488,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 116,
+        "seconds": 19.46,
+        "milliseconds": 19460,
+        "novelty_peak_seconds": 19.465,
+        "relative_strength": 0.47909,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 117,
+        "seconds": 19.55,
+        "milliseconds": 19550,
+        "novelty_peak_seconds": 19.555,
+        "relative_strength": 0.38881,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 118,
+        "seconds": 19.76,
+        "milliseconds": 19760,
+        "novelty_peak_seconds": 19.765,
+        "relative_strength": 0.49327,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 119,
+        "seconds": 19.855,
+        "milliseconds": 19855,
+        "novelty_peak_seconds": 19.86,
+        "relative_strength": 0.37953,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 120,
+        "seconds": 19.94,
+        "milliseconds": 19940,
+        "novelty_peak_seconds": 19.95,
+        "relative_strength": 0.15536,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 121,
+        "seconds": 20.07,
+        "milliseconds": 20070,
+        "novelty_peak_seconds": 20.075,
+        "relative_strength": 0.45495,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 122,
+        "seconds": 20.22,
+        "milliseconds": 20220,
+        "novelty_peak_seconds": 20.235,
+        "relative_strength": 0.4199,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 123,
+        "seconds": 20.37,
+        "milliseconds": 20370,
+        "novelty_peak_seconds": 20.37,
+        "relative_strength": 0.26656,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 124,
+        "seconds": 20.545,
+        "milliseconds": 20545,
+        "novelty_peak_seconds": 20.55,
+        "relative_strength": 0.1761,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 125,
+        "seconds": 20.675,
+        "milliseconds": 20675,
+        "novelty_peak_seconds": 20.69,
+        "relative_strength": 0.53373,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 126,
+        "seconds": 20.825,
+        "milliseconds": 20825,
+        "novelty_peak_seconds": 20.83,
+        "relative_strength": 0.33273,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 127,
+        "seconds": 20.985,
+        "milliseconds": 20985,
+        "novelty_peak_seconds": 20.995,
+        "relative_strength": 0.49544,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 128,
+        "seconds": 21.08,
+        "milliseconds": 21080,
+        "novelty_peak_seconds": 21.085,
+        "relative_strength": 0.27168,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 129,
+        "seconds": 21.165,
+        "milliseconds": 21165,
+        "novelty_peak_seconds": 21.17,
+        "relative_strength": 0.31942,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 130,
+        "seconds": 21.27,
+        "milliseconds": 21270,
+        "novelty_peak_seconds": 21.275,
+        "relative_strength": 0.26107,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 131,
+        "seconds": 21.35,
+        "milliseconds": 21350,
+        "novelty_peak_seconds": 21.355,
+        "relative_strength": 0.17507,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 132,
+        "seconds": 21.445,
+        "milliseconds": 21445,
+        "novelty_peak_seconds": 21.45,
+        "relative_strength": 0.213,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 133,
+        "seconds": 21.595,
+        "milliseconds": 21595,
+        "novelty_peak_seconds": 21.605,
+        "relative_strength": 0.5995,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 134,
+        "seconds": 21.695,
+        "milliseconds": 21695,
+        "novelty_peak_seconds": 21.695,
+        "relative_strength": 0.38674,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 135,
+        "seconds": 21.78,
+        "milliseconds": 21780,
+        "novelty_peak_seconds": 21.785,
+        "relative_strength": 0.34652,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 136,
+        "seconds": 21.91,
+        "milliseconds": 21910,
+        "novelty_peak_seconds": 21.91,
+        "relative_strength": 0.35182,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 137,
+        "seconds": 21.995,
+        "milliseconds": 21995,
+        "novelty_peak_seconds": 22.0,
+        "relative_strength": 0.34624,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 138,
+        "seconds": 22.21,
+        "milliseconds": 22210,
+        "novelty_peak_seconds": 22.215,
+        "relative_strength": 0.4525,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 139,
+        "seconds": 22.305,
+        "milliseconds": 22305,
+        "novelty_peak_seconds": 22.31,
+        "relative_strength": 0.24021,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 140,
+        "seconds": 22.39,
+        "milliseconds": 22390,
+        "novelty_peak_seconds": 22.395,
+        "relative_strength": 0.23345,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 141,
+        "seconds": 22.52,
+        "milliseconds": 22520,
+        "novelty_peak_seconds": 22.525,
+        "relative_strength": 0.399,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 142,
+        "seconds": 22.665,
+        "milliseconds": 22665,
+        "novelty_peak_seconds": 22.68,
+        "relative_strength": 0.57018,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 143,
+        "seconds": 22.845,
+        "milliseconds": 22845,
+        "novelty_peak_seconds": 22.855,
+        "relative_strength": 0.33512,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 144,
+        "seconds": 22.95,
+        "milliseconds": 22950,
+        "novelty_peak_seconds": 22.96,
+        "relative_strength": 0.21153,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 145,
+        "seconds": 23.125,
+        "milliseconds": 23125,
+        "novelty_peak_seconds": 23.135,
+        "relative_strength": 0.38485,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 146,
+        "seconds": 23.225,
+        "milliseconds": 23225,
+        "novelty_peak_seconds": 23.225,
+        "relative_strength": 0.25505,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 147,
+        "seconds": 23.435,
+        "milliseconds": 23435,
+        "novelty_peak_seconds": 23.44,
+        "relative_strength": 0.52499,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 148,
+        "seconds": 23.53,
+        "milliseconds": 23530,
+        "novelty_peak_seconds": 23.53,
+        "relative_strength": 0.20618,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 149,
+        "seconds": 23.61,
+        "milliseconds": 23610,
+        "novelty_peak_seconds": 23.615,
+        "relative_strength": 0.25533,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 150,
+        "seconds": 23.745,
+        "milliseconds": 23745,
+        "novelty_peak_seconds": 23.75,
+        "relative_strength": 0.4017,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 151,
+        "seconds": 23.86,
+        "milliseconds": 23860,
+        "novelty_peak_seconds": 23.865,
+        "relative_strength": 0.30644,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 152,
+        "seconds": 24.045,
+        "milliseconds": 24045,
+        "novelty_peak_seconds": 24.055,
+        "relative_strength": 0.61428,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 153,
+        "seconds": 24.14,
+        "milliseconds": 24140,
+        "novelty_peak_seconds": 24.145,
+        "relative_strength": 0.17908,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 154,
+        "seconds": 24.225,
+        "milliseconds": 24225,
+        "novelty_peak_seconds": 24.235,
+        "relative_strength": 0.19485,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 155,
+        "seconds": 24.355,
+        "milliseconds": 24355,
+        "novelty_peak_seconds": 24.36,
+        "relative_strength": 0.57778,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 156,
+        "seconds": 24.475,
+        "milliseconds": 24475,
+        "novelty_peak_seconds": 24.48,
+        "relative_strength": 0.36994,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 157,
+        "seconds": 24.645,
+        "milliseconds": 24645,
+        "novelty_peak_seconds": 24.665,
+        "relative_strength": 0.3718,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 158,
+        "seconds": 24.755,
+        "milliseconds": 24755,
+        "novelty_peak_seconds": 24.76,
+        "relative_strength": 0.35268,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 159,
+        "seconds": 24.835,
+        "milliseconds": 24835,
+        "novelty_peak_seconds": 24.845,
+        "relative_strength": 0.28036,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 160,
+        "seconds": 24.94,
+        "milliseconds": 24940,
+        "novelty_peak_seconds": 24.945,
+        "relative_strength": 0.22542,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 161,
+        "seconds": 25.02,
+        "milliseconds": 25020,
+        "novelty_peak_seconds": 25.03,
+        "relative_strength": 0.42091,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 162,
+        "seconds": 25.12,
+        "milliseconds": 25120,
+        "novelty_peak_seconds": 25.13,
+        "relative_strength": 0.5538,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 163,
+        "seconds": 25.265,
+        "milliseconds": 25265,
+        "novelty_peak_seconds": 25.27,
+        "relative_strength": 0.35146,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 164,
+        "seconds": 25.42,
+        "milliseconds": 25420,
+        "novelty_peak_seconds": 25.43,
+        "relative_strength": 0.81419,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 165,
+        "seconds": 25.575,
+        "milliseconds": 25575,
+        "novelty_peak_seconds": 25.585,
+        "relative_strength": 0.6843,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 166,
+        "seconds": 25.72,
+        "milliseconds": 25720,
+        "novelty_peak_seconds": 25.725,
+        "relative_strength": 0.44945,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 167,
+        "seconds": 25.89,
+        "milliseconds": 25890,
+        "novelty_peak_seconds": 25.895,
+        "relative_strength": 0.48391,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 168,
+        "seconds": 26.125,
+        "milliseconds": 26125,
+        "novelty_peak_seconds": 26.125,
+        "relative_strength": 0.1727,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 169,
+        "seconds": 26.26,
+        "milliseconds": 26260,
+        "novelty_peak_seconds": 26.28,
+        "relative_strength": 0.35138,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 170,
+        "seconds": 26.385,
+        "milliseconds": 26385,
+        "novelty_peak_seconds": 26.39,
+        "relative_strength": 0.31751,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 171,
+        "seconds": 26.47,
+        "milliseconds": 26470,
+        "novelty_peak_seconds": 26.475,
+        "relative_strength": 0.16372,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 172,
+        "seconds": 26.55,
+        "milliseconds": 26550,
+        "novelty_peak_seconds": 26.555,
+        "relative_strength": 0.47939,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 173,
+        "seconds": 26.68,
+        "milliseconds": 26680,
+        "novelty_peak_seconds": 26.69,
+        "relative_strength": 0.64837,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 174,
+        "seconds": 26.805,
+        "milliseconds": 26805,
+        "novelty_peak_seconds": 26.81,
+        "relative_strength": 0.49145,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 175,
+        "seconds": 26.89,
+        "milliseconds": 26890,
+        "novelty_peak_seconds": 26.895,
+        "relative_strength": 0.20415,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 176,
+        "seconds": 27.09,
+        "milliseconds": 27090,
+        "novelty_peak_seconds": 27.1,
+        "relative_strength": 0.32964,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 177,
+        "seconds": 27.2,
+        "milliseconds": 27200,
+        "novelty_peak_seconds": 27.2,
+        "relative_strength": 0.18807,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 178,
+        "seconds": 27.28,
+        "milliseconds": 27280,
+        "novelty_peak_seconds": 27.285,
+        "relative_strength": 0.23014,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 179,
+        "seconds": 27.37,
+        "milliseconds": 27370,
+        "novelty_peak_seconds": 27.375,
+        "relative_strength": 0.42595,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 180,
+        "seconds": 27.47,
+        "milliseconds": 27470,
+        "novelty_peak_seconds": 27.475,
+        "relative_strength": 0.28277,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 181,
+        "seconds": 27.64,
+        "milliseconds": 27640,
+        "novelty_peak_seconds": 27.645,
+        "relative_strength": 0.21154,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 182,
+        "seconds": 27.835,
+        "milliseconds": 27835,
+        "novelty_peak_seconds": 27.84,
+        "relative_strength": 0.34949,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 183,
+        "seconds": 27.945,
+        "milliseconds": 27945,
+        "novelty_peak_seconds": 27.95,
+        "relative_strength": 0.24237,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 184,
+        "seconds": 28.08,
+        "milliseconds": 28080,
+        "novelty_peak_seconds": 28.09,
+        "relative_strength": 0.23359,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 185,
+        "seconds": 28.165,
+        "milliseconds": 28165,
+        "novelty_peak_seconds": 28.17,
+        "relative_strength": 0.33639,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 186,
+        "seconds": 28.265,
+        "milliseconds": 28265,
+        "novelty_peak_seconds": 28.28,
+        "relative_strength": 0.14837,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 187,
+        "seconds": 28.355,
+        "milliseconds": 28355,
+        "novelty_peak_seconds": 28.36,
+        "relative_strength": 0.43721,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 188,
+        "seconds": 28.455,
+        "milliseconds": 28455,
+        "novelty_peak_seconds": 28.455,
+        "relative_strength": 0.22066,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 189,
+        "seconds": 28.56,
+        "milliseconds": 28560,
+        "novelty_peak_seconds": 28.565,
+        "relative_strength": 0.81027,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 190,
+        "seconds": 28.68,
+        "milliseconds": 28680,
+        "novelty_peak_seconds": 28.68,
+        "relative_strength": 0.1487,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 191,
+        "seconds": 28.795,
+        "milliseconds": 28795,
+        "novelty_peak_seconds": 28.8,
+        "relative_strength": 0.25579,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 192,
+        "seconds": 28.93,
+        "milliseconds": 28930,
+        "novelty_peak_seconds": 28.94,
+        "relative_strength": 0.3518,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 193,
+        "seconds": 29.155,
+        "milliseconds": 29155,
+        "novelty_peak_seconds": 29.16,
+        "relative_strength": 0.31309,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 194,
+        "seconds": 29.36,
+        "milliseconds": 29360,
+        "novelty_peak_seconds": 29.365,
+        "relative_strength": 0.31151,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 195,
+        "seconds": 29.475,
+        "milliseconds": 29475,
+        "novelty_peak_seconds": 29.48,
+        "relative_strength": 0.72868,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 196,
+        "seconds": 29.595,
+        "milliseconds": 29595,
+        "novelty_peak_seconds": 29.595,
+        "relative_strength": 0.39873,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 197,
+        "seconds": 29.69,
+        "milliseconds": 29690,
+        "novelty_peak_seconds": 29.695,
+        "relative_strength": 0.15314,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 198,
+        "seconds": 29.87,
+        "milliseconds": 29870,
+        "novelty_peak_seconds": 29.875,
+        "relative_strength": 0.1817,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 199,
+        "seconds": 30.16,
+        "milliseconds": 30160,
+        "novelty_peak_seconds": 30.17,
+        "relative_strength": 0.35245,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 200,
+        "seconds": 30.255,
+        "milliseconds": 30255,
+        "novelty_peak_seconds": 30.26,
+        "relative_strength": 0.23267,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 201,
+        "seconds": 30.35,
+        "milliseconds": 30350,
+        "novelty_peak_seconds": 30.355,
+        "relative_strength": 0.33281,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 202,
+        "seconds": 30.54,
+        "milliseconds": 30540,
+        "novelty_peak_seconds": 30.545,
+        "relative_strength": 0.22801,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 203,
+        "seconds": 30.665,
+        "milliseconds": 30665,
+        "novelty_peak_seconds": 30.665,
+        "relative_strength": 0.2101,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 204,
+        "seconds": 30.75,
+        "milliseconds": 30750,
+        "novelty_peak_seconds": 30.755,
+        "relative_strength": 0.24701,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 205,
+        "seconds": 30.835,
+        "milliseconds": 30835,
+        "novelty_peak_seconds": 30.845,
+        "relative_strength": 0.24086,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 206,
+        "seconds": 30.925,
+        "milliseconds": 30925,
+        "novelty_peak_seconds": 30.93,
+        "relative_strength": 0.1562,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 207,
+        "seconds": 31.05,
+        "milliseconds": 31050,
+        "novelty_peak_seconds": 31.055,
+        "relative_strength": 0.21401,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 208,
+        "seconds": 31.155,
+        "milliseconds": 31155,
+        "novelty_peak_seconds": 31.16,
+        "relative_strength": 0.2616,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 209,
+        "seconds": 31.27,
+        "milliseconds": 31270,
+        "novelty_peak_seconds": 31.275,
+        "relative_strength": 0.41059,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 210,
+        "seconds": 31.385,
+        "milliseconds": 31385,
+        "novelty_peak_seconds": 31.39,
+        "relative_strength": 0.28836,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 211,
+        "seconds": 31.475,
+        "milliseconds": 31475,
+        "novelty_peak_seconds": 31.49,
+        "relative_strength": 0.21122,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 212,
+        "seconds": 31.59,
+        "milliseconds": 31590,
+        "novelty_peak_seconds": 31.595,
+        "relative_strength": 0.73316,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 213,
+        "seconds": 31.7,
+        "milliseconds": 31700,
+        "novelty_peak_seconds": 31.7,
+        "relative_strength": 0.31969,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 214,
+        "seconds": 31.875,
+        "milliseconds": 31875,
+        "novelty_peak_seconds": 31.88,
+        "relative_strength": 0.25438,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 215,
+        "seconds": 31.995,
+        "milliseconds": 31995,
+        "novelty_peak_seconds": 32.0,
+        "relative_strength": 0.19248,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 216,
+        "seconds": 32.225,
+        "milliseconds": 32225,
+        "novelty_peak_seconds": 32.23,
+        "relative_strength": 0.21878,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 217,
+        "seconds": 32.45,
+        "milliseconds": 32450,
+        "novelty_peak_seconds": 32.455,
+        "relative_strength": 0.28833,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 218,
+        "seconds": 32.625,
+        "milliseconds": 32625,
+        "novelty_peak_seconds": 32.63,
+        "relative_strength": 0.21898,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 219,
+        "seconds": 32.765,
+        "milliseconds": 32765,
+        "novelty_peak_seconds": 32.77,
+        "relative_strength": 0.22641,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 220,
+        "seconds": 32.875,
+        "milliseconds": 32875,
+        "novelty_peak_seconds": 32.88,
+        "relative_strength": 0.23275,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 221,
+        "seconds": 33.215,
+        "milliseconds": 33215,
+        "novelty_peak_seconds": 33.22,
+        "relative_strength": 0.3457,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 222,
+        "seconds": 33.36,
+        "milliseconds": 33360,
+        "novelty_peak_seconds": 33.365,
+        "relative_strength": 0.56418,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 223,
+        "seconds": 33.465,
+        "milliseconds": 33465,
+        "novelty_peak_seconds": 33.465,
+        "relative_strength": 0.4131,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 224,
+        "seconds": 33.555,
+        "milliseconds": 33555,
+        "novelty_peak_seconds": 33.555,
+        "relative_strength": 0.62562,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 225,
+        "seconds": 33.685,
+        "milliseconds": 33685,
+        "novelty_peak_seconds": 33.69,
+        "relative_strength": 1.0,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 226,
+        "seconds": 33.785,
+        "milliseconds": 33785,
+        "novelty_peak_seconds": 33.795,
+        "relative_strength": 0.66935,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 227,
+        "seconds": 33.89,
+        "milliseconds": 33890,
+        "novelty_peak_seconds": 33.89,
+        "relative_strength": 0.22719,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 228,
+        "seconds": 34.025,
+        "milliseconds": 34025,
+        "novelty_peak_seconds": 34.03,
+        "relative_strength": 0.24611,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 229,
+        "seconds": 34.15,
+        "milliseconds": 34150,
+        "novelty_peak_seconds": 34.155,
+        "relative_strength": 0.19981,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 230,
+        "seconds": 34.245,
+        "milliseconds": 34245,
+        "novelty_peak_seconds": 34.245,
+        "relative_strength": 0.22911,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 231,
+        "seconds": 34.325,
+        "milliseconds": 34325,
+        "novelty_peak_seconds": 34.335,
+        "relative_strength": 0.4089,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 232,
+        "seconds": 34.42,
+        "milliseconds": 34420,
+        "novelty_peak_seconds": 34.425,
+        "relative_strength": 0.24396,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 233,
+        "seconds": 34.54,
+        "milliseconds": 34540,
+        "novelty_peak_seconds": 34.545,
+        "relative_strength": 0.16243,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 234,
+        "seconds": 34.655,
+        "milliseconds": 34655,
+        "novelty_peak_seconds": 34.66,
+        "relative_strength": 0.31496,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 235,
+        "seconds": 34.78,
+        "milliseconds": 34780,
+        "novelty_peak_seconds": 34.785,
+        "relative_strength": 0.18929,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 236,
+        "seconds": 34.86,
+        "milliseconds": 34860,
+        "novelty_peak_seconds": 34.865,
+        "relative_strength": 0.26904,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 237,
+        "seconds": 34.995,
+        "milliseconds": 34995,
+        "novelty_peak_seconds": 35.0,
+        "relative_strength": 0.14386,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 238,
+        "seconds": 35.09,
+        "milliseconds": 35090,
+        "novelty_peak_seconds": 35.095,
+        "relative_strength": 0.21113,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 239,
+        "seconds": 35.21,
+        "milliseconds": 35210,
+        "novelty_peak_seconds": 35.215,
+        "relative_strength": 0.24289,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 240,
+        "seconds": 35.335,
+        "milliseconds": 35335,
+        "novelty_peak_seconds": 35.34,
+        "relative_strength": 0.39064,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 241,
+        "seconds": 35.465,
+        "milliseconds": 35465,
+        "novelty_peak_seconds": 35.47,
+        "relative_strength": 0.2457,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 242,
+        "seconds": 35.64,
+        "milliseconds": 35640,
+        "novelty_peak_seconds": 35.645,
+        "relative_strength": 0.61227,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 243,
+        "seconds": 35.745,
+        "milliseconds": 35745,
+        "novelty_peak_seconds": 35.745,
+        "relative_strength": 0.18921,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 244,
+        "seconds": 35.915,
+        "milliseconds": 35915,
+        "novelty_peak_seconds": 35.92,
+        "relative_strength": 0.60653,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 245,
+        "seconds": 36.085,
+        "milliseconds": 36085,
+        "novelty_peak_seconds": 36.09,
+        "relative_strength": 0.39615,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 246,
+        "seconds": 36.17,
+        "milliseconds": 36170,
+        "novelty_peak_seconds": 36.18,
+        "relative_strength": 0.4234,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 247,
+        "seconds": 36.25,
+        "milliseconds": 36250,
+        "novelty_peak_seconds": 36.26,
+        "relative_strength": 0.38155,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 248,
+        "seconds": 36.42,
+        "milliseconds": 36420,
+        "novelty_peak_seconds": 36.42,
+        "relative_strength": 0.53742,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 249,
+        "seconds": 36.515,
+        "milliseconds": 36515,
+        "novelty_peak_seconds": 36.515,
+        "relative_strength": 0.65,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 250,
+        "seconds": 36.605,
+        "milliseconds": 36605,
+        "novelty_peak_seconds": 36.615,
+        "relative_strength": 0.39248,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 251,
+        "seconds": 36.725,
+        "milliseconds": 36725,
+        "novelty_peak_seconds": 36.735,
+        "relative_strength": 0.20364,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 252,
+        "seconds": 36.835,
+        "milliseconds": 36835,
+        "novelty_peak_seconds": 36.855,
+        "relative_strength": 0.4739,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 253,
+        "seconds": 37.065,
+        "milliseconds": 37065,
+        "novelty_peak_seconds": 37.07,
+        "relative_strength": 0.32573,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 254,
+        "seconds": 37.195,
+        "milliseconds": 37195,
+        "novelty_peak_seconds": 37.2,
+        "relative_strength": 0.45562,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 255,
+        "seconds": 37.305,
+        "milliseconds": 37305,
+        "novelty_peak_seconds": 37.31,
+        "relative_strength": 0.36075,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 256,
+        "seconds": 37.4,
+        "milliseconds": 37400,
+        "novelty_peak_seconds": 37.405,
+        "relative_strength": 0.26499,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 257,
+        "seconds": 37.48,
+        "milliseconds": 37480,
+        "novelty_peak_seconds": 37.485,
+        "relative_strength": 0.18413,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      },
+      {
+        "id": 258,
+        "seconds": 37.61,
+        "milliseconds": 37610,
+        "novelty_peak_seconds": 37.61,
+        "relative_strength": 0.23444,
+        "measurement_resolution_ms": 5,
+        "label": "estimated transient; not a verified SFX/beat"
+      }
+    ],
+    "silence_events": [
+      {
+        "event": "start",
+        "seconds": 0.0
+      },
+      {
+        "event": "end",
+        "seconds": 1.369615
+      },
+      {
+        "event": "start",
+        "seconds": 40.669342
+      },
+      {
+        "event": "end",
+        "seconds": 40.8439
+      }
+    ],
+    "precision_note": "Numerical labels are milliseconds; energy analysis resolves 5 ms bins and does not identify semantic SFX/beat boundaries. Compression/codec delays can affect alignment."
+  }
+}

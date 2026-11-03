@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { toast } from "@/lib/toast";
-import { CalendarDays, Copy, Download, FileSpreadsheet, FileText } from "@/components/icons";
+import {
+  CalendarDays,
+  Copy,
+  Download,
+  ExternalLink,
+  FileSpreadsheet,
+  FileText,
+} from "@/components/icons";
+import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
+import { emitAppEvent } from "@/lib/app-events";
+import { exportCalendarToSheets } from "@/lib/integrations.functions";
+import { ServerFnError } from "@/lib/rpc-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,11 +68,30 @@ function printHtml(markup: string) {
   document.body.appendChild(frame);
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Only stored posts go to the sheet; planned Autopilot slots have no row yet. */
+function postIds(list: CalendarEntry[]): string[] {
+  return list
+    .map((e) => e.id)
+    .filter((id) => UUID.test(id))
+    .slice(0, 1000);
+}
+
+/** The first and last day on the list, which name the sheet. */
+function sheetsRange(list: CalendarEntry[]): { from: string; to: string } {
+  const days = list.map((e) => e.date).sort();
+  const last = new Date(`${days[days.length - 1]}T00:00:00Z`);
+  last.setUTCDate(last.getUTCDate() + 1);
+  return { from: `${days[0]}T00:00:00Z`, to: last.toISOString() };
+}
+
 export function ExportMenu({
   shown,
   all,
   shownLabel,
   shownSlug,
+  workspaceId,
 }: {
   /** The posts on screen: the visible dates, with the current filters. */
   shown: CalendarEntry[];
@@ -70,8 +100,13 @@ export function ExportMenu({
   /** "October 2026" — names the visible dates in the menu and on the printout. */
   shownLabel: string;
   shownSlug: string;
+  /** Offers "Google Sheets" when the workspace has it connected (ADR-0042). */
+  workspaceId?: string | null;
 }) {
   const [range, setRange] = useState<"shown" | "all">("shown");
+  const [sending, setSending] = useState(false);
+  const apps = useConnectedApps(workspaceId);
+  const sheets = apps.has("googlesheets");
   const entries = range === "shown" ? shown : all;
   const label = range === "shown" ? shownLabel : "All posts";
   const slug = range === "shown" ? shownSlug : "all";
@@ -122,6 +157,43 @@ export function ExportMenu({
           <FileSpreadsheet className="h-4 w-4" />
           Spreadsheet (Excel, Sheets)
         </DropdownMenuItem>
+        {workspaceId && sheets && (
+          <DropdownMenuItem
+            disabled={sending}
+            onSelect={run(async (list) => {
+              setSending(true);
+              const done = toast.loading("Making a Google Sheet…");
+              try {
+                const result = await exportCalendarToSheets({
+                  data: { workspaceId, ...sheetsRange(list), ids: postIds(list) },
+                });
+                toast.success(`Google Sheet ready · ${result.rows} posts`, {
+                  id: done,
+                  action: {
+                    label: "Open",
+                    onClick: () => window.open(result.url, "_blank", "noopener,noreferrer"),
+                  },
+                });
+              } catch (error) {
+                toast.error(
+                  error instanceof ServerFnError ? error.message : "Couldn't make the sheet.",
+                  { id: done },
+                );
+              } finally {
+                setSending(false);
+              }
+            })}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            New Google Sheet
+          </DropdownMenuItem>
+        )}
+        {workspaceId && !sheets && apps.canConnect && (
+          <DropdownMenuItem onSelect={() => emitAppEvent("open:settings", { section: "accounts" })}>
+            <ExternalLink className="h-4 w-4" />
+            Connect Google Sheets
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onSelect={run((list) => {
             download(

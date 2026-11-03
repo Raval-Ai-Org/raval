@@ -10,7 +10,10 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ArrowLeft, Home, Lock } from "@/components/icons";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
-import { dsFocus, dsGhostBtn } from "@/components/app/surface/buttons";
+import Link from "next/link";
+import { dsFocus, dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { communitiesPath } from "@/lib/workspace/paths";
 import { ErrorState } from "@/components/ui/empty-state";
 import { PageLoader } from "@/components/ui/page-loader";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,6 +55,12 @@ const BRAIN_FEATURE: Partial<Record<BrainId, FeatureKey>> = {
   competitors: "competitors",
   market: "market_brain",
 };
+
+/** Market's two places: what's moving, and the threads people are writing. */
+const MARKET_TABS = [
+  { id: null, label: "Trends" },
+  { id: "community", label: "Communities" },
+] as const;
 
 const HOME_TABS = ["overview", "today", "notes"] as const;
 type HomeTab = (typeof HOME_TABS)[number];
@@ -216,7 +225,13 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
       <div className="relative min-h-0 min-w-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={section === "audience" && tab === "customers" ? "audience-customers" : section}
+            key={
+              section === "audience" && tab === "customers"
+                ? "audience-customers"
+                : section === "market" && tab === "community"
+                  ? "market-community"
+                  : section
+            }
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
@@ -285,6 +300,7 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
                           news={news}
                           locked={locked}
                           onOpen={open}
+                          onEditGoal={() => onNavigate("brand", "goal")}
                         />
                       ))}
                     {homeTab === "today" && (
@@ -330,8 +346,66 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
 
               {section === "market" && (
                 <div className="h-full overflow-y-auto scrollbar-thin">
+                  {overview.data?.community !== false && (
+                    <div className="flex justify-center px-4 pt-4">
+                      <div
+                        role="tablist"
+                        aria-label="Market"
+                        className="ds-well inline-flex max-w-full gap-0.5 rounded-full p-1"
+                      >
+                        {MARKET_TABS.map((m) => {
+                          const active = (tab === "community" ? "community" : null) === m.id;
+                          return (
+                            <button
+                              key={m.label}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              onClick={() => onNavigate("market", m.id)}
+                              className={cn(
+                                "h-8 min-w-0 flex-1 rounded-full px-3 text-[13px] font-medium transition-all duration-200 sm:min-w-[110px] sm:px-4",
+                                active
+                                  ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
+                                  : "text-muted-foreground hover:text-foreground",
+                                dsFocus,
+                              )}
+                            >
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <SurfacePage width="wide">
-                    <MarketBrainPanel workspaceId={workspaceId} brandKeywords={dna.keywords} />
+                    {tab === "community" && overview.data?.community !== false ? (
+                      // The Reddit agent has its own page (sidebar → Create).
+                      <div className="flex flex-col items-start gap-4 rounded-3xl border border-border/70 bg-[var(--ds-tile-bg)] p-6 sm:flex-row sm:items-center">
+                        <div className="flex -space-x-2">
+                          {(["reddit", "quora", "hackernews", "stackexchange"] as const).map(
+                            (p) => (
+                              <PlatformAppIcon
+                                key={p}
+                                platform={p}
+                                size={36}
+                                className="ring-2 ring-background"
+                              />
+                            ),
+                          )}
+                        </div>
+                        <p className="min-w-0 flex-1 text-[15px] font-medium text-foreground">
+                          Threads where people ask about what you do
+                        </p>
+                        <Link
+                          href={communitiesPath(workspaceId)}
+                          className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                        >
+                          Open Reddit agent
+                        </Link>
+                      </div>
+                    ) : (
+                      <MarketBrainPanel workspaceId={workspaceId} brandKeywords={dna.keywords} />
+                    )}
                   </SurfacePage>
                 </div>
               )}

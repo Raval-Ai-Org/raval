@@ -1,7 +1,12 @@
 import "server-only";
+import { createWriteStream } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -149,6 +154,115 @@ export async function signAssetObject(
     }),
     { expiresIn: ttlSeconds },
   );
+}
+
+/**
+ * A short-lived URL the browser PUTs one file to, straight into storage (no
+ * body cap on our server). R2 when configured, else Supabase's signed upload
+ * URL. The path must be a workspace asset path the caller already authorised.
+ */
+export async function presignAssetUpload(
+  path: string,
+  contentType: string,
+  ttlSeconds = 900,
+  supabase: SupabaseClient = supabaseAdmin as unknown as SupabaseClient,
+): Promise<{ url: string; method: "PUT"; headers: Record<string, string> }> {
+  if (!/^workspace\/[0-9a-f-]{36}\/assets\//i.test(path) || path.includes(".."))
+    throw new Error("Invalid asset path");
+  if (isMarkedR2Path(path)) {
+    if (!isR2AssetPath(path)) throw new Error("Invalid R2 asset path");
+    const config = r2Config();
+    if (!config) throw new Error("R2 storage is not configured");
+    const url = await getSignedUrl(
+      r2Client(config),
+      new PutObjectCommand({ Bucket: config.bucket, Key: path, ContentType: contentType }),
+      { expiresIn: ttlSeconds },
+    );
+    return { url, method: "PUT", headers: { "content-type": contentType } };
+  }
+  const { data, error } = await supabase.storage.from(ASSET_BUCKET).createSignedUploadUrl(path);
+  if (error || !data?.signedUrl)
+    throw new Error(`Could not sign Supabase upload URL: ${error?.message ?? "no URL"}`);
+  return { url: data.signedUrl, method: "PUT", headers: { "content-type": contentType } };
+}
+
+/** Bytes of a stored object, or null when it doesn't exist. */
+export async function assetObjectSize(
+  path: string,
+  supabase: SupabaseClient = supabaseAdmin as unknown as SupabaseClient,
+): Promise<number | null> {
+  if (isMarkedR2Path(path)) {
+    if (!isR2AssetPath(path)) throw new Error("Invalid R2 asset path");
+    const config = r2Config();
+    if (!config) throw new Error("R2 storage is not configured");
+    try {
+      const head = await r2Client(config).send(
+        new HeadObjectCommand({ Bucket: config.bucket, Key: path }),
+      );
+      return head.ContentLength ?? null;
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata
+        ?.httpStatusCode;
+      if (status === 404) return null;
+      throw error;
+    }
+  }
+  const folder = path.replace(/\/[^/]+$/, "");
+  const name = path.slice(folder.length + 1);
+  const { data, error } = await supabase.storage
+    .from(ASSET_BUCKET)
+    .list(folder, { limit: 2, search: name });
+  if (error) throw new Error(`Could not read Supabase object: ${error.message}`);
+  const row = data?.find((item) => item.name === name);
+  const size = (row?.metadata as { size?: number } | undefined)?.size;
+  return row ? (typeof size === "number" ? size : 0) : null;
+}
+
+/**
+ * Stream a stored object into a local file, refusing more than `maxBytes`
+ * (large videos never sit whole in memory on R2).
+ */
+export async function downloadAssetObjectToFile(
+  path: string,
+  destination: string,
+  maxBytes: number,
+  supabase: SupabaseClient = supabaseAdmin as unknown as SupabaseClient,
+): Promise<number> {
+  if (!isMarkedR2Path(path)) {
+    const { data, error } = await supabase.storage.from(ASSET_BUCKET).download(path);
+    if (error || !data) throw new Error("Stored object could not be read");
+    if (data.size > maxBytes) throw new Error("Stored object is too large");
+    await writeFile(destination, Buffer.from(await data.arrayBuffer()));
+    return data.size;
+  }
+  if (!isR2AssetPath(path)) throw new Error("Invalid R2 asset path");
+  const config = r2Config();
+  if (!config) throw new Error("R2 storage is not configured");
+  const response = await r2Client(config).send(
+    new GetObjectCommand({ Bucket: config.bucket, Key: path }),
+  );
+  if (!response.Body) throw new Error("R2 object has no body");
+  if ((response.ContentLength ?? 0) > maxBytes) {
+    (response.Body as { destroy?: () => void }).destroy?.();
+    throw new Error("Stored object is too large");
+  }
+  let size = 0;
+  const cap = new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      size += chunk.length;
+      if (size > maxBytes) done(new Error("Stored object is too large"));
+      else done(null, chunk);
+    },
+  });
+  const body = response.Body as unknown;
+  const source =
+    body instanceof Readable
+      ? body
+      : Readable.fromWeb(
+          (body as { transformToWebStream(): ReadableStream }).transformToWebStream() as never,
+        );
+  await pipeline(source, cap, createWriteStream(destination));
+  return size;
 }
 
 type MigrationAlias = { source_path: string; target_path: string; status: string };

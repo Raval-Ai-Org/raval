@@ -13,8 +13,10 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AllowanceView, ModelView, ReferenceImageView } from "@/lib/ugc/schemas";
+import type { AllowanceView, ModelView, ReferenceImageView, Script } from "@/lib/ugc/schemas";
+import { dialogueWordBudget, scriptWordCount } from "@/lib/ugc/prompt";
 import { cn } from "@/lib/utils";
+import { planVideoSegments } from "@/lib/ugc/duration";
 import {
   ChipGroup,
   ChoiceTile,
@@ -83,22 +85,28 @@ export function coerceSettings(
 
 export function GenerateStep({
   models,
+  defaultModel = "long",
   allowance,
   loadingModels,
   settings,
   references,
   hook,
+  script,
+  scriptDurationSec,
   generating,
   onChange,
   onBack,
   onGenerate,
 }: {
   models: ModelView[];
+  defaultModel?: string;
   allowance: AllowanceView | null;
   loadingModels: boolean;
   settings: RenderSettingsState;
   references: ReferenceImageView[];
   hook?: string;
+  script?: Script | null;
+  scriptDurationSec?: number;
   generating: boolean;
   onChange: (next: RenderSettingsState) => void;
   onBack: () => void;
@@ -118,7 +126,7 @@ export function GenerateStep({
   }
   const model =
     models.find((m) => m.key === settings.model) ??
-    models.find((m) => m.key === "standard") ??
+    models.find((m) => m.key === defaultModel) ??
     models[0];
   if (!model) {
     return (
@@ -130,10 +138,14 @@ export function GenerateStep({
 
   const refs = usableRefs(model, settings.referenceIds);
   const durations = allowedDurations(model, refs.length);
+  const native =
+    (refs.length ? model.nativeImageDurations : model.nativeDurations) ?? model.nativeDurations;
+  const clipCount = native ? planVideoSegments(settings.durationSec, native).length : 1;
+  const requiredUnits = model.videoUnits * clipCount;
   const used = allowance ? allowance.videos.used + allowance.videos.held : 0;
   const remaining = allowance ? Math.max(0, allowance.videos.limit - used) : null;
   const blockReason =
-    remaining !== null && remaining < model.videoUnits
+    remaining !== null && remaining < requiredUnits
       ? "Your monthly videos are used up."
       : allowance && allowance.activeRenders >= allowance.maxConcurrent
         ? "Wait for a video in progress to finish."
@@ -145,11 +157,32 @@ export function GenerateStep({
     const next = has
       ? settings.referenceIds.filter((r) => r !== id)
       : [...settings.referenceIds, id];
-    onChange(coerceSettings(model, { ...settings, referenceIds: next }));
+    onChange({
+      ...coerceSettings(model, { ...settings, referenceIds: next }),
+      model: settings.model,
+    });
   };
 
   return (
     <div className="space-y-5">
+      {script ? (
+        <Disclosure label="Script used in this video" badge={`${script.scenes.length} scenes`}>
+          <div className="space-y-3 text-sm">
+            {script.scenes.map((scene) => (
+              <div key={scene.id}>
+                <p className="text-xs text-muted-foreground">{scene.action}</p>
+                <p>{scene.dialogue}</p>
+              </div>
+            ))}
+          </div>
+          {scriptWordCount(script) > dialogueWordBudget(settings.durationSec) ? (
+            <p className="mt-3 text-xs text-warning">
+              The spoken lines may feel rushed at {settings.durationSec}s. Choose a longer video or
+              edit the script.
+            </p>
+          ) : null}
+        </Disclosure>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
         {/* Preview + summary */}
         <aside className="space-y-4 lg:sticky lg:top-0 lg:self-start">
@@ -246,6 +279,19 @@ export function GenerateStep({
                 onChange={(v) => onChange({ ...settings, durationSec: Number(v) })}
                 size="sm"
               />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {clipCount > 1 ? "Multiple generated clips are joined into one video. " : ""}
+                Longer videos take more time and video credits.
+              </p>
+              {scriptDurationSec && Math.abs(scriptDurationSec - settings.durationSec) > 1 ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="mt-2 text-left text-xs text-primary underline underline-offset-2"
+                >
+                  Review your script for the new {settings.durationSec}s length
+                </button>
+              ) : null}
             </div>
             <div className="space-y-2.5">
               <SectionLabel icon={Gauge}>Quality</SectionLabel>

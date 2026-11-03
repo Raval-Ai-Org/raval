@@ -58,6 +58,33 @@ const request = (over: Partial<VideoRenderRequest> = {}): VideoRenderRequest => 
 });
 
 describe("video provider fallback", () => {
+  it("never falls back to a shorter clip when assembling a longer video", async () => {
+    const kie = fake("kie", [
+      {
+        ok: false,
+        code: "provider_credits",
+        message: "No credits",
+        retryable: false,
+        definite: true,
+      },
+    ]);
+    const or = fake("openrouter", []);
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider, openrouter: or.provider },
+      primary: () => "kie",
+      fallback: () => "openrouter",
+    });
+    const result = await routed.submit(
+      request({
+        model: UGC_MODELS.variation,
+        durationSec: 10,
+        minimumDurationSec: 10,
+        imageUrls: ["https://owned.test/product.png"],
+      }),
+    );
+    expect(result).toMatchObject({ ok: false, code: "provider_credits" });
+    expect(or.submits).toHaveLength(0);
+  });
   it("retains legacy reference truncation and fallback without optional taste restrictions", async () => {
     const kie = fake("kie", [
       {
@@ -84,6 +111,67 @@ describe("video provider fallback", () => {
     expect(or.submits).toHaveLength(1);
     expect(result.ok && result.request).not.toHaveProperty("visual_references");
   });
+  it("leaves out a brand style image that does not pass review instead of failing", async () => {
+    const kie = fake("kie", []);
+    setModerationClassifier(async (image) =>
+      image.includes("style-bad")
+        ? { safe: false, categories: ["graphic_violence"] }
+        : { safe: true, categories: [] },
+    );
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider },
+      primary: () => "kie",
+    });
+    const result = await routed.submit(
+      request({
+        imageUrls: [
+          "https://cdn.example.com/own.png",
+          "https://cdn.example.com/style-ok.png",
+          "https://cdn.example.com/style-bad.png",
+        ],
+        requireReferences: true,
+        requiredReferenceCount: 1,
+        styleReferenceCount: 2,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    expect(kie.submits[0].imageUrls).not.toContain("https://cdn.example.com/style-bad.png");
+    expect(kie.submits[0].imageUrls[0]).toBe("https://cdn.example.com/own.png");
+  });
+
+  it("still refuses the person's own image when it fails review", async () => {
+    const kie = fake("kie", []);
+    setModerationClassifier(async () => ({ safe: false, categories: ["graphic_violence"] }));
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider },
+      primary: () => "kie",
+    });
+    const result = await routed.submit(
+      request({ imageUrls: ["https://cdn.example.com/own.png"], styleReferenceCount: 0 }),
+    );
+    expect(result).toMatchObject({ ok: false, code: "refusal" });
+    expect(kie.submits).toHaveLength(0);
+  });
+
+  it("renders from text when every brand style image is left out", async () => {
+    const kie = fake("kie", []);
+    setModerationClassifier(async () => ({ safe: false, categories: ["graphic_violence"] }));
+    const routed = createRoutedVideoProvider({
+      providers: { kie: kie.provider },
+      primary: () => "kie",
+    });
+    const result = await routed.submit(
+      request({
+        imageUrls: ["https://cdn.example.com/style.png"],
+        requireReferences: true,
+        requiredReferenceCount: 1,
+        styleReferenceCount: 1,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    expect(kie.submits[0].imageUrls).toEqual([]);
+  });
+
   it("refuses a route that would drop required identity images", async () => {
     const kie = fake("kie", []);
     const or = fake("openrouter", []);

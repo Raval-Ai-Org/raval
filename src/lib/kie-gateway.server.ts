@@ -19,7 +19,7 @@ export class KieGatewayError extends UpstreamError {
   readonly providerCode?: number;
 
   constructor(status: number, message: string, category = "provider", providerCode?: number) {
-    super(status, message, { provider: "kie", code: category });
+    super(status, message, { provider: "kie", code: category, internal: true });
     this.name = "KieGatewayError";
     this.category = category;
     this.providerCode = providerCode;
@@ -56,7 +56,7 @@ const VALIDATION_HINT_RE = /not within the range|is required|not supported|inval
 
 function mapStatus(status: number, detail?: string): KieGatewayError {
   const error = mapStatusCategory(status, detail);
-  return new KieGatewayError(error.status, error.message, error.category, status);
+  return new KieGatewayError(error.status, error.detail, error.category, status);
 }
 
 function mapStatusCategory(status: number, detail?: string): KieGatewayError {

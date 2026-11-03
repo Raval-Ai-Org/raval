@@ -51,7 +51,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
       "Caption",
     ],
     guidance:
-      "A swipeable carousel. 'Slide 1' is the cover headline (under 8 words) plus a short subline. 'Middle slides' lists each slide on its own line as 'Slide N: heading — one sentence of detail', 4–8 slides. 'Last slide' is the recap plus a save/follow prompt. 'Design look' covers colours, typography feel and layout style. 'Caption' is 2–3 sentences to post with it.",
+      "A swipeable carousel. 'Slide 1' is the cover headline (under 8 words, readable in two seconds: a sharp question, one surprising figure from the context, a bold claim the slides prove, or a specific outcome) plus a short subline. 'Middle slides' lists each slide on its own line as 'Slide N: heading — one sentence of detail', 4–8 slides. 'Last slide' is the recap plus a save/follow prompt. 'Design look' covers colours, typography feel, layout style and one recurring visual motif, with a poster-grade cover and inside slides that keep one grid. 'Caption' is 2–3 sentences to post with it.",
   },
   story: {
     sections: ["Idea", "Why now", "Frame 1", "Middle frames", "Last frame", "Reply prompt"],
@@ -73,7 +73,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
       "Caption idea",
     ],
     guidance:
-      "A detailed image-generation brief a photographer or art director could shoot from. Be concrete and visual: materials, textures, time of day, lens feel (e.g. 50mm, shallow depth of field), angle, framing, light direction and quality, a palette that fits the brand. 'Avoid' lists things that would ruin it (e.g. text in the image, clutter, stock-photo poses). 'Caption idea' is the angle and first line for the caption.",
+      "A detailed image-generation brief a photographer or art director could shoot from. Be concrete and visual: materials, textures, time of day, lens feel (e.g. 50mm, shallow depth of field), angle, framing, light direction and quality, a palette that fits the brand. Build it on one scroll-stopping idea (a surprise of scale, an unexpected material, a striking pose, or the product in a world made of its own ingredients) and say where a short headline would sit relative to the subject. 'Avoid' lists things that would ruin it (e.g. clutter, stock-photo poses, invented labels). 'Caption idea' is the angle and first line for the caption.",
   },
   ad: {
     sections: [
@@ -88,7 +88,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
       "Button text",
     ],
     guidance:
-      "A paid social ad brief. 'Three angles to test' gives three clearly different approaches (e.g. pain, outcome, proof), one line each. 'Headline ideas' gives 3 headlines under 40 characters. 'Main text points' lists what the ad copy must say. 'Visual' describes the ad image in concrete detail sized for a feed. 'Button text' suggests one short call to action. Use only offers, prices and deadlines that exist in the context; otherwise describe the offer generally.",
+      "A paid social ad brief. 'Three angles to test' gives three clearly different approaches (e.g. pain, outcome, proof), one line each. 'Headline ideas' gives 3 headlines under 40 characters. 'Main text points' lists what the ad copy must say. 'Visual' describes the ad image in concrete detail sized for a feed: one hero and its scale, the set, the light and lens, and a calm area for the platform's text. 'Button text' suggests one short call to action. Use only offers, prices and deadlines that exist in the context; otherwise describe the offer generally.",
   },
   video: {
     sections: [
@@ -103,7 +103,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
       "Caption idea",
     ],
     guidance:
-      "A short AI-generated video brief (4–8 seconds of footage). 'Scene by scene' lists 2–4 shots on their own lines as 'Shot N (0–2s): what we see and what moves'. Describe real, filmable visuals: subject, action, setting, textures. 'Camera movement' names the moves (push-in, orbit, slow pan, handheld). 'Sound' suggests music or ambient sound. No on-screen text inside the footage. 'Caption idea' is the post caption angle and first line.",
+      "An AI-generated video brief matching the selected length (10–60 seconds by default). 'Scene by scene' lists enough shots to cover the full selected duration on their own lines as 'Shot N (0–2s): what we see and what moves'. Describe real, filmable visuals: subject, action, setting, textures. 'Camera movement' names the moves (push-in, orbit, slow pan, handheld). 'Sound' suggests music or ambient sound. No on-screen text inside the footage. 'Caption idea' is the post caption angle and first line.",
   },
   script: {
     sections: [
@@ -211,6 +211,7 @@ const SOURCE_BOOST: Record<IdeaSource, number> = {
   momentum: 10,
   gap: 5,
   pillar: 0,
+  campaign: 20,
 };
 
 function normalize(text: string): string {
@@ -252,6 +253,7 @@ export const SIGNAL_LABEL: Record<IdeaSource, string> = {
   gap: "Content gap",
   pillar: "Your brand",
   momentum: "Working well",
+  campaign: "Your campaign",
 };
 
 /** Plain-language settings the prompt should respect. */
@@ -263,8 +265,10 @@ export function describeSettings(
   const parts: string[] = [];
   if (c.platforms?.length) parts.push(`Platforms: ${c.platforms.join(", ")}`);
   if (c.ratio) parts.push(`Size: ${c.ratio}`);
-  if (type === "video" || type === "script")
-    parts.push(`Length: ${c.durationSec ?? (type === "video" ? 6 : 30)} seconds`);
+  if (type === "video" || type === "script" || (type === "story" && c.storyMode === "video"))
+    parts.push(
+      `Length: ${c.durationSec ?? (type === "video" || (type === "story" && c.storyMode === "video") ? 10 : 30)} seconds`,
+    );
   if (type === "carousel") parts.push(`Slides: ${c.slideCount ?? 6}`);
   if (type === "article") parts.push(`Length: ${c.length ?? "standard"}`);
   if (c.includeImage) parts.push("Include an image");

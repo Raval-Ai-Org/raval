@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { studioProductKeys } from "./ProductAndFormat";
+import type { Product } from "@/lib/products/catalog";
 import { PipelineSection } from "@/components/app/StudioRail";
 import { groupRows, type ContentRow } from "@/lib/studio/content-groups";
 import { LibraryPage } from "@/components/app/LibraryPage";
 import { LibraryDialog } from "@/components/app/LibraryDialog";
 import { emitAppEvent } from "@/lib/app-events";
 import { normalizeLibraryAsset } from "@/lib/library";
+import type { TasteView } from "@/lib/taste/contracts";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
@@ -18,7 +22,7 @@ import type { MediaOutput, StudioJob, StudioJobOutput } from "@/lib/studio/jobs"
 import type { SessionStep, StudioSession } from "@/lib/studio/session-store";
 import { ComposerBody } from "./StudioComposer";
 import { CreateLauncher } from "./CreateLauncher";
-import { DockCard } from "./StudioDock";
+import { StudioButtonView } from "./StudioButton";
 import type { ReviewRow } from "./ReviewPanel";
 
 /* Sample data — deliberately realistic so layout problems show up. */
@@ -29,6 +33,27 @@ function art(w: number, h: number, a: string, b: string, label: string) {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${a}'/><stop offset='1' stop-color='${b}'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/><circle cx='${w * 0.7}' cy='${h * 0.35}' r='${Math.min(w, h) * 0.22}' fill='rgba(255,255,255,0.18)'/><text x='50%' y='88%' font-family='system-ui' font-size='${Math.round(w / 18)}' fill='white' text-anchor='middle' opacity='0.85'>${label}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
+
+/** The brand's catalogue, as Brain → Brand → Products would list it. */
+const PRODUCTS: Product[] = [
+  ["Cold Brew Kit", "29.00", "#3b2a1e", "#c68a4a"],
+  ["Huila Single Origin", "18.50", "#1f3b2c", "#7fb069"],
+  ["Ceramic Pour-Over Dripper", "34.00", "#e8e2d6", "#9c8f7a"],
+].map(([name, price, a, b], i) => ({
+  id: `00000000-0000-4000-8000-00000000010${i}`,
+  kind: "product",
+  name,
+  description: "",
+  price,
+  url: `https://brewly.example/products/p${i}`,
+  category: "Coffee",
+  benefits: [],
+  images: [{ assetId: `p${i}`, url: art(600, 600, a, b, name) }],
+  primaryAssetId: `p${i}`,
+  source: "scan",
+  position: i,
+  status: "active",
+}));
 
 const IDEAS: StudioIdea[] = [
   {
@@ -400,6 +425,103 @@ const ROWS: Partial<Record<StudioType, ReviewRow[]>> = {
   ],
 };
 
+/** One Pin: a single tall picture (src/lib/social/pinterest.ts). */
+const PIN_ROW: ReviewRow = {
+  id: "r-pin",
+  status: "pending",
+  title: "Three ways to brew cold brew at home",
+  body: "",
+  meta: { platform: "pinterest" },
+  scheduled_at: null,
+};
+
+const PIN_OUTPUT: StudioJobOutput = {
+  title: "Three ways to brew cold brew at home",
+  angle: "How-to people save",
+  variants: [
+    {
+      platform: "pinterest",
+      title: "Cold brew at home: 3 easy ways",
+      body: "Cold brew at home in three easy ways: a jar, a French press or a pitcher. Coarse grounds, cold water, 12 to 18 hours, then strain. Save this for your next batch.",
+      hashtags: [],
+      chars: 165,
+    },
+  ],
+  media: [ready(art(1024, 1536, "#2b1d14", "#e8c79a", "Cold brew 3 ways"), "2:3")],
+};
+
+/** A storyboarded video that passed its checks (src/lib/studio/video/). */
+const LAB_VIDEO_PLAN: NonNullable<StudioJobOutput["videoPlan"]> = {
+  kind: "product-showcase",
+  model: "standard",
+  clipSeconds: [8, 8],
+  storyboard: {
+    logline:
+      "A frosted can of oat-milk cold brew is opened and poured over ice on a sunny counter.",
+    bible: {
+      cast: [],
+      product: "Matte sage-green 250 ml can with a cream label and the brand's wordmark",
+      setting: "A pale oak kitchen counter by an open window",
+      lighting: "Warm morning sun from the left, soft shadows",
+      palette: "Sage green, cream, honey",
+      camera: "Macro and close shots, slow and steady",
+    },
+    clips: [
+      {
+        opensOn: "Condensation running down the can in macro",
+        shots: [
+          {
+            start: 0,
+            end: 3,
+            camera: "macro push-in",
+            action: "A drop runs down the cold can",
+            cast: [],
+          },
+          {
+            start: 3,
+            end: 8,
+            camera: "slow orbit",
+            action: "A hand lifts the can into the sun",
+            cast: [],
+          },
+        ],
+        endsOn: "The hand cracks the can open, a puff of cold air",
+        sound: "Fizz and a soft click",
+        onScreen: "",
+        voiceover: "",
+      },
+      {
+        opensOn: "The open can in the hand, cold air rising",
+        shots: [
+          {
+            start: 0,
+            end: 5,
+            camera: "side close-up",
+            action: "Cold brew pours over clear ice",
+            cast: [],
+          },
+          {
+            start: 5,
+            end: 8,
+            camera: "slow pull-back",
+            action: "The glass and can sit side by side",
+            cast: [],
+          },
+        ],
+        endsOn: "The full glass beside the can, label facing the camera",
+        sound: "Ice settling, a calm beat",
+        onScreen: "Cold brew, made with oat milk",
+        voiceover: "",
+      },
+    ],
+  },
+  check: {
+    passed: true,
+    redone: 0,
+    notes: ["Checked: the same subject in every clip, and a clean ending."],
+  },
+};
+
 function session(
   type: StudioType,
   step: SessionStep,
@@ -449,7 +571,7 @@ function session(
       slideCount: 5,
       ...(type === "story" ? { storyMode: "frames" as const, frameCount: 3 } : {}),
       length: "standard",
-      durationSec: type === "video" ? 6 : 30,
+      durationSec: type === "video" ? 10 : 30,
     },
     job,
     lastGood: step === "review" ? job : null,
@@ -478,6 +600,29 @@ const approvedRows = (type: StudioType, status = "approved", scheduledAt: string
   (ROWS[type] ?? []).map((r) => ({ ...r, status, scheduled_at: scheduledAt }));
 
 const SCENES: Scene[] = [
+  {
+    id: "brief-creation",
+    label: "Brief · Creation points",
+    make: () => {
+      const base = session("image", "intent", { brief: "Announce our freshly roasted coffee" });
+      return { ...base, controls: { ...base.controls, paymentSource: "creation" } };
+    },
+  },
+  {
+    id: "review-creation",
+    label: "Review · Included caption edits",
+    make: () => {
+      const base = session("image", "review");
+      const job = { ...base.job!, captionEditsRemaining: 3 };
+      return {
+        ...base,
+        controls: { ...base.controls, paymentSource: "creation" },
+        job,
+        lastGood: job,
+      };
+    },
+    fixtures: { rows: ROWS.image, distribution: true },
+  },
   { id: "live-social", label: "Live run · Social", live: "social" },
   { id: "live-image", label: "Live run · Image", live: "image" },
   { id: "live-article", label: "Live run · Article", live: "article" },
@@ -495,6 +640,90 @@ const SCENES: Scene[] = [
       }),
   },
   { id: "brief-article", label: "Brief · Article", make: () => session("article", "intent") },
+  {
+    id: "brief-ad",
+    label: "Brief · Ad with products",
+    make: () =>
+      session("ad", "intent", {
+        brief: "Spring offer on our cold brew kit for busy home brewers.",
+        goal: "offer",
+      }),
+  },
+  {
+    id: "brief-script-video",
+    label: "Brief · Video from reviewed script",
+    make: () =>
+      session("video", "intent", {
+        sourceScript: OUTPUTS.script!.script,
+        brief: "Make a video from my reviewed script",
+        controls: {
+          platforms: ["instagram"],
+          durationSec: 30,
+          audio: true,
+          videoResolution: "720P",
+          ratio: "9:16",
+        },
+      }),
+  },
+  {
+    id: "brief-from-piece",
+    label: "Brief · Made from a post",
+    make: () =>
+      session("carousel", "intent", {
+        brief:
+          'Turn my post "Harvest morning in Huila" into a carousel. Keep the same facts, offer and call to action, and make it work as a carousel.',
+        sourceContentId: "00000000-0000-4000-8000-0000000000d1",
+        sourceLabel: 'your post "Harvest morning in Huila"',
+      }),
+  },
+  {
+    id: "brief-own-photos",
+    label: "Brief · Design with my photos",
+    make: () =>
+      session("image", "intent", {
+        brief: "Our team at the launch event, add 'Now open in Lahore'",
+        controls: {
+          platforms: ["instagram"],
+          ratio: "4:5",
+          referenceMode: "design",
+          referenceAssetIds: [
+            "00000000-0000-4000-8000-0000000000a1",
+            "00000000-0000-4000-8000-0000000000a2",
+          ],
+        },
+      }),
+  },
+  {
+    id: "brief-own-recap",
+    label: "Brief · Recap from my photos",
+    make: () =>
+      session("video", "intent", {
+        brief: "Highlights from our launch night",
+        controls: {
+          platforms: ["instagram"],
+          ratio: "9:16",
+          videoMode: "recap",
+          referenceAssetIds: ["00000000-0000-4000-8000-0000000000a1"],
+        },
+      }),
+  },
+  {
+    id: "brief-own-clips",
+    label: "Brief · Brand my clips",
+    make: () =>
+      session("video", "intent", {
+        brief: "Our new bakery opening, with a line about fresh bread every morning",
+        controls: {
+          platforms: ["instagram", "tiktok"],
+          ratio: "9:16",
+          videoMode: "brand",
+          sourceVideoAssetIds: [
+            "00000000-0000-4000-8000-0000000000c1",
+            "00000000-0000-4000-8000-0000000000c2",
+          ],
+        },
+      }),
+  },
   {
     id: "brief-template",
     label: "Brief · Template picked",
@@ -561,15 +790,193 @@ const SCENES: Scene[] = [
     fixtures: { rows: ROWS.social, distribution: true },
   },
   {
+    id: "review-versions",
+    label: "Review · Versions and edit chat",
+    make: () => {
+      const base = session("ad", "review");
+      const option = (i: number, a: string, b: string): MediaOutput => ({
+        slot: `option:${i}`,
+        kind: "image",
+        ratio: "4:5",
+        status: "ready",
+        url: art(800, 1000, a, b, `Version ${i + 2}`),
+        assetId: `a${i + 2}`,
+        storagePath: "x",
+      });
+      const job = {
+        ...base.job!,
+        id: "job-ad-v3",
+        parent_job_id: "job-ad-v2",
+        output: {
+          ...base.job!.output,
+          adFormat: "big-number",
+          adOnImage: {
+            headline: "Coffee that shows up",
+            support: "",
+            badge: "",
+            points: [],
+            cta: "Shop now",
+          },
+          media: [
+            ...(base.job!.output.media ?? []),
+            option(0, "#1f3d2b", "#7fb069"),
+            option(1, "#5b3a29", "#e9a23b"),
+            {
+              slot: "option:2",
+              kind: "image" as const,
+              ratio: "4:5" as const,
+              status: "failed" as const,
+            },
+          ],
+        },
+      };
+      return {
+        ...base,
+        job,
+        lastGood: job,
+        edits: [
+          {
+            id: "t1",
+            text: "Make the background warmer",
+            aim: "picture" as const,
+            fromJobId: "job-ad",
+            jobId: "job-ad-v2",
+            at: Date.now() - 60_000,
+          },
+          {
+            id: "t2",
+            text: "Show me 3 more versions",
+            aim: "versions" as const,
+            fromJobId: "job-ad-v2",
+            jobId: "job-ad-v3",
+            at: Date.now() - 20_000,
+          },
+        ],
+      };
+    },
+    fixtures: { rows: ROWS.ad, distribution: true },
+  },
+  {
+    id: "review-chat-working",
+    label: "Review · Edit chat working",
+    make: () => {
+      const base = session("image", "review");
+      return {
+        ...base,
+        pendingKey: "lab-pending",
+        pendingKind: "refine" as const,
+        edits: [
+          {
+            id: "t1",
+            text: "Shorter caption, friendlier",
+            aim: "words" as const,
+            fromJobId: "job-image-0",
+            jobId: "job-image",
+            at: Date.now() - 60_000,
+          },
+          {
+            id: "t2",
+            text: "Show the product bigger on a simpler background",
+            aim: "picture" as const,
+            fromJobId: "job-image",
+            at: Date.now() - 2_000,
+          },
+        ],
+      };
+    },
+    fixtures: { rows: ROWS.image, distribution: true },
+  },
+  {
     id: "review-image",
     label: "Review · Image 9:16",
     make: () => session("image", "review"),
     fixtures: { rows: ROWS.image, distribution: true },
   },
   {
+    id: "brief-pin",
+    label: "Brief · Pinterest Pin",
+    make: () => {
+      const base = session("image", "intent", {
+        brief: "Three ways to brew cold brew at home, as a Pin people save",
+      });
+      return { ...base, controls: { ...base.controls, platforms: ["pinterest"], ratio: "2:3" } };
+    },
+  },
+  {
+    id: "review-pin",
+    label: "Review · Pinterest Pin 2:3",
+    make: () => {
+      const base = session("image", "review");
+      const job = base.job && {
+        ...base.job,
+        title: PIN_OUTPUT.title ?? null,
+        output: PIN_OUTPUT,
+        content_item_ids: [PIN_ROW.id],
+      };
+      return {
+        ...base,
+        controls: { ...base.controls, platforms: ["pinterest"], ratio: "2:3" },
+        job,
+        lastGood: job,
+      };
+    },
+    fixtures: { rows: [PIN_ROW], distribution: true },
+  },
+  {
     id: "review-video-rendering",
     label: "Review · Video rendering",
     make: () => session("video", "review"),
+    fixtures: { rows: ROWS.video, distribution: true },
+  },
+  {
+    id: "brief-video-kinds",
+    label: "Brief · Kind of video",
+    make: () =>
+      session("video", "intent", {
+        brief: "Show off our new oat-milk cold brew can for summer",
+        controls: { platforms: ["instagram"], ratio: "9:16", audio: true },
+      }),
+  },
+  {
+    id: "brief-video-motion-post",
+    label: "Brief · Motion post from a picture",
+    make: () =>
+      session("video", "intent", {
+        brief: "Turn my post picture into a short video ad.",
+        sourceContentId: "00000000-0000-4000-8000-0000000000aa",
+        sourceLabel: 'your post "Summer cold brew"',
+        controls: {
+          platforms: ["instagram"],
+          ratio: "9:16",
+          videoKind: "motion-post",
+          videoMode: "recap",
+          recapMotion: "camera",
+        },
+      }),
+  },
+  {
+    id: "review-video-checked",
+    label: "Review · Video checked",
+    make: () => {
+      const base = session("video", "review");
+      const job = {
+        ...base.job!,
+        output: {
+          ...base.job!.output,
+          media: [
+            {
+              slot: "main",
+              kind: "video" as const,
+              ratio: "9:16",
+              status: "ready" as const,
+              url: art(720, 1280, "#1d3b2a", "#c8f25a", "Cold brew"),
+            },
+          ],
+          videoPlan: LAB_VIDEO_PLAN,
+        },
+      } as StudioJob;
+      return { ...base, job, lastGood: job };
+    },
     fixtures: { rows: ROWS.video, distribution: true },
   },
   {
@@ -939,11 +1346,13 @@ function RailScene() {
     title: "Roastery pan",
     error: { category: "provider", message: "The video provider timed out.", retryable: true },
   };
-  const docked: StudioSession[] = [
-    running,
-    session("social", "review"),
-    { ...video, id: "lab-video-docked", job: { ...video.job!, stage: "render" } },
-  ];
+  const rendering: StudioJob = {
+    ...video.job!,
+    id: "job-rendering",
+    group_id: "g-rendering",
+    stage: "render",
+    title: "Roastery pan, 15 seconds",
+  };
   return (
     <div className="flex flex-wrap items-start justify-center gap-10">
       <div className="w-[340px] space-y-6 rounded-2xl bg-surface-1 p-3.5 ring-1 ring-border">
@@ -952,26 +1361,64 @@ function RailScene() {
           loading={false}
           error={null}
           thumbs={{ "thumb-1": art(1280, 720, "#223012", "#b5d84a", "Harvest") }}
-          jobs={[running.job!, failed]}
+          jobs={[running.job!, rendering, failed]}
           agentActions={2}
           publishedThisWeek={4}
           onRefresh={() => {}}
           fixture
         />
       </div>
-      <div className="flex w-[340px] flex-col items-end gap-2">
-        {docked.map((d) => (
-          <DockCard key={d.id} session={d} />
-        ))}
+      {/* The top-bar button while the panel is closed: the only other place progress shows. */}
+      <div className="flex w-[340px] flex-col items-start gap-3" aria-label="Studio button states">
+        <StudioButtonView state="idle" working={0} unseen={0} onClick={() => {}} />
+        <StudioButtonView state="working" working={2} unseen={0} onClick={() => {}} />
+        <StudioButtonView state="ready" working={0} unseen={1} onClick={() => {}} />
+        <StudioButtonView state="failed" working={0} unseen={0} onClick={() => {}} />
       </div>
     </div>
   );
 }
 
+/** Library posts in every shape Studio makes, so a crop would show at once. */
+const LIBRARY_ROWS: ContentRow[] = (
+  [
+    ["l1", "Stop guessing your grind", "carousel", "9:16", "thumb-tall", 90],
+    ["l2", "Weekend pour-over ritual", "social", "4:5", "thumb-portrait", 600],
+    ["l3", "Fresh beans every Friday", "ad", "1:1", "thumb-square", 1500],
+    ["l4", "How we roast, start to finish", "image", "16:9", "thumb-wide", 3000],
+  ] as const
+).map(([id, title, type, ratio, path, ago]) => ({
+  id,
+  title,
+  body: `${title}. Small batches, roasted on Tuesday and shipped the same week.`,
+  kind: type === "social" ? "post" : type,
+  channel: "instagram",
+  status: "approved",
+  meta: {
+    source: "studio",
+    studio_type: type,
+    group_id: `g-${id}`,
+    job_id: `job-${id}`,
+    platform: "instagram",
+    asset_storage_path: path,
+    media_type: "image",
+    aspect_ratio: ratio,
+  },
+  created_at: minutesAgo(ago),
+  updated_at: minutesAgo(ago),
+  scheduled_at: null,
+}));
+
 function libraryFixtures() {
   return {
-    fixtureGroups: RAIL_GROUPS,
-    fixtureThumbs: { "thumb-1": art(1280, 960, "#223012", "#b5d84a", "Harvest") },
+    fixtureGroups: [...RAIL_GROUPS, ...groupRows(LIBRARY_ROWS)],
+    fixtureThumbs: {
+      "thumb-1": art(1280, 960, "#223012", "#b5d84a", "Harvest"),
+      "thumb-tall": art(1080, 1920, "#0d1a0b", "#9ad13a", "Stop guessing"),
+      "thumb-portrait": art(1080, 1350, "#2b1d12", "#d49a5a", "Pour-over"),
+      "thumb-square": art(1080, 1080, "#101820", "#4fd1c5", "Fresh Friday"),
+      "thumb-wide": art(1920, 1080, "#1d1d1d", "#c9f25c", "Roast day"),
+    },
     fixtureAssets: [
       normalizeLibraryAsset({
         id: "asset-1",
@@ -980,8 +1427,23 @@ function libraryFixtures() {
         kind: "image",
         created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
         source: "generated",
+        metadata: { aspect_ratio: "4:5" },
       }),
     ],
+    fixtureTaste: {
+      reactions: { "g-l2": "love", "g-l4": "love", "g-carousel": "love", "g-l3": "less" },
+      summary: {
+        loves: 3,
+        lesses: 1,
+        toLearn: 0,
+        chips: [
+          { kind: "format", value: "carousel", label: "Carousel", tone: "liked" },
+          { kind: "hook", value: "question", label: "Opens with a question", tone: "liked" },
+          { kind: "colorway", value: "dark", label: "Dark backgrounds", tone: "avoided" },
+        ],
+      },
+    } satisfies TasteView,
+    fixtureLastSeen: minutesAgo(30),
   };
 }
 
@@ -996,6 +1458,9 @@ const FRAME: Record<Device, string> = {
 };
 
 export function StudioLab() {
+  // Seed the product catalogue so the product and ad layout pickers have data.
+  const queryClient = useQueryClient();
+  useState(() => queryClient.setQueryData(studioProductKeys.list(WS), PRODUCTS));
   const [scene, setScene] = useState(SCENES[0].id);
   const [device, setDevice] = useState<Device>("window");
   const [dark, setDark] = useState(false);

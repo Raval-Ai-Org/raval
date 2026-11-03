@@ -10,7 +10,7 @@ import { providerSpec, type UgcModel } from "@/lib/ugc/models";
 import { checkVideoResult } from "@/lib/ugc/quality";
 import { log } from "@/server/observability/logger";
 import { kieUsdPerCredit } from "../models.server";
-import { friendlyFailure } from "./failure";
+import { renderFailure } from "./failure";
 import type {
   ProviderCheck,
   ProviderFailure,
@@ -21,10 +21,18 @@ import type {
 
 const RETRYABLE_CATEGORIES = new Set(["rate_limit", "provider", "network", "timeout"]);
 
-export function kieGenerationType(model: UgcModel, imageCount: number): string {
+export function kieGenerationType(model: UgcModel, imageCount: number, firstFrame = false): string {
   if (model.family === "seedance") return imageCount > 0 ? "REFERENCE_IMAGES" : "TEXT";
   if (imageCount === 0 || !model.images) return "TEXT_2_VIDEO";
+  // Veo opens on the exact picture (and may settle on a last one) when asked.
+  if (firstFrame && model.family === "veo") return "FIRST_AND_LAST_FRAMES_2_VIDEO";
   return model.images.mode === "references" ? "REFERENCE_2_VIDEO" : "FIRST_AND_LAST_FRAMES_2_VIDEO";
+}
+
+/** Veo's frame images: the opening frame, then the closing one when there is one. */
+function veoImages(req: VideoRenderRequest, images: string[]): string[] {
+  if (!req.firstFrame || !images.length) return images;
+  return req.lastFrameUrl ? [images[0], req.lastFrameUrl] : [images[0]];
 }
 
 /** The Kie model id for a render (MiniMax H3 has one id per input kind). */
@@ -44,18 +52,20 @@ export function buildKieInput(req: VideoRenderRequest): Record<string, unknown> 
   const images = model.images ? req.imageUrls.slice(0, model.images.max) : [];
   const audio = req.audio ?? model.nativeAudio;
   switch (model.family) {
-    case "veo":
+    case "veo": {
+      const frames = veoImages(req, images);
       return {
         prompt: req.prompt,
         ...(model.providerVariant ? { model: model.providerVariant } : {}),
-        generation_type: kieGenerationType(model, images.length),
-        ...(images.length ? { image_urls: images } : {}),
+        generation_type: kieGenerationType(model, frames.length, req.firstFrame),
+        ...(frames.length ? { image_urls: frames } : {}),
         aspect_ratio: req.aspectRatio,
         resolution: req.resolution,
         duration: req.durationSec,
         // Dialogue is written in the chosen language; translating it would change the words spoken.
         enable_translation: false,
       };
+    }
     case "gemini":
       // Gemini Omni 1.1 Flash: up to 7 quota units (1 per image); duration is
       // a string enum; a first frame can't be combined with references, so
@@ -94,10 +104,10 @@ const MODEL_UNAVAILABLE_RE =
 /** Map a gateway error to a failure the user can act on. Exported for tests. */
 export function kieFailure(error: unknown): ProviderFailure {
   if (error instanceof KieGatewayError) {
-    if (error.providerCode === 402 || /credit|balance|insufficient/i.test(error.message)) {
+    if (error.providerCode === 402 || /credit|balance|insufficient/i.test(error.detail)) {
       return {
         code: "provider_credits",
-        message: "The video provider account is out of credits. Please try again later.",
+        message: "Video making isn't available right now. Please try again soon.",
         retryable: false,
         definite: true,
       };
@@ -105,7 +115,7 @@ export function kieFailure(error: unknown): ProviderFailure {
     if (error.providerCode === 455) {
       return {
         code: "provider_maintenance",
-        message: "The video provider is under maintenance. Retrying shortly.",
+        message: "Video making is paused for a moment. We'll try again shortly.",
         retryable: true,
         definite: true,
       };
@@ -113,15 +123,15 @@ export function kieFailure(error: unknown): ProviderFailure {
     if (error.category === "configuration" || error.category === "authentication") {
       return {
         code: "provider_configuration",
-        message: "Video generation isn't configured on the server. Contact your workspace admin.",
+        message: "Video making isn't available right now. Please try again soon.",
         retryable: false,
         definite: true,
       };
     }
-    if (error.category === "request" && MODEL_UNAVAILABLE_RE.test(error.message)) {
+    if (error.category === "request" && MODEL_UNAVAILABLE_RE.test(error.detail)) {
       return {
         code: "provider_model_unavailable",
-        message: "This video model is unavailable at the provider right now.",
+        message: "This video style isn't available right now. Try another one.",
         retryable: false,
         definite: true,
       };
@@ -148,7 +158,7 @@ export function kieFailure(error: unknown): ProviderFailure {
   }
   return {
     code: "provider_error",
-    message: "The video provider could not be reached.",
+    message: "We couldn't start the video. Please try again.",
     retryable: true,
   };
 }
@@ -168,7 +178,7 @@ export const kieVideoProvider: VideoProvider = {
       return {
         ok: false,
         code: "provider_model_unavailable",
-        message: error instanceof Error ? error.message : "No KIE model for this render.",
+        message: "This video style isn't available for these settings. Try another one.",
         retryable: false,
         definite: true,
       };
@@ -208,9 +218,7 @@ export const kieVideoProvider: VideoProvider = {
         state: "failed",
         providerState: record.providerState,
         meta: { ...meta, failCode: record.failCode },
-        code: "render_failed",
-        message: friendlyFailure(record.failMessage),
-        retryable: false,
+        ...renderFailure(record.failMessage),
       };
     }
     const { videoUrl, thumbnailUrl } = pickVideoUrl(record.urls);
@@ -220,7 +228,7 @@ export const kieVideoProvider: VideoProvider = {
         providerState: record.providerState,
         meta,
         code: "no_result",
-        message: "The provider finished without a video. Your allowance was returned.",
+        message: "The video didn't come out this time. Your allowance was returned.",
         retryable: false,
       };
     }

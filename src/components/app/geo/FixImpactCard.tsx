@@ -9,10 +9,16 @@ import { useEffect, useState } from "react";
 import { BarChart, CheckCircle, Spinner } from "@/components/icons";
 import { getFixImpact } from "@/lib/geo-fixes.functions";
 import type { FixImpact } from "@/lib/geo/fix-impact";
+import { formatVital } from "@/lib/geo/performance";
 import { cn } from "@/lib/utils";
 import { Tile } from "../surface/SurfaceLayout";
 
 const pct = (rate: number) => `${Math.round(rate * 100)}%`;
+const VITAL_LABEL = {
+  lcp: "Page load for real visitors",
+  inp: "Response to taps and clicks",
+  cls: "Layout steadiness",
+} as const;
 const dateOf = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
@@ -152,6 +158,23 @@ export function FixImpactView({
                 : `${Math.abs(placeDelta)} place${Math.abs(placeDelta) === 1 ? "" : "s"} ${placeDelta > 0 ? "up" : "down"}`
             }
             better={placeDelta === 0 ? null : placeDelta > 0}
+          />
+        )}
+        {impact.speed?.map((s) => (
+          <Metric
+            key={s.metric}
+            label={VITAL_LABEL[s.metric]}
+            before={formatVital(s.metric, s.before)}
+            after={formatVital(s.metric, s.after)}
+            change={`${Math.abs(Math.round(s.change * 100))}% ${s.improved ? "better" : "worse"}`}
+            better={s.improved}
+            hint="Real visitors on phones (Chrome data)"
+          />
+        ))}
+        {impact.speed && !impact.speed.length && (
+          <Waiting
+            label="Speed for real visitors"
+            text="Needs about 4 weeks of data after the fix"
           />
         )}
       </div>

@@ -56,6 +56,8 @@ export type RateLimitTier =
   | "web-research"
   | "competitor-discovery"
   | "competitor-profile"
+  | "community-refresh"
+  | "community-reply"
   | "analytics"
   | "analytics-sync"
   | "analytics-insights"
@@ -81,7 +83,11 @@ export type RateLimitTier =
   | "chat-action"
   | "admin-read"
   | "admin-write"
-  | "admin-danger";
+  | "admin-danger"
+  | "setup-write"
+  | "product-import"
+  | "integration-read"
+  | "integration-write";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -160,6 +166,10 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "competitor-discovery": { limit: 6, windowSeconds: 3600, label: "competitor discovery" },
   // Profiling or re-checking one competitor: page fetches plus a synthesis call.
   "competitor-profile": { limit: 20, windowSeconds: 3600, label: "competitor research" },
+  // Community threads: a refresh is a handful of searches (also deduped per
+  // 6 h by the job); a reply draft is one model call.
+  "community-refresh": { limit: 4, windowSeconds: 3600, label: "community refresh" },
+  "community-reply": { limit: 30, windowSeconds: 3600, label: "reply draft" },
   // Analytics reports: database reads, plus an occasional Google Data API call
   // to fill the GA4 users cache for a custom range.
   analytics: { limit: 60, windowSeconds: 60, label: "analytics report" },
@@ -212,6 +222,16 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // Memory (ADR-0033): adding, editing and removing what a brand remembers.
   // Database work only; a person tidying a list makes a burst of these.
   "memory-write": { limit: 60, windowSeconds: 60, label: "memory change" },
+  // Goals and the product catalogue (ADR-0035): database writes from a
+  // person editing cards, so a burst is normal.
+  "setup-write": { limit: 60, windowSeconds: 60, label: "setup change" },
+  // Keeping discovered products downloads their photos through the SSRF guard.
+  "product-import": { limit: 40, windowSeconds: 600, label: "product import" },
+  // Connected apps (ADR-0042), per workspace. Reads back feeds, stats and
+  // account checks; changes are posts and drafts a person approved. Both
+  // protect the shared per-app quotas of Composio's managed sign-in apps.
+  "integration-read": { limit: 240, windowSeconds: 60, label: "connected app" },
+  "integration-write": { limit: 60, windowSeconds: 600, label: "connected app change" },
   // A person clicking a button chat offered. The work it starts is held to
   // its own tier and billing as well.
   "chat-action": { limit: 30, windowSeconds: 60, label: "chat action" },

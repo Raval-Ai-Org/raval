@@ -39,6 +39,7 @@ export type StudioFormat = {
   placeholder: string;
 };
 
+// Pinterest takes one picture per Pin, so only the image post targets it.
 const SOCIAL_PLATFORMS: PlatformId[] = [
   "linkedin",
   "instagram",
@@ -115,7 +116,7 @@ export const STUDIO_FORMATS: Record<StudioType, StudioFormat> = {
     tagline: "An image with a caption",
     kind: "image",
     agent: "spark",
-    platforms: SOCIAL_PLATFORMS,
+    platforms: [...SOCIAL_PLATFORMS, "pinterest"],
     defaultPlatforms: ["instagram"],
     multiPlatform: true,
     ratios: IMAGE_RATIOS,

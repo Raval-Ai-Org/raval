@@ -9,13 +9,21 @@
 export type DistributionProvider = "postforme" | "socialapi" | "sdr";
 
 export type DistributionPlatformId =
-  "linkedin" | "twitter" | "instagram" | "facebook" | "threads" | "tiktok" | "youtube";
+  | "linkedin"
+  | "twitter"
+  | "instagram"
+  | "facebook"
+  | "threads"
+  | "tiktok"
+  | "youtube"
+  | "pinterest";
 
 export type DistributionPlatformMeta = {
   id: DistributionPlatformId;
   label: string;
   /** BrandLogo name. */
-  logo: "linkedin" | "x" | "instagram" | "facebook" | "threads" | "tiktok" | "youtube";
+  logo:
+    "linkedin" | "x" | "instagram" | "facebook" | "threads" | "tiktok" | "youtube" | "pinterest";
   /** Brand tint; omitted for monochrome marks (X, Threads) so they follow text colour. */
   tint?: string;
   description: string;
@@ -78,6 +86,14 @@ export const DISTRIBUTION_PLATFORMS: Record<DistributionPlatformId, Distribution
     tint: "#FF0000",
     description: "Video uploads",
     connectNote: "YouTube posts need a video and a title.",
+  },
+  pinterest: {
+    id: "pinterest",
+    label: "Pinterest",
+    logo: "pinterest",
+    tint: "#E60023",
+    description: "Pins people save and search",
+    connectNote: "Use a Pinterest business account. Every Pin needs an image.",
   },
 };
 

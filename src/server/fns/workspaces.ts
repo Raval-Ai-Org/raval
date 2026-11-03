@@ -207,12 +207,13 @@ export const ensureAuthWorkspace = createServerFn({ method: "POST" })
       (typeof metadata.picture === "string" && metadata.picture) ||
       null;
 
-    await supabaseAdmin
+    const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert(
         { id: context.userId, name: nameFromMeta, avatar_url: avatarFromMeta },
         { onConflict: "id" },
       );
+    if (profileError) throw new HttpError(503, "Could not finish account setup. Please retry.");
 
     // A friend's invite link (/r/<code>) left a cookie: record who invited
     // this person, once. Rewards are paid later by the billing cron.

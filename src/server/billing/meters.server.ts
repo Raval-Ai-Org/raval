@@ -120,7 +120,12 @@ export async function holdMeter(args: {
       meter: args.meter,
       needed: args.amount,
       available: Number(result.available ?? 0),
-      options: args.meter === "video" ? ["video_pack", "upgrade"] : ["credit_pack", "upgrade"],
+      options:
+        args.meter === "creation"
+          ? ["wallet_credits", "upgrade"]
+          : args.meter === "video"
+            ? ["video_pack", "upgrade"]
+            : ["credit_pack", "upgrade"],
     });
   }
   return result;

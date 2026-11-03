@@ -14,14 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Crown, Lock, Wallet } from "@/components/icons";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
-import {
-  CREDIT_PACKS,
-  FEATURES,
-  PLANS,
-  SIGNUP_GRANT,
-  VIDEO_PACKS,
-  type PlanId,
-} from "@/lib/billing/catalog";
+import { FEATURES, PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
+import { CREATION_PLANS } from "@/lib/billing/creation";
 import {
   asPlan,
   formatMeter,
@@ -34,6 +28,7 @@ import { useEntitlements, type BillingView } from "@/lib/billing/use-entitlement
 import { cn } from "@/lib/utils";
 import { GhostButton, PrimaryButton, UsageBar } from "./billing-ui";
 import { LockedFeatures } from "./FreePlanPushes";
+import { StopStudioJobsButton } from "@/components/studio/StopStudioJobsButton";
 
 async function getJson<T>(path: string, workspaceId?: string | null): Promise<T> {
   const response = await authedFetch(path, workspaceId ? { workspaceId } : undefined);
@@ -112,14 +107,6 @@ export function BillingCenter() {
   );
 }
 
-type PurchaseRequestRow = {
-  id: string;
-  kind: string;
-  catalogKey: string;
-  interval: string | null;
-  status: string;
-};
-
 type TeamRequest = {
   id: string;
   brand: string;
@@ -128,18 +115,28 @@ type TeamRequest = {
   requiredPlan: string | null;
 };
 
-function requestLabel(row: PurchaseRequestRow) {
-  if (row.kind === "plan" && row.catalogKey in PLANS) {
-    return `${PLANS[row.catalogKey as PlanId].label} plan`;
-  }
-  const credit = CREDIT_PACKS.find((pack) => pack.key === row.catalogKey);
-  if (credit) return `${formatMeter("credits", credit.credits + credit.bonusCredits)} pack`;
-  const video = VIDEO_PACKS.find((pack) => pack.key === row.catalogKey);
-  if (video) return `${formatMeter("video", video.videoUnits)} pack`;
-  return "Your request";
+type PaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+function cardBrand(value: string): string {
+  const names: Record<string, string> = {
+    amex: "American Express",
+    diners: "Diners Club",
+    discover: "Discover",
+    jcb: "JCB",
+    mastercard: "Mastercard",
+    unionpay: "UnionPay",
+    visa: "Visa",
+  };
+  return names[value.toLowerCase()] ?? value.replaceAll("_", " ");
 }
 
 function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
+  const workspaceId = useOptionalWorkspaceId();
   const queryClient = useQueryClient();
   const current = asPlan(data.entitledPlan);
   const plan = PLANS[current];
@@ -147,11 +144,6 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
-  const requests = useQuery({
-    queryKey: ["billing", "requests", data.accountId ?? "member"],
-    queryFn: () => getJson<{ requests: PurchaseRequestRow[] }>("/api/billing/requests"),
-    enabled: data.isOwner,
-  });
   const team = useQuery({
     queryKey: ["billing", "team-requests", data.accountId ?? "member"],
     queryFn: () => getJson<{ requests: TeamRequest[] }>("/api/billing/upgrade-requests"),
@@ -165,13 +157,17 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       ),
     enabled: data.isOwner,
   });
-  const pending = (requests.data?.requests ?? []).filter((row) => row.status === "pending");
   const paused = (brands.data?.brands ?? []).filter((brand) => brand.frozen_at);
   const cardSubscriber =
     data.isOwner &&
-    data.checkoutMode === "card" &&
     !data.manual &&
     ["active", "past_due", "trialing", "paused"].includes(data.status);
+  const payment = useQuery({
+    queryKey: ["billing", "payment-method", data.accountId ?? "owner"],
+    queryFn: () => getJson<{ paymentMethod: PaymentMethod | null }>("/api/billing/payment-method"),
+    enabled: data.isOwner && !data.manual,
+    staleTime: 60_000,
+  });
 
   async function run(key: string, work: () => Promise<void>) {
     setBusy(key);
@@ -184,6 +180,16 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
     }
   }
 
+  const openPortal = (action: "manage" | "payment_method_update") =>
+    run(action, async () => {
+      const result = await send("/api/billing/portal", {
+        action,
+        returnPath: window.location.pathname,
+      });
+      if (typeof result.url !== "string") throw new Error("Stripe billing did not open.");
+      window.location.assign(result.url);
+    });
+
   const openUpgrade = (credits = false) => {
     onDone();
     emitAppEvent(
@@ -193,7 +199,12 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
   };
 
   // Free credits are a one-time signup grant, so size the bar to it.
-  const creditTotal = current === "free" ? SIGNUP_GRANT.credits : plan.allowances.credits;
+  const creditTotal =
+    current === "free"
+      ? SIGNUP_GRANT.credits
+      : data.creation?.active
+        ? data.creation.flexCredits
+        : plan.allowances.credits;
   const resets = data.period.nextGrantAt ? `Resets ${day(data.period.nextGrantAt)}` : null;
 
   return (
@@ -219,16 +230,8 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         {data.isOwner && (
           <div className="flex flex-wrap gap-2">
             {cardSubscriber && (
-              <GhostButton
-                disabled={busy !== null}
-                onClick={() =>
-                  void run("portal", async () => {
-                    const result = await send("/api/billing/portal");
-                    if (typeof result.url === "string") window.location.assign(result.url);
-                  })
-                }
-              >
-                {data.status === "past_due" ? "Update card" : "Manage billing"}
+              <GhostButton disabled={busy !== null} onClick={() => void openPortal("manage")}>
+                Manage billing
               </GhostButton>
             )}
             {upgradeTo ? (
@@ -246,30 +249,50 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         </p>
       )}
 
-      {pending.map((row) => (
-        <div
-          key={row.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--ds-radius-tile)] bg-primary/10 px-4 py-3 text-[13px]"
-        >
-          <span className="flex items-center gap-2">
-            <Check className="h-4 w-4 text-primary" strokeWidth={2.6} />
-            {requestLabel(row)} requested. We'll email you to finish payment.
-          </span>
-          <button
-            type="button"
-            className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            disabled={busy !== null}
-            onClick={() =>
-              void run(row.id, async () => {
-                await send(`/api/billing/requests?id=${row.id}`, undefined, "DELETE");
-                await queryClient.invalidateQueries({ queryKey: ["billing", "requests"] });
-              })
-            }
-          >
-            Cancel
-          </button>
-        </div>
-      ))}
+      {data.isOwner && !data.manual && (cardSubscriber || payment.data?.paymentMethod) && (
+        <section className="space-y-2">
+          <h3 className="ds-label">Payment method</h3>
+          <div className="ds-tile flex flex-wrap items-center justify-between gap-4 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Wallet className="h-4.5 w-4.5" />
+              </span>
+              {payment.isLoading ? (
+                <Skeleton className="h-10 w-40 rounded-lg" />
+              ) : payment.data?.paymentMethod ? (
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold">
+                    {cardBrand(payment.data.paymentMethod.brand)} ••••{" "}
+                    {payment.data.paymentMethod.last4}
+                  </p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    Expires {String(payment.data.paymentMethod.expMonth).padStart(2, "0")}/
+                    {String(payment.data.paymentMethod.expYear).slice(-2)} · Secured by Stripe
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[14px] font-semibold">Card details</p>
+                  <p className="text-[12.5px] text-muted-foreground">
+                    View or update your payment method securely in Stripe.
+                  </p>
+                </div>
+              )}
+            </div>
+            <GhostButton
+              className="h-9"
+              disabled={busy !== null}
+              onClick={() => void openPortal("payment_method_update")}
+            >
+              {busy === "payment_method_update" ? "Opening…" : "Update card"}
+            </GhostButton>
+          </div>
+          <p className="px-1 text-[11.5px] text-muted-foreground">
+            Mellox stores only the card brand, last four digits and expiry. Stripe protects the full
+            card number and CVC.
+          </p>
+        </section>
+      )}
 
       {/* What's left this month */}
       <section className="space-y-4">
@@ -280,8 +303,36 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           )}
         </div>
         <div className="ds-tile space-y-5 p-5">
+          {!data.creation?.active && current !== "free" && (
+            <p className="text-xs text-muted-foreground">
+              Your current wallet balances keep their existing terms. At the next renewal, this plan
+              receives {CREATION_PLANS[current].points} protected creation points and{" "}
+              {CREATION_PLANS[current].flexCredits} wallet credits, with video and chat allowances
+              kept separate.
+            </p>
+          )}
+          {data.creation?.active && (
+            <div className="space-y-2">
+              <UsageBar
+                label="Creation points"
+                left={data.meters.creation.available}
+                total={Math.max(data.creation.monthlyPoints, data.meters.creation.available)}
+                note={`${formatNumber(data.meters.creation.available)} available of ${formatNumber(data.creation.monthlyPoints)} monthly points`}
+              />
+              <p className="text-xs text-muted-foreground">
+                One text post set uses 1 point. A standard AI image post uses 2. Three caption
+                improvements are included per paid creation. New artwork has its own price. Research
+                and chat cannot spend these points.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Up to {Math.floor(data.meters.creation.available / 2)} standard image posts
+                remaining, or a mix of formats. Creation points expire at the end of their grant
+                window.
+              </p>
+            </div>
+          )}
           <UsageBar
-            label="Credits"
+            label={data.creation?.active ? "Wallet credits for extras" : "Credits available"}
             left={data.meters.credits.available}
             total={Math.max(creditTotal, data.meters.credits.available)}
             note={ofTotal(
@@ -290,9 +341,23 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
               data.meters.credits.available <= creditTotal,
             )}
           />
+          {Object.values(data.meters).some((meter) => meter.held > 0) && (
+            <div className="space-y-2 rounded-lg bg-secondary/50 p-3 text-[13px]">
+              <p className="font-medium">Reserved for work in progress</p>
+              <p className="text-muted-foreground">
+                {Object.entries(data.meters)
+                  .filter(([, meter]) => meter.held > 0)
+                  .map(([name, meter]) => formatMeter(name, meter.held))
+                  .join(" · ")}
+                . These are set aside, not spent. Failed or cancelled work returns its unused
+                reservation.
+              </p>
+              {workspaceId && <StopStudioJobsButton workspaceId={workspaceId} />}
+            </div>
+          )}
           {(plan.allowances.videoUnits > 0 || data.meters.video.available > 0) && (
             <UsageBar
-              label="Videos"
+              label="Video Credits"
               left={data.meters.video.available}
               total={Math.max(plan.allowances.videoUnits, data.meters.video.available)}
               note={ofTotal(
@@ -455,6 +520,7 @@ type LedgerEntry = {
   heldDelta: number;
   action: string | null;
   at: string;
+  job?: { id: string; title: string | null; workspaceId: string } | null;
 };
 
 /**
@@ -463,7 +529,7 @@ type LedgerEntry = {
  * real charge.
  */
 function effectiveDelta(entry: LedgerEntry): number {
-  if (entry.kind === "hold" || entry.kind === "release") return 0;
+  if (entry.kind === "hold" || entry.kind === "release") return Number(entry.delta);
   if (entry.kind === "capture") return Number(entry.delta) + Number(entry.heldDelta ?? 0);
   return Number(entry.delta);
 }
@@ -496,7 +562,28 @@ function RecentActivity() {
           >
             <span className="min-w-0 truncate">
               {ledgerLabel(entry)}
-              <span className="text-muted-foreground"> · {day(entry.at)}</span>
+              {entry.kind === "capture" && (
+                <span className="text-muted-foreground"> · Charged</span>
+              )}
+              {entry.job?.title && (
+                <span className="text-muted-foreground"> · {entry.job.title}</span>
+              )}
+              {(entry.kind === "hold" || entry.kind === "release") && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {entry.kind === "hold" ? "Reserved, not charged" : "Reservation returned"}
+                </span>
+              )}
+              <span className="text-muted-foreground">
+                {" "}
+                ·{" "}
+                {new Date(entry.at).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
             </span>
             <span
               className={cn(
@@ -504,8 +591,13 @@ function RecentActivity() {
                 entry.amount > 0 ? "text-primary" : "text-foreground",
               )}
             >
-              {entry.amount > 0 ? "+" : "−"}
+              {entry.kind === "hold" ? "" : entry.amount > 0 ? "+" : "−"}
               {formatMeter(entry.meter, Math.abs(entry.amount))}
+              {entry.kind === "hold"
+                ? " reserved"
+                : entry.kind === "release"
+                  ? " available again"
+                  : ""}
             </span>
           </div>
         ))}

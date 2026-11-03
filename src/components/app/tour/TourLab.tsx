@@ -12,7 +12,7 @@ const SIDEBAR: { tour: string; label: string }[] = [
   { tour: "library", label: "Library" },
   { tour: "brain", label: "Brain" },
   { tour: "analytics", label: "Analytics" },
-  { tour: "calendar", label: "Content calendar" },
+  { tour: "campaigns", label: "Campaigns" },
   { tour: "visibility", label: "AI Visibility" },
 ];
 

@@ -11,17 +11,19 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/lib/toast";
 import { renameWorkspace, getWorkspaceDetails } from "@/lib/workspaces.functions";
-import { Globe, Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
+import { Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import {
-  BarChart,
   Bot,
   Brain,
   Monitor,
   Moon,
+  Plug,
   SlidersHorizontal,
   Sun,
   Users,
+  Wand,
 } from "@/components/icons";
+import { AgentsPanel } from "@/components/app/agents/AgentsPanel";
 import { MemoryPanel } from "@/components/app/memory/MemoryPanel";
 import { useMemoryAvailable } from "@/components/app/memory/use-memory";
 import { useTheme } from "@/hooks/use-theme";
@@ -34,28 +36,25 @@ import {
   type SurfaceNavItem,
 } from "@/components/app/surface/SurfaceLayout";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
-import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
-import { NotionConnection } from "@/components/app/connectors/NotionConnection";
-import { SlackConnection } from "@/components/app/connectors/SlackConnection";
-import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
-import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
-import { WordPressConnector } from "@/components/app/connectors/WordPressConnector";
-import { GoogleConnectCard } from "@/components/app/analytics/GoogleConnectCard";
+import { ConnectorsGallery } from "@/components/app/connectors/ConnectorsGallery";
 import { McpConnector } from "@/components/app/connectors/McpConnector";
 
 type SettingsSection =
-  "accounts" | "analytics" | "website" | "assistants" | "memory" | "preferences";
+  "accounts" | "connectors" | "assistants" | "agents" | "memory" | "preferences";
 
-/** The GitHub install returns to ?settings=connections, which means the website sources. */
-function sectionFromUrl(value: string | null): SettingsSection | null {
-  if (value === "connections") return "website";
+type SettingsTarget = { section: SettingsSection; connector: string | null };
+
+/** Older names land in Connectors: "analytics" on Google, "website" and "connections" on the list. */
+function targetFor(value: string | null | undefined): SettingsTarget | null {
+  if (value === "analytics") return { section: "connectors", connector: "google" };
+  if (value === "website" || value === "connections" || value === "connectors")
+    return { section: "connectors", connector: null };
   return value === "accounts" ||
-    value === "analytics" ||
-    value === "website" ||
     value === "assistants" ||
+    value === "agents" ||
     value === "memory" ||
     value === "preferences"
-    ? value
+    ? { section: value, connector: null }
     : null;
 }
 
@@ -70,12 +69,15 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("accounts");
+  const [connector, setConnector] = useState<string | null>(null);
 
   useEffect(() => {
     const openRename = () => setRenameOpen(true);
     const openDetails = () => setDetailsOpen(true);
     const openSettings = (e: AppEvent<"open:settings">) => {
-      setSettingsSection(e.detail?.section ?? "accounts");
+      const target = targetFor(e.detail?.section) ?? { section: "accounts", connector: null };
+      setSettingsSection(target.section);
+      setConnector(e.detail?.connector ?? target.connector);
       setSettingsOpen(true);
     };
     addAppEventListener("open:rename", openRename);
@@ -83,9 +85,10 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
     addAppEventListener("open:settings", openSettings);
     // Deep link: /app?settings=connections (the GitHub install returns here).
     const url = new URL(window.location.href);
-    const section = sectionFromUrl(url.searchParams.get("settings"));
-    if (section) {
-      setSettingsSection(section);
+    const target = targetFor(url.searchParams.get("settings"));
+    if (target) {
+      setSettingsSection(target.section);
+      setConnector(target.connector);
       setSettingsOpen(true);
       url.searchParams.delete("settings");
       url.searchParams.delete("github");
@@ -113,7 +116,11 @@ export function WorkspaceDialogs({ workspaceId, workspaceName, onRenamed }: Prop
         onOpenChange={setSettingsOpen}
         workspaceId={workspaceId}
         section={settingsSection}
-        onSectionChange={setSettingsSection}
+        connector={connector}
+        onSectionChange={(next) => {
+          setConnector(null);
+          setSettingsSection(next);
+        }}
       />
     </>
   );
@@ -328,10 +335,10 @@ function DetailsDialog({
 }
 
 const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
-  { id: "accounts", label: "Connections", icon: Users },
-  { id: "analytics", label: "Analytics", icon: BarChart },
-  { id: "website", label: "Website", icon: Globe },
+  { id: "accounts", label: "Social accounts", icon: Users },
+  { id: "connectors", label: "Connectors", icon: Plug },
   { id: "assistants", label: "AI assistants", icon: Bot },
+  { id: "agents", label: "Agents", icon: Wand },
   { id: "memory", label: "Memory", icon: Brain },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
@@ -347,12 +354,14 @@ function SettingsDialog({
   onOpenChange,
   workspaceId,
   section,
+  connector,
   onSectionChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   workspaceId: string | null;
   section: SettingsSection;
+  connector: string | null;
   onSectionChange: (s: SettingsSection) => void;
 }) {
   const [notifications, setNotifications] = useState(true);
@@ -387,43 +396,20 @@ function SettingsDialog({
       size="xl"
       Icon={Settings2}
       title="Settings"
-      srDescription="Connected accounts, analytics, website sources and device preferences"
+      srDescription="Social accounts, connectors, AI assistants and preferences"
       bodyClassName="overflow-hidden"
     >
       <SurfaceLayout label="Settings" items={nav} value={section} onChange={onSectionChange}>
         <div key={section} className="animate-in fade-in duration-300">
           {section === "accounts" && (
-            <SurfacePage width="narrow">
-              <SocialAccountsSection variant="settings" />
-              {workspaceId && (
-                <>
-                  <GroupLabel>Apps</GroupLabel>
-                  <div className="space-y-3">
-                    <CanvaConnection />
-                    <NotionConnection workspaceId={workspaceId} />
-                    <SlackConnection workspaceId={workspaceId} />
-                  </div>
-                </>
-              )}
+            <SurfacePage title="Social accounts" width="narrow">
+              {workspaceId ? <SocialAccountsSection variant="channels" /> : noWorkspace}
             </SurfacePage>
           )}
-          {section === "analytics" && (
-            <SurfacePage title="Analytics" width="narrow">
-              {workspaceId ? <GoogleConnectCard /> : noWorkspace}
-            </SurfacePage>
-          )}
-          {section === "website" && (
-            <SurfacePage
-              title="Website"
-              subtitle="Your live site and the code behind it"
-              width="narrow"
-            >
+          {section === "connectors" && (
+            <SurfacePage title="Connectors" width="narrow">
               {workspaceId ? (
-                <div className="space-y-3">
-                  <GitHubConnector workspaceId={workspaceId} />
-                  <WebflowConnector workspaceId={workspaceId} />
-                  <WordPressConnector workspaceId={workspaceId} />
-                </div>
+                <ConnectorsGallery workspaceId={workspaceId} initial={connector} />
               ) : (
                 noWorkspace
               )}
@@ -432,6 +418,11 @@ function SettingsDialog({
           {section === "assistants" && (
             <SurfacePage title="AI assistants" width="narrow">
               {workspaceId ? <McpConnector workspaceId={workspaceId} /> : noWorkspace}
+            </SurfacePage>
+          )}
+          {section === "agents" && (
+            <SurfacePage title="Agents" subtitle="Who does what for this brand" width="narrow">
+              {workspaceId ? <AgentsPanel /> : noWorkspace}
             </SurfacePage>
           )}
           {section === "memory" && (

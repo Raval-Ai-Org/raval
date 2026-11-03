@@ -1,8 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createPostForMeAdapter } from "@/lib/postforme/client.server";
-import { isStoriesEnabled } from "@/lib/feature-flags";
-import type { SocialApiDeps, PostQuota } from "@/lib/postforme/handlers";
+import { isIntegrationsEnabled, isStoriesEnabled } from "@/lib/feature-flags";
+import { composioConfigured } from "@/server/integrations/composio/gateway.server";
+import type { ComposioHooks, SocialApiDeps, PostQuota } from "@/lib/postforme/handlers";
 
 export const postForMeDb = supabaseAdmin as any;
 
@@ -38,6 +39,47 @@ const quota: PostQuota = {
   },
 };
 
+// Composio-connected accounts (ADR-0042), loaded only when they can exist.
+const composioHooks: ComposioHooks = {
+  accounts: async (workspaceId) =>
+    (await import("@/server/social/composio/service.server")).composioAccounts(workspaceId),
+  deliver: async (args) => (await import("@/server/social/composio/service.server")).deliver(args),
+  disconnect: async (workspaceId, accountId) => {
+    const service = await import("@/server/social/composio/service.server");
+    const out = await service.disconnectDestination(workspaceId, accountId);
+    if (!out.found) return false;
+    // The last destination of a connection gone: remove the connection too.
+    if (out.integrationAccountId && out.remaining === 0) {
+      const { retire } = await import("@/server/integrations/accounts.server");
+      await retire({
+        workspaceId,
+        accountId: out.integrationAccountId,
+        userId: null,
+        reason: "disconnected by a person",
+      });
+    }
+    return true;
+  },
+  retry: async (args) =>
+    (await import("@/server/social/composio/service.server")).retryFailed(args),
+  cancel: async (workspaceId, itemId) =>
+    (await import("@/server/social/composio/service.server")).cancelPending(workspaceId, itemId),
+  hasRows: async (workspaceId, itemId, status) =>
+    (await import("@/server/social/composio/service.server")).hasComposioRows(
+      workspaceId,
+      itemId,
+      status,
+    ),
+};
+
+async function designedMedia(item: any): Promise<string[] | null> {
+  const [{ ensureCarouselMedia }, { ensureStoryMedia }] = await Promise.all([
+    import("@/server/studio/carousel-assets.server"),
+    import("@/server/studio/story-assets.server"),
+  ]);
+  return (await ensureStoryMedia(item)) ?? (await ensureCarouselMedia(item));
+}
+
 export function getPostForMeDeps(workspaceId: string): SocialApiDeps {
   return {
     api: createPostForMeAdapter(workspaceId),
@@ -45,12 +87,26 @@ export function getPostForMeDeps(workspaceId: string): SocialApiDeps {
     brandId: workspaceId,
     quota,
     storiesEnabled: isStoriesEnabled(workspaceId),
-    designedMedia: async (item) => {
-      const [{ ensureCarouselMedia }, { ensureStoryMedia }] = await Promise.all([
-        import("@/server/studio/carousel-assets.server"),
-        import("@/server/studio/story-assets.server"),
-      ]);
-      return (await ensureStoryMedia(item)) ?? (await ensureCarouselMedia(item));
-    },
+    designedMedia,
+    ...(composioConfigured() && isIntegrationsEnabled(workspaceId)
+      ? { composio: composioHooks }
+      : {}),
   };
+}
+
+/** Scheduled Composio posts whose time has come (run-schedules hook). */
+export async function runDueComposioPosts() {
+  if (!composioConfigured()) return { sent: 0, failed: 0, cancelled: 0 };
+  const [{ runDueComposioPublications }, { composioMediaFor, recomputeSocialItemStatus }] =
+    await Promise.all([
+      import("@/server/social/composio/service.server"),
+      import("@/lib/postforme/handlers"),
+    ]);
+  return runDueComposioPublications(
+    {
+      mediaFor: (item) => composioMediaFor(item, { db: postForMeDb, designedMedia }),
+      recompute: (itemId) => recomputeSocialItemStatus(postForMeDb, itemId),
+    },
+    { max: 20, budgetMs: 40_000 },
+  );
 }

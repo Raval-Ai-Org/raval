@@ -76,7 +76,8 @@ describe("firecrawlScrape", () => {
 
     const error = await firecrawlScrape("https://example.com").catch((e) => e);
     expect(error).toBeInstanceOf(FirecrawlGatewayError);
-    expect(error.message).toContain("connection refused");
+    expect(error.detail).toContain("connection refused");
+    expect(error.message).not.toMatch(/firecrawl/i);
   });
 });
 

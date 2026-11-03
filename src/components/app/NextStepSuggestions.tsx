@@ -6,12 +6,28 @@ import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@/lib/use-server-fn";
 import { suggestNextSteps } from "@/lib/content.functions";
+import { emitAppEvent } from "@/lib/app-events";
 
 export interface NextStep {
   label: string;
   prompt: string;
   brand?: BrandKey;
   agent?: string; // e.g. "ads", "seo"
+  /** Opens a place in Mellox instead of sending the prompt. */
+  opens?: "community";
+}
+
+/**
+ * Community threads live in Brain → Market → Communities: the Reddit and
+ * Quora steps open them (a person's click) rather than asking chat.
+ */
+function opensCommunity(step: NextStep): boolean {
+  return (
+    step.opens === "community" ||
+    step.brand === "reddit" ||
+    step.brand === "quora" ||
+    /\b(reddit|quora)\b/i.test(step.label)
+  );
 }
 
 interface Props {
@@ -73,7 +89,11 @@ export function NextStepSuggestions({
           initial={{ opacity: 0, x: -4 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.25 + 0.06 * i, duration: 0.22 }}
-          onClick={() => onPick(s.prompt)}
+          onClick={() =>
+            opensCommunity(s)
+              ? emitAppEvent("open:brain", { section: "market", tab: "community" })
+              : onPick(s.prompt)
+          }
           className="group flex w-full items-center gap-3 border-t border-border/60 py-2.5 text-left text-[14px] text-muted-foreground transition-colors first:border-t-0 hover:text-foreground"
         >
           {s.brand ? (
@@ -107,13 +127,19 @@ function pickSteps(t: string): NextStep[] {
         label: "Find hot Reddit threads",
         prompt: "Find 5 hot Reddit threads in my niche to reply to",
         brand: "reddit",
+        opens: "community",
       },
       {
         label: "Draft Quora answers",
         prompt: "Draft 3 Quora answers linking to my site",
         brand: "quora",
+        opens: "community",
       },
-      { label: "Schedule replies", prompt: "Schedule these replies across this week" },
+      {
+        label: "See questions people ask",
+        prompt: "Show community threads about my field",
+        opens: "community",
+      },
     ];
   }
   if (/(post|social|linkedin|instagram|twitter|x\b)/.test(t)) {

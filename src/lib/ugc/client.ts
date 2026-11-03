@@ -87,7 +87,13 @@ export const ugcApi = {
   },
   createProject(
     workspaceId: string,
-    input: { product: Product; brief: Partial<Brief>; referenceAssetIds: string[]; title?: string },
+    input: {
+      product: Product;
+      brief: Partial<Brief>;
+      referenceAssetIds: string[];
+      title?: string;
+      script?: Script;
+    },
   ) {
     return call<{ project: ProjectView }>("/api/ugc/projects", {
       method: "POST",

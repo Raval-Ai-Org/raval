@@ -4,6 +4,7 @@
 //
 // Consumers must ignore event types they do not recognise: `discovery` was
 // added after `progress | result | error`, and older readers skip it.
+import type { ProductCandidate } from "@/lib/products/catalog";
 
 /** What the homepage itself revealed, sent as soon as it is fetched. */
 export type SiteDiscovery = {
@@ -33,6 +34,11 @@ export type IdentityDiscovery = {
   socialPlatforms: string[];
 };
 
+/** Products read from the site's own product data (Shopify feed, schema.org Product). */
+export type ProductsDiscovery = {
+  products: ProductCandidate[];
+};
+
 /** External web research. */
 export type MarketDiscovery = {
   mentions: number;
@@ -45,7 +51,8 @@ export type BrandExtractDiscovery =
   | { type: "discovery"; kind: "site"; data: SiteDiscovery }
   | { type: "discovery"; kind: "pages"; data: PagesDiscovery }
   | { type: "discovery"; kind: "identity"; data: IdentityDiscovery }
-  | { type: "discovery"; kind: "market"; data: MarketDiscovery };
+  | { type: "discovery"; kind: "market"; data: MarketDiscovery }
+  | { type: "discovery"; kind: "products"; data: ProductsDiscovery };
 
 export type BrandExtractProgress = {
   type: "progress";
@@ -65,6 +72,7 @@ export type Discoveries = {
   pages?: PagesDiscovery;
   identity?: IdentityDiscovery;
   market?: MarketDiscovery;
+  products?: ProductsDiscovery;
 };
 
 /**
@@ -117,6 +125,7 @@ export type BrandExtractResult = {
     >
   >;
   insights?: { title: string; body: string }[];
+  productCandidates?: ProductCandidate[];
   sources?: Record<string, { label: string; snippet?: string; url?: string }>;
   extras?: {
     emails?: string[];

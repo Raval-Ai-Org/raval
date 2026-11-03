@@ -12,7 +12,8 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { FreeCreditStripView, FreeSidebarCardView, LockedFeaturesView } from "./FreePlanPushes";
-import { UpgradeWindow, type UpgradeChoice, type UpgradeView } from "./UpgradeScreen";
+import { UpgradeWindow, type UpgradeView } from "./UpgradeScreen";
+import { BrandLimitCardView } from "./BrandLimitCard";
 
 const SCENES = [
   "plans",
@@ -26,31 +27,24 @@ const SCENES = [
   "sent",
   "loading",
   "pushes",
+  "brands",
+  "brands-window",
 ] as const;
 type Scene = (typeof SCENES)[number];
 
 const BLOCKS: Partial<Record<Scene, BillingBlock>> = {
-  feature: { code: "upgrade_required", feature: "autopilot", requiredPlan: "growth" },
+  feature: { code: "upgrade_required", feature: "campaigns", requiredPlan: "growth" },
   limit: { code: "limit_reached", limit: "competitors", used: 3, max: 3 },
+  "brands-window": { code: "limit_reached", limit: "brands", used: 1, max: 1 },
   credits: { code: "insufficient_balance", meter: "credits", needed: 140, available: 35 },
   // Free and out of credits: the real window shows plans first.
   empty: { code: "insufficient_balance", meter: "credits", needed: 12, available: 0 },
-};
-
-const CHOICE: UpgradeChoice = {
-  kind: "plan",
-  key: "growth",
-  label: "Growth plan",
-  price: "$1,490 a year",
 };
 
 export function UpgradeLab() {
   const [scene, setScene] = useState<Scene | null>(null);
   const [view, setView] = useState<UpgradeView>("plans");
   const [interval, setBillingInterval] = useState<BillingInterval>("year");
-  const [pending, setPending] = useState<UpgradeChoice | null>(null);
-  const [sent, setSent] = useState<UpgradeChoice | null>(null);
-  const [contact, setContact] = useState("");
   const [last, setLast] = useState("");
 
   useEffect(() => {
@@ -58,12 +52,12 @@ export function UpgradeLab() {
     const next = fromUrl && SCENES.includes(fromUrl) ? fromUrl : "plans";
     setScene(next);
     setView(next === "credits" ? "credits" : "plans");
-    setPending(next === "confirm" ? CHOICE : null);
-    setSent(next === "sent" ? CHOICE : null);
   }, []);
 
   const block = (scene && BLOCKS[scene]) ?? null;
-  const current: PlanId = asPlan(scene === "limit" ? "starter" : scene === "paid" ? "growth" : "");
+  const current: PlanId = asPlan(
+    scene === "limit" || scene === "brands-window" ? "starter" : scene === "paid" ? "growth" : "",
+  );
   const recommended = block
     ? suggestedPlan(block, current)
     : current === "free"
@@ -101,7 +95,7 @@ export function UpgradeLab() {
           })}
           <LockedFeaturesView
             locked={[
-              { feature: "autopilot", plan: "growth" },
+              { feature: "autopilot", plan: "starter" },
               { feature: "ugc", plan: "starter" },
               { feature: "audience", plan: "starter" },
               { feature: "competitors", plan: "starter" },
@@ -110,19 +104,30 @@ export function UpgradeLab() {
           />
         </div>
       )}
-      {scene && scene !== "pushes" && (
+      {scene === "brands" && (
+        // The Projects page's website bar sits on a dark sky.
+        <div className="dark mx-auto flex max-w-xl flex-col gap-6 bg-[#0b1220] p-6 text-foreground">
+          <BrandLimitCardView
+            plan="starter"
+            max={1}
+            usedBy={["acme.com"]}
+            wanted="newbrand.com"
+            onUpgrade={() => setLast("brands:upgrade")}
+            onManage={() => setLast("brands:manage")}
+          />
+          <BrandLimitCardView
+            plan="growth"
+            max={3}
+            usedBy={["acme.com", "northwind.com", "contoso.io"]}
+            wanted="fourth.co"
+            onUpgrade={() => setLast("brands:upgrade")}
+          />
+        </div>
+      )}
+      {scene && scene !== "pushes" && scene !== "brands" && (
         <UpgradeWindow
           open
           onOpenChange={() => setLast("close")}
-          pending={pending}
-          sent={sent}
-          contact={contact}
-          onContactChange={setContact}
-          onBack={() => setPending(null)}
-          onSend={() => {
-            setSent(pending);
-            setPending(null);
-          }}
           screen={
             scene === "loading"
               ? null
@@ -135,13 +140,13 @@ export function UpgradeLab() {
                   interval,
                   onIntervalChange: setBillingInterval,
                   canBuy: scene !== "member",
+                  paymentsAvailable: scene !== "confirm",
                   busy: null,
                   askSent: last.startsWith("ask:"),
                   balance: scene === "empty" ? 0 : 35,
                   showVideoPacks: current !== "free",
                   onChoose: (item) => {
                     setLast(`choose:${item.kind}:${item.key}:${item.price}`);
-                    setPending(item);
                   },
                   onAskOwner: (plan) => setLast(`ask:${plan ?? ""}`),
                 }

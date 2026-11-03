@@ -4,6 +4,7 @@ import type { Comparison } from "./compare";
 import type { MetricKey } from "./metrics";
 import type { DateWindow } from "./ranges";
 import type { Signal } from "./signals";
+import type { SocialMetrics } from "@/lib/social-insights/normalize";
 
 export type GoogleSourceKind = "ga4_property" | "gsc_site";
 
@@ -164,6 +165,74 @@ export type AiVisibilityReport = {
   topActions: Array<{ id: string; priority: string; title: string; detail: string }>;
 };
 
+/**
+ * Readiness of the social source (the brand's own accounts, read through
+ * Post for Me's account feed — no Google needed):
+ *  unavailable → direct publishing isn't set up on this server
+ *  no_accounts → no social account connected
+ *  syncing     → accounts connected, their posts haven't been read yet
+ *  ready       → posts have been read (the window may still have none)
+ */
+export type SocialSourceState = "unavailable" | "no_accounts" | "syncing" | "ready";
+
+export type SocialPostRow = {
+  id: string;
+  platform: string;
+  account: string | null;
+  url: string | null;
+  caption: string;
+  thumbnailUrl: string | null;
+  format: "video" | "image" | "text" | "post";
+  postedAt: string | null;
+  /** Mellox published it (else it was posted on the network directly). */
+  madeInMellox: boolean;
+  contentItemId: string | null;
+  metrics: SocialMetrics;
+  engagement: number | null;
+  /** Interactions ÷ views; null when the network reports no views. */
+  engagementRate: number | null;
+};
+
+export type SocialPlatformRow = {
+  platform: string;
+  posts: number;
+  views: number | null;
+  engagement: number | null;
+  engagementRate: number | null;
+  follows: number | null;
+};
+
+/** Average per post for one group, only from posts that reported the number. */
+export type SocialGroupRow = {
+  key: string;
+  posts: number;
+  avgViews: number | null;
+  avgEngagement: number | null;
+};
+
+export type SocialReport = {
+  source: "social";
+  status: {
+    state: SocialSourceState;
+    accounts: number;
+    reconnect: number;
+    lastSyncedAt: string | null;
+  };
+  window: ReportWindow | null;
+  kpis: Kpi[];
+  series: { views: SeriesPoint[]; engagement: SeriesPoint[]; posts: SeriesPoint[] };
+  byPlatform: SocialPlatformRow[];
+  /** The same rows for the previous window; null when it isn't covered. */
+  previousByPlatform: SocialPlatformRow[] | null;
+  topPosts: SocialPostRow[];
+  recentPosts: SocialPostRow[];
+  formats: SocialGroupRow[];
+  /** By weekday (0 = Sunday). Null until there are enough posts to say. */
+  weekdays: SocialGroupRow[] | null;
+  /** Mellox-made vs posted elsewhere; null unless both have posts. */
+  origin: { mellox: SocialGroupRow; other: SocialGroupRow } | null;
+};
+
 export type MelloxKpis = {
   source: "mellox";
   window: ReportWindow;
@@ -187,6 +256,10 @@ export type OverviewReport = {
     pages?: RankedRow[];
   };
   aiVisibility: Pick<AiVisibilityReport, "latest" | "kpi" | "history">;
+  social: Pick<SocialReport, "status" | "window" | "kpis" | "byPlatform"> & {
+    series: SeriesPoint[];
+    topPosts: SocialPostRow[];
+  };
 };
 
 export type InsightItem = {

@@ -162,6 +162,8 @@ export type SafeFetchResult = {
   status: number;
   /** Final URL after redirects. */
   url: string;
+  /** Each redirect followed on the way, in order (empty when none; absent from test doubles). */
+  redirects?: { status: number; url: string }[];
   headers: Headers;
   bytes: Uint8Array;
   truncated: boolean;
@@ -251,6 +253,7 @@ export function createSafeFetch(deps: SafeFetchDeps = {}) {
     const signal = AbortSignal.timeout(opts.timeoutMs ?? 10_000);
     let url = assertPublicUrl(typeof input === "string" ? input : new URL(input.toString()));
     let requestHeaders = opts.headers;
+    const redirects: { status: number; url: string }[] = [];
 
     for (let hop = 0; ; hop++) {
       if (opts.validateUrl && !opts.validateUrl(url)) throw new SsrfBlockedError();
@@ -275,6 +278,7 @@ export function createSafeFetch(deps: SafeFetchDeps = {}) {
             ),
           );
         }
+        redirects.push({ status: res.status, url: next.toString() });
         url = next;
         continue;
       }
@@ -290,6 +294,7 @@ export function createSafeFetch(deps: SafeFetchDeps = {}) {
         ok: res.ok,
         status: res.status,
         url: url.toString(),
+        redirects,
         headers,
         bytes,
         truncated,

@@ -1,8 +1,7 @@
 "use client";
 
 // One place for every billing button: Upgrade now, buy a pack, ask the owner.
-// With Stripe connected ("card") the buttons open checkout; until then
-// ("request") they send a request that Mellox activates from /admin.
+// Owners pay through Stripe Checkout; teammates can still ask their owner.
 
 import { useCallback, useState } from "react";
 import { toast } from "@/lib/toast";
@@ -13,6 +12,17 @@ import type { BillingInterval, PaidPlanId } from "@/lib/billing/catalog";
 import type { BillingView } from "@/lib/billing/use-entitlements";
 
 export type PurchaseKind = "plan" | "credit_pack" | "video_pack";
+
+function prepareCheckoutTab(): Window | null {
+  const tab = window.open("about:blank", "_blank");
+  if (!tab) return null;
+  tab.opener = null;
+  tab.document.title = "Opening secure checkout...";
+  tab.document.body.style.cssText =
+    "margin:0;min-height:100vh;display:grid;place-items:center;background:#09090b;color:#fafafa;font:500 15px system-ui,sans-serif";
+  tab.document.body.textContent = "Opening secure Stripe checkout...";
+  return tab;
+}
 
 async function post(path: string, body: unknown, method = "POST") {
   const response = await authedFetch(path, {
@@ -30,7 +40,7 @@ async function post(path: string, body: unknown, method = "POST") {
 export function useBillingActions(data: BillingView | undefined) {
   const workspaceId = useOptionalWorkspaceId();
   const [busy, setBusy] = useState<string | null>(null);
-  /** Keys of items a request was just sent for (shown as "Request sent"). */
+  /** Keys of team upgrade requests just sent (shown as "Sent to the owner"). */
   const [sent, setSent] = useState<Set<string>>(new Set());
 
   const markSent = (key: string) => setSent((prev) => new Set(prev).add(key));
@@ -41,23 +51,33 @@ export function useBillingActions(data: BillingView | undefined) {
       key: string;
       interval?: BillingInterval;
       trial?: boolean;
-      contact?: string;
-    }): Promise<"redirected" | "requested" | "changed" | "failed"> => {
+    }): Promise<"redirected" | "changed" | "failed"> => {
       if (!data?.isOwner) return "failed";
+      if (data.checkoutMode !== "card") {
+        toast.warning("Payments are temporarily unavailable. Please try again shortly.");
+        return "failed";
+      }
       setBusy(args.key);
       try {
-        if (data.checkoutMode === "card") {
-          const subscribed = ["active", "past_due", "paused", "trialing"].includes(data.status);
-          if (args.kind === "plan" && subscribed && !args.trial) {
-            // Existing subscribers change plan in place (prorated by Stripe).
-            await post("/api/billing/subscription/change", {
-              plan: args.key as PaidPlanId,
-              interval: args.interval ?? "month",
-            });
-            toast.success("Plan updated.");
-            emitAppEvent("billing:changed");
-            return "changed";
-          }
+        const subscribed = ["active", "past_due", "paused", "trialing"].includes(data.status);
+        if (args.kind === "plan" && subscribed && !args.trial) {
+          // Existing subscribers change plan in place (prorated by Stripe).
+          await post("/api/billing/subscription/change", {
+            plan: args.key as PaidPlanId,
+            interval: args.interval ?? "month",
+          });
+          toast.success("Plan updated.");
+          emitAppEvent("billing:changed");
+          return "changed";
+        }
+        // Reserve the tab during the click event. Opening it after the API
+        // request resolves would be blocked as a popup by some browsers.
+        const checkoutTab = prepareCheckoutTab();
+        if (!checkoutTab) {
+          toast.warning("Allow pop-ups for Mellox to open secure Stripe checkout in a new tab.");
+          return "failed";
+        }
+        try {
           const result = await post("/api/billing/checkout", {
             kind: args.kind,
             key: args.key,
@@ -67,18 +87,14 @@ export function useBillingActions(data: BillingView | undefined) {
             returnPath: window.location.pathname,
           });
           if (typeof result.url !== "string") throw new Error("Checkout did not open. Try again.");
-          window.location.assign(result.url);
+          checkoutTab.location.href = result.url;
+          checkoutTab.focus();
+          toast.success("Secure checkout opened in a new tab.");
           return "redirected";
+        } catch (cause) {
+          checkoutTab.close();
+          throw cause;
         }
-        await post("/api/billing/requests", {
-          kind: args.kind,
-          key: args.key,
-          interval: args.interval,
-          contact: args.contact || undefined,
-        });
-        markSent(args.key);
-        emitAppEvent("billing:changed");
-        return "requested";
       } catch (cause) {
         toast.error(cause instanceof Error ? cause.message : "Something went wrong. Try again.");
         return "failed";

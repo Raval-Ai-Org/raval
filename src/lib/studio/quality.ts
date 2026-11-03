@@ -11,6 +11,8 @@ export function studioOutputQualityIssue(
   output: StudioJobOutput,
   controls: StudioControls,
   platformCount: number,
+  /** The carousel's story structure (story.ts), when it is one. */
+  carouselStructure?: string | null,
 ): string | null {
   if (["social", "image", "video", "carousel"].includes(type)) {
     if (
@@ -27,7 +29,10 @@ export function studioOutputQualityIssue(
   if (type === "carousel") {
     if (output.slides?.length !== (controls.slideCount ?? 6))
       return "The carousel has the wrong number of slides.";
-    const story = carouselStoryIssue(output.slides);
+    const story = carouselStoryIssue(
+      output.slides,
+      carouselStructure ?? output.carousel?.structure,
+    );
     if (story) return story;
     if (
       output.slides?.some(

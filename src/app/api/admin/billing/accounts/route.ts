@@ -77,7 +77,7 @@ export const GET = defineRoute({
   query: z.object({ q: z.string().trim().max(120).optional(), id: z.string().uuid().optional() }),
   rateLimit: "billing-admin",
   handler: async ({ userId, query }) => {
-    requireBillingAdmin(userId);
+    await requireBillingAdmin(userId);
     if (query.id) return { account: await detail(query.id) };
 
     const q = query.q ?? "";

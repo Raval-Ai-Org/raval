@@ -109,7 +109,51 @@ export type SocialApiDeps = {
   designedMedia?: (item: any) => Promise<string[] | null>;
   /** The Stories flag for this workspace; false holds Story items back. */
   storiesEnabled?: boolean;
+  /**
+   * Accounts connected through Composio (ADR-0042), when connected apps are
+   * on. Their deliveries never touch Post for Me; see
+   * src/server/social/composio/service.server.ts.
+   */
+  composio?: ComposioHooks;
 };
+
+export type ComposioDelivery = { accountId: string; status: string; last_error: string | null };
+export type ComposioMedia = { images: string[]; video: string | null };
+
+export type ComposioHooks = {
+  accounts(workspaceId: string): Promise<ConnectedAccount[]>;
+  deliver(args: {
+    workspaceId: string;
+    actingUserId: string | null;
+    item: any;
+    platform: string;
+    placement: Placement;
+    targets: ConnectedAccount[];
+    kind: "publish" | "schedule";
+    media: ComposioMedia | null;
+  }): Promise<ComposioDelivery[]>;
+  disconnect(workspaceId: string, accountId: string): Promise<boolean>;
+  retry(args: {
+    workspaceId: string;
+    actingUserId: string | null;
+    item: any;
+    media: ComposioMedia | null;
+  }): Promise<ComposioDelivery[]>;
+  cancel(workspaceId: string, itemId: string): Promise<number>;
+  hasRows(workspaceId: string, itemId: string, status: "pending" | "failed"): Promise<boolean>;
+};
+
+/** The brand's Composio accounts; none when that path is off or unreadable. */
+async function composioAccountsOf(
+  deps: SocialApiDeps,
+  workspaceId: string,
+): Promise<ConnectedAccount[]> {
+  if (!deps.composio) return [];
+  return deps.composio.accounts(workspaceId).catch((e) => {
+    console.error("[postforme] Composio accounts unavailable", e instanceof Error ? e.message : e);
+    return [];
+  });
+}
 
 export class DistributionError extends Error {
   constructor(
@@ -264,7 +308,10 @@ export async function listAccountsHandler(
     const fetched = await fetchBrandAccounts(deps);
     if (!fetched.ok) return fetched.res;
     await syncAccountMirror(deps, workspaceId, fetched.accounts);
-    return { status: 200, body: fetched.accounts };
+    return {
+      status: 200,
+      body: [...fetched.accounts, ...(await composioAccountsOf(deps, workspaceId))],
+    };
   } catch (e) {
     return distributionErrorResponse(e);
   }
@@ -320,6 +367,9 @@ export async function disconnectHandler(
 ): Promise<HandlerResult> {
   if (!args.accountId) return fail(400, "PLATFORM_VALIDATION", "accountId required");
   try {
+    if (deps.composio && (await deps.composio.disconnect(args.workspaceId, args.accountId))) {
+      return { status: 204, body: null };
+    }
     const fetched = await fetchBrandAccounts(deps);
     if (!fetched.ok) return fetched.res;
     if (!fetched.accounts.some((a) => a.accountId === args.accountId)) {
@@ -945,7 +995,7 @@ async function distribute(
 ): Promise<HandlerResult> {
   const fetched = await fetchBrandAccounts(deps);
   if (!fetched.ok) return fetched.res;
-  const accounts = fetched.accounts;
+  const accounts = [...fetched.accounts, ...(await composioAccountsOf(deps, args.workspaceId))];
   const results: SocialPublishOutcome[] = [];
   const skip = (contentItemId: string, reason: string) =>
     results.push({ contentItemId, status: "skipped", reason });
@@ -983,7 +1033,13 @@ async function distribute(
     }
 
     const platform = item.meta?.platform as string | undefined;
-    if (!platform || !(PROVIDER_PLATFORMS.postforme as string[]).includes(platform)) {
+    if (
+      !platform ||
+      !(
+        (PROVIDER_PLATFORMS.postforme as string[]).includes(platform) ||
+        accounts.some((a) => a.provider === "composio" && a.platform === platform)
+      )
+    ) {
       skip(id, `No deliverable platform (${platform ?? "none"})`);
       continue;
     }
@@ -1015,7 +1071,7 @@ async function distribute(
       continue;
     }
 
-    const targets = resolveTargetAccounts(
+    let targets = resolveTargetAccounts(
       accounts.filter((a) => a.platform === platform),
       args.selection,
     );
@@ -1023,6 +1079,9 @@ async function distribute(
       skip(id, `No connected ${label(platform)} account for this selection`);
       continue;
     }
+    // Composio accounts are sent by Mellox itself; the rest go to Post for Me.
+    const composioTargets = deps.composio ? targets.filter((t) => t.provider === "composio") : [];
+    targets = targets.filter((t) => t.provider !== "composio");
 
     const platformData: Record<string, unknown> = {};
     if (platform === "tiktok") {
@@ -1103,6 +1162,27 @@ async function distribute(
     };
     validationMedia = decorate(validationMedia);
     const frameCount = story ? validationMedia.length : null;
+    const composioMedia: ComposioMedia =
+      validationMedia.length && item.meta?.media_type === "video"
+        ? { images: [], video: validationMedia[0].source }
+        : { images: validationMedia.map((m) => m.source), video: null };
+
+    if (composioTargets.length && targets.length === 0) {
+      const outcome = await distributeComposio(kind, {
+        workspaceId: args.workspaceId,
+        userId: args.userId,
+        item,
+        platform,
+        placement: placement ?? "feed",
+        targets: composioTargets,
+        media: composioMedia,
+        utc,
+        deps,
+      });
+      if ("body" in outcome) return { ...outcome, body: { ...outcome.body, results } };
+      results.push(outcome);
+      continue;
+    }
     const baseBody = {
       text,
       ...(title ? { title } : {}),
@@ -1317,9 +1397,162 @@ async function distribute(
           }
         : {}),
     });
+
+    // The same post to this item's Composio accounts, under the claim above.
+    if (composioTargets.length && deps.composio) {
+      try {
+        await deps.composio.deliver({
+          workspaceId: args.workspaceId,
+          actingUserId: args.userId,
+          item,
+          platform,
+          placement: placement ?? "feed",
+          targets: composioTargets,
+          kind,
+          media: composioMedia,
+        });
+      } catch (e) {
+        console.error(
+          "[postforme] Composio delivery failed",
+          id,
+          e instanceof Error ? e.message : e,
+        );
+      }
+      await recomputeSocialItemStatus(deps.db, id);
+    }
   }
 
   return { status: 200, body: { results } };
+}
+
+/** Send (or park for its time) an item whose every target is a Composio account. */
+async function distributeComposio(
+  kind: "publish" | "schedule",
+  a: {
+    workspaceId: string;
+    userId: string | null;
+    item: any;
+    platform: string;
+    placement: Placement;
+    targets: ConnectedAccount[];
+    media: ComposioMedia;
+    utc: string | undefined;
+    deps: SocialApiDeps;
+  },
+): Promise<SocialPublishOutcome | HandlerResult> {
+  const { item, deps } = a;
+  const id = item.id as string;
+  if (deps.quota) {
+    const q = await deps.quota.check(a.workspaceId, a.targets.length);
+    if (!q.ok) {
+      return {
+        status: 429,
+        body: {
+          error: {
+            code: "QUOTA_EXCEEDED",
+            detail: `This brand has reached the fair-use guard of ${q.limit} posts today. Try again tomorrow.`,
+          },
+        },
+      };
+    }
+  }
+  const claimedStatus = kind === "publish" ? "publishing" : "scheduled";
+  const priorScheduledAt = item.scheduled_at ?? null;
+  const notReady = await promoteForDistribution(deps.db, item, claimedStatus);
+  if (notReady) return { contentItemId: id, status: "skipped", reason: notReady };
+  const priorStatus = item.status as string;
+  const claimed = await claimItem(
+    deps.db,
+    item,
+    claimedStatus,
+    kind === "schedule" ? { scheduled_at: a.utc } : {},
+  );
+  if (!claimed) return { contentItemId: id, status: "skipped", reason: CLAIM_LOST };
+
+  let rows: ComposioDelivery[];
+  try {
+    rows = await deps.composio!.deliver({
+      workspaceId: a.workspaceId,
+      actingUserId: a.userId,
+      item,
+      platform: a.platform,
+      placement: a.placement,
+      targets: a.targets,
+      kind,
+      media: a.media,
+    });
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : "Sending failed.";
+    await moveItemStatus(deps.db, id, claimedStatus, kind === "publish" ? "failed" : priorStatus, {
+      meta: mergeMeta(item.meta, { last_distribution_error: reason.slice(0, 500) }),
+      ...(kind === "schedule" ? { scheduled_at: priorScheduledAt } : {}),
+    });
+    return { contentItemId: id, status: "skipped", reason };
+  }
+
+  await deps.quota
+    ?.record({
+      workspaceId: a.workspaceId,
+      operation: kind,
+      providerPostId: `composio:${id}`,
+      contentItemId: id,
+      userId: a.userId,
+      targets: rows.length,
+    })
+    .catch((e) => console.error("[postforme] usage not recorded", e));
+
+  const meta = mergeMeta(item.meta, {
+    distribution_provider: "composio",
+    last_distribution_error: rows.find((r) => r.last_error)?.last_error ?? null,
+  });
+  if (kind === "schedule") {
+    await moveItemStatus(deps.db, id, "scheduled", "scheduled", { meta, scheduled_at: a.utc });
+  } else {
+    await moveItemStatus(deps.db, id, "publishing", aggregateItemStatus(rows), { meta });
+  }
+  const failedAll = rows.every((r) => r.status === "failed");
+  return {
+    contentItemId: id,
+    status: failedAll ? "failed" : "publishing",
+    sdrJobId: `composio:${id}`,
+    providerPostId: `composio:${id}`,
+    targets: rows.length,
+    ...(a.utc ? { scheduledAt: a.utc } : {}),
+    ...(failedAll
+      ? {
+          reason:
+            rows.find((r) => r.last_error)?.last_error ?? "Every destination refused the post.",
+        }
+      : {}),
+  };
+}
+
+/** An item's pictures or video as public links, read now (scheduled Composio sends). */
+export async function composioMediaFor(
+  item: any,
+  deps: Pick<SocialApiDeps, "db" | "designedMedia">,
+): Promise<ComposioMedia | null> {
+  if (hasForeignStoragePath(item)) return null;
+  const designed = deps.designedMedia ? await deps.designedMedia(item).catch(() => null) : null;
+  const paths =
+    designed &&
+    designed.length >= 1 &&
+    designed.length <= 20 &&
+    designed.every((p) => isWorkspaceStoragePath(p, item.workspace_id))
+      ? designed
+      : storagePathsOf(item);
+  let urls: string[] = [];
+  if (paths.length) {
+    const signed = await Promise.all(paths.map((p) => signedUrl(deps.db, p)));
+    if (signed.some((u) => !u)) return null;
+    urls = signed as string[];
+  } else {
+    const external = publicMediaUrl(item);
+    if (external) urls = [external];
+  }
+  return item.meta?.media_type === "video"
+    ? { images: [], video: urls[0] ?? null }
+    : { images: urls, video: null };
 }
 
 async function publishExistingPost(
@@ -1436,6 +1669,16 @@ export async function cancelHandler(
       .maybeSingle();
     if (!item) return fail(404, "NOT_FOUND", "Content item not found");
     const postId = item.meta?.postforme_post_id as string | undefined;
+    if (
+      !postId &&
+      item.status === "scheduled" &&
+      deps.composio &&
+      (await deps.composio.hasRows(args.workspaceId, args.contentItemId, "pending"))
+    ) {
+      await deps.composio.cancel(args.workspaceId, args.contentItemId);
+      await moveItemStatus(deps.db, args.contentItemId, "scheduled", "approved", {});
+      return { status: 204, body: null };
+    }
     if (!postId) return fail(400, "PLATFORM_VALIDATION", "Item has no scheduled post to cancel");
     // DELETE on a published post would remove it from the platforms.
     if (item.status !== "scheduled") {
@@ -1463,6 +1706,7 @@ export async function cancelHandler(
       .eq("provider", "postforme")
       .eq("sdr_post_id", postId);
     if (pubError) return fail(500, "UNKNOWN", pubError.message);
+    await deps.composio?.cancel(args.workspaceId, args.contentItemId);
     await moveItemStatus(deps.db, args.contentItemId, "scheduled", "approved", {
       meta: mergeMeta(item.meta, { postforme_post_id: null }),
     });
@@ -1486,6 +1730,24 @@ export async function retryHandler(
       .maybeSingle();
     if (!item) return fail(404, "NOT_FOUND", "Content item not found");
     const postId = item.meta?.postforme_post_id as string | undefined;
+    if (
+      !postId &&
+      (item.status === "failed" || item.status === "partial_failed") &&
+      deps.composio &&
+      (await deps.composio.hasRows(args.workspaceId, args.contentItemId, "failed"))
+    ) {
+      const rows = await deps.composio.retry({
+        workspaceId: args.workspaceId,
+        actingUserId: args.userId,
+        item,
+        media: await composioMediaFor(item, deps),
+      });
+      const status = await recomputeSocialItemStatus(deps.db, args.contentItemId);
+      return {
+        status: 200,
+        body: { contentItemId: args.contentItemId, status, retried: rows.length },
+      };
+    }
     if (!postId) return fail(400, "PLATFORM_VALIDATION", "This item has no post to retry");
     if (item.status !== "failed" && item.status !== "partial_failed") {
       return fail(400, "PLATFORM_VALIDATION", "Only failed deliveries can be retried");

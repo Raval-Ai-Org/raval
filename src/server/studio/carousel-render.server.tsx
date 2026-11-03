@@ -19,8 +19,10 @@ import {
   type CarouselDesign,
   type CarouselTheme,
 } from "@/lib/studio/carousel/design";
+import { SCREEN_ASPECT, type PhotoFrame } from "@/lib/studio/carousel/photos";
 import type { CarouselSlide } from "@/lib/studio/jobs";
 import { safeFetch } from "@/server/safe-fetch";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 
 type FontFace = { name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" };
 
@@ -101,7 +103,38 @@ export type CarouselRenderInput = {
   site?: string | null;
   /** The generated cover picture's bytes, if there is one. */
   coverArt?: Buffer | null;
+  /** The brand's own pictures, in photo order; null where one couldn't be read. */
+  photos?: ({ bytes: Buffer; frame: PhotoFrame } | null)[] | null;
+  /** The story structure; a running joke has its own layout. */
+  structure?: string | null;
 };
+
+/**
+ * A picture ready for a slide: a screen cut to its window's shape from the
+ * top (the first screen of a page is what people recognise), a photo kept
+ * whole and made light enough to draw.
+ */
+export async function slidePhotoData(
+  bytes: Buffer,
+  frame: PhotoFrame,
+): Promise<{ src: string; frame: PhotoFrame } | null> {
+  try {
+    const image = sharp(bytes, { limitInputPixels: PHOTO_PIXEL_LIMIT, failOn: "none" }).rotate();
+    const fitted =
+      frame === "photo"
+        ? image.resize(1400, 1400, { fit: "inside", withoutEnlargement: true })
+        : image.resize(
+            frame === "phone" ? 700 : 1280,
+            Math.round((frame === "phone" ? 700 : 1280) / SCREEN_ASPECT[frame]),
+            { fit: "cover", position: "north" },
+          );
+    const jpeg = await fitted.jpeg({ quality: 86 }).toBuffer();
+    return { src: `data:image/jpeg;base64,${jpeg.toString("base64")}`, frame };
+  } catch (error) {
+    console.warn("[carousel] slide photo unreadable, drawing without it", error);
+    return null;
+  }
+}
 
 /** Slides this renderer can draw faithfully (see canRenderText). */
 export function carouselRenderable(input: Pick<CarouselRenderInput, "slides" | "brand">): boolean {
@@ -133,6 +166,10 @@ export async function renderCarouselSlides(input: CarouselRenderInput): Promise<
     }
   }
 
+  const photos = await Promise.all(
+    (input.photos ?? []).map((p) => (p ? slidePhotoData(p.bytes, p.frame) : null)),
+  );
+
   const out: Buffer[] = [];
   for (let index = 0; index < input.slides.length; index++) {
     const image = new ImageResponse(
@@ -146,6 +183,8 @@ export async function renderCarouselSlides(input: CarouselRenderInput): Promise<
         brand={input.brand}
         site={input.site}
         coverImage={coverImage}
+        photos={photos}
+        structure={input.structure}
       />,
       { width, height, ...(fonts.length ? { fonts } : {}) },
     );

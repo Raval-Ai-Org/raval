@@ -29,6 +29,7 @@ import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { STORY_THEMES, type StoryThemeId } from "@/lib/stories/frames";
 import { STORY_PLATFORMS } from "@/lib/stories/placement";
 import { storyTimes, toMinutes, type StorySettings } from "@/lib/stories/schedule";
+import { PlatformLogoGrid, PlatformStack } from "@/components/studio/studio-ui";
 import { Chip, SwitchRow } from "./autopilot-ui";
 import { Readiness } from "./Readiness";
 
@@ -297,28 +298,18 @@ export function SettingRows({
           label="Where"
           value={
             s.platforms.length ? (
-              s.platforms.map((p) => PLATFORMS[p].label).join(", ")
+              <PlatformStack platforms={s.platforms} size={22} max={7} />
             ) : (
               <span className="text-warning">Pick at least one</span>
             )
           }
         >
-          <div className="flex flex-wrap gap-2">
-            {PLATFORM_ORDER.map((id) => (
-              <Chip
-                key={id}
-                active={s.platforms.includes(id)}
-                onClick={() => set("platforms", toggle(s.platforms, id).slice(0, 5))}
-              >
-                {PLATFORMS[id].label}
-                {!connected.includes(id) && (
-                  <span className="text-[11px] font-normal text-muted-foreground">
-                    not connected
-                  </span>
-                )}
-              </Chip>
-            ))}
-          </div>
+          <PlatformLogoGrid
+            platforms={PLATFORM_ORDER}
+            isSelected={(id) => s.platforms.includes(id)}
+            onToggle={(id) => set("platforms", toggle(s.platforms, id).slice(0, 5))}
+            note={(id) => (connected.includes(id) ? null : "not connected")}
+          />
           {unlinked.length > 0 && (
             <Hint>
               {unlinked.map((p) => PLATFORMS[p].label).join(" and ")}{" "}
@@ -625,25 +616,16 @@ function StoriesSettings({
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {STORY_PLATFORMS.map((id) => (
-              <Chip
-                key={id}
-                active={st.platforms.includes(id)}
-                onClick={() => {
-                  const next = toggle(st.platforms, id);
-                  if (next.length) set("platforms", next);
-                }}
-              >
-                {PLATFORMS[id].label}
-                {!connected.includes(id) && (
-                  <span className="text-[11px] font-normal text-muted-foreground">
-                    not connected
-                  </span>
-                )}
-              </Chip>
-            ))}
-          </div>
+          <PlatformLogoGrid
+            platforms={STORY_PLATFORMS}
+            size={40}
+            isSelected={(id) => st.platforms.includes(id)}
+            onToggle={(id) => {
+              const next = toggle(st.platforms, id);
+              if (next.length) set("platforms", next);
+            }}
+            note={(id) => (connected.includes(id) ? null : "not connected")}
+          />
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-[13px] text-muted-foreground">Between</span>

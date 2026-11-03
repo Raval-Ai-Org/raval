@@ -3,7 +3,9 @@
 // and heartbeat). Sweeps stale in-flight deliveries against the provider that
 // owns them so nothing strands in "publishing":
 //   * SDR rows against each workspace's own SDR (when the SDR is configured);
-//   * SocialAPI.ai rows via GET /posts/{id}, plus engagement metrics refresh.
+//   * SocialAPI.ai rows via GET /posts/{id}, plus engagement metrics refresh;
+//   * Post for Me account feeds (Analytics → Social), a few accounts per run;
+//   * connected apps (Composio): each account re-read every 6 hours.
 // Auth + heartbeat come from defineCronRoute.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { reconcileStalePublications } from "@/lib/sdr.reconcile";
@@ -13,6 +15,9 @@ import { isPostForMeConfigured } from "@/lib/feature-flags";
 import { postForMeDb } from "@/lib/postforme/workspace.server";
 import { reconcilePostForMe } from "@/lib/postforme/reconcile";
 import { createPostForMeAdapter } from "@/lib/postforme/client.server";
+import { syncDueFeeds } from "@/lib/postforme/feeds";
+import { composioConfigured } from "@/server/integrations/composio/gateway.server";
+import { sweepAccounts } from "@/server/integrations/accounts.server";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +48,27 @@ export const POST = defineCronRoute({
         });
       } catch (e) {
         failures.push(`postforme: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      try {
+        result.feeds = await syncDueFeeds({
+          apiFor: (workspaceId) => createPostForMeAdapter(workspaceId),
+          db: postForMeDb,
+        });
+      } catch (e) {
+        failures.push(`feeds: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // Connected apps (ADR-0042): Composio sends no event when a connection
+    // stops working, so re-read each account every 6 hours.
+    if (composioConfigured()) {
+      try {
+        result.apps = await sweepAccounts();
+        // HubSpot counts for leads goals, twice a day per account.
+        const { refreshLeadCounts } = await import("@/server/integrations/business.server");
+        result.leads = await refreshLeadCounts({ max: 10 });
+      } catch (e) {
+        failures.push(`apps: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

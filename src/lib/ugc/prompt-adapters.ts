@@ -1,8 +1,7 @@
-import type { UgcModel } from "./models";
 import { buildVideoPrompt, type PromptInput } from "./prompt";
 
 function withDirection(base: string, direction: string): string {
-  return `${base}\n\nMODEL DIRECTION: ${direction}`.slice(0, 8000);
+  return `${base}\n\nMODEL DIRECTION: ${direction}`;
 }
 
 export function seedancePromptAdapter(input: PromptInput): string {

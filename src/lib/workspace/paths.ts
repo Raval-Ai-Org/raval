@@ -55,6 +55,55 @@ export function brainPath(
 }
 
 /**
+ * Inspo (ADR-0037): how the brand's posts look and sound, and its own media.
+ *   inspoPath(id)          → /w/<id>/app/inspo
+ *   inspoPath(id, "voice") → /w/<id>/app/inspo?s=voice
+ */
+export function inspoPath(workspaceId: string, section?: string | null): string {
+  return workspacePath(workspaceId, "inspo", {
+    s: section && section !== "board" ? section : undefined,
+  });
+}
+
+/**
+ * Campaigns (ADR-0039): planned runs of posts and Stories.
+ *   campaignsPath(id)                       → /w/<id>/app/campaigns
+ *   campaignsPath(id, { c: "<campaign>" })  → one campaign
+ *   campaignsPath(id, { v: "new", type })   → the designer, on a kind
+ */
+export function campaignsPath(
+  workspaceId: string,
+  opts: { c?: string | null; v?: "new" | null; type?: string | null; tab?: string | null } = {},
+): string {
+  return workspacePath(workspaceId, "campaigns", {
+    c: opts.c,
+    v: opts.v,
+    type: opts.type,
+    tab: opts.tab && opts.tab !== "overview" ? opts.tab : undefined,
+  });
+}
+
+/**
+ * Channels: every social account and app the brand connects, in one place.
+ *   channelsPath(id)         → /w/<id>/app/channels
+ *   channelsPath(id, "apps") → /w/<id>/app/channels?s=apps
+ */
+export function channelsPath(workspaceId: string, section?: string | null): string {
+  return workspacePath(workspaceId, "channels", {
+    s: section && section !== "social" ? section : undefined,
+  });
+}
+
+/**
+ * Communities: the threads where people ask about what the brand does
+ * (Reddit, Quora, Hacker News, Stack Exchange).
+ *   communitiesPath(id) → /w/<id>/app/communities
+ */
+export function communitiesPath(workspaceId: string): string {
+  return workspacePath(workspaceId, "communities");
+}
+
+/**
  * Re-anchor an in-app path ("/app?settings=connections", "/app/chat/x") inside
  * a workspace. Already-canonical and non-app paths are returned unchanged.
  */

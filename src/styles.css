@@ -3586,17 +3586,17 @@ svg [data-series="bar"]:hover rect:not(:hover) {
 
 @media (prefers-reduced-motion: reduce) {
   :is(
-      a,
-      button,
-      [role="button"],
-      [role="menuitem"],
-      [role="tab"],
-      [role="option"],
-      summary,
-      .interactive,
-      .icon-tap,
-      .surface-hover
-    ):where(:not(#marketing-root *)) {
+    a,
+    button,
+    [role="button"],
+    [role="menuitem"],
+    [role="tab"],
+    [role="option"],
+    summary,
+    .interactive,
+    .icon-tap,
+    .surface-hover
+  ):where(:not(#marketing-root *)) {
     transition: none !important;
     transform: none !important;
   }
@@ -4609,7 +4609,7 @@ pre {
    ========================================================= */
 @layer components {
   .mx-chat {
-    --mx-radius: 1.5rem;
+    --mx-radius: 1.75rem; /* matches --ds-radius-window */
     --mx-box-bg: hsl(var(--card));
     --mx-box-border: hsl(var(--border));
     --mx-user-bg: hsl(var(--muted));
@@ -4645,8 +4645,9 @@ pre {
     height: 2.25rem;
     padding: 0 0.9rem;
     border-radius: 999px;
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--card) / 0.6);
+    /* A filled chip, the way Pinterest draws its idea chips. */
+    border: 1px solid transparent;
+    background: hsl(var(--surface-2) / 0.8);
     color: hsl(var(--foreground) / 0.85);
     font-size: 13.5px;
     font-weight: 500;
@@ -4674,8 +4675,8 @@ pre {
     }
   }
   .mx-starter:hover {
-    background: hsl(var(--card));
-    border-color: hsl(var(--border-strong));
+    background: color-mix(in oklab, hsl(var(--surface-2)) 88%, hsl(var(--foreground)));
+    border-color: transparent;
     color: hsl(var(--foreground));
     transform: translateY(-1px);
   }
@@ -5415,8 +5416,32 @@ pre {
     0 0 0 1px hsl(220 16% 83% / 0.7);
   --ds-glow: hsl(var(--primary) / 0.1);
   --ds-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-tile-shadow-hover: 0 22px 40px -24px hsl(0 0% 0% / 0.35);
+}
+/* Inside the app the light theme is a clean white canvas with neutral greys,
+ * the way Pinterest is: the content carries the colour, the chrome recedes.
+ * Scoped to [data-mellox-app] so the public landing page keeps its paper. */
+:root:not(.dark):has([data-mellox-app]) {
+  --background: 0 0% 100%;
+  --surface-1: 0 0% 100%;
+  --surface-2: 0 0% 94%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 33%;
+  --secondary: 0 0% 91%;
+  --border: 0 0% 87%;
+  --border-strong: 0 0% 74%;
+  --input: 0 0% 80%;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 0 0% 12%;
+  --sidebar-accent: 0 0% 94%;
+  --sidebar-border: 0 0% 90%;
+  --ds-tile-border: hsl(0 0% 0% / 0.08);
+  --ds-well-bg: hsl(0 0% 0% / 0.05);
+  --ds-well-bg-hover: hsl(0 0% 0% / 0.08);
+  --ds-window-shadow: 0 24px 80px -24px hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(0 0% 0% / 0.06);
 }
 .dark {
+  --ds-tile-shadow-hover: 0 22px 40px -24px hsl(0 0% 0% / 0.85);
   --ds-tile-bg: hsl(0 0% 100% / 0.035);
   --ds-tile-border: hsl(0 0% 100% / 0.07);
   --ds-well-bg: hsl(0 0% 100% / 0.05);
@@ -5442,14 +5467,15 @@ pre {
   border: 1px solid var(--ds-tile-border);
   background-color: var(--ds-tile-bg);
 }
+/* A tile that opens something lifts a little on hover, the way a pin does. */
 @utility ds-tile-hover {
   transition:
-    border-color 200ms var(--ds-ease),
-    transform 200ms var(--ds-ease),
-    box-shadow 200ms var(--ds-ease);
+    border-color 300ms var(--ds-ease),
+    transform 300ms var(--ds-ease),
+    box-shadow 300ms var(--ds-ease);
   &:hover {
-    border-color: var(--ds-tile-border-hover);
-    box-shadow: 0 12px 32px -18px hsl(var(--primary) / 0.35);
+    transform: translateY(-2px);
+    box-shadow: var(--ds-tile-shadow-hover);
   }
 }
 @utility ds-well {
@@ -5463,13 +5489,13 @@ pre {
   letter-spacing: -0.015em;
   color: hsl(var(--foreground));
 }
+/* A plain sentence-case heading over a group, not an uppercase eyebrow. */
 @utility ds-label {
-  font-size: 12px;
-  line-height: 1;
+  font-size: 13px;
+  line-height: 1.25;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: hsl(var(--muted-foreground));
+  letter-spacing: -0.005em;
+  color: hsl(var(--foreground) / 0.8);
 }
 @utility ds-enter {
   animation: ds-enter 320ms var(--ds-ease) both;
@@ -5572,8 +5598,14 @@ pre {
 
 /* In the app, every Button is a pill (Gemini/ChatGPT-style). Unlayered so it
  * outranks per-instance radius utilities; opt out with data-shape="square". */
-:root:has([data-mellox-app]) [data-slot="button"]:not([data-shape="square"]) {
+:root:has([data-mellox-app]) [data-slot="button"]:not([data-shape="square"]),
+:root:has([data-mellox-app]) [data-slot="input"]:not([data-shape="square"]),
+:root:has([data-mellox-app]) [data-slot="select-trigger"]:not([data-shape="square"]) {
   border-radius: 9999px;
+}
+/* Text boxes follow the tile shape. */
+:root:has([data-mellox-app]) [data-slot="textarea"]:not([data-shape="square"]) {
+  border-radius: var(--ds-radius-tile);
 }
 
 /* ═══ A loading signal never freezes ═══════════════════════════════════════

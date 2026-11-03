@@ -107,6 +107,8 @@ export interface BrandDna {
   colors: BrandColor[];
   fonts: string[];
   logoUrl: string | null;
+  /** An uploaded logo (assets row in this workspace). Preferred over logoUrl when set. */
+  logoAssetId?: string | null;
   faviconUrl: string | null;
   websiteUrl: string | null;
   socials: BrandSocial[];

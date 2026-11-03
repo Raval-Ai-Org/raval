@@ -5,17 +5,16 @@
 // `open` pinned and closing mapped to navigation. That gives a real URL, real
 // metadata, working back/forward and deep links, while reusing the surface
 // every other Mellox feature uses — no second layout system.
-import { Suspense, lazy } from "react";
+//
+// Backlinks is paused while it is reworked: old links, chat offers and the
+// agency view still land here, and see "coming soon" instead of the panel.
+// `LinksPanel` and its server side are untouched; render it again to bring it back.
 import { useRouter } from "next/navigation";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Link2 } from "@/components/icons";
-import { PageLoader } from "@/components/ui/page-loader";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
-
-const LinksPanel = lazy(() =>
-  import("@/components/app/links/LinksPanel").then((m) => ({ default: m.LinksPanel })),
-);
 
 export default function BacklinksRoute() {
   const router = useRouter();
@@ -29,14 +28,15 @@ export default function BacklinksRoute() {
         // current URL.
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
-      title="Backlink Growth"
+      title="Backlinks"
       Icon={Link2}
-      size="xl"
-      bodyClassName="overflow-hidden"
+      size="sm"
     >
-      <Suspense fallback={<PageLoader />}>
-        <LinksPanel workspaceId={workspaceId} />
-      </Suspense>
+      <EmptyState
+        icon={Link2}
+        title="Coming soon"
+        description="We're reworking Backlinks. It will be back here when it's ready."
+      />
     </AppModalShell>
   );
 }

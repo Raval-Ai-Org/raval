@@ -4,11 +4,18 @@
 // Market Brain and the competitor sweeps supply the signals. Nothing here
 // generates, publishes or searches the web on its own.
 import "server-only";
+import { getEntitlements } from "@/server/billing/entitlements.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
 import { PLAN_GOALS } from "@/lib/calendar/planner";
-import { isAutopilotEnabled, isFullAutopilotEnabled, isStoriesEnabled } from "@/lib/feature-flags";
+import {
+  isAutopilotEnabled,
+  isCampaignsEnabled,
+  isFullAutopilotEnabled,
+  isStoriesEnabled,
+} from "@/lib/feature-flags";
+import { campaignControls, campaignState } from "@/server/campaigns/context.server";
 import { StrategySchema } from "@/lib/autopilot/contracts";
 import type { Candidate, Rating } from "@/lib/autopilot/opportunities";
 import { matchEvidence } from "@/lib/autopilot/opportunities";
@@ -23,13 +30,15 @@ import {
   type BrainEntry,
   type BrainLists,
 } from "@/lib/autopilot/brief";
-import { isAudienceEnabled } from "@/lib/feature-flags";
+import { isAudienceEnabled, isCommunityEnabled } from "@/lib/feature-flags";
 import { HOOK_STYLES } from "@/lib/studio/memory";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
 import { CreateJobSchema, type GoalId, type StudioJob } from "@/lib/studio/jobs";
 import type { StudioType } from "@/lib/studio/formats";
 import { summarizeLearnings, type MeasuredPiece } from "@/lib/autopilot/learn";
 import { weeklyReport } from "@/lib/autopilot/report";
+import { GoalsSchema } from "@/lib/goals/contracts";
+import { leadCountFor } from "@/server/integrations/business.server";
 import { underperformers } from "@/lib/studio/performance";
 import { agentsGloballyDisabled } from "@/server/agents/policy";
 import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
@@ -46,6 +55,7 @@ import type { PlatformId } from "@/lib/social-platforms";
 import { advanceStudioJob, getJobRow } from "@/server/studio/runner.server";
 import { bestHours } from "@/lib/stories/schedule";
 import { getStoryTheme } from "@/lib/stories/frames";
+import { pinIssue } from "@/lib/social/pinterest";
 import type { AutopilotPorts, ContentLite, JobLite, PlanInput } from "./engine";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
@@ -116,6 +126,14 @@ export async function approveContent(
   id: string,
   from: string[] = ["pending"],
 ): Promise<boolean> {
+  // A Pin that isn't one picture is never approved; it waits for a person.
+  const { data: row } = await db
+    .from("content_items")
+    .select("kind, channel, media_url, meta")
+    .eq("workspace_id", workspaceId)
+    .eq("id", id)
+    .maybeSingle();
+  if (row && pinIssue(row as Parameters<typeof pinIssue>[0])) return false;
   const { data, error } = await db
     .from("content_items")
     .update({ status: "approved" })
@@ -392,8 +410,11 @@ async function context(workspaceId: string) {
   return loadStudioContext(db, workspaceId, null);
 }
 
-/** Autopilot's own posts that have numbers, for what it learns between weeks. */
-async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
+/**
+ * Autopilot's and campaigns' posts that have numbers, for what it learns
+ * between weeks. Campaign planning reads it too.
+ */
+export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
   const { data } = await db
     .from("autopilot_actions")
     .select("title, platform, content_type, result")
@@ -411,6 +432,36 @@ async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
 }
 
 /* ───────────────────────── the weekly summary ───────────────────────── */
+
+/**
+ * What the Growth and Community agents add to the summary, from stored rows
+ * only: HubSpot's measured lead count for the current goal, and community
+ * threads found this week. Either part missing (no CRM, no goal, no table yet)
+ * is simply left out.
+ */
+async function growthFacts(workspaceId: string, since: string) {
+  const [{ data: goalRow }, threads] = await Promise.all([
+    db.from("workspace_goals").select("goals").eq("workspace_id", workspaceId).maybeSingle(),
+    db
+      .from("community_threads")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .gte("found_at", since)
+      .then(
+        (r: { count: number | null; error: unknown }) => (r.error ? 0 : (r.count ?? 0)),
+        () => 0,
+      ),
+  ]);
+  const goals = GoalsSchema.safeParse((goalRow as { goals?: unknown } | null)?.goals);
+  const leads =
+    goals.success && goals.data.targets.some((t) => t.metric === "leads")
+      ? await leadCountFor(workspaceId, goals.data.startedAt).catch(() => null)
+      : null;
+  return {
+    leads: leads ? { value: leads.value, source: leads.source } : null,
+    communityThreads: threads,
+  };
+}
 
 /**
  * One email to the member the program acts for: what went out in the last
@@ -475,6 +526,7 @@ async function sendWeeklySummary(workspaceId: string, userId: string) {
     ideas: ideas ?? 0,
     visibilityScore: (scan as { overall_score?: number } | null)?.overall_score ?? null,
     learnings: summarizeLearnings(await measuredPieces(workspaceId)),
+    ...(await growthFacts(workspaceId, weekAgo)),
   });
   if (!report) {
     return { status: "skipped" as const, summary: "Nothing to report this week.", quiet: true };
@@ -502,6 +554,8 @@ export const realPorts: AutopilotPorts = {
   enabled: (workspaceId) => isAutopilotEnabled(workspaceId),
   fullEnabled: (workspaceId) => isFullAutopilotEnabled(workspaceId),
   storiesEnabled: (workspaceId) => isStoriesEnabled(workspaceId),
+  campaignsEnabled: (workspaceId) => isCampaignsEnabled(workspaceId),
+  campaignState,
 
   async automationPaused(workspaceId) {
     if (agentsGloballyDisabled()) return true;
@@ -545,6 +599,14 @@ export const realPorts: AutopilotPorts = {
         source: "autopilot",
         // The calendar shows this as the post's topic.
         ...(tag.pillar ? { pillar: tag.pillar } : {}),
+        // Campaigns (ADR-0039): the calendar and the Library group by it.
+        ...(tag.campaignId
+          ? {
+              campaign_id: tag.campaignId,
+              campaign_phase: tag.campaignPhase ?? null,
+              campaign_name: tag.campaignName ?? null,
+            }
+          : {}),
       };
       const { error: writeError } = await db
         .from("content_items")
@@ -572,9 +634,13 @@ export const realPorts: AutopilotPorts = {
     },
 
     async create({ workspaceId, userId, role, idempotencyKey, action, platforms, story }) {
+      const entitlements = await getEntitlements({ workspaceId, userId, role });
       const type = (action.content_type ?? "social") as StudioType;
       // Instagram, TikTok and YouTube can't take words alone: the post gets a picture.
       const picture = withPicture(type, action.platform);
+      // A campaign piece brings the brand's own photos or clips, its product
+      // and its call to action, all placed when the campaign was planned.
+      const campaign = action.campaign_id ? campaignControls(action) : {};
       const input = CreateJobSchema.parse({
         workspaceId,
         type,
@@ -595,10 +661,13 @@ export const realPorts: AutopilotPorts = {
             typeof action.result.hook === "string" ? action.result.hook.slice(0, 24) : undefined,
           ideaId: action.opportunity_id ?? undefined,
           ideaSource: "autopilot",
+          autopilotProgramId: action.program_id ?? undefined,
         },
         controls: {
+          paymentSource: entitlements.creation?.active ? "creation" : "credits",
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
           ...(picture ? { includeImage: true } : {}),
+          ...campaign,
           // Story frames are individually generated and reviewed by the image model.
           ...(story
             ? { storyMode: "frames", frameCount: story.frames, storyTheme: story.theme }
@@ -607,18 +676,30 @@ export const realPorts: AutopilotPorts = {
       });
       const { job, charge } = await runWithScope(
         { workspaceId, userId, route: "autopilot.run" },
-        () => createBilledStudioJob({ client: db, workspaceId, userId, role, input }),
+        // A selling piece shows a real product from the catalogue, moving
+        // through the catalogue rather than repeating the last one.
+        () =>
+          createBilledStudioJob({
+            client: db,
+            workspaceId,
+            userId,
+            role,
+            input,
+            autoProduct: "any",
+          }),
       );
       const charged =
         job.status === "succeeded" || job.status === "running" || job.status === "queued";
       return {
         job: toJobLite(job),
         credits:
-          charged && charge.meter === "credits"
-            ? charge.amount
-            : charged
-              ? estimateCost(type, action.platform).credits
-              : 0,
+          charged && charge.meter === "creation"
+            ? charge.amount * 10
+            : charged && charge.meter === "credits"
+              ? charge.amount
+              : charged
+                ? estimateCost(type, action.platform).credits
+                : 0,
       };
     },
 
@@ -634,6 +715,7 @@ export const realPorts: AutopilotPorts = {
           ...(billing
             ? {
                 billingAccountId: billing.account_id,
+                billingMeter: billing.meter,
                 billingChargeId: billing.charge_id ?? undefined,
               }
             : {}),
@@ -743,6 +825,33 @@ export const realPorts: AutopilotPorts = {
       if (placed.error) throw new Error(placed.error.message);
       if (timed.error) throw new Error(timed.error.message);
       const out = new Map<string, CalendarPost>();
+      // A running campaign's pieces own their days too, made or not (ADR-0039).
+      const { data: campaignSteps } = await db
+        .from("autopilot_actions")
+        .select("title, platform, planned_for, content_type")
+        .eq("workspace_id", workspaceId)
+        .eq("kind", "content")
+        .not("campaign_id", "is", null)
+        .in("status", [
+          "proposed",
+          "planned",
+          "generating",
+          "needs_approval",
+          "approved",
+          "scheduled",
+          "published",
+        ])
+        .gte("planned_for", dayBefore)
+        .lte("planned_for", dayAfter)
+        .limit(200);
+      for (const row of (campaignSteps ?? []) as Record<string, unknown>[]) {
+        if (row.content_type === "story" || typeof row.planned_for !== "string") continue;
+        const date = ymdInZone(new Date(row.planned_for), timeZone);
+        if (date < from || date > to) continue;
+        const platform = typeof row.platform === "string" ? row.platform : null;
+        const title = typeof row.title === "string" ? row.title.trim() : "";
+        out.set(`${date}|${platform}|${title}`, { date, platform, title });
+      }
       for (const row of [...(placed.data ?? []), ...(timed.data ?? [])] as Record<
         string,
         unknown
@@ -1085,6 +1194,36 @@ export const realPorts: AutopilotPorts = {
             sourceId: market.result.collectionId,
             significance: "minor",
             date: s.publishedDate,
+          });
+        }
+      }
+
+      // 2b. Questions people asked in communities, found by Community
+      //     Intelligence. The thread's own link is the evidence.
+      if (isCommunityEnabled(workspaceId)) {
+        const { data: threads } = await db
+          .from("community_threads")
+          .select("id, url, title, summary, snippet, matched_on, relevance, posted_at, found_at")
+          .eq("workspace_id", workspaceId)
+          .neq("status", "hidden")
+          .gte("relevance", 60)
+          .gte("found_at", new Date(now - 14 * DAY).toISOString())
+          .order("relevance", { ascending: false })
+          .limit(8);
+        for (const t of (threads ?? []) as Record<string, string | number | null>[]) {
+          if (!t.url || !t.title) continue;
+          candidates.push({
+            kind: "customer",
+            title: String(t.title).slice(0, 200),
+            summary: String(t.summary || t.snippet || ""),
+            evidence: [
+              { title: String(t.title), url: String(t.url), date: (t.posted_at as string) ?? null },
+            ],
+            sourceKind: "community_thread",
+            sourceId: String(t.id),
+            significance:
+              t.matched_on === "alternative" || t.matched_on === "problem" ? "notable" : "minor",
+            date: (t.posted_at as string) ?? (t.found_at as string),
           });
         }
       }

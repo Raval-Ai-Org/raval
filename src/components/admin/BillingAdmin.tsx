@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import {
@@ -67,11 +68,25 @@ function itemLabel(kind: string, key: string, interval?: string | null): string 
 }
 
 export function BillingAdmin() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedAccount = searchParams.get("account");
+  const accountId =
+    requestedAccount &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedAccount)
+      ? requestedAccount
+      : null;
   const [tab, setTab] = useState<Tab>("requests");
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const openAccount = (id: string | null) => {
+    setTab("accounts");
+    router.push(id ? `/admin/billing?account=${encodeURIComponent(id)}` : "/admin/billing");
+  };
   const check = useQuery({
     queryKey: ["admin", "billing", "access"],
-    queryFn: () => api<{ report: Record<string, unknown> }>("/api/admin/billing"),
+    queryFn: () =>
+      api<{ report: Record<string, unknown>; creationCost?: CreationCostView[] | null }>(
+        "/api/admin/billing",
+      ),
     retry: false,
   });
   const denied = (check.error as (Error & { status?: number }) | null)?.status === 403;
@@ -134,28 +149,26 @@ export function BillingAdmin() {
         ) : (
           <SurfaceLayout
             items={nav}
-            value={tab}
+            value={accountId ? "accounts" : tab}
             onChange={(next) => {
               setTab(next);
-              if (next !== "accounts") setAccountId(null);
+              if (accountId) router.push("/admin/billing");
             }}
             label="Admin sections"
           >
-            {tab === "requests" && (
-              <RequestsPage
-                openAccount={(id) => {
-                  setAccountId(id);
-                  setTab("accounts");
-                }}
+            {!accountId && tab === "requests" && <RequestsPage openAccount={openAccount} />}
+            {(accountId || tab === "accounts") &&
+              (accountId ? (
+                <AccountPage key={accountId} id={accountId} back={() => openAccount(null)} />
+              ) : (
+                <AccountsPage open={openAccount} />
+              ))}
+            {!accountId && tab === "health" && (
+              <HealthPage
+                report={check.data?.report ?? {}}
+                creationCost={check.data?.creationCost}
               />
             )}
-            {tab === "accounts" &&
-              (accountId ? (
-                <AccountPage id={accountId} back={() => setAccountId(null)} />
-              ) : (
-                <AccountsPage open={setAccountId} />
-              ))}
-            {tab === "health" && <HealthPage report={check.data?.report ?? {}} />}
           </SurfaceLayout>
         )}
       </div>
@@ -527,6 +540,15 @@ function AccountPage({ id, back }: { id: string; back: () => void }) {
       )}
       {account && (
         <>
+          <Tile className="mb-4 space-y-2">
+            <p className="text-[13px]">Account owner: {account.email ?? account.ownerUserId}</p>
+            <Link
+              href={`/admin/users/${encodeURIComponent(account.ownerUserId)}`}
+              className="text-[13px] font-medium text-primary hover:underline"
+            >
+              View customer profile
+            </Link>
+          </Tile>
           <div className="grid gap-3 sm:grid-cols-4">
             <Stat
               label="Plan"
@@ -547,6 +569,10 @@ function AccountPage({ id, back }: { id: string; back: () => void }) {
                   ? `${formatNumber(account.wallet.credits.held)} held`
                   : undefined
               }
+            />
+            <Stat
+              label="Creation points"
+              value={formatNumber(account.wallet?.creation?.available ?? 0)}
             />
             <Stat
               label="Videos"
@@ -813,9 +839,9 @@ function GrantPackForm({ account }: { account: AccountDetail }) {
 
 function AdjustForm({ account }: { account: AccountDetail }) {
   const action = useAdminAction(account.id);
-  const [meter, setMeter] = useState<"credits" | "video" | "pro_messages" | "flash_messages">(
-    "credits",
-  );
+  const [meter, setMeter] = useState<
+    "credits" | "creation" | "video" | "pro_messages" | "flash_messages"
+  >("credits");
   const [amount, setAmount] = useState(100);
   const [reason, setReason] = useState("");
   const units = meter === "video" ? amount * 100 : amount;
@@ -829,7 +855,8 @@ function AdjustForm({ account }: { account: AccountDetail }) {
           aria-label="Balance"
         >
           <option value="credits">Credits</option>
-          <option value="video">Videos</option>
+          <option value="creation">Creation points</option>
+          <option value="video">Video Credits</option>
           <option value="pro_messages">Pro messages</option>
           <option value="flash_messages">Chat messages</option>
         </select>
@@ -934,10 +961,50 @@ const HEALTH_LABELS: Record<string, string> = {
   refunded_cents: "Refunded",
 };
 
-function HealthPage({ report }: { report: Record<string, unknown> }) {
+type CreationCostView = {
+  account_id: string;
+  provider_usd: number;
+  provider_limit_usd: number;
+  creation_points_spent: number;
+  calls: number;
+};
+function HealthPage({
+  report,
+  creationCost,
+}: {
+  report: Record<string, unknown>;
+  creationCost?: CreationCostView[] | null;
+}) {
   const entries = Object.entries(HEALTH_LABELS).filter(([key]) => key in report);
   return (
     <SurfacePage title="Health">
+      <GroupLabel>Recorded creation-account provider spending</GroupLabel>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Includes recorded provider calls for all features and included edits. This is not profit or
+        an invoice reconciliation. The emergency ceiling uses monthly-equivalent revenue for annual
+        plans.
+      </p>
+      {creationCost == null ? (
+        <p className="text-sm text-muted-foreground">
+          Cost reporting is unavailable. Check the billing migration and worker.
+        </p>
+      ) : creationCost.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No active creation grant windows yet.</p>
+      ) : (
+        creationCost.map((row) => (
+          <Tile key={row.account_id} className="mb-3 text-sm">
+            <p className="break-all font-medium">{row.account_id}</p>
+            <p>
+              {formatUsd(row.provider_usd)} recorded provider cost /{" "}
+              {formatUsd(row.provider_limit_usd)} emergency ceiling
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatNumber(row.creation_points_spent)} points spent · {formatNumber(row.calls)}{" "}
+              recorded calls
+            </p>
+          </Tile>
+        ))
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         {entries.map(([key, label]) => {
           const raw = Number(report[key] ?? 0);

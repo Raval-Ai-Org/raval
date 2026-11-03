@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, RefreshCw, Sparkles, Wand2, X } from "@/components/icons";
+import { ArrowRight, Layers, RefreshCw, Sparkles, Wand2, X } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { IDEA_SOURCE_LABEL, type StudioIdea } from "@/lib/studio/ideas";
 import { TypeGlyph } from "./studio-ui";
+import { IdeaSwipeDeck } from "./IdeaSwipeDeck";
 
 type Dismissed = { id: string; title: string };
 
@@ -78,6 +79,7 @@ export function IdeasPanel({
   );
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [swiping, setSwiping] = useState(false);
   const request = useRef(0);
 
   const load = useCallback(
@@ -152,16 +154,41 @@ export function IdeasPanel({
             {heading}
           </h3>
         )}
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={refreshing || status === "loading" || !!fixtureIdeas}
-          className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
-        >
-          <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
-          Fresh ideas
-        </button>
+        <span className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => setSwiping(true)}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
+          >
+            <Layers className="size-3.5 text-primary" />
+            Swipe
+          </button>
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={refreshing || status === "loading" || !!fixtureIdeas}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+            Fresh ideas
+          </button>
+        </span>
       </div>
+      <IdeaSwipeDeck
+        open={swiping}
+        onOpenChange={(next) => {
+          setSwiping(next);
+          // Skips made in the deck also leave the list.
+          if (!next && !fixtureIdeas) {
+            const hidden = new Set(readDismissed(workspaceId).map((d) => d.id));
+            setIdeas((list) => list.filter((i) => !hidden.has(i.id)));
+          }
+        }}
+        workspaceId={workspaceId}
+        type={type}
+        onPick={onPick}
+        fixtureIdeas={fixtureIdeas}
+      />
 
       {status === "loading" ? (
         <ul

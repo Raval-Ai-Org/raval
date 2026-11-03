@@ -92,6 +92,13 @@ const Schema = z.object({
   WEBFLOW_CLIENT_SECRET: z.string().optional(),
   WEBFLOW_REDIRECT_URI: z.string().optional(),
   WEBFLOW_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  // Wix website connector: Mellox's own Wix app (App ID / App Secret), server-only.
+  WIX_CLIENT_ID: z.string().optional(),
+  WIX_CLIENT_SECRET: z.string().optional(),
+  WIX_REDIRECT_URI: z.string().optional(),
+  // Only while the app is unlisted: the id from its share install link.
+  WIX_SHARE_URL_ID: z.string().optional(),
+  WIX_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   WORDPRESS_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   WORDPRESS_CLIENT_ID: z.string().optional(),
   WORDPRESS_CLIENT_SECRET: z.string().optional(),
@@ -112,6 +119,14 @@ const Schema = z.object({
   // Stripe — credit top-ups. Server-only. Never expose as NEXT_PUBLIC_*.
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // Composio (connected apps, ADR-0042) — server-only. Never expose as NEXT_PUBLIC_*.
+  // COMPOSIO_AUTH_CONFIG_<TOOLKIT> names Mellox's own OAuth app for a toolkit;
+  // without one, Composio's managed sign-in is used.
+  COMPOSIO_API_KEY: z.string().optional(),
+  COMPOSIO_BASE_URL: optionalUrl,
+  COMPOSIO_TOOLKIT_VERSION: z.string().optional(),
+  FEATURE_FLAG_INTEGRATIONS_ENABLED: z.string().optional(),
+  FEATURE_FLAG_INTEGRATIONS_TESTING: z.string().optional(),
   // Tavily (web research) — server-only. Never expose as NEXT_PUBLIC_*.
   // Unset means every research surface degrades to its prior behaviour and
   // reports itself unavailable rather than failing when someone asks.
@@ -255,7 +270,7 @@ export function checkEnv(env: Record<string, string | undefined>): EnvReport {
     if (
       name.startsWith("NEXT_PUBLIC_") &&
       env[name] &&
-      (/SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE|ENCRYPTION_KEY|POST_FOR_ME|SOCIALAPI|SDR_ADMIN|GITHUB_WEBHOOK|RIXOT_API|TAVILY_API|OPENROUTER_API|OPENAI_API|ANTHROPIC_API|KIE_API|FIRECRAWL_API/i.test(
+      (/SECRET|PASSWORD|PRIVATE_KEY|SERVICE_ROLE|ENCRYPTION_KEY|POST_FOR_ME|SOCIALAPI|SDR_ADMIN|GITHUB_WEBHOOK|RIXOT_API|TAVILY_API|COMPOSIO_API|OPENROUTER_API|OPENAI_API|ANTHROPIC_API|KIE_API|FIRECRAWL_API/i.test(
         name,
       ) ||
         isServerSecret(env[name]!))

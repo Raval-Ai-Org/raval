@@ -12,4 +12,6 @@ playwright-report
 Social-Distribtion-Engine-MelloxAI-SDE
 docs
 tests
+# Unit tests under src/ import shared fixtures, and next build type-checks them.
+!tests/fixtures
 *.md

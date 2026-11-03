@@ -510,6 +510,189 @@ export function fixRecipeFor(fixId: string, ctx: FixContext): FixRecipe | null {
           "Don't change the date without changing the content.",
         ],
       };
+    case "redirects":
+      return {
+        title: "Link straight to final URLs",
+        placement: "In your navigation, content links and redirect rules",
+        steps: [
+          "Change each internal link listed in the finding to the final URL it redirects to.",
+          "Make every old URL redirect once (301), straight to its final page — no chains.",
+          "Keep trailing slashes consistent with how your pages are served.",
+        ],
+      };
+    case "soft-404":
+      return {
+        title: "Return 404 for missing pages",
+        placement: "In your framework's not-found route or your host settings",
+        steps: [
+          "Unknown URLs must answer with status 404 (or 410), not 200.",
+          "Next.js: call notFound() or add app/not-found.tsx. Static hosts: add a 404.html page.",
+          "Don't redirect missing pages to the homepage.",
+        ],
+        lang: "txt",
+        code: `curl -sI ${origin}/this-page-does-not-exist | head -1\n# expect: HTTP/2 404`,
+      };
+    case "compression":
+      return {
+        title: "Compress HTML",
+        placement: "At your host, CDN or web server",
+        steps: [
+          "Turn on Brotli or gzip for text/html (Cloudflare, Vercel and Netlify do this by default).",
+          "nginx: gzip on; gzip_types text/html text/css application/javascript;",
+        ],
+        lang: "txt",
+        code: `curl -sI -H "Accept-Encoding: br, gzip" ${page} | grep -i content-encoding`,
+      };
+    case "caching":
+      return {
+        title: "Let crawlers re-check pages cheaply",
+        placement: "In your host or server response headers",
+        steps: [
+          "Send an ETag or Last-Modified header with HTML so crawlers can ask “changed since?”.",
+          "Static hosts and most CDNs send these already; dynamic servers may need it switched on.",
+        ],
+        lang: "txt",
+        code: `curl -sI ${page} | grep -iE "etag|last-modified|cache-control"`,
+      };
+    case "mixed-content":
+      return {
+        title: "Load every resource over https",
+        placement: `In the HTML of ${page}`,
+        steps: [
+          "Change the http:// URLs listed in the finding to https:// (or a relative path).",
+          "If a resource isn't available over https, host a copy yourself or remove it.",
+        ],
+      };
+    case "security-headers":
+      return {
+        title: "Send the standard security headers",
+        placement: "In your host, CDN or server headers",
+        lang: "txt",
+        code: [
+          "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+          "X-Content-Type-Options: nosniff",
+          "X-Frame-Options: SAMEORIGIN",
+          "Referrer-Policy: strict-origin-when-cross-origin",
+        ].join("\n"),
+      };
+    case "sitemap-clean":
+      return {
+        title: "Keep the sitemap to real pages",
+        placement: `In ${origin}/sitemap.xml (or the code that builds it)`,
+        steps: [
+          "Remove the URLs listed in the finding.",
+          "Replace redirecting URLs with their final address.",
+          "List only pages that return 200, aren't noindex and are their own canonical.",
+        ],
+      };
+    case "hreflang":
+      return {
+        title: "Make hreflang reciprocal",
+        placement: "In the <head> of every language version",
+        steps: [
+          "Every version lists all versions, itself included, with the same set of tags.",
+          "Remove alternates that return errors.",
+        ],
+        lang: "html",
+        code: `<link rel="alternate" hreflang="en" href="${page}">\n<link rel="alternate" hreflang="x-default" href="${page}">`,
+      };
+    case "self-contained":
+      return {
+        title: "Make each paragraph stand on its own",
+        placement: `In the copy of ${page}`,
+        steps: [
+          "Open paragraphs with the subject they're about, not “This”, “It” or “As mentioned above”.",
+          "An answer engine may quote one paragraph alone — it should still make sense.",
+        ],
+      };
+    case "quotable-passages":
+      return {
+        title: "Write passages engines can quote",
+        placement: `In the copy of ${page}`,
+        steps: [
+          "Add short paragraphs (40–150 words) that each state one concrete fact: a figure, a product name, a date.",
+          "Use only facts you can stand behind — never invent a number.",
+        ],
+      };
+    case "readability":
+      return {
+        title: "Shorten long sentences",
+        placement: `In the copy of ${page}`,
+        steps: [
+          "Split sentences over ~30 words; keep one idea per sentence.",
+          "Prefer everyday words to jargon where both say the same.",
+        ],
+      };
+    case "accessible-controls":
+      return {
+        title: "Name every control",
+        placement: `In the HTML of ${page}`,
+        lang: "html",
+        code: `<button aria-label="Open menu">…</button>\n<label for="email">Email</label> <input id="email" type="email">\n<iframe title="Product demo video" src="…"></iframe>`,
+      };
+    case "hidden-instructions":
+      return {
+        title: "Remove hidden instructions to AI",
+        placement: `In the HTML of ${page}, its theme or plugins`,
+        steps: [
+          "Delete hidden text, HTML comments or data-ai/data-prompt attributes that tell AI systems what to say.",
+          "If a plugin adds them, remove it. Engines treat this as manipulation and can drop the site.",
+          "To guide AI systems honestly, publish clear visible content and an llms.txt.",
+        ],
+      };
+    case "dates-match":
+      return {
+        title: "Make dates agree",
+        placement: `In the visible byline and JSON-LD of ${page}`,
+        steps: [
+          "Use the same, true “last updated” date in the visible text and in dateModified.",
+          "Only change the date when the content really changed.",
+        ],
+      };
+    case "web-vitals":
+      return {
+        title: "Speed up the site for real visitors",
+        placement: "Across the site — start with the slowest page templates",
+        steps: [
+          "LCP: compress and size the largest image, preload it, and cache HTML at the CDN.",
+          "INP: split long JavaScript tasks and defer third-party scripts.",
+          "CLS: give images and embeds width/height and reserve space for banners.",
+          "Real-user data updates over 28 days; Mellox shows the change once it settles.",
+        ],
+      };
+    case "lab-speed":
+      return {
+        title: "Fix the biggest Lighthouse savings",
+        placement: `On ${page}`,
+        steps: [
+          "Work through the opportunities in the finding, largest saving first.",
+          "Re-run a full scan to test the page again.",
+        ],
+      };
+    case "render-blocking":
+      return {
+        title: "Defer head scripts",
+        placement: `In the <head> of ${page}`,
+        lang: "html",
+        code: `<script src="/app.js" defer></script>\n<script src="https://analytics.example/tag.js" async></script>`,
+      };
+    case "image-dimensions":
+      return {
+        title: "Give images their size",
+        placement: `On the <img> tags of ${page}`,
+        lang: "html",
+        code: `<img src="/hero.jpg" alt="…" width="1200" height="630">`,
+        steps: ["Use the file's real pixel size; CSS can still scale it."],
+      };
+    case "dom-size":
+      return {
+        title: "Trim the page structure",
+        placement: `On ${page}`,
+        steps: [
+          "Remove wrapper elements that add nothing, and markup duplicated for mobile and desktop.",
+          "Render long menus and lists on demand instead of all at once.",
+        ],
+      };
     default:
       return null;
   }

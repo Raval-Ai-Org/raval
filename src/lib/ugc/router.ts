@@ -1,5 +1,6 @@
 import type { Brief, Product, Script } from "./schemas";
 import { UGC_MODELS, type UgcModelKey } from "./models";
+import { MAX_VIDEO_DURATION } from "./duration";
 
 export type VideoGenerationTier = "draft" | "standard" | "premium" | "variations";
 
@@ -42,7 +43,7 @@ function fits(key: UgcModelKey, durationSec: number, referenceCount: number): bo
     referenceCount > 0 && model.images?.durations?.length
       ? model.images.durations
       : model.durations;
-  return durationSec <= Math.max(...durations);
+  return durationSec >= Math.min(...durations) && durationSec <= MAX_VIDEO_DURATION;
 }
 
 /**

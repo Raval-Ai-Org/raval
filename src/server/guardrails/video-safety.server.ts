@@ -93,7 +93,11 @@ export async function assertSafeVideo(source: string): Promise<void> {
     if (!frames.length || frames.length > MAX_FRAMES) throw new MediaSafetyError(true);
     for (let index = 0; index < frames.length; index += 4) {
       await Promise.all(
-        frames.slice(index, index + 4).map((frame) => assertSafeMediaImages([frame])),
+        // These are frames of the finished video, never the customer's source
+        // image: a refusal here must say the result was blocked.
+        frames
+          .slice(index, index + 4)
+          .map((frame) => assertSafeMediaImages([frame], { stage: "output" })),
       );
     }
     await cache.set(key, true, 7 * 24 * 3600);

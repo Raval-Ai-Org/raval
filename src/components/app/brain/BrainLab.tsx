@@ -3,15 +3,17 @@
 // Development-only: the Brain screens with sample data, so layout, motion and
 // copy can be checked without a workspace or a sign-in. Mounted at /brain-lab.
 import { useEffect, useState } from "react";
-import { emptyDna, type BrandDna } from "@/hooks/use-brand-dna";
 import { newsSince, type BrainOverview, type BrainSection } from "@/lib/brain/brain";
+import { decideGoals, goalLine } from "@/lib/goals/decide";
+import { goalProgress } from "@/lib/goals/progress";
 import type { MarketingStrategy, StrategyView } from "@/lib/strategy/contracts";
 import { cn } from "@/lib/utils";
 import { BrainHome } from "./BrainHome";
 import { BrainIcon, BrainMark } from "./BrainMark";
 import { BrainPulseView } from "./BrainPulse";
 import { ScanSteps } from "./brand/ScanSteps";
-import { LookEditor } from "./brand/look/LookEditor";
+import { CommunityScreen, type CommunityHandlers } from "./community/CommunityScreen";
+import { communityHome, communityHomeEmpty } from "./community/community-lab.fixtures";
 import { NotesBoard } from "./home/NotesBoard";
 import { StrategyScreen, type StrategyHandlers } from "./strategy/StrategyScreen";
 
@@ -193,6 +195,31 @@ const overview: BrainOverview = {
       cta: "Pick",
     },
   ],
+  goal: (() => {
+    const set = decideGoals(
+      {
+        focus: "followers",
+        targets: [
+          { metric: "followers", platform: "instagram", target: 5000, baseline: 1200 },
+          { metric: "reach", target: 60_000 },
+        ],
+        timeframeWeeks: 12,
+        postsPerWeek: 4,
+        channels: ["instagram"],
+      },
+      new Date(Date.now() - 3 * 7 * 86_400_000),
+    );
+    return set.ok
+      ? {
+          line: goalLine(set.goals),
+          progress: goalProgress(
+            set.goals,
+            { postsPublished: 11, views: 18_400, connected: ["instagram"] },
+            new Date(),
+          ),
+        }
+      : null;
+  })(),
   generatedAt: new Date().toISOString(),
 };
 
@@ -269,31 +296,18 @@ const SCENES = [
   "strategy-empty",
   "strategy-writing",
   "pulse",
-  "look",
   "notes",
   "scan",
   "marks",
+  "community",
+  "community-empty",
 ] as const;
 type Scene = (typeof SCENES)[number];
-
-const sampleDna: BrandDna = {
-  ...emptyDna,
-  brandName: "Northside Roasters",
-  voice: "Warm, practical, a little dry",
-  colors: [
-    { name: "Primary", hex: "#1f3d2b" },
-    { name: "Accent", hex: "#e9a23b" },
-    { name: "Background", hex: "#f6f1e7" },
-    { name: "Text", hex: "#1b1b1b" },
-  ],
-  fonts: ["Fraunces", "Inter"],
-};
 
 export function BrainLab() {
   const [scene, setScene] = useState<Scene>("home");
   const [last, setLast] = useState<string>("");
   const [pulseOpen, setPulseOpen] = useState(true);
-  const [dna, setDna] = useState<BrandDna>(sampleDna);
   // Set once the page is interactive and on the scene the URL asked for.
   const [ready, setReady] = useState(false);
 
@@ -313,6 +327,15 @@ export function BrainLab() {
     saving: false,
   };
   const seenAt = Date.now() - 10 * HOUR;
+  const community: CommunityHandlers = {
+    refresh: () => setLast("community:refresh"),
+    pause: () => setLast("community:pause"),
+    setStatus: (id, status) => setLast(`community:status:${id.slice(-4)}:${status}`),
+    addWatch: (kind, value) => setLast(`community:watch:${kind}:${value}`),
+    removeWatch: (id) => setLast(`community:unwatch:${id.slice(-4)}`),
+    draftReply: (id) => setLast(`community:draft:${id.slice(-4)}`),
+    copy: (text) => setLast(`community:copy:${text.length}`),
+  };
 
   return (
     <div data-mellox-app className="min-h-dvh bg-background text-foreground">
@@ -382,11 +405,6 @@ export function BrainLab() {
             />
           </div>
         )}
-        {scene === "look" && (
-          <div className="mx-auto max-w-[1100px] p-4 sm:p-7">
-            <LookEditor dna={dna} save={(patch) => setDna((d) => ({ ...d, ...patch }))} />
-          </div>
-        )}
         {scene === "notes" && (
           <div className="mx-auto max-w-[1040px] px-4 pt-5 sm:px-6">
             <NotesBoard workspaceId="00000000-0000-4000-8000-0000000000ab" />
@@ -398,6 +416,16 @@ export function BrainLab() {
             <ScanSteps brand="done" audience="running" competitors="running" />
             <ScanSteps brand="done" audience="done" competitors="done" />
             <ScanSteps brand="done" audience="skipped" competitors="done" />
+          </div>
+        )}
+        {scene === "community" && (
+          <div className="px-4 py-5 sm:px-6">
+            <CommunityScreen home={communityHome} handlers={community} />
+          </div>
+        )}
+        {scene === "community-empty" && (
+          <div className="px-4 py-5 sm:px-6">
+            <CommunityScreen home={communityHomeEmpty} handlers={community} />
           </div>
         )}
         {scene === "marks" && (

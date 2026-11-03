@@ -8,7 +8,6 @@ import { emitAppEvent } from "@/lib/app-events";
 import { shareStoryAsReel, shareVideoAsStory } from "@/lib/stories.functions";
 import { STORY_FEATURES, STORY_LIFETIME_HOURS, isStoryPlatform } from "@/lib/stories/placement";
 import type { StudioType } from "@/lib/studio/formats";
-import { openComposer } from "@/lib/studio/session-store";
 
 type Row = { id: string; title?: string | null; meta: Record<string, unknown> | null };
 
@@ -68,33 +67,7 @@ export function StoryNotes({
     }
   };
 
-  if (type !== "video" && type !== "story") {
-    const title = (first?.title ?? "").trim();
-    return (
-      <div className="space-y-3">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Retell this as a short Story for Instagram and Facebook.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled || !first}
-          onClick={() =>
-            first &&
-            openComposer({
-              type: "story",
-              brief: title ? `Turn "${title}" into a Story.` : "Turn this post into a Story.",
-              sourceContentId: first.id,
-            })
-          }
-        >
-          <Story />
-          Make a Story from this
-        </Button>
-      </div>
-    );
-  }
-
+  // Making a new Story from another format is "Make more from this" (MakeMoreFrom).
   if (type === "video") {
     return (
       <div className="space-y-3">

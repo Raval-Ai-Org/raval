@@ -37,7 +37,9 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   primary colour is Ultra Moss lime in both themes; use `EmptyState` /
   `ErrorState` / `Skeleton` for states; feature surfaces are `AppModalShell` modals.
   Follow [docs/design-system.md](docs/design-system.md): `ds-*` tokens/utilities,
-  `SurfaceLayout` rail for multi-section surfaces, pill buttons. Never restyle the
+  `SurfaceLayout` rail for multi-section surfaces, pill buttons. A social platform
+  is shown by its app icon (`PlatformAppIcon`, `src/components/brand/`), and picked
+  from `PlatformLogoGrid` (`studio-ui.tsx`), never as a row of text names. Never restyle the
   public landing page (`src/app/page.tsx`) as part of app UI work.
 - **Background work:** no queue service — job rows with leases claimed via
   SKIP LOCKED RPCs, advanced by pg_cron → `/api/public/hooks/*` and `after()`.
@@ -78,14 +80,29 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 
 - **No Anthropic API.** Text, vision, tool use and images all go through
   OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
-  `anthropic/claude-opus-5.5` via OpenRouter.
+  `anthropic/claude-opus-5.5` (and Sonnet / Haiku 5.5) via OpenRouter.
 - **The model comes from the route label.** `src/server/ai/task-models.ts`
   maps every metering `route` to a plan (models + fallbacks, reasoning effort,
-  token ceiling, escalation, degraded plan). Tiers: PREMIUM Opus 5.5,
-  WORKHORSE Gemini 3.8 Flash, ECONOMY Gemini 3.1 Flash-Lite. A new `route:`
-  label needs an entry (a test enforces it). Override per route with
-  `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`.
-- Every call sends `provider.data_collection: "deny"`, `tool_choice: "auto"`
+  token ceiling, escalation, degraded plan). Tiers, each the cheapest model
+  that does its kind of work well (cost review 2026-11-03):
+  - PREMIUM Opus 5.5: only rare, high-stakes work (GEO Engineer and fixes,
+    experiment code, published articles, video storyboards, escalations);
+  - ANALYST GPT-6.1 Sol: Brand DNA, strategy, audience groups, campaign plans;
+  - CONVERSATION Sonnet 5.5: Mellox Pro chat and Coach;
+  - SUMMARY GPT-6.1 Terra: briefings and small structured jobs, and
+    WORKHORSE's fallback (a fallback never costs more than its primary);
+  - WORKHORSE Gemini 3.8 Flash: everything people see from Studio, chat,
+    pictures and audio, Market Brain;
+  - BUDGET DeepSeek V4.1 Flash and LABELLER GLM-5.3 Flash: text-only
+    internal work and labelling;
+  - CAREFUL Haiku 5.5 (safety checks, caption edits), LUNA GPT-6 Luna,
+    ECONOMY Gemini 3.1 Flash-Lite (files, audience scores).
+    A new `route:` label needs an entry (a test enforces it). Override per
+    route with `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`; that is also
+    the instant rollback for a route.
+- Every call sends `provider.data_collection: "deny"`; a request with an
+  open-weight model (`isOpenWeightModel`) also sends `provider.quantizations`
+  so 4-bit hosts never answer. `tool_choice: "auto"`
   only (Opus rejects forced tools), and meters the model that actually
   answered from `usage.cost`. The tool loop replays `reasoning_details`
   unchanged and is append-only.
@@ -131,13 +148,27 @@ Brand Styles and the Brand Kit are gone — never add them back).
     column is a copy; the workspace row is the source.
   - Nothing rebuilds or spends by itself. The first strategy is included; a
     rebuild is `strategy_rebuild` through `runMetered`.
-- **One look per brand, on Brand DNA** (`dna.look`, edited in Brand → Look &
-  voice). Pure core in `src/lib/brand-look/` (`parseLook`, `resolveLook`, prompt
+- **One look per brand, on Brand DNA** (`dna.look`, edited in Inspo — see
+  below). Pure core in `src/lib/brand-look/` (`parseLook`, `resolveLook`, prompt
   blocks, `checkWritingConformance`, fonts).
   - **Generators get the look only through** `loadBrandLook` / `lookTextFor`
     (`src/server/brand-look/resolve.server.ts`), with the verified workspace id.
     There is no style id anywhere; never add a picker or a second look.
   - No look set means plain Brand DNA (`customized: false`, no style block).
+- **Inspo** ([ADR-0037](docs/adr/0037-inspo.md)) is where the look is edited:
+  sidebar → Inspo, `/w/<id>/app/inspo?s=board|post|video|voice|media`
+  (`inspoPath`, `open:inspo`), the one look-related exception to "no sidebar
+  entry". UI `src/components/app/inspo/` (`InspoScreen` is presentational,
+  `/inspo-lab` + `tests/integration/inspo-lab.spec.ts`), pure rules
+  `src/lib/inspo/`.
+  - Board and Media are `brand_visual_sources` rows (Love/`style`, Avoid,
+    Product, Person) through `POST /api/brand-visuals/upload`; Post look,
+    Video look and Voice write `dna.look` via `tidyLook`. No new table.
+  - "Learn my style" is the existing paid analysis with the price on the
+    button; a direction is used only after "Use this". Style strength and the
+    voice sample are pure and free.
+  - Brand DNA keeps one Inspo tile; `?t=look` / `?t=assets` / `/brand-kit`
+    land in Inspo. `dna.assets` is not edited any more.
 - **One scan fills three brains.** A Brand DNA scan (`BrandDnaSurface`) then
   builds the audience groups (`buildAudience`) and looks for competitors
   (`bootstrapCompetitors`) from what it found; `ScanSteps` shows the three
@@ -212,6 +243,75 @@ generators get no memory block. Chat tools off: chat is one plain reply.
   them with sample data in development (`tests/integration/memory-lab.spec.ts`).
 - Live check: `tests/live/memory.live.ts`.
 
+## Onboarding, goals and products
+
+Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
+[ADR-0035](docs/adr/0035-goals-and-product-catalog.md).
+
+- **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
+  website → goal (asked while the scan runs) → Brand DNA → products → channels
+  → first posts. "I don't have a website" swaps the scan for three questions.
+  New projects always start in onboarding. `/onboarding-lab` renders every new
+  step with sample data (`tests/integration/onboarding-lab.spec.ts`).
+- **Goals are the person's numbers** (`workspace_goals`).
+  - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the
+    RPC in `src/server/fns/goals.ts`.
+  - Save only through `decideGoals`. Never write an estimate into a goal.
+  - Progress (`goalProgress`, `GoalCard` on Brain home) counts only posts that
+    went out and their views. Followers, subscribers, leads and sales say "not
+    measured" until Mellox can really read them.
+  - Generators read the goal through `goalBlockFor`.
+  - The strategy follows it through `followGoals`, which pins the goal, the
+    first KPI and the weekly pace. Autopilot proposes its pace and channels.
+- **Products are rows; photos are assets** (`workspace_products`).
+  - Pure rules are in `src/lib/products/`, the server in `src/server/products/`.
+  - Discovery starts with the scan and reads the site's own data through
+    `safeFetch` (Shopify / WooCommerce feeds, product and service pages,
+    sitemaps, schema.org Product / Service / OfferCatalog), plus the Brand DNA
+    call's `catalog` list, which `groundCatalog` keeps only where the site says
+    so. No extra model call.
+  - Found items are kept by themselves as they arrive (`autoKeep`); a person
+    removes what they don't sell. `importCandidates` only adds, so a removed
+    product never comes back.
+  - Photos are `assets` rows checked against the workspace; never use a URL
+    or path from the browser. Upload through `POST /api/products/photos`.
+  - `BrandDna.products` is a summary of the catalogue. It is only rewritten
+    while it still says what Mellox wrote last.
+- **A product's photo is never redrawn, except in a hero poster.**
+  `controls.productId` on a Studio job makes the piece with the product's own
+  photos (`productPhotoControls`, `src/lib/products/feature.ts`): a single
+  picture is a **product hero poster** ([ADR-0040](docs/adr/0040-product-hero.md),
+  `referenceMode: "hero"`, `src/lib/studio/product-hero/`,
+  `src/server/studio/product-hero/`, flag `FEATURE_FLAG_PRODUCT_HERO_ENABLED`):
+  the image model cuts the product out once per photo (checked by `judgeCutout`,
+  cached as a `product-cutout` asset), code picks a new topic, staging, light,
+  set and occasion off the brand's latest posters while the brand's colours,
+  type and finish stay the same (`variety.ts`, `meta.hero_look`), the concept writer (`studio.hero.concept`) gives it its
+  own idea and headline, checked by `groundConcept` (no claim or figure the
+  facts don't state, no near-repeat), and the model stages it, never in a
+  frame or card.
+  With the flag off it is designed around the main photo (photo design, kept
+  exact; "post as is" when designing is off). A carousel places up to three on its slides, a Story or a made video starts
+  from the main one. Photos a person chose and edits keep what they had.
+  `createBilledStudioJob` decides this before pricing. The product's stored
+  facts lead the prompt (`productContextFor`), with the rule to claim nothing
+  else. Generators read the catalogue through `catalogBlockFor`.
+- **The right product is picked by itself.** A product the brief names is
+  picked (`namedProduct`) on the server and in Studio, which shows it and
+  prices it the same way; "No product" (`controls.noProduct`) stops that.
+  Autopilot (`autoProduct: "any"`) also features one for a selling brief that
+  names none, the one shown least recently (`content_items.meta.product_id`),
+  so posts move through the catalogue. Never let a model pick the product.
+- **A new picture is staged on another layout.** `meta.art_direction` is
+  stored per post; `recentLayouts` keeps the next concept off the latest two
+  (left out of `archetypeMenu`, refused in `shapeOutput`, excluded in
+  `pickArchetype`). A revision keeps its layout.
+- **First posts are a person's click.** Three ordinary Studio jobs through the
+  metered route, with the price on the button. Keys are fixed per post
+  (`onboarding-first:<workspaceId>:<n>`), so nothing is made or charged twice.
+  A 402 never blocks finishing setup.
+- Editing after onboarding: Brain → Brand → **Products** and **Goal** tiles.
+
 ## App tour (a new person's first look around)
 
 - **Once per account, never per workspace.** `profiles.app_tour_seen_at`
@@ -228,6 +328,26 @@ generators get no memory block. Chat tools off: chat is one plain reply.
 - `AppTour` (`src/components/app/tour/`) is presentational and starts nothing:
   the last card's first steps are a person's click. `/tour-lab` renders it on
   a stand-in shell in development (`tests/integration/tour-lab.spec.ts`).
+
+## Analytics (social, Google, and what needs no connection)
+
+- **Only Website and Search wait for Google** (`GoogleGate`,
+  `src/components/app/analytics/AnalyticsLock.tsx`). Overview, Social, Content
+  and Insights are always open; with Google not connected Overview shows one
+  `GoogleConnectBanner`, never six empty cards.
+- **Social is the brand's own accounts, read from Post for Me's account feed**
+  (every post, made in Mellox or not): `src/lib/postforme/feeds.ts` stores
+  `social_account_posts`, advanced by the **existing** sdr-reconcile sweep
+  (`syncDueFeeds`, each account every 6 h) and "Refresh"
+  (`/api/social/metrics/sync`). No cron job of its own.
+- Network numbers are normalised in `src/lib/social-insights/normalize.ts`; a
+  number a network doesn't report is left out, never 0. The report is pure
+  (`src/lib/social-insights/report.ts`): a post counts on the day it went out,
+  patterns need 2 posts per group (weekdays 8 in the window).
+- Source `social` and metrics `social.*` (`src/lib/analytics/metrics.ts`) feed
+  Overview, insights signals and the chat context like the other sources; never
+  add social numbers to GA4 or Search Console ones.
+- `/analytics-lab` renders every tab with sample data, including Social.
 
 ## Sharing (team invites and the client portal)
 
@@ -334,6 +454,24 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
     (a test enforces it).
   - **Activity log:** `geo_agent_events` holds real tool/transition summaries
     only, never model reasoning.
+- **Score version 3** ([ADR-0035](docs/adr/0035-geo-engine-v3-http-citability-speed.md),
+  rules in `src/lib/geo/rules-v3.ts`): HTTP behaviour (`analysis.http`,
+  `site.http`), citability and hidden instructions to AI (`analysis.citability`,
+  `analysis.hygiene`), and speed (`site.performance`). Every v3 rule is N/A when
+  its evidence wasn't collected — keep it that way.
+  - **Speed** goes only through `src/server/geo/performance.server.ts`
+    (PageSpeed Insights + Chrome UX Report, Mellox's `GOOGLE_PAGESPEED_API_KEY`
+    in a header). The runner measures inside `crawling` after the frontier
+    empties, saving each result so a slice resumes; quick scans get real-user
+    data only, verification scans nothing. Flag `FEATURE_FLAG_GEO_PERFORMANCE_ENABLED`.
+  - `pageImportance` in `score.ts` orders findings; it never changes a score.
+  - Response-header fixes stay manual: `paths.ts` never lets Mellox write
+    hosting configuration. Don't loosen it to automate them.
+  - `PerformanceView` and `FixImpactView` are presentational; `/geo-lab`
+    renders them with sample data in development.
+  - The live check (`tests/live/geo-scan.live.ts`) drives 240-second slices: a
+    shorter slice expires the lease and the deployed worker's pg_cron finishes
+    the scan with production code.
 - Dimension scores (`src/lib/geo/dimensions.ts`) are derived from the stored
   rule summaries; every rule id must be mapped (a test enforces it).
 - WordPress / Webflow sites (migration `20260929090000_geo_site_connectors.sql`):
@@ -426,6 +564,58 @@ sidebar entry is hidden, RPCs answer 404, and the worker pauses that workspace.
   `/api/public/hooks/experiments` every 5 minutes. PR state arrives via the
   GitHub webhook and a poll.
 - Live check: `tests/live/experiments.live.ts`.
+
+## Campaigns
+
+Full reference: [docs/campaigns.md](docs/campaigns.md), decision record
+[ADR-0039](docs/adr/0039-campaigns.md). Flag `FEATURE_FLAG_CAMPAIGNS_ENABLED`
+(with `_WS_<id>`), on unless `false`. When it's off, the RPCs answer 404, the
+worker cancels campaign steps and generators get no block.
+
+- **Sidebar → Campaigns replaced "Content calendar".** The calendar opens from
+  the Campaigns header (`open:content-calendar`). The route is
+  `/w/<id>/app/campaigns`; build links with `campaignsPath`; open it with
+  `open:campaigns`.
+- **A kind is a playbook** (`src/lib/campaigns/playbooks.ts`): phases around
+  a key date, each with its purpose, aims, formats, deliverable, openings,
+  Story theme, photo roles and link strength. Ids are stored: add, never
+  rename.
+- **Code shapes, the model writes.** `buildCampaignSkeleton` (free; at most
+  one feed post per channel per day across everything planned),
+  `settleFormats` and `assignMedia` decide the plan. "Write the plan"
+  (`campaign.plan`, 55 credits) only fills the words, through
+  `groundCampaignPlan`, which drops unknown figures, foreign links and
+  competitor names.
+- **The goal is the person's.** Their link must be public https (`linkRule`:
+  it goes in the caption where links work, "link in bio" on Instagram and
+  TikTok). Their count is typed in. Never estimate it.
+- **Pieces are Autopilot steps** (`autopilot_actions.campaign_id`,
+  `program_id` null), made by the existing worker through
+  `createBilledStudioJob`, with `campaignControls`. Approval follows the live
+  program's mode, else a person. Edits go through `diffPieces`, which never
+  touches a made step. No new cron job.
+- **Everything hears about it:**
+  - `runningCampaignsFor` / `campaignBlockFor` feed `loadStudioContext`, so
+    every generator gets the block and ideas get a `campaign` source;
+  - Autopilot's `calendar()` counts campaign steps as taken;
+  - posts carry `meta.campaign_id` / `campaign_phase` / `campaign_name`,
+    which the calendar shows and the Library filters by;
+  - chat and MCP have read-only `list_campaigns` / `get_campaign`.
+  - Never plan or start a campaign from chat.
+- **People always know what waits for them, Autopilot on or off.**
+  - `notifyCampaignWaiting` (`src/server/campaigns/notify.server.ts`, from the
+    existing `runDueAutopilot` sweep) emails the campaign's acting member at most
+    once a day per campaign (`workspace_campaigns.last_notified_at`, compare-and-set).
+  - The workspace pulse (`src/lib/pulse/pulse.ts`, `src/server/pulse/`, RPC
+    `src/server/fns/pulse.ts`) is one free read with the caller's own client:
+    posts waiting, running campaigns and their phase, products, goal.
+    `WaitingChip` shows campaign approvals in the message box when there is no
+    Autopilot program, and the ideas under the box (`buildStarters`) name them.
+- "Write the plan" also gets the brand's measured learnings (`measuredPieces`
+  → `summarizeLearnings`), the stored trends snapshot (`trendLines`) and recent
+  openings. Never search the web from planning.
+- `CampaignsScreen` is presentational; `/campaigns-lab` renders it with
+  sample data (`tests/integration/campaigns-lab.spec.ts`).
 
 ## Autopilot
 
@@ -652,12 +842,43 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   `market_intelligence_cache`, keyed on the sources' own content so identical
   evidence never bills twice). Sources are wrapped as untrusted data
   (`src/server/guardrails/untrusted.ts`) before they reach the prompt.
-- **Daily re-collection** is a `scheduled_jobs` row (`task_type:
+- **Re-collection** is a `scheduled_jobs` row (`task_type:
 "market-brain"`) driven by `market-brain-scheduler.server.ts`, advanced by
-  `runDueMarketBrainCollections()`.
+  `runDueMarketBrainCollections()`: daily for a workspace a person used in
+  the last 7 days, weekly otherwise. A failed web search is metered at $0
+  (Tavily bills answered requests only).
 - UI: `MarketBrainPanel.tsx` + `MarketBrainInsights.tsx` +
   `MarketBrainProgress.tsx`, shown in Brain → Market; routes
   `src/app/api/market/{trends,intelligence,latest}`.
+
+## Studio video (kinds, storyboards, chained clips, checks)
+
+Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
+[ADR-0041](docs/adr/0041-studio-video-kinds.md). Flag
+`FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED` (with `_WS_<id>`), on unless `false`.
+
+- **A video has a kind** (`src/lib/studio/video/kinds.ts`; ids stored: add,
+  never rename). Auto is `pickVideoKind`. A person talking to camera is a
+  Creator (UGC) video, not a kind.
+- **Settle once, the same everywhere:** `settleVideoControls` decides kind,
+  model and length for the composer, the quote and `createBilledStudioJob`.
+  The default model is `DEFAULT_STUDIO_VIDEO_MODEL`; never pick Premium for
+  a person.
+- **Whole clips only** (`lengths.ts`). Never trim a clip to fit a length.
+- **The storyboard decides, code builds the prompts.** One
+  `studio.video.storyboard` call; `storyboardIssues` stops a bad plan before
+  any video spend; `clipPrompt` puts the full bible in every clip. A
+  reviewed script's words reach their clip exactly.
+- **Story kinds chain** (each clip opens on the last frame of the one
+  before); mood clips run in parallel and dissolve.
+- **Bad videos are never delivered.** Every storyboarded video is checked
+  (`checks.ts`, `qa.server.ts`, route `studio.video.qa`); one redo at
+  Mellox's cost, then the job fails and nothing is charged. Never turn a
+  failed check into a warning.
+- A video from a post opens on the whole post (`frameForVideo`, never
+  cropped) and ends on the exact post.
+- Premium video is sold from Starter (`video_premium`); Cinematic stays
+  Agency and up.
 
 ## Studio: carousels, trends and content memory
 
@@ -693,6 +914,85 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
   run-schedules hook via the one search path. Generators only read it: a brief
   never triggers a trends search. A trend is kept only if it cites a source the
   search returned (`groundTrends`). Flag `FEATURE_FLAG_SOCIAL_TRENDS_ENABLED`.
+- **Art direction is one library** (`src/lib/studio/art-direction.ts`, pure):
+  proven campaign layouts (oversized object, product in its own world,
+  exploded view, miniature diorama, giant word behind the subject, and so on),
+  written brand-neutral, plus the craft rules every picture gets. The image
+  brief picks a layout (`artDirection`), post images and carousel covers are
+  staged on it, and a brand style with its own layout or exact references
+  keeps that layout. Add a layout there; never name another brand in it.
+- **Creative knowledge is one module** (`src/lib/studio/creative-knowledge.ts`,
+  pure; sources and licences in [docs/studio/creative-knowledge.md](docs/studio/creative-knowledge.md)):
+  deliverables (offer, event, launch, quote, tips cover...) with reading order
+  and "never invent" rules, exact copy as verbatim data with one emphasis per
+  brand, the type system, the final quality check, and the writers' cover test
+  and self-review. Post images, carousel slides, Story frames and the briefs
+  read it; add a rule there, never in one prompt only. Keep the attribution
+  table current when a source changes.
+- **An ad is not a post: it has an objective** (`src/lib/studio/ad-objectives.ts`,
+  pure; ids stored, add never rename): sell, leads, clicks, awareness,
+  win back visitors, app installs, local visits, event. `controls.adObjective`
+  (picker in Studio), else `resolveAdObjective` from the brief and goal; a
+  revision keeps it. It sets the copy method, the three angles tested, the
+  buttons, the layouts tried first (`pickAdFormat`) and the picture's job, plus
+  `AD_POLICY_RULES` (no invented urgency, never assert personal attributes).
+  Ad pictures get the same `TYPE_SYSTEM` and `qualityCheckLines` as posts. Every
+  ad also writes Google search lines (`search`, kept only within 30/90 chars,
+  stored as `meta.ad_search`), which the Google Ads connector uses first.
+- **An ad is a designed ad.** `src/lib/studio/ad-formats.ts` holds the proven
+  static layouts (ids stored on jobs: add, never rename). The ad prompt picks
+  one (`pickAdFormat`), the copy model writes `onImage` for it, and
+  `adImagePrompt` renders a finished ad with exactly those words. A look with
+  no words on pictures, composed artwork or a source-photo edit keeps the
+  plain visual, and so does an ad about a picked product (its photo is kept
+  unchanged, ADR-0035), so layouts that need a product (`needsProduct`) are
+  not offered or picked. A format's copy rules never allow an invented quote,
+  offer, figure or competitor.
+- **Versions, the edit chat and the ideas deck** (review tools):
+  - Versions (`src/lib/studio/variations.ts`): a revision with target
+    `variations` renders 2-4 `option:N` slots for a single-picture piece,
+    saved without linking the post. Priced per picture from the catalog's
+    `image_standard` (2 creation points each); only finished versions are
+    captured. Choosing one is `POST /api/studio/jobs/[id]/choose` (free): it
+    links that picture and swaps it with `main`. Any other new render drops
+    old versions.
+  - The edit chat (`EditChat.tsx`, pure routing `src/lib/studio/edit-chat.ts`)
+    is the only change box in review: `planEdit` sends a message to the
+    picture (`media`, edited on the current render), the words, both (`all`)
+    or versions, and shows the price before it is sent. Every message is an
+    ordinary revision. Undo is `POST /api/studio/jobs/[id]/restore` (free),
+    which rewrites the post from the earlier job; not offered for carousels
+    or Stories.
+  - The ideas deck (`IdeaSwipeDeck.tsx`, pure `src/lib/studio/idea-deck.ts`)
+    keeps saved and skipped ideas per browser only. More ideas is always a
+    person's click.
+- **Make more from this** (`src/lib/studio/repurpose.ts`, pure): a finished
+  piece offers the formats it can become (`repurposeTargets`), in review
+  (`MakeMoreFrom.tsx`) and on the chat's Studio card. A click opens a draft
+  with `sourceContentId` (shown as "Made from …" in the prompt box); nothing
+  is made until Generate. In chat, "turn this into a carousel" right after a
+  piece (`detectRepurposeIntent`) starts from that piece. The server reads the
+  source by id against the job's workspace and every text prompt keeps its
+  facts (`sourceSection`). A picture becomes a video with the picture kept.
+- **A carousel can show the brand's own photos and screenshots**
+  (`src/lib/studio/carousel/photos.ts`, `carousel-photos.server.ts`). Code
+  places them on slides (`assignPhotos`: cover first, the last slide stays
+  type-only) in a `phone`, `browser` or `photo` frame; screens are cut to
+  their window from the top on the server, never redrawn. `carousel.photos`
+  stores workspace paths only (re-checked by `workspacePhotos`); signed links
+  are added on read.
+- **Type-led structures have their own looks:** `reveal` / `intro` → `swiss`,
+  `running-joke` → the `glow` motif (`pickCarouselDesign`). `BRAND_LOOKS`
+  keeps the original four, so adding a look never reshuffles a brand's look.
+- **A website capture is always shown in a device** (`screenCaptureIds`,
+  `cropToScreen`, `image-website-showcase`), never as a raw picture.
+- **"From my website"** (`videoMode: "site"`, `src/lib/studio/site-reel.ts`,
+  `clip-edit/site-frame.server.ts`, `siteScroll`): one full-page capture
+  scrolls in a code-drawn device with holds and eased moves and loops back to
+  the top. No model call; priced as `photo_recap`.
+- Lessons from studied reference posts are distilled into these modules and
+  [docs/studio/reference-study-2026-10.md](docs/studio/reference-study-2026-10.md).
+  `Post Training/` is never committed or shipped; never name a brand from it.
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style
@@ -703,6 +1003,63 @@ Decision record [ADR-0023](docs/adr/0023-tavily-market-signals.md).
 - Live check: `tests/live/studio-carousel-trends.live.ts` (collecting behind
   `TRENDS_LIVE_REFRESH=yes`).
 
+## Own photos and clips (design with the brand's real media)
+
+Full reference: [docs/studio/photo-design.md](docs/studio/photo-design.md),
+decision record [ADR-0036](docs/adr/0036-own-photos-and-clips.md). Flags
+`FEATURE_FLAG_PHOTO_DESIGN_ENABLED` / `FEATURE_FLAG_CLIP_EDIT_ENABLED` (each
+with `_WS_<id>`), on unless `false`.
+
+- **Photos are composited, never redrawn**, unless the person chose "Blend it
+  more". The image model draws a design layer with key-colour windows
+  (`src/lib/studio/photo-design/`); code places the real photos
+  (`src/server/studio/photo-design/compose.server.ts`).
+- **No template fallback.** A layer that fails the pure checks (`checks.ts`)
+  is asked for once more with the reason, then the piece fails plainly.
+- **The model never draws a logo or a person**; only the real logo, placed by
+  code.
+- `resolvePhotoMode` decides the mode once, before pricing. "Post as is" with
+  words asked for, a picture edit or versions becomes a design.
+- **Clips and recaps** (`src/server/studio/clip-edit/`, FFmpeg):
+  - the footage is kept;
+  - the render runs in `after()` and parks its result in the cache for
+    `advanceStudioJob`;
+  - no cron job;
+  - animated recap photos are `motion:<n>` slots, never linked to the post;
+  - **which part of a clip is used is code's decision** (`src/lib/studio/smart-cut.ts`):
+    FFmpeg measures scene changes, black/frozen footage and pauses, the minute
+    is shared so every clip appears, and pieces join with one short `xfade`.
+    No Python and no second toolchain;
+  - **captions only when someone talks**, heard once per sound (cached by
+    hash) by local whisper.cpp (`WHISPER_CPP_PATH` + `WHISPER_MODEL_PATH`) or
+    route `studio.transcribe`; cues, colours and position are pure
+    (`src/lib/studio/captions.ts`), words heard in silence are dropped, and a
+    failure leaves captions out, never the video;
+  - the brand's own sound is brought to -14 LUFS.
+
+## Library and taste (hearts teach Mellox)
+
+Decision record [ADR-0038](docs/adr/0038-library-taste.md). Flag
+`FEATURE_FLAG_TASTE_ENABLED` (with `_WS_<id>`), on unless `false`. Off: no
+hearts, RPCs answer 404, no prompt block, no lean.
+
+- **Nothing is cropped.** Library tiles are masonry at each piece's true shape
+  (`src/lib/library-grid.ts`, `src/components/app/library/`), pictures
+  `object-contain`. Never go back to fixed-ratio `object-cover` tiles.
+- **One reaction per piece per brand** (`content_reactions`, `love` / `less`,
+  shared by the team). A post's subject is its `group_id`; a post's picture
+  belongs to its post.
+- **Traits are copied from stored rows only** (`traitsOf`,
+  `src/lib/taste/traits.ts`) by `setReaction` (`src/server/taste/`, RPC
+  `src/server/fns/taste.ts`, editor only). Never take a trait from the browser.
+- **Honest thresholds** (`src/lib/taste/learn.ts`): two loves to like a value,
+  two lesses to avoid one, newest 200 reactions. Never lower them.
+- **Generators get taste only through** `tasteContextFor` / `tasteBlockFor` or
+  `ctx.taste` (`loadStudioContext`). Pickers take a lean through `applyLean`,
+  which never empties a list and runs after the picker's own rules.
+- **Loved pictures become Inspo references** ("Loved in Library") only when the
+  asset has none; removing a heart removes only the reference it created.
+
 ## Backlink Growth (buying real placements)
 
 Mellox **buys** backlinks; it does not analyse someone else's. A user picks the
@@ -711,8 +1068,12 @@ the placement through a fulfilment provider, then fetches the published page to
 prove the link is really there. The user never needs a provider account and
 never sees one.
 
-- Route `/w/<id>/app/backlinks` (renders `AppModalShell` over `AppShell`, which
-  owns the viewport); sidebar entry in **Intelligence**. UI in
+- **Paused in the UI ("coming soon").** The route `/w/<id>/app/backlinks`
+  (`BacklinksRoute`, an `AppModalShell` over `AppShell`) shows a coming-soon
+  state instead of `LinksPanel`; it is not in the sidebar at all, and it is not sold: the catalog marks
+  it `availability: "later"` and it is off the plan highlights and the pricing
+  table. To bring it back, render `LinksPanel` in the route, restore the
+  **Intelligence** sidebar entry, set it to `"launch"` and restore the copy. UI in
   `src/components/app/links/`, RPC `src/server/fns/links.ts`, stubs
   `src/lib/links.functions.ts`.
 - **Mellox owns the provider credential** (`RIXOT_API_KEY`) — never ask a user
@@ -783,6 +1144,12 @@ record ADR-0027.
   Included work uses `requireBillingFeature` / `requireWithinLimit`. Background jobs
   use `beginAsyncCharge` → `link(kind, rowId)` (`async-charges.server.ts`) and settle
   from the job's own status; add new kinds to `billing_async_links` and `outcomeFor`.
+- **Short clips use credits, not Video Credits.** One AI clip of 8 s or less on
+  Economy or Standard (a picture brought to life, each animated recap photo, an
+  8 s video or video Story) is `studio_short_clip`: `SHORT_CLIP_CREDITS` in the
+  catalog, decided by the pure `shortClipPlan` (`src/lib/studio/short-clip.ts`),
+  also payable in creation points. Longer, Premium, Cinematic and UGC renders
+  stay on Video Credits.
 - Notices go through `notify()` (`src/server/billing/notify.server.ts`, deduped per
   window); email only via `src/server/notify/email.server.ts` (Resend).
 - Tracked prompts: `src/server/geo/tracked-prompts.server.ts`, run from the existing
@@ -811,6 +1178,127 @@ record [ADR-0011](docs/adr/0011-github-app-website-connector.md).
   paths checked by `paths.ts`, exact-content approval, a PR — never a push to a
   base branch. The one merge path is an admin pressing "Merge now" on a GEO fix
   (see AI Visibility). Every write is audited (`src/server/audit.server.ts`).
+
+## Connected apps (Composio)
+
+Decision record [ADR-0042](docs/adr/0042-composio-integration-layer.md);
+capability checks in [docs/integrations/capability-matrix.md](docs/integrations/capability-matrix.md).
+Flags `FEATURE_FLAG_INTEGRATIONS_ENABLED` (on unless `false`, with `_WS_<id>`)
+and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
+
+- **One gateway:** `src/server/integrations/composio/gateway.server.ts` is the
+  only file that reads `COMPOSIO_API_KEY` or calls Composio. Writes are never
+  retried; an unclear write is `unknown_outcome` and is resolved by reading.
+- **One guard:** every tool runs through `runIntegrationTool`
+  (`src/server/integrations/execute.server.ts`): account belongs to the
+  verified workspace and is active → tool is on the catalog allow-list → role →
+  a write needs an `approvalRef` → rate limit (`integration-read` / `-write`)
+  → `integration_tool_calls` (append-only) + audit. Never call the gateway's
+  `executeTool` from anywhere else.
+- **One catalog:** `src/lib/integrations/catalog.ts` lists every app, its
+  method, availability (`live | testing | needs_approval | later`), what Mellox
+  does with it and the exact tool slugs. Never list a destructive tool (a test
+  enforces it); only OAuth apps, never a pasted key. An app is shown only once
+  its workflow exists.
+- **Identity is the workspace:** Composio user `mellox_ws_<workspaceId>`
+  (`composioUserId`), derived, never stored or taken from a request.
+  `completeConnect` re-reads Composio before trusting an account.
+- Accounts: `integration_accounts` (Composio ids only, no tokens); connect →
+  `/api/integrations/apps/callback` → `AppConnectCallback` with
+  `useConnectWindow("apps")`. Status is swept every 6 h from the **existing**
+  `sdr-reconcile` hook (`sweepAccounts`); no cron job of its own.
+- UI lives in **Settings**, three places only: **Social accounts**
+  (`SocialAccountsSection`, every network the same, whichever provider is
+  behind it), **Connectors** (`connectors/ConnectorsGallery.tsx`: one
+  searchable grid of real logos; a tile opens that app's own connector, Canva
+  shown once) and **AI assistants** (MCP, unchanged). Open one with
+  `open:settings` `{ section, connector }`; the old `analytics` / `website`
+  sections and `/channels` links land in Connectors. App marks are the real
+  logos in `brand/AppLogo.tsx`; never draw a look-alike.
+  Both pages share `connectors/ConnectorParts.tsx` (hero, square logo tiles,
+  opened view) and are presentational (`SocialGrid`, `ConnectorsView`), shown
+  in `/connections-lab` (scenes `social`, `connectors`).
+- **Offer an app where it's needed**, not as another page: Canva in a
+  picture's edit tools (`CanvaEditButton`); a finished piece's "Send to" row
+  (`studio/SendToApps.tsx`, `sendAppsFor`) shows the apps that fit it (ads →
+  Google Ads, Drive; posts and articles → Drive, Gmail), connected ones as
+  actions and the rest as dashed chips that connect in a sign-in window
+  (admins); Sheets in the calendar's Export menu.
+- **The Reddit agent** (`/w/<id>/app/communities`, `communitiesPath`) is in
+  the sidebar under Create; Brain → Market → Communities links there. It is
+  the agreed sidebar exception.
+- A social network that signs in through Composio opens a marked window
+  (`openConnectWindow("apps")`); `SocialAccountsSection` hears the result on
+  the connect-window channel as well as Post for Me's, so no refresh is needed.
+- **Social on Composio (Phase 2):** Instagram, Facebook Pages, Pinterest,
+  LinkedIn and YouTube, every network Composio signs in to without an app of
+  Mellox's own (`COMPOSIO_PUBLISHING`, `src/lib/social/routing.ts`); X,
+  Threads and TikTok need one, so they stay on Post for Me. The provider is
+  per account.
+  - A tool that takes a file (LinkedIn pictures, a YouTube video) gets a
+    `{ $file }` argument (`fileFor`, `requests.ts`); the publisher fetches it
+    through `safeFetch` and puts it in Composio's file store
+    (`stageIntegrationFile` → gateway `uploadFile`) just before the step.
+  - LinkedIn video goes from a person only; YouTube takes video only.
+  - Connecting looks up where it can post (`syncDestinations`,
+    `src/lib/social/composio/destinations.ts`): each Page, board or business
+    account is one `social_accounts` row (`provider = 'composio'`,
+    `provider_account_id = <integration account id>:<destination>`).
+  - The Post for Me handlers take `deps.composio` (wired in
+    `postforme/workspace.server.ts`): those accounts are listed, sent by
+    `src/server/social/composio/service.server.ts`, cancelled, retried and
+    disconnected there. Post for Me never sees them.
+  - Pinterest is a Studio platform (`PlatformId`), Composio only (never on
+    Post for Me's list; `connectablePlatforms` adds it to the accounts
+    picker). A Pin is one 2:3 picture from the image post: `pinIssue`
+    (`src/lib/social/pinterest.ts`) refuses video, Stories, carousels and
+    words alone before approval.
+  - Requests are pure (`src/lib/social/composio/requests.ts`), matched to the
+    live tool schemas. Stories, LinkedIn media and YouTube uploads are refused
+    with a reason, never guessed.
+  - Mellox keeps their schedule: rows park as `pending` and the **existing**
+    `run-schedules` hook sends them (`runDueComposioPosts`) only while the item
+    still reads `scheduled`. A send is never retried by itself; a cut-off or
+    timed-out publish fails as `unknown_outcome` and Retry is a person's click.
+- GitHub, Slack, Notion, Google, WordPress, Webflow and Wix stay on their own
+  connector code. Wix is shown only when `checkWixConfig()` passes (its app
+  keys are set); a site already connected still shows.
+- **Canva runs through Composio** unless Mellox's own Canva app is configured
+  (`CANVA_CLIENT_ID`). The edit flow (`src/server/connectors/canva/`) is the
+  same either way: `canvaRequest` sends each call through the guarded proxy
+  (`runIntegrationProxy`, `execute.server.ts` → gateway `proxyRequest`),
+  limited to the catalog's `proxy` endpoint allow-list (`allowedProxy`, exact
+  paths, `:id` segments only, never DELETE).
+- **Drive, Gmail, Google Ads** (`business.server.ts`, button row
+  `studio/SendToApps.tsx`): Drive only adds files to a "Mellox" folder; Gmail
+  only saves drafts; Google Ads makes a **paused** Search campaign from a
+  Studio ad (budget → campaign → ad group → responsive search ad), admins
+  only. Never send a status that runs an ad. TikTok Ads stays `later` until
+  its send flow exists.
+- **Business apps** (`src/lib/integrations/business.ts`, pure;
+  `src/server/integrations/business.server.ts`), each tied to one workflow:
+  - HubSpot only reads: the count of contacts added since the goal started is
+    kept on `integration_accounts.metadata.leads` by the **existing**
+    sdr-reconcile sweep (`refreshLeadCounts`) and shown as measured by
+    `goalProgress`. Never estimate it.
+  - Mailchimp makes a **draft** campaign from a post (`saveEmailDraft`); never
+    add a send or schedule tool.
+  - Google Sheets makes a new sheet from the calendar
+    (`exportCalendarToSheets`); it never edits an existing sheet.
+  - Both writes are chat buttons (`CHAT_ACTION_TOOLS`) and MCP tools
+    (`src/server/mcp/tools/apps.ts`), and a person's click in the app: the
+    calendar's Export menu ("New Google Sheet", exactly the posts on screen,
+    placed by `entryFromContent`) and review's Email section (`EmailDraft`).
+    Both show only when the app is connected (`useConnectedApps`).
+  - The weekly report adds the measured lead count and the week's community
+    threads (`growthFacts` in `autopilot/ports.server.ts`); a missing part is
+    left out. Shopify, Klaviyo and Drive are `later`.
+- **Agents are names for work that exists** (`src/lib/agents/roster.ts`, pure):
+  each has a place, needs, Autopilot automations, control-plane workers and
+  chat reads. `getAgents` (`src/server/fns/agents.ts`) works out the state from
+  stored rows only; Settings → Agents (`AgentsPanel`) shows it above
+  `OperationsInbox`, the one approvals list. Never give an agent its own chatbot
+  or a way to act without a person's click or an approval.
 
 ## MCP server (AI assistants)
 

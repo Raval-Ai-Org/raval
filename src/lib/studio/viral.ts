@@ -120,7 +120,7 @@ export function formatGuide(types: readonly string[]): string {
 }
 
 const VISUAL: readonly StudioType[] = ["image", "carousel", "video", "story"];
-const SEARCHED: readonly PlatformId[] = ["instagram", "tiktok", "youtube"];
+const SEARCHED: readonly PlatformId[] = ["instagram", "tiktok", "youtube", "pinterest"];
 
 /** What every piece needs before it is worth posting, whatever its aim. */
 export function shareRules(type: StudioType, platforms: readonly PlatformId[] = []): string[] {
@@ -129,6 +129,7 @@ export function shareRules(type: StudioType, platforms: readonly PlatformId[] = 
     "The opening is a promise and the rest keeps it. Never open on the brand's name, a greeting, or how excited anyone is.",
     "Be specific: a named situation, a real example, a figure that is in the context. A general statement is skipped.",
     "One idea. Everything that does not serve it is cut.",
+    "Write for a phone: a first line under ten words, then paragraphs of one or two lines; what the reader gets, not a list of features; no hype words like 'game-changer' or 'revolutionary'.",
     "Ask for one action that fits the piece (save it, send it to someone, answer one thing, follow a link). Never several.",
     "No bait: no 'comment YES', no 'you won't believe', no pretend deadline. It gets a post hidden and costs trust.",
   ];

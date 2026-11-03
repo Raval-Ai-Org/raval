@@ -14,7 +14,7 @@ import { triggerEnabled } from "@/server/trigger/flags.server";
 
 export class TriggerGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(status, message, { provider: "trigger.dev", code });
+    super(status, message, { provider: "trigger.dev", code, internal: true });
     this.name = "TriggerGatewayError";
   }
 }

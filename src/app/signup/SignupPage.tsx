@@ -244,8 +244,8 @@ function SignupPage() {
             Check your email to finish signing up.
           </p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Open the confirmation link in the same browser. Check spam or promotions if it does not
-            arrive shortly.
+            Open the newest confirmation email in any browser, then select Confirm email. Check spam
+            or promotions if it does not arrive shortly.
           </p>
           <button
             type="button"

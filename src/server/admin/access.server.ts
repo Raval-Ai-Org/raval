@@ -29,7 +29,7 @@ export type AdminIdentity = {
 const SEEN_EVERY_MS = 5 * 60_000;
 
 export async function resolveAdmin(userId: string): Promise<AdminIdentity | null> {
-  const billing = isBillingAdmin(userId);
+  const environmentBilling = isBillingAdmin(userId);
   const { data, error } = await adminDb
     .from("admin_users")
     .select("role,status,extra_permissions,denied_permissions,last_seen_at")
@@ -67,17 +67,17 @@ export async function resolveAdmin(userId: string): Promise<AdminIdentity | null
         row.denied_permissions ?? [],
       ),
       source: "team",
-      billing,
+      billing: environmentBilling || row.role === "super_admin",
     };
   }
 
-  if (billing) {
+  if (environmentBilling) {
     return {
       userId,
       role: "super_admin",
       permissions: effectivePermissions("super_admin"),
       source: "environment",
-      billing,
+      billing: environmentBilling,
     };
   }
   return null;

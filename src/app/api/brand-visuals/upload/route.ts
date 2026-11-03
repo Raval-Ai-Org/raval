@@ -2,16 +2,25 @@ import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { z } from "zod";
 import { safeFetch } from "@/server/safe-fetch";
-import { sampleVideoFrames } from "@/server/brand-visuals/video-frames.server";
-import { persistAsset } from "@/server/assets/persist.server";
-import { addVisualSource } from "@/server/brand-visuals/service.server";
 import { PURPOSES, FORMATS } from "@/lib/brand-visuals/contracts";
-import sharp from "sharp";
 import { readReferenceForm } from "@/server/brand-visuals/multipart.server";
-import { createVisualPreview } from "@/server/brand-visuals/preview.server";
+import {
+  ingestFetchedVideo,
+  ingestImage,
+  problemMessage,
+  type ReferenceTarget,
+} from "@/server/brand-visuals/ingest.server";
+import { MAX_IMAGE_BYTES, UPLOAD_MESSAGES, uploadKind, uploadType } from "@/lib/inspo/uploads";
+import { isReelLink } from "@/lib/inspo/links";
+import { fetchReelVideo } from "@/server/brand-visuals/link-media.server";
+import { isInspoLinksEnabled } from "@/lib/feature-flags";
+
+// A link (or one small file sent as a form). Files from Inspo go straight to
+// storage through ./start and ./finish instead; both end in the same ingest.
+const LINK_MAX_BYTES = 100 * 1024 * 1024;
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 export const POST = defineRoute({
   name: "brand-visuals/upload",
   auth: "workspace",
@@ -27,100 +36,60 @@ export const POST = defineRoute({
       return jsonError(400, "Choose what this reference is for.");
     if (file instanceof File && (!file.size || file.size > 20 * 1024 * 1024))
       return jsonError(400, "Choose an image or short video, up to 20 MB.");
-    const label =
-      String(form.get("label") ?? (file instanceof File ? file.name : "Image reference"))
-        .trim()
-        .slice(0, 100) || "Reference";
-    const notes = String(form.get("notes") ?? "").slice(0, 600);
     const format = String(form.get("format") ?? "all");
     if (format !== "all" && !FORMATS.includes(format as (typeof FORMATS)[number]))
       return jsonError(400, "Choose a supported format.");
+    let input: Buffer;
+    let mime: string;
+    let external: string | undefined;
+    if (file instanceof File) {
+      input = Buffer.from(await file.arrayBuffer());
+      mime = uploadType(file);
+    } else if (isReelLink(String(form.get("sourceUrl") ?? ""))) {
+      // Instagram, TikTok and YouTube pages aren't video files: read them only when allowed.
+      const reel = isInspoLinksEnabled(workspaceId)
+        ? await fetchReelVideo(String(form.get("sourceUrl")))
+        : null;
+      if (!reel) return jsonError(422, UPLOAD_MESSAGES.link);
+      input = reel.bytes;
+      mime = reel.mime;
+      external = reel.url;
+      if (!form.get("label") && reel.title) form.set("label", reel.title);
+    } else {
+      const url = String(form.get("sourceUrl") ?? "");
+      const fetched = await safeFetch(url, { maxBytes: LINK_MAX_BYTES, onOverflow: "error" }).catch(
+        () => null,
+      );
+      if (!fetched?.ok) return jsonError(422, UPLOAD_MESSAGES.link);
+      input = Buffer.from(fetched.bytes);
+      mime = (fetched.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      external = fetched.url;
+    }
+    const kind = uploadKind(mime);
+    if (!kind) return jsonError(415, external ? UPLOAD_MESSAGES.link : UPLOAD_MESSAGES.type);
+    if (kind === "image" && input.length > MAX_IMAGE_BYTES)
+      return jsonError(413, UPLOAD_MESSAGES.imageSize);
+    const label =
+      String(form.get("label") ?? (file instanceof File ? file.name : "Inspo"))
+        .trim()
+        .slice(0, 100) || "Inspo";
+    const target: ReferenceTarget = {
+      purpose: purpose as (typeof PURPOSES)[number],
+      label,
+      notes: String(form.get("notes") ?? ""),
+      format,
+      campaign: String(form.get("campaign") ?? "").slice(0, 120) || undefined,
+      sourceUrl: external,
+    };
+    const c = { workspaceId, userId, role };
     try {
-      let input: Buffer;
-      let mime: string;
-      let external: string | undefined;
-      if (file instanceof File) {
-        input = Buffer.from(await file.arrayBuffer());
-        mime = file.type;
-      } else {
-        const url = String(form.get("sourceUrl") ?? "");
-        const fetched = await safeFetch(url, { maxBytes: 10 * 1024 * 1024, onOverflow: "error" });
-        if (!fetched.ok) return jsonError(422, "This public image link could not be opened.");
-        input = Buffer.from(fetched.bytes);
-        mime = (fetched.headers.get("content-type") ?? "").split(";")[0];
-        external = fetched.url;
-      }
-      const video = /^video\/(mp4|webm)$/.test(mime);
-      if (!video && !/^image\/(png|jpeg|webp)$/.test(mime))
-        return jsonError(
-          415,
-          "Use a direct image link, or upload a PNG, JPEG, WebP, MP4 or WebM file.",
-        );
-      const sampled = video ? await sampleVideoFrames(input, mime) : null;
-      const bytes = video
-        ? input
-        : await sharp(input, { limitInputPixels: 30_000_000 })
-            .rotate()
-            .resize({ width: 3000, height: 3000, fit: "inside", withoutEnlargement: true })
-            .png()
-            .toBuffer();
-      const saved = await persistAsset({
-        workspaceId,
-        idempotencyKey: `visual-upload:${crypto.randomUUID()}`,
-        bytes,
-        preserveBytes: true,
-        assetType: video ? "video" : "image",
-        mimeType: video ? mime : "image/png",
-        filename: label,
-        metadata: {
-          source: "visual_reference",
-          purpose,
-          source_url: external,
-          duration: sampled?.duration,
-        },
-      });
-      if (!saved.ok) return jsonError(saved.status, saved.message);
-      if (!video) await createVisualPreview(workspaceId, saved.asset, bytes);
-      const c = { workspaceId, userId, role };
-      const sourcePurpose = purpose as (typeof PURPOSES)[number];
-      const campaign = String(form.get("campaign") ?? "").slice(0, 120) || undefined;
-      await addVisualSource(c, {
-        assetId: saved.asset.id,
-        label,
-        purpose: sourcePurpose,
-        notes,
-        formats: format !== "all" ? [format] : video ? ["video", "ugc"] : [],
-        campaign,
-        kind: "upload",
-        sourceUrl: external,
-      });
-      for (const [index, frame] of (sampled?.frames ?? []).entries()) {
-        const asset = await persistAsset({
-          workspaceId,
-          idempotencyKey: `visual-frame:${saved.asset.id}:${index}`,
-          bytes: frame.bytes,
-          preserveBytes: true,
-          assetType: "image",
-          mimeType: "image/png",
-          filename: `${label}-${index + 1}`,
-          parentAssetId: saved.asset.id,
-          metadata: { source: "visual_video_frame", time: frame.time, duration: sampled!.duration },
-        });
-        if (!asset.ok) throw new Error("The video reference frames could not be saved.");
-        await createVisualPreview(workspaceId, asset.asset, frame.bytes);
-        await addVisualSource(c, {
-          assetId: asset.asset.id,
-          label: `${label} · ${frame.time.toFixed(1)}s`,
-          purpose: sourcePurpose,
-          notes,
-          formats: format !== "all" ? [format] : ["video", "ugc"],
-          campaign,
-          kind: "upload",
-        });
-      }
-      return Response.json({ assetId: saved.asset.id });
-    } catch {
-      return jsonError(422, "This reference could not be read. Try another file.");
+      const { assetId } =
+        kind === "video"
+          ? await ingestFetchedVideo(c, input, mime, target)
+          : await ingestImage(c, input, mime, target);
+      return Response.json({ assetId });
+    } catch (error) {
+      return jsonError(422, problemMessage(error, kind));
     }
   },
 });

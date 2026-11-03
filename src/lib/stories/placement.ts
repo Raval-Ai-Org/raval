@@ -24,6 +24,7 @@ const PLACEMENTS: Record<PlatformId, readonly Placement[]> = {
   twitter: ["feed"],
   tiktok: ["feed"],
   youtube: ["feed"],
+  pinterest: ["feed"],
 };
 
 export function placementsFor(platform: string): readonly Placement[] {

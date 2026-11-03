@@ -14,6 +14,9 @@ Delivery plan: [ADMIN-PANEL-PLAN.md](ADMIN-PANEL-PLAN.md).
      table is ever wrong. Keep at least one id here.**
    - `ADMIN_REQUIRE_MFA`: on by default in production. Admin routes answer
      `mfa_required` until the person has verified an authenticator code.
+   - `BILLING_ENFORCEMENT=on`, `BILLING_PROVIDER=stripe`, `STRIPE_SECRET_KEY` and
+     `STRIPE_WEBHOOK_SECRET`: set all four on the production service. The Stripe values
+     are server-only. This Checkout flow does not use a publishable key.
 3. **Sign in** at `/admin`. A person who is not an admin sees "Admins only" and every
    `/api/admin/*` route answers 404 to them.
 4. **Add the team** under Team & access (super admin only; nobody edits their own row and
@@ -103,3 +106,33 @@ find `flag.created` in the Audit log).
 Visual check without signing in, in development only: `/admin-lab?s=<section>&role=<role>`
 (sections: overview, users, workspaces, plans, flags, announcements, support, analytics,
 integrations, ai, usage, health, emergency, jobs, abuse, audit, security, team, view).
+
+## 7. Stripe production handoff
+
+Before deployment, synchronize the catalog once. The command is idempotent and verifies
+an existing mapping before it creates anything:
+
+```bash
+node --env-file=.env --experimental-strip-types scripts/billing/stripe-sync.mjs \
+  --apply --production --confirm-production
+```
+
+After the production variables are deployed, run the read-only readiness report:
+
+```bash
+npm run billing:stripe-readiness
+```
+
+The first deployment needs one real Stripe-signed delivery before Checkout reports ready.
+The probe below temporarily subscribes to `customer.created`, creates a customer with no
+payment method or charge, waits for the signed delivery, deletes the customer and restores
+the webhook event list:
+
+```bash
+npm run billing:stripe-readiness -- --probe --confirm-production
+```
+
+All checks must say `OK`. Then sign in with an id from `BILLING_ADMIN_USER_IDS`, open
+`/admin/billing`, create the least expensive real Checkout using an authorized card, verify
+the resulting plan or credit grant, and refund it from Stripe. Confirm the refund or
+clawback appears in the billing event inbox and account ledger.

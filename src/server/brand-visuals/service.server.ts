@@ -19,6 +19,7 @@ import {
   type VisualView,
 } from "@/lib/brand-visuals/contracts";
 import { assertPublicUrl } from "@/server/safe-fetch";
+import { MAX_REFERENCES } from "@/lib/inspo/uploads";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
 export type VisualCaller = { workspaceId: string; userId: string; role: WorkspaceRole };
@@ -203,6 +204,18 @@ export async function startVisualCapture(
   ) as CaptureJob;
 }
 
+/** Asset ids of the Board and Media references that count towards the cap. */
+export async function countedReferences(workspaceId: string): Promise<string[]> {
+  const rows = checked(
+    await table("brand_visual_sources")
+      .select("asset_id,asset:assets(parent_asset_id)")
+      .eq("workspace_id", workspaceId)
+      .neq("kind", "website")
+      .neq("status", "removed"),
+  ) as { asset_id: string; asset: { parent_asset_id: string | null } | null }[] | null;
+  return (rows ?? []).filter((r) => !r.asset?.parent_asset_id).map((r) => r.asset_id);
+}
+
 export async function addVisualSource(
   c: VisualCaller,
   args: {
@@ -219,7 +232,7 @@ export async function addVisualSource(
   editor(c);
   const asset = checked(
     await table("assets")
-      .select("id,storage_path,mime_type")
+      .select("id,storage_path,mime_type,parent_asset_id")
       .eq("id", args.assetId)
       .eq("workspace_id", c.workspaceId)
       .eq("status", "ready")
@@ -232,15 +245,12 @@ export async function addVisualSource(
     !/^(image|video)\//.test(asset.mime_type ?? "")
   )
     throw new HttpError(404, "Choose an image or video from this brand's library.");
-  const total = checked(
-    await table("brand_visual_sources")
-      .select("id,asset_id")
-      .eq("workspace_id", c.workspaceId)
-      .neq("kind", "website")
-      .neq("status", "removed"),
-  );
-  if ((total?.length ?? 0) >= 80 && !total?.some((s) => s.asset_id === asset.id))
-    throw new HttpError(409, "Remove an unused reference before adding another.");
+  // A video's stills follow their video and don't count towards the cap.
+  if (!asset.parent_asset_id) {
+    const counted = await countedReferences(c.workspaceId);
+    if (counted.length >= MAX_REFERENCES && !counted.includes(asset.id))
+      throw new HttpError(409, "Remove an unused reference before adding another.");
+  }
   checked(
     await table("brand_visual_sources").upsert(
       {

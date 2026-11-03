@@ -159,7 +159,8 @@ export function SurfacePage({
           <div className="min-w-0 max-w-full">
             {title && <h3 className="ds-page-title break-words">{title}</h3>}
             {subtitle && (
-              <p className="mt-0.5 break-words text-[13px] text-muted-foreground">{subtitle}</p>
+              // One title per page; the subtitle stays for screen readers only.
+              <p className="sr-only">{subtitle}</p>
             )}
           </div>
           {actions && (
@@ -195,7 +196,7 @@ export function Tile({
   );
 }
 
-/** Small uppercase label above a group of tiles. */
+/** A short heading above a group of tiles. */
 export function GroupLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-2.5 mt-7 flex flex-wrap items-center justify-between gap-3 first:mt-0">

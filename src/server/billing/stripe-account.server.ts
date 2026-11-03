@@ -27,6 +27,7 @@ import {
 } from "./grants.server";
 import { windowAfterCancel } from "@/lib/billing/cancel-window";
 import { grantMeter, clawbackMeter } from "./meters.server";
+import { projectStripeSubscription, shouldPreserveFreeWindow } from "./stripe-subscription-state";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 let stripeInstance: Stripe | null = null;
@@ -69,7 +70,11 @@ export async function stripeAccountReady(): Promise<boolean> {
       key: pack.key,
       interval: null,
     })),
-    ...VIDEO_PACKS.map((pack) => ({ kind: "video_pack" as const, key: pack.key, interval: null })),
+    ...VIDEO_PACKS.filter((pack) => pack.availability === "launch").map((pack) => ({
+      kind: "video_pack" as const,
+      key: pack.key,
+      interval: null,
+    })),
   ];
   try {
     await Promise.all(required.map((item) => mappedPrice(item.kind, item.key, item.interval)));
@@ -177,6 +182,108 @@ async function customerFor(account: BillingAccount, email: string | null): Promi
   return String(winner.provider_customer_id);
 }
 
+type OpenPlanCheckout = {
+  id: string;
+  created_by: string;
+  catalog_key: string;
+  interval: string | null;
+  provider_session_id: string | null;
+  expires_at: string;
+};
+
+async function consumeCheckoutIntent(intentId: string): Promise<void> {
+  const { error } = await admin
+    .from("checkout_intents")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", intentId)
+    .is("consumed_at", null);
+  if (error) throw new Error("Could not close checkout intent.");
+}
+
+async function releaseCheckoutIntent(intentId: string): Promise<void> {
+  try {
+    await consumeCheckoutIntent(intentId);
+  } catch {
+    throw new HttpError(503, "Could not close the previous checkout.");
+  }
+}
+
+/**
+ * Reuse an identical open Checkout Session. If the owner selected another
+ * plan, close the abandoned session first so the unique reservation can be
+ * replaced without making them wait 35 minutes.
+ */
+async function resumeOrReplacePlanCheckout(args: {
+  accountId: string;
+  userId: string;
+  key: string;
+  interval: BillingInterval | null;
+  trial: boolean;
+}): Promise<{ url: string } | null> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data, error } = await admin
+      .from("checkout_intents")
+      .select("id,created_by,catalog_key,interval,provider_session_id,expires_at")
+      .eq("account_id", args.accountId)
+      .eq("kind", "plan")
+      .is("consumed_at", null)
+      .maybeSingle();
+    if (error) throw new HttpError(503, "Could not check open plan checkout.");
+    if (!data) return null;
+    const intent = data as OpenPlanCheckout;
+
+    if (new Date(intent.expires_at).getTime() <= Date.now()) {
+      await releaseCheckoutIntent(intent.id);
+      return null;
+    }
+    if (intent.created_by !== args.userId) {
+      throw new HttpError(409, "Another account owner already opened plan checkout.");
+    }
+    // A second click can reach this row while the first request is still
+    // creating its Stripe session. Give that request a brief chance to link it.
+    if (!intent.provider_session_id) {
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      throw new HttpError(409, "Secure checkout is still opening. Try again in a moment.");
+    }
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe().checkout.sessions.retrieve(intent.provider_session_id);
+    } catch {
+      await releaseCheckoutIntent(intent.id);
+      return null;
+    }
+    if (
+      session.metadata?.mellox_checkout_intent !== intent.id ||
+      session.client_reference_id !== intent.id
+    ) {
+      throw new HttpError(409, "The previous checkout could not be verified.");
+    }
+    if (session.status === "complete") {
+      throw new HttpError(409, "Your payment is being confirmed. Refresh Plan & billing shortly.");
+    }
+    if (session.status === "expired") {
+      await releaseCheckoutIntent(intent.id);
+      return null;
+    }
+
+    // Sessions created before this marker existed were regular checkouts.
+    const recordedTrial = session.metadata?.mellox_checkout_trial ?? "false";
+    const trialMatches = recordedTrial === String(args.trial);
+    const selectionMatches =
+      intent.catalog_key === args.key && intent.interval === args.interval && trialMatches;
+    if (selectionMatches && session.url) return { url: session.url };
+
+    await stripe().checkout.sessions.expire(session.id);
+    await releaseCheckoutIntent(intent.id);
+    return null;
+  }
+  return null;
+}
+
 export async function createAccountCheckout(args: {
   userId: string;
   email: string | null;
@@ -189,9 +296,17 @@ export async function createAccountCheckout(args: {
 }): Promise<{ url: string }> {
   if (!(await stripeAccountReady()))
     throw new HttpError(503, "Purchases open after Stripe webhook and prices are verified.");
-  const account = await accountForUser(args.userId);
+  let account = await accountForUser(args.userId);
   if (account.provider_subscription_id && args.kind === "plan") {
-    throw new HttpError(409, "Change your existing plan from Plan & billing.");
+    // Repair stale local state before refusing a new purchase. Stripe can have
+    // expired an incomplete subscription while its webhook was delayed.
+    if (account.provider === "stripe") {
+      await syncSubscription(account.provider_subscription_id);
+      account = await accountForUser(args.userId);
+    }
+    if (account.provider_subscription_id) {
+      throw new HttpError(409, "Change your existing plan from Plan & billing.");
+    }
   }
   if (args.kind === "plan" && args.quantity !== 1) {
     throw new HttpError(400, "A subscription has one plan.");
@@ -202,6 +317,12 @@ export async function createAccountCheckout(args: {
   if (!Number.isInteger(args.quantity) || args.quantity < 1 || args.quantity > 20) {
     throw new HttpError(400, "Invalid purchase quantity.");
   }
+  // Video packs are off sale: videos past the free ones take credits.
+  if (
+    args.kind === "video_pack" &&
+    VIDEO_PACKS.find((pack) => pack.key === args.key)?.availability !== "launch"
+  )
+    throw new HttpError(400, "Video packs are no longer sold. Videos use credits.");
   const interval = args.interval ?? null;
   const priceId = await mappedPrice(args.kind, args.key, interval);
   const customer = await customerFor(account, args.email);
@@ -223,9 +344,17 @@ export async function createAccountCheckout(args: {
       .is("consumed_at", null)
       .lte("expires_at", new Date().toISOString());
     if (expireError) throw new HttpError(503, "Could not check open plan checkout.");
+    const existing = await resumeOrReplacePlanCheckout({
+      accountId: account.id,
+      userId: args.userId,
+      key: args.key,
+      interval,
+      trial: Boolean(args.trial),
+    });
+    if (existing) return existing;
   }
   const expiresAt = new Date(Date.now() + 35 * 60_000);
-  const { data: intent, error } = await admin
+  let insertResult = await admin
     .from("checkout_intents")
     .insert({
       account_id: account.id,
@@ -239,52 +368,299 @@ export async function createAccountCheckout(args: {
     })
     .select("id")
     .single();
-  if (error?.code === "23505")
-    throw new HttpError(409, "A plan checkout is already open. Finish or wait for it to expire.");
+  if (insertResult.error?.code === "23505" && args.kind === "plan") {
+    const existing = await resumeOrReplacePlanCheckout({
+      accountId: account.id,
+      userId: args.userId,
+      key: args.key,
+      interval,
+      trial: Boolean(args.trial),
+    });
+    if (existing) return existing;
+    // The competing reservation was stale and has now been released.
+    insertResult = await admin
+      .from("checkout_intents")
+      .insert({
+        account_id: account.id,
+        created_by: args.userId,
+        kind: args.kind,
+        catalog_key: args.key,
+        interval,
+        quantity: args.quantity,
+        provider_price_id: priceId,
+        expires_at: expiresAt.toISOString(),
+      })
+      .select("id")
+      .single();
+  }
+  const { data: intent, error } = insertResult;
   if (error || !intent) throw new HttpError(503, "Could not begin checkout.");
   const intentId = String(intent.id);
   const origin = getAppUrl();
   const returnPath = args.returnPath ?? "/projects";
   const mode = args.kind === "plan" ? "subscription" : "payment";
-  const session = await stripe().checkout.sessions.create(
-    {
-      mode,
-      customer,
-      client_reference_id: intentId,
-      metadata: { mellox_checkout_intent: intentId },
-      ...(mode === "subscription"
-        ? {
-            subscription_data: {
-              metadata: { mellox_checkout_intent: intentId },
-              ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
-            },
-          }
-        : {}),
-      line_items: [{ price: priceId, quantity: args.quantity }],
-      expires_at: Math.floor(expiresAt.getTime() / 1000),
-      success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=return`,
-      cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel`,
-    },
-    { idempotencyKey: `mellox-checkout:${intentId}` },
-  );
-  if (!session.url) throw new HttpError(502, "Stripe did not return a checkout URL.");
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe().checkout.sessions.create(
+      {
+        mode,
+        customer,
+        client_reference_id: intentId,
+        metadata: {
+          mellox_checkout_intent: intentId,
+          mellox_checkout_trial: String(Boolean(args.trial)),
+        },
+        ...(mode === "subscription"
+          ? {
+              subscription_data: {
+                metadata: { mellox_checkout_intent: intentId },
+                ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
+              },
+            }
+          : {}),
+        line_items: [{ price: priceId, quantity: args.quantity }],
+        expires_at: Math.floor(expiresAt.getTime() / 1000),
+        billing_address_collection: "auto",
+        customer_update: { address: "auto", name: "auto" },
+        custom_text: {
+          submit: {
+            message:
+              mode === "subscription"
+                ? "Your Mellox plan activates automatically after payment."
+                : "Your credits are added automatically after payment.",
+          },
+        },
+        ...(mode === "subscription"
+          ? { payment_method_collection: "always" as const }
+          : { saved_payment_method_options: { payment_method_save: "enabled" as const } }),
+        success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=success&checkout_session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel&checkout_session_id={CHECKOUT_SESSION_ID}`,
+      },
+      { idempotencyKey: `mellox-checkout:${intentId}` },
+    );
+  } catch {
+    await admin
+      .from("checkout_intents")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", intentId)
+      .is("consumed_at", null);
+    throw new HttpError(502, "Secure checkout could not be opened. Please try again.");
+  }
+  if (!session.url) {
+    await consumeCheckoutIntent(intentId).catch(() => undefined);
+    throw new HttpError(502, "Stripe did not return a checkout URL.");
+  }
   const { error: linkError } = await admin
     .from("checkout_intents")
     .update({ provider_session_id: session.id })
     .eq("id", intentId);
-  if (linkError) throw new HttpError(503, "Could not finish checkout setup.");
+  if (linkError) {
+    if (session.status === "open")
+      await stripe()
+        .checkout.sessions.expire(session.id)
+        .catch(() => null);
+    await admin
+      .from("checkout_intents")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("id", intentId)
+      .is("consumed_at", null);
+    throw new HttpError(503, "Could not finish checkout setup.");
+  }
   return { url: session.url };
 }
 
-export async function createAccountBillingPortal(userId: string): Promise<{ url: string }> {
+export type AccountCheckoutStatus = {
+  state: "active" | "processing" | "open" | "expired" | "failed";
+  kind: PurchaseKind;
+  catalogKey: string;
+};
+
+async function checkoutIntentForUser(userId: string, sessionId: string) {
+  const account = await accountForUser(userId);
+  const { data, error } = await admin
+    .from("checkout_intents")
+    .select("id,kind,catalog_key,consumed_at,provider_session_id")
+    .eq("account_id", account.id)
+    .eq("created_by", userId)
+    .eq("provider_session_id", sessionId)
+    .maybeSingle();
+  if (error) throw new HttpError(503, "Could not check checkout.");
+  if (!data) throw new HttpError(404, "Checkout not found.");
+  return data;
+}
+
+/** Read-only status used by the return page while the signed webhook activates a purchase. */
+export async function getAccountCheckoutStatus(
+  userId: string,
+  sessionId: string,
+): Promise<AccountCheckoutStatus> {
+  const intent = await checkoutIntentForUser(userId, sessionId);
+  const kind = intent.kind as PurchaseKind;
+  const base = { kind, catalogKey: String(intent.catalog_key) };
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  if (
+    session.id !== intent.provider_session_id ||
+    session.metadata?.mellox_checkout_intent !== intent.id ||
+    session.client_reference_id !== intent.id
+  ) {
+    throw new HttpError(409, "Checkout could not be verified.");
+  }
+  if (session.status === "expired") return { ...base, state: "expired" };
+  let consumedAt = intent.consumed_at;
+  if (session.status === "complete" && !consumedAt) {
+    const verifiedIntent = await intentForSession(session);
+    await fulfillCheckoutSession(verifiedIntent, session);
+    const { data, error } = await admin
+      .from("checkout_intents")
+      .select("consumed_at")
+      .eq("id", intent.id)
+      .single();
+    if (error || !data) throw new HttpError(503, "Could not confirm checkout activation.");
+    consumedAt = data.consumed_at;
+  }
+  if (consumedAt) {
+    return {
+      ...base,
+      state:
+        session.payment_status === "paid" || session.payment_status === "no_payment_required"
+          ? "active"
+          : "failed",
+    };
+  }
+  if (session.status === "open") return { ...base, state: "open" };
+  return { ...base, state: "processing" };
+}
+
+/** Release a plan reservation when its owner returns through Stripe's cancel URL. */
+export async function cancelAccountCheckout(
+  userId: string,
+  sessionId: string,
+): Promise<{ canceled: boolean; completed: boolean }> {
+  const intent = await checkoutIntentForUser(userId, sessionId);
+  const session = await stripe().checkout.sessions.retrieve(sessionId);
+  if (
+    session.id !== intent.provider_session_id ||
+    session.metadata?.mellox_checkout_intent !== intent.id ||
+    session.client_reference_id !== intent.id
+  ) {
+    throw new HttpError(409, "Checkout could not be verified.");
+  }
+  if (session.status === "expired") return { canceled: true, completed: false };
+  if (intent.consumed_at) return { canceled: false, completed: true };
+  if (session.status === "complete") return { canceled: false, completed: true };
+  if (session.status === "open") await stripe().checkout.sessions.expire(sessionId);
+  const { error } = await admin
+    .from("checkout_intents")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("id", intent.id)
+    .is("consumed_at", null);
+  if (error) throw new HttpError(503, "Could not close checkout.");
+  return { canceled: true, completed: false };
+}
+
+export type AccountPaymentMethod = {
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+};
+
+async function paymentMethodFrom(
+  value: string | Stripe.PaymentMethod | null,
+  customerId: string,
+): Promise<Stripe.PaymentMethod | null> {
+  if (!value) return null;
+  const method = typeof value === "string" ? await stripe().paymentMethods.retrieve(value) : value;
+  const owner = subscriptionId(method.customer);
+  return owner && owner !== customerId ? null : method;
+}
+
+export async function getAccountPaymentMethod(userId: string): Promise<{
+  paymentMethod: AccountPaymentMethod | null;
+}> {
+  const account = await accountForUser(userId);
+  if (account.provider !== "stripe" || !account.provider_customer_id) {
+    return { paymentMethod: null };
+  }
+  const customerId = account.provider_customer_id;
+  let method: Stripe.PaymentMethod | null = null;
+  if (account.provider_subscription_id) {
+    const subscription = await stripe().subscriptions.retrieve(account.provider_subscription_id, {
+      expand: ["default_payment_method"],
+    });
+    if (subscriptionId(subscription.customer) !== customerId) {
+      throw new Error("Stripe customer mismatch.");
+    }
+    method = await paymentMethodFrom(subscription.default_payment_method, customerId);
+  }
+  if (!method) {
+    const customer = await stripe().customers.retrieve(customerId, {
+      expand: ["invoice_settings.default_payment_method"],
+    });
+    if (!customer.deleted) {
+      method = await paymentMethodFrom(
+        customer.invoice_settings.default_payment_method,
+        customerId,
+      );
+    }
+  }
+  if (!method) {
+    const methods = await stripe().paymentMethods.list({
+      customer: customerId,
+      type: "card",
+      limit: 1,
+    });
+    method = methods.data[0] ?? null;
+  }
+  if (method?.type !== "card" || !method.card) return { paymentMethod: null };
+  return {
+    paymentMethod: {
+      brand: method.card.display_brand ?? method.card.brand,
+      last4: method.card.last4,
+      expMonth: method.card.exp_month,
+      expYear: method.card.exp_year,
+    },
+  };
+}
+
+export async function createAccountBillingPortal(
+  userId: string,
+  options: { action?: "manage" | "payment_method_update"; returnPath?: string } = {},
+): Promise<{ url: string }> {
   const account = await accountForUser(userId);
   if (account.provider !== "stripe" || !account.provider_customer_id) {
     throw new HttpError(409, "There is no Stripe billing account to manage yet.");
   }
-  const session = await stripe().billingPortal.sessions.create({
+  const origin = getAppUrl();
+  const returnPath = options.returnPath ?? "/projects";
+  const returnUrl = `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=manage`;
+  const params: Stripe.BillingPortal.SessionCreateParams = {
     customer: account.provider_customer_id,
-    return_url: `${getAppUrl()}/projects`,
-  });
+    return_url: returnUrl,
+    ...(options.action === "payment_method_update"
+      ? {
+          flow_data: {
+            type: "payment_method_update" as const,
+            after_completion: {
+              type: "redirect" as const,
+              redirect: { return_url: returnUrl },
+            },
+          },
+        }
+      : {}),
+  };
+  let session: Stripe.BillingPortal.Session;
+  try {
+    session = await stripe().billingPortal.sessions.create(params);
+  } catch (error) {
+    if (options.action !== "payment_method_update") throw error;
+    // Some Stripe accounts do not enable the direct update flow in their
+    // portal configuration. The full portal still lets the customer manage it.
+    session = await stripe().billingPortal.sessions.create({
+      customer: account.provider_customer_id,
+      return_url: returnUrl,
+    });
+  }
   return { url: session.url };
 }
 
@@ -783,6 +1159,9 @@ async function grantPack(intent: CheckoutIntent, session: Stripe.Checkout.Sessio
       existing.kind !== intent.kind
     )
       throw new Error("Stripe payment was already attributed elsewhere.");
+    // A prior attempt may have granted and recorded the payment but failed on
+    // the final checkout update. Finish that last step on every safe replay.
+    await consumeCheckoutIntent(intent.id);
     return;
   }
   const grantIds: string[] = [];
@@ -838,10 +1217,64 @@ async function grantPack(intent: CheckoutIntent, session: Stripe.Checkout.Sessio
     grant_ids: grantIds,
   });
   if (error) throw new Error("Could not record Stripe payment.");
-  await admin
-    .from("checkout_intents")
-    .update({ consumed_at: new Date().toISOString() })
-    .eq("id", intent.id);
+  await consumeCheckoutIntent(intent.id);
+  invalidateBillingAccount(intent.account_id);
+}
+
+/**
+ * Fulfill from Stripe's current server-side state. Webhooks remain the primary
+ * path; the authenticated return-page poll uses this as a repair path when a
+ * webhook is delayed or a previous database step failed.
+ */
+async function fulfillCheckoutSession(
+  intent: CheckoutIntent,
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  if (session.status !== "complete") return;
+  if (intent.kind === "plan") {
+    const id = subscriptionId(session.subscription);
+    if (!id) throw new Error("Checkout subscription is missing.");
+    await syncSubscription(id);
+    return;
+  }
+  await grantPack(intent, session);
+}
+
+async function failCheckoutSession(
+  intent: CheckoutIntent,
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  // A stale failure event must never undo a purchase that Stripe now reports
+  // as paid or a trial that no longer requires an initial payment.
+  if (session.payment_status === "paid" || session.payment_status === "no_payment_required") {
+    await fulfillCheckoutSession(intent, session);
+    return;
+  }
+  if (intent.kind === "plan") {
+    const id = subscriptionId(session.subscription);
+    if (id) {
+      const subscription = await stripe().subscriptions.retrieve(id);
+      if (subscription.status === "active" || subscription.status === "trialing") {
+        await syncSubscription(id);
+        return;
+      }
+      const { error } = await admin
+        .from("billing_accounts")
+        .update({
+          provider_subscription_id: null,
+          status: "free",
+          plan_id: "free",
+          entitled_plan_id: "free",
+          grace_until: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", intent.account_id)
+        .eq("provider_subscription_id", id)
+        .is("last_paid_invoice_id", null);
+      if (error) throw new Error("Could not release the failed subscription.");
+    }
+  }
+  await consumeCheckoutIntent(intent.id);
   invalidateBillingAccount(intent.account_id);
 }
 
@@ -971,17 +1404,7 @@ async function syncSubscription(
   const canceled =
     subscription.status === "canceled" || subscription.status === "incomplete_expired";
   const paused = details.plan === "pause" && active;
-  const status = canceled
-    ? "canceled"
-    : trialing
-      ? "trialing"
-      : pastDue
-        ? "past_due"
-        : paused
-          ? "paused"
-          : active
-            ? "active"
-            : "free";
+  const projection = projectStripeSubscription(subscription.status, details.plan);
   if (active && !paused && !paidInvoiceId) {
     const latestId = subscriptionId(subscription.latest_invoice);
     if (!latestId) return;
@@ -999,12 +1422,32 @@ async function syncSubscription(
         ? account.next_grant_at
         : nextMonthlyWindow(details.start, details.start)
       : details.end;
+  const preserveFreeWindow = shouldPreserveFreeWindow(subscription.status, {
+    status: account.status,
+    lastPaidInvoiceId: account.last_paid_invoice_id,
+    trialUsed: account.trial_used,
+  });
   const changes: Record<string, unknown> = {
     provider: "stripe",
-    provider_subscription_id: canceled ? null : subscription.id,
-    status,
-    plan_id: canceled ? "free" : paused ? "paused" : details.plan,
-    entitled_plan_id: canceled || paused ? "free" : details.plan,
+    provider_subscription_id: projection.clearProviderSubscription ? null : subscription.id,
+    status: projection.localStatus,
+    plan_id: projection.planId,
+    entitled_plan_id: projection.entitledPlanId,
+    updated_at: now.toISOString(),
+  };
+  if (preserveFreeWindow) {
+    // An initial payment that is still pending or has expired must not replace
+    // the customer's existing Free allowance window with an unpaid plan cycle.
+    changes.status = "free";
+    changes.plan_id = "free";
+    changes.entitled_plan_id = "free";
+    changes.grace_until = null;
+    const { error } = await admin.from("billing_accounts").update(changes).eq("id", account.id);
+    if (error) throw new Error("Could not sync pending Stripe subscription.");
+    invalidateBillingAccount(account.id);
+    return;
+  }
+  Object.assign(changes, {
     billing_interval: details.interval,
     current_period_start: details.start,
     current_period_end: details.end,
@@ -1013,8 +1456,7 @@ async function syncSubscription(
     cancel_at: subscription.cancel_at
       ? new Date(subscription.cancel_at * 1000).toISOString()
       : null,
-    updated_at: now.toISOString(),
-  };
+  });
   // See windowAfterCancel: an account on a comped plan keeps its own monthly cadence.
   if (canceled) changes.grant_anchor = afterCancel.grantAnchor;
   // A scheduled downgrade is recorded when it is scheduled. Once the schedule is gone
@@ -1331,31 +1773,49 @@ async function recordWebhookHealth(eventId: string): Promise<void> {
 /** Replays only events that entered the inbox after a valid Stripe signature. */
 export async function replayFailedBillingEvents(
   limit = 25,
-): Promise<{ replayed: number; failed: number }> {
-  if (!stripeAccountConfigured()) return { replayed: 0, failed: 0 };
+): Promise<{ replayed: number; failed: number; archived: number }> {
+  if (!stripeAccountConfigured()) return { replayed: 0, failed: 0, archived: 0 };
   const { data, error } = await admin
     .from("billing_events")
-    .select("payload")
+    .select("id,payload")
     .is("processed_at", null)
     .order("received_at", { ascending: true })
     .limit(limit);
   if (error) throw new Error("Could not load pending Stripe events.");
   let replayed = 0;
   let failed = 0;
+  let archived = 0;
   for (const row of data ?? []) {
+    const storedEvent = row.payload as Stripe.Event;
+    if (storedEvent.livemode !== (environment() === "production")) {
+      // A test event can remain pending when an installation switches to live
+      // credentials (or vice versa). It is validly signed historical input,
+      // but the current Stripe account can never retrieve its objects.
+      const { error: archiveError } = await admin
+        .from("billing_events")
+        .update({
+          processed_at: new Date().toISOString(),
+          error: "Archived after Stripe billing environment changed.",
+        })
+        .eq("id", row.id)
+        .is("processed_at", null);
+      if (archiveError) failed++;
+      else archived++;
+      continue;
+    }
     const rawBody = JSON.stringify(row.payload);
     const signature = stripe().webhooks.generateTestHeaderString({
       payload: rawBody,
       secret: process.env.STRIPE_WEBHOOK_SECRET!,
     });
     try {
-      await processStripeEvent(row.payload as Stripe.Event, rawBody, signature);
+      await processStripeEvent(storedEvent, rawBody, signature);
       replayed++;
     } catch {
       failed++;
     }
   }
-  return { replayed, failed };
+  return { replayed, failed, archived };
 }
 
 async function processStripeEvent(
@@ -1364,7 +1824,14 @@ async function processStripeEvent(
   signature: string,
 ): Promise<void> {
   try {
-    if (
+    if (event.type === "checkout.session.async_payment_failed") {
+      const eventSession = event.data.object as Stripe.Checkout.Session;
+      const session = await stripe().checkout.sessions.retrieve(eventSession.id);
+      if (session.metadata?.mellox_checkout_intent) {
+        const intent = await intentForSession(session);
+        await failCheckoutSession(intent, session);
+      }
+    } else if (
       event.type === "checkout.session.completed" ||
       event.type === "checkout.session.async_payment_succeeded"
     ) {

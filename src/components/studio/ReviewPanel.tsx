@@ -17,7 +17,6 @@ import {
   Send,
   Sparkles,
   Spinner,
-  Wand2,
   X,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -39,15 +38,11 @@ import { isDistributionPlatform, type DistributionPlatformId } from "@/lib/distr
 import { RATIOS } from "@/lib/studio/aspect";
 import { readBrandPayload } from "@/lib/studio/client";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
-import {
-  isActiveJob,
-  REFINE_PRESETS,
-  type StudioJob,
-  type StudioJobOutput,
-} from "@/lib/studio/jobs";
+import { isActiveJob, type StudioJob, type StudioJobOutput } from "@/lib/studio/jobs";
 import { scriptToMarkdown } from "@/lib/studio/prompts";
 import {
   cancelSession,
+  chooseVersion,
   discardSession,
   generate,
   openComposer,
@@ -69,9 +64,19 @@ import { PublishToSite } from "./PublishToSite";
 import { useLookConformance } from "@/components/app/brain/brand/look/use-look-conformance";
 import { conformanceFixInstruction } from "@/lib/brand-look/conformance";
 import { SocialPostPreview } from "./previews/SocialPostPreview";
-import { Burst, DrawCheck } from "./studio-ui";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { Burst, DrawCheck, PlatformLogoGrid } from "./studio-ui";
 import { AudienceInspector, AudienceScoreChip } from "@/components/app/audience/AudienceInspector";
 import { useAudienceEnabled } from "@/components/app/audience/hooks";
+import { studioPriceLabel } from "@/lib/studio/billing";
+import { ScriptVideoActions } from "./ScriptVideoActions";
+import { EditChat } from "./EditChat";
+import { MakeMoreFrom } from "./MakeMoreFrom";
+import { EmailDraft } from "./EmailDraft";
+import { SendToApps } from "./SendToApps";
+import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
+import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
+import { VersionStrip } from "./VersionStrip";
 
 export type ReviewRow = {
   id: string;
@@ -112,6 +117,12 @@ const TOOL =
 const TOOL_ICON =
   "grid size-8 place-items-center rounded-full text-foreground/80 transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
 const FLOAT = "rounded-full bg-surface-3/90 p-1 shadow-2 ring-1 ring-border/70 backdrop-blur";
+
+/** One storyboard line, short enough for a check row. */
+function shortLine(text: string): string {
+  const line = text.trim().replace(/\s+/g, " ");
+  return line.length > 80 ? `${line.slice(0, 79).trimEnd()}…` : line;
+}
 
 function defaultScheduleTime(): string {
   const d = new Date();
@@ -222,6 +233,8 @@ export function ReviewPanel({
   const reduce = useReducedMotion();
   const revising = !!session.pendingKey || !!(session.job && isActiveJob(session.job));
   const sdr = useSdrStatus(fixtureRows ? null : session.workspaceId);
+  const connectedApps = useConnectedApps(fixtureRows ? null : session.workspaceId);
+  const workspaceRole = useOptionalWorkspaceRole();
   const distributionReady = fixtureDistribution ?? canDistribute(sdr);
 
   const [rows, setRows] = useState<ReviewRow[]>(fixtureRows ?? []);
@@ -233,7 +246,6 @@ export function ReviewPanel({
   );
   const [active, setActive] = useState<PlatformId | null>(null);
   const [scope, setScope] = useState<"one" | "all">("all");
-  const [custom, setCustom] = useState("");
   const [scheduleAt, setScheduleAt] = useState(defaultScheduleTime);
   const [publishMode, setPublishMode] = useState<"publish" | "schedule" | null>(null);
   // Articles: each press of the main Publish button presses PublishToSite's own.
@@ -328,21 +340,36 @@ export function ReviewPanel({
     ? format.platforms.filter((platform) => !platforms.includes(platform))
     : [];
   const multi = platforms.length > 1;
-  const refineTarget = multi && scope === "one" && current ? current : "all";
+  const defaultTextTarget = ["social", "image", "video", "ad"].includes(session.type)
+    ? "captions"
+    : "all";
+  const refineTarget = multi && scope === "one" && current ? current : defaultTextTarget;
+  const newTakePrice = studioPriceLabel({
+    type: session.type,
+    controls: session.controls,
+    regenerate: true,
+  });
+  const mediaPrice = studioPriceLabel({
+    type: session.type,
+    controls: session.controls,
+    parentJobId: job.id,
+    refine: { instruction: "Remake visual", target: "media" },
+    intent: { brief: session.brief },
+  });
 
   const edit = (next: StudioJobOutput) => {
     setDraft(next);
     setDirty(true);
   };
 
+  const visualChanged =
+    (session.type === "carousel" &&
+      JSON.stringify(draft.slides) !== JSON.stringify(job.output.slides)) ||
+    (session.type === "story" &&
+      draft.story?.mode === "frames" &&
+      JSON.stringify(draft.story.frames) !== JSON.stringify(job.output.story?.frames));
   const save = async (): Promise<boolean> => {
     if (!dirty) return true;
-    const visualChanged =
-      (session.type === "carousel" &&
-        JSON.stringify(draft.slides) !== JSON.stringify(job.output.slides)) ||
-      (session.type === "story" &&
-        draft.story?.mode === "frames" &&
-        JSON.stringify(draft.story.frames) !== JSON.stringify(job.output.story?.frames));
     setBusy("save");
     try {
       for (const row of rows) {
@@ -426,6 +453,12 @@ export function ReviewPanel({
   const approve = async (selectedIds?: string[]) => {
     if (draft.storyboard?.status === "preview") {
       toast("Make the video from this frame before approving it.");
+      return false;
+    }
+    if (dirty && visualChanged) {
+      toast("Update the edited visuals before approving", {
+        description: `Use Update visuals (${mediaPrice}) to make the artwork match your changes.`,
+      });
       return false;
     }
     if (dirty && !(await save())) return false;
@@ -708,6 +741,13 @@ export function ReviewPanel({
 
   /* ── Status: one unmistakable statement of where this piece stands ── */
   const hero = (() => {
+    if (session.type === "script")
+      return {
+        tone: "ok" as Tone,
+        icon: <DrawCheck className="size-4" />,
+        title: "Your script is ready",
+        sub: "Review the lines, then choose how to make your video",
+      };
     const s = STATUS_COPY[groupStatus] ?? { label: groupStatus, tone: "muted" as Tone };
     const versions = multi ? `${platforms.length} platform versions` : format.label;
     switch (groupStatus) {
@@ -821,6 +861,24 @@ export function ReviewPanel({
               ),
             },
     );
+  }
+  // A planned AI video: the check it passed before anyone saw it, then its clips.
+  const videoPlan =
+    media?.kind === "video" && media.status === "ready" ? draft.videoPlan : undefined;
+  if (videoPlan?.check?.passed)
+    checks.push({
+      key: "video-check",
+      state: "ok",
+      label: videoPlan.check.notes[0] ?? "Checked before you saw it",
+      detail: videoPlan.check.redone ? "A clip was made again to get it right" : undefined,
+    });
+  for (const [index, clip] of (videoPlan?.storyboard.clips ?? []).entries()) {
+    checks.push({
+      key: `video-clip-${index}`,
+      state: "ok",
+      label: `Clip ${index + 1}: ${shortLine(clip.endsOn)}`,
+      detail: `${videoPlan?.clipSeconds[index] ?? ""}s`,
+    });
   }
   for (const [index, warning] of (draft.warnings ?? []).entries()) {
     checks.push({
@@ -963,8 +1021,21 @@ export function ReviewPanel({
             }}
           >
             <Sparkles />
-            Make video
+            Make video ·{" "}
+            {studioPriceLabel({
+              type: session.type,
+              controls: { ...session.controls, videoPreview: false },
+            })}
           </Button>
+        </motion.div>
+      ) : session.type === "script" && draft.script ? (
+        <motion.div key="script-video" {...fadeSwap} className="flex w-full flex-col gap-2">
+          <ScriptVideoActions
+            session={session}
+            script={draft.script}
+            disabled={revising || dirty || editing || busy !== null}
+            onCopy={copyText}
+          />
         </motion.div>
       ) : approvable && confirmDiscard ? (
         <motion.div key="confirm" {...fadeSwap} className="grid w-full min-w-0 grid-cols-2 gap-2">
@@ -1117,7 +1188,6 @@ export function ReviewPanel({
             >
               {platforms.map((p) => {
                 const spec = PLATFORMS[p];
-                const Icon = spec.icon;
                 const selected = p === current;
                 const v = draft.variants?.find((x) => x.platform === p);
                 const over = v ? v.body.length > spec.maxChars : false;
@@ -1128,10 +1198,13 @@ export function ReviewPanel({
                     role="tab"
                     aria-selected={selected}
                     aria-label={spec.label}
+                    title={spec.label}
                     onClick={() => setActive(p)}
                     className={cn(
-                      "relative inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast]",
-                      selected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                      "relative inline-flex h-9 items-center gap-1.5 rounded-full pl-1.5 pr-1.5 text-xs font-medium transition-[color,opacity] duration-[--motion-duration-fast]",
+                      selected
+                        ? "pr-3 text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {selected ? (
@@ -1141,8 +1214,22 @@ export function ReviewPanel({
                         transition={{ duration: duration.medium, ease: ease.emphasized }}
                       />
                     ) : null}
-                    <Icon className="relative size-3.5" />
-                    <span className="relative hidden sm:inline">{spec.label}</span>
+                    <PlatformAppIcon platform={p} size={24} className="relative" />
+                    {/* Only the open version says its name; the others are just their logo. */}
+                    <AnimatePresence initial={false}>
+                      {selected ? (
+                        <motion.span
+                          key="name"
+                          initial={reduce ? false : { opacity: 0, width: 0 }}
+                          animate={{ opacity: 1, width: "auto" }}
+                          exit={reduce ? undefined : { opacity: 0, width: 0 }}
+                          transition={{ duration: duration.medium, ease: ease.emphasized }}
+                          className="relative hidden overflow-hidden whitespace-nowrap sm:inline"
+                        >
+                          {spec.label}
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
                     {over ? (
                       <span
                         aria-label="Over the character limit"
@@ -1156,16 +1243,10 @@ export function ReviewPanel({
           ) : platforms[0] ? (
             // The window header already names the format; only the channel is new here.
             <span
-              className={cn(
-                "pointer-events-auto inline-flex h-10 items-center gap-2 px-4 text-xs font-medium text-foreground",
-                FLOAT,
-              )}
+              className={cn("pointer-events-auto inline-flex h-10 items-center px-1.5", FLOAT)}
+              title={PLATFORMS[platforms[0]].label}
             >
-              {(() => {
-                const Icon = PLATFORMS[platforms[0]].icon;
-                return <Icon className="size-3.5" />;
-              })()}
-              {PLATFORMS[platforms[0]].label}
+              <PlatformAppIcon platform={platforms[0]} size={28} label />
             </span>
           ) : null}
 
@@ -1195,10 +1276,10 @@ export function ReviewPanel({
                   className={TOOL}
                   onClick={() => void generate(session.id, { kind: "regenerate" })}
                   disabled={revising || locked}
-                  title="Same description, a new version"
+                  title={`Same description, a new version · ${newTakePrice}`}
                 >
                   <RefreshCw />
-                  <span className="hidden sm:inline">New take</span>
+                  <span className="hidden sm:inline">New take · {newTakePrice}</span>
                 </button>
                 <span aria-hidden className="mx-1 h-4 w-px bg-border" />
                 <button
@@ -1336,7 +1417,7 @@ export function ReviewPanel({
         ) : null}
 
         {/* Stage */}
-        <div className="relative flex flex-1 justify-center px-4 pb-28 pt-4 @3xl/composer:px-10 @3xl/composer:pt-6">
+        <div className="relative flex flex-1 flex-col px-4 pb-28 pt-4 @3xl/composer:px-10 @3xl/composer:pt-6">
           <AnimatePresence>
             {justApproved && !reduce ? (
               <motion.span
@@ -1366,6 +1447,14 @@ export function ReviewPanel({
           >
             {preview}
           </motion.div>
+          {!locked && media?.kind === "image" ? (
+            <VersionStrip
+              media={draft.media}
+              ratio={ratio.replace(":", " / ")}
+              disabled={revising || editing}
+              onChoose={(slot) => chooseVersion(session.id, slot)}
+            />
+          ) : null}
         </div>
 
         {/* Bottom bars: editing and revising */}
@@ -1377,10 +1466,10 @@ export function ReviewPanel({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: duration.medium, ease: ease.emphasized }}
-              className="sticky bottom-4 z-20 mx-auto -mt-16 mb-4 shrink-0 flex w-fit items-center gap-2 rounded-full bg-surface-4 py-1.5 pl-4 pr-1.5 shadow-4 ring-1 ring-border"
+              className="sticky bottom-4 z-20 mx-auto -mt-16 mb-4 flex w-[calc(100%-1rem)] max-w-[600px] shrink-0 flex-wrap items-center justify-end gap-2 rounded-2xl bg-surface-4 px-3 py-2 shadow-4 ring-1 ring-border"
             >
               <span className={cn("size-1.5 rounded-full", dirty ? "bg-warning" : "bg-primary")} />
-              <span className="mr-2 text-sm text-foreground">
+              <span className="mr-auto text-xs text-foreground">
                 {dirty
                   ? "Unsaved changes"
                   : `Editing${multi && current ? ` ${PLATFORMS[current].label}` : ""}`}
@@ -1390,13 +1479,13 @@ export function ReviewPanel({
               </Button>
               <Button
                 size="sm"
-                className="rounded-full"
+                className="h-auto min-h-9 min-w-0 whitespace-normal rounded-full py-2 text-center"
                 onClick={() => void save()}
                 disabled={!dirty}
                 loading={busy === "save"}
               >
                 <Check />
-                Save changes
+                {visualChanged ? `Update visuals · ${mediaPrice}` : "Save changes (free)"}
               </Button>
             </motion.div>
           ) : revising ? (
@@ -1509,8 +1598,51 @@ export function ReviewPanel({
             <div className="mt-5 hidden @5xl/composer:flex">{actions}</div>
           </div>
 
-          {session.type === "story" ||
-          (["video", "social", "image", "carousel"].includes(session.type) && rows.length) ? (
+          {job.status === "succeeded" && job.content_item_ids?.[0] ? (
+            <InspectorSection title="Make more from this">
+              <MakeMoreFrom
+                session={session}
+                contentItemId={job.content_item_ids[0]}
+                title={draft.title ?? job.title}
+                media={mediaReady ? media : null}
+                disabled={revising || dirty || editing}
+              />
+            </InspectorSection>
+          ) : null}
+
+          {job.status === "succeeded" &&
+          job.content_item_ids?.[0] &&
+          connectedApps.has("mailchimp") &&
+          session.type !== "story" &&
+          session.type !== "video" ? (
+            <InspectorSection title="Email">
+              <EmailDraft
+                workspaceId={session.workspaceId}
+                contentItemId={job.content_item_ids[0]}
+                disabled={revising || dirty || editing}
+              />
+            </InspectorSection>
+          ) : null}
+
+          {job.status === "succeeded" &&
+          job.content_item_ids?.[0] &&
+          (connectedApps.has("googledrive") ||
+            connectedApps.has("gmail") ||
+            ((workspaceRole === "owner" || workspaceRole === "admin") &&
+              (connectedApps.canConnect ||
+                (session.type === "ad" && connectedApps.has("googleads"))))) ? (
+            <InspectorSection title="Send to">
+              <SendToApps
+                workspaceId={session.workspaceId}
+                contentItemId={job.content_item_ids[0]}
+                isAd={session.type === "ad"}
+                disabled={revising || dirty || editing}
+              />
+            </InspectorSection>
+          ) : null}
+
+          {/* Other formats make a Story through "Make more from this". */}
+          {session.type === "story" || (session.type === "video" && rows.length) ? (
             <InspectorSection title={session.type === "story" ? "About Stories" : "Stories"}>
               <StoryNotes
                 workspaceId={session.workspaceId}
@@ -1562,8 +1694,7 @@ export function ReviewPanel({
           ) : canShip ? (
             <InspectorSection title="Publishing">
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Publish all generated versions to your connected accounts, or choose versions and
-                connect accounts in the publishing window.
+                Post every version to your connected accounts.
               </p>
               {rows.length > deliverable.length ? (
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -1577,7 +1708,7 @@ export function ReviewPanel({
           ) : !approvable && shippableType && sdr && !sdr.enabled ? (
             <InspectorSection title="Publishing">
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Direct publishing isn't enabled for this workspace. Copy or download it to post.
+                Copy or download it to post.
               </p>
             </InspectorSection>
           ) : null}
@@ -1588,27 +1719,19 @@ export function ReviewPanel({
                 Adapt this post for more channels while keeping the existing versions.
               </p>
               {showExpand ? (
-                <div className="mt-3 space-y-2">
-                  {morePlatforms.map((platform) => (
-                    <label
-                      key={platform}
-                      className="flex cursor-pointer items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-primary"
-                        checked={expandChoices.includes(platform)}
-                        onChange={() =>
-                          setExpandChoices((current) =>
-                            current.includes(platform)
-                              ? current.filter((item) => item !== platform)
-                              : [...current, platform],
-                          )
-                        }
-                      />
-                      {PLATFORMS[platform].label}
-                    </label>
-                  ))}
+                <div className="mt-3 space-y-3">
+                  <PlatformLogoGrid
+                    platforms={morePlatforms}
+                    size={40}
+                    isSelected={(platform) => expandChoices.includes(platform)}
+                    onToggle={(platform) =>
+                      setExpandChoices((current) =>
+                        current.includes(platform)
+                          ? current.filter((item) => item !== platform)
+                          : [...current, platform],
+                      )
+                    }
+                  />
                   <Button
                     size="sm"
                     onClick={() => expandPlatforms()}
@@ -1654,7 +1777,7 @@ export function ReviewPanel({
                 dirty={dirty}
                 locked={locked}
                 onImprove={(instruction) =>
-                  refine(instruction, multi && current ? current : "all", "audience")
+                  refine(instruction, multi && current ? current : defaultTextTarget, "audience")
                 }
                 onUseVersion={
                   variant
@@ -1677,8 +1800,11 @@ export function ReviewPanel({
           ) : null}
 
           {!locked ? (
-            <InspectorSection
-              title="Improve"
+            <EditChat
+              session={session}
+              wordsTarget={refineTarget}
+              designedAd={session.type === "ad" && !!draft.adOnImage}
+              disabled={editing}
               aside={
                 multi ? (
                   <div
@@ -1710,66 +1836,7 @@ export function ReviewPanel({
                   </div>
                 ) : null
               }
-            >
-              <form
-                data-no-rhythm
-                className="flex items-center gap-1 rounded-xl bg-surface-2 p-1 pl-3 ring-1 ring-border transition-shadow focus-within:ring-2 focus-within:ring-primary"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (custom.trim().length < 2) return;
-                  refine(custom.trim());
-                  setCustom("");
-                }}
-              >
-                <Wand2 className="size-4 shrink-0 text-muted-foreground" />
-                <input
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  disabled={revising || editing}
-                  placeholder="Describe a change…"
-                  aria-label="Describe a change"
-                  className="h-8 min-w-0 flex-1 !border-0 !bg-transparent px-1.5 text-sm !shadow-none outline-none placeholder:text-muted-foreground focus-visible:!ring-0 disabled:opacity-50"
-                />
-                <Button
-                  type="submit"
-                  size="icon-sm"
-                  className="rounded-lg"
-                  disabled={custom.trim().length < 2 || revising}
-                  aria-label="Apply change"
-                >
-                  <Send />
-                </Button>
-              </form>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {REFINE_PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    disabled={revising || editing}
-                    onClick={() => refine(p.instruction, refineTarget, p.id)}
-                    className="inline-flex h-8 items-center rounded-full bg-surface-2/70 px-3 text-xs font-medium text-foreground ring-1 ring-transparent transition-[background-color,box-shadow,translate] duration-[--motion-duration-fast] hover:-translate-y-px hover:bg-primary-surface hover:shadow-1 hover:ring-primary-border disabled:opacity-45"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-                {hasMedia || media?.status === "failed" ? (
-                  <button
-                    type="button"
-                    disabled={revising || editing}
-                    onClick={() =>
-                      refine(
-                        "Create a fresh take on the visual with a different composition.",
-                        "media",
-                      )
-                    }
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-2/70 px-3 text-xs font-medium text-foreground ring-1 ring-transparent transition-[background-color,box-shadow,translate] duration-[--motion-duration-fast] hover:-translate-y-px hover:bg-primary-surface hover:shadow-1 hover:ring-primary-border disabled:opacity-45"
-                  >
-                    <RefreshCw className="size-3" />
-                    Retake visual
-                  </button>
-                ) : null}
-              </div>
-            </InspectorSection>
+            />
           ) : null}
 
           <InspectorSection title="Brief">

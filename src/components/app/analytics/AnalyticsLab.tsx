@@ -13,7 +13,14 @@ import { AnalyticsModal } from "@/components/app/AnalyticsModal";
 import { TABS, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
 import { METRICS } from "@/lib/analytics/metrics";
-import type { GoogleConnectionView, Kpi, RankedRow, SeriesPoint } from "@/lib/analytics/types";
+import type {
+  GoogleConnectionView,
+  Kpi,
+  RankedRow,
+  SeriesPoint,
+  SocialPostRow,
+  SocialReport,
+} from "@/lib/analytics/types";
 import { cn } from "@/lib/utils";
 
 const WS_ID = "00000000-0000-0000-0000-0000000000aa";
@@ -226,6 +233,155 @@ const SEARCH = {
   },
 };
 
+const post = (
+  id: string,
+  platform: string,
+  caption: string,
+  daysAgo: number,
+  metrics: SocialPostRow["metrics"],
+  madeInMellox = true,
+): SocialPostRow => {
+  const engagement =
+    (metrics.likes ?? 0) + (metrics.comments ?? 0) + (metrics.shares ?? 0) + (metrics.saves ?? 0);
+  return {
+    id,
+    platform,
+    account: "@acme",
+    url: `https://example.com/${id}`,
+    caption,
+    thumbnailUrl: null,
+    format: platform === "tiktok" || platform === "youtube" ? "video" : "image",
+    postedAt: new Date(Date.now() - daysAgo * 864e5).toISOString(),
+    madeInMellox,
+    contentItemId: madeInMellox ? `c-${id}` : null,
+    metrics,
+    engagement,
+    engagementRate: metrics.views ? engagement / metrics.views : null,
+  };
+};
+
+const SOCIAL_POSTS = [
+  post("p1", "instagram", "Behind the scenes: how we test every batch", 4, {
+    views: 18400,
+    reach: 12100,
+    likes: 920,
+    comments: 64,
+    shares: 41,
+    saves: 130,
+    follows: 38,
+  }),
+  post(
+    "p2",
+    "tiktok",
+    "3 mistakes people make with AI answers",
+    9,
+    {
+      views: 24100,
+      likes: 1310,
+      comments: 88,
+      shares: 120,
+    },
+    false,
+  ),
+  post("p3", "linkedin", "What we learned shipping 40 pages in a month", 12, {
+    views: 7300,
+    likes: 210,
+    comments: 31,
+    shares: 18,
+    linkClicks: 96,
+  }),
+  post("p4", "instagram", "New: the autumn range is here", 17, {
+    views: 9100,
+    reach: 7400,
+    likes: 480,
+    comments: 22,
+    shares: 15,
+    saves: 60,
+    follows: 12,
+  }),
+];
+
+const SOCIAL_STATUS = {
+  state: "ready" as const,
+  accounts: 3,
+  reconnect: 0,
+  lastSyncedAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+};
+
+const SOCIAL_REPORT: SocialReport = {
+  source: "social",
+  status: SOCIAL_STATUS,
+  window: WINDOW,
+  kpis: [
+    kpi("social.views", 58900, 47200),
+    kpi("social.engagement", 3529, 2810),
+    {
+      ...kpi("social.engagementRate", 0, 0),
+      value: 0.06,
+      comparison: {
+        ...compare("social.engagementRate", 0.06, 0.059),
+        current: 0.06,
+        previous: 0.059,
+        abs: 0.001,
+        pct: 1.7,
+        significant: false,
+      },
+    },
+    kpi("social.reach", 19500, 16100),
+    kpi("social.follows", 50, 31),
+    kpi("social.linkClicks", 96, 70),
+    kpi("social.posts", 14, 11),
+  ],
+  series: {
+    views: series(28, 2000, 900),
+    engagement: series(28, 120, 60),
+    posts: series(28, 1, 1),
+  },
+  byPlatform: [
+    {
+      platform: "tiktok",
+      posts: 4,
+      views: 24100,
+      engagement: 1518,
+      engagementRate: 0.063,
+      follows: null,
+    },
+    {
+      platform: "instagram",
+      posts: 7,
+      views: 27500,
+      engagement: 1732,
+      engagementRate: 0.063,
+      follows: 50,
+    },
+    {
+      platform: "linkedin",
+      posts: 3,
+      views: 7300,
+      engagement: 259,
+      engagementRate: 0.035,
+      follows: null,
+    },
+  ],
+  previousByPlatform: null,
+  topPosts: SOCIAL_POSTS,
+  recentPosts: [...SOCIAL_POSTS].reverse(),
+  formats: [
+    { key: "image", posts: 9, avgViews: 4100, avgEngagement: 240 },
+    { key: "video", posts: 5, avgViews: 6200, avgEngagement: 330 },
+  ],
+  weekdays: [
+    { key: "1", posts: 3, avgViews: 3900, avgEngagement: 210 },
+    { key: "2", posts: 4, avgViews: 5200, avgEngagement: 300 },
+    { key: "4", posts: 4, avgViews: 6100, avgEngagement: 350 },
+    { key: "6", posts: 3, avgViews: 2600, avgEngagement: 150 },
+  ],
+  origin: {
+    mellox: { key: "mellox", posts: 10, avgViews: 4600, avgEngagement: 270 },
+    other: { key: "other", posts: 4, avgViews: 3800, avgEngagement: 220 },
+  },
+};
+
 const OVERVIEW = {
   mellox: {
     source: "mellox" as const,
@@ -256,6 +412,14 @@ const OVERVIEW = {
     positionSeries: SEARCH.series.position,
     queries: SEARCH.breakdowns.query,
     pages: SEARCH.breakdowns.page,
+  },
+  social: {
+    status: SOCIAL_STATUS,
+    window: WINDOW,
+    kpis: SOCIAL_REPORT.kpis.slice(0, 5),
+    series: SOCIAL_REPORT.series.views,
+    byPlatform: SOCIAL_REPORT.byPlatform,
+    topPosts: SOCIAL_POSTS.slice(0, 4),
   },
   aiVisibility: {
     latest: {
@@ -446,7 +610,32 @@ function answer(path: string, body: unknown, connection: GoogleConnectionView): 
     const section = (body as { data?: { section?: string } })?.data?.section;
     if (section === "website") return { section, report: WEBSITE };
     if (section === "search") return { section, report: SEARCH };
-    return { section: "overview", report: OVERVIEW };
+    if (section === "social") return { section, report: SOCIAL_REPORT };
+    // Overview never waits for Google: follow the chosen connection state.
+    const google = !connection.connection
+      ? "not_connected"
+      : connection.connection.status !== "active"
+        ? "reconnect"
+        : !connection.ga4 && !connection.gsc
+          ? "no_source"
+          : "ready";
+    if (google === "ready") return { section: "overview", report: OVERVIEW };
+    const off = (s: typeof OVERVIEW.website.status) => ({
+      ...s,
+      state: google,
+      source: null,
+      firstDate: null,
+      lastDate: null,
+      message: null,
+    });
+    return {
+      section: "overview",
+      report: {
+        ...OVERVIEW,
+        website: { status: off(OVERVIEW.website.status), window: null, kpis: [], series: [] },
+        search: { status: off(OVERVIEW.search.status), window: null, kpis: [], series: [] },
+      },
+    };
   }
   return null;
 }

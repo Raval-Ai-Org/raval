@@ -26,6 +26,7 @@ import { PLATFORM_PLAYBOOK } from "@/lib/studio/playbook";
 import { TRENDS_RULE, trendLines } from "@/lib/studio/trends";
 import { aimSequence, shareSection, type ShareAim } from "@/lib/studio/viral";
 import type { PlatformId } from "@/lib/social-platforms";
+import { pinIssue } from "@/lib/social/pinterest";
 import {
   buildPlanSlots,
   industryById,
@@ -56,6 +57,7 @@ const ChannelEnum = z.enum([
   "tiktok",
   "youtube",
   "threads",
+  "pinterest",
   "blog",
   "email",
   "web",
@@ -365,7 +367,7 @@ async function updateEditorialContent(
 ) {
   const { data: current, error: readError } = await context.supabase
     .from("content_items")
-    .select("workspace_id, status, body, meta, updated_at")
+    .select("workspace_id, status, kind, channel, media_url, body, meta, updated_at")
     .eq("id", data.id)
     .single();
   if (readError || !current) throw new Error(readError?.message ?? "Content item not found");
@@ -402,6 +404,17 @@ async function updateEditorialContent(
     patch.status = "draft";
   } else if (requestedStatus) {
     assertContentTransition(currentStatus, requestedStatus);
+  }
+
+  if (patch.status === "approved") {
+    // A Pin must be one picture before anyone approves it.
+    const issue = pinIssue({
+      kind: (patch.kind as string | undefined) ?? current.kind,
+      channel: (patch.channel as string | undefined) ?? current.channel,
+      media_url: (patch.media_url as string | null | undefined) ?? current.media_url,
+      meta: (patch.meta ?? current.meta) as Record<string, unknown> | null,
+    });
+    if (issue) throw new HttpError(422, issue);
   }
 
   const { data: row, error } = await context.supabase

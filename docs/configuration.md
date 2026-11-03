@@ -51,3 +51,15 @@ with `KIE_UGC_MODEL_<MODEL_KEY>`, for example
 controlled with `UGC_MODEL_<MODEL_KEY>_ENABLED`; prices can be overridden with
 `UGC_PRICE_<MODEL_KEY>_<RESOLUTION>_CREDITS`. `UGC_DEFAULT_MODEL` remains the
 fallback catalog default, while automatic routing is the Studio default.
+
+Video and video Story defaults are 10 seconds. Studio and UGC offer 10, 15,
+20, 30, 40 and 60 seconds. Longer outputs are assembled from provider-sized
+clips; scripts, scene timing, provider cost estimates and credit holds scale
+with the selected length. Automatic UGC routing respects the workspace plan.
+
+Apply `supabase/migrations/20261021090000_video_compositions.sql` and install
+FFmpeg on every server/worker that advances video jobs (`FFMPEG_PATH` may point
+to the executable). The service-only composition table persists accepted clip
+tasks across polls and deploys. An interrupted submit is failed rather than
+silently submitted again. Each finished clip passes the existing video safety
+review before assembly. Native-length renders use the existing provider path.

@@ -16,9 +16,12 @@ import {
   type CaptureJob,
   type VisualProfile,
 } from "@/lib/brand-visuals/contracts";
+import { userSafeMessage } from "@/lib/user-errors";
+import { upstreamDetail } from "@/server/upstream";
 import { captureVisualPage } from "./capture.server";
 import { createVisualPreview } from "./preview.server";
 import { readSources, type VisualCaller } from "./service.server";
+import { PHOTO_PIXEL_LIMIT } from "@/server/assets/image-limits";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
 const jobs = () => db.from("brand_visual_capture_jobs");
@@ -73,7 +76,7 @@ Return JSON: {v:1,selected:0,observations:[{category:"layout"|"typography"|"colo
     const file = await downloadAssetObject(db, source.asset!.storage_path);
     if (file.error || !file.data) continue;
     const bytes = Buffer.from(await file.data.arrayBuffer());
-    const image = await sharp(bytes, { limitInputPixels: 30_000_000 })
+    const image = await sharp(bytes, { limitInputPixels: PHOTO_PIXEL_LIMIT, failOn: "none" })
       .resize({ width: 1100, height: 1600, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer();
@@ -334,11 +337,15 @@ export async function advanceVisualCapture(id: string, workspaceId?: string): Pr
       });
       return;
     }
+    // The row is shown in Inspo as it is: keep browser and supplier wording in the log.
+    console.warn("[brand-visuals] capture step failed", upstreamDetail(error).slice(0, 600));
     await checkpoint({
       status: attempts >= 2 ? "failed" : "queued",
       attempts,
-      error:
-        error instanceof Error ? error.message.slice(0, 400) : "The visual scan could not finish.",
+      error: userSafeMessage(
+        error instanceof Error ? error.message.split("\n")[0].slice(0, 400) : null,
+        "We couldn't look at your site's pages just now. Please try again.",
+      ),
     });
   }
 }

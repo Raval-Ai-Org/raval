@@ -6,6 +6,8 @@
 // differs from the workspace's recent carousels, and every slide has a role in
 // that structure. The model writes the words; the roles, the order, the labels
 // and the limits are decided here.
+import { applyLean } from "@/lib/taste/bias";
+import type { Lean } from "@/lib/taste/contracts";
 import type { CarouselSlide } from "../jobs";
 
 export type SlideRole = "cover" | "context" | "point" | "proof" | "recap" | "cta";
@@ -26,6 +28,11 @@ export type CarouselStructure = {
   directive: string;
   /** What the short label above each middle heading looks like. */
   kickerHint: string;
+  /**
+   * The middle slides carry a picture or a punchline, not teaching text, so a
+   * short body is right (case studies, running jokes).
+   */
+  shortBodies?: boolean;
 };
 
 export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
@@ -33,7 +40,7 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     id: "steps",
     label: "Step by step",
     directive:
-      "A sequence someone can follow. Each middle slide is one step in the real order, its heading starts with a verb, and each step only makes sense after the one before it.",
+      "A sequence someone can follow. Each middle slide is one step in the real order, its heading starts with a verb, and each step only makes sense after the one before it. Where it helps, the body ends with the one mistake people make at that step.",
     kickerHint: '"Step 1", "Step 2", …',
   },
   {
@@ -75,7 +82,7 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     id: "comparison",
     label: "This versus that",
     directive:
-      "Two ways of doing the same thing, compared on one point per slide. Keep the same two sides and the same order on every slide so the reader can follow the contrast.",
+      "Two ways of doing the same thing, compared on one point per slide. Keep the same two sides and the same order on every slide so the reader can follow the contrast. Be honest about where each side wins, and before the close give a plain rule for choosing (one side if…, the other if…).",
     kickerHint: 'the point being compared, e.g. "Cost", "Time", "Result"',
   },
   {
@@ -89,7 +96,7 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     id: "checklist",
     label: "A checklist",
     directive:
-      "Things to check, in the order someone would check them. Each heading is the item, each body is the one-line reason it matters. Made to be saved.",
+      "Things to check, in the order someone would check them. Each heading is the item, written as a specific action rather than vague advice; each body is the one-line reason it matters. When the items fall naturally into before, during and after, keep them in that order. Made to be saved.",
     kickerHint: '"Check 1", "Check 2", …',
   },
   {
@@ -98,6 +105,52 @@ export const CAROUSEL_STRUCTURES: CarouselStructure[] = [
     directive:
       "Each middle slide is one real question in the audience's own words, answered directly in the body. Order the questions the way they come up in a buyer's head.",
     kickerHint: '"Q1", "Q2", …',
+  },
+  // Round 4, from a study of caption and carousel prompt patterns.
+  {
+    id: "insights",
+    label: "What the numbers mean",
+    directive:
+      "One finding per middle slide. The heading says what the finding means, not just the figure; the body gives the supporting figure and one line on what the reader should do about it. Put the most surprising finding first. Use only figures in the brief or the brand's facts; with none, use plain observations and no numbers.",
+    kickerHint: '"Finding 1", "Finding 2", …',
+  },
+  {
+    id: "soft-sell",
+    label: "Teach, then offer",
+    directive:
+      "Useful first, offer second. The first middle slides teach something genuinely useful about the topic so the post is worth saving on its own; then one slide bridges from the lesson to how the brand's offer removes what is still hard; proof only from supplied facts. Keep at least three parts lesson to one part offer, and end with one clear next step.",
+    kickerHint: '"Know this", "Why it\'s hard", "The easy way"',
+  },
+  // Round 2, from agency portfolio posts (docs/studio/reference-study-2026-10.md).
+  {
+    id: "case-study",
+    label: "Our work, shown",
+    directive:
+      "A piece of work shown where it lives. The cover names the project. Each middle slide shows the work on one real touchpoint (the website, the packaging, a sign, a social post, the app), never the same kind of touchpoint twice; the heading names the touchpoint and the body says in one short line what was done there. The last slide names the scope in a few words and asks for one step. Only facts from the brief: no results, clients' words or figures that were not supplied.",
+    kickerHint: 'the touchpoint, e.g. "Website", "Packaging", "Signage"',
+    shortBodies: true,
+  },
+  {
+    id: "intro",
+    label: "Who we are",
+    directive:
+      "An introduction that turns a stranger into a lead. The cover promises a payoff in a small aside. Then: what the brand does (up to four offers, each with a one-line plain-spoken aside), who it is for, proof only from supplied facts, and a last slide whose heading is a question and whose body pays off the cover's promise. Never state how many slides there are unless it matches exactly.",
+    kickerHint: '"What we do", "For", "Proof"',
+  },
+  {
+    id: "reveal",
+    label: "Hold the reveal",
+    directive:
+      "Make them lean in before you tell them. The cover is a bold line about a standard or a feeling that does not yet say what the post is about. Slide 2 reveals it plainly and quietly (the hiring, the new thing, the change). The middle slides give the details as a numbered list when there is one. The last slide gives the one way to act.",
+    kickerHint: '"The reveal", "Details", or the item\'s number',
+  },
+  {
+    id: "running-joke",
+    label: "A running joke",
+    directive:
+      "One template, repeated. Every middle slide has the same shape: `body` is a short setup line, `heading` is the punchline of two to four words, and the punchline is the same or nearly the same on every slide while the setup changes. The joke must be about the audience's world and kind, never about a person or another company. The last slide gives the reason or the turn (a greeting, a day off, the one thing you will do).",
+    kickerHint: "leave empty",
+    shortBodies: true,
   },
 ];
 
@@ -110,12 +163,25 @@ const ANGLE_STRUCTURES: Record<string, string[]> = {
   proof: ["breakdown", "story", "list"],
   story: ["story", "breakdown"],
   myth: ["myths", "mistakes"],
-  data: ["list", "breakdown", "comparison"],
-  objection: ["questions", "myths", "comparison"],
+  data: ["insights", "list", "breakdown", "comparison"],
+  objection: ["questions", "myths", "comparison", "soft-sell"],
   "behind-scenes": ["breakdown", "story", "steps"],
   checklist: ["checklist", "steps", "mistakes"],
   comparison: ["comparison", "story", "mistakes"],
 };
+
+/**
+ * Made only when asked for (a template, the brief or, for the last two, an
+ * angle above), never picked by rotation.
+ */
+const ON_REQUEST = new Set([
+  "case-study",
+  "intro",
+  "reveal",
+  "running-joke",
+  "insights",
+  "soft-sell",
+]);
 
 /** A template names its own structure; nothing overrides it. */
 const TEMPLATE_STRUCTURE: Record<string, string> = {
@@ -127,6 +193,10 @@ const TEMPLATE_STRUCTURE: Record<string, string> = {
   "carousel-product-tour": "breakdown",
   "carousel-stats": "list",
   "carousel-faq": "questions",
+  "carousel-case-study": "case-study",
+  "carousel-intro": "intro",
+  "carousel-hiring": "reveal",
+  "carousel-running-joke": "running-joke",
 };
 
 function hash(value: string): number {
@@ -144,6 +214,18 @@ export function getCarouselStructure(id: string | null | undefined): CarouselStr
 
 const NUMBER = "(?:\\d+|two|three|four|five|six|seven|eight|nine|ten)";
 const ASKED: [RegExp, string][] = [
+  [
+    /\bcase stud(y|ies)\b|\bportfolio\b|\bshowcase (of )?our work\b|\bour (latest|recent) (work|project)\b/i,
+    "case-study",
+  ],
+  [
+    /\bwho we are\b|\bintroduc(e|ing) (us|ourselves|our (agency|studio|team|company))\b|\bmeet (us|the team)\b/i,
+    "intro",
+  ],
+  [/\bwe['’]?re hiring\b|\bwe are hiring\b|\bnow hiring\b|\bjob opening/i, "reveal"],
+  [/\brunning joke\b|\bmeme carousel\b|\bnot today\b/i, "running-joke"],
+  [/\bsoft[- ]sell\b|\bteach,? then (sell|offer)\b/i, "soft-sell"],
+  [/\bsurvey (results|findings)\b|\bwhat the (data|numbers) (says?|shows?|means?)\b/i, "insights"],
   [/\bchecklist\b/i, "checklist"],
   [/\bmyths?\b/i, "myths"],
   [/\bmistakes?\b/i, "mistakes"],
@@ -182,6 +264,8 @@ export function pickCarouselStructure(args: {
   preferred?: string | null;
   /** What was asked for, in the asker's words. */
   brief?: string | null;
+  /** The brand's taste for carousel stories (ADR-0038). */
+  lean?: Lean | null;
 }): CarouselStructure {
   const kept = getCarouselStructure(args.preferred);
   if (kept) return kept;
@@ -194,10 +278,17 @@ export function pickCarouselStructure(args: {
   const suited = (ANGLE_STRUCTURES[args.angleId ?? ""] ?? [])
     .map((id) => BY_ID.get(id))
     .filter((s): s is CarouselStructure => !!s);
-  const fresh = suited.filter((s) => !used.has(s.id));
+  const byId = (s: CarouselStructure) => s.id;
+  const fresh = applyLean(
+    suited.filter((s) => !used.has(s.id)),
+    args.lean,
+    args.seed,
+    byId,
+  );
   if (fresh.length) return fresh[hash(args.seed) % fresh.length];
-  const unused = CAROUSEL_STRUCTURES.filter((s) => !used.has(s.id));
-  const pool = unused.length ? unused : CAROUSEL_STRUCTURES;
+  const general = CAROUSEL_STRUCTURES.filter((s) => !ON_REQUEST.has(s.id));
+  const unused = general.filter((s) => !used.has(s.id));
+  const pool = applyLean(unused.length ? unused : general, args.lean, args.seed, byId);
   return pool[hash(args.seed) % pool.length];
 }
 
@@ -285,6 +376,10 @@ export function normalizeSlides(raw: unknown, count?: number): CarouselSlide[] {
     const kicker = role === "cta" ? "" : oneLine(row.kicker, 26);
     const visual = oneLine(row.visual, 240);
     const emphasis = emphasisIn(heading, row.emphasis);
+    const photo =
+      Number.isInteger(row.photo) && (row.photo as number) >= 0 && (row.photo as number) < 6
+        ? (row.photo as number)
+        : null;
     return {
       heading,
       body,
@@ -292,6 +387,7 @@ export function normalizeSlides(raw: unknown, count?: number): CarouselSlide[] {
       ...(kicker ? { kicker } : {}),
       ...(emphasis ? { emphasis } : {}),
       ...(visual ? { visual } : {}),
+      ...(photo !== null ? { photo } : {}),
     };
   });
 }
@@ -339,15 +435,41 @@ function overlap(a: string, b: string): number {
   return shared / Math.min(left.size, right.size);
 }
 
+const COUNT_WORDS: Record<string, number> = {
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
+/** "give it 8 slides": the count a cover promises, if it names one. */
+function promisedSlides(cover: string): number | null {
+  const m = /\b(\d{1,2}|three|four|five|six|seven|eight|nine|ten)\s+(?:slides|swipes)\b/i.exec(
+    cover,
+  );
+  if (!m) return null;
+  return COUNT_WORDS[m[1].toLowerCase()] ?? Number(m[1]);
+}
+
 /**
  * Why a carousel doesn't hold together, or null when it does. Checked before
  * anything is saved; a failure gets one corrected attempt.
  */
-export function carouselStoryIssue(slides: CarouselSlide[] | undefined): string | null {
+export function carouselStoryIssue(
+  slides: CarouselSlide[] | undefined,
+  structure?: string | null,
+): string | null {
   if (!slides?.length) return "The carousel has no slides.";
   if (slides.some((s) => !s.heading.trim())) return "A carousel slide has no heading.";
   if (words(slides[0].heading).length > 12)
     return "The carousel cover is too long to read at once.";
+  const promised = promisedSlides(`${slides[0].heading} ${slides[0].body}`);
+  if (promised !== null && promised !== slides.length)
+    return `The cover promises ${promised} slides but the carousel has ${slides.length}.`;
   const seen = new Set<string>();
   for (const s of slides) {
     const key = words(s.heading).join(" ");
@@ -355,7 +477,8 @@ export function carouselStoryIssue(slides: CarouselSlide[] | undefined): string 
     seen.add(key);
   }
   const middle = slides.slice(1, -1);
-  if (middle.some((s) => s.body.trim().length < 25))
+  const shortBodies = !!getCarouselStructure(structure)?.shortBodies;
+  if (middle.some((s) => s.body.trim().length < (shortBodies ? 8 : 25)))
     return "A carousel teaching slide is too thin.";
   for (let i = 0; i < middle.length; i++) {
     for (let j = i + 1; j < middle.length; j++) {

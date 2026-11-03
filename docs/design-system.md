@@ -1,9 +1,8 @@
 # Mellox design system
 
-One look for the whole app: calm canvas, soft tiles, pill controls, a quiet
-navigation rail and a lime glow that marks Mellox. It borrows the structure of
-Gemini's and ChatGPT's settings and Claude's restraint, and keeps Mellox's own
-brand: **Ultra Moss lime is the only accent colour, in both themes**, and icons
+One look for the whole app, in the Pinterest language: the content is the
+interface, pictures sit at their true shape in rounded pins, every control is a
+pill, and there is very little text. It keeps Mellox's own brand: **Ultra Moss lime is the only accent colour, in both themes**, and icons
 come from the bespoke set in `@/components/icons`.
 
 The public landing page (`src/app/page.tsx`) is not part of this system and
@@ -18,8 +17,11 @@ must not change when the app's styling does (see "Scope" below).
 3. **One primary action per screen.** Lime pill. Everything else is a quiet
    outlined pill or an icon button.
 4. **Soft, not boxed.** Tiles have a hairline and a faint fill; no heavy
-   borders, no shadows on content, depth only on windows.
-5. **Calm motion.** Pages fade up 6px; the rail highlight slides; nothing
+   borders and no shadows at rest. A tile that opens something lifts a
+   little on hover, like a pin; windows carry the only standing depth.
+5. **Pictures first.** Anything visual is a pin in a masonry wall, never a
+   cropped thumbnail in a fixed grid.
+6. **Calm motion.** Pages fade up 6px; the rail highlight slides; nothing
    bounces. Reduced motion turns it off.
 
 ## Tokens (`src/styles.css`, "Mellox surface system")
@@ -45,14 +47,42 @@ must not change when the app's styling does (see "Scope" below).
 | `ds-tile-hover` | a tile that opens something                  |
 | `ds-well`       | soft inset fill                              |
 | `ds-page-title` | the one heading on a page (20px semibold)    |
-| `ds-label`      | small uppercase label above a group          |
+| `ds-label`      | short sentence-case heading above a group    |
 | `ds-enter`      | how a page arrives                           |
+
+## Pinterest language
+
+| Pinterest trait                 | Mellox rule                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| The content is the interface    | Light theme is a white canvas with neutral greys (in-app only); dark stays black               |
+| Pins at their true shape        | `Masonry` + `PinCard`, 20px radius, `object-contain`, 12px gutters, columns by container width |
+| Hover reveals actions           | White round `PinButton`s on a bottom gradient; always visible on touch                         |
+| Boards                          | `BoardCover` (one large + two small pictures), a 13px title and one 11px meta line             |
+| Everything is a pill            | Buttons, fields, selects, tabs, chips and nav rows are round; menus are `rounded-2xl`          |
+| Search and chips above the wall | `SearchPill`, `PillTabs`, `PILL_SELECT`, `Chip` / `ChipRow` (scrolls sideways)                 |
+| Very little text                | One title per screen, labels of one to three words, no subtitles or description paragraphs     |
+
+Type scale: 11px meta · 12px controls · 13px card titles · 15px window title ·
+20px page title.
+
+### The pin kit (`src/components/app/pins/`)
+
+- `Masonry` places items in the shortest column (`src/lib/library-grid.ts`).
+- `PinCard` is the frame: a click target over the whole picture, `topLeft` /
+  `topRight` badges (`PinBadge`), hover `actions` (`PinButton`), an
+  `overlay`, and a `footer` (`PinFooter`: title + one meta line). Pass
+  `content` to draw something other than a picture.
+- `PillTabs`, `SearchPill`, `PILL_SELECT`, `PILL_TRACK`, `Chip`, `ChipRow`,
+  `BoardCover` and `PinGridSkeleton` are the controls around a wall.
+- The Library (`LibraryTile`) is the reference: hearts, download, share and a
+  ••• menu on a `PinCard`.
 
 ## Components
 
 - **Windows:** `AppModalShell` (`src/components/app/AppModalShell.tsx`). Sizes
   `sm`, `md`, `lg`, `xl`, and `2xl` for data-heavy surfaces. The header is
-  an icon chip (lime, round), a title and at most one short description line.
+  an icon chip (lime, round) and a title; a `description` is read to screen
+  readers only.
   The window focuses itself on open, so no button opens wearing a focus ring.
 - **Rail layout:** `SurfaceLayout`, `SurfacePage`, `Tile`, `Stat`,
   `GroupLabel` (`src/components/app/surface/SurfaceLayout.tsx`). Used by AI
@@ -63,8 +93,8 @@ must not change when the app's styling does (see "Scope" below).
   pill.
 - **Site and engine marks:** `SiteIcon` (a website's favicon with a monogram
   fallback) and `EngineMark` (ChatGPT, Claude and Gemini logos).
-- **Primitives:** tabs are a soft segmented pill; inputs, textareas and select
-  triggers are rounded with a soft fill; menus and popovers are rounded with
+- **Primitives:** tabs are a soft segmented pill; inputs and select triggers
+  are pills and textareas are tile-rounded, with a soft fill; menus and popovers are rounded with
   rounded items; tooltips are neutral (never lime); empty states use a
   lime-tinted icon.
 
@@ -78,7 +108,8 @@ must not change when the app's styling does (see "Scope" below).
 
 ## Scope
 
-In-app shape overrides (every `Button` as a pill) apply only when the page
+In-app overrides (every `Button`, `Input` and `SelectTrigger` as a pill, and
+the white light-theme canvas) apply only when the page
 contains an element with `data-mellox-app`: the workspace shell, projects,
 agency, onboarding and every `AppModalShell` window set it. The landing page
 does not, so it renders exactly as before.
@@ -87,7 +118,8 @@ does not, so it renders exactly as before.
 
 - [ ] Opens in `AppModalShell` (or a route that renders one)
 - [ ] More than one section? Use `SurfaceLayout`
-- [ ] One `ds-page-title` per page, no explanatory paragraphs
+- [ ] One `ds-page-title` per page, no subtitles or explanatory paragraphs
+- [ ] Pictures are pins (`PinCard` in `Masonry`), never cropped thumbnails
 - [ ] One lime primary action
 - [ ] Tiles are `Tile` / `ds-tile`; no ad-hoc borders or shadows
 - [ ] Works at 390px wide and in light and dark

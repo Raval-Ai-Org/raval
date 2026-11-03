@@ -29,6 +29,7 @@ const FOLD: Record<PlatformId, number> = {
   threads: 500,
   tiktok: 100,
   youtube: 180,
+  pinterest: 60,
 };
 
 /** How each platform colours hashtags, mentions and links. */
@@ -38,6 +39,7 @@ const LINK: Partial<Record<PlatformId, string>> = {
   twitter: "text-[#1D9BF0]",
   instagram: "text-[#00376B] dark:text-[#E0F1FF]",
   threads: "text-[#0095F6]",
+  pinterest: "font-medium text-foreground",
 };
 
 type Layout = "conversation" | "visual" | "network";
@@ -48,6 +50,7 @@ const LAYOUT: Record<PlatformId, Layout> = {
   instagram: "visual",
   tiktok: "visual",
   youtube: "visual",
+  pinterest: "visual",
   linkedin: "network",
   facebook: "network",
 };

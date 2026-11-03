@@ -316,7 +316,7 @@ export function ScriptStep({
               })}
             </AnimatePresence>
           </ol>
-          {script.scenes.length < 6 ? (
+          {script.scenes.length < 12 ? (
             <button
               type="button"
               onClick={addScene}

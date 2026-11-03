@@ -5,6 +5,7 @@
 // stored in workspace_marketing_strategy.
 import { z } from "zod";
 import { AUTOPILOT_GOALS } from "@/lib/autopilot/contracts";
+import type { WorkspaceGoals } from "@/lib/goals/contracts";
 
 export const STRATEGY_VERSION = 1;
 
@@ -117,6 +118,8 @@ export type StrategyFacts = {
   audiences: string[];
   /** Connected social platforms. */
   platforms: string[];
+  /** The person's own goal (ADR-0035). When set, it decides the strategy's goal and pace. */
+  goals?: WorkspaceGoals | null;
 };
 
 export type StrategyStatus = "draft" | "confirmed";

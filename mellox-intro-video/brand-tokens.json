@@ -1,0 +1,69 @@
+{
+  "brand": "Mellox AI",
+  "typography": {
+    "primaryFamily": "Google Sans Flex",
+    "primaryFallback": "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    "displayFamily": "Google Sans Flex",
+    "wordmarkFamily": "Michroma",
+    "weights": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "wordmarkWeight": 400,
+    "tracking": {
+      "tighter": "-0.03em",
+      "tight": "-0.015em",
+      "normal": "0em",
+      "wide": "0.02em",
+      "caps": "0.06em"
+    },
+    "localFontFiles": {
+      "400": "assets/fonts/google-sans-flex-400.ttf",
+      "500": "assets/fonts/google-sans-flex-500.ttf",
+      "600": "assets/fonts/google-sans-flex-600.ttf",
+      "700": "assets/fonts/google-sans-flex-700.ttf",
+      "wordmark400": "assets/fonts/michroma-400.ttf"
+    },
+    "sources": [
+      "src/styles.css:11",
+      "src/styles.css:45",
+      "src/app/layout.tsx:11",
+      "src/components/brand/Logo.tsx:56"
+    ]
+  },
+  "palette": {
+    "background": "#000000",
+    "backgroundRaised": "#0A0F13",
+    "backgroundInk": "#0D1114",
+    "heroSky": "#030405",
+    "brandSlate": "#39444A",
+    "primaryText": "#FFFFFF",
+    "lightGrayText": "#F7F7F7",
+    "mutedText": "#ABABAB",
+    "ultraMoss": "#CBE960",
+    "onLime": "#11170A",
+    "supportBlue": "#0756E7",
+    "supportPurple": "#B489D1",
+    "sources": [
+      "src/marketing/globals.css:22",
+      "src/marketing/components/problems.css:6",
+      "src/marketing/components/intro.css:112",
+      "src/components/brand/MelloxAurora.tsx:19",
+      "src/styles.css:373"
+    ]
+  },
+  "logo": {
+    "canonicalSource": "public/assets/mellox-logo.svg",
+    "localFile": "assets/mellox-logo.svg",
+    "fill": "#CBE960",
+    "viewBox": "140 225 360 195",
+    "croppedAlternative": "public/brand/mark-lime.svg",
+    "croppedViewBox": "150 226 352 184",
+    "whiteAlternative": "public/brand/mark-white.svg",
+    "lightBackgroundAlternative": "public/assets/Dark-Logo.svg",
+    "lockupNote": "The source SVG is the mark only. The app builds the Mellox AI wordmark as Michroma 400; AI uses lime and has a 0.28em left margin."
+  },
+  "selectionNote": "Revised brand film v2 uses the Mellox product pure-black background at the user explicit request, with white and Ultra Moss accents."
+}

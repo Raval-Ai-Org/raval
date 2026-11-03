@@ -22,7 +22,7 @@ import {
   MediaSafetyError,
 } from "@/server/guardrails/media-safety.server";
 import { randomUUID } from "node:crypto";
-import { fetchWithRetry } from "@/server/upstream";
+import { fetchWithRetry, upstreamDetail } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
 import { enforceBudget } from "@/server/ai/budget";
 import { recordUsage } from "@/server/ai/metering";
@@ -36,10 +36,14 @@ import {
   OPENROUTER_BASE,
   openRouterHeaders,
 } from "./ai-gateway.server";
-import { routeImageModel, type ImageRoutingInput } from "./model-router.server";
+import {
+  routeImageModel,
+  routeStandardImageModel,
+  type ImageRoutingInput,
+} from "./model-router.server";
 
 /** Studio's image sizes, and the legacy /api/generate-image sizes. */
-export type ImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792";
+export type ImageSize = "1024x1024" | "1024x1280" | "1792x1024" | "1024x1792" | "1024x1536";
 export type ImageQuality = "low" | "medium" | "high";
 
 const IMAGE_TIMEOUT_MS = 150_000;
@@ -67,12 +71,13 @@ export type GeneratedImage = { b64: string; mimeType: string; model: string; cos
 /**
  * The GPT Image 2.5 models take 1:1, 16:9, 9:16, 3:4 (and others) but not
  * 4:5, so Studio's 4:5 portrait (1024x1280) renders as 3:4, the closest
- * supported portrait ratio.
+ * supported portrait ratio. A Pin (1024x1536) is the models' native 2:3.
  */
-export function aspectRatioFor(size: ImageSize): "1:1" | "16:9" | "9:16" | "3:4" {
+export function aspectRatioFor(size: ImageSize): "1:1" | "16:9" | "9:16" | "3:4" | "2:3" {
   if (size === "1792x1024") return "16:9";
   if (size === "1024x1792") return "9:16";
   if (size === "1024x1280") return "3:4";
+  if (size === "1024x1536") return "2:3";
   return "1:1";
 }
 
@@ -104,6 +109,8 @@ export type ImageRequest = {
   aspectRatio: string;
   quality: ImageQuality;
   references: string[];
+  /** "transparent" only for a design layer laid over real photos. */
+  background?: "opaque" | "transparent";
 };
 
 export type ImageTransport = (req: ImageRequest) => Promise<GeneratedImage>;
@@ -115,7 +122,7 @@ async function openRouterImage(req: ImageRequest): Promise<GeneratedImage> {
     aspect_ratio: req.aspectRatio,
     quality: req.quality,
     resolution: "1K",
-    background: "opaque",
+    background: req.background ?? "opaque",
     output_format: "png",
     n: 1,
   };
@@ -200,6 +207,7 @@ export type GenerateImageOpts = {
   maxAttempts?: number;
   /** Skip the budget check (a restart of an already-budgeted task). */
   budgeted?: boolean;
+  background?: "opaque" | "transparent";
 };
 
 export type GenerateImageResult = GeneratedImage & {
@@ -216,7 +224,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
   const size = opts.size ?? "1024x1024";
   const references = usableReferences(opts.routing?.referenceAssets);
   await assertSafeMediaPrompt(opts.prompt);
-  await assertSafeMediaImages(references);
+  await assertSafeMediaImages(references, { stage: "source" });
   const requiresReference = Boolean(
     opts.routing?.hasReference ||
     opts.routing?.editing ||
@@ -254,12 +262,12 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     attempt += 1;
     const aspectRatio = aspectRatioFor(size);
     const key = `or:img:${await digest(
-      `${tenant()}|${model}|${aspectRatio}|${quality}|${references.join(",")}|${opts.prompt}`,
+      `${tenant()}|${model}|${aspectRatio}|${quality}|${opts.background ?? "opaque"}|${references.join(",")}|${opts.prompt}`,
     )}`;
     const hit = await cache.get<GeneratedImage>(key);
     recordCacheLookup("image", Boolean(hit));
     if (hit) {
-      await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`]);
+      await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`], { stage: "output" });
       recordUsage({
         provider: "openrouter",
         model,
@@ -281,6 +289,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               aspectRatio,
               quality,
               references,
+              background: opts.background,
             });
             recordUsage({
               provider: "openrouter",
@@ -290,7 +299,9 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               estCostUsd: image.costUsd,
               latencyMs: Date.now() - started,
             });
-            await assertSafeMediaImages([`data:${image.mimeType};base64,${image.b64}`]);
+            await assertSafeMediaImages([`data:${image.mimeType};base64,${image.b64}`], {
+              stage: "output",
+            });
             await cache.set(key, image, IMAGE_CACHE_TTL_SECONDS);
             return image;
           } catch (error) {
@@ -319,7 +330,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         model,
         attempt,
         code: error instanceof AiGatewayError ? error.code : undefined,
-        message: error instanceof Error ? error.message : String(error),
+        message: upstreamDetail(error),
       });
       if (error instanceof AiGatewayError && TERMINAL_CODES.has(error.code ?? "")) throw error;
     }
@@ -404,19 +415,21 @@ async function inBackground(work: () => Promise<void>): Promise<void> {
  * `model` restarts a failed task on that fallback (already budgeted).
  */
 export async function startImageTask(opts: {
+  costTier?: "standard";
   prompt: string;
   size: ImageSize;
   referenceAssets?: string[];
   model?: string;
+  background?: "opaque" | "transparent";
 }): Promise<StartedImageTask> {
   const references = usableReferences(opts.referenceAssets);
-  const plan = routeImageModel({
+  const plan = (opts.costTier === "standard" ? routeStandardImageModel : routeImageModel)({
     prompt: opts.prompt,
     hasReference: references.length > 0,
     referenceAssets: references,
     editing: references.length > 0,
   });
-  if (!opts.model) await enforceBudget("image");
+  await enforceBudget("image");
   // Fail fast when the key is missing instead of parking a doomed task.
   getOpenRouterKey();
   const model = opts.model ?? plan.model;
@@ -436,6 +449,7 @@ export async function startImageTask(opts: {
           model,
           maxAttempts: 1,
           budgeted: true,
+          background: opts.background,
         });
         parked = {
           state: "success",
@@ -452,7 +466,7 @@ export async function startImageTask(opts: {
             error instanceof AiGatewayError || error instanceof MediaSafetyError
               ? error.code
               : undefined,
-          message: error instanceof Error ? error.message : String(error),
+          message: upstreamDetail(error),
         });
         parked = {
           state: "failed",
@@ -465,7 +479,7 @@ export async function startImageTask(opts: {
           message:
             error instanceof AiGatewayError || error instanceof MediaSafetyError
               ? error.message.slice(0, 300)
-              : "The image provider could not complete this render.",
+              : "The picture couldn't be made this time. Please try again.",
         };
       }
       await cache.set(taskKey(taskId), parked, TASK_TTL_SECONDS);

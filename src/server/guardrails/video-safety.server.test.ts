@@ -35,6 +35,13 @@ describe("finished video safety", () => {
     }));
     await expect(assertSafeVideo(source)).rejects.toMatchObject({ status: 422, code: "refusal" });
   });
+  it("reports a blocked frame as the generated result, never as the source image", async () => {
+    setVideoFrameExtractor(async () => [frame("result")]);
+    setModerationClassifier(async () => ({ safe: false, categories: ["graphic_violence"] }));
+    const error = await assertSafeVideo(video()).catch((caught: Error) => caught);
+    expect(error?.message).toMatch(/generated result/);
+    expect(error?.message).not.toMatch(/source image/);
+  });
   it.each([[], Array(91).fill("data:image/jpeg;base64,AA==")])(
     "fails closed on absent or excessive samples",
     async (frames) => {

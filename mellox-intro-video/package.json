@@ -1,0 +1,15 @@
+{
+  "name": "mellox-intro-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local, deterministic 1080p60 Mellox AI film preview and renderer",
+  "scripts": {
+    "dev": "node server.mjs --port 4177",
+    "render": "node render.mjs",
+    "stills": "node render.mjs --stills 2.5,6.5,11,16,20.5,25,29.5,34.5,39",
+    "check": "node render.mjs --check"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "playwright": "1.56.0" }
+}

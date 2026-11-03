@@ -33,7 +33,7 @@ export const POST = defineRoute({
       brief: ctx.brief,
       brand: ctx.brand,
       workspace: ctx.workspace,
-      durationSec: body.durationSec ?? 8,
+      durationSec: body.durationSec ?? ctx.brief.durationSec ?? 10,
       styleText: ctx.styleText || undefined,
       memoryText: ctx.memoryText || undefined,
     };

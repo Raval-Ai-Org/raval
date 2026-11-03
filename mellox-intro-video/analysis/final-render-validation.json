@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "video": "G:\\Startups\\Raval Ai\\Raval Ai Codebase\\mellox-intro-video\\output\\mellox-black-brand-film-1080p60.mp4",
+  "decoded_all_frames": 2451,
+  "width": 1920,
+  "height": 1080,
+  "fps": 60,
+  "video_duration_seconds": 40.85,
+  "max_frame_pts_error_seconds": 3.3333333604446125e-07,
+  "input_video_stream": "Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 534 kb/s, 60 fps, 60 tbr, 15360 tbn (default)",
+  "input_audio_stream": "Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 316 kb/s (default)",
+  "audio_sample_rate_for_comparison": 16000,
+  "source_audio_seconds": 40.8439375,
+  "rendered_audio_seconds": 40.8533125,
+  "audio_lag_ms_positive_means_output_late": 0.0,
+  "audio_correlation": 0.9985929340591195,
+  "audio_windows": [
+    {
+      "start_seconds": 2,
+      "end_seconds": 6,
+      "lag_ms": 0.0,
+      "correlation": 0.9998048212201457
+    },
+    {
+      "start_seconds": 18,
+      "end_seconds": 22,
+      "lag_ms": 0.0,
+      "correlation": 0.9997099990478951
+    },
+    {
+      "start_seconds": 34,
+      "end_seconds": 38,
+      "lag_ms": 0.0,
+      "correlation": 0.9969244320131936
+    }
+  ],
+  "minimum_one_second_audio_correlation": 0.9985960514379119,
+  "audio_note": "AAC is lossy; correlation measures retained timing/content, not bit identity. Decoder skips codec priming using container edit information."
+}

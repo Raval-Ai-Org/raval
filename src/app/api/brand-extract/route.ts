@@ -7,6 +7,7 @@ import { normalizeUrl } from "@/lib/crawl/html";
 import { runBrandExtraction } from "@/lib/brand-extract.server";
 import type { BrandExtractEvent } from "@/lib/brand-extract-events";
 import { normalizeDomain } from "@/lib/workspace/domain";
+import { userSafeMessage } from "@/lib/user-errors";
 import { paidTargetForUserRoute } from "@/server/billing/accounts.server";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -17,6 +18,8 @@ import { creditsFor } from "@/lib/billing/catalog";
 import { BrandFrozenError, SpendNotAllowedError } from "@/server/billing/errors";
 
 export const dynamic = "force-dynamic";
+
+const SCAN_FAILED = "We couldn't finish reading your site. Please try again.";
 
 const BodySchema = z.object({
   url: z.string().min(1).max(2000),
@@ -86,8 +89,13 @@ export const POST = defineRoute({
             finalEvent = event;
             return;
           }
+          // A stream skips the route's error filter, so failures are made safe here.
+          const safe =
+            event.type === "error"
+              ? { ...event, error: userSafeMessage(event.error, SCAN_FAILED) }
+              : event;
           try {
-            controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+            controller.enqueue(encoder.encode(JSON.stringify(safe) + "\n"));
           } catch {
             // Client disconnected; the pipeline finishes and is discarded.
           }

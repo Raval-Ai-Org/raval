@@ -4,7 +4,9 @@
 // of view, "keep an eye on the competition":
 //   * legacy URL watches: snapshot-diff a watched page and raise alerts;
 //   * competitor intelligence: profile newly tracked competitors and sweep for
-//     meaningful changes (src/server/competitors/service.server.ts).
+//     meaningful changes (src/server/competitors/service.server.ts);
+//   * community threads: who is asking about the brand's problem, field or
+//     competitors (src/server/community/service.server.ts).
 // Sharing the existing, already-scheduled hook is deliberate — this feature
 // adds no new cron job and nothing new to enable per environment.
 //
@@ -18,15 +20,25 @@ export const POST = defineCronRoute({
   job: "competitor-watch",
   expectedIntervalSeconds: 30 * 60,
   handler: async () => {
-    const [{ runDueCompetitorScans }, { runDueCompetitorJobs }] = await Promise.all([
-      import("@/lib/competitor-watch.server"),
-      import("@/server/competitors/service.server"),
-    ]);
+    const started = Date.now();
+    const [{ runDueCompetitorScans }, { runDueCompetitorJobs }, { runDueCommunityJobs }] =
+      await Promise.all([
+        import("@/lib/competitor-watch.server"),
+        import("@/server/competitors/service.server"),
+        import("@/server/community/service.server"),
+      ]);
     // Sequential, and well inside pg_net's 120s timeout: the watches are cheap
     // page fetches, the competitor jobs spend a search and a model call each.
     const watches = await runDueCompetitorScans({ max: 40 });
     const competitors = await runDueCompetitorJobs({ budgetMs: 60_000, max: 3 });
-    return { ...watches, competitors };
+    // Community threads (Brain → Market → Communities): a daily refresh per
+    // workspace that asked for one; a few searches and one economy call each.
+    // Only with the time left inside pg_net's 120s.
+    const community = await runDueCommunityJobs({
+      budgetMs: Math.min(40_000, 105_000 - (Date.now() - started)),
+      max: 2,
+    });
+    return { ...watches, competitors, community };
   },
 });
 

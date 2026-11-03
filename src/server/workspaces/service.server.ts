@@ -8,11 +8,14 @@
 //   - list:   public.workspace_overview() under the CALLER's RLS, so every
 //     metric is correlated on its own workspace id
 //   - delete: owner only, typed confirmation, storage + provider cleanup,
-//     recorded in workspace_deletions (audit_logs cascade with the workspace)
+//     recorded in workspace_deletions (audit_logs cascade with the workspace).
+//     The brand's place on the plan is free again at once, and adding the
+//     same site back gets its free Brand DNA scan (a few times a month).
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { normalizeDomain } from "@/lib/workspace/domain";
+import { mayRestoreFreeScan } from "@/lib/workspace/brand-room";
 import { HttpError } from "@/server/http-error";
 import { optionalWorkspaceEntitlements } from "@/server/billing/readiness.server";
 import { LimitReachedError } from "@/server/billing/errors";
@@ -55,7 +58,7 @@ export async function createOrGetWorkspace(args: {
     if (error.message.includes("billing_brand_limit")) {
       throw new LimitReachedError({
         limit: "brands",
-        used: entitlements?.usage.brands ?? 0,
+        used: entitlements?.usage.activeBrands ?? entitlements?.usage.brands ?? 0,
         max: entitlements?.limits.brands ?? 0,
       });
     }
@@ -227,9 +230,28 @@ export type DeleteDeps = {
   releaseSocialBrand: (brandId: string) => Promise<void>;
   disconnectPostForMeAccounts?: (workspaceId: string) => Promise<void>;
   disconnectCanva?: (workspaceId: string, userId: string) => Promise<void>;
+  /** Give the domain's free Brand DNA scan back, so re-adding it is a full scan. */
+  restoreFreeScan?: (args: { ownerId: string; accountId: string; domain: string }) => Promise<void>;
 };
 
+async function restoreFreeScan(args: { ownerId: string; accountId: string; domain: string }) {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("workspace_deletions")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", args.ownerId)
+    .gte("created_at", since);
+  if (error || !mayRestoreFreeScan(count ?? 0)) return;
+  await admin
+    .from("brand_scan_allowances")
+    .delete()
+    .eq("account_id", args.accountId)
+    .eq("normalized_domain", args.domain)
+    .eq("kind", "brand_dna");
+}
+
 const defaultDeleteDeps: DeleteDeps = {
+  restoreFreeScan,
   disconnectCanva: async (workspaceId, userId) => {
     const { disconnectCanva } = await import("@/server/connectors/canva/service.server");
     await disconnectCanva(workspaceId, userId);
@@ -245,20 +267,23 @@ const defaultDeleteDeps: DeleteDeps = {
     const listed = await call<{ data: Array<{ id: string; status: string; brand_id?: string }> }>({
       path: "/accounts",
     });
-    if (listed.status !== 200) throw new Error("Could not list connected social accounts");
+    if (listed.status !== 200) {
+      throw new Error(`Could not list connected social accounts (HTTP ${listed.status})`);
+    }
+    const failed: string[] = [];
     for (const account of listed.data.data) {
-      if (account.status !== "active") continue;
-      if (account.brand_id !== workspaceId) {
-        throw new Error("A connected account is outside this workspace");
-      }
+      // Never touch an account that belongs to another workspace.
+      if (account.status !== "active" || account.brand_id !== workspaceId) continue;
       const removed = await call({
         method: "DELETE",
         path: `/accounts/${encodeURIComponent(account.id)}`,
       });
       if (removed.status !== 204 && removed.status !== 200 && removed.status !== 404) {
-        throw new Error("Could not disconnect a social account");
+        failed.push(`${account.id} (HTTP ${removed.status})`);
       }
     }
+    if (failed.length)
+      throw new Error(`Could not disconnect social accounts: ${failed.join(", ")}`);
   },
 };
 
@@ -278,7 +303,7 @@ export async function deleteWorkspace(
 
   const { data: ws } = await db
     .from("workspaces")
-    .select("id, name, domain, owner_id")
+    .select("id, name, domain, owner_id, billing_account_id")
     .eq("id", args.workspaceId)
     .maybeSingle();
   if (!ws) throw new HttpError(404, "Workspace not found");
@@ -300,17 +325,25 @@ export async function deleteWorkspace(
     .eq("workspace_id", args.workspaceId)
     .maybeSingle();
 
-  const objects = await deps.listObjects(args.workspaceId).catch(() => {
-    throw new HttpError(503, "Could not list this workspace's stored media. Try again.");
-  });
-  if (deps.disconnectCanva) await deps.disconnectCanva(args.workspaceId, args.userId);
-
+  // Cleanup before the delete is best effort: storage, Canva or a social
+  // provider that is down, out of credits or rejects Mellox's key must never
+  // keep a person from deleting their workspace. What is left behind is tagged
+  // with this workspace's id, which no other workspace can ever read.
+  const cleanupFailed = (step: string) => (error: unknown) => {
+    console.error(
+      `[workspaces] ${step} cleanup requires retry`,
+      args.workspaceId,
+      error instanceof Error ? error.message : error,
+    );
+  };
+  const objects = await deps
+    .listObjects(args.workspaceId)
+    .catch((error: unknown): string[] => (cleanupFailed("storage")(error), []));
+  if (deps.disconnectCanva) {
+    await deps.disconnectCanva(args.workspaceId, args.userId).catch(cleanupFailed("Canva"));
+  }
   if (deps.disconnectPostForMeAccounts) {
-    try {
-      await deps.disconnectPostForMeAccounts(args.workspaceId);
-    } catch {
-      throw new HttpError(503, "Could not disconnect this workspace's social accounts. Try again.");
-    }
+    await deps.disconnectPostForMeAccounts(args.workspaceId).catch(cleanupFailed("social account"));
   }
 
   const { error: deleteError, data: deleted } = await db
@@ -319,8 +352,14 @@ export async function deleteWorkspace(
     .eq("id", args.workspaceId)
     .eq("owner_id", args.userId)
     .select("id");
+  if (deleteError?.message.includes("workspace_link_order_in_progress")) {
+    throw new HttpError(
+      409,
+      "A backlink order for this workspace is still in progress. Try again once it has finished.",
+    );
+  }
   if (deleteError || !deleted?.length) {
-    console.error("[workspaces] delete failed", deleteError?.message);
+    console.error("[workspaces] delete failed", deleteError?.code, deleteError?.message);
     throw new HttpError(500, "Could not delete workspace");
   }
 
@@ -337,6 +376,13 @@ export async function deleteWorkspace(
   }
   const brandId = (social?.brand_id as string | null) ?? null;
   if (brandId) await deps.releaseSocialBrand(brandId).catch(() => undefined);
+  // Counted before this deletion is recorded, so the limit is "this many restores".
+  const accountId = (ws.billing_account_id as string | null | undefined) ?? null;
+  if (deps.restoreFreeScan && accountId && ws.domain) {
+    await deps
+      .restoreFreeScan({ ownerId: args.userId, accountId, domain: ws.domain as string })
+      .catch(() => console.error("[workspaces] free scan restore failed", args.workspaceId));
+  }
 
   await db.from("workspace_deletions").insert({
     workspace_id: args.workspaceId,

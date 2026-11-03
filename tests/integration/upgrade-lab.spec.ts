@@ -27,15 +27,17 @@ test.describe("Upgrade lab — laptop", () => {
     page,
   }) => {
     await openScene(page, "feature");
-    await expect(page.getByRole("heading", { name: "Unlock Autopilot" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Unlock Campaign plans" })).toBeVisible();
     await expect(page.getByText("On Growth and above")).toBeVisible();
     await expect(page.getByTestId("plan-growth")).toHaveAttribute("data-recommended", "true");
-    await expect(page.getByTestId("plan-growth")).toContainText("Unlocks Autopilot");
+    await expect(page.getByTestId("plan-growth")).toContainText("Unlocks Campaign plans");
     await expect(page.getByTestId("plan-growth")).toContainText("Everything in Starter, plus");
     await expect(page.getByTestId("plan-growth")).toContainText("6,000 credits a month");
 
     // The smaller plan says what it leaves out, and can still be chosen.
-    await expect(page.getByTestId("missing-starter")).toContainText("Autopilot is not included");
+    await expect(page.getByTestId("missing-starter")).toContainText(
+      "Campaign plans is not included",
+    );
     await expect(page.getByTestId("missing-growth")).toHaveCount(0);
     for (const name of ["Starter", "Growth", "Agency", "Scale"]) {
       const button = page.getByRole("button", { name: `Upgrade to ${name}` });
@@ -57,11 +59,7 @@ test.describe("Upgrade lab — laptop", () => {
     await expect(page.getByTestId("plan-agency")).toContainText("Save $898 with yearly");
     await page.getByRole("button", { name: "Upgrade to Agency" }).click();
     await expect(last(page)).toHaveAttribute("data-last", "choose:plan:agency:$449 a month");
-
-    // The request step, then the thank-you.
-    await expect(page.getByText("We email you to pay")).toBeVisible();
-    await page.getByRole("button", { name: "Send request" }).click();
-    await expect(page.getByText("We got your request for the Agency plan")).toBeVisible();
+    await expect(page.getByText("Secure checkout by Stripe.")).toBeVisible();
   });
 
   test("out of free credits shows plans first, with packs one tab away", async ({ page }) => {
@@ -99,6 +97,12 @@ test.describe("Upgrade lab — laptop", () => {
     await page.getByTestId("plan-growth").getByRole("button", { name: "Ask the owner" }).click();
     await expect(last(page)).toHaveAttribute("data-last", "ask:growth");
     await expect(page.getByText("Sent to the owner").first()).toBeVisible();
+  });
+
+  test("payments stay disabled when Stripe is temporarily unavailable", async ({ page }) => {
+    await openScene(page, "confirm");
+    await expect(page.getByText("Payments are temporarily unavailable.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Payments unavailable" }).first()).toBeDisabled();
   });
 });
 

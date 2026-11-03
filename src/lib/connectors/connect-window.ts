@@ -14,12 +14,15 @@ const MARK = "mellox:connect-window";
 const NAME = "mellox-connect";
 
 export type ConnectProvider =
-  "github" | "wordpress" | "webflow" | "slack" | "notion" | "canva" | "google";
+  "github" | "wordpress" | "webflow" | "slack" | "notion" | "canva" | "google" | "apps" | "wix";
 
 export const CONNECT_PROVIDER_LABEL: Record<ConnectProvider, string> = {
+  // Any app connected through Composio (src/lib/integrations/catalog.ts).
+  apps: "App",
   github: "GitHub",
   wordpress: "WordPress",
   webflow: "Webflow",
+  wix: "Wix",
   slack: "Slack",
   notion: "Notion",
   canva: "Canva",

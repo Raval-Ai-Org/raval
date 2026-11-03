@@ -1,0 +1,124 @@
+# Reference study, October 2026
+
+Notes from studying about 30 published agency posts (84 pictures, 11 clips)
+that the team put in `Post Training/` (kept out of git). Everything here is
+brand-neutral: the posts are never copied, quoted or named in the product.
+Where each lesson lives in code is listed in
+[creative-knowledge.md](creative-knowledge.md#reference-study-october-2026).
+A later round should add to this file, not start a new one.
+
+## What the best posts have in common
+
+- **Type-led and exact.** The strongest pieces are mostly words, set big and
+  spelled perfectly: a hiring reveal in heavy capitals with one word in the
+  accent colour, a "we'll … just not today" joke repeated on every slide, a
+  greeting that is one symbol and one line. Mellox draws these by code
+  (`SlideArt`), never with an image model.
+- **The real work, shown plainly.** Case studies give each touchpoint its own
+  slide (sign, packaging, website on a device, merchandise) and never show the
+  same medium twice. One shape taken from the logo comes back on every slide.
+- **Screens always sit in a device.** A phone or a browser window, seen
+  straight on, never a raw screenshot filling the frame.
+- **Restraint.** The accent colour covers about 3–8% of the picture. One grade
+  across the set, with fine grain. Emphasis is either a weight change or one
+  coloured word, never both.
+- **Depth.** The subject overlaps the giant headline; objects have contact
+  shadows; heroes are shot from a slightly low angle.
+
+## Recipes per post kind
+
+| Kind             | Structure                                                                                      | Notes                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Case study       | Cover (the identity on its hero object) → one touchpoint per slide → quiet end card            | Caption ends with a credits block: "Client · category", then "Scope: a · b · c". |
+| Agency intro     | Hook → what we do (numbered) → who it's for → proof → action that calls back to the cover      | Plain words; the proof is real work, not adjectives.                             |
+| Hiring           | A metaphor hook that doesn't say "hiring" → the reveal → roles as a numbered list → one action | The reveal is low-key: a grey line under the big words.                          |
+| Greeting         | One symbol in the brand colour, at least 75% empty space, one line                             | A brand glyph can replace part of the symbol; no logo lock-up needed.            |
+| Teaser           | One shape or crop that hides the thing, the date if there is one                               | Never show what is being teased.                                                 |
+| Humour           | The same setup and punchline template on every slide; the last slide says why                  | Topical "what if" pictures are photoreal and impossible.                         |
+| Collab           | "A × B" set as words, both names the same size                                                 | Never draw either logo.                                                          |
+| Market entry     | From → to, as a split picture                                                                  | Only places and dates the brand gave.                                            |
+| Website showcase | The real capture in a device on a calm set in brand colours                                    | Headline above or beside the device, never on the screen.                        |
+
+## Captions
+
+A pun, a quoted line or a question opens. One or two emoji at most. Case
+studies carry the credits block. The close is a question or the link.
+Engagement bait ("comment X to get Y") appears in the set and stays banned
+(`viral.ts`).
+
+## The clips, measured
+
+All 4:5 at 720×900, 30 fps, silent, with no cuts. Each moves in a
+hold → move → hold rhythm: about a second resting so the screen can be read,
+then one smooth move, every 1.5–2 seconds, one interaction per clip. The last
+frame matches the first so the feed loops cleanly. Topical reels use a
+flip-book instead: 6–7 matched stills of about 0.8 seconds each, cut hard.
+
+Mellox's website reel (`site-reel.ts`) follows the first: 3–5 stops down the
+first few screens of the page, a 1-second hold and a 1.2-second eased scroll
+between them, then back to the top: 6–12 seconds in all.
+
+## Round 3: product hero posters
+
+One skincare brand's feed (15 posts) against one Mellox post that pasted the
+whole product photo into a rounded card with clip-art around it.
+
+- One product per post, cut out and large (55–75% of the frame), never in a
+  frame or card.
+- Tone-on-tone: the backdrop is a light tint of the pack's own colour, the
+  type a deep shade of it, plus one contrasting accent.
+- The product's own formula is the prop: a gel pour, a cream swirl, foam,
+  drips. Nothing unrelated.
+- Recurring stagings: a glow sweep on a curved horizon, a wet glass ledge, a
+  macro crop running off the frame, a podium stack, a benefit column with
+  small matching icons.
+- The same handling every post, so the feed reads as one series.
+
+Distilled into `src/lib/studio/product-hero/` (ADR-0040), the `benefit-list`
+art-direction layout for services, and the product-hero deliverable.
+
+## Round 4: campaign poster prompts and caption patterns
+
+About 35 published poster prompts the team collected (giant-object fashion
+ads, product worlds, sports posters, birthday and travel posters, exploded
+infographics), plus a public library of 112 fill-in-the-blank caption, hook
+and carousel prompts. Most poster ideas were already in the library from
+rounds 1–3 (`monument-object`, `hero-world`, `exploded-view`,
+`miniature-diorama`, `portal-pop-out`, `name-on-the-wall`, `peak-action`,
+`pop-collage`, `quiet-editorial`, `literal-metaphor`, `material-swap`,
+`double-exposure`, `film-strip-cutout`); nothing was removed. New:
+
+- Layouts `portrait-backdrop` (a huge profile portrait behind, the same person
+  small in front, one word cut in vertically), `carved-relief` (a number or
+  shape carved into a wall, the subject breaking out), `sculpted-backdrop`
+  (a wide stance in front of glossy inflated shapes, a lowercase word behind)
+  and `annotated-giant` (the product at the size of a seated person, with thin
+  callouts).
+- Craft rule: oversized things look real only through contact (shadow,
+  reflection, fabric folds).
+- Deliverable `milestone` (anniversaries, "turns 5", follower counts): the
+  figure from the copy as a carved or sculpted object, never invented.
+- Carousels: `insights` (what each finding means, most surprising first, only
+  supplied figures) and `soft-sell` (teach first, offer at most a quarter of
+  the slides). Steps may name the usual mistake, comparisons end with a rule
+  for choosing, checklists are specific actions in before/during/after order.
+- Openings `relatable` and `curiosity` (an honest open loop that is paid off).
+- Caption rule: written for a phone, benefits over features, no hype words.
+
+What was left out on purpose: the prompts' model names, "8K" and other
+quality tags (the gateway picks the model), famous people and other brands'
+logos or slogans, and "comment KEYWORD for the link" (still banned bait).
+
+## Mistakes seen in the set (and guarded against)
+
+- A cover promising "8 slides" over 6 slides → `carouselStoryIssue` refuses it.
+- The logo jumping corners between slides → the logo corner is fixed per look.
+- Half-resolution clips → reels are rendered at one size all the way through.
+- Three display faces in one piece → the type system allows one display face.
+- A lead post with no brand mark or contact → every code-drawn slide carries
+  the brand name; the closing slide carries the action.
+- Background tones that don't match between slides → one colourway per carousel.
+- Low-resolution cut-outs → the brand's own pictures are placed by code at
+  full size; a product hero's cut-out is checked and cleaned before use.
+- A product photo pasted in a card with clip-art (round 3) → product hero
+  posters, `HERO_NEVER`, and "no unrelated props" in the quality check.

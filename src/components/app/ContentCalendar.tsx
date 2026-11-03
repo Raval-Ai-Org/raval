@@ -894,6 +894,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
               all={entries}
               shownLabel={range.label}
               shownSlug={range.slug}
+              workspaceId={workspaceId}
             />
             <Button
               size="sm"

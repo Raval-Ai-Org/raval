@@ -14,8 +14,10 @@ import { crawlDelayFor, isPathAllowed } from "@/lib/geo/robots";
 import { buildPathTo100, summarizeDimensions } from "@/lib/geo/path";
 import { scoreScan } from "@/lib/geo/score";
 import { strategyForRule } from "./fixes/strategies";
-import type { GeoAction, PageAnalysis, SiteArtifacts } from "@/lib/geo/types";
+import { sampleLabPages } from "@/lib/geo/performance";
+import type { GeoAction, PageAnalysis, SiteArtifacts, SitePerformance } from "@/lib/geo/types";
 import type { Renderer } from "./render.server";
+import type { PerformanceMeter } from "./performance.server";
 import {
   discoverSiteArtifacts,
   fetchWithRetry,
@@ -53,6 +55,10 @@ export type RunnerDeps = {
   render?: Renderer;
   /** Why rendering is unavailable (shown on pages that needed it). */
   renderUnavailableReason?: string;
+  /** Lighthouse + Chrome UX Report measurement; absent when switched off. */
+  performance?: PerformanceMeter;
+  /** Lab pages per full scan (route-sampled). */
+  labPages?: number;
   log?: (message: string, detail?: unknown) => void;
 };
 
@@ -370,13 +376,14 @@ async function pagePatchFromFetch(
   if (res.finalUrl && siteHost(res.finalUrl) !== site.host) {
     return { ...base, state: "skipped", skip_reason: "Redirects to another site" };
   }
-  const analysis = await analyzeWithRendering(
+  const analyzed = await analyzeWithRendering(
     res.body,
     res.finalUrl ?? "",
     { bytes: res.bytes, truncated: res.truncated },
     scan,
     deps,
   );
+  const analysis = res.http ? { ...analyzed, http: res.http } : analyzed;
   return { ...base, state: "fetched", skip_reason: null, analysis };
 }
 
@@ -446,7 +453,11 @@ async function crawl(scan: ScanRow, deps: RunnerDeps): Promise<boolean> {
     }
 
     const batch = await deps.store.nextPending(scan.id, CONCURRENCY);
-    if (!batch.length) break;
+    if (!batch.length) {
+      // The frontier is done: measure speed before analysing (resumable).
+      if (!(await measure(scan, deps))) return false;
+      break;
+    }
 
     const discovered: { url: string; depth: number }[] = [];
     await Promise.all(
@@ -501,6 +512,84 @@ async function crawlPage(
   return analysis.links.internal
     .map((l) => normalizeCrawlUrl(l.href, site.host))
     .filter((u): u is string => !!u);
+}
+
+/* ───────────────────────── measure ───────────────────────── */
+
+/** A Lighthouse run through PageSpeed Insights takes 15–45 s. */
+const LAB_TIMEOUT_MS = 55_000;
+const LAB_MIN_SLICE_MS = 30_000;
+
+/**
+ * Real-user data for the origin once, then Lighthouse on a few route-sampled
+ * pages. Results are saved on the scan as they arrive, so a slice that runs
+ * out of time resumes with the pages still to measure. Returns false when the
+ * slice must yield first. Speed is enrichment: nothing here fails a scan.
+ */
+async function measure(scan: ScanRow, deps: RunnerDeps): Promise<boolean> {
+  const meter = deps.performance;
+  if (!meter || scan.mode === "targeted") return true;
+  const now = deps.now ?? Date.now;
+  const site = scan.site as SiteArtifacts;
+  let perf: SitePerformance | undefined = site.performance;
+
+  if (!perf) {
+    const field = await meter.field(site.origin).catch(() => null);
+    const rows = await deps.store.loadPages(scan.id);
+    // Most important first: shallow pages, then the ones most linked to.
+    const inbound = new Map<string, number>();
+    for (const r of rows)
+      for (const l of r.analysis?.links.internal ?? [])
+        inbound.set(l.href, (inbound.get(l.href) ?? 0) + 1);
+    const candidates = rows
+      .filter((r) => r.analysis && (r.status_code ?? 200) < 400 && !r.analysis.robotsMeta?.noindex)
+      .sort(
+        (a, b) =>
+          a.depth - b.depth ||
+          (inbound.get(b.analysis!.url) ?? 0) - (inbound.get(a.analysis!.url) ?? 0),
+      )
+      .map((r) => r.analysis!.url);
+    // A quick scan answers inside the request: real-user data only.
+    const max = scan.mode === "full" ? (deps.labPages ?? 4) : 0;
+    perf = {
+      measuredAt: nowIso(),
+      unavailable: field?.reason ?? (field ? null : "Real-user data couldn't be read."),
+      field: field ? { origin: field.origin, history: field.history } : null,
+      sample: sampleLabPages(candidates, max).map((s) => s.url),
+      lab: [],
+    };
+    await write(deps, scan, { site: { ...site, performance: perf } });
+  }
+
+  const done = new Set(perf.lab.map((r) => r.url));
+  const remaining = perf.sample.filter((url) => !done.has(url));
+  if (!remaining.length) return true;
+  const left = deps.deadline - now() - 5_000;
+  if (left < LAB_MIN_SLICE_MS) return false;
+
+  const groups = new Map(
+    sampleLabPages(perf.sample, perf.sample.length).map((s) => [s.url, s.group]),
+  );
+  const runs = await Promise.all(
+    remaining.map((url) =>
+      meter
+        .lab(url, groups.get(url) ?? "/", Math.min(LAB_TIMEOUT_MS, left))
+        .catch((): SitePerformance["lab"][number] => ({
+          url,
+          group: groups.get(url) ?? "/",
+          ok: false,
+          error: "The speed test failed.",
+        })),
+    ),
+  );
+  const latest = (scan.site as SiteArtifacts).performance ?? perf;
+  await write(deps, scan, {
+    site: {
+      ...(scan.site as SiteArtifacts),
+      performance: { ...latest, measuredAt: nowIso(), lab: [...latest.lab, ...runs] },
+    },
+  });
+  return true;
 }
 
 /* ───────────────────────── analyze ───────────────────────── */

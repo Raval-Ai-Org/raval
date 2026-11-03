@@ -590,6 +590,176 @@ const STRATEGIES: Record<string, FixStrategy> = {
     ],
     validationSteps: [rescanPage],
   }),
+
+  /* ── score version 3 ── */
+  "tech.redirects": agent({
+    editClasses: ["internal link targets (href values) pointing at their final URL"],
+    verifyScope: "full",
+    manualSteps: [
+      "Update internal links to point at the final URL shown in the finding, not the address that redirects.",
+      "Collapse redirect chains so each old URL redirects once, straight to its final page.",
+    ],
+    validationSteps: ["curl -sI the old URL shows one redirect at most.", rescanPage],
+  }),
+  "tech.soft_404": agent({
+    editClasses: ["the not-found route or catch-all handler so it returns HTTP 404"],
+    verifyScope: "site",
+    risk: "A catch-all route that serves every path with 200 hides missing pages; changing it affects every unknown URL.",
+    manualSteps: [
+      "Make unknown URLs return status 404 (Next.js: notFound() / not-found.tsx; static hosts: a 404.html page).",
+      "Don't redirect missing pages to the homepage.",
+    ],
+    validationSteps: [
+      "curl -sI https://your-site/does-not-exist returns 404.",
+      "Run “Verify fix” in Mellox.",
+    ],
+  }),
+  "tech.https_redirect": manual(
+    [
+      "Turn on “Always use HTTPS” at your host or CDN, or add a permanent (301) redirect from http:// to https://.",
+    ],
+    ["curl -sI http://your-site/ returns 301 with Location: https://…"],
+    "site",
+  ),
+  // Response headers are hosting configuration, which Mellox never edits
+  // (paths.ts refuses next.config, vercel.json, netlify.toml…): owner steps.
+  "tech.compression": manual(
+    ["Enable Brotli or gzip for text/html at your host or CDN (most do this with one setting)."],
+    [
+      "curl -sI -H 'Accept-Encoding: br, gzip' https://your-site/ shows content-encoding.",
+      rescanPage,
+    ],
+    "site",
+  ),
+  "tech.http_caching": manual(
+    [
+      "Send an ETag or Last-Modified header with HTML (static hosts and CDNs usually do), or a short Cache-Control max-age.",
+    ],
+    ["curl -sI https://your-site/ shows etag or last-modified.", rescanPage],
+    "site",
+  ),
+  "tech.mixed_content": agent({
+    editClasses: ["resource URLs changed from http:// to https://"],
+    manualSteps: [
+      "Change every http:// image, script, stylesheet and frame URL on the page to https:// (or a relative path).",
+    ],
+    validationSteps: [viewSource("no src or href starting with http://"), rescanPage],
+  }),
+  "tech.security_headers": manual(
+    [
+      "At your host or CDN, send Strict-Transport-Security: max-age=31536000; X-Content-Type-Options: nosniff; X-Frame-Options: SAMEORIGIN; Referrer-Policy: strict-origin-when-cross-origin.",
+      "Leave Content-Security-Policy for later: a strict one can break scripts.",
+    ],
+    ["curl -sI https://your-site/ shows the headers.", "Run “Verify fix” in Mellox."],
+    "site",
+  ),
+  "tech.sitemap_quality": agent({
+    editClasses: ["the sitemap file or the code that generates it"],
+    verifyScope: "full",
+    manualSteps: [
+      "Remove the listed URLs from the sitemap, or replace redirecting ones with their final URL.",
+      "List only pages that return 200, are indexable and are their own canonical.",
+    ],
+    validationSteps: ["Open /sitemap.xml and check the listed URLs are gone.", "Run a full scan."],
+  }),
+  "tech.hreflang_targets": agent({
+    editClasses: META,
+    verifyScope: "full",
+    manualSteps: [
+      "Make every language version list all the others (and itself) with the same hreflang set.",
+      "Remove alternates that return errors.",
+    ],
+    validationSteps: ["Run a full scan and check every alternate links back."],
+  }),
+  "content.self_contained": agent({
+    editClasses: CONTENT,
+    grounding: "page_text",
+    manualSteps: [
+      "Start each paragraph with the thing it is about (“Acme's invoicing…”) instead of “This” or “It”.",
+    ],
+    validationSteps: [rescanPage],
+  }),
+  "content.quotable_passages": manual(
+    [
+      "Add a few 40–150 word paragraphs that each state one concrete fact: a figure, a named product, a date. Use only facts you can stand behind — Mellox won't invent them.",
+    ],
+    [rescanPage],
+  ),
+  "content.readability": agent({
+    editClasses: CONTENT,
+    grounding: "page_text",
+    manualSteps: ["Split sentences over ~30 words; prefer plain words to jargon."],
+    validationSteps: [rescanPage],
+  }),
+  "content.agent_usable": agent({
+    editClasses: ["aria-label, label and title attributes on existing controls"],
+    grounding: "page_text",
+    manualSteps: [
+      "Give icon-only buttons and links an aria-label, every form field a <label>, and every iframe a title.",
+    ],
+    validationSteps: [rescanPage],
+  }),
+  "trust.hidden_instructions": manual(
+    [
+      "Remove the hidden text, HTML comments or data attributes that address AI systems (shown in the finding).",
+      "If a plugin or theme adds them, remove or reconfigure it. Engines treat this as manipulation and may drop the site.",
+    ],
+    [viewSource("the instructions are gone"), rescanPage],
+  ),
+  "trust.headline_year": manual(
+    [
+      "Review the article. If it still holds, update the facts and the year in the title and H1; if it doesn't, rewrite or retire it.",
+      "Don't change the year without changing the content.",
+    ],
+    [rescanPage],
+  ),
+  "trust.date_consistency": agent({
+    editClasses: ["the visible date or the JSON-LD dateModified/datePublished"],
+    grounding: "page_text_inputs",
+    inputs: [
+      {
+        key: "date_modified",
+        label: "Date the page was last really updated",
+        why: "Both dates must say the same, true date.",
+        example: "2026-09-14",
+      },
+    ],
+    manualSteps: ["Make the visible “Updated” date and the structured dateModified the same day."],
+    validationSteps: [rescanPage],
+  }),
+  "perf.core_web_vitals": manual(
+    [
+      "Fix the Lighthouse opportunities listed on your sampled pages, largest saving first.",
+      "Typical wins: compress and size images, defer third-party scripts, cache HTML at the CDN.",
+    ],
+    [
+      "Real-user data is a 28-day rolling window: Mellox compares it before and after your fix once enough days have passed.",
+    ],
+    "site",
+  ),
+  "perf.lab_score": manual(
+    ["Work through the opportunities in the finding, largest saving first."],
+    ["Run a full scan; the page is tested with Lighthouse again."],
+  ),
+  "perf.render_blocking": agent({
+    editClasses: ["async/defer on existing script tags", "framework script loading strategy"],
+    risk: "Deferring a script other code depends on can break the page; order-dependent scripts stay as they are.",
+    manualSteps: ["Add defer (or async for independent scripts) to <script src> tags in the head."],
+    validationSteps: [viewSource("head scripts carry defer or async"), rescanPage],
+  }),
+  "perf.image_dimensions": agent({
+    editClasses: ["width and height attributes on existing images (the files' real sizes)"],
+    manualSteps: [
+      "Add width and height to <img> tags (the file's real pixel size), or use your framework's image component.",
+    ],
+    validationSteps: [rescanPage],
+  }),
+  "perf.dom_size": manual(
+    [
+      "Reduce nested wrappers and repeated hidden blocks (mega menus, duplicated mobile/desktop markup).",
+    ],
+    [rescanPage],
+  ),
 };
 
 const FALLBACK = manual(["Follow the recommendation shown for this finding."], [rescanPage]);

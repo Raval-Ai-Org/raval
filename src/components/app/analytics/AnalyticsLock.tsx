@@ -1,11 +1,11 @@
 "use client";
 
-// The analytics surface is locked until this workspace has a Google source.
+// Website and Search are locked until this workspace has a Google source.
 // Behind the lock sits a blurred, inert sketch of the dashboard — plain markup,
 // never real numbers — with one card in the middle asking for the one thing
 // that is missing. Once a property or site is chosen the lock is gone for
-// good: no panel below ever asks to connect again (changing or removing the
-// connection lives in Settings → Connections).
+// good (changing or removing the connection lives in Settings → Connections).
+// Overview, Social, Content and Insights never wait for Google.
 import { AlertTriangle, Lock, ShieldCheck } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { emitAppEvent } from "@/lib/app-events";
@@ -221,8 +221,8 @@ function LockedScreen({ state, view }: { state: AccessState; view?: GoogleConnec
           </div>
         ) : (
           <LockCard
-            title="Connect your data"
-            body="Mellox reads Google Analytics and Search Console to show your numbers here."
+            title="Connect Google"
+            body="See visits to your website and how you show up in Google Search. Your social numbers work without it."
           >
             <SourceList />
             <div className="mt-5 flex justify-center">
@@ -246,10 +246,40 @@ function LockedScreen({ state, view }: { state: AccessState; view?: GoogleConnec
   );
 }
 
+/** Overview's one card for Google when it isn't connected (instead of a lock). */
+export function GoogleConnectBanner({ reconnect = false }: { reconnect?: boolean }) {
+  return (
+    <section
+      data-no-rhythm
+      className="flex flex-col gap-4 rounded-2xl border border-border bg-card/60 p-4 sm:flex-row sm:items-center sm:p-5"
+    >
+      <div className="flex shrink-0 -space-x-2">
+        {SOURCES.map(({ Mark, name }) => (
+          <span
+            key={name}
+            className="grid size-10 place-items-center rounded-xl bg-white shadow-sm ring-2 ring-card"
+          >
+            <Mark className="size-5" />
+          </span>
+        ))}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[13px] font-semibold tracking-tight">
+          {reconnect ? "Google access expired" : "Add your website and Google Search"}
+        </h3>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">
+          Visits, conversions, search terms and rankings, next to your social numbers. Read-only.
+        </p>
+      </div>
+      <ConnectGoogleButton label={reconnect ? "Reconnect Google" : "Connect Google"} />
+    </section>
+  );
+}
+
 /* ── Gate ──────────────────────────────────────────────────────────────── */
 
-/** Renders the analytics surface only once a Google source exists. */
-export function AnalyticsGate({ children }: { children: React.ReactNode }) {
+/** Renders a Google report (Website, Search) only once a Google source exists. */
+export function GoogleGate({ children }: { children: React.ReactNode }) {
   const { data, isLoading, isError } = useGoogleConnection();
   const state: AccessState =
     isLoading && !data ? "loading" : isError && !data ? "failed" : accessStateOf(data);

@@ -6,6 +6,7 @@ import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { listJobs, StudioJobError } from "@/server/studio/runner.server";
 import { createBilledStudioJob, studioJobRenders } from "@/server/studio/billed.server";
 import { isStoriesEnabled } from "@/lib/feature-flags";
+import { recoverStaleStudioJobs } from "@/server/billing/studio-async.server";
 
 export const dynamic = "force-dynamic";
 // Text generation runs inside this request; renders do not.
@@ -60,7 +61,13 @@ export const POST = defineRoute({
 export const GET = defineRoute({
   name: "studio/jobs:list",
   auth: "workspace",
-  query: z.object({ workspaceId: z.string().uuid() }),
+  query: z.object({
+    workspaceId: z.string().uuid(),
+    requestKey: z.string().min(8).max(120).optional(),
+  }),
   workspaceId: ({ query }) => query.workspaceId,
-  handler: async ({ workspaceId, supabase }) => ({ jobs: await listJobs(supabase, workspaceId) }),
+  handler: async ({ workspaceId, supabase, query }) => {
+    await recoverStaleStudioJobs(workspaceId);
+    return { jobs: await listJobs(supabase, workspaceId, query.requestKey) };
+  },
 });

@@ -229,9 +229,8 @@ export function AppModalShell({
                       {title}
                     </h2>
                     {description && (
-                      <div className="hidden truncate text-[11.5px] leading-snug text-muted-foreground sm:block">
-                        {description}
-                      </div>
+                      // Pinterest-style windows show the title only; the line stays for screen readers.
+                      <div className="sr-only">{description}</div>
                     )}
                   </div>
 

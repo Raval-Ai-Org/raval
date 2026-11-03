@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageLoader } from "@/components/ui/page-loader";
-import { useCreateWorkspace } from "@/hooks/use-create-workspace";
+import { isBrandLimitError, useCreateWorkspace } from "@/hooks/use-create-workspace";
+import { emitAppEvent } from "@/lib/app-events";
 import { ServerFnError } from "@/lib/rpc-client";
 import { toast } from "@/lib/toast";
 import { nameFromDomain, normalizeDomain, toWebsiteUrl } from "@/lib/workspace/domain";
@@ -33,8 +34,15 @@ export default function StartPage() {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        // A plan limit (402) already shows its own notice with a button.
-        if (!(error instanceof ServerFnError && error.status === 402)) {
+        // No room for another brand: the list opens with this site in the
+        // website bar and the "Upgrade now" card under it.
+        if (isBrandLimitError(error)) {
+          router.replace(`${WORKSPACES_HOME}?add=${encodeURIComponent(websiteUrl)}`);
+          return;
+        }
+        if (error instanceof ServerFnError && error.status === 402) {
+          if (error.billing) emitAppEvent("billing:blocked", error.billing as never);
+        } else {
           toast.error("We couldn't set up that website", {
             description: "Paste the link here to try again.",
           });

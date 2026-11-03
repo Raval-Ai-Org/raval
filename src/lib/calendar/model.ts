@@ -37,6 +37,8 @@ export type CalendarEntry = {
   images: string[];
   /** An Instagram or Facebook Story: gone a day after it goes out. */
   story?: boolean;
+  /** The campaign it was made for (ADR-0039), by name. */
+  campaign?: string;
 };
 
 /** The stored row fields the calendar reads (a subset of `ContentItem`). */
@@ -238,6 +240,10 @@ export function entryFromContent(item: CalendarSourceItem): CalendarEntry {
         ? meta.format.trim().slice(0, 40)
         : (KIND_FORMAT[item.kind] ?? "Post"),
     topic: typeof meta.pillar === "string" && meta.pillar.trim() ? meta.pillar.trim() : undefined,
+    campaign:
+      typeof meta.campaign_name === "string" && meta.campaign_name.trim()
+        ? meta.campaign_name.trim().slice(0, 80)
+        : undefined,
     title: item.title?.trim() || "Untitled post",
     caption: item.body || undefined,
     hashtags: Array.isArray(item.hashtags) ? item.hashtags.filter(Boolean) : [],
@@ -281,7 +287,7 @@ export function filterEntries(entries: CalendarEntry[], filter: CalendarFilter):
     if (filter.format === "stories" && !e.story) return false;
     if (filter.format === "posts" && e.story) return false;
     if (!q) return true;
-    return [e.title, e.caption ?? "", e.hashtags.join(" "), e.topic ?? ""]
+    return [e.title, e.caption ?? "", e.hashtags.join(" "), e.topic ?? "", e.campaign ?? ""]
       .join("\n")
       .toLowerCase()
       .includes(q);

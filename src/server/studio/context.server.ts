@@ -4,6 +4,7 @@
 // Workspace data is cached briefly. Brand DNA is read from the database for the
 // job's own workspace; a request-supplied copy is only used when none is stored.
 import "server-only";
+import { readHeroLook } from "@/lib/studio/product-hero/variety";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
@@ -15,6 +16,10 @@ import { openingLine } from "@/lib/studio/memory";
 import { audienceBlockFor } from "@/server/audience/context.server";
 import { strategyBlockFor } from "@/server/strategy/context.server";
 import { memoryBlockFor } from "@/server/memory/context.server";
+import { goalBlockFor } from "@/server/goals/context.server";
+import { catalogBlockFor } from "@/server/products/context.server";
+import { tasteContextFor } from "@/server/taste/context.server";
+import { campaignBlockText, runningCampaignsFor } from "@/server/campaigns/context.server";
 import { getSocialTrends } from "./social-trends.server";
 
 type WorkspaceSnapshot = Omit<StudioContext, "brandText" | "brandName" | "moments" | "today"> & {
@@ -192,6 +197,11 @@ async function loadWorkspaceSnapshot(
         storyTheme: str(story.theme),
         hookStyle: str(meta.hook_style),
         structure: str(record(meta.carousel).structure),
+        adFormat: str(meta.ad_format),
+        artDirection: str(meta.art_direction),
+        videoKind: str(meta.video_kind),
+        videoHook: str(meta.video_hook),
+        heroLook: readHeroLook(meta.hero_look),
         design:
           meta.carousel || story.spec
             ? {
@@ -237,6 +247,9 @@ async function loadWorkspaceSnapshot(
       .map((a) => [str(a.title), str(a.summary)].filter(Boolean).join(": ").slice(0, 240))
       .filter(Boolean),
     insights: insightRows.map((i) => (str(i.body) ?? "").slice(0, 240)).filter(Boolean),
+    competitorNames: (((rivals as { data: Row[] | null }).data ?? []) as Row[])
+      .map((r) => str(r.name))
+      .filter((name): name is string => !!name),
     rivals: rivalLines.length
       ? `## Who you are up against (never name them in a post unless asked)\n${rivalLines.join("\n")}`
       : "",
@@ -267,20 +280,39 @@ export async function loadStudioContext(
   workspaceId: string,
   brand: Record<string, unknown> | null | undefined,
 ): Promise<StudioContext & { brand: Record<string, unknown> | null }> {
-  const [snapshot, stored, socialTrends, audience, strategy, memory, visualMemory] =
-    await Promise.all([
-      loadWorkspaceSnapshot(db, workspaceId),
-      settle(readBrandDna(db, workspaceId), null, "brand dna"),
-      // The stored snapshot only; a job never searches for trends itself.
-      getSocialTrends(),
-      // Who the piece is for (ADR-0031). Empty when Audience is off or not set up.
-      audienceBlockFor(workspaceId),
-      // The confirmed marketing strategy (ADR-0032). Empty until a person confirms one.
-      strategyBlockFor(workspaceId),
-      // What the team told Mellox to remember (ADR-0033). Empty when off or unset.
-      memoryBlockFor(workspaceId, "text"),
-      memoryBlockFor(workspaceId, "image"),
-    ]);
+  const [
+    snapshot,
+    stored,
+    socialTrends,
+    audience,
+    strategy,
+    memory,
+    visualMemory,
+    goal,
+    catalog,
+    taste,
+    campaignsNow,
+  ] = await Promise.all([
+    loadWorkspaceSnapshot(db, workspaceId),
+    settle(readBrandDna(db, workspaceId), null, "brand dna"),
+    // The stored snapshot only; a job never searches for trends itself.
+    getSocialTrends(),
+    // Who the piece is for (ADR-0031). Empty when Audience is off or not set up.
+    audienceBlockFor(workspaceId),
+    // The confirmed marketing strategy (ADR-0032). Empty until a person confirms one.
+    strategyBlockFor(workspaceId),
+    // What the team told Mellox to remember (ADR-0033). Empty when off or unset.
+    memoryBlockFor(workspaceId, "text"),
+    memoryBlockFor(workspaceId, "image"),
+    // What the brand wants and what it sells (ADR-0035). Empty until set.
+    goalBlockFor(workspaceId),
+    catalogBlockFor(workspaceId),
+    // What the team loved in the Library (ADR-0038). Empty until something is learned.
+    tasteContextFor(workspaceId),
+    // The campaigns that are on (ADR-0039), so new pieces support them.
+    settle(runningCampaignsFor(workspaceId), [], "campaigns"),
+  ]);
+  const campaigns = campaignBlockText(campaignsNow);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
   const brandText = serializeBrandContext(dna, {
@@ -294,17 +326,28 @@ export async function loadStudioContext(
         .join("\n")}`
     : "";
   const { name, rivals: _rivals, ...rest } = snapshot;
-  const brandBlocks = [brandText + insightsBlock, audience, snapshot.rivals, strategy];
+  const brandBlocks = [
+    brandText + insightsBlock,
+    catalog,
+    audience,
+    snapshot.rivals,
+    strategy,
+    goal,
+    campaigns,
+  ];
   // Memory goes first: several generators only read the start of this text.
   const join = (blocks: string[]) => blocks.filter(Boolean).join("\n\n").trim();
   return {
     ...rest,
     brand: dna as Record<string, unknown> | null,
     brandName: str(dna?.brandName) ?? name,
-    brandText: join([memory, ...brandBlocks]),
-    visualBrandText: join([visualMemory, brandText]),
+    brandText: join([memory, taste.text, ...brandBlocks]),
+    visualBrandText: join([visualMemory, taste.text, brandText]),
+    taste: taste.taste,
+    lovedSamples: taste.lovedSamples,
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
     moments: upcomingMoments(new Date(), { limit: 4 }),
+    campaignsNow: campaignsNow.map((c) => ({ name: c.name, phase: c.phase, purpose: c.purpose })),
   };
 }

@@ -3,6 +3,7 @@
 // no competitor the workspace doesn't track, no market play without a source
 // Market Brain really collected.
 import "server-only";
+import { goalBlock } from "@/lib/goals/block";
 import { llmJson } from "@/lib/ai-gateway.server";
 import { STRATEGY_OUTPUT_SCHEMA, type MarketingStrategy } from "@/lib/strategy/contracts";
 import { groundStrategy } from "@/lib/strategy/ground";
@@ -66,6 +67,8 @@ export function buildStrategyUser(
         : "",
     ),
     section("Connected accounts", facts.platforms.join(", ")),
+    // The team's own goal: the strategy is written to it, and pure code pins it.
+    facts.goals ? goalBlock(facts.goals) : "",
     section(
       "What the team asked for",
       note?.trim()

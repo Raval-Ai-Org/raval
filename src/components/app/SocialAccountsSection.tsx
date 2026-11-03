@@ -12,6 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { isPlatformAppIconId, PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { Plus, X } from "@/components/ui/gemini-icons";
 import {
   disconnectAccount,
@@ -22,6 +24,9 @@ import {
   type SdrStatus,
 } from "@/lib/sdr.functions";
 import type { ConnectedAccount } from "@/lib/sdr.handlers";
+import { onConnectResult, openConnectWindow } from "@/lib/connectors/connect-window";
+import { SocialGrid } from "@/components/app/SocialGrid";
+import { DisconnectDialog } from "@/components/app/connectors/DisconnectDialog";
 import {
   DISTRIBUTION_PLATFORMS,
   isDistributionPlatform,
@@ -41,9 +46,14 @@ const RECONNECT_COPY: Record<string, string> = {
 /** Platforms whose disconnect can't revoke the grant on the platform itself. */
 const NO_REMOTE_REVOKE = new Set(["linkedin"]);
 
-type Props = { variant: "studio" | "settings"; onManage?: () => void };
+type Props = {
+  variant: "studio" | "settings" | "onboarding" | "channels";
+  onManage?: () => void;
+  /** Platforms with an active connection, after every refresh (onboarding uses it). */
+  onConnectedChange?: (platforms: string[]) => void;
+};
 
-export function SocialAccountsSection({ variant }: Props) {
+export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
   // The workspace on screen: its own connections, never another brand's.
   const workspaceId = useOptionalWorkspaceId();
   const [status, setStatus] = useState<SdrStatus | null>(null);
@@ -54,6 +64,7 @@ export function SocialAccountsSection({ variant }: Props) {
   const [pendingPlatform, setPendingPlatform] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<ConnectedAccount | null>(null);
   const [chooserOpen, setChooserOpen] = useState(false);
+  const [openNetwork, setOpenNetwork] = useState<string | null>(null);
   const connectStartedAt = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -89,6 +100,15 @@ export function SocialAccountsSection({ variant }: Props) {
       void refresh();
       emitAppEvent("connections:changed");
     });
+    // Networks that sign in through Composio come back to the apps callback,
+    // which announces on the connect-window channel instead.
+    const offApps = onConnectResult((result) => {
+      if (result.provider !== "apps") return;
+      if (result.workspaceId && workspaceId && result.workspaceId !== workspaceId) return;
+      connectStartedAt.current = 0;
+      void refresh();
+      emitAppEvent("connections:changed");
+    });
     // Fallback when BroadcastChannel is unavailable: re-check on return from
     // the popup, but only shortly after a connection was started.
     const onFocus = () => {
@@ -100,27 +120,23 @@ export function SocialAccountsSection({ variant }: Props) {
     return () => {
       removeAppEventListener("connections:changed", onChange);
       unsubscribe();
+      offApps();
       window.removeEventListener("focus", onFocus);
     };
-  }, [refresh]);
+  }, [refresh, workspaceId]);
 
   const connect = async (platform: string) => {
     if (!workspaceId) return;
-    const oauthWindow = window.open("about:blank", "_blank", "width=600,height=760");
-    if (!oauthWindow) {
-      setError(
-        "Your browser blocked the social account window. Allow popups for this app and try again.",
-      );
-      return;
-    }
+    // A marked sign-in window, so whichever callback it lands on closes it and
+    // tells this tab, instead of loading Mellox inside the pop-up.
+    const oauthWindow = openConnectWindow("apps");
     setBusy(platform);
     setError(null);
     try {
       const result = await oauthStart(workspaceId, platform);
       if (result.authorizationUrl) {
         connectStartedAt.current = Date.now();
-        oauthWindow.location.href = result.authorizationUrl;
-        oauthWindow.focus();
+        oauthWindow.go(result.authorizationUrl);
       } else {
         oauthWindow.close();
         await refresh();
@@ -157,10 +173,87 @@ export function SocialAccountsSection({ variant }: Props) {
   const pendingMeta = pendingPlatform ? metaFor(pendingPlatform) : null;
   const pendingLabel = pendingMeta?.label ?? pendingPlatform;
   const needsReconnect = visible.filter((a) => a.status !== "active").length;
+  const activeKey = visible
+    .filter((a) => a.status === "active")
+    .map((a) => a.platform)
+    .sort()
+    .join(",");
+  const onConnectedRef = useRef(onConnectedChange);
+  useEffect(() => {
+    onConnectedRef.current = onConnectedChange;
+  });
+  useEffect(() => {
+    if (!loading) onConnectedRef.current?.(activeKey ? [...new Set(activeKey.split(","))] : []);
+  }, [activeKey, loading]);
 
   if (variant === "studio") {
     if (loading || error || !status?.enabled || !status.canPublish) return null;
     if (visible.length > 0 && needsReconnect === 0) return null;
+  }
+
+  // Settings → Social accounts: the same tiles and opened view as Connectors.
+  if (variant === "channels") {
+    const networks = [
+      ...platforms,
+      ...[...connectedPlatforms]
+        .filter((id) => !platforms.some((p) => p.id === id))
+        .map((id) => metaFor(id))
+        .filter((m): m is DistributionPlatformMeta => !!m),
+    ];
+    return (
+      <section aria-label="Social accounts">
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 px-4 py-3"
+          >
+            <p className="min-w-0 text-[13px] text-destructive">{error}</p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="shrink-0 text-[12.5px] font-medium underline underline-offset-2"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+        {!loading && !status?.enabled ? (
+          <p className="ds-tile px-5 py-8 text-center text-[13px] text-muted-foreground">
+            Posting to social accounts isn&apos;t on for this workspace
+          </p>
+        ) : (
+          <SocialGrid
+            platforms={networks}
+            accounts={visible}
+            loading={loading && !status}
+            canEdit={!!status?.canPublish}
+            busy={busy}
+            open={openNetwork}
+            onOpen={setOpenNetwork}
+            onConnect={(platform) => void connect(platform)}
+            onDisconnect={setConfirmDisconnect}
+          />
+        )}
+        <DisconnectDialog
+          open={confirmDisconnect !== null}
+          onOpenChange={(next) => !next && setConfirmDisconnect(null)}
+          name={
+            confirmDisconnect
+              ? confirmDisconnect.displayName ||
+                confirmDisconnect.platformUsername ||
+                "this account"
+              : "this account"
+          }
+          description={
+            confirmDisconnect && NO_REMOTE_REVOKE.has(confirmDisconnect.platform)
+              ? "Scheduled posts to it stop. Also remove Mellox in your LinkedIn settings."
+              : "Scheduled posts to it stop. Published posts stay."
+          }
+          busy={busy !== null}
+          onConfirm={() => confirmDisconnect && void disconnect(confirmDisconnect)}
+        />
+      </section>
+    );
   }
 
   return (
@@ -168,7 +261,12 @@ export function SocialAccountsSection({ variant }: Props) {
       className={cn(variant === "studio" ? "space-y-3 px-2 py-1" : "space-y-4")}
       aria-labelledby={`${variant}-connections-title`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className={cn(
+          "flex items-start justify-between gap-3",
+          variant === "onboarding" && "sr-only",
+        )}
+      >
         <div>
           <h3
             id={`${variant}-connections-title`}
@@ -227,6 +325,65 @@ export function SocialAccountsSection({ variant }: Props) {
             Posts can still be copied or downloaded and published manually.
           </p>
         </div>
+      ) : variant === "onboarding" ? (
+        <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {platforms.map((platform) => {
+            const account = visible.find((a) => a.platform === platform.id);
+            const active = account?.status === "active";
+            return (
+              <li key={platform.id}>
+                <button
+                  type="button"
+                  onClick={() => !active && setPendingPlatform(platform.id)}
+                  disabled={!status.canPublish || busy === platform.id}
+                  aria-pressed={active}
+                  className={cn(
+                    "ds-tile flex w-full min-w-0 items-center gap-3 p-3.5 text-left transition-colors",
+                    active
+                      ? "border-primary/40 bg-primary/[0.06]"
+                      : "ds-tile-hover disabled:opacity-60",
+                  )}
+                >
+                  <span
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-secondary"
+                    style={{ color: platform.tint }}
+                  >
+                    <BrandLogo name={platform.logo} brand size={20} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium">{platform.label}</span>
+                    <span className="block truncate text-[12px] text-muted-foreground">
+                      {active
+                        ? account?.displayName || account?.platformUsername || "Connected"
+                        : account
+                          ? "Reconnect needed"
+                          : platform.description}
+                    </span>
+                  </span>
+                  {busy === platform.id ? (
+                    <Spinner
+                      className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+                      aria-hidden
+                    />
+                  ) : active ? (
+                    <span className="shrink-0 rounded-full bg-success-surface px-2.5 py-1 text-[11px] font-semibold text-success">
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full border border-border/70 px-3 py-1 text-[12px] font-medium">
+                      Connect
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+          {!status.canPublish ? (
+            <li className="text-[12px] text-muted-foreground sm:col-span-2">
+              Only editors, admins and owners can connect accounts.
+            </li>
+          ) : null}
+        </ul>
       ) : variant === "settings" ? (
         <div className="space-y-2">
           {visible.length === 0 ? (
