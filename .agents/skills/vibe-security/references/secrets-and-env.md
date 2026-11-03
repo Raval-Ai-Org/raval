@@ -44,4 +44,4 @@ When auditing, search for:
 - Files named `.env` that are tracked by git (`git ls-files | grep .env`)
 - Strings matching common key patterns: `sk_live_`, `sk_test_`, `AKIA`, `ghp_`, `glpat-`, `xoxb-`, `Bearer `
 - `process.env.NEXT_PUBLIC_` or `import.meta.env.VITE_` referencing anything with "secret", "private", "service", or "key" in the name
-- Hardcoded URLs containing credentials (e.g., `postgresql://user:password@host`)
+- Hardcoded URLs containing credentials (e.g., `postgresql://user:password@host`) <!-- secret-scan:allow documentation example, not a real credential --> <!-- secret-scan:allow documentation example, not a real credential -->
