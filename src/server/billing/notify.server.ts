@@ -77,6 +77,7 @@ export function monthlyAllowance(plan: keyof typeof PLANS, meter: Meter): number
   const a = PLANS[plan].allowances;
   if (meter === "credits") return plan === "free" ? SIGNUP_GRANT.credits : a.credits;
   if (meter === "video") return a.videoUnits;
+  if (meter === "premium_video") return a.premiumVideos;
   if (meter === "pro_messages") return a.proMessages;
   return a.flashMessages;
 }
@@ -99,6 +100,7 @@ const METER_WORDS: Record<Meter, string> = {
   video: "videos",
   pro_messages: "Pro messages",
   flash_messages: "chat messages",
+  premium_video: "premium videos",
 };
 
 /** After a charge: tell the owner once per window at 80% and at 100% used. */

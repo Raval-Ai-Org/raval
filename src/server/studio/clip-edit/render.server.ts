@@ -47,6 +47,15 @@ import { planPhotoDesign, type PhotoDesignPlan } from "@/lib/studio/photo-design
 import { designLayerPrompt, type PhotoDesignBrand } from "@/lib/studio/photo-design/prompt";
 import type { PhotoReading } from "@/lib/studio/photo-design/read";
 import { resolveStudioClips, resolveStudioReferences } from "../references.server";
+import { makeMotionGraphic, type MotionRatio } from "../motion/compose.server";
+import {
+  collectSoundtrack,
+  meterSoundtrack,
+  mixSoundtrack,
+  startSoundtrack,
+  type SoundtrackTasks,
+} from "../audio/soundtrack.server";
+import { musicMood } from "@/lib/studio/audio/soundtrack";
 import { logoLayers, type LogoCorner } from "../logo-overlay.server";
 import { composePhotoDesign } from "../photo-design/compose.server";
 import {
@@ -82,8 +91,11 @@ export const CLIP_EDIT_PREFIX = "clip-edit:";
 
 /** Stored on the Studio media task while the video is put together. */
 export type ClipEditTask = {
-  /** "site": the brand's website capture scrolling in a device (site-reel.ts). */
-  mode: "brand" | "recap" | "site";
+  /**
+   * "site": the brand's website capture scrolling in a device (site-reel.ts).
+   * "motion": a motion graphic designed by the model and drawn by code (ADR-0043).
+   */
+  mode: "brand" | "recap" | "site" | "motion";
   motion?: "camera" | "ai";
   /** "Brand my clips": the person's clips, by asset id. */
   clipAssetIds: string[];
@@ -109,6 +121,18 @@ export type ClipEditTask = {
    * one picture is held long enough to read.
    */
   post?: boolean;
+  /** A motion graphic: what the design call gets, all read for the verified workspace. */
+  graphic?: {
+    seconds: number;
+    brandText: string;
+    knownFacts: string;
+    approvedCopy?: string[];
+    recentLayouts?: string[];
+    /** A music bed is made for it (sound on). */
+    music: boolean;
+    musicLook?: string;
+    userId?: string | null;
+  };
 };
 
 export type ClipEditResult =
@@ -477,11 +501,125 @@ async function saveVideo(
   return result;
 }
 
+export const MOTION_FAILED =
+  "We couldn't make this motion graphic look right. You weren't charged. Try different words.";
+
+/** How long a finished motion graphic waits for its music before going out without it. */
+const MOTION_MUSIC_WAIT_MS = 3 * 60_000;
+
+function motionRatio(ratio: AspectRatio): MotionRatio {
+  if (ratio === "1:1") return "1:1";
+  if (ratio === "16:9" || ratio === "4:3") return "16:9";
+  if (ratio === "9:16") return "9:16";
+  return "4:5";
+}
+
+/** A stable number from the job's seed, so a restart designs the same piece. */
+function hashSeed(seed: string): number {
+  let h = 2166136261;
+  for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+/**
+ * A motion graphic (ADR-0043): the model designs it, code checks and draws
+ * it (src/server/studio/motion/). Its music bed is made at the same time and
+ * mixed in; a slow or failed bed leaves the piece silent, never fails it.
+ */
+async function motionGraphic(args: ClipEditArgs, dir: string): Promise<ClipEditResult> {
+  const { task, client, workspaceId } = args;
+  const graphic = task.graphic;
+  if (!graphic) throw new Error("The motion graphic has no brief.");
+  const beat = () => park(args.taskId, { state: "running", at: Date.now() });
+  // The brand's own photos and logo go into the design's slots, placed by code.
+  const photos: string[] = [];
+  for (const ref of await resolveStudioReferences(client, workspaceId, task.photoAssetIds)) {
+    if (!isWorkspaceStoragePath(ref.storagePath, workspaceId)) continue;
+    const stored = await downloadAssetObject(client, ref.storagePath);
+    if (stored.data)
+      photos.push(await asDataUrl(await asPhoto(Buffer.from(await stored.data.arrayBuffer()))));
+  }
+  let logo: string | null = null;
+  if (task.logo) {
+    const { safeFetch } = await import("@/server/safe-fetch");
+    const response = await safeFetch(task.logo.url, {
+      maxBytes: 5 * 1024 * 1024,
+      timeoutMs: 15_000,
+    }).catch(() => null);
+    const png = response?.ok
+      ? await sharp(Buffer.from(response.bytes))
+          .resize(512, 512, { fit: "inside" })
+          .png()
+          .toBuffer()
+          .catch(() => null)
+      : null;
+    if (png) logo = `data:image/png;base64,${png.toString("base64")}`;
+  }
+  // The music starts while the design is made, on the mood the motion follows.
+  const mood = musicMood(`${graphic.musicLook ?? ""} ${task.brief}`);
+  const music = graphic.music
+    ? await startSoundtrack({
+        seconds: graphic.seconds,
+        music: { mood, look: graphic.musicLook, title: task.brand.brandName },
+        seed: workspaceId,
+      }).catch(() => ({}) as SoundtrackTasks)
+    : ({} as SoundtrackTasks);
+  const made = await makeMotionGraphic({
+    workspaceId,
+    brief: [task.brief, task.revision].filter(Boolean).join("\n\n"),
+    seconds: graphic.seconds,
+    ratio: motionRatio(task.ratio),
+    brandText: graphic.brandText,
+    brandName: task.brand.brandName,
+    knownFacts: graphic.knownFacts,
+    approvedCopy: graphic.approvedCopy,
+    logo,
+    photos,
+    recentLayouts: graphic.recentLayouts,
+    mood,
+    seed: hashSeed(task.emphasisSeed),
+  });
+  await beat();
+  if (!made.ok) {
+    console.warn("[clip-edit] motion graphic refused", made.reason, made.issues.slice(0, 4));
+    const result: ClipEditResult = { state: "failed", message: MOTION_FAILED };
+    await park(args.taskId, result);
+    return result;
+  }
+  let dataUrl = `data:video/mp4;base64,${made.video.toString("base64")}`;
+  if (music.music) {
+    const waitUntil = Date.now() + MOTION_MUSIC_WAIT_MS;
+    let sound = await collectSoundtrack(music);
+    while (sound.pending && Date.now() < waitUntil) {
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+      await beat();
+      sound = await collectSoundtrack(music);
+    }
+    if (sound.musicUrl) {
+      dataUrl = await mixSoundtrack(
+        dataUrl,
+        { musicUrl: sound.musicUrl },
+        { seconds: graphic.seconds, keepClipAudio: false },
+      );
+      meterSoundtrack(sound, { workspaceId, userId: graphic.userId });
+    }
+  }
+  const finished = join(dir, "motion.mp4");
+  await writeFile(finished, Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64"));
+  return saveVideo(args, finished, [], {
+    motion_layout: made.layout,
+    motion_mood: made.mood,
+    source_asset_ids: task.photoAssetIds,
+    source_preserved: true,
+  });
+}
+
 export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult> {
   const { task, client, workspaceId } = args;
   const beat = () => park(args.taskId, { state: "running", at: Date.now() });
   const dir = await mkdtemp(join(tmpdir(), "mellox-clip-"));
   try {
+    if (task.mode === "motion") return await motionGraphic(args, dir);
     if (task.mode === "site")
       return await saveVideo(args, await siteReel(args, dir), [], {
         source_asset_ids: task.photoAssetIds,

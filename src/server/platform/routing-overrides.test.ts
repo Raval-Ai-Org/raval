@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
 
-import { knownModels, planFor, PREMIUM, WORKHORSE, ECONOMY } from "@/server/ai/task-models";
+import {
+  ANALYST,
+  knownModels,
+  planFor,
+  PREMIUM,
+  WORKHORSE,
+  ECONOMY,
+} from "@/server/ai/task-models";
 import { refreshRoutingOverrides, setOverrideReader } from "./routing-overrides.server";
 
 afterEach(() => {
@@ -16,7 +23,7 @@ describe("routing overrides in planFor", () => {
   it("leaves the built-in plan alone with no override", async () => {
     setOverrideReader(async () => ({}));
     await refreshRoutingOverrides(true);
-    expect(planFor("brand-extract").models[0]).toBe(PREMIUM);
+    expect(planFor("brand-extract").models[0]).toBe(ANALYST);
   });
 
   it("applies an admin override to the models and effort", async () => {
@@ -30,7 +37,7 @@ describe("routing overrides in planFor", () => {
   it("ignores a model the registry does not use", async () => {
     setOverrideReader(async () => ({ "brand-extract": { models: ["evil/unknown-model"] } }));
     await refreshRoutingOverrides(true);
-    expect(planFor("brand-extract").models[0]).toBe(PREMIUM);
+    expect(planFor("brand-extract").models[0]).toBe(ANALYST);
   });
 
   it("lets an environment variable outrank the override", async () => {

@@ -64,6 +64,39 @@ function fixture() {
 }
 
 describe("durable video composition", () => {
+  it("makes each storyboard clip on its own model when it has one", async () => {
+    const f = fixture();
+    const submitted = await f.provider.submit({
+      ...f.request,
+      model: UGC_MODELS.standard,
+      durationSec: 18,
+      clips: [
+        { seconds: 10, prompt: "Opening", model: UGC_MODELS.premium },
+        { seconds: 8, prompt: "Then" },
+      ],
+    });
+    if (!submitted.ok) throw new Error("Submit failed");
+    await f.provider.check(submitted.taskId);
+    const models = vi.mocked(f.base.submit).mock.calls.map(([r]) => r.model.key);
+    expect(models).toEqual(["premium", "standard"]);
+    expect(vi.mocked(f.base.submit).mock.calls[0][0].clips).toBeUndefined();
+  });
+
+  it("sends a single clip on its own model straight to the provider", async () => {
+    const f = fixture();
+    await f.provider.submit({
+      ...f.request,
+      model: UGC_MODELS.standard,
+      durationSec: 10,
+      clips: [{ seconds: 10, prompt: "Only", model: UGC_MODELS.premium }],
+    });
+    expect(vi.mocked(f.base.submit).mock.calls[0][0]).toMatchObject({
+      prompt: "Only",
+      model: { key: "premium" },
+    });
+    expect(f.current()).toBeNull();
+  });
+
   it("leaves native ten-second generation on its existing path", async () => {
     const f = fixture();
     const result = await f.provider.submit({ ...f.request, durationSec: 10 });

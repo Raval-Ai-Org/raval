@@ -535,6 +535,7 @@ export const LAB_OVERVIEW: AdminOverview = {
           pro_messages: { available: 22, held: 0, debt: 0 },
           flash_messages: { available: 614, held: 0, debt: 0 },
           creation: { available: 130, held: 2, debt: 0 },
+          premium_video: { available: 3, held: 0, debt: 0 },
         },
       },
       {
@@ -553,6 +554,7 @@ export const LAB_OVERVIEW: AdminOverview = {
           pro_messages: { available: 130, held: 0, debt: 0 },
           flash_messages: { available: 1_760, held: 0, debt: 0 },
           creation: { available: 460, held: 0, debt: 0 },
+          premium_video: { available: 5, held: 0, debt: 0 },
         },
       },
     ],

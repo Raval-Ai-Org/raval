@@ -130,6 +130,7 @@ const emptyMeters = (): Entitlements["meters"] => ({
   video: { available: 0, held: 0, debt: 0, nextExpiry: null },
   pro_messages: { available: 0, held: 0, debt: 0, nextExpiry: null },
   flash_messages: { available: 0, held: 0, debt: 0, nextExpiry: null },
+  premium_video: { available: 0, held: 0, debt: 0, nextExpiry: null },
 });
 
 export function resolveEntitlements(args: {

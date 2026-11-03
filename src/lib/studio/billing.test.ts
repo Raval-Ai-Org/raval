@@ -46,7 +46,7 @@ describe("Studio charges follow the work requested", () => {
         parentJobId: "original",
         refine: { instruction: "Remake the visual", target: "media" },
       }),
-    ).toBe("2 video credits");
+    ).toBe("240 credits");
     expect(
       studioPriceLabel({ type: "video", controls: { platforms: [], videoPreview: true } }),
     ).toBe("30 credits");
@@ -181,5 +181,30 @@ describe("interrupted Studio jobs", () => {
     expect(
       studioJobIsStale({ status: "succeeded", created_at: time(121), stage_at: time(121) }, now),
     ).toBe(false);
+  });
+});
+
+describe("motion graphics and the premium quota", () => {
+  it("prices a motion graphic as one, with no video model", () => {
+    expect(
+      studioPriceLabel({
+        type: "video",
+        controls: { platforms: [], videoMode: "motion", durationSec: 12 },
+      }),
+    ).toBe("90 credits");
+  });
+
+  it("says how many premium videos are left", () => {
+    const quote = { hash: "a".repeat(64), units: 1, meter: "premium_video" as const };
+    const controls = { platforms: [], videoModelKey: "premium" as const, durationSec: 20 };
+    expect(
+      studioPriceLabel({
+        type: "video",
+        controls: { ...controls, videoQuote: { ...quote, premiumLeft: 2, premiumMonthly: 5 } },
+      }),
+    ).toBe("Premium video · 2 of 5 left");
+    expect(studioPriceLabel({ type: "video", controls: { ...controls, videoQuote: quote } })).toBe(
+      "Premium video",
+    );
   });
 });

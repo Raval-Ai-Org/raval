@@ -174,3 +174,13 @@ describe("no invented claims or lettering", () => {
     );
   });
 });
+
+describe("motion graphics kind", () => {
+  it("is drawn by code: no models, no clip roles, never picked for a person", () => {
+    const kind = VIDEO_KINDS.find((k) => k.id === "motion-graphics")!;
+    expect(kind).toMatchObject({ join: "code", models: [], people: "none" });
+    expect(clipRoles("motion-graphics", 1)).toEqual([]);
+    for (const brief of ["Animated stats for our launch", "Motion graphic of our offer"])
+      expect(pickVideoKind(brief)).not.toBe("motion-graphics");
+  });
+});

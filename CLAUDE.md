@@ -111,9 +111,15 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 - **Video (still KIE):** `VIDEO_PROVIDER=kie` with automatic fallback to
   OpenRouter (`VIDEO_PROVIDER_FALLBACK`) only on out-of-credits, auth or
   model-unavailable — never on an unknown outcome. Catalog keys
-  (`standard`, `draft`, `premium`, `long`, `cinematic`, `variation`) in
-  `src/lib/ugc/models.ts`; old keys are read-only aliases. Dropping KIE is
-  the checklist in ADR-0026.
+  (`standard`, `draft`, `premium`, `long`, `cinematic`, `variation`, and
+  Studio-only `animation`) in `src/lib/ugc/models.ts`; old keys are
+  read-only aliases. Dropping KIE is the checklist in ADR-0026.
+  - Every key runs on KIE ([ADR-0043](docs/adr/0043-video-categories-and-motion.md)):
+    Premium is Gemini Omni Flash, Long and `animation` are Wan 3.0. A
+    fallback never costs more than its primary. A composed video may name a
+    model per clip (`clips[].model`).
+  - `VIDEO_MAX_USD_PER_JOB` (default $5) refuses a quote over the cap before
+    anything is held.
 - Live check: `tests/live/openrouter-models.live.ts` (video behind
   `VIDEO_LIVE_OPENROUTER=yes`).
 
@@ -879,6 +885,24 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   cropped) and ends on the exact post.
 - Premium video is sold from Starter (`video_premium`); Cinematic stays
   Agency and up.
+- **Premium videos are a monthly quota** (meter `premium_video`,
+  `allowances.premiumVideos`, never rolled over): `videoChargePlan` spends one
+  on a Premium, Cinematic or Long video up to 24 s, then credits. Only a
+  `studio_video` hold may use the meter.
+- **Sound is made, not prompted** (`src/lib/studio/audio/`,
+  `src/server/studio/audio/soundtrack.server.ts`): a voiceover of the
+  storyboard's exact words and an instrumental bed on KIE, mixed with the
+  music ducked under the voice at -14 LUFS. It fails open, never fails a
+  video. Off with `VIDEO_SOUNDTRACK_ENABLED=false`.
+- **Motion graphics: the model designs, code checks and draws**
+  (`src/lib/studio/motion/`, `src/server/studio/motion/`). Opus (route
+  `studio.motion.compose`) writes one HTML/SVG + CSS document; `staticIssues`
+  refuses scripts, outside addresses and words the brand never said;
+  Chromium draws it offline and `drawnIssues` checks the words, safe area,
+  size, contrast and end hold; FFmpeg encodes it. One retry with the reasons,
+  then it fails plainly. The logo and photos go into `data-slot` images,
+  placed by code. Craft rules and layouts live in `principles.ts`, never in
+  the prompt only. Priced `motion_graphics`.
 
 ## Studio: carousels, trends and content memory
 

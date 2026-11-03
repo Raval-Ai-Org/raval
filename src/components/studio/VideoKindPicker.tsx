@@ -9,6 +9,7 @@ import {
   Repeat2,
   RotateCcw,
   Type,
+  Shapes,
   ShoppingBag,
   Sparkles,
   UserCircle2,
@@ -33,6 +34,7 @@ const ICONS: Record<VideoKindId, LucideIcon> = {
   "product-motion": RotateCcw,
   "product-demo": MousePointerClick,
   "broll-hook": Type,
+  "motion-graphics": Shapes,
 };
 
 type Choice = VideoKindId | "auto";
@@ -53,7 +55,12 @@ export function VideoKindPicker({
   picked?: VideoKindId;
   set: (patch: Partial<StudioControls>) => void;
 }) {
-  const value: Choice = c.videoMode === "recap" ? "motion-post" : (c.videoKind ?? "auto");
+  const value: Choice =
+    c.videoMode === "recap"
+      ? "motion-post"
+      : c.videoMode === "motion"
+        ? "motion-graphics"
+        : (c.videoKind ?? "auto");
   const choose = (next: Choice) => {
     // A new kind starts at its own length.
     if (next === "motion-post")
@@ -64,10 +71,22 @@ export function VideoKindPicker({
         durationSec: undefined,
         videoPeople: undefined,
       });
+    // Drawn by code from a design (no video model, no people).
+    if (next === "motion-graphics")
+      return set({
+        videoKind: next,
+        videoMode: "motion",
+        recapMotion: undefined,
+        videoModelKey: undefined,
+        durationSec: undefined,
+        videoPeople: undefined,
+      });
     // Who is on screen is decided again for the new kind.
     set({
       videoKind: next === "auto" ? undefined : next,
-      ...(c.videoMode === "recap" ? { videoMode: "generate", recapMotion: undefined } : {}),
+      ...(c.videoMode === "recap" || c.videoMode === "motion"
+        ? { videoMode: "generate", recapMotion: undefined }
+        : {}),
       durationSec: undefined,
       videoPeople: undefined,
     });

@@ -39,6 +39,7 @@ const emptyMeters = (): FundingAccountInput["meters"] => ({
   video: { available: 0, held: 0, debt: 0 },
   pro_messages: { available: 0, held: 0, debt: 0 },
   flash_messages: { available: 0, held: 0, debt: 0 },
+  premium_video: { available: 0, held: 0, debt: 0 },
 });
 
 function chunks<T>(items: T[], size: number): T[][] {

@@ -42,9 +42,11 @@ export type VideoRenderRequest = {
   /**
    * Composition only (Studio storyboards): each clip's own prompt and length,
    * made at that length and used whole. Absent: the length is split and the
-   * prompt's timed beat lines are shared out (UGC).
+   * prompt's timed beat lines are shared out (UGC). A clip with its own
+   * `model` (viewed for its primary provider, see activeModel) is made on it:
+   * a Premium video opens on Gemini Omni and continues on Veo 3.1 Fast.
    */
-  clips?: { seconds: number; prompt: string }[];
+  clips?: { seconds: number; prompt: string; model?: UgcModel }[];
   /**
    * Composition only: each clip after the first starts from the last frame of
    * the clip before (stored as an asset of this workspace, sent as the first

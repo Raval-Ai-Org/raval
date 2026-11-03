@@ -18,7 +18,7 @@ import { getVisualTaste } from "@/lib/brand-visuals.functions";
 import { emitAppEvent } from "@/lib/app-events";
 
 type VideoMode = NonNullable<StudioControls["videoMode"]>;
-const MODE_ICON: Record<VideoMode, LucideIcon> = {
+const MODE_ICON: Record<Exclude<VideoMode, "motion">, LucideIcon> = {
   generate: Sparkles,
   brand: Video,
   recap: ImageIcon,
@@ -41,7 +41,8 @@ export function SourceClips({
   set: (patch: Partial<StudioControls>) => void;
   disabled?: boolean;
 }) {
-  const mode = c.videoMode ?? "generate";
+  // A motion graphic is new footage too (picked under "Kind of video").
+  const mode = !c.videoMode || c.videoMode === "motion" ? "generate" : c.videoMode;
   const value = c.sourceVideoAssetIds ?? [];
   const photoCount = c.referenceAssetIds?.length ?? 0;
   // Website captures are read (free) only once a person picks "My website".

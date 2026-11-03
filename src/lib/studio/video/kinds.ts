@@ -21,7 +21,8 @@ export type VideoKindId =
   | "offer-teaser"
   | "product-motion"
   | "product-demo"
-  | "broll-hook";
+  | "broll-hook"
+  | "motion-graphics";
 
 /** How a kind's clips are put together. */
 export type VideoJoin =
@@ -261,6 +262,20 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
       "No numbers, prices, dates or percentages on screen in the footage.",
       "End on a calm frame with plenty of empty space, so the offer card follows it smoothly.",
     ],
+  },
+  {
+    // Designed by Opus as HTML/SVG + CSS, checked and drawn frame by frame by
+    // code (src/server/studio/motion/, ADR-0043). No video model.
+    id: "motion-graphics",
+    label: "Motion graphics",
+    hint: "Animated type and shapes, words always exact",
+    join: "code",
+    people: "none",
+    defaultClips: 1,
+    maxClips: 1,
+    ending: "hero-frame",
+    models: [],
+    rules: [],
   },
 ];
 

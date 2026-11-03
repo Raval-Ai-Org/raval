@@ -22,7 +22,8 @@ export type UgcAspectRatio = "9:16" | "1:1" | "16:9" | "4:3" | "3:4";
 export type UgcResolution = "480p" | "720p" | "768p" | "1080p" | "2k";
 export type VideoProviderId = "kie" | "openrouter";
 
-export type UgcModelKey = "standard" | "draft" | "premium" | "long" | "cinematic" | "variation";
+export type UgcModelKey =
+  "standard" | "draft" | "premium" | "long" | "cinematic" | "variation" | "animation";
 
 /** Keys from before 2026-09-25. Existing jobs and history keep them; new jobs never do. */
 export type LegacyUgcModelKey =
@@ -82,7 +83,7 @@ export type ProviderVideoSpec = {
 export type UgcModel = {
   key: AnyUgcModelKey;
   /** Prompt adapter family (src/lib/ugc/prompt-adapters.ts). */
-  family: "veo" | "seedance" | "gemini" | "minimax" | "kling" | "grok";
+  family: "veo" | "seedance" | "gemini" | "minimax" | "kling" | "grok" | "wan";
   displayName: string;
   tier: "draft" | "standard" | "premium";
   description: string;
@@ -100,6 +101,8 @@ export type UgcModel = {
   images: ProviderVideoSpec["images"];
   pricing: UgcPricing;
   enabledByDefault: boolean;
+  /** Made only by Studio (a video kind picks it); never offered as a Creator (UGC) model. */
+  studioOnly?: boolean;
   /** A pre-2026-09-25 key: resolves and renders, never offered for new jobs. */
   legacy?: { aliasOf: UgcModelKey };
 };
@@ -215,16 +218,25 @@ const KIE_VEO_LITE: ProviderVideoSpec = {
   variant: "veo3_lite",
   pricing: credits("video", { "720p": 30, "1080p": 35 }),
 };
-const KIE_SEEDANCE_FAST: ProviderVideoSpec = {
-  model: "bytedance/seedance-2-fast",
+// Wan 3.0 (docs.kie.ai/market/wan/3-0-video): one model id for text, a first
+// frame or up to 10 references; 2-30 s; billed per output second. KIE's
+// example bills 40 credits for 5 s at 480P. Verify on kie.ai/pricing
+// (UGC_PRICE_LONG_<RES>_CREDITS / UGC_PRICE_ANIMATION_<RES>_CREDITS).
+const KIE_WAN_3: ProviderVideoSpec = {
+  model: "wan/3-0-video",
   durations: range(4, 15),
   aspectRatios: ["9:16", "1:1", "16:9", "4:3", "3:4"],
-  resolutions: ["480p", "720p"],
+  resolutions: ["480p", "720p", "1080p"],
   defaultResolution: "720p",
   nativeAudio: true,
   spokenDialogue: true,
   images: { mode: "references", max: 9 },
-  pricing: credits("second", { "480p": 11.7, "720p": 24.8 }),
+  pricing: credits("second", { "480p": 8, "720p": 16, "1080p": 24 }),
+};
+// The same model opening on one styled keyframe (animation: the still sets the look).
+const KIE_WAN_3_I2V: ProviderVideoSpec = {
+  ...KIE_WAN_3,
+  images: { mode: "first_frame", max: 1 },
 };
 const KIE_GROK_I2V: ProviderVideoSpec = {
   model: "grok-imagine/image-to-video",
@@ -273,25 +285,30 @@ const ENTRIES: Record<UgcModelKey, Entry> = {
         defaultResolution: "1080p",
         nativeAudio: true,
         spokenDialogue: true,
-        // Up to 7 quota units; images use 1 each. A first frame can't be
-        // combined with references, so product photos go in as references.
+        // Up to 7 quota units; images use 1 each. With a first frame (a
+        // picture brought to life, a chained clip) it opens on that exact
+        // frame instead; references and a first frame never mix.
         images: { mode: "references", max: 7 },
-        // Verify on kie.ai/pricing (UGC_PRICE_PREMIUM_<RES>_CREDITS).
-        pricing: credits("video", { "720p": 120, "1080p": 160 }),
+        // About $0.0525/s at any resolution up to 1080p (cost review
+        // 2026-11-03). Verify on kie.ai/pricing (UGC_PRICE_PREMIUM_<RES>_CREDITS);
+        // the task's own creditsConsumed is what is metered.
+        pricing: credits("second", { "720p": 10.5, "1080p": 10.5 }),
       },
-      // Gemini Omni isn't on OpenRouter; MiniMax H3 is the realism tier there.
-      openrouter: OR_HAILUO_3,
+      // Gemini Omni isn't on OpenRouter. Veo 3.1 Fast is the outage fallback:
+      // about the same price, never Hailuo 3 at 2K ($0.13/s).
+      openrouter: OR_VEO_FAST,
     },
     enabledByDefault: true,
   },
   long: {
     key: "long",
-    family: "seedance",
+    family: "wan",
     displayName: "Long take",
     tier: "standard",
     description:
       "Takes up to 15 seconds, square video, and up to 9 product photos for accurate packaging.",
-    providers: { kie: KIE_SEEDANCE_FAST, openrouter: OR_SEEDANCE_FAST },
+    // Wan 3.0 on KIE; Seedance 2.0 Fast on OpenRouter only when KIE refuses.
+    providers: { kie: KIE_WAN_3, openrouter: OR_SEEDANCE_FAST },
     enabledByDefault: true,
   },
   cinematic: {
@@ -329,6 +346,19 @@ const ENTRIES: Record<UgcModelKey, Entry> = {
     // A KIE refusal falls back to a 6s Veo Lite variation instead.
     providers: { kie: KIE_GROK_I2V, openrouter: { ...OR_VEO_LITE, durations: [6] } },
     enabledByDefault: true,
+  },
+  animation: {
+    key: "animation",
+    family: "wan",
+    displayName: "Animation",
+    tier: "standard",
+    description:
+      "Stylised motion from a designed keyframe: 2D, soft 3D, clay and surreal looks that keep their style.",
+    // Kling 4.0 was the alternative; at about $0.14/s on KIE it costs nearly
+    // twice Wan 3.0 for the same job, so it is not used.
+    providers: { kie: KIE_WAN_3_I2V, openrouter: OR_SEEDANCE_FAST },
+    enabledByDefault: true,
+    studioOnly: true,
   },
 };
 

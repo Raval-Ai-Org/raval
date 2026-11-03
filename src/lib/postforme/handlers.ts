@@ -249,6 +249,38 @@ export async function fetchBrandAccounts(deps: SocialApiDeps): Promise<AccountsF
   return { ok: true, accounts };
 }
 
+type AllAccounts =
+  | { ok: true; accounts: ConnectedAccount[]; postForMeError: HandlerResult | null }
+  | { ok: false; res: HandlerResult };
+
+/**
+ * Post for Me's accounts plus the brand's Composio ones. Post for Me being
+ * unreachable (a bad key, an outage) never blocks the Composio accounts: they
+ * are sent by Mellox itself. Only with no Composio account is its error final.
+ */
+async function allBrandAccounts(deps: SocialApiDeps, workspaceId: string): Promise<AllAccounts> {
+  const fetched = await fetchBrandAccounts(deps).catch((e): AccountsFetch => ({
+    ok: false,
+    res: distributionErrorResponse(e),
+  }));
+  const composio = await composioAccountsOf(deps, workspaceId);
+  if (fetched.ok) {
+    return { ok: true, accounts: [...fetched.accounts, ...composio], postForMeError: null };
+  }
+  if (!composio.length) return fetched;
+  console.error(
+    "[postforme] accounts unavailable; using Composio accounts only",
+    fetched.res.status,
+    errorDetail(fetched.res),
+  );
+  return { ok: true, accounts: composio, postForMeError: fetched.res };
+}
+
+function errorDetail(res: HandlerResult): string {
+  const detail = (res.body as { error?: { detail?: unknown } } | null)?.error?.detail;
+  return typeof detail === "string" && detail ? detail : `status ${res.status}`;
+}
+
 /** Mirror the provider's account list into social_accounts (best effort). */
 export async function syncAccountMirror(
   deps: SocialApiDeps,
@@ -305,13 +337,17 @@ export async function listAccountsHandler(
   deps: SocialApiDeps,
 ): Promise<HandlerResult> {
   try {
-    const fetched = await fetchBrandAccounts(deps);
-    if (!fetched.ok) return fetched.res;
-    await syncAccountMirror(deps, workspaceId, fetched.accounts);
-    return {
-      status: 200,
-      body: [...fetched.accounts, ...(await composioAccountsOf(deps, workspaceId))],
-    };
+    const all = await allBrandAccounts(deps, workspaceId);
+    if (!all.ok) return all.res;
+    // Never mirror a partial list: the mirror prunes what it doesn't see.
+    if (!all.postForMeError) {
+      await syncAccountMirror(
+        deps,
+        workspaceId,
+        all.accounts.filter((a) => a.provider !== "composio"),
+      );
+    }
+    return { status: 200, body: all.accounts };
   } catch (e) {
     return distributionErrorResponse(e);
   }
@@ -993,9 +1029,9 @@ async function distribute(
   },
   deps: SocialApiDeps,
 ): Promise<HandlerResult> {
-  const fetched = await fetchBrandAccounts(deps);
-  if (!fetched.ok) return fetched.res;
-  const accounts = [...fetched.accounts, ...(await composioAccountsOf(deps, args.workspaceId))];
+  const all = await allBrandAccounts(deps, args.workspaceId);
+  if (!all.ok) return all.res;
+  const { accounts, postForMeError } = all;
   const results: SocialPublishOutcome[] = [];
   const skip = (contentItemId: string, reason: string) =>
     results.push({ contentItemId, status: "skipped", reason });
@@ -1076,7 +1112,12 @@ async function distribute(
       args.selection,
     );
     if (targets.length === 0) {
-      skip(id, `No connected ${label(platform)} account for this selection`);
+      skip(
+        id,
+        postForMeError
+          ? `Post for Me isn't answering (${errorDetail(postForMeError)}). Reconnect ${label(platform)} in Settings → Social accounts to post through Mellox's own connection.`
+          : `No connected ${label(platform)} account for this selection`,
+      );
       continue;
     }
     // Composio accounts are sent by Mellox itself; the rest go to Post for Me.

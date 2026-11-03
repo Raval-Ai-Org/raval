@@ -1,6 +1,6 @@
 // What a Studio job costs, shared by the jobs route (which charges it) and the
 // composer (which shows it on the Generate button). Browser-safe.
-import { creditsFor, type CreditAction, VIDEO_UNITS_PER_VC } from "@/lib/billing/catalog";
+import { creditsFor, creditsForVideoUnits, type CreditAction } from "@/lib/billing/catalog";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import type { CreateJobInput, StudioJob } from "./jobs";
 import { studioVideoUnits } from "@/lib/ugc/duration";
@@ -82,6 +82,8 @@ export function studioChargeFor(args: {
   if (args.type === "video" && args.videoMode === "brand") return "clip_brand";
   // The website reel is code and FFmpeg only, priced like a camera-move recap.
   if (args.type === "video" && args.videoMode === "site") return "photo_recap";
+  // A motion graphic: one design call, drawn by code (ADR-0043).
+  if (args.type === "video" && args.videoMode === "motion") return "motion_graphics";
   if (args.type === "video" && args.videoMode === "recap")
     return args.recapMotion === "ai" ? "studio_video" : "photo_recap";
   // A product cut out of its photo and staged as the hero (ADR-0040).
@@ -171,9 +173,19 @@ export function studioPriceLabel(
     input.type === "video" && input.controls.videoMode === "recap"
       ? studioVideoUnits((input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS)
       : null;
-  return action === "studio_video"
-    ? `${(animated ?? input.controls.videoQuote?.units ?? studioVideoUnits(input.controls.durationSec)) / VIDEO_UNITS_PER_VC} video credits`
-    : `${creditsFor(action as CreditAction) * (variations ? variationCount(input.controls) : 1)} credits`;
+  if (action === "studio_video") {
+    // The quote's meter says what pays: a free video or credits.
+    const quote = animated == null ? input.controls.videoQuote : undefined;
+    if (quote?.meter === "video") return "Free video";
+    if (quote?.meter === "premium_video")
+      return quote.premiumLeft != null && quote.premiumMonthly
+        ? `Premium video · ${quote.premiumLeft} of ${quote.premiumMonthly} left`
+        : "Premium video";
+    if (quote?.meter === "credits") return `${quote.units.toLocaleString("en-US")} credits`;
+    const units = animated ?? studioVideoUnits(input.controls.durationSec);
+    return `${creditsForVideoUnits(units).toLocaleString("en-US")} credits`;
+  }
+  return `${creditsFor(action as CreditAction) * (variations ? variationCount(input.controls) : 1)} credits`;
 }
 
 /** A social post whose optional image failed must not cost the image bundle price. */

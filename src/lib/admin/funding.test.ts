@@ -21,6 +21,7 @@ function account(
       video: { available: 200, held: 0, debt: 0 },
       pro_messages: { available: 3, held: 0, debt: 0 },
       flash_messages: { available: 40, held: 0, debt: 0 },
+      premium_video: { available: 0, held: 0, debt: 0 },
     },
     ...overrides,
   };

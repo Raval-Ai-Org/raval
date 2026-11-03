@@ -143,13 +143,24 @@ Up to 4 reference images. Aspect ratios 1:1, 16:9, 9:16; Studio's 4:5 renders as
 
 ## Video catalog
 
-| Key                  | Purpose                                                           | KIE (active)                                                     | OpenRouter (fallback / next week) |
-| -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------- |
-| `standard` (default) | Talking-creator UGC with lip-synced dialogue                      | `veo-3-1` `veo3_fast`                                            | `google/veo-3.1-fast`             |
-| `draft`              | Cheap hook/concept drafts                                         | `veo-3-1` `veo3_lite`                                            | `google/veo-3.1-lite`             |
-| `premium`            | Hero ads, highest realism (also Studio and `/api/generate-video`) | `google/gemini-omni-flash-1-1`                                   | `minimax/hailuo-3`                |
-| `long`               | 8–15 s takes, up to 9 product photos                              | `bytedance/seedance-2-fast`                                      | `bytedance/seedance-2.0-fast`     |
-| `cinematic`          | Controlled camera, multi-shot                                     | `minimax-h3/reference-to-video` (`text-to-video` without photos) | `minimax/hailuo-3`                |
-| `variation`          | Fast, cheap image animation                                       | `grok-imagine/image-to-video`                                    | `x-ai/grok-imagine-video-1.5`     |
+| Key                  | Purpose                                                            | KIE (active)                                                     | OpenRouter (fallback / next week) |
+| -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | --------------------------------- |
+| `standard` (default) | Talking-creator UGC with lip-synced dialogue                       | `veo-3-1` `veo3_fast`                                            | `google/veo-3.1-fast`             |
+| `draft`              | Cheap hook/concept drafts                                          | `veo-3-1` `veo3_lite`                                            | `google/veo-3.1-lite`             |
+| `premium`            | Hero ads, highest realism                                          | `google/gemini-omni-flash-1-1` (first + last frame)              | `google/veo-3.1-fast`             |
+| `long`               | Long takes up to 15 s, with sound, up to 9 product photos          | `wan/3-0-video` (720p)                                           | `bytedance/seedance-2.0-fast`     |
+| `cinematic`          | Controlled camera, multi-shot                                      | `minimax-h3/reference-to-video` (`text-to-video` without photos) | `minimax/hailuo-3`                |
+| `animation`          | Studio only: 2D, soft-3D and stylised clips from a styled keyframe | `wan/3-0-video` (image to video)                                 | `bytedance/seedance-2.0-fast`     |
+| `variation`          | Fast, cheap image animation                                        | `grok-imagine/image-to-video`                                    | `x-ai/grok-imagine-video-1.5`     |
 
 Old keys (`veo-3-1-fast`, `veo-3-1-quality`, `veo-3-1-lite`, `seedance-2`, `seedance-2-fast`, `kling-3`, `grok-imagine`) are read-only aliases for history rows. Kling 3 is no longer used for new jobs.
+
+Every key runs on KIE by default (`VIDEO_PROVIDER_<KEY>` overrides one); OpenRouter is the fallback only on out-of-credits, auth or model-unavailable. A fallback never costs more than its primary (Hailuo 2K was dropped as premium's fallback). `VIDEO_MAX_USD_PER_JOB` (default $5) refuses a quote whose provider cost is higher, before any spend. Kling 4.0 was priced (about $0.14/s) and not adopted.
+
+## Video sound and motion graphics
+
+| Route                   | Model                                                                   | Notes                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `studio.motion.compose` | PREMIUM (`anthropic/claude-opus-5.5`, medium, 16k)                      | One HTML/SVG + CSS motion design; code checks and draws it. `motion_graphics`, 90 credits. |
+| `studio.video.voice`    | KIE `elevenlabs/text-to-speech-turbo-2-5` (`KIE_VOICE_MODEL`)           | Voiceover from the storyboard's exact words. Metered, not a text route.                    |
+| `studio.video.music`    | KIE `ai-music-api/generate` V6 (`KIE_MUSIC_MODEL`, `KIE_MUSIC_VERSION`) | Instrumental bed only. Metered, not a text route.                                          |

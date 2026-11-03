@@ -487,7 +487,7 @@ describe("Kie provider mapping", () => {
     });
   });
 
-  it("builds Seedance input with reference images and audio", () => {
+  it("builds Wan 3.0 input with reference images and audio", () => {
     expect(
       buildKieInput({
         ...base,
@@ -499,11 +499,31 @@ describe("Kie provider mapping", () => {
       prompt: "p",
       reference_image_urls: ["a"],
       aspect_ratio: "9:16",
-      resolution: "720p",
+      resolution: "720P",
       duration: 12,
-      generate_audio: true,
-      web_search: false,
+      audio: true,
+      nsfw_checker: true,
     });
+  });
+
+  it("opens Wan animation on its keyframe and Gemini Omni on an exact first frame", () => {
+    expect(
+      buildKieInput({ ...base, durationSec: 8, model: UGC_MODELS.animation, imageUrls: ["k"] }),
+    ).toMatchObject({ first_frame_url: "k", duration: 8 });
+    const omni = buildKieInput({
+      ...base,
+      durationSec: 8,
+      model: UGC_MODELS.premium,
+      imageUrls: ["post", "ref"],
+      firstFrame: true,
+      lastFrameUrl: "end",
+    });
+    expect(omni).toMatchObject({ first_frame_url: "post", last_frame_url: "end", duration: "8" });
+    expect(omni).not.toHaveProperty("image_urls");
+    // Without a first frame, product photos stay references.
+    expect(
+      buildKieInput({ ...base, durationSec: 8, model: UGC_MODELS.premium, imageUrls: ["a", "b"] }),
+    ).toMatchObject({ image_urls: ["a", "b"] });
   });
 
   it("maps Kie errors to retryable / final failures", () => {

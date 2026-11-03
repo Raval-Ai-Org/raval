@@ -62,17 +62,20 @@ export const ControlsSchema = z.object({
   durationSec: z.number().int().min(4).max(90).optional(),
   videoResolution: z.enum(["480P", "720P", "1080P"]).optional(),
   videoModelKey: z
-    .enum(["standard", "draft", "premium", "long", "cinematic", "variation"])
+    .enum(["standard", "draft", "premium", "long", "cinematic", "variation", "animation"])
     .optional(),
   videoQuote: z
     .object({
       hash: z.string().length(64),
       units: z.number().int().positive(),
       /** "video" is one of the month's free videos; "credits" otherwise (src/lib/billing/video-charge.ts). */
-      meter: z.enum(["video", "credits"]).optional(),
+      meter: z.enum(["video", "premium_video", "credits"]).optional(),
       /** For the price chip only: free videos left, and how many a month the plan gives. */
       freeLeft: z.number().int().min(0).optional(),
       freeMonthly: z.number().int().min(0).optional(),
+      /** Premium videos left this month (before this one), and the plan's monthly number. */
+      premiumLeft: z.number().int().min(0).optional(),
+      premiumMonthly: z.number().int().min(0).optional(),
       resolution: z.enum(["480p", "720p", "768p", "1080p", "2k"]).optional(),
       aspectRatio: AspectRatioSchema.optional(),
     })
@@ -109,7 +112,7 @@ export const ControlsSchema = z.object({
    * Video: make a new one (default), brand the person's own clips, or make a
    * recap from their photos (src/lib/studio/clip-edit.ts).
    */
-  videoMode: z.enum(["generate", "brand", "recap", "site"]).optional(),
+  videoMode: z.enum(["generate", "brand", "recap", "site", "motion"]).optional(),
   /**
    * New AI video: the kind it is made as (src/lib/studio/video/kinds.ts).
    * Absent: picked from the brief and its source by settleVideoControls.

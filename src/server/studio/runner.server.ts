@@ -74,6 +74,14 @@ import {
   videoBuffer,
 } from "@/server/studio/video/finish.server";
 import { checkStudioVideo } from "@/server/studio/video/qa.server";
+import {
+  collectSoundtrack,
+  meterSoundtrack,
+  mixSoundtrack,
+  startSoundtrack,
+  type SoundtrackTasks,
+} from "@/server/studio/audio/soundtrack.server";
+import { musicMood } from "@/lib/studio/audio/soundtrack";
 import { isVideoStoryboardEnabled } from "@/lib/feature-flags";
 import {
   resolveStudioReferences,
@@ -302,6 +310,10 @@ type ProviderTask = {
     };
     /** The brand's font and accent for the words drawn on the video (overlay.ts). */
     wordStyle?: { font?: string; accent?: string };
+    /** The voiceover and music bed made beside the clips, mixed in when the video passes. */
+    soundtrack?: SoundtrackTasks;
+    /** When the finished video first waited for its soundtrack. */
+    soundtrackWaitSince?: number;
   };
   /** Video only: times the render was submitted again after an outage. */
   resubmits?: number;
@@ -1244,6 +1256,20 @@ function videoPrompt(
  * of the one before; a post's picture is framed whole for the video's shape
  * and opens the first clip. The checks and the ending run when it finishes.
  */
+/** Layouts of the brand's latest motion graphics, newest first, so the next one differs. */
+async function recentMotionLayouts(client: Db, workspaceId: string): Promise<string[]> {
+  const { data } = await client
+    .from("assets")
+    .select("metadata")
+    .eq("workspace_id", workspaceId)
+    .eq("metadata->>video_mode", "motion")
+    .order("created_at", { ascending: false })
+    .limit(4);
+  return (data ?? [])
+    .map((row) => (row.metadata as { motion_layout?: unknown } | null)?.motion_layout)
+    .filter((layout): layout is string => typeof layout === "string");
+}
+
 async function startStoryboardVideo(a: {
   client: Db;
   job: JobRow;
@@ -1318,6 +1344,24 @@ async function startStoryboardVideo(a: {
     ...a.notes,
   ].filter((note): note is string => !!note);
   const script = input.intent.sourceScript;
+  const total = clips.reduce((sum, clip) => sum + clip.seconds, 0);
+  // The voice reads the storyboard's exact words and the music is made for
+  // the video's length; both are mixed in after the checks. Fails open.
+  const soundtrack = audio
+    ? await startSoundtrack({
+        seconds: total,
+        voiceLines: plan.voice
+          ? plan.storyboard.clips.map((clip) => clip.voiceover ?? "").filter(Boolean)
+          : undefined,
+        brandVoice: ctx.style?.writing?.voice,
+        music: {
+          mood: musicMood(`${ctx.style?.video.music ?? ""} ${plan.storyboard.logline}`),
+          look: ctx.style?.video.music,
+          title: ctx.brandName,
+        },
+        seed: job.workspace_id,
+      }).catch(() => ({}) as SoundtrackTasks)
+    : ({} as SoundtrackTasks);
   const prompts = plan.storyboard.clips.map((_, i) =>
     clipPrompt(plan.storyboard, i, {
       kind: plan.kind,
@@ -1329,7 +1373,8 @@ async function startStoryboardVideo(a: {
       productPhoto: !!input.controls.productId && a.supplied.length > 0,
       audio,
       people: plan.people,
-      voice: plan.voice,
+      // A made voiceover reads the words; the video model then doesn't speak.
+      voice: plan.voice && !soundtrack.voice,
       soundLook: ctx.style?.video.music,
       // The storyboard's words are drawn on the finished video by code.
       wordsByCode: true,
@@ -1399,6 +1444,7 @@ async function startStoryboardVideo(a: {
         font: ctx.style?.visual.typography?.heading,
         accent: ctx.style?.visual.palette.accent,
       },
+      ...(soundtrack.voice || soundtrack.music ? { soundtrack } : {}),
       ...(kind.ending === "end-card"
         ? {
             endCardStyle: {
@@ -1488,9 +1534,12 @@ async function startMedia(args: {
   const videoMode = input.controls.videoMode;
   if (
     job.type === "video" &&
-    (videoMode === "brand" || videoMode === "recap" || videoMode === "site")
+    (videoMode === "brand" ||
+      videoMode === "recap" ||
+      videoMode === "site" ||
+      videoMode === "motion")
   ) {
-    if (!isClipEditEnabled(job.workspace_id))
+    if (videoMode !== "motion" && !isClipEditEnabled(job.workspace_id))
       throw new StudioJobError(404, "Making videos from your own clips isn't available here.");
     const look = ctx.style ? imageStyleInput(ctx.style) : null;
     const logoUrl = look?.useLogo === false ? null : brand?.logoUrl?.trim() || null;
@@ -1561,6 +1610,20 @@ async function startMedia(args: {
       ...(refineNote ? { revision: refineNote } : {}),
       emphasisSeed: seed,
       ...(videoMode === "brand" ? { captions: input.controls.clipCaptions !== false } : {}),
+      ...(videoMode === "motion"
+        ? {
+            graphic: {
+              seconds: input.controls.durationSec ?? 12,
+              brandText: ctx.brandText,
+              knownFacts: `${input.intent.brief}
+${ctx.brandText}`,
+              recentLayouts: await recentMotionLayouts(args.client, job.workspace_id),
+              music: input.controls.audio ?? true,
+              musicLook: ctx.style?.video.music,
+              userId: getRequestScope().userId ?? null,
+            },
+          }
+        : {}),
     };
     const main: ProviderTask = {
       slot: "main",
@@ -3390,15 +3453,28 @@ async function resubmitStudioVideo(
  * A finished storyboard video: checked (src/lib/studio/video/checks.ts), made
  * again where it failed (once, at Mellox's cost), or given its ending.
  */
+const SOUNDTRACK_WAIT_MS = 4 * 60_000;
+
 async function finishStoryboardVideo(
   row: JobRow,
   task: ProviderTask,
   check: Extract<MediaCheck, { state: "success" }>,
 ): Promise<
-  { state: "redo" } | { state: "failed" } | { state: "ok"; dataUrl: string; warnings: string[] }
+  | { state: "redo" }
+  | { state: "wait" }
+  | { state: "failed" }
+  | { state: "ok"; dataUrl: string; warnings: string[] }
 > {
   const plan = row.output.videoPlan!;
   const video = task.video!;
+  // The voice and music usually finish before the clips. A slow one is
+  // waited for a few minutes before the checks run (they cost a call), then
+  // left out: sound never holds a video back for long.
+  const sound = video.soundtrack ? await collectSoundtrack(video.soundtrack) : null;
+  if (sound?.pending) {
+    video.soundtrackWaitSince ??= Date.now();
+    if (Date.now() - video.soundtrackWaitSince < SOUNDTRACK_WAIT_MS) return { state: "wait" };
+  }
   let dataUrl = check.dataUrl;
   if (!dataUrl) {
     const { safeFetch } = await import("@/server/safe-fetch");
@@ -3467,6 +3543,18 @@ async function finishStoryboardVideo(
     return { state: "redo" };
   }
   const kind = videoKind(plan.kind);
+  // The made voice and music go under the whole video, the clips' own sound ducked beneath.
+  let hasAudio = video.audio && result.probe.hasAudio;
+  if (sound && (sound.voiceUrl || sound.musicUrl)) {
+    const mixed = await mixSoundtrack(dataUrl, sound, {
+      seconds: result.probe.duration,
+      // The clips' own sound stays only when they speak the voiceover themselves.
+      keepClipAudio: !sound.musicUrl || (plan.voice && !video.soundtrack?.voice),
+    });
+    // A silent clip with a voice or music laid under it now has sound to keep.
+    if (mixed !== dataUrl) hasAudio = true;
+    dataUrl = mixed;
+  }
   // The storyboard's words, spelled exactly, before the ending (never on the post or the card).
   const cues = textCues(plan.storyboard, clips, plan.kind, {
     duration: result.probe.duration,
@@ -3496,11 +3584,16 @@ async function finishStoryboardVideo(
         duration: result.probe.duration,
         width: result.probe.width,
         height: result.probe.height,
-        audio: video.audio && result.probe.hasAudio,
+        audio: hasAudio,
       })
     ).dataUrl;
   // Make sure what is saved is still a real video file.
   videoBuffer(dataUrl);
+  if (sound)
+    meterSoundtrack(sound, {
+      workspaceId: row.workspace_id,
+      userId: getRequestScope().userId ?? null,
+    });
   plan.check = { passed: true, redone, notes: [passedNote(plan.kind, clips.length)] };
   return {
     state: "ok",
@@ -3802,7 +3895,12 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         }
         if (parked.state === "running") continue;
         if (parked.state === "failed") {
-          fail();
+          // A refused motion graphic says so; anything else is the clip message.
+          fail(
+            task.clipEdit.mode === "motion"
+              ? { category: "quality", message: parked.message, retryable: true }
+              : undefined,
+          );
           continue;
         }
         stage = "save";
@@ -3894,7 +3992,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           console.warn("[studio] video finishing failed", classify(error).message);
           return { state: "error" as const };
         });
-        if (finished.state === "redo") {
+        if (finished.state === "redo" || finished.state === "wait") {
           await requireActiveJob(c, row);
           continue;
         }
