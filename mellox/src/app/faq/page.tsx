@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function FaqPage() {
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-[#030405] text-white">
+    <div className="relative min-h-screen overflow-x-clip bg-[var(--mx-bg)] text-white">
       <JsonLd data={faqJsonLd(faqs)} />
       <Navbar />
       <Faq
@@ -23,7 +23,7 @@ export default function FaqPage() {
         title="All your questions, answered"
         blurb="Everything you need to know about how Mellox works."
       />
-      <div className="bg-[#030405] pb-20 text-center">
+      <div className="bg-[var(--mx-bg)] pb-20 text-center">
         <Link href="/" className="inline-block py-3 text-[15px] text-white/60 underline decoration-white/25 underline-offset-4 transition-colors hover:text-lime">
           Back to home
         </Link>

@@ -31,4 +31,4 @@
 .nf-link:hover { transform: translateY(-3px); border-color: rgb(203 233 96 / 0.5); }
 .nf-link:focus-visible { outline: 2px solid var(--brand-lime); outline-offset: 3px; }
 .nf-link b { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
-.nf-link span { margin-top: 4px; font-size: 14.5px; color: #8b97c2; }
+.nf-link span { margin-top: 4px; font-size: 14.5px; color: var(--mx-t1); }

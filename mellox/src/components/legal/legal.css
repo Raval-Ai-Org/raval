@@ -26,8 +26,8 @@
   overflow-y: auto;
   padding: 22px 18px;
   border-radius: 24px;
-  border: 1px solid rgb(255 255 255 / 0.09);
-  background: rgb(255 255 255 / 0.025);
+  border: 1px solid rgb(var(--mx-w) / 0.09);
+  background: rgb(var(--mx-w) / 0.025);
 }
 @media (max-width: 960px) {
   .lg-toc {
@@ -50,7 +50,7 @@
   border-radius: 12px;
   font-size: 14.5px;
   line-height: 1.35;
-  color: #8b97c2;
+  color: var(--mx-t1);
   transition:
     background-color 0.25s,
     color 0.25s;
@@ -62,8 +62,8 @@
 }
 .lg-toc a:hover,
 .lg-toc a:focus-visible {
-  color: #fff;
-  background: rgb(255 255 255 / 0.07);
+  color: var(--mx-fg);
+  background: rgb(var(--mx-w) / 0.07);
   outline: none;
 }
 
@@ -78,7 +78,7 @@
   padding-bottom: 28px;
   font-size: 18px;
   line-height: 1.65;
-  color: rgb(255 255 255 / 0.85);
+  color: rgb(var(--mx-w) / 0.85);
 }
 .lg-intro a,
 .lg-doc a {
@@ -91,7 +91,7 @@
   scroll-margin-top: 24px;
   padding-top: 30px;
   margin-top: 30px;
-  border-top: 1px solid rgb(255 255 255 / 0.08);
+  border-top: 1px solid rgb(var(--mx-w) / 0.08);
 }
 .lg-sec h2 {
   display: flex;
@@ -121,7 +121,7 @@
   font-size: 1.15rem;
   font-weight: 600;
   letter-spacing: -0.015em;
-  color: #fff;
+  color: var(--mx-fg);
 }
 .lg-sec strong {
   font-weight: 600;

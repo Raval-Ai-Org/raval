@@ -10,9 +10,9 @@
   padding: 8px 18px;
   border-radius: 999px;
   font-size: 15px;
-  color: #cfd7f5;
-  background: rgb(255 255 255 / 0.05);
-  border: 1px solid rgb(255 255 255 / 0.1);
+  color: var(--mx-t7);
+  background: rgb(var(--mx-w) / 0.05);
+  border: 1px solid rgb(var(--mx-w) / 0.1);
   transition: color 0.2s, border-color 0.2s;
 }
 .ig-jump a:hover { color: var(--brand-lime); border-color: rgb(203 233 96 / 0.5); }
@@ -33,10 +33,10 @@
   gap: 10px;
   padding: clamp(20px, 2.2vw, 28px);
   border-radius: 24px;
-  border: 1px solid rgb(255 255 255 / 0.09);
+  border: 1px solid rgb(var(--mx-w) / 0.09);
   background:
     radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
-    linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(255 255 255 / 0.012));
+    linear-gradient(180deg, rgb(var(--mx-w) / 0.035), rgb(var(--mx-w) / 0.012));
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s;
 }
 .ig-card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
@@ -48,8 +48,8 @@
   height: 52px;
   border-radius: 16px;
   color: var(--accent);
-  background: rgb(255 255 255 / 0.06);
-  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(var(--mx-w) / 0.06);
+  border: 1px solid rgb(var(--mx-w) / 0.1);
 }
 .ig-logo img { filter: brightness(0) invert(1); opacity: 0.92; }
 /* full colour brand logos keep their own colours */
@@ -63,5 +63,5 @@
   background: rgb(203 233 96 / 0.1);
   border: 1px solid rgb(203 233 96 / 0.25);
 }
-.ig-card h3 { font-size: 1.3rem; font-weight: 500; letter-spacing: -0.02em; color: #fff; }
-.ig-card p { font-size: 15.5px; line-height: 1.6; color: #8b97c2; }
+.ig-card h3 { font-size: 1.3rem; font-weight: 500; letter-spacing: -0.02em; color: var(--mx-fg); }
+.ig-card p { font-size: 15.5px; line-height: 1.6; color: var(--mx-t1); }

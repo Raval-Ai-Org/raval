@@ -17,7 +17,7 @@
 .skip-link:focus,
 .skip-link:focus-visible {
   transform: translateY(0);
-  outline: 3px solid #fff;
+  outline: 3px solid var(--mx-fg);
   outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {

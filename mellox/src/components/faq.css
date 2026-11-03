@@ -2,7 +2,7 @@
 .faq {
   position: relative;
   padding: clamp(70px, 9vw, 130px) 0 clamp(80px, 9vw, 130px);
-  background: #030405;
+  background: var(--mx-bg);
 }
 .faq-standalone {
   min-height: 100vh;
@@ -30,11 +30,11 @@
   gap: 14px;
   padding-bottom: 20px;
   font-size: 17px;
-  color: #9aa7cf;
+  color: var(--mx-t2);
 }
 .faq-rule {
   height: 1px;
-  background: rgb(255 255 255 / 0.1);
+  background: rgb(var(--mx-w) / 0.1);
 }
 .faq-head {
   display: flex;
@@ -50,14 +50,14 @@
   font-weight: 400;
   line-height: 1.04;
   letter-spacing: -0.035em;
-  color: #fff;
+  color: var(--mx-fg);
 }
 .faq-head p {
   max-width: 360px;
   margin-top: 12px;
   font-size: clamp(15px, 1.25vw, 18px);
   line-height: 1.6;
-  color: #8b97c2;
+  color: var(--mx-t1);
 }
 
 .faq-grid {
@@ -85,16 +85,16 @@
 
 .faq-item {
   border-radius: 30px; /* constant: a radius that changes on open makes the corners jump */
-  border: 1px solid rgb(255 255 255 / 0.09);
+  border: 1px solid rgb(var(--mx-w) / 0.09);
   background: #0b0e14;
   transition: border-color 0.4s ease, background-color 0.4s ease;
 }
 .faq-item:hover {
-  border-color: rgb(255 255 255 / 0.18);
+  border-color: rgb(var(--mx-w) / 0.18);
 }
 .faq-item.is-open {
   border-color: rgb(203 233 96 / 0.4);
-  background: #0d1118;
+  background: var(--mx-bg3);
 }
 .faq-item button {
   display: flex;
@@ -109,7 +109,7 @@
   font-size: clamp(16px, 1.45vw, 21px);
   font-weight: 500;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--mx-fg);
   cursor: pointer;
 }
 .plus {
@@ -159,10 +159,10 @@
   gap: 12px;
   padding: 16px 30px;
   border-radius: 9999px;
-  border: 1px solid rgb(255 255 255 / 0.22);
-  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(var(--mx-w) / 0.22);
+  background: rgb(var(--mx-w) / 0.04);
   font-size: 17px;
-  color: #fff;
+  color: var(--mx-fg);
   transition:
     background-color 0.4s ease,
     border-color 0.4s ease,

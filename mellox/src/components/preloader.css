@@ -12,7 +12,7 @@ html.mx-lock {
   inset: 0;
   z-index: 1000;
   overflow: hidden;
-  color: #fff;
+  color: var(--mx-fg);
   pointer-events: auto;
 }
 
@@ -22,7 +22,7 @@ html.mx-lock {
   left: 0;
   right: 0;
   height: 50.2%;
-  background: #030405;
+  background: var(--mx-bg);
   transition: transform 0.95s cubic-bezier(0.76, 0, 0.24, 1) 0.18s;
   will-change: transform;
 }
@@ -170,7 +170,7 @@ html.mx-lock {
 }
 .mx-pre-tag {
   font-size: clamp(13px, 1.6vw, 16px);
-  color: rgb(255 255 255 / 0.62);
+  color: rgb(var(--mx-w) / 0.62);
   opacity: 0;
   animation: pre-fade 0.9s ease 1.5s forwards;
 }
@@ -199,7 +199,7 @@ html.mx-lock {
   line-height: 1;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: rgb(255 255 255 / 0.92);
+  color: rgb(var(--mx-w) / 0.92);
 }
 .mx-pre-count i {
   margin-left: 4px;
@@ -212,7 +212,7 @@ html.mx-lock {
   height: 2px;
   overflow: hidden;
   border-radius: 9999px;
-  background: rgb(255 255 255 / 0.14);
+  background: rgb(var(--mx-w) / 0.14);
 }
 .mx-pre-bar span {
   position: absolute;
@@ -229,7 +229,7 @@ html.mx-lock {
   z-index: 60;
   display: grid;
   place-items: center;
-  background: #030405;
+  background: var(--mx-bg);
   animation: load-in 0.3s ease 0.12s both;
 }
 @keyframes load-in {
@@ -272,7 +272,7 @@ html.mx-lock {
   top: 0;
   height: 3px;
   overflow: hidden;
-  background: rgb(255 255 255 / 0.06);
+  background: rgb(var(--mx-w) / 0.06);
 }
 .mx-load-bar span {
   display: block;
