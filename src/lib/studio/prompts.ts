@@ -574,7 +574,7 @@ export type BuiltPrompt<T> = {
   route: string;
   system: string;
   user: string;
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
+  schema: z.ZodType<T, unknown>;
   maxTokens: number;
   temperature: number;
 };

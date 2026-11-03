@@ -60,7 +60,7 @@ const signalsSchema = z.object({
   pendingDrafts: z.number(),
   latestGeoScore: z.number().nullable(),
   previousGeoScore: z.number().nullable(),
-  geoSubscores: z.unknown(),
+  geoSubscores: z.unknown().optional(),
   recentInsights: z.array(z.string()),
   recentContent: z.array(z.string()),
 });

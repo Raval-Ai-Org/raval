@@ -29,7 +29,7 @@ const CreateSchema = z.object({
   allowComments: z.boolean().default(true),
   allowApprovals: z.boolean().default(true),
   allowDownload: z.boolean().default(false),
-  branding: z.record(z.any()).optional(),
+  branding: z.record(z.string(), z.any()).optional(),
   /** Set after the user reviewed guardrail findings and chose to share anyway. */
   acknowledgeWarnings: z.boolean().optional(),
   items: z
@@ -46,7 +46,7 @@ const CreateSchema = z.object({
         refId: z.string().uuid().optional().nullable(),
         title: z.string().max(200).optional(),
         description: z.string().max(1000).optional(),
-        snapshot: z.record(z.any()).optional(),
+        snapshot: z.record(z.string(), z.any()).optional(),
       }),
     )
     .min(1)

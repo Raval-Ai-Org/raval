@@ -4,7 +4,7 @@
 // the gateway (src/lib/ai-gateway.server.ts) for every call.
 
 import "server-only";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 import {
   chatCompletion,
   AiGatewayError,
@@ -92,7 +92,7 @@ async function callJson(
  * mistaken for a real one.
  */
 export async function runStructuredPrompt<T>(
-  opts: Common & { schema: ZodType<T, ZodTypeDef, unknown> },
+  opts: Common & { schema: ZodType<T, unknown> },
 ): Promise<T> {
   const maxTokens = opts.maxTokens ?? 1200;
   return runStructured({

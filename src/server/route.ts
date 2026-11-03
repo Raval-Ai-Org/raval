@@ -14,7 +14,7 @@
 // correct-by-default posture as the RPC path; `supabaseAdmin` stays an
 // explicit import for the rare query that must bypass RLS.
 import "server-only";
-import { ZodError, type ZodType, type ZodTypeDef } from "zod";
+import { ZodError, type ZodType } from "zod";
 import type { UserSupabaseClient } from "@/integrations/supabase/client.user.server";
 import {
   checkWorkspaceMembership,
@@ -39,7 +39,7 @@ import { UpstreamError } from "./upstream";
 import { messageForFailure, messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import { readJsonBody, RequestBodyTooLargeError } from "./request-body";
 
-type Schema<T> = ZodType<T, ZodTypeDef, unknown>;
+type Schema<T> = ZodType<T, unknown>;
 
 export type RouteContext<TBody, TQuery> = {
   request: Request;

@@ -27,7 +27,7 @@ vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
 import { defineAdminRoute } from "./route";
 
 const ADMIN = {
-  userId: "11111111-1111-1111-1111-111111111111",
+  userId: "11111111-1111-4111-8111-111111111111",
   role: "support" as const,
   permissions: ["users.read", "users.notes.write"] as string[],
   source: "team" as const,
@@ -187,7 +187,7 @@ describe("defineAdminRoute", () => {
       query: z.object({ id: z.string().uuid() }),
       handler: async ({ body, query }) => ({ n: body.n, id: query.id }),
     });
-    const id = "22222222-2222-2222-2222-222222222222";
+    const id = "22222222-2222-4222-8222-222222222222";
     expect((await withInput(req({ n: "x" }, `http://localhost/x?id=${id}`))).status).toBe(400);
     expect((await withInput(req({ n: 2 }, "http://localhost/x?id=nope"))).status).toBe(400);
     const ok = await withInput(req({ n: 2 }, `http://localhost/x?id=${id}`));

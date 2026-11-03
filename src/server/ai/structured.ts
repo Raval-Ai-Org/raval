@@ -11,7 +11,7 @@
 //   3. if that also fails, logs a `parse_failure` guardrail event and throws
 //      AiOutputError (HTTP 502) — the caller surfaces a real error.
 import "server-only";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 import { UpstreamError } from "@/server/upstream";
 import { logGuardrailEvent } from "@/server/guardrails/events";
 import { extractFirstJsonObject, stripJsonFences } from "@/lib/ai/json";
@@ -35,7 +35,7 @@ export type RunStructuredOpts<T> = {
   route: string;
   system: string;
   user: string;
-  schema: ZodType<T, ZodTypeDef, unknown>;
+  schema: ZodType<T, unknown>;
   maxTokens: number;
   /** Ceiling for the repair attempt's output budget. Default: 2× maxTokens. */
   maxRepairTokens?: number;
@@ -45,10 +45,7 @@ export type RunStructuredOpts<T> = {
 export type ParseOutcome<T> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Parse model text into T. Tolerates ```json fences and leading prose. */
-export function parseStructured<T>(
-  raw: string,
-  schema: ZodType<T, ZodTypeDef, unknown>,
-): ParseOutcome<T> {
+export function parseStructured<T>(raw: string, schema: ZodType<T, unknown>): ParseOutcome<T> {
   const text = raw.trim();
   if (!text) return { ok: false, error: "empty response" };
   let json: unknown;

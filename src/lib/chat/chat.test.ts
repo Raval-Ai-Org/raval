@@ -104,7 +104,7 @@ describe("shapeToJsonSchema", () => {
       required: ["ids", "note", "items", "flag"],
       properties: {
         status: { type: "string", enum: ["draft", "approved"], description: "Which posts" },
-        limit: { type: "integer", minimum: 1, maximum: 200 },
+        limit: { type: "integer", minimum: 1, maximum: 200, default: 50 },
         ids: {
           type: "array",
           items: { type: "string", format: "uuid" },
