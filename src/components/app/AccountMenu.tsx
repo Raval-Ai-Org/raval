@@ -14,8 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sun, Moon, Settings, ChevronDown } from "@/components/brand/icons";
 import { LogOut, HelpCircle } from "@/components/ui/gemini-icons";
-import { Brain, Compass, Shield, Wallet } from "@/components/icons";
-import { useEntitlements } from "@/lib/billing/use-entitlements";
+import { Brain, Compass, Wallet } from "@/components/icons";
 import { supabase } from "@/integrations/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
 import { signOutAndRedirect } from "@/lib/auth";
@@ -184,7 +183,6 @@ export function AccountMenu({
           <Wallet className="h-4 w-4 text-primary" />
           Plan & billing
         </DropdownMenuItem>
-        <AdminMenuItem />
         <DropdownMenuItem
           onSelect={() => {
             emitAppEvent("open:tour");
@@ -302,7 +300,6 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
         >
           <Wallet className="h-4 w-4 text-primary" /> Plan & billing
         </DropdownMenuItem>
-        <AdminMenuItem />
         <DropdownMenuItem
           onSelect={() => emitAppEvent("open:tour")}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
@@ -326,19 +323,5 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/** Only Mellox billing admins see this; the server decides who they are. */
-function AdminMenuItem() {
-  const { data } = useEntitlements();
-  if (!data?.isBillingAdmin) return null;
-  return (
-    <DropdownMenuItem
-      onSelect={() => window.location.assign("/admin")}
-      className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
-    >
-      <Shield className="h-4 w-4 text-muted-foreground" /> Admin console
-    </DropdownMenuItem>
   );
 }

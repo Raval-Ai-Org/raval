@@ -34,7 +34,7 @@ import {
   BookOpen,
   Calendar as CalendarIcon,
   ChevronDown,
-  Link2,
+  LayoutGrid,
   Megaphone,
   Menu,
   MessageCircle,
@@ -483,8 +483,14 @@ function AppShell() {
   };
 
   const SidebarSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    // Grouped by a thin line only; the name is for screen readers.
+    // A small group name so people can tell what each block is for.
     <div role="group" aria-label={label} className="space-y-0.5">
+      <p
+        aria-hidden
+        className="px-2.5 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70"
+      >
+        {label}
+      </p>
       <div className="space-y-0.5">{children}</div>
     </div>
   );
@@ -543,8 +549,25 @@ function AppShell() {
 
         <div className="h-px bg-border/50" />
 
-        {/* Ordered by how often people reach for them: making and posting
-            first, then the brand, then results, then the team. */}
+        {/* Ordered by priority: the brand comes first (everything Mellox makes
+            reads it), then making and posting, then growth and results, then
+            the team. The rail below keeps the same order. */}
+        <SidebarSection label="Brand">
+          {sidebarAction({
+            icon: BrainIcon,
+            label: "Brain",
+            hint: brainNews ? `${brainNews} new` : undefined,
+            tour: "brain",
+            onClick: () => openBrain(),
+          })}
+          {sidebarAction({
+            icon: Palette,
+            label: "Inspo",
+            tour: "inspo",
+            onClick: () => navigate({ to: inspoPath(workspaceId) }),
+          })}
+        </SidebarSection>
+
         <SidebarSection label="Create">
           {sidebarAction({
             icon: BookOpen,
@@ -565,36 +588,9 @@ function AppShell() {
             feature: "publishing",
             onClick: () => emitAppEvent("open:schedule"),
           })}
-          {/* The Reddit agent: threads worth joining, with replies to approve. */}
-          {sidebarAction({
-            icon: MessageCircle,
-            label: "Reddit agent",
-            tour: "communities",
-            onClick: () => navigate({ to: communitiesPath(workspaceId) }),
-          })}
         </SidebarSection>
 
-        <div className="h-px bg-border/50" />
-
-        <SidebarSection label="Brand">
-          {sidebarAction({
-            icon: BrainIcon,
-            label: "Brain",
-            hint: brainNews ? `${brainNews} new` : undefined,
-            tour: "brain",
-            onClick: () => openBrain(),
-          })}
-          {sidebarAction({
-            icon: Palette,
-            label: "Inspo",
-            tour: "inspo",
-            onClick: () => navigate({ to: inspoPath(workspaceId) }),
-          })}
-        </SidebarSection>
-
-        <div className="h-px bg-border/50" />
-
-        <SidebarSection label="Results">
+        <SidebarSection label="Grow">
           {sidebarAction({
             icon: BarChart3,
             label: "Analytics",
@@ -609,6 +605,13 @@ function AppShell() {
             tour: "visibility",
             onClick: () => emitAppEvent("open:ai-visibility"),
           })}
+          {/* The Reddit agent: threads worth joining, with replies to approve. */}
+          {sidebarAction({
+            icon: MessageCircle,
+            label: "Reddit agent",
+            tour: "communities",
+            onClick: () => navigate({ to: communitiesPath(workspaceId) }),
+          })}
           {proofEngine?.enabled &&
             sidebarAction({
               icon: Trophy,
@@ -618,8 +621,6 @@ function AppShell() {
               onClick: () => navigate({ to: workspacePath(workspaceId, "experiments") }),
             })}
         </SidebarSection>
-
-        <div className="h-px bg-border/50" />
 
         <SidebarSection label="Team">
           {sidebarAction({
@@ -644,19 +645,6 @@ function AppShell() {
         </div>
 
         <FreeSidebarCard className="mx-1 mt-2" />
-
-        {/* Backlinks is paused while it is reworked: a quiet note, not a link. */}
-        <div
-          aria-disabled
-          title="Backlinks is coming soon"
-          className="mx-1 flex cursor-default select-none items-center gap-2 px-2.5 py-1 text-[11.5px] text-muted-foreground/50"
-        >
-          <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden />
-          <span className="flex-1 truncate">Backlinks</span>
-          <span className="rounded-full border border-border/50 px-1.5 py-px text-[9.5px] font-medium uppercase tracking-wide">
-            Soon
-          </span>
-        </div>
 
         <div data-tour="account" className="mt-2 border-t border-border/50 pt-2">
           <AccountMenu
@@ -719,7 +707,10 @@ function AppShell() {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={() => setNavOpen(true)}
+                    onClick={() => {
+                      navigate({ to: homeHref });
+                      emitAppEvent("chat:focus");
+                    }}
                     aria-label="New Chat"
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition hover:-translate-y-px hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
@@ -734,8 +725,14 @@ function AppShell() {
               {/* Divider between primary and quick actions */}
               <div aria-hidden className="my-1 h-px w-6 bg-border/50" />
 
-              {/* Same order as the open sidebar. */}
+              {/* The most used places only, in the open sidebar's order;
+                  "More" opens the full sidebar for the rest. */}
               {[
+                {
+                  icon: BrainIcon,
+                  label: "Brain",
+                  onClick: () => openBrain(),
+                },
                 {
                   icon: BookOpen,
                   label: "Library",
@@ -747,29 +744,14 @@ function AppShell() {
                   onClick: () => navigate({ to: campaignsPath(workspaceId) }),
                 },
                 {
-                  icon: MessageCircle,
-                  label: "Reddit agent",
-                  onClick: () => navigate({ to: communitiesPath(workspaceId) }),
-                },
-                {
-                  icon: BrainIcon,
-                  label: "Brain",
-                  onClick: () => openBrain(),
-                },
-                {
-                  icon: Palette,
-                  label: "Inspo",
-                  onClick: () => navigate({ to: inspoPath(workspaceId) }),
-                },
-                {
                   icon: BarChart3,
                   label: "Analytics",
                   onClick: () => emitAppEvent("open:analytics"),
                 },
                 {
-                  icon: Sparkles,
-                  label: "AI Visibility",
-                  onClick: () => emitAppEvent("open:ai-visibility"),
+                  icon: LayoutGrid,
+                  label: "More",
+                  onClick: () => setNavOpen(true),
                 },
               ].map(({ icon: Icon, label, onClick }) => (
                 <Tooltip key={label}>
@@ -1063,12 +1045,12 @@ function AppShell() {
           </button>
           <button
             type="button"
-            onClick={() => setAnalyticsOpen(true)}
+            onClick={() => openBrain()}
             className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="Open Analytics"
+            aria-label="Open Brain"
           >
-            <BarChart3 className="size-5" aria-hidden />
-            <span className="text-[10px] font-medium">Analytics</span>
+            <BrainIcon className="size-5" />
+            <span className="text-[10px] font-medium">Brain</span>
           </button>
           <button
             type="button"

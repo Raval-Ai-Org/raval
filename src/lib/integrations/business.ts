@@ -265,17 +265,27 @@ function fit(text: string, max: number): string | null {
   return (space > max * 0.5 ? cut.slice(0, space) : cut).replace(/[,;:\-–]+$/, "").trim();
 }
 
-/** Responsive search ad text: 3-15 headlines, 2-4 descriptions, all distinct. */
+/**
+ * Responsive search ad text: 3-15 headlines, 2-4 descriptions, all distinct.
+ * Lines the ad was written with for Google (`search`, already within the
+ * limits) come first; the social copy only fills what is missing.
+ */
 export function rsaText(
   ads: AdCopy[],
   brand: string,
+  search?: { headlines?: unknown; descriptions?: unknown } | null,
 ): { headlines: string[]; descriptions: string[] } | null {
+  const written = (list: unknown, max: number) =>
+    (Array.isArray(list) ? list : [])
+      .map((x) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim() : ""))
+      .filter((x) => x && x.length <= max);
   const uniq = (list: (string | null)[]) => [
     ...new Map(
       list.filter((x): x is string => !!x).map((x) => [x.toLowerCase(), x] as const),
     ).values(),
   ];
   const headlines = uniq([
+    ...written(search?.headlines, RSA_HEADLINE_MAX),
     ...ads.map((a) => fit(a.headline, RSA_HEADLINE_MAX)),
     ...ads.flatMap((a) =>
       a.primaryText.split(/(?<=[.!?])\s+/).map((s) => fit(s, RSA_HEADLINE_MAX)),
@@ -283,6 +293,7 @@ export function rsaText(
     fit(brand, RSA_HEADLINE_MAX),
   ]).slice(0, 15);
   const descriptions = uniq([
+    ...written(search?.descriptions, RSA_DESCRIPTION_MAX),
     ...ads.map((a) => fit(a.description, RSA_DESCRIPTION_MAX)),
     ...ads.map((a) => fit(a.primaryText, RSA_DESCRIPTION_MAX)),
   ]).slice(0, 4);

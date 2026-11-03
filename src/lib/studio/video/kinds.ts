@@ -19,7 +19,9 @@ export type VideoKindId =
   | "before-after"
   | "mood-broll"
   | "offer-teaser"
-  | "product-motion";
+  | "product-motion"
+  | "product-demo"
+  | "broll-hook";
 
 /** How a kind's clips are put together. */
 export type VideoJoin =
@@ -56,6 +58,11 @@ export type VideoKind = {
   needsSource?: boolean;
   /** Models in the order this kind prefers them. The first one the plan allows is used. */
   models: readonly UgcModelKey[];
+  /**
+   * Words on screen: none, one phrase per clip, or one hook line held over
+   * the whole video (the B-roll reel). Always drawn by code, never by the model.
+   */
+  words?: "clip" | "hook";
   /** The craft rules for this kind, written as a director's brief. */
   rules: readonly string[];
 };
@@ -201,6 +208,45 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     ],
   },
   {
+    id: "product-demo",
+    label: "Product demo",
+    hint: "Hands show what it does, one feature at a time",
+    join: "chain",
+    people: "hands",
+    defaultClips: 2,
+    maxClips: 3,
+    ending: "hero-frame",
+    models: ["standard", "premium", "draft"],
+    rules: [
+      "Show the product doing what it really does, the way a customer uses it: open, press, pour, apply, wear, plug in, switch on. One feature per shot, each one visibly working.",
+      "Only features, results and parts the product facts state. If the facts don't say it does something, it is not shown doing it.",
+      "The product looks exactly like its photo in every shot: the same shape, colour, label and size relative to the hands.",
+      "Hands only, never a face. One clean surface or one real place of use, one light direction, mostly close and steady so every action can be followed.",
+      "Open on the most satisfying moment of use as the hook, then show the features in order, then end on the product at rest, its label to camera, held.",
+    ],
+  },
+  {
+    id: "broll-hook",
+    label: "B-roll with a hook",
+    hint: "Aesthetic shots of your world, one line of text on top",
+    // Quick, separate shots joined with cuts: the Reels format where the
+    // words carry the message and the footage carries the feeling.
+    join: "cut",
+    people: "optional",
+    defaultClips: 2,
+    maxClips: 3,
+    ending: "hero-frame",
+    models: ["standard", "draft"],
+    words: "hook",
+    rules: [
+      "This is a text-on-B-roll reel: one line of words sits over the whole video and says the message; the footage is beautiful, calm B-roll that makes people stop and read.",
+      "Every shot is B-roll from the brand's real world: the product in its place, a macro of its texture or material, an ingredient or part, hands at work, the space, light moving across a surface, steam, pouring, wrapping. Never a person posing for the camera.",
+      "Several short shots per clip (two to three seconds each), each a different angle or detail, all in one palette, one light quality and one lens look so they cut together.",
+      "Keep the middle of the frame calm and uncluttered, where the words sit; the action happens around it.",
+      "No words, signs, screens or labels that must be read in the footage, apart from the product's own label.",
+    ],
+  },
+  {
     id: "offer-teaser",
     label: "Offer",
     hint: "Moving shots, then your offer in exact words",
@@ -240,6 +286,8 @@ const TEMPLATE_KIND: Record<string, VideoKindId> = {
   "video-offer-teaser": "offer-teaser",
   "video-place-tour": "mood-broll",
   "video-unboxing": "product-showcase",
+  "video-demo": "product-demo",
+  "video-broll-hook": "broll-hook",
 };
 
 export function kindForTemplate(template: string | undefined): VideoKindId | null {
@@ -251,7 +299,13 @@ export function kindForTemplate(template: string | undefined): VideoKindId | nul
 const HOW = /\b(how to|how it works|step[- ]by[- ]step|steps|tutorial|recipe|process)\b/i;
 const BEFORE = /\b(before (and|&) after|transformation|makeover|glow[- ]up)\b/i;
 const OFFER = /\b(sale|discount|offer|deal|% ?off|promo|coupon|free shipping|limited time)\b/i;
-const MOOD = /\b(mood|vibe|atmosphere|aesthetic|b-?roll|ambien\w*|tour)\b/i;
+const MOOD = /\b(mood|vibe|atmosphere|ambien\w*|tour)\b/i;
+/** The Reels format: aesthetic footage with a line of text over it. */
+const BROLL =
+  /\b(b-?roll|aesthetic|text (on|over)|with (a )?text|pov|things (you|nobody|no one)|reasons (to|why)|tips?)\b/i;
+/** The brief asks to see the product working. */
+const DEMO =
+  /\b(demo|demonstrat\w*|in action|how (it|to) use|show (how|what) it|features?|use it|using it)\b/i;
 const STORY = /\b(story|day in the life|customers?|when you|pov)\b/i;
 const ANIMATE =
   /\b(animate|animation|bring (it|this|my \w+) to life|in motion|moving|spin|rotate|360)\b/i;
@@ -287,8 +341,10 @@ export function pickVideoKind(
   if (source.script) return "brand-story";
   if (OFFER.test(brief)) return "offer-teaser";
   if (BEFORE.test(brief)) return "before-after";
+  if (DEMO.test(brief)) return "product-demo";
   if (HOW.test(brief)) return "how-it-works";
   if (ANIMATE.test(brief)) return "product-motion";
+  if (BROLL.test(brief)) return "broll-hook";
   if (STORY.test(brief)) return "brand-story";
   if (MOOD.test(brief)) return "mood-broll";
   if (source.product && ASKS_FOR_PEOPLE.test(brief)) return "product-showcase";

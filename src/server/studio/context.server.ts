@@ -199,6 +199,8 @@ async function loadWorkspaceSnapshot(
         structure: str(record(meta.carousel).structure),
         adFormat: str(meta.ad_format),
         artDirection: str(meta.art_direction),
+        videoKind: str(meta.video_kind),
+        videoHook: str(meta.video_hook),
         heroLook: readHeroLook(meta.hero_look),
         design:
           meta.carousel || story.spec
@@ -245,6 +247,9 @@ async function loadWorkspaceSnapshot(
       .map((a) => [str(a.title), str(a.summary)].filter(Boolean).join(": ").slice(0, 240))
       .filter(Boolean),
     insights: insightRows.map((i) => (str(i.body) ?? "").slice(0, 240)).filter(Boolean),
+    competitorNames: (((rivals as { data: Row[] | null }).data ?? []) as Row[])
+      .map((r) => str(r.name))
+      .filter((name): name is string => !!name),
     rivals: rivalLines.length
       ? `## Who you are up against (never name them in a post unless asked)\n${rivalLines.join("\n")}`
       : "",

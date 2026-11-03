@@ -458,7 +458,11 @@ export async function sendAdToGoogleAds(args: {
   } catch {
     throw new HttpError(400, "Add the page people should land on (an https link).");
   }
-  const text = rsaText(ads, ws?.name ?? "");
+  const search =
+    item.meta?.ad_search && typeof item.meta.ad_search === "object"
+      ? (item.meta.ad_search as { headlines?: unknown; descriptions?: unknown })
+      : null;
+  const text = rsaText(ads, ws?.name ?? "", search);
   if (!text) throw new HttpError(400, "This ad needs a little more text for Google (3 headlines).");
 
   const approvalRef = `ad:${item.id}`;

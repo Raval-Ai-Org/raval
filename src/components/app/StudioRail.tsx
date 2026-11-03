@@ -546,7 +546,8 @@ function rememberTab(id: PipelineStage) {
 
 function readDismissedJobs(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(DISMISSED_JOBS) ?? "[]") as string[];
+    const value = JSON.parse(localStorage.getItem(DISMISSED_JOBS) ?? "[]") as unknown;
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
   }

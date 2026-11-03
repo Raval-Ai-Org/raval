@@ -41,6 +41,12 @@ const PICTURE_VIDEOS: {
     seconds: 24,
   },
   {
+    kind: "product-demo",
+    label: "Product demo",
+    hint: "Hands show what it does",
+    seconds: 16,
+  },
+  {
     kind: "living-picture",
     label: "Bring it to life",
     hint: "Your post, gently moving",
@@ -54,6 +60,12 @@ const PICTURE_VIDEOS: {
     seconds: 24,
   },
 ];
+
+/** A demo from the finished picture: the same product, shown working by hands, only as its facts say. */
+function demoFromPictureBrief(from: StudioType, title: string | null | undefined): string {
+  const name = title?.trim() ? ` "${title.trim().slice(0, 100)}"` : "";
+  return `A product demo from my ${STUDIO_FORMATS[from].noun}${name}. Open on the picture, then hands show the product doing what it really does, one feature at a time, close and steady, and end on the product at rest. The same product, colours and label as the picture; show only what the product facts say it does.`;
+}
 
 /** A product film from the finished picture: the product moves, nobody is added. */
 function productFromPictureBrief(from: StudioType, title: string | null | undefined): string {
@@ -177,7 +189,9 @@ export function repurposeOpen(args: {
           ? storyFromPictureBrief(args.from, args.title)
           : kind === "product-motion"
             ? productFromPictureBrief(args.from, args.title)
-            : animateBrief({ type: args.from, title: args.title }),
+            : kind === "product-demo"
+              ? demoFromPictureBrief(args.from, args.title)
+              : animateBrief({ type: args.from, title: args.title }),
       referenceAssetIds: [args.picture.assetId],
       referenceMode: "preserve",
       ...(video?.seconds ? { durationSec: video.seconds } : {}),

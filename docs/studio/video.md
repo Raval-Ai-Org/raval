@@ -42,14 +42,40 @@ Decision record: [ADR-0041](../adr/0041-studio-video-kinds.md).
 | `before-after` | AI | chain | the after |
 | `mood-broll` | AI | cut (dissolve) | hero frame |
 | `offer-teaser` | AI + code card | chain | exact offer card |
+| `product-motion` | AI, no people | chain | the picture / hero frame |
+| `product-demo` | AI, hands only | chain | product at rest |
+| `broll-hook` | AI + code words | cut (dissolve) | hero frame, hook line held throughout |
 
 Ids are stored on jobs: add, never rename. A person talking to the camera is
 a Creator (UGC) video.
 
+## What makes each video different
+
+- **By length** (`structure.ts`): `clipRoles(kind, clips)` gives each clip a
+  role. 8 s is one idea that loops, 16 s a hook and a payoff, 24 s and more a
+  full arc with B-roll between hero shots. The storyboard prompt lists the
+  roles, so a longer video is planned differently, not stretched.
+- **The opening** (`hooks.ts`): code picks one of `VIDEO_HOOKS` that fits the
+  kind and the people rule (never hands in a no-people video), skipping the
+  brand's last two (`meta.video_hook`), seeded by the job id so a retry keeps
+  it. `meta.video_kind` is stored too. A followed Inspo recipe overrides it.
+- **Words are drawn by code** (`overlay.ts` → `overlayWords` in
+  `finish.server.tsx`): clips get `wordsByCode`, so the model never letters
+  anything. A B-roll reel's hook line is held over the whole video; other
+  kinds show each clip's phrase during that clip. A video made from a post, an
+  offer (its card) and a motion post get no overlay.
+- **Nothing invented** (`storyboardIssues`): besides unknown numbers and
+  competitor names (now passed from `ctx.competitorNames`), a plan is refused
+  for claims the brand never made (`unknownClaims`: #1, award-winning,
+  clinically, proven, guaranteed, certified, organic, vegan...) and for
+  readable words written into the footage. The prompt says the product's
+  shape, features and what it does come only from its facts and photos.
+
 ## Picture → video
 
-`repurposeTargets` offers three choices for a finished picture: Bring it to
-life (`living-picture`, 8 s), Motion post (`videoMode: "recap"`,
+`repurposeTargets` offers these choices for a finished picture: Animate the
+product (`product-motion`, 24 s), Product demo (`product-demo`, 16 s), Bring it
+to life (`living-picture`, 8 s), Motion post (`videoMode: "recap"`,
 `recapMotion: "camera"`, one photo, priced as `photo_recap`) and Story video
 (`brand-story`, 16 s, opens on the post and ends back on it).
 

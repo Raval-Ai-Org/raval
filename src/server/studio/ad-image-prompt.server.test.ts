@@ -37,4 +37,12 @@ describe("adImagePrompt", () => {
   it("keeps vertical ads clear of the platform's buttons", () => {
     expect(adImagePrompt({ ...base, ratio: "9:16" })).toContain("bottom 20% free of text");
   });
+
+  it("gets the same type rules and final check as posts, and the ad's job", async () => {
+    const { getAdObjective } = await import("@/lib/studio/ad-objectives");
+    const prompt = adImagePrompt({ ...base, objective: getAdObjective("sales") });
+    expect(prompt).toContain("This ad's job: sell");
+    expect(prompt).toContain("Type scale");
+    expect(prompt).toContain("QUALITY CHECK BEFORE FINALIZING");
+  });
 });

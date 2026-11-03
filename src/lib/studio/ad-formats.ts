@@ -8,6 +8,7 @@
 // Ids are stored on jobs: add formats, never rename ids.
 import { applyLean } from "@/lib/taste/bias";
 import type { Lean } from "@/lib/taste/contracts";
+import type { AdObjective } from "./ad-objectives";
 import type { GoalId } from "./jobs";
 
 export type AdFormatThumb =
@@ -217,11 +218,14 @@ function hash(seed: string): number {
 
 /**
  * The format an ad uses: the person's choice when it fits, else one that
- * suits the goal, not used in the last few ads, picked by the job's seed.
+ * does the ad's job (its objective's layouts, else the goal's), not used in
+ * the last few ads, picked by the job's seed.
  */
 export function pickAdFormat(args: {
   chosen?: string | null;
   goal?: GoalId;
+  /** What the ad is for (ad-objectives.ts); its layouts come first. */
+  objective?: AdObjective | null;
   hasProduct: boolean;
   seed: string;
   recent?: (string | null | undefined)[];
@@ -231,8 +235,12 @@ export function pickAdFormat(args: {
   const chosen = getAdFormat(args.chosen);
   if (chosen && (args.hasProduct || !chosen.needsProduct)) return chosen;
   const usable = adFormatsFor(args.hasProduct);
-  const byGoal = args.goal ? usable.filter((f) => f.goals.includes(args.goal!)) : usable;
-  const pool = byGoal.length ? byGoal : usable;
+  const byObjective = args.objective
+    ? usable.filter((f) => args.objective!.formats.includes(f.id))
+    : [];
+  const goal = args.goal ?? args.objective?.goal;
+  const byGoal = goal ? usable.filter((f) => f.goals.includes(goal)) : usable;
+  const pool = byObjective.length ? byObjective : byGoal.length ? byGoal : usable;
   const recent = new Set((args.recent ?? []).filter(Boolean).slice(0, 3));
   const fresh = pool.filter((f) => !recent.has(f.id));
   const choices = applyLean(fresh.length ? fresh : pool, args.lean, args.seed, (f) => f.id);

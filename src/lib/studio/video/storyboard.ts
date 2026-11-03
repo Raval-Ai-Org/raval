@@ -84,6 +84,8 @@ export type VideoPlanOutput = {
   people?: PeopleRule;
   /** A voiceover was planned (its words are on the clips). */
   voice?: boolean;
+  /** The opening it was planned on (hooks.ts), so the next video opens differently. */
+  hook?: string;
   /** The checks after rendering, once they ran. */
   check?: { passed: boolean; redone: number; notes: string[] };
 };
@@ -152,6 +154,25 @@ function unknownNumbers(line: string, known: string): string[] {
 }
 
 /**
+ * Claims a video must never make unless the brand said so: the kind a viewer
+ * would take as fact and a regulator would ask about.
+ */
+const CLAIMS =
+  /(#\s?1\b|\bnumber one\b|\bno\.? ?1\b|\baward[- ]winning\b|\bclinically\b|\bproven\b|\bguarantee\w*|\bcertified\b|\borganic\b|\bvegan\b|\bcruelty[- ]free\b|\bsugar[- ]free\b|\bgluten[- ]free\b|\bdermatologist\w*|\bpatented\b|\bfree shipping\b|\bbest[- ]selling\b|\bbestsell\w*)/gi;
+
+/** Claims in a line that the brand never made. */
+export function unknownClaims(line: string, known: string): string[] {
+  const facts = normal(known);
+  return [...new Set((line.match(CLAIMS) ?? []).map((m) => m.toLowerCase().trim()))].filter(
+    (claim) => !facts.includes(normal(claim)),
+  );
+}
+
+/** Words written into the footage itself (a sign that says, a quoted line on a screen). */
+const READABLE =
+  /("[^"]{3,}\s[^"]{2,}"|\b(sign|screen|banner|poster|chalkboard|board|caption|text|headline|title|neon)\b[^.]{0,30}\b(reads?|says|saying|spells?|with the words)\b)/i;
+
+/**
  * Why a storyboard can't be made yet, in words the model can fix. Empty when
  * it is ready. Code decides; the model only writes.
  */
@@ -215,14 +236,30 @@ export function storyboardIssues(sb: VideoStoryboard, ctx: StoryboardCheckContex
       for (const number of unknownNumbers(clip.voiceover, ctx.knownFacts))
         issues.push(`Clip ${n}'s voiceover says "${number}", which the brand never said.`);
     }
+    for (const line of [clip.opensOn, clip.endsOn, ...clip.shots.map((shot) => shot.action)])
+      if (READABLE.test(line)) {
+        issues.push(
+          `Clip ${n} writes words into the footage; video models misspell them. Keep readable words out of the shots (only the product's own label) and put the line in \`onScreen\`.`,
+        );
+        break;
+      }
+    if (kind.words === "hook" && i > 0 && clip.onScreen)
+      issues.push("The hook line is held over the whole video: put it on clip 1 only.");
+    if (kind.words === "hook" && i === 0) {
+      if (words(clip.onScreen) < 3)
+        issues.push("Clip 1 needs the hook line in `onScreen`: 3 to 12 words people stop to read.");
+      else if (words(clip.onScreen) > 12) issues.push("The hook line must be 12 words or fewer.");
+    }
     if (clip.onScreen) {
       if (kind.id === "offer-teaser")
         issues.push("An offer video keeps words off the footage; put them on the end card.");
-      else if (words(clip.onScreen) > 6)
+      else if (kind.words !== "hook" && words(clip.onScreen) > 6)
         issues.push(`Clip ${n}'s on-screen words must be 6 words or fewer.`);
       for (const number of unknownNumbers(clip.onScreen, ctx.knownFacts))
         issues.push(`Clip ${n} shows "${number}", which the brand never said.`);
     }
+    for (const claim of unknownClaims(`${clip.onScreen} ${clip.voiceover}`, ctx.knownFacts))
+      issues.push(`Clip ${n} claims "${claim}", which the brand never said. Remove it.`);
   });
 
   if (kind.ending === "end-card") {
@@ -230,6 +267,11 @@ export function storyboardIssues(sb: VideoStoryboard, ctx: StoryboardCheckContex
     for (const line of [sb.endCard?.headline ?? "", sb.endCard?.detail ?? ""])
       for (const number of unknownNumbers(line, ctx.knownFacts))
         issues.push(`The end card shows "${number}", which the brand never said.`);
+    for (const claim of unknownClaims(
+      `${sb.endCard?.headline ?? ""} ${sb.endCard?.detail ?? ""}`,
+      ctx.knownFacts,
+    ))
+      issues.push(`The end card claims "${claim}", which the brand never said.`);
   }
 
   const all = normal(JSON.stringify(sb));

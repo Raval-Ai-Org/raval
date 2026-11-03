@@ -93,15 +93,38 @@ export function findRepeatedOpening(
   return null;
 }
 
+/** One form for a link, so "https://www.x.com/a/." and "http://x.com/a" match. */
+function normalizeUrl(url: string): string {
+  return url
+    .trim()
+    .replace(/[.,;:!?'"]+$/, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/$/, "")
+    .replace(/^https?:\/\/(www\.)?/i, "")
+    .toLowerCase();
+}
+
 /** A researched article must visibly point readers to at least one supplied source. */
 export function hasResearchCitation(markdown: string, sourceUrls: string[]): boolean {
   if (!sourceUrls.length) return true;
-  const normalize = (url: string) =>
-    url
-      .replace(/[?#].*$/, "")
-      .replace(/\/$/, "")
-      .toLowerCase();
-  const allowed = new Set(sourceUrls.map(normalize));
+  const allowed = new Set(sourceUrls.map(normalizeUrl));
   const links = markdown.match(/https?:\/\/[^\s)\]>]+/gi) ?? [];
-  return links.some((url) => allowed.has(normalize(url)));
+  return links.some((url) => allowed.has(normalizeUrl(url)));
+}
+
+/**
+ * The last resort for a researched article that forgot to link its sources:
+ * list the sources the research really returned under the article, rather
+ * than failing a draft that is otherwise fine. Only supplied links are used.
+ */
+export function withResearchSources(
+  markdown: string,
+  sources: { title: string; url: string }[],
+): string {
+  const lines = sources
+    .filter((s) => /^https:\/\//i.test(s.url))
+    .slice(0, 5)
+    .map((s) => `- [${(s.title || s.url).replace(/[[\]]/g, "").trim()}](${s.url})`);
+  if (!lines.length) return markdown;
+  return `${markdown.trimEnd()}\n\n## Sources\n\n${lines.join("\n")}\n`;
 }

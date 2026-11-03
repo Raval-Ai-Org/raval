@@ -5,7 +5,11 @@
 // so connecting here is exactly connecting anywhere else; which provider sits
 // behind a social network is decided on the server and never shown.
 import { BarChart, Globe, Megaphone, Sparkles } from "@/components/icons";
-import { SurfaceLayout, SurfacePage, type SurfaceNavItem } from "@/components/app/surface/SurfaceLayout";
+import {
+  SurfaceLayout,
+  SurfacePage,
+  type SurfaceNavItem,
+} from "@/components/app/surface/SurfaceLayout";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
 import { NotionConnection } from "@/components/app/connectors/NotionConnection";

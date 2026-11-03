@@ -1,7 +1,8 @@
 // The code half of a Studio AI video (src/lib/studio/video/): measuring the
 // finished file, sampling its frames for the checks, framing a post's picture
-// for the video's shape, drawing the offer's end card with exact words, and
-// adding the ending. FFmpeg and next/og only; no model call, nothing to pay.
+// for the video's shape, drawing the offer's end card and the storyboard's
+// words with exact spelling, and adding the ending. FFmpeg and next/og only;
+// no model call, nothing to pay.
 import "server-only";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -11,6 +12,7 @@ import { join, relative, resolve } from "node:path";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import type { VideoProbe } from "@/lib/studio/video/checks";
+import { cueFades, type TextCue } from "@/lib/studio/video/overlay";
 import { loadFonts } from "@/server/studio/carousel-render.server";
 
 const run = promisify(execFile);
@@ -262,6 +264,134 @@ export async function renderEndCard(input: EndCardInput): Promise<Buffer> {
   return sharp(Buffer.from(await image.arrayBuffer()))
     .jpeg({ quality: 92 })
     .toBuffer();
+}
+
+export type WordStyle = { font?: string; accent?: string };
+
+/** One cue's words as a transparent picture the size of the video, drawn with the brand's font. */
+async function renderCue(
+  cue: TextCue,
+  size: { width: number; height: number },
+  style: WordStyle,
+): Promise<Buffer> {
+  const { width, height } = size;
+  const fonts = style.font ? await loadFonts([style.font]) : [];
+  const family = fonts[0]?.name ?? "sans-serif";
+  const unit = Math.min(width, height);
+  const hook = cue.role === "hook";
+  const fontSize = Math.round(unit * (hook ? (cue.text.length > 40 ? 0.062 : 0.075) : 0.06));
+  const image = new ImageResponse(
+    <div
+      style={{
+        width,
+        height,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-start",
+        // Clear of the app's top bar and of the caption and buttons at the bottom.
+        paddingTop: Math.round(height * (hook ? 0.2 : 0.16)),
+        paddingLeft: Math.round(width * 0.09),
+        paddingRight: Math.round(width * 0.09),
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          textAlign: "center",
+          justifyContent: "center",
+          color: "#ffffff",
+          fontFamily: family,
+          fontSize,
+          fontWeight: 700,
+          lineHeight: 1.15,
+          padding: `${Math.round(fontSize * 0.35)}px ${Math.round(fontSize * 0.55)}px`,
+          borderRadius: Math.round(fontSize * 0.4),
+          background: "rgba(0,0,0,0.42)",
+          textShadow: "0 2px 8px rgba(0,0,0,0.55)",
+          // The brand's accent as a thin underline, only when it is a real colour.
+          ...(style.accent && HEX.test(style.accent)
+            ? { borderBottom: `${Math.max(3, Math.round(unit * 0.006))}px solid ${style.accent}` }
+            : {}),
+        }}
+      >
+        {cue.text}
+      </div>
+    </div>,
+    { width, height, ...(fonts.length ? { fonts } : {}) },
+  );
+  return Buffer.from(await image.arrayBuffer());
+}
+
+/**
+ * The storyboard's words drawn on the finished video, exactly as written,
+ * each fading in and out on its own cue. No cues: the video is unchanged.
+ */
+export async function overlayWords(
+  dataUrl: string,
+  cues: readonly TextCue[],
+  opts: { duration: number; width: number; height: number; style: WordStyle },
+): Promise<string> {
+  if (!cues.length || !opts.width || !opts.height) return dataUrl;
+  return withTemp(async (dir) => {
+    const input = join(dir, "in.mp4");
+    const output = join(dir, "out.mp4");
+    await writeFile(input, videoBuffer(dataUrl));
+    const pictures: string[] = [];
+    for (const [i, cue] of cues.entries()) {
+      const file = join(dir, `cue${i}.png`);
+      await writeFile(file, await renderCue(cue, opts, opts.style));
+      pictures.push(file);
+    }
+    const length = opts.duration.toFixed(2);
+    const filters: string[] = [`[0:v]fps=30,format=yuv420p,setsar=1[b0]`];
+    cues.forEach((cue, i) => {
+      const fade = cueFades(cue);
+      filters.push(
+        `[${i + 1}:v]format=rgba,fade=t=in:st=${fade.inAt}:d=${fade.seconds}:alpha=1,fade=t=out:st=${fade.outAt}:d=${fade.seconds}:alpha=1[w${i}]`,
+        `[b${i}][w${i}]overlay=0:0:eof_action=pass:format=auto[b${i + 1}]`,
+      );
+    });
+    await run(
+      ffmpeg(),
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-threads",
+        "1",
+        ...SAFE_INPUT,
+        "-i",
+        input,
+        ...pictures.flatMap((file) => ["-loop", "1", "-t", length, "-i", file]),
+        "-filter_complex",
+        filters.join(";"),
+        "-map",
+        `[b${cues.length}]`,
+        "-map",
+        "0:a?",
+        "-c:a",
+        "copy",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-t",
+        length,
+        "-movflags",
+        "+faststart",
+        output,
+      ],
+      options,
+    );
+    const bytes = await readFile(output);
+    return `data:video/mp4;base64,${bytes.toString("base64")}`;
+  });
 }
 
 /**

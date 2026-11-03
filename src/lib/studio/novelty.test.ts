@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findSimilarRecent, hasResearchCitation } from "./novelty";
+import { findSimilarRecent, hasResearchCitation, withResearchSources } from "./novelty";
 import type { StudioContext } from "./prompts";
 
 const recent: StudioContext["recent"] = [
@@ -65,5 +65,21 @@ describe("Studio novelty gate", () => {
     ).toBe(true);
     expect(hasResearchCitation("A report found a change.", sources)).toBe(false);
     expect(hasResearchCitation("See https://unrelated.example/report", sources)).toBe(false);
+  });
+
+  it("accepts a cited link that ends a sentence or drops www", () => {
+    const sources = ["https://www.example.org/research/report/"];
+    expect(hasResearchCitation("See https://example.org/research/report.", sources)).toBe(true);
+    expect(hasResearchCitation("(http://www.example.org/research/report)", sources)).toBe(true);
+  });
+
+  it("lists only the supplied sources under an article that forgot them", () => {
+    const out = withResearchSources("# Title\n\nBody.", [
+      { title: "The [2026] report", url: "https://example.org/r" },
+      { title: "Plain", url: "http://insecure.example/x" },
+    ]);
+    expect(out).toBe("# Title\n\nBody.\n\n## Sources\n\n- [The 2026 report](https://example.org/r)\n");
+    expect(hasResearchCitation(out, ["https://example.org/r"])).toBe(true);
+    expect(withResearchSources("Body", [])).toBe("Body");
   });
 });

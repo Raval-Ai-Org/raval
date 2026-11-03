@@ -22,10 +22,13 @@ import { applyLean } from "@/lib/taste/bias";
 import type { Lean, Taste } from "@/lib/taste/contracts";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import { adFormatDirective, type AdFormat } from "./ad-formats";
+import { SEARCH_AD_RULES, adObjectiveDirective, type AdObjective } from "./ad-objectives";
 import { platformVideoNote, VIDEO_AD_RULES, videoBeatsText, videoCraftRules } from "./video-ad";
 import { videoKind, type PeopleRule, type VideoKindId } from "./video/kinds";
 import type { ClipPlan } from "./video/lengths";
 import { peopleDirection, StoryboardSchema } from "./video/storyboard";
+import { lengthNote, structureText } from "./video/structure";
+import type { VideoHook } from "./video/hooks";
 import type {
   StudioControls,
   StudioIntent,
@@ -71,6 +74,9 @@ export type StudioContext = {
     heroLook?: Partial<HeroLook> | null;
     /** Stories: the theme it followed, so the next one rotates. */
     storyTheme?: string | null;
+    /** Videos: the kind and opening it was made on (video/hooks.ts), so the next one differs. */
+    videoKind?: string | null;
+    videoHook?: string | null;
     /** A longer passage of the copy, used only as a voice reference. */
     sample?: string;
   }[];
@@ -106,6 +112,8 @@ export type StudioContext = {
   taste?: Taste | null;
   /** Captions of posts the team loved, used only as a voice reference. */
   lovedSamples?: string[];
+  /** Tracked competitors' names: a video storyboard that names one is refused. */
+  competitorNames?: string[];
 };
 
 export function emptyContext(brandName = "the brand"): StudioContext {
@@ -512,11 +520,30 @@ export const AdOnImageSchema = z.object({
   cta: Str(24).default(""),
 });
 
+/** Google search lines; anything over Google's limits is dropped, never cut. */
+const SearchLines = (max: number, most: number) =>
+  z
+    .array(z.coerce.string())
+    .catch([])
+    .default([])
+    .transform((list) =>
+      [...new Set(list.map((l) => l.replace(/\s+/g, " ").trim()))]
+        .filter((l) => l && l.length <= max)
+        .slice(0, most),
+    );
+
+export const AdSearchSchema = z.object({
+  headlines: SearchLines(30, 15),
+  descriptions: SearchLines(90, 4),
+});
+
 export const AdSchema = z.object({
   title: Str(120),
   visualConcept: Str(700),
   /** The words typeset on the ad picture, written for its format (ad-formats.ts). */
   onImage: AdOnImageSchema.optional().catch(undefined),
+  /** Google search lines (ad-objectives.ts SEARCH_AD_RULES). */
+  search: AdSearchSchema.optional().catch(undefined),
   variants: z
     .array(
       z.object({
@@ -569,6 +596,8 @@ type BuildArgs = {
   source?: { title: string; body: string; kind: string } | null;
   /** Ads: the designed layout the picture follows (ad-formats.ts). */
   adFormat?: AdFormat | null;
+  /** Ads: what the ad is for (ad-objectives.ts): its method, angles and buttons. */
+  adObjective?: AdObjective | null;
   /** New AI video: plan it as a storyboard of whole clips (src/lib/studio/video/). */
   video?: {
     kind: VideoKindId;
@@ -580,6 +609,8 @@ type BuildArgs = {
     voice?: boolean;
     /** The followed Inspo reference as a structured recipe block, when there is one. */
     recipe?: string;
+    /** The opening picked by code for this video (video/hooks.ts). */
+    hook?: VideoHook | null;
   };
 };
 
@@ -806,10 +837,12 @@ export function buildAdPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof AdSch
   return {
     route: "studio.ad",
     system: systemPrompt(
-      "You are Mellox, a performance creative strategist writing paid-social ads to A/B test.",
+      "You are Mellox, a performance creative strategist writing paid ads to A/B test. An ad is not a social post: it is paid to make one thing happen, so every word works toward that one action.",
       [
-        "Write 3 variants that test genuinely different angles (e.g. outcome, pain, proof), label each with its angle in 1-3 words.",
-        "Each has primaryText, headline, description, and a CTA button label (Learn more, Sign up, Shop now, Book now, Get offer, Contact us, Download).",
+        args.adObjective
+          ? adObjectiveDirective(args.adObjective)
+          : "Write 3 variants that test genuinely different angles (e.g. outcome, pain, proof), label each with its angle in 1-3 words.",
+        "Write 3 variants. Each has primaryText, headline, description, and a CTA button label (Learn more, Sign up, Shop now, Book now, Get offer, Contact us, Download, Get quote, Register, Order now).",
         platforms
           .map((p) => AD_LIMITS[p])
           .filter(Boolean)
@@ -818,16 +851,17 @@ export function buildAdPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof AdSch
           ? "`visualConcept` describes the ad picture for the layout below: the subject, setting, props, light and mood, in concrete words a photographer could shoot. Do not repeat the on-image words in it."
           : "`visualConcept` describes one ad visual that works for all variants, written as art direction for a poster-grade key visual: the hero and its scale, the set, any person (always a fictional model) and pose, lens and angle, light, real materials, a palette from the brand colours, and a calm area for the platform's text. Leave space for the platform UI; no text in the image beyond a short product name if essential.",
         args.adFormat ? adFormatDirective(args.adFormat) : "",
+        SEARCH_AD_RULES,
         ...CONCEPT_METHOD,
         args.controls.cta ? `Preferred CTA: ${args.controls.cta}` : "",
       ].filter(Boolean),
       args.adFormat
-        ? `{"title": string, "visualConcept": string, "onImage": {"headline": string, "support": string, "badge": string, "points": string[], "cta": string}, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`
-        : `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}]}`,
+        ? `{"title": string, "visualConcept": string, "onImage": {"headline": string, "support": string, "badge": string, "points": string[], "cta": string}, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}], "search": {"headlines": string[], "descriptions": string[]}}`
+        : `{"title": string, "visualConcept": string, "variants": [{"label": string, "primaryText": string, "headline": string, "description": string, "cta": string}], "search": {"headlines": string[], "descriptions": string[]}}`,
     ),
     user: sections([...sharedUser(args, "ad"), ...refineSections(args.refine, args.current)]),
     schema: AdSchema,
-    maxTokens: 2000,
+    maxTokens: 2600,
     temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
   };
 }
@@ -929,10 +963,21 @@ export function buildVideoStoryboardPrompt(
       [
         `Kind of video: ${kind.label} (${kind.hint}). It is ${total} seconds made of ${clips} clip(s) of ${plan.map((c) => c.seconds).join(" + ")} seconds. Each clip is made separately by a video model${kind.join === "chain" ? ", starting from the exact last frame of the clip before" : ""}, so write exactly ${clips} clip(s).`,
         `How this kind works:\n${kind.rules.map((rule) => `- ${rule}`).join("\n")}`,
+        `${lengthNote(total)} What each clip is for:\n${structureText(
+          kind.id,
+          plan.map((c) => c.seconds),
+        )}`,
+        args.video.hook && !args.video.recipe
+          ? `The opening (${args.video.hook.label}): ${args.video.hook.direction} Make it fit this brand and product.`
+          : "",
         "`storyboard.logline` is the whole story in one sentence.",
         "`storyboard.bible` is what never changes: the product (exactly as the brand sells it), the one setting, the light, the colours (from the brand palette) and the camera look. Every clip is made from this bible alone, so write it completely and concretely.",
         people,
-        "Each clip has `opensOn` (the first frame; from clip 2 on it is the frame the clip before ended on), 2 to 4 `shots` with times in seconds inside that clip, `endsOn` (the exact final frame, still for half a second), `sound` (the scene's own sound and the music feel) and `onScreen` (at most one phrase of 2-6 words, or empty; Mellox draws these words on the finished video, so the footage itself carries none).",
+        `Each clip has "opensOn" (the first frame; from clip 2 on it is the frame the clip before ended on), 2 to 4 "shots" with times in seconds inside that clip, "endsOn" (the exact final frame, still for half a second), "sound" (the scene's own sound and the music feel) and "onScreen" (${
+          kind.words === "hook"
+            ? "on clip 1 only: the hook line, 3-12 words, held over the whole video. Write it the way the best Reels do: a sharp promise, a surprising truth, a question or a POV the audience recognises, using only the brand's facts. Every other clip's onScreen is empty"
+            : "at most one phrase of 2-6 words, or empty"
+        }; Mellox sets these words on the finished video with exact spelling, so the footage itself carries no readable words apart from the product's own label).`,
         voice
           ? "A voiceover was asked for: each clip's `voiceover` is the exact words spoken over it, about two words a second, in the brand's voice, using only facts from the brief and brand details. Together they read as one message that lands on the last clip."
           : "Leave every `voiceover` empty: no narration.",
@@ -954,6 +999,8 @@ export function buildVideoStoryboardPrompt(
           : "",
         platformVideoNote(args.controls.platforms ?? []),
         "Use only facts, numbers and names from the brief and the brand details. Never name a competitor or another brand.",
+        "Never invent the product: its shape, colour, size, parts, features and what it does come only from the product facts and the attached photos. If the facts don't say it does something, don't show it doing it. Never claim awards, certifications, ingredients, guarantees or results the brand didn't state.",
+        "Make it something people want to watch twice and send to a friend: specific to this brand and this audience, never a generic stock ad. Don't repeat a video listed as already made.",
         "`title` names the video in a few words. `altText` describes it for accessibility.",
       ].filter(Boolean),
       `{"title": string, "storyboard": {"logline": string, "bible": {"cast": [{"id": string, "look": string}], "product": string, "setting": string, "lighting": string, "palette": string, "camera": string}, "clips": [{"opensOn": string, "shots": [{"start": number, "end": number, "camera": string, "action": string, "cast": string[]}], "endsOn": string, "sound": string, "onScreen": string, "voiceover": string}], "endCard"?: {"headline": string, "detail": string}}, "altText": string}`,

@@ -61,6 +61,16 @@ describe("Google Ads", () => {
     expect(new Set(text.headlines.map((h) => h.toLowerCase())).size).toBe(text.headlines.length);
   });
 
+  it("leads with the lines written for Google and skips any over the limit", () => {
+    const text = rsaText(ads, "Blume", {
+      headlines: ["Gentle Acne Oil", "x".repeat(31)],
+      descriptions: ["Made for sensitive skin. Order your bottle today."],
+    })!;
+    expect(text.headlines[0]).toBe("Gentle Acne Oil");
+    expect(text.headlines).not.toContain("x".repeat(31));
+    expect(text.descriptions[0]).toBe("Made for sensitive skin. Order your bottle today.");
+  });
+
   it("refuses an ad too thin for a responsive search ad", () => {
     expect(rsaText([{ headline: "Hi", primaryText: "", description: "" }], "")).toBeNull();
   });

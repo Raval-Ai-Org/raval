@@ -47,9 +47,12 @@ import {
   DEFAULT_STUDIO_VIDEO_MODEL,
   videoKind,
   wantsVoiceover,
+  type PeopleRule,
   type VideoKindId,
 } from "@/lib/studio/video/kinds";
 import { clipPlan, clipSeconds } from "@/lib/studio/video/lengths";
+import { pickVideoHook } from "@/lib/studio/video/hooks";
+import { textCues } from "@/lib/studio/video/overlay";
 import { isAiVideo } from "@/lib/studio/video/settle";
 import {
   clipPrompt,
@@ -66,6 +69,7 @@ import { isComposedTask, redoComposedClips } from "@/server/ugc/providers/compos
 import {
   endOnStill,
   frameForVideo,
+  overlayWords,
   renderEndCard,
   videoBuffer,
 } from "@/server/studio/video/finish.server";
@@ -151,7 +155,12 @@ import type {
 } from "@/lib/studio/jobs";
 import { invalidateStudioContext, loadStudioContext } from "./context.server";
 import { productContextFor } from "@/server/products/context.server";
-import { findRepeatedOpening, findSimilarRecent, hasResearchCitation } from "@/lib/studio/novelty";
+import {
+  findRepeatedOpening,
+  findSimilarRecent,
+  hasResearchCitation,
+  withResearchSources,
+} from "@/lib/studio/novelty";
 import { pickHookStyle } from "@/lib/studio/memory";
 import { AIM_ANGLES } from "@/lib/studio/viral";
 import { normalizeSlides, pickCarouselStructure } from "@/lib/studio/carousel/story";
@@ -195,6 +204,7 @@ import {
   storyFramePrompt,
 } from "./visual-prompts.server";
 import { getAdFormat, pickAdFormat, type AdFormat } from "@/lib/studio/ad-formats";
+import { getAdObjective, resolveAdObjective, type AdObjective } from "@/lib/studio/ad-objectives";
 import {
   isOptionSlot,
   isVariationsRequest,
@@ -290,6 +300,8 @@ type ProviderTask = {
       accent?: string;
       font?: string;
     };
+    /** The brand's font and accent for the words drawn on the video (overlay.ts). */
+    wordStyle?: { font?: string; accent?: string };
   };
   /** Video only: times the render was submitted again after an outage. */
   resubmits?: number;
@@ -578,7 +590,12 @@ function draftRows(type: StudioType, output: StudioJobOutput, platforms: Platfor
         channel: channelForPlatform(p),
         body: output.ads?.[0]?.primaryText ?? "",
         hashtags: [],
-        meta: { platform: p, ad_variants: output.ads ?? [] },
+        meta: {
+          platform: p,
+          ad_variants: output.ads ?? [],
+          ...(output.adObjective ? { ad_objective: output.adObjective } : {}),
+          ...(output.adSearch ? { ad_search: output.adSearch } : {}),
+        },
       }));
     case "script": {
       const p = platforms[0] ?? "instagram";
@@ -1152,12 +1169,31 @@ function opensOnChosenPhoto(kind: VideoKindId, controls: CreateJobInput["control
   return kind === "living-picture" || (kind === "product-motion" && !controls.productId);
 }
 
+/**
+ * The opening a storyboard video is planned on (video/hooks.ts): one that
+ * fits, not the brand's last two; the job id keeps it the same on a retry.
+ */
+function videoHookFor(
+  jobId: string,
+  ctx: StudioContext,
+  planned: { kind: VideoKindId; people: PeopleRule } | null,
+) {
+  if (!planned) return null;
+  return pickVideoHook(
+    planned.kind,
+    planned.people,
+    ctx.recent.map((item) => item.videoHook),
+    jobId,
+  );
+}
+
 /** The model's storyboard fitted to the clips that will be made, and its shot lines. */
 function shapeVideoPlan(
   workspaceId: string,
   type: StudioType,
   input: CreateJobInput,
   parsed: Record<string, unknown>,
+  seed: { jobId: string; ctx: StudioContext },
 ): { concept: string; videoPlan: NonNullable<StudioJobOutput["videoPlan"]> } | null {
   const planned = studioVideoPlan(workspaceId, type, input.controls);
   if (!planned || !parsed.storyboard) return null;
@@ -1176,6 +1212,7 @@ function shapeVideoPlan(
       storyboard,
       people: planned.people,
       voice,
+      hook: videoHookFor(seed.jobId, seed.ctx, planned)?.id,
     },
   };
 }
@@ -1294,6 +1331,8 @@ async function startStoryboardVideo(a: {
       people: plan.people,
       voice: plan.voice,
       soundLook: ctx.style?.video.music,
+      // The storyboard's words are drawn on the finished video by code.
+      wordsByCode: true,
       // A reviewed script's own words reach the clip they belong to, exactly.
       extra: [
         ...(script ? [sourceScriptClipDirection(script, clips[i], start, audio)] : []),
@@ -1356,6 +1395,10 @@ async function startStoryboardVideo(a: {
       ...composed,
       firstFramePath,
       loopsToSource,
+      wordStyle: {
+        font: ctx.style?.visual.typography?.heading,
+        accent: ctx.style?.visual.palette.accent,
+      },
       ...(kind.ending === "end-card"
         ? {
             endCardStyle: {
@@ -1966,6 +2009,7 @@ ${variationNote(index, count)}`
   const prompt = designedAd
     ? adImagePrompt({
         format: adFormat,
+        objective: getAdObjective(output.adObjective),
         copy: {
           ...output.adOnImage!,
           cta: output.adOnImage!.cta || output.ads?.[0]?.cta || "",
@@ -2392,6 +2436,17 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   // An ad's designed layout. A revision keeps it, so an edit never swaps it.
   // A product a person picked keeps its own photo unchanged (ADR-0035), so
   // only layouts that don't redraw a product are picked.
+  // What the ad is for (ad-objectives.ts): the person's choice, else what the
+  // brief and goal say. A revision keeps it.
+  const adObjective: AdObjective | null =
+    type !== "ad"
+      ? null
+      : ((input.refine ? getAdObjective(parent?.output?.adObjective) : null) ??
+        resolveAdObjective({
+          chosen: controls.adObjective,
+          goal: input.intent.goal,
+          brief: input.intent.brief,
+        }));
   const adFormat: AdFormat | null =
     type !== "ad"
       ? null
@@ -2400,6 +2455,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         : pickAdFormat({
             chosen: controls.adFormat,
             goal: input.intent.goal,
+            objective: adObjective,
             hasProduct: false,
             seed: input.idempotencyKey,
             recent: ctx.recent.filter((r) => r.type === "ad").map((r) => r.adFormat),
@@ -2461,6 +2517,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
       storyTheme,
       source,
       adFormat,
+      adObjective,
       refine: input.refine,
       current: parent?.output,
       video: videoPlan
@@ -2471,6 +2528,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
             fromPicture: Boolean(source?.imagePath) || opensOnChosenPhoto(videoPlan.kind, controls),
             people: videoPlan.people,
             voice: videoVoice(input),
+            hook: videoHookFor(job.id, ctx, videoPlan),
           }
         : undefined,
     };
@@ -2547,6 +2605,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
               knownFacts: `${input.intent.brief}\n${ctx.brandText}\n${source?.body ?? ""}`,
               fromPicture: promptArgs.video?.fromPicture,
               people: videoPlan.people,
+              competitors: ctx.competitorNames,
             }).join(" ") || null
           : videoPlan && !captionOnly
             ? "The storyboard is missing."
@@ -2571,6 +2630,28 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         );
       if (!similar && !uncitedResearch && !qualityIssue && !repeatedOpening) {
         output = candidate;
+        break;
+      }
+      // The second draft is fine except for its links: list the research's
+      // own sources under it instead of failing the whole article.
+      if (
+        attempt === 1 &&
+        uncitedResearch &&
+        !similar &&
+        !qualityIssue &&
+        !repeatedOpening &&
+        candidate.article
+      ) {
+        output = {
+          ...candidate,
+          article: {
+            ...candidate.article,
+            markdown: withResearchSources(
+              candidate.article.markdown,
+              ctx.liveResearch?.sources ?? [],
+            ),
+          },
+        };
         break;
       }
       rejected = qualityIssue
@@ -2603,6 +2684,7 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   });
   if (visualTaste) output.visualTaste = visualTaste;
   if (adFormat) output.adFormat = adFormat.id;
+  if (adObjective) output.adObjective = adObjective.id;
   if (visualTaste?.direction.composed && !["video", "carousel", "story"].includes(type))
     output.artwork = {
       headline: output.title ?? input.intent.brief.slice(0, 90),
@@ -2766,6 +2848,13 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
         ...(product ? { product_id: controls.productId } : {}),
         ...(output.artDirection ? { art_direction: output.artDirection } : {}),
         ...(output.heroLook ? { hero_look: output.heroLook } : {}),
+        // What the video was made as, so the next one opens and plays differently.
+        ...(output.videoPlan
+          ? {
+              video_kind: output.videoPlan.kind,
+              ...(output.videoPlan.hook ? { video_hook: output.videoPlan.hook } : {}),
+            }
+          : {}),
         // The job's headline, so every surface titles the piece consistently.
         job_title: title,
         brand_version: brandVersion(input.brand),
@@ -3058,7 +3147,10 @@ async function shapeOutput(args: {
       const theme = args.storyTheme?.id ?? "tip";
       const mentions = cleanMentions(input.controls.mentions ?? []);
       if (input.controls.storyMode === "video") {
-        const planned = shapeVideoPlan(job.workspace_id, type, input, parsed);
+        const planned = shapeVideoPlan(job.workspace_id, type, input, parsed, {
+          jobId: job.id,
+          ctx,
+        });
         return {
           title,
           story: {
@@ -3095,12 +3187,17 @@ async function shapeOutput(args: {
         ads: parsed.variants as StudioJobOutput["ads"],
         ...({ visualConcept: String(parsed.visualConcept ?? "") } as object),
         ...(parsed.onImage ? { adOnImage: parsed.onImage as StudioJobOutput["adOnImage"] } : {}),
+        ...((parsed.search as StudioJobOutput["adSearch"])?.headlines?.length
+          ? { adSearch: parsed.search as StudioJobOutput["adSearch"] }
+          : {}),
       };
     case "image":
     case "video": {
       await requireActiveJob(client, job);
       const planned =
-        type === "video" ? shapeVideoPlan(job.workspace_id, type, input, parsed) : null;
+        type === "video"
+          ? shapeVideoPlan(job.workspace_id, type, input, parsed, { jobId: job.id, ctx })
+          : null;
       const concept = planned?.concept ?? String(parsed.concept ?? "");
       const visual = [concept, parsed.onImageText ? `Text in visual: ${parsed.onImageText}` : ""]
         .filter(Boolean)
@@ -3370,6 +3467,18 @@ async function finishStoryboardVideo(
     return { state: "redo" };
   }
   const kind = videoKind(plan.kind);
+  // The storyboard's words, spelled exactly, before the ending (never on the post or the card).
+  const cues = textCues(plan.storyboard, clips, plan.kind, {
+    duration: result.probe.duration,
+    fromPicture: !!video.firstFramePath,
+  });
+  if (cues.length)
+    dataUrl = await overlayWords(dataUrl, cues, {
+      duration: result.probe.duration,
+      width: result.probe.width,
+      height: result.probe.height,
+      style: video.wordStyle ?? {},
+    });
   const still =
     kind.ending === "back-to-source"
       ? reference

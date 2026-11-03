@@ -641,6 +641,31 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     thumb: "grid",
   },
   {
+    id: "video-demo",
+    types: ["video"],
+    label: "Product demo",
+    tagline: "Show what it does, feature by feature",
+    beats: ["Best moment", "Feature by feature", "At rest"],
+    starter: "A product demo of [product] showing [what it does] up close.",
+    directive:
+      "Shot plan: open on the most satisfying moment of use, then hands show each feature working, one per shot, close and steady, ending on the product at rest with its label to camera. Only features the product facts state. Captions name the one benefit people saw and give a simple next step.",
+    goal: "leads",
+    thumb: "play",
+  },
+  {
+    id: "video-broll-hook",
+    types: ["video"],
+    label: "B-roll with a hook",
+    tagline: "Aesthetic shots with one line of text",
+    beats: ["Hook line", "Beautiful B-roll", "Hero shot"],
+    starter:
+      "Aesthetic B-roll of [product or place] with the line: [one line people will stop for].",
+    directive:
+      "Shot plan: quick, calm B-roll from the brand's world (the product in its place, textures, hands at work, light moving), one palette and light throughout, with one line of words held over the whole video and set by Mellox. The line is the message; the caption adds the detail and the next step.",
+    goal: "awareness",
+    thumb: "story",
+  },
+  {
     id: "video-site-reel",
     types: ["video"],
     label: "Website reel",

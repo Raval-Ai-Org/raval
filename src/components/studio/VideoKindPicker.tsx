@@ -4,9 +4,11 @@ import {
   ImagePlus,
   ListChecks,
   Megaphone,
+  MousePointerClick,
   Palette,
   Repeat2,
   RotateCcw,
+  Type,
   ShoppingBag,
   Sparkles,
   UserCircle2,
@@ -29,6 +31,8 @@ const ICONS: Record<VideoKindId, LucideIcon> = {
   "mood-broll": Palette,
   "offer-teaser": Megaphone,
   "product-motion": RotateCcw,
+  "product-demo": MousePointerClick,
+  "broll-hook": Type,
 };
 
 type Choice = VideoKindId | "auto";

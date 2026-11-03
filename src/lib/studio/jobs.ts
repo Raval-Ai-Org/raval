@@ -8,6 +8,7 @@ import type { StageId, StudioType } from "./formats";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import type { AdOnImage } from "./ad-formats";
+import { AD_OBJECTIVE_IDS } from "./ad-objectives";
 import { VIDEO_KIND_IDS, type VideoKindId } from "./video/kinds";
 import type { VideoPlanOutput } from "./video/storyboard";
 
@@ -131,6 +132,8 @@ export const ControlsSchema = z.object({
   noProduct: z.boolean().optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
   adFormat: z.string().max(40).optional(),
+  /** Ads: what the ad is for (src/lib/studio/ad-objectives.ts). Absent: from the brief and goal. */
+  adObjective: z.enum(AD_OBJECTIVE_IDS).optional(),
   /** Variations (src/lib/studio/variations.ts): how many more versions to make. */
   variationCount: z.number().int().min(2).max(4).optional(),
 });
@@ -474,6 +477,10 @@ export type StudioJobOutput = {
   /** Ad: the designed layout the picture follows, and the words typeset on it. */
   adFormat?: string;
   adOnImage?: AdOnImage;
+  /** Ad: what it is for (ad-objectives.ts id). */
+  adObjective?: string;
+  /** Ad: Google search lines, written to Google's limits for the Google Ads connector. */
+  adSearch?: { headlines: string[]; descriptions: string[] };
   media?: MediaOutput[];
   /** Per-part failures that did not fail the whole job. */
   partial?: { target: string; error: string }[];

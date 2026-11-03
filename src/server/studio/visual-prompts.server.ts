@@ -3,6 +3,7 @@ import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import type { StoryFrame } from "@/lib/stories/frames";
 import type { ImageStyleInput } from "@/lib/post-image";
 import { onImageCopyLines, type AdFormat, type AdOnImage } from "@/lib/studio/ad-formats";
+import type { AdObjective } from "@/lib/studio/ad-objectives";
 import {
   archetypePromptLines,
   carouselSeriesRules,
@@ -190,6 +191,8 @@ export function storyFramePrompt(
  */
 export function adImagePrompt(args: {
   format: AdFormat;
+  /** What the ad is for: decides what the picture must make obvious. */
+  objective?: AdObjective | null;
   copy: AdOnImage;
   scene: string;
   brandName: string;
@@ -208,6 +211,10 @@ export function adImagePrompt(args: {
   const lines = onImageCopyLines(args.copy);
   return [
     `Create a finished, ready-to-run paid social ad for ${args.brandName}, ${args.ratio} format. It must look like a top-performing ad made by a professional performance creative team: one clear focal point, an obvious reading order (badge, headline, product, supporting line, button), strong contrast, and every word legible on a phone held at arm's length.`,
+    args.objective
+      ? `This ad's job: ${args.objective.label.toLowerCase()} (${args.objective.tagline.toLowerCase()}). ${args.objective.visual}`
+      : "",
+    "A paid ad, not an organic post: the offer or promise and the button are part of the design, and the whole message is understood with the sound off in one glance.",
     `Layout: ${args.format.layout}`,
     args.scene ? `Scene and subject: ${args.scene}` : "",
     args.palette.length
@@ -227,6 +234,7 @@ export function adImagePrompt(args: {
           "If a line cannot fit cleanly, leave it out rather than shrinking it until it is unreadable or changing its words.",
         ].join("\n")
       : "No words in the image.",
+    lines.length ? TYPE_SYSTEM.join("\n") : "",
     `Keep all text at least 6% away from every edge${vertical ? ", and keep the top 14% and bottom 20% free of text for the platform's own buttons" : ""}.`,
     args.logoCorner
       ? `Leave the ${args.logoCorner} corner clear (about 16% of the width): the brand's real logo is placed there afterward. Do not draw any logo.`
@@ -234,6 +242,10 @@ export function adImagePrompt(args: {
     args.revision,
     args.novelty,
     "Never: invented claims, prices, discounts, ratings, reviews or people's names; another brand's logo or product; fake app screens, status bars or social media buttons; watermarks; gibberish text.",
+    qualityCheckLines({
+      hasText: lines.length > 0,
+      hasProduct: sellsPhysicalProduct(args.brandContext),
+    }).join("\n"),
   ]
     .filter(Boolean)
     .join("\n\n");

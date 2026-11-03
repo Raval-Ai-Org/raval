@@ -929,6 +929,16 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   and self-review. Post images, carousel slides, Story frames and the briefs
   read it; add a rule there, never in one prompt only. Keep the attribution
   table current when a source changes.
+- **An ad is not a post: it has an objective** (`src/lib/studio/ad-objectives.ts`,
+  pure; ids stored, add never rename): sell, leads, clicks, awareness,
+  win back visitors, app installs, local visits, event. `controls.adObjective`
+  (picker in Studio), else `resolveAdObjective` from the brief and goal; a
+  revision keeps it. It sets the copy method, the three angles tested, the
+  buttons, the layouts tried first (`pickAdFormat`) and the picture's job, plus
+  `AD_POLICY_RULES` (no invented urgency, never assert personal attributes).
+  Ad pictures get the same `TYPE_SYSTEM` and `qualityCheckLines` as posts. Every
+  ad also writes Google search lines (`search`, kept only within 30/90 chars,
+  stored as `meta.ad_search`), which the Google Ads connector uses first.
 - **An ad is a designed ad.** `src/lib/studio/ad-formats.ts` holds the proven
   static layouts (ids stored on jobs: add, never rename). The ad prompt picks
   one (`pickAdFormat`), the copy model writes `onImage` for it, and
@@ -1060,8 +1070,7 @@ never sees one.
 
 - **Paused in the UI ("coming soon").** The route `/w/<id>/app/backlinks`
   (`BacklinksRoute`, an `AppModalShell` over `AppShell`) shows a coming-soon
-  state instead of `LinksPanel`; the sidebar has only a dimmed, unclickable
-  "Backlinks · Soon" note at the bottom, and it is not sold: the catalog marks
+  state instead of `LinksPanel`; it is not in the sidebar at all, and it is not sold: the catalog marks
   it `availability: "later"` and it is off the plan highlights and the pricing
   table. To bring it back, render `LinksPanel` in the route, restore the
   **Intelligence** sidebar entry, set it to `"launch"` and restore the copy. UI in

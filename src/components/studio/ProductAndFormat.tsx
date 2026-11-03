@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ShoppingBag } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { adFormatsFor, type AdFormat, type AdFormatThumb } from "@/lib/studio/ad-formats";
+import { AD_OBJECTIVES, preferFormats, type AdObjectiveId } from "@/lib/studio/ad-objectives";
 import { listProducts } from "@/lib/products.functions";
 import type { Product } from "@/lib/products/catalog";
 import { namedProduct, productPhotoControls } from "@/lib/products/feature";
@@ -173,11 +174,61 @@ export function ProductPicker({
   );
 }
 
-export function AdFormatPicker({
+/** What the ad is for (ad-objectives.ts): it decides the copy, button and layouts. */
+export function AdObjectivePicker({
   value,
   onChange,
 }: {
+  value: AdObjectiveId | undefined;
+  onChange: (adObjective: AdObjectiveId | undefined) => void;
+}) {
+  const options = [
+    { id: undefined, label: "Auto", tagline: "Read from your brief" },
+    ...AD_OBJECTIVES.map((o) => ({ id: o.id, label: o.label, tagline: o.tagline })),
+  ];
+  return (
+    <div>
+      <FieldLabel>What is this ad for?</FieldLabel>
+      <div role="radiogroup" aria-label="What is this ad for?" className="flex flex-wrap gap-1.5">
+        {options.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id ?? "auto"}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              title={o.tagline}
+              onClick={() => onChange(o.id)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
+                active
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-surface-3 text-muted-foreground hover:border-foreground/25 hover:text-foreground",
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+        {value
+          ? AD_OBJECTIVES.find((o) => o.id === value)?.tagline
+          : "Mellox reads it from your brief. Ads are written to get one action, not likes."}
+      </p>
+    </div>
+  );
+}
+
+export function AdFormatPicker({
+  value,
+  objective,
+  onChange,
+}: {
   value: string | undefined;
+  /** The ad's objective: its best layouts are shown first. */
+  objective?: AdObjectiveId;
   onChange: (adFormat: string | undefined) => void;
 }) {
   return (
@@ -194,7 +245,10 @@ export function AdFormatPicker({
           active={!value}
           onClick={() => onChange(undefined)}
         />
-        {adFormatsFor(false).map((f) => (
+        {preferFormats(
+          adFormatsFor(false),
+          AD_OBJECTIVES.find((o) => o.id === objective),
+        ).map((f) => (
           <FormatTile
             key={f.id}
             format={f}

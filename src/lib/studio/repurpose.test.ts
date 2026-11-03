@@ -27,7 +27,7 @@ describe("making one piece from another", () => {
       repurposeTargets("image", true)
         .filter((t) => t.type === "video")
         .map((t) => t.videoKind),
-    ).toEqual(["product-motion", "living-picture", "motion-post", "brand-story"]);
+    ).toEqual(["product-motion", "product-demo", "living-picture", "motion-post", "brand-story"]);
     expect(repurposeTargets("image", false).map((t) => t.type)).not.toContain("video");
     expect(repurposeTargets("article", true).map((t) => t.type)).not.toContain("video");
     // A script becomes a video through its own button, with its scenes.
@@ -72,7 +72,7 @@ describe("making one piece from another", () => {
     expect(video.brief).toMatch(/No people/);
     const story = repurposeOpen({
       from: "image",
-      target: repurposeTargets("image", true)[3],
+      target: repurposeTargets("image", true)[4],
       contentItemId: id,
       platforms: ["instagram"],
       picture: { assetId: "asset-1", ratio: "4:5" },
@@ -81,7 +81,7 @@ describe("making one piece from another", () => {
     expect(story.extraControls).toEqual({ videoKind: "brand-story", videoPeople: "source" });
     const motion = repurposeOpen({
       from: "image",
-      target: repurposeTargets("image", true)[2],
+      target: repurposeTargets("image", true)[3],
       contentItemId: id,
       platforms: ["instagram"],
       picture: { assetId: "asset-1", ratio: "1:1" },

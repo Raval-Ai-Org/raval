@@ -12,7 +12,7 @@ import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
 import { SourceClips } from "./SourceClips";
-import { AdFormatPicker, ProductPicker } from "./ProductAndFormat";
+import { AdFormatPicker, AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { shortClipPlan } from "@/lib/studio/short-clip";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
@@ -256,6 +256,10 @@ export function ControlsPanel({
         </label>
       ) : null}
 
+      {session.type === "ad" && (
+        <AdObjectivePicker value={c.adObjective} onChange={(adObjective) => set({ adObjective })} />
+      )}
+
       {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
         <ProductPicker
           workspaceId={session.workspaceId}
@@ -266,7 +270,11 @@ export function ControlsPanel({
         />
       )}
       {session.type === "ad" && (
-        <AdFormatPicker value={c.adFormat} onChange={(adFormat) => set({ adFormat })} />
+        <AdFormatPicker
+          value={c.adFormat}
+          objective={c.adObjective}
+          onChange={(adFormat) => set({ adFormat })}
+        />
       )}
 
       {(session.type === "video" || storyVideo) && (!ownFootage || animatedRecap) && (
