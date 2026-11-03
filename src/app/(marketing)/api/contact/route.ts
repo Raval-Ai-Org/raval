@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { consumeRateLimit } from "@/server/rate-limit";
 import { FORMS, type FormKey } from "@/marketing/lib/contact";
 import { buildEmail } from "@/marketing/lib/email-template";
 
@@ -7,16 +9,6 @@ export const runtime = "nodejs";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_LEN = 5000;
 
-// tiny in-memory throttle: 5 submissions per IP per 10 minutes (per server instance)
-const hits = new Map<string, number[]>();
-function throttled(ip: string) {
-  const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < 10 * 60_000);
-  recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > 5;
-}
-
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
 export async function POST(req: Request) {
@@ -24,8 +16,17 @@ export async function POST(req: Request) {
   const to = process.env.CONTACT_TO_EMAIL;
   if (!apiKey || !to) return fail("Email is not configured on the server.", 500);
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  if (throttled(ip)) return fail("Too many messages. Please try again in a few minutes.", 429);
+  const ip =
+    req.headers.get("x-real-ip")?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown";
+  const visitor = createHash("sha256").update(ip).digest("hex").slice(0, 24);
+  // Per visitor first, so one noisy sender cannot use up the shared bucket.
+  const mine = await consumeRateLimit("contact-form", visitor);
+  const everyone = mine.ok ? await consumeRateLimit("contact-form-all", "all") : null;
+  if (!mine.ok || !everyone?.ok) {
+    return fail("Too many messages. Please try again in a few minutes.", 429);
+  }
 
   let body: Record<string, unknown>;
   try {

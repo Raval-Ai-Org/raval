@@ -45,6 +45,8 @@ export type RateLimitTier =
   | "ugc-draft"
   | "ugc-render"
   | "share-password"
+  | "contact-form"
+  | "contact-form-all"
   | "share-password-link"
   | "share-event"
   | "share-event-link"
@@ -130,6 +132,11 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // password two or three times; 10 per 5 minutes is generous for them and
   // useless for a brute-force run.
   "share-password": { limit: 10, windowSeconds: 300, label: "password attempt" },
+  // The public contact form sends an email through Resend per submission.
+  // Per visitor, and one bucket for everyone so a spread-out run (spoofed
+  // addresses, many machines) still cannot drain the mailbox or the quota.
+  "contact-form": { limit: 5, windowSeconds: 600, label: "message" },
+  "contact-form-all": { limit: 100, windowSeconds: 3600, label: "message" },
   // What a client sends from a share link (approve, comment, view). The link
   // needs no sign-in, so this bounds how fast a thread can be filled.
   "share-event": { limit: 40, windowSeconds: 300, label: "message" },
