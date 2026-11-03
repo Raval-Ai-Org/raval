@@ -175,7 +175,7 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
 }
 .px-toggle button[aria-pressed="true"] .px-free-tag {
   color: #5d7a00;
@@ -292,7 +292,7 @@
   color: var(--mx-fg);
 }
 .px-credits-main svg {
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
 }
 .px-credits .vc {
   color: rgb(var(--mx-w) / 0.85);
@@ -346,7 +346,7 @@
   color: var(--mx-t1);
 }
 .px-save b {
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
   font-weight: 600;
 }
 
@@ -439,7 +439,7 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
   background: rgb(203 233 96 / 0.1);
   border: 1px solid rgb(203 233 96 / 0.3);
 }
@@ -475,7 +475,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
 }
 .px-card h3.px-h3 {
   margin-top: 10px;
@@ -733,7 +733,7 @@
   flex: none;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
 }
 
 /* ---------- Comparison matrix ---------- */
@@ -765,7 +765,7 @@
   z-index: 1;
   min-width: 240px;
   text-align: left;
-  background: #07090b;
+  background: var(--mx-panel);
   color: rgb(var(--mx-w) / 0.75);
 }
 .px-mx thead th {
@@ -797,7 +797,7 @@
   font-size: 17px;
   font-weight: 600;
   color: var(--mx-fg);
-  background: #07090b;
+  background: var(--mx-panel);
 }
 .px-mx tr.grp td.hl {
   background: rgb(203 233 96 / 0.05);
@@ -882,7 +882,7 @@
 
 /* dark outlined nav like the reference, instead of picking up the aurora colours */
 .px-hero nav.glass {
-  background: rgb(5 6 8 / 0.55);
+  background: rgb(var(--mx-bg-rgb) / 0.55);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
@@ -900,4 +900,20 @@
 .px .hero-cta:hover {
   transform: translateY(-2px);
   box-shadow: -6px 0 32px -4px rgb(203 233 96 / 0.7), 6px 0 36px -4px rgb(7 86 231 / 0.85);
+}
+
+/* ---------- Light theme: cards become white with the same orange / blue / lime glow ---------- */
+:root[data-theme="light"] .px-card {
+  border-color: rgb(13 17 20 / 0.09);
+  background:
+    radial-gradient(75% 55% at 8% 100%, rgb(254 112 50 / 0.13), transparent 70%),
+    radial-gradient(80% 60% at 78% 78%, rgb(7 86 231 / 0.12), transparent 72%),
+    radial-gradient(70% 45% at 45% 100%, rgb(203 233 96 / 0.22), transparent 70%),
+    #ffffff;
+  box-shadow: inset 0 1px 0 #fff, 0 20px 44px -26px rgb(13 17 20 / 0.28);
+}
+:root[data-theme="light"] .px-card::after { display: none; }
+:root[data-theme="light"] .px-card.featured {
+  border-color: rgb(120 150 20 / 0.5);
+  box-shadow: inset 0 1px 0 #fff, 0 0 60px -22px rgb(150 185 30 / 0.55), 0 20px 44px -26px rgb(13 17 20 / 0.28);
 }

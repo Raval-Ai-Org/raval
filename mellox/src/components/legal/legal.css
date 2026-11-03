@@ -41,7 +41,7 @@
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
 }
 .lg-toc a {
   display: flex;
@@ -82,7 +82,7 @@
 }
 .lg-intro a,
 .lg-doc a {
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -106,7 +106,7 @@
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
   font-variant-numeric: tabular-nums;
 }
 .lg-sec p {
@@ -114,7 +114,7 @@
   max-width: 72ch;
   font-size: 17px;
   line-height: 1.75;
-  color: #a4aed3;
+  color: var(--mx-t2);
 }
 .lg-sec h3 {
   margin-top: 30px;
@@ -125,7 +125,7 @@
 }
 .lg-sec strong {
   font-weight: 600;
-  color: #e6eaf7;
+  color: var(--mx-t6);
 }
 .lg-sec ul,
 .lg-sec ol {
@@ -147,7 +147,7 @@
   padding-left: 26px;
   font-size: 17px;
   line-height: 1.7;
-  color: #a4aed3;
+  color: var(--mx-t2);
 }
 .lg-sec ol li::before {
   content: counter(lgstep);
