@@ -171,13 +171,13 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center justify-end gap-2 justify-self-end xl:gap-3">
+          <ThemeToggle />
           <a
             href={APP_URL}
             className="glass-link hidden whitespace-nowrap rounded-full px-4 py-3 text-[16px] font-medium text-white/85 transition hover:text-white min-[1180px]:inline-block xl:text-[17px]"
           >
             Log in
           </a>
-          <ThemeToggle />
           <Link
             href="/demo"
             className="glass glass-lime glass-interactive hidden whitespace-nowrap rounded-full px-6 py-3.5 text-[16px] font-semibold text-white min-[1180px]:inline-block xl:px-7 xl:text-[17px]"

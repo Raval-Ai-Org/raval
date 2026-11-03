@@ -102,7 +102,7 @@
   background: rgb(var(--mx-w) / 0.07);
   border: 1px solid rgb(var(--mx-w) / 0.12);
 }
-.ft-rule { display: flex; align-items: center; gap: 10px; font-size: 15px; color: #e7ecff; }
+.ft-rule { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--mx-t6); }
 .ft-rule svg { flex: none; padding: 3px; width: 22px; height: 22px; border-radius: 50%; color: #11170a; background: var(--brand-lime); }
 
 .ft-swap p { font-size: 15.5px; line-height: 1.45; }
@@ -132,7 +132,7 @@
   padding: 14px;
   border-radius: 16px;
   font-size: 15px;
-  color: #e7ecff;
+  color: var(--mx-t6);
   background: rgb(var(--mx-w) / 0.05);
   border: 1px solid rgb(var(--mx-w) / 0.09);
 }
@@ -152,7 +152,7 @@
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
 }
-.ft-fix svg { flex: none; color: var(--brand-lime); }
+.ft-fix svg { flex: none; color: var(--mx-lime-text); }
 .ft-fix b { margin-left: auto; flex: none; padding: 5px 12px; border-radius: 999px; font-size: 13px; color: #11170a; background: var(--brand-lime); }
 
 .ft-brain { flex-direction: row; align-items: center; gap: 14px; border-color: color-mix(in srgb, var(--c) 45%, transparent); }
@@ -185,7 +185,7 @@
   padding: 13px 14px;
   border-radius: 14px;
   font-size: 15.5px;
-  color: #e7ecff;
+  color: var(--mx-t6);
   background: rgb(var(--mx-w) / 0.05);
   border: 1px solid rgb(var(--mx-w) / 0.09);
 }
@@ -204,8 +204,8 @@
 .ft-pool i { display: block; height: 10px; border-radius: 999px; background: rgb(var(--mx-w) / 0.12); }
 .ft-pool b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brain-orange), var(--brand-lime)); }
 .ft-pool span { display: block; margin-top: 10px; font-size: 14px; color: var(--mx-t2); }
-.ft-link { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 14px; font-size: 14.5px; color: #e7ecff; background: rgb(var(--mx-w) / 0.06); border: 1px dashed rgb(var(--mx-w) / 0.25); }
-.ft-link b { margin-left: auto; font-size: 13px; color: var(--brand-lime); }
+.ft-link { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 14px; font-size: 14.5px; color: var(--mx-t6); background: rgb(var(--mx-w) / 0.06); border: 1px dashed rgb(var(--mx-w) / 0.25); }
+.ft-link b { margin-left: auto; font-size: 13px; color: var(--mx-lime-text); }
 
 /* ---------- Steps ---------- */
 .ft-steps {
@@ -271,10 +271,10 @@
 .ft-table thead th small { display: block; margin-top: 4px; font-size: 12.5px; font-weight: 400; color: var(--mx-t5); }
 .ft-table tbody th { text-align: left; font-weight: 400; color: var(--mx-t7); min-width: 220px; }
 .ft-table .hl { background: rgb(203 233 96 / 0.06); }
-.ft-yes { display: inline-block; color: var(--brand-lime); }
+.ft-yes { display: inline-block; color: var(--mx-lime-text); }
 .ft-no { display: inline-block; color: #4a5379; }
 .ft-fine { margin-top: 16px; font-size: 14.5px; color: var(--mx-t5); }
-.ft-fine a { color: var(--brand-lime); text-decoration: underline; text-underline-offset: 3px; }
+.ft-fine a { color: var(--mx-lime-text); text-decoration: underline; text-underline-offset: 3px; }
 
 /* ---------- FAQ ---------- */
 .ft-faq { display: flex; flex-direction: column; gap: 12px; max-width: 880px; margin: clamp(26px, 4vw, 48px) auto 0; }

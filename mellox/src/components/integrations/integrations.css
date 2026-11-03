@@ -15,7 +15,7 @@
   border: 1px solid rgb(var(--mx-w) / 0.1);
   transition: color 0.2s, border-color 0.2s;
 }
-.ig-jump a:hover { color: var(--brand-lime); border-color: rgb(203 233 96 / 0.5); }
+.ig-jump a:hover { color: var(--mx-lime-text); border-color: rgb(203 233 96 / 0.5); }
 
 .ig-group { scroll-margin-top: 20px; }
 
@@ -59,9 +59,12 @@
   border-radius: 999px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--brand-lime);
+  color: var(--mx-lime-text);
   background: rgb(203 233 96 / 0.1);
   border: 1px solid rgb(203 233 96 / 0.25);
 }
 .ig-card h3 { font-size: 1.3rem; font-weight: 500; letter-spacing: -0.02em; color: var(--mx-fg); }
 .ig-card p { font-size: 15.5px; line-height: 1.6; color: var(--mx-t1); }
+
+/* Light theme: white mono logos become dark */
+:root[data-theme="light"] .ig-logo img { filter: brightness(0); }

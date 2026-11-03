@@ -1,50 +1,107 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import "./theme-toggle.css";
 
-type Theme = "light" | "dark";
+const KEY = "mx-theme";
+const RAYS = Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4);
+
+function systemTheme(): "light" | "dark" {
+  return matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function hasChoice(): boolean {
+  try {
+    const v = localStorage.getItem(KEY);
+    return v === "light" || v === "dark";
+  } catch {
+    return false;
+  }
+}
+
+function current(): "light" | "dark" {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
 
 /**
- * Light/dark switch. The theme starts from the visitor's system setting (see THEME_SCRIPT in layout.tsx);
- * clicking this stores an explicit choice, which then wins over the system.
+ * Animated day / night switch (sun turns into a moon). The page starts from the visitor's saved choice, else their system
+ * setting (THEME_SCRIPT in layout.tsx, before first paint). Flipping the switch saves an explicit choice; flipping it
+ * back to the same theme as the system clears the saved choice, so the page follows the system again. Every visual state
+ * is drawn by theme-toggle.css from <html data-theme>.
  */
 export default function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme | null>(null);
+  const id = useId();
+  const [dark, setDark] = useState(true);
 
   useEffect(() => {
-    const read = () => setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
-    read();
+    setDark(current() === "dark");
     const mq = matchMedia("(prefers-color-scheme: light)");
     const onSystem = () => {
-      try {
-        if (localStorage.getItem("mx-theme")) return;
-      } catch {}
-      document.documentElement.setAttribute("data-theme", mq.matches ? "light" : "dark");
-      read();
+      if (hasChoice()) return;
+      document.documentElement.setAttribute("data-theme", systemTheme());
+      setDark(current() === "dark");
     };
     mq.addEventListener("change", onSystem);
     return () => mq.removeEventListener("change", onSystem);
   }, []);
 
-  function toggle() {
-    const next: Theme = theme === "light" ? "dark" : "light";
+  function flip() {
+    const next = current() === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     try {
-      localStorage.setItem("mx-theme", next);
+      if (next === systemTheme()) localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, next);
     } catch {}
-    setTheme(next);
+    setDark(next === "dark");
   }
 
-  const isLight = theme === "light";
   return (
     <button
       type="button"
-      onClick={toggle}
-      aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
-      className={`glass glass-interactive flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${className}`}
+      role="switch"
+      aria-checked={dark}
+      aria-label="Dark mode"
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={flip}
+      className={`tt ${className}`}
     >
-      {theme === null ? null : isLight ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
+      <span className="tt-stars" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="tt-clouds" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="tt-knob" aria-hidden="true">
+        <svg viewBox="0 0 28 28">
+          <defs>
+            <mask id={`${id}-moon`}>
+              <rect width="28" height="28" fill="#fff" />
+              <circle className="tt-bite" cx="20" cy="8.5" r="7" fill="#000" />
+            </mask>
+          </defs>
+          <g className="tt-rays">
+            {RAYS.map((a) => (
+              <line
+                key={a}
+                x1={14 + Math.cos(a) * 11.5}
+                y1={14 + Math.sin(a) * 11.5}
+                x2={14 + Math.cos(a) * 13.5}
+                y2={14 + Math.sin(a) * 13.5}
+              />
+            ))}
+          </g>
+          <g mask={`url(#${id}-moon)`}>
+            <circle className="tt-disc" cx="14" cy="14" r="9" />
+            <circle className="tt-crater" cx="10.5" cy="17" r="1.5" />
+            <circle className="tt-crater" cx="15" cy="20" r="1" />
+          </g>
+        </svg>
+      </span>
     </button>
   );
 }

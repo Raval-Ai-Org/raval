@@ -79,7 +79,7 @@ function Menu({
                   setOpen(false);
                 }}
                 className={`flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2 text-left text-[15px] transition-colors hover:bg-white/[0.07] ${
-                  o === value ? "text-lime" : "text-white/80"
+                  o === value ? "text-[var(--mx-lime-text)]" : "text-white/80"
                 }`}
               >
                 {o}
@@ -108,7 +108,7 @@ export default function HeroChat() {
     >
       <div className="relative flex flex-wrap items-center gap-y-1 rounded-[29px] bg-[var(--mx-panel)]/90 p-2 backdrop-blur-xl sm:flex-nowrap sm:gap-1 sm:rounded-full sm:py-2 sm:pl-3 sm:pr-2">
         <div className="flex min-w-0 basis-full items-center gap-3 pl-3 pr-2 pt-1.5 sm:basis-auto sm:flex-1 sm:pt-0">
-          <svg className="shrink-0 text-white/35 transition-colors group-focus-within:text-lime" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg className="shrink-0 text-white/35 transition-colors group-focus-within:text-[var(--mx-lime-text)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18" />
             <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z" />
