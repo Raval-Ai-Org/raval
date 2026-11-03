@@ -78,7 +78,9 @@ describe("Studio novelty gate", () => {
       { title: "The [2026] report", url: "https://example.org/r" },
       { title: "Plain", url: "http://insecure.example/x" },
     ]);
-    expect(out).toBe("# Title\n\nBody.\n\n## Sources\n\n- [The 2026 report](https://example.org/r)\n");
+    expect(out).toBe(
+      "# Title\n\nBody.\n\n## Sources\n\n- [The 2026 report](https://example.org/r)\n",
+    );
     expect(hasResearchCitation(out, ["https://example.org/r"])).toBe(true);
     expect(withResearchSources("Body", [])).toBe("Body");
   });

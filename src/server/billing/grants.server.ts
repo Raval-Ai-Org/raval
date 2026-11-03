@@ -131,6 +131,7 @@ export async function grantPlanWindow(args: {
     ["credits", creation ? CREATION_PLANS[plan].flexCredits : allowances.credits],
     ["creation", creation ? CREATION_PLANS[plan].points : 0],
     ["video", allowances.videoUnits],
+    ["premium_video", allowances.premiumVideos],
     ["pro_messages", allowances.proMessages],
     ["flash_messages", allowances.flashMessages],
   ];
@@ -210,6 +211,7 @@ export async function grantPlanUpgrade(args: {
     ],
     ["creation", creation ? CREATION_PLANS[args.to].points - CREATION_PLANS[args.from].points : 0],
     ["video", next.videoUnits - old.videoUnits],
+    ["premium_video", next.premiumVideos - old.premiumVideos],
     ["pro_messages", next.proMessages - old.proMessages],
     ["flash_messages", next.flashMessages - old.flashMessages],
   ] as const) {

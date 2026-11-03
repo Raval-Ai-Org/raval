@@ -84,6 +84,7 @@ export const METER_LABEL: Record<Meter, string> = {
   video: "Videos",
   pro_messages: "Pro messages",
   flash_messages: "Chat messages",
+  premium_video: "Premium videos",
 };
 
 /** One meter amount in plain words: "1,200 credits", "3.5 videos". */
@@ -97,6 +98,7 @@ export function formatMeter(meter: Meter | string, amount: number): string {
   const n = formatNumber(amount);
   if (meter === "pro_messages") return `${n} Pro ${amount === 1 ? "message" : "messages"}`;
   if (meter === "flash_messages") return `${n} chat ${amount === 1 ? "message" : "messages"}`;
+  if (meter === "premium_video") return `${n} premium ${amount === 1 ? "video" : "videos"}`;
   return `${n} ${amount === 1 ? "credit" : "credits"}`;
 }
 

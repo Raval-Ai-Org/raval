@@ -48,12 +48,22 @@ function item(over: Record<string, unknown> = {}) {
   };
 }
 
-function setup(opts: { items?: any[]; pfmAccounts?: any[]; hooks?: Partial<ComposioHooks> } = {}) {
+function setup(
+  opts: {
+    items?: any[];
+    pfmAccounts?: any[];
+    pfmDown?: boolean;
+    hooks?: Partial<ComposioHooks>;
+  } = {},
+) {
   const db = createMemoryDb(
     { content_items: opts.items ?? [item()] },
     { unique: { content_publications: [["content_item_id", "sdr_target_id"]] } },
   );
   const provider = scriptedApi((_req, key) => {
+    if (key === "GET /accounts" && opts.pfmDown) {
+      return { status: 401, data: { error: { message: "The provided API key is invalid." } } };
+    }
     if (key === "GET /accounts") return { status: 200, data: { data: opts.pfmAccounts ?? [] } };
     if (key === "POST /posts/validate") return { status: 200, data: { valid: true } };
     if (key === "POST /posts")
@@ -128,6 +138,48 @@ describe("Composio accounts in the Post for Me handlers", () => {
     const row = await itemRow(db);
     expect(row.status).toBe("published");
     expect(row.meta.distribution_provider).toBe("composio");
+  });
+
+  it("still lists and publishes Composio accounts while Post for Me is down", async () => {
+    const { deps, deliver, db } = setup({ pfmDown: true });
+    const list = await listAccountsHandler(WS, deps);
+    expect(list.status).toBe(200);
+    expect(list.body.map((a: ConnectedAccount) => a.accountId)).toEqual([COMPOSIO_IG.accountId]);
+    const out = await publishHandler(
+      { workspaceId: WS, userId: USER, contentItemIds: ["item-1"], selection: { type: "all" } },
+      deps,
+    );
+    expect(out.status).toBe(200);
+    expect(out.body.results[0]).toMatchObject({ status: "publishing", targets: 1 });
+    expect(deliver).toHaveBeenCalledTimes(1);
+    expect((await itemRow(db)).status).toBe("published");
+  });
+
+  it("says why a Post for Me-only network can't go while Post for Me is down", async () => {
+    const { deps, deliver } = setup({
+      pfmDown: true,
+      items: [item({ meta: { platform: "linkedin", media_type: "image" } })],
+      hooks: { accounts: async () => [{ ...COMPOSIO_IG, platform: "linkedin" }] },
+    });
+    const out = await publishHandler(
+      {
+        workspaceId: WS,
+        userId: USER,
+        contentItemIds: ["item-1"],
+        selection: { type: "account", accountId: "acc_li_pfm" },
+      },
+      deps,
+    );
+    expect(out.status).toBe(200);
+    expect(out.body.results[0].status).toBe("skipped");
+    expect(out.body.results[0].reason).toMatch(/Post for Me isn't answering/);
+    expect(deliver).not.toHaveBeenCalled();
+  });
+
+  it("keeps Post for Me's error when there is no Composio account", async () => {
+    const { deps } = setup({ pfmDown: true, hooks: { accounts: async () => [] } });
+    const out = await listAccountsHandler(WS, deps);
+    expect(out.status).not.toBe(200);
   });
 
   it("parks a scheduled post for Mellox to send", async () => {

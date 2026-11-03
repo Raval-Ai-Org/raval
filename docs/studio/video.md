@@ -32,19 +32,19 @@ Decision record: [ADR-0041](../adr/0041-studio-video-kinds.md).
 
 ## Kinds
 
-| Kind | Made by | Joins | Ends on |
-| --- | --- | --- | --- |
-| `living-picture` | AI, one clip | single | the exact post |
-| `motion-post` | code (recap camera path), no AI | — | the post |
-| `product-showcase` | AI | chain | hero frame |
-| `brand-story` | AI | chain | payoff + end card |
-| `how-it-works` | AI | chain | result |
-| `before-after` | AI | chain | the after |
-| `mood-broll` | AI | cut (dissolve) | hero frame |
-| `offer-teaser` | AI + code card | chain | exact offer card |
-| `product-motion` | AI, no people | chain | the picture / hero frame |
-| `product-demo` | AI, hands only | chain | product at rest |
-| `broll-hook` | AI + code words | cut (dissolve) | hero frame, hook line held throughout |
+| Kind               | Made by                         | Joins          | Ends on                               |
+| ------------------ | ------------------------------- | -------------- | ------------------------------------- |
+| `living-picture`   | AI, one clip                    | single         | the exact post                        |
+| `motion-post`      | code (recap camera path), no AI | —              | the post                              |
+| `product-showcase` | AI                              | chain          | hero frame                            |
+| `brand-story`      | AI                              | chain          | payoff + end card                     |
+| `how-it-works`     | AI                              | chain          | result                                |
+| `before-after`     | AI                              | chain          | the after                             |
+| `mood-broll`       | AI                              | cut (dissolve) | hero frame                            |
+| `offer-teaser`     | AI + code card                  | chain          | exact offer card                      |
+| `product-motion`   | AI, no people                   | chain          | the picture / hero frame              |
+| `product-demo`     | AI, hands only                  | chain          | product at rest                       |
+| `broll-hook`       | AI + code words                 | cut (dissolve) | hero frame, hook line held throughout |
 
 Ids are stored on jobs: add, never rename. A person talking to the camera is
 a Creator (UGC) video.
@@ -79,11 +79,62 @@ to life (`living-picture`, 8 s), Motion post (`videoMode: "recap"`,
 `recapMotion: "camera"`, one photo, priced as `photo_recap`) and Story video
 (`brand-story`, 16 s, opens on the post and ends back on it).
 
+## Models and cost
+
+Decision record [ADR-0043](../adr/0043-video-categories-and-motion.md).
+
+- Every video key runs on KIE (`src/lib/ugc/models.ts`): Standard and Draft on
+  Veo 3.1 Fast / Lite, Premium on Gemini Omni Flash (first and last frame),
+  Long on Wan 3.0 720p, Cinematic on MiniMax H3, and `animation` (Studio
+  only) on Wan 3.0 image-to-video. OpenRouter is the fallback, never dearer
+  than the primary.
+- A composed video can use a different model per clip (`clips[].model` in
+  `VideoRenderRequest`). Premium uses Omni for every clip: it is cheaper on
+  KIE than any model that makes its 10 s follow-on clips.
+- `VIDEO_MAX_USD_PER_JOB` (default $5) refuses a quote over the cap before
+  anything is held.
+
+## Sound
+
+`src/lib/studio/audio/soundtrack.ts` (pure) and
+`src/server/studio/audio/soundtrack.server.ts`: a voiceover of the
+storyboard's exact words (ElevenLabs on KIE; whole lines only, as many as fit
+at 2.5 words a second, the same brand always on the same voice) and an
+instrumental music bed (Suno on KIE). `startSoundtrack` starts both while the
+clips render, `collectSoundtrack` reads them, `meterSoundtrack` records the
+cost once, `mixSoundtrack` ducks the music under the voice and brings the mix
+to -14 LUFS. Every step fails open: the video keeps its own sound.
+`VIDEO_SOUNDTRACK_ENABLED=false` turns it off.
+
+## Motion graphics
+
+`src/lib/studio/motion/` (pure) and `src/server/studio/motion/`:
+
+- Opus (route `studio.motion.compose`) writes one HTML/SVG + CSS document with
+  CSS `@keyframes` only, on a layout from `MOTION_LAYOUTS` and the craft rules
+  in `principles.ts` (add rules there, never in the prompt).
+- `staticIssues` refuses scripts, handlers, outside addresses, invented
+  figures and claims, and slots with nothing to fill them. The real logo and
+  photos are placed by code into `data-slot` images.
+- `inspectMotion` lays the page out in Chromium (offline, no scripts) and
+  `drawnIssues` checks the words on screen are the copy, inside the safe area,
+  big enough, readable (contrast) and still for the last 1.5 s.
+- A failed design is asked for once more with the reasons, then the piece
+  fails plainly. `renderMotion` seeks every animation per frame at 30 fps and
+  pipes the frames to FFmpeg. One drawing at a time per process.
+- Priced as `motion_graphics` (90 credits). Live check:
+  `tests/live/motion.live.ts` (behind `MOTION_LIVE_AI=yes`, needs FFmpeg).
+
 ## Plans
 
 Premium (`video_premium`) is sold from Starter at its Video Credit price;
 Cinematic is Agency and up, Full HD Growth and up. The composer shows a
 lock and an upgrade toast; the server still checks.
+
+Each plan has premium videos a month (`allowances.premiumVideos`: Free 0,
+Starter 2, Growth 5, Agency 12, Scale 30; meter `premium_video`, never rolled
+over). `videoChargePlan` spends one on a Premium, Cinematic or Long video of up
+to 24 s, then credits. Free videos (Draft, Standard) are never spent on them.
 
 ## Flag and checks
 

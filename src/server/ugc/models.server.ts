@@ -12,6 +12,7 @@
 //   KIE_USD_PER_CREDIT=0.005                 Kie credit → USD (DEPRECATED with KIE)
 //   UGC_DEFAULT_MODEL=standard
 //   UGC_MAX_CONCURRENT_RENDERS=3             live renders per workspace
+//   VIDEO_MAX_USD_PER_JOB=5                  refuse a Studio video costing Mellox more
 import "server-only";
 import {
   DEFAULT_UGC_MODEL,
@@ -58,7 +59,10 @@ export function videoProvider(): VideoProviderId {
 export function videoProviderForModel(key: UgcModelKey): VideoProviderId {
   const override = process.env[`VIDEO_PROVIDER_${envKey(key)}`]?.trim().toLowerCase();
   if (override === "kie" || override === "openrouter") return override;
-  return key === "standard" || key === "draft" || key === "variation" ? "kie" : "openrouter";
+  // Every option runs on KIE first (cost review 2026-11-03: Gemini Omni, Wan 3.0
+  // and MiniMax H3 768p are cheaper there than anything OpenRouter offers for
+  // the same job); OpenRouter takes a render only when KIE refuses it outright.
+  return "kie";
 }
 
 /** Where a render goes when the primary refuses it outright (null: nowhere). */
@@ -82,6 +86,15 @@ export function activeModel(
   return specFor(model, provider) ?? model;
 }
 
+/**
+ * The most one Studio video may cost Mellox before it is made. A guard against
+ * a mispriced provider or a new model, not a price: every option at its
+ * longest length stays under it today.
+ */
+export function videoMaxUsdPerJob(): number {
+  return envNumber("VIDEO_MAX_USD_PER_JOB") ?? 5;
+}
+
 export function maxConcurrentRenders(): number {
   return Math.max(1, Math.round(envNumber("UGC_MAX_CONCURRENT_RENDERS") ?? 3));
 }
@@ -90,9 +103,11 @@ export function isModelEnabled(key: UgcModelKey): boolean {
   return envBool(`UGC_MODEL_${envKey(key)}_ENABLED`) ?? resolveUgcModel(key).enabledByDefault;
 }
 
-/** Models offered for new renders, viewed for the primary provider. */
+/** Creator (UGC) models offered for new renders, viewed for their primary provider. */
 export function enabledModels(): UgcModel[] {
-  return UGC_MODEL_KEYS.filter(isModelEnabled).map((k) => activeModel(k));
+  return UGC_MODEL_KEYS.filter(isModelEnabled)
+    .map((k) => activeModel(k))
+    .filter((m) => !m.studioOnly);
 }
 
 export function defaultModelKey(): UgcModelKey {

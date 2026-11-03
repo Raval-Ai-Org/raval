@@ -8,6 +8,8 @@ const PREFIX = "composition:";
 type Clip = VideoSegment & {
   /** This clip's own prompt (a storyboard clip); absent: cut from the shared prompt. */
   prompt?: string;
+  /** This clip's own model; absent: the request's. */
+  model?: VideoRenderRequest["model"];
   taskId?: string;
   provider?: string;
   videoUrl?: string;
@@ -91,7 +93,13 @@ function planClips(request: VideoRenderRequest): Clip[] {
     );
   let start = 0;
   return request.clips.map((clip) => {
-    const out = { start, seconds: clip.seconds, renderSeconds: clip.seconds, prompt: clip.prompt };
+    const out = {
+      start,
+      seconds: clip.seconds,
+      renderSeconds: clip.seconds,
+      prompt: clip.prompt,
+      ...(clip.model ? { model: clip.model } : {}),
+    };
     start += clip.seconds;
     return out;
   });
@@ -179,7 +187,12 @@ export function withVideoComposition(
     async submit(request) {
       const clips = planClips(request);
       if (clips.length === 1 && clips[0].renderSeconds === request.durationSec)
-        return base.submit(clips[0].prompt ? { ...request, prompt: clips[0].prompt } : request);
+        return base.submit({
+          ...request,
+          clips: undefined,
+          ...(clips[0].prompt ? { prompt: clips[0].prompt } : {}),
+          ...(clips[0].model ? { model: clips[0].model } : {}),
+        });
       // Check the required local encoder before spending provider credits.
       if (!deps.assemble) {
         const { assertVideoEncoder } = await import("./assemble.server");
@@ -252,6 +265,7 @@ export function withVideoComposition(
             await save();
             const submitted = await base.submit({
               ...request,
+              model: clip.model ?? request.model,
               clips: undefined,
               chain: undefined,
               callbackUrl: undefined,
@@ -340,7 +354,11 @@ export function withVideoComposition(
           throw new Error("Generated clips exceed the video size limit.");
         clips.push({ dataUrl: downloaded.dataUrl, seconds: clip.seconds });
       }
-      return assemble(clips, row.state.request.audio ?? row.state.request.model.nativeAudio, {
+      const { request } = row.state;
+      // Keep a sound track when any clip was made with sound.
+      const audio =
+        request.audio ?? row.state.clips.some((c) => (c.model ?? request.model).nativeAudio);
+      return assemble(clips, audio, {
         dissolve: row.state.request.dissolve,
       });
     },

@@ -33,10 +33,11 @@ export const POST = defineRoute({
       template: body.template,
       source: { ...body.source, product: Boolean(body.controls.productId) },
     });
-    // One of the month's free videos while one is left, otherwise credits.
+    // One of the month's free or premium videos while one is left, otherwise credits.
     const entitlements = await getEntitlements({ workspaceId, userId, role });
     const quote = quoteStudioVideo(controls, {
       videoBalance: entitlements.meters.video.available,
+      premiumBalance: entitlements.meters.premium_video.available,
     });
     await requireBillingFeature({
       workspaceId,
@@ -51,6 +52,8 @@ export const POST = defineRoute({
       meter: quote.meter,
       freeLeft: quote.freeLeft,
       freeMonthly: freeVideosLeft(PLANS[entitlements.entitledPlan].allowances.videoUnits),
+      premiumLeft: quote.premiumLeft,
+      premiumMonthly: PLANS[entitlements.entitledPlan].allowances.premiumVideos,
       model: quote.model,
       resolution: quote.resolution,
       aspectRatio: quote.aspectRatio,

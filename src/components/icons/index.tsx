@@ -136,6 +136,8 @@ export * from "./glyphs";
 export * from "./social";
 // Campaigns (ADR-0039): the campaign kinds' marks, lucide until bespoke glyphs exist.
 export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
+// Studio motion graphics (ADR-0043), lucide until a bespoke glyph exists.
+export { Shapes } from "lucide-react";
 export { type IconProps, ICON_STROKE, createIcon } from "./icon-base";
 
 import {

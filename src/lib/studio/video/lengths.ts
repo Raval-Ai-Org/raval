@@ -19,6 +19,7 @@ export const CLIP_SECONDS: Record<UgcModelKey, number> = {
   long: 15,
   cinematic: 10,
   variation: 5,
+  animation: 8,
 };
 
 /** At most this many clips per video: each one waits for the one before. */

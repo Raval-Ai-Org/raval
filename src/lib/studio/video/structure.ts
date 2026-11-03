@@ -9,7 +9,7 @@ import type { VideoKindId } from "./kinds";
 /** Four beats per kind: open, develop, deepen, close. Fewer clips use fewer beats. */
 type Beats = { open: string; develop: string; deepen: string; close: string; single: string };
 
-const BEATS: Record<Exclude<VideoKindId, "motion-post">, Beats> = {
+const BEATS: Record<Exclude<VideoKindId, "motion-post" | "motion-graphics">, Beats> = {
   "living-picture": {
     single: "The post itself coming alive with one gentle motion, settling back on the post.",
     open: "The post itself, exactly as it is, coming alive with one gentle motion.",
@@ -88,7 +88,7 @@ const BEATS: Record<Exclude<VideoKindId, "motion-post">, Beats> = {
 
 /** One role per clip, in order. */
 export function clipRoles(kind: VideoKindId, clips: number): string[] {
-  if (kind === "motion-post") return [];
+  if (kind === "motion-post" || kind === "motion-graphics") return [];
   const beats = BEATS[kind];
   if (clips <= 1) return [beats.single];
   if (clips === 2) return [beats.open, beats.close];

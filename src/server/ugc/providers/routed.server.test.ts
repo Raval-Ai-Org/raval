@@ -217,9 +217,14 @@ describe("video provider fallback", () => {
     expect(videoProviderForModel("standard")).toBe("kie");
     expect(videoProviderForModel("draft")).toBe("kie");
     expect(videoProviderForModel("variation")).toBe("kie");
-    expect(videoProviderForModel("premium")).toBe("openrouter");
-    expect(videoProviderForModel("cinematic")).toBe("openrouter");
+    // Every option runs on KIE first (cost review 2026-11-03).
+    expect(videoProviderForModel("premium")).toBe("kie");
+    expect(videoProviderForModel("cinematic")).toBe("kie");
+    expect(videoProviderForModel("long")).toBe("kie");
+    expect(videoProviderForModel("animation")).toBe("kie");
+    vi.stubEnv("VIDEO_PROVIDER_LONG", "openrouter");
     expect(videoProviderForModel("long")).toBe("openrouter");
+    vi.unstubAllEnvs();
     vi.stubEnv("VIDEO_PROVIDER_PREMIUM", "kie");
     expect(videoProviderForModel("premium")).toBe("kie");
     vi.unstubAllEnvs();
@@ -341,9 +346,9 @@ describe("OpenRouter video requests", () => {
         { type: "image_url", image_url: { url: "https://x/a.png" }, frame_type: "first_frame" },
       ],
     });
-    const premium = specFor(UGC_MODELS.premium, "openrouter")!;
+    const cinematic = specFor(UGC_MODELS.cinematic, "openrouter")!;
     const body = buildOpenRouterVideoBody(
-      request({ model: premium, resolution: "2k", imageUrls: ["https://x/a.png"] }),
+      request({ model: cinematic, resolution: "2k", imageUrls: ["https://x/a.png"] }),
       "https://app.example.com/api/public/hooks/openrouter-video",
     );
     expect(body).toMatchObject({
@@ -416,7 +421,11 @@ describe("model catalog", () => {
       expect(specFor(model, "kie"), model.key).not.toBeNull();
       expect(specFor(model, "openrouter"), model.key).not.toBeNull();
     }
-    expect(specFor(UGC_MODELS.premium, "openrouter")!.providerModel).toBe("minimax/hailuo-3");
+    // Premium's outage fallback is Veo 3.1 Fast, never Hailuo 3 at 2K.
+    expect(specFor(UGC_MODELS.premium, "openrouter")!.providerModel).toBe("google/veo-3.1-fast");
+    expect(UGC_MODELS.premium.providerModel).toBe("google/gemini-omni-flash-1-1");
+    expect(UGC_MODELS.long.providerModel).toBe("wan/3-0-video");
+    expect(UGC_MODELS.animation.providerModel).toBe("wan/3-0-video");
     expect(specFor(UGC_MODELS.long, "openrouter")!.providerModel).toBe(
       "bytedance/seedance-2.0-fast",
     );

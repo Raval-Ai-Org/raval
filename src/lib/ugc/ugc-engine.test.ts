@@ -127,7 +127,8 @@ describe("model registry", () => {
 
   it("prices per video and per second, in credits (KIE) or USD (OpenRouter)", () => {
     expect(renderCredits(UGC_MODELS.standard.pricing, "720p", 4)).toBe(60);
-    expect(renderCredits(UGC_MODELS.long.pricing, "720p", 10)).toBe(248);
+    expect(renderCredits(UGC_MODELS.long.pricing, "720p", 10)).toBe(160);
+    expect(renderCredits(UGC_MODELS.premium.pricing, "1080p", 8)).toBe(84);
     expect(renderCredits(UGC_MODELS.standard.pricing, "480p", 8)).toBeNull();
     const orStandard = specFor(UGC_MODELS.standard, "openrouter")!;
     expect(renderCredits(orStandard.pricing, "720p", 8)).toBeNull();

@@ -1,4 +1,6 @@
-// Which meter pays for a video: one of the month's free videos, or credits.
+// Which meter pays for a video: one of the month's free videos (Draft,
+// Standard), one of the month's premium videos (Premium, Cinematic, Long), or
+// credits.
 // Pure and browser-safe; the quote, the Studio hold and UGC all use it, so the
 // price a person sees is the one charged.
 import {
@@ -11,13 +13,20 @@ import {
 /** A free video covers one whole video on these options, any offered length. */
 export const FREE_VIDEO_OPTIONS: readonly UgcModelKey[] = ["draft", "standard"];
 
+/** A premium video covers one whole video on these options, up to 24 s. */
+export const PREMIUM_VIDEO_OPTIONS: readonly UgcModelKey[] = ["premium", "cinematic", "long"];
+export const PREMIUM_VIDEO_MAX_SECONDS = 24;
+
 export type VideoCharge =
   | { meter: "video"; amount: number; label: string }
+  | { meter: "premium_video"; amount: number; label: string }
   | { meter: "credits"; amount: number; label: string };
 
 export function videoChargePlan(args: {
   /** The account's video balance in units (100 = 1 free video). */
   videoBalance: number;
+  /** Premium videos left this month (whole videos). */
+  premiumBalance?: number;
   option: UgcModelKey;
   seconds: number;
   resolution: VideoResolution;
@@ -26,6 +35,12 @@ export function videoChargePlan(args: {
 }): VideoCharge {
   if (FREE_VIDEO_OPTIONS.includes(args.option) && args.videoBalance >= FREE_VIDEO_UNITS)
     return { meter: "video", amount: FREE_VIDEO_UNITS, label: "Free video" };
+  if (
+    PREMIUM_VIDEO_OPTIONS.includes(args.option) &&
+    args.seconds <= PREMIUM_VIDEO_MAX_SECONDS &&
+    (args.premiumBalance ?? 0) >= 1
+  )
+    return { meter: "premium_video", amount: 1, label: "Premium video" };
   const amount = videoCreditsFor(args.option, args.seconds, args.resolution, args.providerCostUsd);
   return { meter: "credits", amount, label: `${amount.toLocaleString("en-US")} credits` };
 }

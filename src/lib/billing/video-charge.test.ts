@@ -55,6 +55,56 @@ describe("videoChargePlan", () => {
     ).toBe(240);
   });
 
+  it("uses a premium video for Premium, Cinematic and Long up to 24 s, then credits", () => {
+    for (const option of ["premium", "cinematic", "long"] as const)
+      expect(
+        videoChargePlan({
+          videoBalance: 0,
+          premiumBalance: 2,
+          option,
+          seconds: 24,
+          resolution: "720p",
+        }),
+      ).toEqual({ meter: "premium_video", amount: 1, label: "Premium video" });
+    // Longer than one premium video, none left, or not a premium option: credits.
+    expect(
+      videoChargePlan({
+        videoBalance: 0,
+        premiumBalance: 2,
+        option: "long",
+        seconds: 30,
+        resolution: "720p",
+      }).meter,
+    ).toBe("credits");
+    expect(
+      videoChargePlan({
+        videoBalance: 0,
+        premiumBalance: 0,
+        option: "premium",
+        seconds: 8,
+        resolution: "720p",
+      }).meter,
+    ).toBe("credits");
+    // A free Standard video stays free; premium videos are never spent on it.
+    expect(
+      videoChargePlan({
+        videoBalance: 0,
+        premiumBalance: 5,
+        option: "standard",
+        seconds: 16,
+        resolution: "720p",
+      }).meter,
+    ).toBe("credits");
+  });
+
+  it("gives every paid plan its monthly premium videos and Free none", () => {
+    expect(PLANS.free.allowances.premiumVideos).toBe(0);
+    expect(PLANS.starter.allowances.premiumVideos).toBe(2);
+    expect(PLANS.growth.allowances.premiumVideos).toBe(5);
+    expect(PLANS.agency.allowances.premiumVideos).toBe(12);
+    expect(PLANS.scale.allowances.premiumVideos).toBe(30);
+  });
+
   it("keeps the provider-cost floor in the credit price", () => {
     const cheap = videoCreditsFor("standard", 8, "720p", 0.3);
     const dear = videoCreditsFor("standard", 8, "720p", 3);

@@ -23,6 +23,9 @@ const RETRYABLE_CATEGORIES = new Set(["rate_limit", "provider", "network", "time
 
 export function kieGenerationType(model: UgcModel, imageCount: number, firstFrame = false): string {
   if (model.family === "seedance") return imageCount > 0 ? "REFERENCE_IMAGES" : "TEXT";
+  // Gemini Omni and Wan open on an exact frame when asked, else take references.
+  if (firstFrame && imageCount > 0 && (model.family === "gemini" || model.family === "wan"))
+    return "FIRST_AND_LAST_FRAMES_2_VIDEO";
   if (imageCount === 0 || !model.images) return "TEXT_2_VIDEO";
   // Veo opens on the exact picture (and may settle on a last one) when asked.
   if (firstFrame && model.family === "veo") return "FIRST_AND_LAST_FRAMES_2_VIDEO";
@@ -67,15 +70,42 @@ export function buildKieInput(req: VideoRenderRequest): Record<string, unknown> 
       };
     }
     case "gemini":
-      // Gemini Omni 1.1 Flash: up to 7 quota units (1 per image); duration is
-      // a string enum; a first frame can't be combined with references, so
-      // product photos always go in as references.
+      // Gemini Omni 1.1 Flash: duration is a string enum. With a first frame
+      // (a post's picture, or the frame the clip before ended on) the clip
+      // opens on it exactly and may settle on a last frame; references can't
+      // be combined with it. Otherwise up to 7 quota units, 1 per image.
       return {
         prompt: req.prompt.slice(0, 20_000),
-        ...(images.length ? { image_urls: images.slice(0, 7) } : {}),
+        ...(req.firstFrame && images.length
+          ? {
+              first_frame_url: images[0],
+              ...(req.lastFrameUrl ? { last_frame_url: req.lastFrameUrl } : {}),
+            }
+          : images.length
+            ? { image_urls: images.slice(0, 7) }
+            : {}),
         duration: String(req.durationSec),
         aspect_ratio: req.aspectRatio,
         resolution: req.resolution,
+      };
+    case "wan":
+      // Wan 3.0: one model id for text, a first frame or up to 10 references
+      // (never both). Resolutions are upper-case tiers.
+      return {
+        prompt: req.prompt.slice(0, 20_000),
+        ...((req.firstFrame || model.images?.mode === "first_frame") && images.length
+          ? {
+              first_frame_url: images[0],
+              ...(req.lastFrameUrl ? { last_frame_url: req.lastFrameUrl } : {}),
+            }
+          : images.length
+            ? { reference_image_urls: images.slice(0, 10) }
+            : {}),
+        resolution: req.resolution.toUpperCase(),
+        aspect_ratio: req.aspectRatio,
+        duration: req.durationSec,
+        audio,
+        nsfw_checker: true,
       };
     case "minimax":
       return {
@@ -189,7 +219,14 @@ export const kieVideoProvider: VideoProvider = {
         input,
         callBackUrl: req.callbackUrl,
       });
-      const { prompt: _prompt, image_urls: _i, reference_image_urls: _r, ...request } = input;
+      const {
+        prompt: _prompt,
+        image_urls: _i,
+        reference_image_urls: _r,
+        first_frame_url: _f,
+        last_frame_url: _l,
+        ...request
+      } = input;
       return {
         ok: true,
         taskId,

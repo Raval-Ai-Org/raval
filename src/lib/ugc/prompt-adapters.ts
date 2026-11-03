@@ -46,6 +46,13 @@ export function grokPromptAdapter(input: PromptInput): string {
   );
 }
 
+export function wanPromptAdapter(input: PromptInput): string {
+  return withDirection(
+    buildVideoPrompt(input),
+    "Keep the exact look of the supplied frame or references: the same art style, line, palette, materials and lighting from the first frame to the last. One clear motion idea per beat, smooth readable timing, no new characters or objects, no morphing of the product, and no words drawn on screen.",
+  );
+}
+
 export function buildModelPrompt(input: PromptInput): string {
   switch (input.model.family) {
     case "veo":
@@ -58,6 +65,8 @@ export function buildModelPrompt(input: PromptInput): string {
       return klingPromptAdapter(input);
     case "grok":
       return grokPromptAdapter(input);
+    case "wan":
+      return wanPromptAdapter(input);
     case "seedance":
     default:
       return seedancePromptAdapter(input);

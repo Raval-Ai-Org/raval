@@ -35,7 +35,8 @@ export function planRank(plan: PlanId): number {
  *   pro_messages    1 unit = 1 Mellox Pro (Claude Opus 5.5) chat message
  *   flash_messages  1 unit = 1 Mellox Flash chat message (fair-use counter)
  */
-export type Meter = "credits" | "video" | "pro_messages" | "flash_messages" | "creation";
+export type Meter =
+  "credits" | "video" | "pro_messages" | "flash_messages" | "creation" | "premium_video";
 export const VIDEO_UNITS_PER_VC = 100;
 
 export type ProbeEngine = "perplexity" | "chatgpt" | "gemini" | "google_aio";
@@ -56,6 +57,8 @@ export type PlanDef = {
   allowances: {
     credits: number;
     videoUnits: number;
+    /** Premium videos a month (Premium, Cinematic, Long; up to 24 s each). Never rolls over. */
+    premiumVideos: number;
     proMessages: number;
     flashMessages: number;
   };
@@ -105,7 +108,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 0,
     brands: 1,
     seats: 1,
-    allowances: { credits: 0, videoUnits: 0, proMessages: 0, flashMessages: 30 },
+    allowances: { credits: 0, videoUnits: 0, premiumVideos: 0, proMessages: 0, flashMessages: 30 },
     limits: {
       trackedPrompts: 5,
       engines: ["chatgpt", "gemini"],
@@ -140,7 +143,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 490,
     brands: 1,
     seats: 2,
-    allowances: { credits: 2_000, videoUnits: 200, proMessages: 30, flashMessages: 800 },
+    allowances: {
+      credits: 2_000,
+      videoUnits: 200,
+      premiumVideos: 2,
+      proMessages: 30,
+      flashMessages: 800,
+    },
     limits: {
       trackedPrompts: 25,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -178,7 +187,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 1_490,
     brands: 3,
     seats: 5,
-    allowances: { credits: 6_000, videoUnits: 200, proMessages: 150, flashMessages: 2_000 },
+    allowances: {
+      credits: 6_000,
+      videoUnits: 200,
+      premiumVideos: 5,
+      proMessages: 150,
+      flashMessages: 2_000,
+    },
     limits: {
       trackedPrompts: 100,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -211,7 +226,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 4_490,
     brands: 10,
     seats: null,
-    allowances: { credits: 18_000, videoUnits: 200, proMessages: 400, flashMessages: 5_000 },
+    allowances: {
+      credits: 18_000,
+      videoUnits: 200,
+      premiumVideos: 12,
+      proMessages: 400,
+      flashMessages: 5_000,
+    },
     limits: {
       trackedPrompts: 300,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -246,7 +267,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     priceAnnualUsd: 11_990,
     brands: 30,
     seats: null,
-    allowances: { credits: 50_000, videoUnits: 200, proMessages: 1_200, flashMessages: 12_000 },
+    allowances: {
+      credits: 50_000,
+      videoUnits: 200,
+      premiumVideos: 30,
+      proMessages: 1_200,
+      flashMessages: 12_000,
+    },
     limits: {
       trackedPrompts: 1_000,
       engines: ["perplexity", "chatgpt", "gemini"],
@@ -622,6 +649,16 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.12,
     routes: ["studio.photo-read"],
   },
+  // A motion graphic: one design call (Opus) drawn frame by frame by code,
+  // with its music bed and the frame check. No video model, no video units.
+  motion_graphics: {
+    credits: 90,
+    label: "Motion graphic",
+    unit: "per video",
+    feature: "studio",
+    expectedCostUsd: 0.4,
+    routes: ["studio.motion.compose"],
+  },
   carousel: {
     credits: 30,
     label: "Carousel",
@@ -989,7 +1026,8 @@ export function chatUnitsFor(
 
 /* ─────────────────────────── video credits ─────────────────────────── */
 
-export type UgcModelKey = "standard" | "draft" | "premium" | "long" | "cinematic" | "variation";
+export type UgcModelKey =
+  "standard" | "draft" | "premium" | "long" | "cinematic" | "variation" | "animation";
 /** Provider resolutions. 768p (KIE MiniMax H3) is priced and gated like 720p. */
 export type VideoResolution = "480p" | "720p" | "768p" | "1080p" | "2k";
 
@@ -998,11 +1036,11 @@ function priceBand(resolution: VideoResolution): VideoResolution {
 }
 
 /**
- * Video providers for now: KIE runs Veo 3.1 Fast / Lite (standard, draft) and Grok
- * Imagine (variation) because it is 2.6-3.9x cheaper there and those prices are
- * verified in src/lib/ugc/models.ts. OpenRouter runs premium, cinematic, long and the
- * Studio clip (KIE prices for Gemini Omni / MiniMax H3 are unverified; Seedance is
- * cheaper on OpenRouter). OpenRouter is also every KIE option's fallback.
+ * Video providers (cost review 2026-11-03): every option runs on KIE first, where
+ * each job's best model is cheapest: Veo 3.1 Fast / Lite (standard, draft), Gemini
+ * Omni Flash (premium), Wan 3.0 (long, animation), MiniMax H3 768p (cinematic) and
+ * Grok Imagine (variation). OpenRouter is every option's fallback when KIE refuses
+ * a render outright; it never takes Hailuo 3 at 2K for Premium.
  */
 export type VideoProviderId = "kie" | "openrouter";
 
@@ -1062,8 +1100,8 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     label: "Standard 8s 1080p",
   },
   {
-    provider: "openrouter",
-    fallback: "none",
+    provider: "kie",
+    fallback: "openrouter google/veo-3.1-fast",
     ugcKey: "premium",
     seconds: 8,
     resolution: "1080p",
@@ -1072,8 +1110,8 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     label: "Premium 8s",
   },
   {
-    provider: "openrouter",
-    fallback: "none",
+    provider: "kie",
+    fallback: "openrouter google/veo-3.1-fast",
     ugcKey: "premium",
     seconds: 10,
     resolution: "1080p",
@@ -1082,8 +1120,8 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     label: "Premium 10s",
   },
   {
-    provider: "openrouter",
-    fallback: "none",
+    provider: "kie",
+    fallback: "openrouter minimax/hailuo-3",
     ugcKey: "cinematic",
     seconds: 10,
     resolution: "2k",
@@ -1092,8 +1130,8 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     label: "Cinematic 10s",
   },
   {
-    provider: "openrouter",
-    fallback: "none",
+    provider: "kie",
+    fallback: "openrouter bytedance/seedance-2.0-fast",
     ugcKey: "long",
     seconds: 12,
     resolution: "720p",
@@ -1102,8 +1140,8 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     label: "Long take 12s 720p",
   },
   {
-    provider: "openrouter",
-    fallback: "none",
+    provider: "kie",
+    fallback: "openrouter bytedance/seedance-2.0-fast",
     ugcKey: "long",
     seconds: 15,
     resolution: "720p",
@@ -1112,8 +1150,8 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     label: "Long take 15s 720p",
   },
   {
-    provider: "openrouter",
-    fallback: "none",
+    provider: "kie",
+    fallback: "openrouter bytedance/seedance-2.0-fast",
     ugcKey: "long",
     seconds: 15,
     resolution: "480p",
@@ -1140,6 +1178,26 @@ export const VIDEO_OPTIONS: VideoOptionDef[] = [
     videoUnits: 50,
     feature: "ugc",
     label: "Quick variation 6s 480p",
+  },
+  {
+    provider: "kie",
+    fallback: "openrouter bytedance/seedance-2.0-fast",
+    ugcKey: "animation",
+    seconds: 8,
+    resolution: "720p",
+    videoUnits: 100,
+    feature: "ugc",
+    label: "Animation 8s 720p",
+  },
+  {
+    provider: "kie",
+    fallback: "openrouter bytedance/seedance-2.0-fast",
+    ugcKey: "animation",
+    seconds: 8,
+    resolution: "1080p",
+    videoUnits: 125,
+    feature: "video_1080p",
+    label: "Animation 8s 1080p",
   },
 ];
 

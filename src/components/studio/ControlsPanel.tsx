@@ -53,7 +53,9 @@ export function describeControls(session: StudioSession): string {
     parts.push({ short: "Short", standard: "Medium length", long: "Long" }[c.length ?? "standard"]);
   }
   if (session.type === "script") parts.push(`${c.durationSec ?? 30} seconds`);
-  if (
+  if (session.type === "video" && c.videoMode === "motion")
+    parts.push(`Motion graphic · ${c.durationSec ?? 12} seconds`);
+  else if (
     session.type === "video" &&
     (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site")
   )
@@ -178,7 +180,11 @@ export function ControlsPanel({
   // The brand's own clips or photos: no model footage, length or quality to pick.
   const ownFootage =
     session.type === "video" &&
-    (c.videoMode === "brand" || c.videoMode === "recap" || c.videoMode === "site");
+    (c.videoMode === "brand" ||
+      c.videoMode === "recap" ||
+      c.videoMode === "site" ||
+      c.videoMode === "motion");
+  const motionGraphic = session.type === "video" && c.videoMode === "motion";
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
   const motionPost = c.videoMode === "recap" && c.videoKind === "motion-post";
   const aiVideo = isAiVideo(session.type, c);
@@ -226,8 +232,19 @@ export function ControlsPanel({
           disabled={disabled}
         />
       )}
-      {session.type === "video" && (aiVideo || motionPost) ? (
+      {session.type === "video" && (aiVideo || motionPost || motionGraphic) ? (
         <VideoKindPicker controls={c} picked={settled.videoKind} set={set} />
+      ) : null}
+      {motionGraphic ? (
+        <div>
+          <FieldLabel>Length</FieldLabel>
+          <Segmented
+            label="Length"
+            value={String(c.durationSec ?? 12)}
+            onChange={(v) => set({ durationSec: Number(v) })}
+            options={["8", "12", "20"].map((v) => ({ value: v, label: `${v}s` }))}
+          />
+        </div>
       ) : null}
       {session.type === "story" ? (
         <StoryControls controls={c} set={set} lengths={lengths} length={settled.durationSec} />

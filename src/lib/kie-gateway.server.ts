@@ -176,11 +176,14 @@ function resultUrls(record: any): string[] {
       "videos",
       "videoUrl",
       "video_url",
+      "audio_url",
+      "audioUrl",
       "url",
     ]) {
       if (key in value) urls.push(...visit(value[key], depth + 1));
     }
-    for (const key of ["resultJson", "result_json", "result", "data"]) {
+    // Suno (music) keeps its tracks under response.data[].
+    for (const key of ["resultJson", "result_json", "result", "response", "data"]) {
       if (key in value) urls.push(...visit(value[key], depth + 1));
     }
     return [...new Set(urls)];

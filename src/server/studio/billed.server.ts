@@ -38,6 +38,10 @@ import {
 } from "@/server/billing/creation.server";
 import { HttpError } from "@/server/http-error";
 import { quoteStudioVideo, shortClipCreditsForRecap } from "./video-quote.server";
+import { MOTION_MAX_SECONDS, MOTION_MIN_SECONDS } from "@/lib/studio/motion/document";
+
+/** A motion graphic with no length chosen: long enough for three beats and the end hold. */
+const MOTION_DEFAULT_SECONDS = 12;
 import { shortClipPlan } from "@/lib/studio/short-clip";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { isClipEditEnabled, isPhotoDesignEnabled, isProductHeroEnabled } from "@/lib/feature-flags";
@@ -60,13 +64,15 @@ export { studioJobRenders } from "@/lib/studio/billing";
 
 const FREE_VIDEOS_USED =
   "Your free videos for this month are used. Check the price in credits and generate again.";
+const PREMIUM_VIDEOS_USED =
+  "Your premium videos for this month are used. Check the price in credits and generate again.";
 
 export type BilledStudioJob = {
   job: StudioJob;
   /** Refreshed from the wallet so held and spent credits stay distinct. */
   balance: number | null;
   /** What the job is priced at: credits, or video units for a video. */
-  charge: { meter: "credits" | "video" | "creation"; amount: number };
+  charge: { meter: "credits" | "video" | "premium_video" | "creation"; amount: number };
 };
 
 export async function createBilledStudioJob(args: {
@@ -160,6 +166,20 @@ export async function createBilledStudioJob(args: {
       input.controls.durationSec =
         (input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS;
   }
+  // A motion graphic is drawn by code: no video model, no quote, one price.
+  if (input.type === "video" && input.controls.videoMode === "motion") {
+    input.controls.videoPreview = false;
+    input.controls.videoKind = "motion-graphics";
+    delete input.controls.videoQuote;
+    delete input.controls.videoModelKey;
+    input.controls.durationSec = Math.min(
+      MOTION_MAX_SECONDS,
+      Math.max(
+        MOTION_MIN_SECONDS,
+        Math.round(input.controls.durationSec ?? MOTION_DEFAULT_SECONDS),
+      ),
+    );
+  }
   // A new AI video's kind, model and length in whole clips, decided before
   // pricing (src/lib/studio/video/settle.ts). A video with no model chosen is
   // made on Standard, never silently on Premium.
@@ -219,13 +239,17 @@ export async function createBilledStudioJob(args: {
   const clip = action === "studio_short_clip" ? shortClipPlan(input) : null;
   const recapClips = clip && input.controls.videoMode === "recap";
   const quoted = Boolean((video || (clip && !recapClips)) && input.controls.videoModelKey);
-  // A whole video is one of the month's free videos while one is left, then
-  // credits (src/lib/billing/video-charge.ts).
-  const videoBalance =
-    video && quoted
-      ? (await getEntitlements({ workspaceId, userId, role })).meters.video.available
-      : 0;
-  let videoQuote = quoted ? quoteStudioVideo(input.controls, { videoBalance }) : null;
+  // A whole video is one of the month's free videos (Draft, Standard) or
+  // premium videos (Premium, Cinematic, Long) while one is left, then credits
+  // (src/lib/billing/video-charge.ts).
+  const wallets =
+    video && quoted ? (await getEntitlements({ workspaceId, userId, role })).meters : null;
+  let videoQuote = quoted
+    ? quoteStudioVideo(input.controls, {
+        videoBalance: wallets?.video.available ?? 0,
+        premiumBalance: wallets?.premium_video.available ?? 0,
+      })
+    : null;
   // A person's Generate button carries the quote it showed, which must still
   // hold. A worker (Autopilot, Campaigns, MCP) shows no price and is charged
   // the server's quote.
@@ -239,7 +263,9 @@ export async function createBilledStudioJob(args: {
       409,
       shownQuote.meter === "video" && videoQuote.meter === "credits"
         ? FREE_VIDEOS_USED
-        : "Video settings or prices changed. Refresh the quote before generating.",
+        : shownQuote.meter === "premium_video" && videoQuote.meter === "credits"
+          ? PREMIUM_VIDEOS_USED
+          : "Video settings or prices changed. Refresh the quote before generating.",
     );
   const keepQuote = (quote: NonNullable<typeof videoQuote>) => {
     input.controls.videoQuote = {
@@ -304,7 +330,10 @@ export async function createBilledStudioJob(args: {
     : video
       ? (videoQuote?.meter ?? ("credits" as const))
       : ("credits" as const);
-  const price: { meter: "credits" | "video" | "creation"; amount: number } = { meter, amount };
+  const price: { meter: "credits" | "video" | "premium_video" | "creation"; amount: number } = {
+    meter,
+    amount,
+  };
   const actionName = captionEditId
     ? "studio_caption_included"
     : useCreation
@@ -334,12 +363,18 @@ export async function createBilledStudioJob(args: {
     try {
       return await begin();
     } catch (error) {
-      // The last free video went between the quote and the hold. A person sees
-      // the credit price before paying; a worker is charged the server's quote.
-      if (!(error instanceof InsufficientBalanceError) || price.meter !== "video" || !videoQuote)
+      // The last free or premium video went between the quote and the hold. A
+      // person sees the credit price before paying; a worker is charged the
+      // server's quote.
+      if (
+        !(error instanceof InsufficientBalanceError) ||
+        (price.meter !== "video" && price.meter !== "premium_video") ||
+        !videoQuote
+      )
         throw error;
-      if (shownQuote) throw new HttpError(409, FREE_VIDEOS_USED);
-      videoQuote = quoteStudioVideo(input.controls, { videoBalance: 0 });
+      if (shownQuote)
+        throw new HttpError(409, price.meter === "video" ? FREE_VIDEOS_USED : PREMIUM_VIDEOS_USED);
+      videoQuote = quoteStudioVideo(input.controls, { videoBalance: 0, premiumBalance: 0 });
       keepQuote(videoQuote);
       price.meter = videoQuote.meter;
       price.amount = amount = videoQuote.units;
