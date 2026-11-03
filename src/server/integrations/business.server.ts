@@ -9,6 +9,9 @@
 //   saveEmailDraft       a person's click: a content item becomes a Mailchimp
 //                        draft campaign. Mellox never sends or schedules it.
 //   exportCalendarToSheets  a person's click: the calendar to a new sheet.
+//   savePostToDrive      a person's click: a post's files into a Mellox folder.
+//   saveGmailDraft       a person's click: a post as a Gmail draft (never sent).
+//   sendAdToGoogleAds    an admin's click: a Studio ad as a paused campaign.
 import "server-only";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { recordAudit } from "@/server/audit.server";
@@ -16,8 +19,22 @@ import { HttpError } from "@/server/http-error";
 import { isIntegrationsEnabled } from "@/lib/feature-flags";
 import { GoalsSchema } from "@/lib/goals/contracts";
 import {
+  DRIVE_FOLDER,
   calendarValues,
+  driveFileName,
+  driveFolderUrl,
   emailHtml,
+  gmailDraftArgs,
+  googleAdsAdArgs,
+  googleAdsAdGroupArgs,
+  googleAdsBudgetArgs,
+  googleAdsCampaignArgs,
+  googleAdsCampaignUrl,
+  readCustomerIds,
+  readDriveId,
+  readGmailDraftId,
+  readResourceName,
+  rsaText,
   hubspotNewContactsArgs,
   leadCountDue,
   mailchimpCampaignArgs,
@@ -245,6 +262,272 @@ export async function saveEmailDraft(args: {
     payload: { campaignId, listId: list.id },
   });
   return { campaignId, url: mailchimpDraftUrl(campaign.web_id), audience: list.name };
+}
+
+// ── A post's own media ────────────────────────────────────────────────────
+
+type PostRow = {
+  id: string;
+  kind: string | null;
+  title: string | null;
+  body: string | null;
+  meta: Record<string, unknown> | null;
+};
+
+async function loadPost(workspaceId: string, id: string): Promise<PostRow> {
+  const { data: item } = await db
+    .from("content_items")
+    .select("id, kind, title, body, meta")
+    .eq("id", id)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (!item) throw new HttpError(404, "That post isn't in this workspace.");
+  return item as PostRow;
+}
+
+/** The post's stored pictures and video, checked to be this workspace's files. */
+function mediaPaths(item: PostRow, workspaceId: string): string[] {
+  const meta = item.meta ?? {};
+  const paths = Array.isArray(meta.asset_storage_paths)
+    ? meta.asset_storage_paths
+    : meta.asset_storage_path
+      ? [meta.asset_storage_path]
+      : [];
+  return paths.filter(
+    (p): p is string => typeof p === "string" && isWorkspaceStoragePath(p, workspaceId),
+  );
+}
+
+// ── Google Drive: save a finished post ────────────────────────────────────
+
+export async function savePostToDrive(args: {
+  workspaceId: string;
+  userId: string;
+  role: string;
+  contentItemId: string;
+}): Promise<{ folderUrl: string; files: number }> {
+  requireOn(args.workspaceId);
+  const caller: ToolCaller = { kind: "person", userId: args.userId, role: args.role };
+  const account = await activeAccount(args.workspaceId, "googledrive");
+  if (!account) throw new HttpError(409, "Connect Google Drive first in Channels.");
+  const item = await loadPost(args.workspaceId, args.contentItemId);
+  const paths = mediaPaths(item, args.workspaceId);
+  const words = String(item.body ?? "").trim();
+  if (!paths.length && !words) throw new HttpError(400, "This post has nothing to save yet.");
+  const approvalRef = `content:${item.id}`;
+  const run = (tool: string, toolArgs: Record<string, unknown>) =>
+    runIntegrationTool({
+      workspaceId: args.workspaceId,
+      accountId: account.id,
+      tool,
+      arguments: toolArgs,
+      caller,
+      purpose: "drive",
+      approvalRef,
+    });
+
+  // One "Mellox" folder at the top of the Drive, found or made once.
+  const found = await run("GOOGLEDRIVE_FIND_FOLDER", { name_exact: DRIVE_FOLDER, page_size: 1 });
+  let folderId = found.successful ? readDriveId(found.data) : null;
+  if (!folderId) {
+    const made = await run("GOOGLEDRIVE_CREATE_FOLDER", { name: DRIVE_FOLDER });
+    folderId = made.successful ? readDriveId(made.data) : null;
+    if (!folderId) throw new HttpError(502, made.error || "Google Drive didn't make the folder.");
+  }
+
+  const signed = await signStoragePaths(supabaseAdmin as any, paths, 3600);
+  let files = 0;
+  for (const [n, path] of paths.entries()) {
+    const url = signed.get(path);
+    if (!url) continue;
+    const saved = await run("GOOGLEDRIVE_UPLOAD_FROM_URL", {
+      source_url: url,
+      name: driveFileName(item.title, n, paths.length, path),
+      parent_folder_id: folderId,
+    });
+    if (!saved.successful) {
+      throw new HttpError(
+        502,
+        `${files} of ${paths.length} files were saved, then Drive refused one: ${saved.error ?? "no reason given"}`,
+      );
+    }
+    files++;
+  }
+  if (words) {
+    const text = await run("GOOGLEDRIVE_CREATE_FILE_FROM_TEXT", {
+      file_name: driveFileName(item.title, 0, 1, "caption.txt"),
+      text_content: words,
+      mime_type: "text/plain",
+      parent_id: folderId,
+    });
+    if (text.successful) files++;
+  }
+  await recordAudit({
+    workspaceId: args.workspaceId,
+    userId: args.userId,
+    action: "integrations.drive.save",
+    entity: item.id,
+    payload: { files },
+  });
+  return { folderUrl: driveFolderUrl(folderId), files };
+}
+
+// ── Gmail: a draft ────────────────────────────────────────────────────────
+
+export async function saveGmailDraft(args: {
+  workspaceId: string;
+  userId: string;
+  role: string;
+  contentItemId: string;
+}): Promise<{ draftId: string; url: string }> {
+  requireOn(args.workspaceId);
+  const caller: ToolCaller = { kind: "person", userId: args.userId, role: args.role };
+  const account = await activeAccount(args.workspaceId, "gmail");
+  if (!account) throw new HttpError(409, "Connect Gmail first in Channels.");
+  const item = await loadPost(args.workspaceId, args.contentItemId);
+  const body = String(item.body ?? "").trim();
+  if (!body) throw new HttpError(400, "This post has no words to put in an email.");
+  const [path] = mediaPaths(item, args.workspaceId);
+  const image = path
+    ? ((await signStoragePaths(supabaseAdmin as any, [path], 7 * 24 * 3600)).get(path) ?? null)
+    : null;
+  const result = await runIntegrationTool({
+    workspaceId: args.workspaceId,
+    accountId: account.id,
+    tool: "GMAIL_CREATE_EMAIL_DRAFT",
+    arguments: gmailDraftArgs(subjectFrom(item.title, body), emailHtml(body, image)),
+    caller,
+    purpose: "email",
+    approvalRef: `content:${item.id}`,
+  });
+  const draftId = result.successful ? readGmailDraftId(result.data) : null;
+  if (!draftId) throw new HttpError(502, result.error || "Gmail didn't save the draft.");
+  await recordAudit({
+    workspaceId: args.workspaceId,
+    userId: args.userId,
+    action: "integrations.gmail.draft",
+    entity: item.id,
+    payload: { draftId },
+  });
+  return { draftId, url: "https://mail.google.com/mail/u/0/#drafts" };
+}
+
+// ── Google Ads: a paused Search campaign ──────────────────────────────────
+
+/** A day's budget a person can set here: $1 to $1,000, in the account's currency. */
+const DAILY_MIN = 1;
+const DAILY_MAX = 1000;
+
+export async function sendAdToGoogleAds(args: {
+  workspaceId: string;
+  userId: string;
+  role: string;
+  contentItemId: string;
+  /** Daily budget in the ad account's own currency. */
+  dailyBudget: number;
+  /** Where people land; the brand's website when not given. */
+  finalUrl?: string | null;
+}): Promise<{ campaignUrl: string; campaign: string }> {
+  requireOn(args.workspaceId);
+  const caller: ToolCaller = { kind: "person", userId: args.userId, role: args.role };
+  if (!(args.dailyBudget >= DAILY_MIN && args.dailyBudget <= DAILY_MAX)) {
+    throw new HttpError(400, `Pick a daily budget between ${DAILY_MIN} and ${DAILY_MAX}.`);
+  }
+  const account = await activeAccount(args.workspaceId, "googleads");
+  if (!account) throw new HttpError(409, "Connect Google Ads first in Channels.");
+  const item = await loadPost(args.workspaceId, args.contentItemId);
+  const ads = (Array.isArray(item.meta?.ad_variants) ? item.meta.ad_variants : [])
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
+    .map((a) => ({
+      headline: String(a.headline ?? ""),
+      primaryText: String(a.primaryText ?? ""),
+      description: String(a.description ?? ""),
+    }));
+  if (!ads.length) throw new HttpError(400, "Only a Studio ad can go to Google Ads.");
+
+  const { data: ws } = await db
+    .from("workspaces")
+    .select("name, domain")
+    .eq("id", args.workspaceId)
+    .maybeSingle();
+  const finalUrl =
+    args.finalUrl?.trim() ||
+    (ws?.domain ? `https://${String(ws.domain).replace(/^https?:\/\//, "")}` : "");
+  try {
+    if (new URL(finalUrl).protocol !== "https:") throw new Error();
+  } catch {
+    throw new HttpError(400, "Add the page people should land on (an https link).");
+  }
+  const text = rsaText(ads, ws?.name ?? "");
+  if (!text) throw new HttpError(400, "This ad needs a little more text for Google (3 headlines).");
+
+  const approvalRef = `ad:${item.id}`;
+  const run = async (tool: string, toolArgs: Record<string, unknown>, what: string) => {
+    const result = await runIntegrationTool({
+      workspaceId: args.workspaceId,
+      accountId: account.id,
+      tool,
+      arguments: toolArgs,
+      caller,
+      purpose: "ads",
+      approvalRef,
+    });
+    if (!result.successful)
+      throw new HttpError(
+        502,
+        `Google Ads didn't make the ${what}: ${result.error ?? "no reason given"}`,
+      );
+    return result.data;
+  };
+
+  const customers = readCustomerIds(
+    await run("GOOGLEADS_LIST_ACCESSIBLE_CUSTOMERS", {}, "account list"),
+  );
+  const customerId = customers[0];
+  if (!customerId) throw new HttpError(409, "No Google Ads account was found for this sign-in.");
+
+  const name = `Mellox · ${subjectFrom(item.title, ads[0].headline).slice(0, 60)} · ${new Date().toISOString().slice(0, 10)}`;
+  const budget = readResourceName(
+    await run(
+      "GOOGLEADS_MUTATE_CAMPAIGN_BUDGETS",
+      googleAdsBudgetArgs(customerId, `${name} budget`, Math.round(args.dailyBudget * 1_000_000)),
+      "budget",
+    ),
+    "campaignBudgets",
+  );
+  if (!budget) throw new HttpError(502, "Google Ads didn't return the budget it made.");
+  const campaign = readResourceName(
+    await run(
+      "GOOGLEADS_MUTATE_CAMPAIGNS_V2",
+      googleAdsCampaignArgs(customerId, name, budget),
+      "campaign",
+    ),
+    "campaigns",
+  );
+  if (!campaign) throw new HttpError(502, "Google Ads didn't return the campaign it made.");
+  const adGroup = readResourceName(
+    await run(
+      "GOOGLEADS_MUTATE_AD_GROUPS",
+      googleAdsAdGroupArgs(customerId, "Ad group 1", campaign),
+      "ad group",
+    ),
+    "adGroups",
+  );
+  if (!adGroup) throw new HttpError(502, "Google Ads didn't return the ad group it made.");
+  await run(
+    "GOOGLEADS_MUTATE_AD_GROUP_ADS",
+    googleAdsAdArgs(customerId, adGroup, text, finalUrl),
+    "ad",
+  );
+
+  await recordAudit({
+    workspaceId: args.workspaceId,
+    userId: args.userId,
+    action: "integrations.googleads.paused_campaign",
+    entity: item.id,
+    payload: { customerId, campaign, dailyBudget: args.dailyBudget },
+  });
+  return { campaign, campaignUrl: googleAdsCampaignUrl(customerId, campaign) };
 }
 
 // ── Google Sheets: the calendar ───────────────────────────────────────────

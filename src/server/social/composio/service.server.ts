@@ -2,7 +2,8 @@
 //
 //   syncDestinations   after a social app connects: look up where it can post
 //                      (the Instagram business account, each Facebook Page,
-//                      each Pinterest board) and mirror each one into
+//                      each Pinterest board, the LinkedIn profile, each
+//                      YouTube channel) and mirror each one into
 //                      social_accounts (provider 'composio'), so the publish
 //                      picker, Analytics and the calendar list them as usual.
 //   composioAccounts   those rows as ConnectedAccounts for distribute().
@@ -28,6 +29,7 @@ import { integrationApp } from "@/lib/integrations/catalog";
 import type { ConnectedAccount } from "@/lib/sdr.handlers";
 import { COMPOSIO_PUBLISHING } from "@/lib/social/routing";
 import {
+  isFileArg,
   planPublish,
   postUrl,
   resolveArgs,
@@ -42,7 +44,8 @@ import {
   readDestinations,
 } from "@/lib/social/composio/destinations";
 import { ComposioGatewayError } from "@/server/integrations/composio/gateway.server";
-import { runIntegrationTool } from "@/server/integrations/execute.server";
+import { runIntegrationTool, stageIntegrationFile } from "@/server/integrations/execute.server";
+import { safeFetch } from "@/server/safe-fetch";
 
 // Read on each call, so tests can swap the client in.
 const db = {
@@ -95,7 +98,11 @@ export async function syncDestinations(args: {
             ? "No Facebook Page found. Connect again and pick a Page you manage."
             : args.app === "pinterest"
               ? "No Pinterest board found. Make a board, then connect again."
-              : `Mellox couldn't read this ${name} account. Use a Business or Creator account.`,
+              : args.app === "youtube"
+                ? "No YouTube channel found. Create a channel, then connect again."
+                : args.app === "linkedin"
+                  ? "Mellox couldn't read this LinkedIn profile. Connect again."
+                  : `Mellox couldn't read this ${name} account. Use a Business or Creator account.`,
       })
       .eq("id", args.integrationAccountId);
     return 0;
@@ -351,10 +358,15 @@ async function sendRow(
 
   const ids: (string | null)[] = [];
   for (const [index, step] of plan.steps.entries()) {
-    const stepArgs = resolveArgs(step.args, ids);
-    if (!stepArgs) return failed("The network didn't return the post it was making.");
+    const resolved = resolveArgs(step.args, ids);
+    if (!resolved) return failed("The network didn't return the post it was making.");
     const last = index === plan.steps.length - 1;
     try {
+      const stepArgs = await withStagedFiles(resolved, {
+        workspaceId: args.workspaceId,
+        accountId: parsed.integrationAccountId,
+        tool: step.tool,
+      });
       const result = await runIntegrationTool({
         workspaceId: args.workspaceId,
         accountId: parsed.integrationAccountId,
@@ -411,6 +423,39 @@ async function sendRow(
     error_code: null,
     error_category: null,
   });
+}
+
+// The biggest file handed to a network: a YouTube or LinkedIn video.
+const MAX_FILE_BYTES = 512 * 1024 * 1024;
+
+/**
+ * Replace every `{ $file }` argument (alone or in a list) with the file put in
+ * Composio's store. The bytes come from the post's own signed link, through
+ * the SSRF-guarded fetcher. Staging posts nothing, so a failure here is safe.
+ */
+async function withStagedFiles(
+  args: Record<string, unknown>,
+  where: { workspaceId: string; accountId: string; tool: string },
+): Promise<Record<string, unknown>> {
+  const stage = async (value: unknown): Promise<unknown> => {
+    if (!isFileArg(value)) return value;
+    const { url, name, mimetype } = value.$file;
+    const res = await safeFetch(url, {
+      timeoutMs: 120_000,
+      maxBytes: MAX_FILE_BYTES,
+      onOverflow: "error",
+    });
+    if (!res.ok)
+      throw new Error(
+        `The ${mimetype.startsWith("video") ? "video" : "picture"} couldn't be read from storage.`,
+      );
+    return stageIntegrationFile({ ...where, name, mimetype, bytes: res.bytes });
+  };
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    out[key] = Array.isArray(value) ? await Promise.all(value.map(stage)) : await stage(value);
+  }
+  return out;
 }
 
 // ── Retry, cancel ─────────────────────────────────────────────────────────

@@ -35,11 +35,10 @@ import {
   Tile,
   type SurfaceNavItem,
 } from "@/components/app/surface/SurfaceLayout";
-import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
-import { CanvaConnection } from "@/components/app/connectors/CanvaConnection";
-import { NotionConnection } from "@/components/app/connectors/NotionConnection";
-import { SlackConnection } from "@/components/app/connectors/SlackConnection";
-import { ConnectedApps } from "@/components/app/connectors/ConnectedApps";
+import Link from "next/link";
+import { AppLogo } from "@/components/brand/AppLogo";
+import { dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { channelsPath } from "@/lib/workspace/paths";
 import { GitHubConnector } from "@/components/app/connectors/GitHubConnector";
 import { WebflowConnector } from "@/components/app/connectors/WebflowConnector";
 import { WixConnector } from "@/components/app/connectors/WixConnector";
@@ -399,18 +398,39 @@ function SettingsDialog({
       <SurfaceLayout label="Settings" items={nav} value={section} onChange={onSectionChange}>
         <div key={section} className="animate-in fade-in duration-300">
           {section === "accounts" && (
-            <SurfacePage width="narrow">
-              <SocialAccountsSection variant="settings" />
-              {workspaceId && (
-                <>
-                  <GroupLabel>Apps</GroupLabel>
-                  <div className="space-y-3">
-                    <CanvaConnection />
-                    <NotionConnection workspaceId={workspaceId} />
-                    <SlackConnection workspaceId={workspaceId} />
-                    <ConnectedApps />
+            <SurfacePage title="Connections" width="narrow">
+              {workspaceId ? (
+                // Every account and app now lives in Channels (sidebar → Grow).
+                <div className="flex flex-col items-start gap-4 rounded-3xl border border-border/70 bg-[var(--ds-tile-bg)] p-5 sm:flex-row sm:items-center">
+                  <div className="flex -space-x-2">
+                    {(["instagram", "linkedin", "youtube", "gmail"] as const).map((app) => (
+                      <AppLogo
+                        key={app}
+                        app={app}
+                        name={app}
+                        size={36}
+                        className="ring-2 ring-background"
+                      />
+                    ))}
                   </div>
-                </>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-medium text-foreground">
+                      Your accounts and apps are in Channels
+                    </p>
+                    <p className="text-[13px] text-muted-foreground">
+                      Social accounts, apps, your website and analytics, all in one place.
+                    </p>
+                  </div>
+                  <Link
+                    href={channelsPath(workspaceId)}
+                    onClick={() => onOpenChange(false)}
+                    className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                  >
+                    Open Channels
+                  </Link>
+                </div>
+              ) : (
+                noWorkspace
               )}
             </SurfacePage>
           )}

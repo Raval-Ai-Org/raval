@@ -73,6 +73,7 @@ import { ScriptVideoActions } from "./ScriptVideoActions";
 import { EditChat } from "./EditChat";
 import { MakeMoreFrom } from "./MakeMoreFrom";
 import { EmailDraft } from "./EmailDraft";
+import { SendToApps } from "./SendToApps";
 import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
 import { VersionStrip } from "./VersionStrip";
 
@@ -1616,6 +1617,21 @@ export function ReviewPanel({
               <EmailDraft
                 workspaceId={session.workspaceId}
                 contentItemId={job.content_item_ids[0]}
+                disabled={revising || dirty || editing}
+              />
+            </InspectorSection>
+          ) : null}
+
+          {job.status === "succeeded" &&
+          job.content_item_ids?.[0] &&
+          (connectedApps.has("googledrive") ||
+            connectedApps.has("gmail") ||
+            (session.type === "ad" && connectedApps.has("googleads"))) ? (
+            <InspectorSection title="Send to">
+              <SendToApps
+                workspaceId={session.workspaceId}
+                contentItemId={job.content_item_ids[0]}
+                isAd={session.type === "ad"}
                 disabled={revising || dirty || editing}
               />
             </InspectorSection>

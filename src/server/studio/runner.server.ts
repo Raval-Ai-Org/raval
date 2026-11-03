@@ -2653,7 +2653,11 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
   // Keep caption generation and its rewrite on the existing writing style.
   // The approved visual layer is applied only when designing/rendering media.
   if (visualLook) ctx.style = visualLook;
-  const title = (output.title || input.intent.brief).slice(0, 120);
+  // A model can answer the literal text "undefined"; that is no title.
+  const ownTitle = output.title?.trim();
+  const title = (
+    ownTitle && !/^(undefined|null)$/i.test(ownTitle) ? ownTitle : input.intent.brief
+  ).slice(0, 120);
   if (type === "carousel" && output.slides?.length) {
     output = {
       ...output,

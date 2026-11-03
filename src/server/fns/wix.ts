@@ -8,6 +8,16 @@ import { z } from "zod";
 const uuid = z.string().uuid();
 const service = () => import("@/server/connectors/wix/service.server");
 
+/** Whether this server has Mellox's Wix app keys; without them Wix isn't offered. */
+export const getWixAvailability = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    const { checkWixConfig } = await import("@/server/connectors/wix/config.server");
+    return { available: checkWixConfig().ok };
+  });
+
 export const getWixConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))

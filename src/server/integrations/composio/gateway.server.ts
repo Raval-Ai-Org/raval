@@ -368,6 +368,115 @@ export async function deleteAccount(id: string): Promise<void> {
 
 // ── Tools ─────────────────────────────────────────────────────────────────
 
+// ── Files ─────────────────────────────────────────────────────────────────
+//
+// A tool that takes a file (a LinkedIn picture, a YouTube video) takes it from
+// Composio's file store: ask for an upload link, PUT the bytes, then pass
+// `{ name, mimetype, s3key }` as the tool's argument.
+
+export type ComposioFile = { name: string; mimetype: string; s3key: string };
+
+/** Put one file in Composio's store for one tool. Only execute.server.ts calls this. */
+export async function uploadFile(args: {
+  toolkit: string;
+  tool: string;
+  name: string;
+  mimetype: string;
+  bytes: Uint8Array;
+}): Promise<ComposioFile> {
+  const { createHash } = await import("node:crypto");
+  const md5 = createHash("md5").update(args.bytes).digest("hex");
+  const link = await call<{ key?: string; new_presigned_url?: string; newPresignedUrl?: string }>({
+    method: "POST",
+    path: "/files/upload/request",
+    body: {
+      toolkit_slug: args.toolkit,
+      tool_slug: args.tool,
+      filename: args.name,
+      mimetype: args.mimetype,
+      md5,
+    },
+    // Asking for a link changes nothing the person has.
+    write: false,
+  });
+  const url = link.new_presigned_url ?? link.newPresignedUrl;
+  if (!link.key || !url) {
+    throw new ComposioGatewayError(502, "Composio returned no upload link", "provider_error");
+  }
+  // The same key with the same bytes is the same file, so a retry is harmless.
+  const put = await fetchWithRetry(
+    url,
+    {
+      method: "PUT",
+      headers: { "Content-Type": args.mimetype },
+      body: args.bytes as unknown as BodyInit,
+    },
+    {
+      timeoutMs: 120_000,
+      retries: 2,
+      retryOnTimeout: true,
+      retryableStatuses: [429, 500, 502, 503, 504],
+      onTransportError: ({ kind, detail }) =>
+        new ComposioGatewayError(502, `File upload ${kind}: ${detail}`, "provider_error"),
+    },
+  );
+  if (!put.ok) {
+    throw new ComposioGatewayError(502, `File upload failed (${put.status})`, "provider_error");
+  }
+  return { name: args.name, mimetype: args.mimetype, s3key: link.key };
+}
+
+// ── Proxy ─────────────────────────────────────────────────────────────────
+//
+// For an app whose own API Mellox already speaks (Canva), Composio signs the
+// request with the connected account's grant. Only execute.server.ts calls
+// this, after checking the endpoint against the catalog.
+
+export type ProxyResult = { status: number; data: unknown; headers: Record<string, string> };
+
+export async function proxyRequest(args: {
+  userId: string;
+  connectedAccountId: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  endpoint: string;
+  body?: Record<string, unknown>;
+  binary?: { base64: string; contentType: string };
+  headers?: Record<string, string>;
+  write: boolean;
+  timeoutMs?: number;
+}): Promise<ProxyResult> {
+  const res = await call<{
+    status?: number;
+    data?: unknown;
+    headers?: Record<string, string>;
+  }>({
+    method: "POST",
+    path: "/tools/execute/proxy",
+    body: {
+      user_id: args.userId,
+      connected_account_id: args.connectedAccountId,
+      endpoint: args.endpoint,
+      method: args.method,
+      ...(args.body ? { body: args.body } : {}),
+      ...(args.binary
+        ? { binary_body: { base64: args.binary.base64, content_type: args.binary.contentType } }
+        : {}),
+      ...(args.headers
+        ? {
+            parameters: Object.entries(args.headers).map(([name, value]) => ({
+              name,
+              value,
+              type: "header",
+            })),
+          }
+        : {}),
+    },
+    write: args.write,
+    timeoutMs: args.timeoutMs,
+  });
+  return { status: res.status ?? 200, data: res.data ?? null, headers: res.headers ?? {} };
+}
+
 /** Run one tool for one connected account. Only execute.server.ts calls this. */
 export async function executeTool(args: {
   tool: string;

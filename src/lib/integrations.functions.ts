@@ -18,6 +18,15 @@ export const listMailchimpAudiences = serverFn<typeof Handlers.listMailchimpAudi
 export const saveEmailDraft = serverFn<typeof Handlers.saveEmailDraft>(
   "integrations/saveEmailDraft",
 );
+export const savePostToDrive = serverFn<typeof Handlers.savePostToDrive>(
+  "integrations/savePostToDrive",
+);
+export const saveGmailDraft = serverFn<typeof Handlers.saveGmailDraft>(
+  "integrations/saveGmailDraft",
+);
+export const sendAdToGoogleAds = serverFn<typeof Handlers.sendAdToGoogleAds>(
+  "integrations/sendAdToGoogleAds",
+);
 export const exportCalendarToSheets = serverFn<typeof Handlers.exportCalendarToSheets>(
   "integrations/exportCalendarToSheets",
 );

@@ -14,6 +14,7 @@ import {
   restoreCanvaOriginalAction,
   startCanvaConnect,
 } from "@/lib/canva.functions";
+import { startAppConnect } from "@/lib/integrations.functions";
 import { onConnectResult, openConnectWindow } from "@/lib/connectors/connect-window";
 import { CanvaPanel, type CanvaPanelProps } from "./CanvaPanel";
 
@@ -63,7 +64,8 @@ export function CanvaEditButton({
   useEffect(
     () =>
       onConnectResult((result) => {
-        if (result.provider !== "canva" || result.status !== "connected") return;
+        if (result.provider !== "canva" && result.provider !== "apps") return;
+        if (result.status !== "connected") return;
         toast.success("Canva connected");
         void refresh();
       }),
@@ -95,9 +97,20 @@ export function CanvaEditButton({
         tab?.close();
         const returnPath = window.location.pathname + window.location.search;
         // Reserved before asking for the address; falls back to this tab if blocked.
-        const win = openConnectWindow("canva");
+        const viaApps = connection.via === "composio";
+        const win = openConnectWindow(viaApps ? "apps" : "canva");
         try {
-          win.go((await startCanvaConnect({ data: { workspaceId, returnPath } })).url);
+          const { url } = viaApps
+            ? await startAppConnect({
+                data: {
+                  workspaceId,
+                  app: "canva",
+                  returnOrigin: window.location.origin,
+                  returnPath,
+                },
+              })
+            : await startCanvaConnect({ data: { workspaceId, returnPath } });
+          win.go(url);
         } catch (cause) {
           win.close();
           throw cause;

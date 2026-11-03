@@ -15,9 +15,15 @@ import {
 } from "@/components/workspace/WorkspaceProvider";
 import { Button } from "@/components/ui/button";
 import { emitAppEvent } from "@/lib/app-events";
-import { connectableApps, integrationApp, type IntegrationApp } from "@/lib/integrations/catalog";
+import {
+  connectableApps,
+  integrationApp,
+  type IntegrationApp,
+  type IntegrationCategory,
+} from "@/lib/integrations/catalog";
 import { disconnectApp, getIntegrations, startAppConnect } from "@/lib/integrations.functions";
-import { isPlatformAppIconId, PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { AppLogo } from "@/components/brand/AppLogo";
+import { GroupLabel } from "@/components/app/surface/SurfaceLayout";
 import { ConnectionCard, ConnectionFact } from "./ConnectionCard";
 import { DisconnectDialog } from "./DisconnectDialog";
 import { useConnectWindow } from "./useConnectWindow";
@@ -25,14 +31,15 @@ import { useConnectWindow } from "./useConnectWindow";
 export type AppsView = Awaited<ReturnType<typeof getIntegrations>>;
 type Account = AppsView["accounts"][number];
 
-function AppMark({ app }: { app: IntegrationApp }) {
-  if (isPlatformAppIconId(app.id)) return <PlatformAppIcon platform={app.id} size={28} />;
-  return (
-    <span className="text-[15px] font-semibold" aria-hidden>
-      {app.name.slice(0, 1)}
-    </span>
-  );
-}
+/** How apps are grouped when the list is grouped, in this order. */
+const GROUPS: { label: string; categories: IntegrationCategory[] }[] = [
+  { label: "Social", categories: ["social", "community"] },
+  { label: "Design", categories: ["design"] },
+  { label: "Email and customers", categories: ["email", "crm"] },
+  { label: "Ads", categories: ["ads"] },
+  { label: "Files and sheets", categories: ["productivity", "commerce"] },
+  { label: "Team", categories: ["team"] },
+];
 
 export function AppsList({
   view,
@@ -41,6 +48,8 @@ export function AppsList({
   onConnect,
   onReconnect,
   onDisconnect,
+  exclude = [],
+  grouped = false,
 }: {
   view: AppsView;
   canEdit: boolean;
@@ -49,6 +58,10 @@ export function AppsList({
   onConnect: (app: IntegrationApp) => void;
   onReconnect: (account: Account) => void;
   onDisconnect: (account: Account) => void;
+  /** Categories shown elsewhere (social accounts have their own list). */
+  exclude?: IntegrationCategory[];
+  /** Under a heading per kind of app. */
+  grouped?: boolean;
 }) {
   const shown = connectableApps({ testing: view.testing });
   // An account stays visible (to reconnect or disconnect) even if its app
@@ -57,85 +70,114 @@ export function AppsList({
     const app = integrationApp(account.app);
     if (app && !shown.includes(app)) shown.push(app);
   }
-  if (!view.enabled || shown.length === 0) return null;
-  return (
-    <div className="grid gap-3">
-      {shown.map((app) => {
-        const accounts = view.accounts.filter((a) => a.app === app.id);
-        const attention = accounts.filter((a) => a.status !== "active");
-        const canAdd = canEdit && view.configured && (accounts.length === 0 || app.multiple);
-        return (
-          <ConnectionCard
-            key={app.id}
-            label={`${app.name} connection`}
-            logo={<AppMark app={app} />}
-            name={app.name}
-            description={app.does.join(" · ")}
-            status={
-              attention.length
-                ? { tone: "attention", text: "Reconnect needed" }
-                : accounts.length
-                  ? { tone: "connected", text: "Connected" }
-                  : { tone: "off", text: "Not connected" }
-            }
-            facts={
-              accounts.length > 0 && (
-                <>
-                  {accounts.map((account) => (
-                    <span key={account.id} className="inline-flex items-center gap-1">
-                      <ConnectionFact tone={account.status === "active" ? "default" : "warning"}>
-                        {account.label}
-                      </ConnectionFact>
-                      {canEdit && account.status !== "active" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy !== null}
-                          onClick={() => onReconnect(account)}
-                        >
-                          Reconnect
-                        </Button>
-                      )}
-                      {canEdit && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={busy !== null}
-                          onClick={() => onDisconnect(account)}
-                        >
-                          Disconnect
-                        </Button>
-                      )}
-                    </span>
-                  ))}
-                </>
-              )
-            }
-            actions={
-              canAdd && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy !== null}
-                  onClick={() => onConnect(app)}
-                >
-                  {busy === app.id ? "Opening…" : accounts.length ? "Add another" : "Connect"}
-                </Button>
-              )
-            }
-            note={
-              !view.configured
-                ? "Connected apps aren't set up on this server yet."
-                : (attention[0]?.problem ?? app.note)
-            }
-          />
-        );
-      })}
-    </div>
-  );
+  const apps = shown.filter((app) => !exclude.includes(app.category));
+  if (!view.enabled || apps.length === 0) return null;
+  if (grouped) {
+    return (
+      <div className="space-y-6">
+        {GROUPS.map((group) => {
+          const inGroup = apps.filter((app) => group.categories.includes(app.category));
+          if (!inGroup.length) return null;
+          return (
+            <div key={group.label}>
+              <GroupLabel>{group.label}</GroupLabel>
+              {cards(inGroup)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return cards(apps);
+
+  function cards(list: IntegrationApp[]) {
+    return (
+      <div className="@container">
+        <div className="grid gap-3 @2xl:grid-cols-2">{list.map((app) => card(app))}</div>
+      </div>
+    );
+  }
+
+  function card(app: IntegrationApp) {
+    const accounts = view.accounts.filter((a) => a.app === app.id);
+    const attention = accounts.filter((a) => a.status !== "active");
+    const canAdd = canEdit && view.configured && (accounts.length === 0 || app.multiple);
+    return (
+      <ConnectionCard
+        key={app.id}
+        label={`${app.name} connection`}
+        logo={<AppLogo app={app.id} name={app.name} size={28} />}
+        name={app.name}
+        description={app.does.join(" · ")}
+        status={
+          attention.length
+            ? { tone: "attention", text: "Reconnect needed" }
+            : accounts.length
+              ? { tone: "connected", text: "Connected" }
+              : { tone: "off", text: "Not connected" }
+        }
+        facts={
+          accounts.length > 0 && (
+            <>
+              {accounts.map((account) => (
+                <span key={account.id} className="inline-flex items-center gap-1">
+                  <ConnectionFact tone={account.status === "active" ? "default" : "warning"}>
+                    {account.label}
+                  </ConnectionFact>
+                  {canEdit && account.status !== "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy !== null}
+                      onClick={() => onReconnect(account)}
+                    >
+                      Reconnect
+                    </Button>
+                  )}
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy !== null}
+                      onClick={() => onDisconnect(account)}
+                    >
+                      Disconnect
+                    </Button>
+                  )}
+                </span>
+              ))}
+            </>
+          )
+        }
+        actions={
+          canAdd && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => onConnect(app)}
+            >
+              {busy === app.id ? "Opening…" : accounts.length ? "Add another" : "Connect"}
+            </Button>
+          )
+        }
+        note={
+          !view.configured
+            ? "Connected apps aren't set up on this server yet."
+            : (attention[0]?.problem ?? app.note)
+        }
+      />
+    );
+  }
 }
 
-export function ConnectedApps() {
+export function ConnectedApps({
+  exclude,
+  grouped,
+}: {
+  exclude?: IntegrationCategory[];
+  grouped?: boolean;
+} = {}) {
   const workspaceId = useOptionalWorkspaceId();
   const role = useOptionalWorkspaceRole();
   const [view, setView] = useState<AppsView | null>(null);
@@ -181,7 +223,8 @@ export function ConnectedApps() {
                 app: app.id,
                 replaces,
                 returnOrigin: window.location.origin,
-                returnPath: `${window.location.pathname}?settings=accounts`,
+                // Back to where the person pressed Connect (Channels or Settings).
+                returnPath: `${window.location.pathname}${window.location.search}`,
               },
             })
           ).url,
@@ -221,6 +264,8 @@ export function ConnectedApps() {
           if (app) void open(app, account.id);
         }}
         onDisconnect={setLeaving}
+        exclude={exclude}
+        grouped={grouped}
       />
       <DisconnectDialog
         open={leaving !== null}

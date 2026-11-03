@@ -23,6 +23,7 @@ import { HttpError } from "@/server/http-error";
 import { consumeRateLimit, RateLimitedError } from "@/server/rate-limit";
 import { isIntegrationsEnabled } from "@/lib/feature-flags";
 import {
+  allowedProxy,
   allowedTool,
   composioUserId,
   integrationApp,
@@ -31,7 +32,11 @@ import {
 import {
   ComposioGatewayError,
   executeTool,
+  proxyRequest,
+  uploadFile,
   type ComposioExecution,
+  type ComposioFile,
+  type ProxyResult,
 } from "@/server/integrations/composio/gateway.server";
 
 const db = supabaseAdmin as unknown as { from: (table: string) => any };
@@ -101,6 +106,143 @@ async function recordCall(row: {
 }): Promise<void> {
   const { error } = await db.from("integration_tool_calls").insert(row);
   if (error) console.error("[integrations] call not recorded", row.tool, error.message);
+}
+
+/**
+ * Put a file in Composio's store for one allow-listed tool of one account, so
+ * the tool can take it as `{ name, mimetype, s3key }`. Same account checks as
+ * running the tool; the tool itself still goes through runIntegrationTool.
+ */
+export async function stageIntegrationFile(args: {
+  workspaceId: string;
+  accountId: string;
+  tool: string;
+  name: string;
+  mimetype: string;
+  bytes: Uint8Array;
+}): Promise<ComposioFile> {
+  if (!isIntegrationsEnabled(args.workspaceId)) throw new HttpError(404, "Not found");
+  const account = await loadAccount(args.workspaceId, args.accountId);
+  if (account.status !== "active") {
+    throw new HttpError(409, "This app needs connecting again before Mellox can use it.");
+  }
+  const app = integrationApp(account.app);
+  if (!app || !allowedTool(app, args.tool)) {
+    throw new HttpError(403, "Mellox doesn't use that action for this app.");
+  }
+  return uploadFile({
+    toolkit: account.toolkit,
+    tool: args.tool,
+    name: args.name,
+    mimetype: args.mimetype,
+    bytes: args.bytes,
+  });
+}
+
+export type RunProxyArgs = {
+  workspaceId: string;
+  accountId: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** The app's own API path, e.g. "/designs/abc". Checked against the catalog. */
+  endpoint: string;
+  body?: Record<string, unknown>;
+  binary?: { base64: string; contentType: string };
+  headers?: Record<string, string>;
+  caller: ToolCaller;
+  purpose: string;
+  approvalRef?: string | null;
+  timeoutMs?: number;
+};
+
+/**
+ * Call an app's own API through Composio (for apps whose API Mellox already
+ * speaks, like Canva). Same guard as a tool: account, allow-listed endpoint,
+ * role, approval for writes, rate limit, call log and audit.
+ */
+export async function runIntegrationProxy(args: RunProxyArgs): Promise<ProxyResult> {
+  if (!isIntegrationsEnabled(args.workspaceId)) throw new HttpError(404, "Not found");
+
+  const account = await loadAccount(args.workspaceId, args.accountId);
+  if (account.status !== "active") {
+    throw new HttpError(409, "This app needs connecting again before Mellox can use it.");
+  }
+  const app = integrationApp(account.app);
+  const rule = app ? allowedProxy(app, args.method, args.endpoint) : null;
+  if (!app || !rule) {
+    throw new HttpError(403, "Mellox doesn't use that action for this app.");
+  }
+  if (args.caller.kind === "person" && !roleAllows(args.caller.role, rule.minRole)) {
+    throw new HttpError(403, "Your role can't do that in this workspace.");
+  }
+  if (rule.write && !args.approvalRef) {
+    throw new HttpError(403, "This change needs approval first.");
+  }
+
+  const tier = rule.write ? "integration-write" : "integration-read";
+  const limit = await consumeRateLimit(tier, `ws:${args.workspaceId}`);
+  if (!limit.ok) throw new RateLimitedError(tier, limit);
+
+  const userId =
+    args.caller.kind === "person" ? args.caller.userId : (args.caller.actingUserId ?? null);
+  const label = `${args.method} ${rule.label}`;
+  const startedAt = Date.now();
+  let errorCode: string | null = null;
+  try {
+    const result = await proxyRequest({
+      userId: composioUserId(args.workspaceId),
+      connectedAccountId: account.composio_account_id,
+      method: args.method,
+      endpoint: args.endpoint,
+      body: args.body,
+      binary: args.binary,
+      headers: args.headers,
+      write: rule.write,
+      timeoutMs: args.timeoutMs,
+    });
+    if (result.status === 401) {
+      errorCode = "account_auth";
+      await markReconnect(account.id, `${app.name} refused the connection (401).`);
+    } else if (result.status < 200 || result.status >= 300) {
+      errorCode = `http_${result.status}`;
+    }
+    return result;
+  } catch (error) {
+    errorCode = error instanceof ComposioGatewayError ? error.kind : "error";
+    if (error instanceof ComposioGatewayError && error.kind === "account_auth") {
+      await markReconnect(account.id, error.detail);
+    }
+    throw error;
+  } finally {
+    await recordCall({
+      workspace_id: args.workspaceId,
+      account_id: account.id,
+      user_id: userId,
+      app: account.app,
+      tool: label.slice(0, 120),
+      is_write: rule.write,
+      ok: errorCode === null,
+      error_code: errorCode,
+      duration_ms: Date.now() - startedAt,
+      log_id: null,
+      purpose: args.purpose.slice(0, 40),
+      approval_ref: args.approvalRef ?? null,
+    });
+    if (rule.write) {
+      await recordAudit({
+        workspaceId: args.workspaceId,
+        userId,
+        action: `integrations.${account.app}.proxy`,
+        entity: account.id,
+        payload: {
+          endpoint: label,
+          purpose: args.purpose,
+          approvalRef: args.approvalRef ?? null,
+          ok: errorCode === null,
+          errorCode,
+        },
+      });
+    }
+  }
 }
 
 export async function runIntegrationTool(args: RunToolArgs): Promise<ComposioExecution> {

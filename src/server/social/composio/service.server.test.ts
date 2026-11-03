@@ -294,8 +294,8 @@ describe("syncDestinations", () => {
     expect(
       await syncDestinations({
         workspaceId: WS,
-        integrationAccountId: "acc-li",
-        app: "linkedin",
+        integrationAccountId: "acc-hs",
+        app: "hubspot",
         connectedBy: null,
       }),
     ).toBe(0);

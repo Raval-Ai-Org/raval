@@ -1182,10 +1182,23 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   `useConnectWindow("apps")`. Status is swept every 6 h from the **existing**
   `sdr-reconcile` hook (`sweepAccounts`); no cron job of its own.
 - UI: `connectors/ConnectedApps.tsx` (`AppsList` is presentational, shown in
-  `/connections-lab`) under Settings → Connections → Apps.
-- **Social on Composio (Phase 2):** Instagram, Facebook Pages and Pinterest
-  (`COMPOSIO_PUBLISHING`, `src/lib/social/routing.ts`); X, Threads, TikTok,
-  LinkedIn and YouTube stay on Post for Me. The provider is per account.
+  `/connections-lab`) in **Channels** (sidebar → Grow → Channels,
+  `/w/<id>/app/channels?s=social|apps|website|analytics`, `channelsPath`),
+  the one place for accounts and apps; Settings → Connections only links
+  there. App marks are `brand/AppLogo.tsx`.
+- **Communities** (the Reddit agent) has its own sidebar entry under Grow
+  (`/w/<id>/app/communities`, `communitiesPath`); Brain → Market →
+  Communities links there. These two are agreed sidebar exceptions.
+- **Social on Composio (Phase 2):** Instagram, Facebook Pages, Pinterest,
+  LinkedIn and YouTube, every network Composio signs in to without an app of
+  Mellox's own (`COMPOSIO_PUBLISHING`, `src/lib/social/routing.ts`); X,
+  Threads and TikTok need one, so they stay on Post for Me. The provider is
+  per account.
+  - A tool that takes a file (LinkedIn pictures, a YouTube video) gets a
+    `{ $file }` argument (`fileFor`, `requests.ts`); the publisher fetches it
+    through `safeFetch` and puts it in Composio's file store
+    (`stageIntegrationFile` → gateway `uploadFile`) just before the step.
+  - LinkedIn video goes from a person only; YouTube takes video only.
   - Connecting looks up where it can post (`syncDestinations`,
     `src/lib/social/composio/destinations.ts`): each Page, board or business
     account is one `social_accounts` row (`provider = 'composio'`,
@@ -1206,8 +1219,21 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
     `run-schedules` hook sends them (`runDueComposioPosts`) only while the item
     still reads `scheduled`. A send is never retried by itself; a cut-off or
     timed-out publish fails as `unknown_outcome` and Retry is a person's click.
-- GitHub, Slack, Notion, Canva, Google, WordPress, Webflow and Wix stay on
-  their own connector code.
+- GitHub, Slack, Notion, Google, WordPress, Webflow and Wix stay on their own
+  connector code. Wix is shown only when `checkWixConfig()` passes (its app
+  keys are set); a site already connected still shows.
+- **Canva runs through Composio** unless Mellox's own Canva app is configured
+  (`CANVA_CLIENT_ID`). The edit flow (`src/server/connectors/canva/`) is the
+  same either way: `canvaRequest` sends each call through the guarded proxy
+  (`runIntegrationProxy`, `execute.server.ts` → gateway `proxyRequest`),
+  limited to the catalog's `proxy` endpoint allow-list (`allowedProxy`, exact
+  paths, `:id` segments only, never DELETE).
+- **Drive, Gmail, Google Ads** (`business.server.ts`, button row
+  `studio/SendToApps.tsx`): Drive only adds files to a "Mellox" folder; Gmail
+  only saves drafts; Google Ads makes a **paused** Search campaign from a
+  Studio ad (budget → campaign → ad group → responsive search ad), admins
+  only. Never send a status that runs an ad. TikTok Ads stays `later` until
+  its send flow exists.
 - **Business apps** (`src/lib/integrations/business.ts`, pure;
   `src/server/integrations/business.server.ts`), each tied to one workflow:
   - HubSpot only reads: the count of contacts added since the goal started is

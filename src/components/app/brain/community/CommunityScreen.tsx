@@ -576,7 +576,8 @@ function Watches({
                         type="button"
                         aria-label={`Remove ${w.value}`}
                         className={cn(
-                          "grid h-5 w-5 place-items-center rounded-full text-muted-foreground hover:text-foreground",
+                          // A 32px touch area around the small mark.
+                          "relative grid h-5 w-5 place-items-center rounded-full text-muted-foreground after:absolute after:-inset-1.5 after:content-[''] hover:text-foreground",
                           dsFocus,
                         )}
                         onClick={() => handlers.removeWatch(w.id)}

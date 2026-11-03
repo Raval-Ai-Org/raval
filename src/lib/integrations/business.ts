@@ -7,6 +7,11 @@
 //   Mailchimp     a post or campaign email saved as a draft campaign
 //                 (never sent or scheduled from Mellox)
 //   Google Sheets the content calendar exported to a new sheet
+//   Google Drive  a finished post's pictures, video and words saved into a
+//                 "Mellox" folder (new files only)
+//   Gmail         a post or article saved as a Gmail draft (never sent)
+//   Google Ads    a Studio ad made into a paused Search campaign: budget,
+//                 campaign, ad group and responsive search ad, all paused
 
 // ── HubSpot: new contacts since a date ────────────────────────────────────
 
@@ -179,6 +184,215 @@ export function sheetValuesArgs(
     valueInputOption: "RAW",
     data: [{ range: "A1", values }],
   };
+}
+
+// ── Google Drive: a finished post into a Mellox folder ────────────────────
+
+export const DRIVE_FOLDER = "Mellox";
+
+/** A Drive-safe, readable file name: the post's title, then the part number. */
+export function driveFileName(
+  title: string | null | undefined,
+  n: number,
+  total: number,
+  path: string,
+): string {
+  const ext = /\.([a-z0-9]{2,5})$/i.exec(path)?.[1]?.toLowerCase() ?? "jpg";
+  const base =
+    (title ?? "")
+      .replace(/[\\/:*?"<>|#\n\r\t]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80) || "Mellox post";
+  return total > 1 ? `${base} (${n + 1} of ${total}).${ext}` : `${base}.${ext}`;
+}
+
+/** The first folder id in a find/create result; null when none. */
+export function readDriveId(data: unknown): string | null {
+  const levels = [record(data), record(record(data)?.data)];
+  for (const level of levels) {
+    if (typeof level?.id === "string" && level.id) return level.id;
+    for (const key of ["folders", "files", "items"]) {
+      const list = level?.[key];
+      if (Array.isArray(list)) {
+        const first = record(list[0]);
+        if (typeof first?.id === "string" && first.id) return first.id;
+      }
+    }
+  }
+  return null;
+}
+
+export function driveFolderUrl(folderId: string): string {
+  return `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`;
+}
+
+// ── Gmail: a draft ────────────────────────────────────────────────────────
+
+export function gmailDraftArgs(subject: string, html: string): Record<string, unknown> {
+  // No recipient: the person picks who it goes to in Gmail.
+  return { user_id: "me", subject, body: html, is_html: true };
+}
+
+export function readGmailDraftId(data: unknown): string | null {
+  for (const level of [record(data), record(record(data)?.data)]) {
+    const id = level?.id ?? record(level?.draft)?.id;
+    if (typeof id === "string" && id) return id;
+  }
+  return null;
+}
+
+// ── Google Ads: a paused Search campaign from a Studio ad ─────────────────
+//
+// Everything is created PAUSED and never switched on from Mellox: nothing
+// runs or spends until the person turns it on in Google Ads, after adding the
+// keywords they want. The words come from the ad as the person approved it.
+
+export type AdCopy = { headline: string; primaryText: string; description: string };
+
+const RSA_HEADLINE_MAX = 30;
+const RSA_DESCRIPTION_MAX = 90;
+
+function fit(text: string, max: number): string | null {
+  const clean = text
+    .replace(/\s+/g, " ")
+    .replace(/[!]{2,}/g, "!")
+    .trim();
+  if (!clean) return null;
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return (space > max * 0.5 ? cut.slice(0, space) : cut).replace(/[,;:\-–]+$/, "").trim();
+}
+
+/** Responsive search ad text: 3-15 headlines, 2-4 descriptions, all distinct. */
+export function rsaText(
+  ads: AdCopy[],
+  brand: string,
+): { headlines: string[]; descriptions: string[] } | null {
+  const uniq = (list: (string | null)[]) => [
+    ...new Map(
+      list.filter((x): x is string => !!x).map((x) => [x.toLowerCase(), x] as const),
+    ).values(),
+  ];
+  const headlines = uniq([
+    ...ads.map((a) => fit(a.headline, RSA_HEADLINE_MAX)),
+    ...ads.flatMap((a) =>
+      a.primaryText.split(/(?<=[.!?])\s+/).map((s) => fit(s, RSA_HEADLINE_MAX)),
+    ),
+    fit(brand, RSA_HEADLINE_MAX),
+  ]).slice(0, 15);
+  const descriptions = uniq([
+    ...ads.map((a) => fit(a.description, RSA_DESCRIPTION_MAX)),
+    ...ads.map((a) => fit(a.primaryText, RSA_DESCRIPTION_MAX)),
+  ]).slice(0, 4);
+  if (headlines.length < 3 || descriptions.length < 2) return null;
+  return { headlines, descriptions };
+}
+
+/** The customer id from `customers/1234567890`; null when it isn't one. */
+export function readCustomerIds(data: unknown): string[] {
+  const text = JSON.stringify(data ?? null);
+  return [...new Set([...text.matchAll(/customers\/(\d{6,12})(?!\/)/g)].map((m) => m[1]))];
+}
+
+/** The first resource name of one kind in a mutate result (e.g. campaignBudgets). */
+export function readResourceName(data: unknown, kind: string): string | null {
+  const text = JSON.stringify(data ?? null);
+  const match = new RegExp(`customers/\\d+/${kind}/\\d+`).exec(text);
+  return match ? match[0] : null;
+}
+
+export function googleAdsBudgetArgs(
+  customerId: string,
+  name: string,
+  dailyMicros: number,
+): Record<string, unknown> {
+  return {
+    customer_id: customerId,
+    operations: [
+      {
+        create: {
+          name,
+          amount_micros: dailyMicros,
+          delivery_method: "STANDARD",
+          explicitly_shared: false,
+        },
+      },
+    ],
+  };
+}
+
+export function googleAdsCampaignArgs(
+  customerId: string,
+  name: string,
+  budget: string,
+): Record<string, unknown> {
+  return {
+    customer_id: customerId,
+    operations: [
+      {
+        operation_type: "create",
+        create: {
+          name,
+          status: "paused",
+          advertising_channel_type: "search",
+          campaign_budget: budget,
+          manual_cpc: {},
+          network_settings: {
+            target_google_search: true,
+            target_search_network: false,
+            target_content_network: false,
+          },
+          contains_eu_political_advertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
+        },
+      },
+    ],
+  };
+}
+
+export function googleAdsAdGroupArgs(
+  customerId: string,
+  name: string,
+  campaign: string,
+): Record<string, unknown> {
+  return {
+    customer_id: customerId,
+    operations: [{ create: { name, campaign, status: "PAUSED", type: "SEARCH_STANDARD" } }],
+  };
+}
+
+export function googleAdsAdArgs(
+  customerId: string,
+  adGroup: string,
+  text: { headlines: string[]; descriptions: string[] },
+  finalUrl: string,
+): Record<string, unknown> {
+  return {
+    customer_id: customerId,
+    operations: [
+      {
+        create: {
+          ad_group: adGroup,
+          status: "PAUSED",
+          ad: {
+            final_urls: [finalUrl],
+            responsive_search_ad: {
+              headlines: text.headlines.map((t) => ({ text: t })),
+              descriptions: text.descriptions.map((t) => ({ text: t })),
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+export function googleAdsCampaignUrl(customerId: string, campaign: string): string {
+  const id = /campaigns\/(\d+)/.exec(campaign)?.[1];
+  return id
+    ? `https://ads.google.com/aw/adgroups?campaignId=${id}&__c=${customerId}`
+    : "https://ads.google.com/aw/campaigns";
 }
 
 /** The new sheet's id and link from the create tool's result. */

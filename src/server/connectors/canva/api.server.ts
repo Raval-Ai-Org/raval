@@ -63,7 +63,88 @@ export async function revokeCanvaToken(token: string) {
   }
 }
 
-export async function canvaRequest(token: string, path: string, init: RequestInit = {}) {
+/**
+ * How a Canva call is signed: Mellox's own Canva app token, or the workspace's
+ * Canva account on Composio (no Canva keys of Mellox's own needed). The edit
+ * flow is the same either way.
+ */
+export type CanvaAuth =
+  | string
+  | {
+      kind: "composio";
+      workspaceId: string;
+      /** integration_accounts.id of the workspace's Canva account. */
+      accountId: string;
+      userId: string;
+      /** What the person is editing, recorded with every change. */
+      approvalRef: string;
+    };
+
+function checkStatus(status: number, retryAfter: string | null) {
+  if (status === 401) throw new HttpError(409, "Canva connection expired. Reconnect Canva.");
+  if (status === 403)
+    throw new HttpError(403, "Canva has not granted the required access. Reconnect Canva.");
+  if (status === 429) {
+    const seconds = Number(retryAfter);
+    throw new HttpError(
+      429,
+      Number.isFinite(seconds) && seconds > 0 && seconds < 3600
+        ? `Canva is busy. Try again in ${Math.ceil(seconds)} seconds.`
+        : "Canva is busy. Try again shortly.",
+    );
+  }
+  if (status === 404) throw new HttpError(404, "This Canva design no longer exists.");
+  if (status < 200 || status >= 300)
+    throw new HttpError(502, "Canva could not complete this action.");
+}
+
+async function viaComposio(
+  auth: Exclude<CanvaAuth, string>,
+  path: string,
+  init: RequestInit,
+): Promise<object> {
+  const { runIntegrationProxy } = await import("@/server/integrations/execute.server");
+  const method = (init.method ?? "GET").toUpperCase() as "GET" | "POST";
+  const headers = new Headers(init.headers);
+  const contentType = headers.get("content-type") ?? "";
+  const extra: Record<string, string> = {};
+  for (const name of ["Asset-Upload-Metadata", "Import-Metadata"]) {
+    const value = headers.get(name);
+    if (value) extra[name] = value;
+  }
+  let body: Record<string, unknown> | undefined;
+  let binary: { base64: string; contentType: string } | undefined;
+  if (init.body instanceof Uint8Array) {
+    binary = {
+      base64: Buffer.from(init.body).toString("base64"),
+      contentType: contentType || "application/octet-stream",
+    };
+  } else if (typeof init.body === "string") {
+    body = JSON.parse(init.body) as Record<string, unknown>;
+  }
+  const result = await runIntegrationProxy({
+    workspaceId: auth.workspaceId,
+    accountId: auth.accountId,
+    method,
+    endpoint: path,
+    body,
+    binary,
+    headers: Object.keys(extra).length ? extra : undefined,
+    caller: { kind: "person", userId: auth.userId, role: "editor" },
+    purpose: "canva_edit",
+    approvalRef: auth.approvalRef,
+    timeoutMs: binary ? 60_000 : 20_000,
+  });
+  checkStatus(result.status, result.headers["retry-after"] ?? null);
+  const data = result.data;
+  if (!data || typeof data !== "object" || Array.isArray(data))
+    throw new HttpError(502, "Canva returned an invalid response.");
+  return data;
+}
+
+export async function canvaRequest(auth: CanvaAuth, path: string, init: RequestInit = {}) {
+  if (typeof auth !== "string") return viaComposio(auth, path, init);
+  const token: string = auth;
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
   const res = await timedFetch(`${BASE}${path}`, {
@@ -93,7 +174,7 @@ export async function canvaRequest(token: string, path: string, init: RequestIni
 }
 
 /** Link the grant to its Canva user and team without requesting profile access. */
-export async function getCanvaIdentity(token: string) {
+export async function getCanvaIdentity(token: CanvaAuth) {
   const identity = z
     .object({
       team_user: z.object({
@@ -106,7 +187,7 @@ export async function getCanvaIdentity(token: string) {
   return identity.data.team_user;
 }
 
-export async function uploadImage(token: string, bytes: Buffer, name: string): Promise<string> {
+export async function uploadImage(token: CanvaAuth, bytes: Buffer, name: string): Promise<string> {
   if (bytes.length > 50 * 1024 * 1024) throw new HttpError(413, "Image is too large for Canva.");
   const started = (await canvaRequest(token, "/asset-uploads", {
     method: "POST",
@@ -144,7 +225,7 @@ function safeEditUrl(value: string | undefined): string {
 }
 
 export async function createDesign(
-  token: string,
+  token: CanvaAuth,
   args: { assetId: string; title: string; width: number; height: number },
 ) {
   const response = (await canvaRequest(token, "/designs", {
@@ -162,7 +243,7 @@ export async function createDesign(
   return { id, editUrl: safeEditUrl(response.design?.urls?.edit_url) };
 }
 
-export async function getDesignEditUrl(token: string, id: string) {
+export async function getDesignEditUrl(token: CanvaAuth, id: string) {
   if (!/^[\w-]+$/.test(id)) throw new HttpError(400, "Invalid Canva design.");
   const response = (await canvaRequest(token, `/designs/${id}`)) as {
     design?: { urls?: { edit_url?: string } };
@@ -180,7 +261,7 @@ type Job = {
   };
 };
 
-async function pollJob(token: string, endpoint: string, started: Job, label: string) {
+async function pollJob(token: CanvaAuth, endpoint: string, started: Job, label: string) {
   const id = started.job?.id;
   if (!id || !/^[\w-]+$/.test(id)) throw new HttpError(502, `Canva ${label} did not start.`);
   for (let n = 0; n < 18; n++) {
@@ -202,7 +283,7 @@ export class CanvaJobError extends HttpError {
   }
 }
 
-export async function imageToDesign(token: string, assetId: string, title: string) {
+export async function imageToDesign(token: CanvaAuth, assetId: string, title: string) {
   const started = (await canvaRequest(token, "/image-to-design-imports", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -214,7 +295,7 @@ export async function imageToDesign(token: string, assetId: string, title: strin
   return { id: design.id, editUrl: safeEditUrl(design.urls?.edit_url) };
 }
 
-export async function importPptx(token: string, bytes: Buffer, title: string) {
+export async function importPptx(token: CanvaAuth, bytes: Buffer, title: string) {
   const started = (await canvaRequest(token, "/imports", {
     method: "POST",
     headers: {
@@ -244,7 +325,7 @@ export async function importPptx(token: string, bytes: Buffer, title: string) {
 }
 
 export async function exportPngPages(
-  token: string,
+  token: CanvaAuth,
   designId: string,
   options: { pages?: number[] } = {},
 ) {
@@ -278,7 +359,7 @@ export async function exportPngPages(
  * whether the account may use it needs a scope this app does not request.
  */
 export async function createSingleImageDesign(
-  token: string,
+  token: CanvaAuth,
   args: { assetId: string; title: string; width: number; height: number },
   magicEnabled = canvaMagicLayersEnabled(),
 ) {

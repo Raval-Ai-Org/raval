@@ -6,11 +6,14 @@
 // GET /tools/<slug>, toolkit versions 20261101_00). Every slug here is on the
 // app's allow-list in src/lib/integrations/catalog.ts.
 //
-// Not sent through Composio yet, on purpose (the reason is returned, and the
-// post goes through Post for Me instead):
+// A tool that takes a file (LinkedIn pictures, a YouTube video) gets a
+// `{ $file }` argument: the publisher puts that file in Composio's store just
+// before the step runs and passes the stored file instead.
+//
+// Not sent through Composio, on purpose (the reason is returned):
 //   Stories (Composio has no confirmed Story publishing),
-//   LinkedIn pictures and video (need Composio's file store, not a URL),
-//   YouTube (the upload takes a file, not a URL),
+//   LinkedIn video to a company page (LinkedIn allows it from a person only),
+//   YouTube without a video,
 //   Pinterest with more than one picture.
 
 export type ComposioSocialPlatform =
@@ -45,10 +48,39 @@ export type ComposioTarget = { platform: ComposioSocialPlatform; destination: st
 /** An argument filled from an earlier step's result id. */
 export type FromStep = { $fromStep: number };
 
+/** A file to hand the tool: fetched from `url` and put in Composio's store first. */
+export type FileArg = { $file: { url: string; name: string; mimetype: string } };
+
 export type PlanStep = {
   tool: string;
-  args: Record<string, unknown | FromStep>;
+  args: Record<string, unknown | FromStep | FileArg | FileArg[]>;
 };
+
+export function isFileArg(value: unknown): value is FileArg {
+  return Boolean(value && typeof value === "object" && "$file" in (value as FileArg));
+}
+
+/** The file argument for a public link, named and typed from the link itself. */
+export function fileFor(url: string, kind: "image" | "video", n = 0): FileArg {
+  const ext = /\.(png|jpe?g|webp|gif|mp4|mov|webm)(?:$|\?)/i.exec(new URL(url).pathname)?.[1];
+  const type = (ext ?? (kind === "video" ? "mp4" : "jpg")).toLowerCase();
+  const mimetype =
+    kind === "video"
+      ? type === "mov"
+        ? "video/quicktime"
+        : type === "webm"
+          ? "video/webm"
+          : "video/mp4"
+      : type === "png"
+        ? "image/png"
+        : type === "webp"
+          ? "image/webp"
+          : type === "gif"
+            ? "image/gif"
+            : "image/jpeg";
+  const name = `${kind}-${n + 1}.${type === "jpeg" ? "jpg" : type}`;
+  return { $file: { url, name, mimetype } };
+}
 
 export type PublishPlan = { ok: true; steps: PlanStep[] } | { ok: false; reason: string };
 
@@ -86,8 +118,46 @@ export function planPublish(post: ComposioPost, target: ComposioTarget): Publish
     case "pinterest":
       return pinterest(post, target.destination);
     case "youtube":
-      return no("YouTube uploads aren't sent this way yet.");
+      return youtube(post);
   }
+}
+
+const YT_TITLE_MAX = 100;
+const YT_DESCRIPTION_MAX = 5000;
+
+function youtube(post: ComposioPost): PublishPlan {
+  if (!post.video) return no("YouTube takes videos only. Add a video to send this post there.");
+  const firstLine =
+    post.caption
+      .split("\n")
+      .find((line) => line.trim())
+      ?.trim() ?? "";
+  // YouTube refuses < and > in titles and descriptions.
+  const clean = (text: string) => text.replace(/[<>]/g, "");
+  const title = clean(post.title?.trim() || firstLine || "New video").slice(0, YT_TITLE_MAX);
+  const tags = [...post.caption.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((m) => m[1]).slice(0, 15);
+  const description = clean(
+    post.link && !post.caption.includes(post.link)
+      ? `${post.caption}\n\n${post.link}`
+      : post.caption,
+  ).slice(0, YT_DESCRIPTION_MAX);
+  return {
+    ok: true,
+    steps: [
+      {
+        tool: "YOUTUBE_UPLOAD_VIDEO",
+        args: {
+          title,
+          description,
+          tags,
+          // 22 = People & Blogs, YouTube's general category.
+          categoryId: "22",
+          privacyStatus: "public",
+          videoFilePath: fileFor(post.video, "video"),
+        },
+      },
+    ],
+  };
 }
 
 function instagram(post: ComposioPost, igUserId: string): PublishPlan {
@@ -147,7 +217,24 @@ function instagram(post: ComposioPost, igUserId: string): PublishPlan {
 }
 
 function facebook(post: ComposioPost, pageId: string): PublishPlan {
-  if (post.video) return no("Facebook videos aren't sent this way yet.");
+  if (post.video) {
+    if (post.images.length) return no("Facebook can't mix a video with pictures in one post.");
+    return {
+      ok: true,
+      steps: [
+        {
+          tool: "FACEBOOK_CREATE_VIDEO_POST",
+          args: {
+            page_id: pageId,
+            file_url: post.video,
+            description: post.caption,
+            ...(post.title ? { title: post.title.slice(0, 255) } : {}),
+            published: true,
+          },
+        },
+      ],
+    };
+  }
   if (post.images.length > FB_PHOTOS_MAX) {
     return no(`Facebook posts take at most ${FB_PHOTOS_MAX} pictures.`);
   }
@@ -190,15 +277,40 @@ function facebook(post: ComposioPost, pageId: string): PublishPlan {
   };
 }
 
+const LI_IMAGES_MAX = 20;
+const LI_TEXT_MAX = 3000;
+
 function linkedin(post: ComposioPost, author: string): PublishPlan {
-  if (post.images.length || post.video) {
-    return no("LinkedIn posts with pictures or video aren't sent this way yet.");
-  }
-  const text =
+  const text = (
     post.link && !post.caption.includes(post.link)
       ? `${post.caption}\n\n${post.link}`.trim()
-      : post.caption;
-  if (!text.trim()) return no("This post has nothing to say.");
+      : post.caption
+  ).slice(0, LI_TEXT_MAX);
+  if (post.video) {
+    if (post.images.length) return no("LinkedIn can't mix a video with pictures in one post.");
+    if (!author.startsWith("urn:li:person:")) {
+      return no("LinkedIn only takes video posts from a person, not a company page.");
+    }
+    return {
+      ok: true,
+      steps: [
+        { tool: "LINKEDIN_UPLOAD_VIDEO", args: { video_url: post.video } },
+        {
+          tool: "LINKEDIN_CREATE_VIDEO_POST",
+          args: {
+            video_urn: { $fromStep: 0 },
+            commentary: text,
+            visibility: "PUBLIC",
+            ...(post.title ? { title: post.title.slice(0, 200) } : {}),
+          },
+        },
+      ],
+    };
+  }
+  if (post.images.length > LI_IMAGES_MAX) {
+    return no(`LinkedIn posts take at most ${LI_IMAGES_MAX} pictures.`);
+  }
+  if (!text.trim() && !post.images.length) return no("This post has nothing to say.");
   return {
     ok: true,
     steps: [
@@ -209,6 +321,9 @@ function linkedin(post: ComposioPost, author: string): PublishPlan {
           commentary: text,
           visibility: "PUBLIC",
           lifecycleState: "PUBLISHED",
+          ...(post.images.length
+            ? { images: post.images.map((url, n) => fileFor(url, "image", n)) }
+            : {}),
         },
       },
     ],
@@ -258,11 +373,15 @@ export function resolveArgs(
  * both levels are read. A Facebook photo's post is `post_id`, not the photo.
  */
 export function resultId(data: unknown): string | null {
-  const levels = [data, (data as { data?: unknown } | null)?.data];
+  const inner = (data as { data?: unknown } | null)?.data;
+  // YouTube's upload answers with the video under `response_data`.
+  const nested = (value: unknown) => (value as { response_data?: unknown } | null)?.response_data;
+  const levels = [data, inner, nested(data), nested(inner)];
   for (const level of levels) {
     if (!level || typeof level !== "object") continue;
     const record = level as Record<string, unknown>;
-    for (const key of ["post_id", "id", "urn"]) {
+    // A LinkedIn video upload answers with `video_urn`; its post with `post_id`.
+    for (const key of ["post_id", "id", "x_restli_id", "urn", "video_urn"]) {
       const value = record[key];
       if (typeof value === "string" && value) return value;
       if (typeof value === "number") return String(value);
@@ -280,6 +399,8 @@ export function postUrl(platform: ComposioSocialPlatform, id: string): string | 
       return id.startsWith("urn:li:") ? `https://www.linkedin.com/feed/update/${id}/` : null;
     case "pinterest":
       return `https://www.pinterest.com/pin/${encodeURIComponent(id)}/`;
+    case "youtube":
+      return `https://youtu.be/${encodeURIComponent(id)}`;
     default:
       // Instagram's link is read from the post afterwards (its id isn't the shortcode).
       return null;

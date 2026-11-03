@@ -13,14 +13,15 @@ import { COMPOSIO_SOCIAL_PLATFORMS, type ComposioSocialPlatform } from "./compos
 export type SocialProvider = "composio" | "postforme";
 
 /**
- * Networks Composio publishes for without losing anything Post for Me does.
- * LinkedIn (pictures, video) and YouTube (uploads) stay on Post for Me until
- * their Composio requests can send media.
+ * Networks Composio publishes for: every one it can sign in to without an app
+ * of Mellox's own. X, Threads and TikTok need one, so they stay on Post for Me.
  */
 export const COMPOSIO_PUBLISHING: readonly ComposioSocialPlatform[] = [
   "instagram",
   "facebook",
   "pinterest",
+  "linkedin",
+  "youtube",
 ];
 
 export type RouteContext = {

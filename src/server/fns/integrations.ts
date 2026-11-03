@@ -102,6 +102,43 @@ export const saveEmailDraft = createServerFn({ method: "POST" })
     return (await business()).saveEmailDraft({ ...data, userId: context.userId, role });
   });
 
+export const savePostToDrive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, contentItemId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    return (await business()).savePostToDrive({ ...data, userId: context.userId, role });
+  });
+
+export const saveGmailDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, contentItemId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
+    return (await business()).saveGmailDraft({ ...data, userId: context.userId, role });
+  });
+
+/** An ad made paused in Google Ads. Admins only: a campaign can spend money. */
+export const sendAdToGoogleAds = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        contentItemId: uuid,
+        dailyBudget: z.number().min(1).max(1000),
+        finalUrl: z.string().url().max(2000).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    const role = await requireWorkspaceRole(context, data.workspaceId, "admin");
+    return (await business()).sendAdToGoogleAds({ ...data, userId: context.userId, role });
+  });
+
 export const exportCalendarToSheets = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, rateLimitFor("integration-write")])
   .inputValidator((data) =>

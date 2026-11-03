@@ -17,7 +17,7 @@ export type Destination = {
 
 /** The lookup tool per network, with its arguments. Every slug is a catalog read tool. */
 export const DESTINATION_LOOKUP: Record<
-  Exclude<ComposioSocialPlatform, "youtube">,
+  ComposioSocialPlatform,
   { tool: string; args: Record<string, unknown> }
 > = {
   instagram: {
@@ -27,6 +27,7 @@ export const DESTINATION_LOOKUP: Record<
   facebook: { tool: "FACEBOOK_LIST_MANAGED_PAGES", args: {} },
   linkedin: { tool: "LINKEDIN_GET_MY_INFO", args: {} },
   pinterest: { tool: "PINTEREST_LIST_BOARDS", args: {} },
+  youtube: { tool: "YOUTUBE_LIST_CHANNELS", args: { mine: true, part: "snippet" } },
 };
 
 /** At most this many destinations per connection (Pages, boards). */
@@ -131,6 +132,18 @@ export function readDestinations(platform: ComposioSocialPlatform, data: unknown
       }
       break;
     case "youtube":
+      for (const channel of list(data)) {
+        const id = str(channel.id);
+        if (!id) continue;
+        const snippet = obj(channel.snippet);
+        const thumb = str(obj(obj(snippet?.thumbnails)?.default)?.url);
+        out.push({
+          id,
+          username: str(snippet?.customUrl),
+          displayName: str(snippet?.title),
+          avatarUrl: thumb && /^https:\/\//.test(thumb) ? thumb : null,
+        });
+      }
       break;
   }
   const seen = new Set<string>();

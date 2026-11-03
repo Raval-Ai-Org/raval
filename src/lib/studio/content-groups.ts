@@ -143,7 +143,7 @@ export function ago(iso: string): string {
 }
 
 const GENERIC_TITLE =
-  /^(untitled( post| draft)?|draft|new post|(linkedin|instagram|x|twitter|x \/ twitter|facebook|threads|tiktok|youtube)( post)?)$/i;
+  /^(undefined|null|untitled( post| draft)?|draft|new post|(linkedin|instagram|x|twitter|x \/ twitter|facebook|threads|tiktok|youtube)( post)?)$/i;
 
 /** Caption text without hashtags or markdown. */
 function plain(value: string | null | undefined): string {
@@ -181,7 +181,7 @@ function excerptOf(body: string | null, title: string): string {
 /** A title candidate for one row, and how trustworthy it is. */
 function titleOf(row: ContentRow): { text: string; rank: number } {
   const jobTitle = cleanText(typeof row.meta?.job_title === "string" ? row.meta.job_title : "");
-  if (jobTitle) return { text: clip(jobTitle, 90), rank: 3 };
+  if (jobTitle && !GENERIC_TITLE.test(jobTitle)) return { text: clip(jobTitle, 90), rank: 3 };
   const title = cleanText(row.title);
   if (title && !GENERIC_TITLE.test(title)) return { text: clip(title, 90), rank: 2 };
   const sentence = firstSentence(row.body);

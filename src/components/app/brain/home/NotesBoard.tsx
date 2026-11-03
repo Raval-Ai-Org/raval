@@ -64,7 +64,8 @@ function ColorDots({
           title={COLOR[name].label}
           onClick={() => onChange(name)}
           className={cn(
-            "rounded-full transition-transform hover:scale-110",
+            // A 28px touch area around the small dot.
+            "relative rounded-full transition-transform after:absolute after:-inset-1.5 after:content-[''] hover:scale-110",
             size,
             COLOR[name].dot,
             value === name

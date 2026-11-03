@@ -55,6 +55,8 @@ export function CanvaConnection() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
   }, []);
   if (!workspaceId) return null;
+  // Canva through Composio is the Canva tile among the connected apps.
+  if (status?.via === "composio") return null;
   const canEdit = role === "owner" || role === "admin" || role === "editor";
   const connected = status?.status === "active";
   const needsAttention = status?.status === "error";

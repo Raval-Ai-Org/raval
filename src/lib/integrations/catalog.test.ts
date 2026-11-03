@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DESTRUCTIVE_WORDS,
   INTEGRATION_APPS,
+  allowedProxy,
   allowedTool,
   composioUserId,
   connectableApps,
@@ -76,6 +77,27 @@ describe("integration catalog", () => {
     expect(allowedTool(app, "instagram_get_user_info")).toBeNull();
     expect(allowedTool(app, "INSTAGRAM_DELETE_COMMENT")).toBeNull();
     expect(allowedTool(app, "INSTAGRAM_GET")).toBeNull();
+  });
+
+  it("matches proxy endpoints exactly, with one id per :id", () => {
+    const canva = integrationApp("canva")!;
+    expect(allowedProxy(canva, "GET", "/designs/DAF1-x_2")).not.toBeNull();
+    expect(allowedProxy(canva, "POST", "/designs")?.write).toBe(true);
+    expect(allowedProxy(canva, "DELETE", "/designs/abc")).toBeNull();
+    expect(allowedProxy(canva, "GET", "/designs/abc/extra")).toBeNull();
+    expect(allowedProxy(canva, "GET", "/designs/../users")).toBeNull();
+    expect(allowedProxy(canva, "GET", "/designs/a?b=1")).toBeNull();
+    expect(allowedProxy(canva, "GET", "/folders/abc")).toBeNull();
+    expect(allowedProxy(integrationApp("instagram")!, "GET", "/users/me")).toBeNull();
+  });
+
+  it("never allows a proxy DELETE, and writes need an editor", () => {
+    for (const app of INTEGRATION_APPS) {
+      for (const rule of app.proxy ?? []) {
+        expect(rule.method, `${app.id} ${rule.path}`).not.toBe("DELETE");
+        if (rule.write) expect(rule.minRole).not.toBe("viewer");
+      }
+    }
   });
 
   it("ranks roles", () => {

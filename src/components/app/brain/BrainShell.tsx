@@ -10,7 +10,10 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ArrowLeft, Home, Lock } from "@/components/icons";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
-import { dsFocus, dsGhostBtn } from "@/components/app/surface/buttons";
+import Link from "next/link";
+import { dsFocus, dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
+import { communitiesPath } from "@/lib/workspace/paths";
 import { ErrorState } from "@/components/ui/empty-state";
 import { PageLoader } from "@/components/ui/page-loader";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,9 +42,6 @@ const CompetitorsPanel = lazy(() =>
 );
 const MarketBrainPanel = lazy(() =>
   import("@/components/app/MarketBrainPanel").then((m) => ({ default: m.MarketBrainPanel })),
-);
-const CommunityPanel = lazy(() =>
-  import("./community/CommunityPanel").then((m) => ({ default: m.CommunityPanel })),
 );
 const StrategyPanel = lazy(() =>
   import("./strategy/StrategyPanel").then((m) => ({ default: m.StrategyPanel })),
@@ -379,7 +379,35 @@ export function BrainShell({ workspaceId, section, tab, onNavigate }: BrainShell
                   )}
                   <SurfacePage width="wide">
                     {tab === "community" && overview.data?.community !== false ? (
-                      <CommunityPanel workspaceId={workspaceId} />
+                      // Communities has its own place now (sidebar → Grow).
+                      <div className="flex flex-col items-start gap-4 rounded-3xl border border-border/70 bg-[var(--ds-tile-bg)] p-6 sm:flex-row sm:items-center">
+                        <div className="flex -space-x-2">
+                          {(["reddit", "quora", "hackernews", "stackexchange"] as const).map(
+                            (p) => (
+                              <PlatformAppIcon
+                                key={p}
+                                platform={p}
+                                size={36}
+                                className="ring-2 ring-background"
+                              />
+                            ),
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[15px] font-medium text-foreground">
+                            Communities moved to its own page
+                          </p>
+                          <p className="text-[13px] text-muted-foreground">
+                            Threads where people ask about what you do, one click from the sidebar.
+                          </p>
+                        </div>
+                        <Link
+                          href={communitiesPath(workspaceId)}
+                          className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                        >
+                          Open Communities
+                        </Link>
+                      </div>
                     ) : (
                       <MarketBrainPanel workspaceId={workspaceId} brandKeywords={dna.keywords} />
                     )}

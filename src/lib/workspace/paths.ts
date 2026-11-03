@@ -84,6 +84,26 @@ export function campaignsPath(
 }
 
 /**
+ * Channels: every social account and app the brand connects, in one place.
+ *   channelsPath(id)         → /w/<id>/app/channels
+ *   channelsPath(id, "apps") → /w/<id>/app/channels?s=apps
+ */
+export function channelsPath(workspaceId: string, section?: string | null): string {
+  return workspacePath(workspaceId, "channels", {
+    s: section && section !== "social" ? section : undefined,
+  });
+}
+
+/**
+ * Communities: the threads where people ask about what the brand does
+ * (Reddit, Quora, Hacker News, Stack Exchange).
+ *   communitiesPath(id) → /w/<id>/app/communities
+ */
+export function communitiesPath(workspaceId: string): string {
+  return workspacePath(workspaceId, "communities");
+}
+
+/**
  * Re-anchor an in-app path ("/app?settings=connections", "/app/chat/x") inside
  * a workspace. Already-canonical and non-app paths are returned unchanged.
  */

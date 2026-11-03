@@ -52,6 +52,18 @@ export type IntegrationTool = {
   minRole: ToolRole;
 };
 
+/**
+ * One endpoint of an app's own API that Mellox may call through Composio's
+ * proxy. `path` is exact, except `:id` segments, which match one id
+ * (letters, digits, `-` and `_`). Never a prefix or a wildcard.
+ */
+export type IntegrationProxyRule = {
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  write: boolean;
+  minRole: ToolRole;
+};
+
 export type IntegrationApp = {
   id: string;
   name: string;
@@ -67,10 +79,25 @@ export type IntegrationApp = {
   /** More than one account of this app per workspace. */
   multiple?: boolean;
   tools: IntegrationTool[];
+  /** The app's own API endpoints Mellox calls through Composio's proxy. */
+  proxy?: IntegrationProxyRule[];
 };
 
 const read = (slug: string): IntegrationTool => ({ slug, write: false, minRole: "viewer" });
 const write = (slug: string): IntegrationTool => ({ slug, write: true, minRole: "editor" });
+const admin = (slug: string): IntegrationTool => ({ slug, write: true, minRole: "admin" });
+const get = (path: string): IntegrationProxyRule => ({
+  method: "GET",
+  path,
+  write: false,
+  minRole: "viewer",
+});
+const post = (path: string): IntegrationProxyRule => ({
+  method: "POST",
+  path,
+  write: true,
+  minRole: "editor",
+});
 
 export const INTEGRATION_APPS: readonly IntegrationApp[] = [
   // ── Social: Composio where its sign-in and tools work ───────────────────
@@ -124,17 +151,18 @@ export const INTEGRATION_APPS: readonly IntegrationApp[] = [
     category: "social",
     method: "composio",
     toolkit: "linkedin",
-    availability: "later",
-    does: ["Post to your profile or company page", "Read how each post did"],
+    availability: "testing",
+    does: ["Post text, pictures and video", "Read how each post did"],
+    note: "Video posts go to your own profile; company pages get text and pictures.",
     multiple: true,
     tools: [
       read("LINKEDIN_GET_SHARE_STATS"),
       read("LINKEDIN_GET_ORG_PAGE_STATS"),
       read("LINKEDIN_GET_MY_INFO"),
+      read("LINKEDIN_GET_COMPANY_INFO"),
       read("LINKEDIN_GET_NETWORK_SIZE"),
       write("LINKEDIN_CREATE_LINKED_IN_POST"),
       write("LINKEDIN_CREATE_ARTICLE_OR_URL_SHARE"),
-      write("LINKEDIN_INITIALIZE_IMAGE_UPLOAD"),
       write("LINKEDIN_UPLOAD_VIDEO"),
       write("LINKEDIN_CREATE_VIDEO_POST"),
     ],
@@ -145,15 +173,15 @@ export const INTEGRATION_APPS: readonly IntegrationApp[] = [
     category: "social",
     method: "composio",
     toolkit: "youtube",
-    availability: "later",
+    availability: "testing",
     does: ["Upload videos and Shorts", "Read views and likes"],
+    note: "Videos only. A picture post isn't sent to YouTube.",
     multiple: true,
     tools: [
       read("YOUTUBE_LIST_CHANNELS"),
       read("YOUTUBE_GET_CHANNEL_STATISTICS"),
       read("YOUTUBE_GET_VIDEO_DETAILS_BATCH"),
       write("YOUTUBE_UPLOAD_VIDEO"),
-      write("YOUTUBE_MULTIPART_UPLOAD_VIDEO"),
     ],
   },
   {
@@ -282,8 +310,55 @@ export const INTEGRATION_APPS: readonly IntegrationApp[] = [
     category: "productivity",
     method: "composio",
     toolkit: "googledrive",
+    availability: "testing",
+    does: ["Save finished posts to a Mellox folder in your Drive"],
+    note: "Mellox only adds new files. It never edits or removes anything in your Drive.",
+    tools: [
+      read("GOOGLEDRIVE_FIND_FOLDER"),
+      write("GOOGLEDRIVE_CREATE_FOLDER"),
+      write("GOOGLEDRIVE_UPLOAD_FROM_URL"),
+      write("GOOGLEDRIVE_CREATE_FILE_FROM_TEXT"),
+    ],
+  },
+  {
+    id: "gmail",
+    name: "Gmail",
+    category: "email",
+    method: "composio",
+    toolkit: "gmail",
+    availability: "testing",
+    does: ["Save posts and articles as Gmail drafts"],
+    note: "Drafts only. Mellox never sends email from your account.",
+    // Never SEND: a draft is all Mellox makes.
+    tools: [read("GMAIL_GET_PROFILE"), write("GMAIL_CREATE_EMAIL_DRAFT")],
+  },
+  // ── Ads: everything is made paused; nothing spends until you turn it on ──
+  {
+    id: "googleads",
+    name: "Google Ads",
+    category: "ads",
+    method: "composio",
+    toolkit: "googleads",
+    availability: "testing",
+    does: ["Turn a Studio ad into a paused Search campaign"],
+    note: "Made paused. Add your keywords, then turn it on in Google Ads. Nothing spends before that.",
+    // Spending money is an admin's call: every write needs an admin.
+    tools: [
+      read("GOOGLEADS_LIST_ACCESSIBLE_CUSTOMERS"),
+      admin("GOOGLEADS_MUTATE_CAMPAIGN_BUDGETS"),
+      admin("GOOGLEADS_MUTATE_CAMPAIGNS_V2"),
+      admin("GOOGLEADS_MUTATE_AD_GROUPS"),
+      admin("GOOGLEADS_MUTATE_AD_GROUP_ADS"),
+    ],
+  },
+  {
+    id: "tiktok_ads",
+    name: "TikTok Ads",
+    category: "ads",
+    method: "composio",
+    toolkit: "tiktok_ads",
     availability: "later",
-    does: ["Bring brand photos into your library"],
+    does: ["Turn a Studio video into a paused TikTok ad"],
     tools: [],
   },
   // ── Mellox's own connectors (shown by their existing cards) ─────────────
@@ -323,14 +398,30 @@ export const INTEGRATION_APPS: readonly IntegrationApp[] = [
     does: ["Website and search numbers"],
     tools: [],
   },
+  // Canva's own API, signed by Composio: the edit flow in
+  // src/server/connectors/canva/ calls exactly these endpoints.
   {
     id: "canva",
     name: "Canva",
     category: "design",
-    method: "direct",
-    availability: "live",
-    does: ["Edit pictures and carousels in Canva"],
+    method: "composio",
+    toolkit: "canva",
+    availability: "testing",
+    does: ["Edit pictures and carousels in Canva", "Bring your changes back to the post"],
     tools: [],
+    proxy: [
+      get("/users/me"),
+      post("/asset-uploads"),
+      get("/asset-uploads/:id"),
+      post("/designs"),
+      get("/designs/:id"),
+      post("/image-to-design-imports"),
+      get("/image-to-design-imports/:id"),
+      post("/imports"),
+      get("/imports/:id"),
+      post("/exports"),
+      get("/exports/:id"),
+    ],
   },
   {
     id: "notion",
@@ -377,6 +468,26 @@ export function isConnectable(app: IntegrationApp, opts: { testing: boolean }): 
 /** The allow-listed tool, or null. Matching is exact: slugs are never patterns. */
 export function allowedTool(app: IntegrationApp, slug: string): IntegrationTool | null {
   return app.tools.find((tool) => tool.slug === slug) ?? null;
+}
+
+const PROXY_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+/** The allow-listed proxy endpoint, with a readable label, or null. */
+export function allowedProxy(
+  app: IntegrationApp,
+  method: string,
+  endpoint: string,
+): (IntegrationProxyRule & { label: string }) | null {
+  if (!/^\/[A-Za-z0-9/_-]*$/.test(endpoint)) return null;
+  const parts = endpoint.split("/");
+  for (const rule of app.proxy ?? []) {
+    if (rule.method !== method) continue;
+    const pattern = rule.path.split("/");
+    if (pattern.length !== parts.length) continue;
+    if (pattern.every((seg, i) => (seg === ":id" ? PROXY_ID.test(parts[i]) : seg === parts[i])))
+      return { ...rule, label: rule.path };
+  }
+  return null;
 }
 
 const ROLE_RANK: Record<ToolRole, number> = { viewer: 0, editor: 1, admin: 2 };

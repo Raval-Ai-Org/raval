@@ -80,7 +80,11 @@ describe("planPublish", () => {
     expect(steps(planPublish(post({ images: [IMG, IMG2] }), fb))[0].tool).toBe(
       "FACEBOOK_CREATE_MULTI_PHOTO_POST",
     );
-    expect(planPublish(post({ video: VID }), fb).ok).toBe(false);
+    expect(steps(planPublish(post({ video: VID }), fb))[0]).toMatchObject({
+      tool: "FACEBOOK_CREATE_VIDEO_POST",
+      args: { page_id: "page1", file_url: VID, description: "New beans #coffee", published: true },
+    });
+    expect(planPublish(post({ video: VID, images: [IMG] }), fb).ok).toBe(false);
   });
 
   it("posts LinkedIn text with the link added once", () => {
@@ -95,7 +99,43 @@ describe("planPublish", () => {
       planPublish(post({ caption: "See https://x.co", link: "https://x.co" }), li),
     );
     expect(already[0].args.commentary).toBe("See https://x.co");
-    expect(planPublish(post({ images: [IMG] }), li).ok).toBe(false);
+  });
+
+  it("hands LinkedIn pictures over as files", () => {
+    const li = { platform: "linkedin" as const, destination: "urn:li:person:abc" };
+    const s = steps(planPublish(post({ images: [IMG, "https://cdn.example.com/c.png"] }), li));
+    expect(s[0].args.images).toEqual([
+      { $file: { url: IMG, name: "image-1.jpg", mimetype: "image/jpeg" } },
+      {
+        $file: { url: "https://cdn.example.com/c.png", name: "image-2.png", mimetype: "image/png" },
+      },
+    ]);
+  });
+
+  it("uploads a LinkedIn video, then posts it, from a person only", () => {
+    const li = { platform: "linkedin" as const, destination: "urn:li:person:abc" };
+    const s = steps(planPublish(post({ video: VID }), li));
+    expect(s.map((x) => x.tool)).toEqual(["LINKEDIN_UPLOAD_VIDEO", "LINKEDIN_CREATE_VIDEO_POST"]);
+    expect(s[0].args).toEqual({ video_url: VID });
+    expect(s[1].args.video_urn).toEqual({ $fromStep: 0 });
+    const page = { platform: "linkedin" as const, destination: "urn:li:organization:9" };
+    expect(planPublish(post({ video: VID }), page).ok).toBe(false);
+  });
+
+  it("uploads a YouTube video as a file with a clean title and tags", () => {
+    const yt = { platform: "youtube" as const, destination: "UC1" };
+    const s = steps(
+      planPublish(post({ video: VID, caption: "Roast day <live>\nMore #coffee" }), yt),
+    );
+    expect(s).toHaveLength(1);
+    expect(s[0].tool).toBe("YOUTUBE_UPLOAD_VIDEO");
+    expect(s[0].args).toMatchObject({
+      title: "Roast day live",
+      tags: ["coffee"],
+      privacyStatus: "public",
+      videoFilePath: { $file: { url: VID, name: "video-1.mp4", mimetype: "video/mp4" } },
+    });
+    expect(planPublish(post({ images: [IMG] }), yt).ok).toBe(false);
   });
 
   it("makes a Pin from one picture with Pinterest's limits", () => {
@@ -112,16 +152,13 @@ describe("planPublish", () => {
     expect(planPublish(post({ images: [IMG, IMG2] }), pin).ok).toBe(false);
   });
 
-  it("never sends Stories, YouTube, non-https media or an unfinished account", () => {
+  it("never sends Stories, non-https media or an unfinished account", () => {
     expect(
       planPublish(post({ images: [IMG], placement: "stories" }), {
         platform: "instagram",
         destination: "1",
       }).ok,
     ).toBe(false);
-    expect(planPublish(post({ video: VID }), { platform: "youtube", destination: "UC1" }).ok).toBe(
-      false,
-    );
     expect(
       planPublish(post({ images: ["http://plain.example.com/a.jpg"] }), {
         platform: "facebook",
@@ -141,12 +178,17 @@ describe("planPublish", () => {
       ["facebook", {}],
       ["facebook", { images: [IMG] }],
       ["facebook", { images: [IMG, IMG2] }],
+      ["facebook", { video: VID }],
       ["linkedin", {}],
+      ["linkedin", { images: [IMG] }],
+      ["linkedin", { video: VID }],
       ["pinterest", { images: [IMG] }],
+      ["youtube", { video: VID }],
     ];
     for (const [platform, over] of cases) {
       const app = integrationApp(platform)!;
-      const plan = planPublish(post(over), { platform, destination: "d" });
+      const destination = platform === "linkedin" ? "urn:li:person:d" : "d";
+      const plan = planPublish(post(over), { platform, destination });
       for (const step of steps(plan)) {
         const tool = allowedTool(app, step.tool);
         expect(tool, step.tool).not.toBeNull();

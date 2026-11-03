@@ -18,6 +18,7 @@ import { IntegrationDetails } from "./IntegrationDetails";
 import { useConnectWindow } from "./useConnectWindow";
 import {
   disconnectWix,
+  getWixAvailability,
   getWixConnection,
   refreshWixSite,
   startWixConnect,
@@ -181,6 +182,7 @@ export function WixView({
 
 export function WixConnector({ workspaceId }: { workspaceId: string }) {
   const [connection, setConnection] = useState<WixConnection | undefined>();
+  const [available, setAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -189,7 +191,12 @@ export function WixConnector({ workspaceId }: { workspaceId: string }) {
     setLoading(true);
     setError(null);
     try {
-      setConnection(await getWixConnection({ data: { workspaceId } }));
+      const [setup, view] = await Promise.all([
+        getWixAvailability({ data: { workspaceId } }),
+        getWixConnection({ data: { workspaceId } }),
+      ]);
+      setAvailable(setup.available);
+      setConnection(view);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Wix status could not be loaded.");
     } finally {
@@ -252,6 +259,9 @@ export function WixConnector({ workspaceId }: { workspaceId: string }) {
   };
 
   if (loading) return <ConnectionSkeleton label="Loading Wix" />;
+  // Without Mellox's Wix app keys nobody can connect, so the tile isn't shown
+  // at all; a site that is already connected still shows so it can be removed.
+  if (!error && !available && !connection) return null;
   if (error || connection === undefined)
     return (
       <ErrorState

@@ -20,6 +20,8 @@ import { useWorkspace, useWorkspaceActions } from "@/components/workspace/Worksp
 import {
   brainPath,
   campaignsPath,
+  channelsPath,
+  communitiesPath,
   conversationIdFromPath,
   inspoPath,
   workspacePath,
@@ -36,6 +38,7 @@ import {
   Link2,
   Megaphone,
   Menu,
+  MessageCircle,
   Palette,
   PanelRightOpen,
   Plus,
@@ -567,6 +570,25 @@ function AppShell() {
 
         <div className="h-px bg-border/50" />
 
+        {/* Where the brand shows up: its accounts and apps, and the
+            conversations it can join. */}
+        <SidebarSection label="Grow">
+          {sidebarAction({
+            icon: Link2,
+            label: "Channels",
+            tour: "channels",
+            onClick: () => navigate({ to: channelsPath(workspaceId) }),
+          })}
+          {sidebarAction({
+            icon: MessageCircle,
+            label: "Communities",
+            tour: "communities",
+            onClick: () => navigate({ to: communitiesPath(workspaceId) }),
+          })}
+        </SidebarSection>
+
+        <div className="h-px bg-border/50" />
+
         <SidebarSection label="Brand">
           {sidebarAction({
             icon: BrainIcon,
@@ -736,6 +758,16 @@ function AppShell() {
                   icon: Megaphone,
                   label: "Campaigns",
                   onClick: () => navigate({ to: campaignsPath(workspaceId) }),
+                },
+                {
+                  icon: Link2,
+                  label: "Channels",
+                  onClick: () => navigate({ to: channelsPath(workspaceId) }),
+                },
+                {
+                  icon: MessageCircle,
+                  label: "Communities",
+                  onClick: () => navigate({ to: communitiesPath(workspaceId) }),
                 },
                 {
                   icon: BrainIcon,
