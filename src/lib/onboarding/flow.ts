@@ -1,12 +1,7 @@
 // The onboarding flow (ADR-0035): which step comes next, what a step needs
-// before Continue, and the three first posts a person can make at the end.
+// before Continue. It ends on "first" (the finish: press and hold to go in);
+// no post is made during onboarding (Mellox 2.0).
 // Pure and browser-safe; OnboardingPage only renders what this decides.
-import type { PlatformId } from "@/lib/social-platforms";
-import type { ShareAimId } from "@/lib/studio/viral";
-import { SHARE_AIMS } from "@/lib/studio/viral";
-import type { GoalFocus, WorkspaceGoals } from "@/lib/goals/contracts";
-import { goalLine } from "@/lib/goals/decide";
-import type { Product } from "@/lib/products/catalog";
 
 export type OnboardingStep =
   | "website"
@@ -96,7 +91,7 @@ export function indicatorSteps(mode: FlowMode): IndicatorStep[] {
     { id: "language", label: "Language", covers: ["language"] },
     { id: "products", label: "Products", covers: ["products"] },
     { id: "channels", label: "Channels", covers: ["channels"] },
-    { id: "first", label: "First posts", covers: ["first", "done"] },
+    { id: "first", label: "Ready", covers: ["first", "done"] },
   ];
   return mode === "manual"
     ? [
@@ -115,121 +110,4 @@ export function indicatorSteps(mode: FlowMode): IndicatorStep[] {
 export function indicatorIndex(mode: FlowMode, step: OnboardingStep): number {
   if (step === "done") return indicatorSteps(mode).length;
   return indicatorSteps(mode).findIndex((s) => s.covers.includes(step));
-}
-
-// ── First posts ────────────────────────────────────────────────────────────
-
-const FIRST_AIMS: Record<GoalFocus, [ShareAimId, ShareAimId, ShareAimId]> = {
-  followers: ["send", "save", "relate"],
-  reach: ["send", "relate", "save"],
-  engagement: ["reply", "relate", "send"],
-  leads: ["save", "act", "send"],
-  sales: ["act", "save", "relate"],
-  launch: ["act", "send", "reply"],
-};
-
-const STUDIO_GOAL: Record<GoalFocus, "awareness" | "engagement" | "leads" | "launch" | "offer"> = {
-  followers: "awareness",
-  reach: "awareness",
-  engagement: "engagement",
-  leads: "leads",
-  sales: "offer",
-  launch: "launch",
-};
-
-/** Platforms where a post is a picture first, so the first post gets one. */
-const VISUAL_FIRST = new Set<PlatformId>([
-  "instagram",
-  "tiktok",
-  "youtube",
-  "facebook",
-  "pinterest",
-]);
-
-export type FirstPostBrief = {
-  n: 1 | 2 | 3;
-  aim: ShareAimId;
-  aimLabel: string;
-  platform: PlatformId;
-  /** The Studio job body (without `brand`, which the browser adds). */
-  job: {
-    workspaceId: string;
-    type: "social";
-    idempotencyKey: string;
-    intent: {
-      brief: string;
-      goal: (typeof STUDIO_GOAL)[GoalFocus];
-      aim: ShareAimId;
-      ideaSource: "onboarding";
-    };
-    controls: {
-      platforms: PlatformId[];
-      includeImage: boolean;
-      productId: string;
-      referenceAssetIds?: string[];
-      referenceMode?: "preserve";
-    };
-  };
-};
-
-/** The key a first post is created with: the same on every retry or refresh. */
-export const firstPostKey = (workspaceId: string, n: number) =>
-  `onboarding-first:${workspaceId}:${n}`;
-
-export function firstPostPlatform(goals: WorkspaceGoals | null, connected: string[]): PlatformId {
-  const wanted = goals?.channels ?? [];
-  const pick =
-    wanted.find((c) => connected.includes(c)) ??
-    wanted[0] ??
-    (connected[0] as PlatformId | undefined);
-  return (pick as PlatformId | undefined) ?? "instagram";
-}
-
-/**
- * Three first posts, each with a different job (save / send / reply / act…)
- * chosen for the goal, all about one real product, on the person's main
- * channel. A product with a photo keeps that exact photo ("preserve").
- */
-export function firstPostBriefs(args: {
-  workspaceId: string;
-  brandName: string;
-  goals: WorkspaceGoals | null;
-  product: Pick<Product, "id" | "kind" | "name" | "primaryAssetId">;
-  platform: PlatformId;
-}): FirstPostBrief[] {
-  const { workspaceId, brandName, goals, product, platform } = args;
-  const focus: GoalFocus = goals?.focus ?? "reach";
-  const aims = FIRST_AIMS[focus];
-  const photo = product.kind === "product" ? product.primaryAssetId : null;
-  const goalText = goals ? goalLine(goals) : "";
-  return aims.map((aimId, i) => {
-    const aim = SHARE_AIMS.find((a) => a.id === aimId)!;
-    const n = (i + 1) as 1 | 2 | 3;
-    const brief = [
-      `One of ${brandName || "the brand"}'s first posts on Mellox, about ${product.name}.`,
-      `Its job: ${aim.label.toLowerCase()}. ${aim.directive}`,
-      goalText ? `It works toward the brand's goal: ${goalText}.` : "",
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .slice(0, 1200);
-    return {
-      n,
-      aim: aimId,
-      aimLabel: aim.label,
-      platform,
-      job: {
-        workspaceId,
-        type: "social",
-        idempotencyKey: firstPostKey(workspaceId, n),
-        intent: { brief, goal: STUDIO_GOAL[focus], aim: aimId, ideaSource: "onboarding" },
-        controls: {
-          platforms: [platform],
-          includeImage: Boolean(photo) || VISUAL_FIRST.has(platform),
-          productId: product.id,
-          ...(photo ? { referenceAssetIds: [photo], referenceMode: "preserve" as const } : {}),
-        },
-      },
-    };
-  });
 }

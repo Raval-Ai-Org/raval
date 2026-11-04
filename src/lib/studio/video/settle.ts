@@ -43,16 +43,14 @@ export function settleVideoControls(args: SettleArgs): StudioControls {
   if (!isAiVideo(type, controls)) return controls;
   const source = args.source ?? {};
   const picked = controls.videoKind ?? pickVideoKind(args.brief ?? "", source, args.template);
-  // A Story video is one vertical piece: it is never a code-made motion post.
-  // A photo the person attached can be chosen to come alive like a post's
-  // picture (it is never picked for them: product photos are attached too).
-  const kind = usableKind(
-    type === "story" && picked === "motion-post" ? "living-picture" : picked,
-    {
-      ...source,
-      picture: Boolean(source.picture || controls.referenceAssetIds?.length),
-    },
-  );
+  // A kind drawn by code (a motion post, a motion graphic) is never made by
+  // a video model. A photo the person attached can be chosen to come alive
+  // like a post's picture (it is never picked for them: product photos are
+  // attached too).
+  const kind = usableKind(picked, {
+    ...source,
+    picture: Boolean(source.picture || controls.referenceAssetIds?.length),
+  });
   const videoModelKey = studioVideoModelFor(kind, controls.videoModelKey);
   return {
     ...controls,

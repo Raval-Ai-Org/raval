@@ -233,7 +233,12 @@ export function ControlsPanel({
         />
       )}
       {session.type === "video" && (aiVideo || motionPost || motionGraphic) ? (
-        <VideoKindPicker controls={c} picked={settled.videoKind} set={set} />
+        <VideoKindPicker
+          controls={c}
+          picked={settled.videoKind}
+          hasPicture={!!session.sourceContentId || !!c.referenceAssetIds?.length}
+          set={set}
+        />
       ) : null}
       {motionGraphic ? (
         <div>

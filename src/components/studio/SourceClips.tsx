@@ -71,11 +71,16 @@ export function SourceClips({
         value={mode}
         onChange={(videoMode) =>
           // The website reel uses one capture; other modes start without it.
-          set(
-            videoMode === "site" || mode === "site"
-              ? { videoMode, referenceAssetIds: [] }
-              : { videoMode },
-          )
+          // A kind drawn by code (motion post, motion graphic) belongs to the
+          // mode it was picked in, so a new mode starts from Auto.
+          set({
+            videoMode,
+            ...(videoMode === "site" || mode === "site" ? { referenceAssetIds: [] } : {}),
+            ...(videoMode !== c.videoMode &&
+            (c.videoKind === "motion-post" || c.videoKind === "motion-graphics")
+              ? { videoKind: undefined, recapMotion: undefined }
+              : {}),
+          })
         }
         options={VIDEO_MODES.map((option) => ({ ...option, icon: MODE_ICON[option.value] }))}
       />

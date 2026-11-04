@@ -110,7 +110,7 @@ export function HomeBento({
   }, [start.complete]);
 
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 pb-6 pt-6 md:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-[880px] px-4 pb-6 pt-3 md:px-6 md:pt-6">
       {/* Greeting */}
       <div className="ds-rise mb-7 flex items-center gap-4" style={rise(0)}>
         <span className="mox-float shrink-0">
@@ -136,13 +136,13 @@ export function HomeBento({
             label="Open Brain"
             onClick={() => emitAppEvent("open:brain")}
             style={rise(1)}
-            className="relative min-h-[220px] overflow-hidden p-5 [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
+            className="relative min-h-[150px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
           >
             <h3 className="text-[18px] font-bold tracking-[-0.015em]">Mox knows your brand</h3>
             <p className="mt-1 text-[12px] text-muted-foreground">Everything is set up.</p>
             <Illustration
               kind="rocket"
-              className="absolute -bottom-3 -right-3 h-[150px] w-[195px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
+              className="absolute -bottom-3 -right-3 h-[110px] w-[145px] sm:h-[150px] sm:w-[195px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
             />
             <CardArrow className="absolute bottom-5 left-5" />
           </TiltCard>
@@ -152,7 +152,7 @@ export function HomeBento({
           label="Swipe ideas"
           onClick={() => create.open("social")}
           style={rise(2)}
-          className="relative min-h-[220px] overflow-hidden p-5 [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
+          className="relative min-h-[150px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
         >
           <span className="ds-grad-pill inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-bold">
             Popular
@@ -163,7 +163,7 @@ export function HomeBento({
           </p>
           <Illustration
             kind="swipe"
-            className="absolute -bottom-3 -right-3 h-[160px] w-[205px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
+            className="absolute -bottom-3 -right-3 h-[115px] w-[150px] sm:h-[160px] sm:w-[205px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
           />
           <CardArrow className="absolute bottom-5 left-5" />
         </TiltCard>
@@ -172,7 +172,7 @@ export function HomeBento({
           label={waiting ? "Open posts waiting" : "Open Autopilot"}
           onClick={() => (waiting ? onOpenWaiting() : emitAppEvent("open:autopilot"))}
           style={rise(3)}
-          className="relative min-h-[220px] overflow-hidden p-5 [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] sm:col-span-2 lg:col-span-1"
+          className="relative min-h-[150px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] sm:col-span-2 lg:col-span-1"
         >
           {waiting ? (
             <>
@@ -222,14 +222,14 @@ export function HomeBento({
           See all
         </button>
       </div>
-      <div className="-mx-2 -my-2 flex snap-x gap-2.5 overflow-x-auto overflow-y-hidden px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {POPULAR.map((p, i) => (
           <TiltCard
             key={p.choice}
             label={p.label}
             onClick={() => create.open(p.choice)}
             style={rise(5 + i)}
-            className="h-16 min-w-[200px] flex-1 snap-start !flex-row !items-center gap-3 px-2.5"
+            className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
           >
             <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:scale-105">
               <Illustration kind={p.illo} className="size-11" />

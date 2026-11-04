@@ -4666,13 +4666,22 @@ pre {
       min-width: 2.75rem;
       min-height: 2.75rem;
     }
+    /* A compact box on phones: one line until you type more. */
     [data-mellox-app] .mx-composer__input {
       font-size: 16px;
-      max-height: min(30dvh, 12rem);
+      padding: 0.7rem 0.95rem 0.1rem;
+      min-height: 2.4rem;
+      max-height: min(24dvh, 9rem);
       overflow-y: auto;
     }
     [data-mellox-app] .mx-composer--hero .mx-composer__input {
-      min-height: 3.25rem;
+      min-height: 2.4rem;
+    }
+    [data-mellox-app] .mx-composer .mx-icon-btn,
+    [data-mellox-app] .mx-composer .mx-model-btn,
+    [data-mellox-app] .mx-composer .mx-send {
+      min-width: 2.5rem;
+      min-height: 2.5rem;
     }
   }
   .mx-starter:hover {
@@ -6298,6 +6307,40 @@ pre {
   --ds-card-shadow-hover: 0 22px 44px -20px hsl(0 0% 0% / 0.9);
   --ds-glass-bg: hsl(0 0% 8% / 0.82);
 }
+/* Dark inside the app (Mellox 2.0): a deep green-slate, never pure black,
+ * with surfaces that step up clearly and text that stays bright. The landing
+ * page has no [data-mellox-app], so it keeps its own dark. */
+:root.dark:has([data-mellox-app]) {
+  --background: 200 10% 9%;
+  --card: 200 9% 12.5%;
+  --popover: 200 9% 13.5%;
+  --muted: 200 8% 15%;
+  --muted-foreground: 200 8% 74%;
+  --secondary: 200 8% 16%;
+  --border: 200 8% 21%;
+  --border-strong: 200 8% 30%;
+  --input: 200 8% 24%;
+  --sidebar-background: 200 10% 10.5%;
+  --sidebar-foreground: 200 8% 78%;
+  --sidebar-accent: 200 8% 16%;
+  --sidebar-border: 200 8% 17%;
+  --ds-frame-bg: #13181a;
+  --ds-card-bg: #1a2023;
+  --ds-card-border: hsl(160 30% 80% / 0.1);
+  --ds-card-shadow: 0 1px 0 hsl(0 0% 100% / 0.04) inset, 0 10px 28px -16px hsl(0 0% 0% / 0.7);
+  --ds-card-shadow-hover:
+    0 1px 0 hsl(0 0% 100% / 0.06) inset, 0 0 0 1px hsl(140 80% 60% / 0.18),
+    0 24px 48px -20px hsl(150 60% 30% / 0.45);
+  --ds-well-bg: hsl(0 0% 100% / 0.07);
+  --ds-well-bg-hover: hsl(0 0% 100% / 0.11);
+  --ds-glass-bg: hsl(200 10% 13% / 0.86);
+  --ds-aurora-cool: hsl(188 92% 55% / 0.14);
+  --ds-aurora-warm: hsl(78 95% 58% / 0.13);
+  --ds-aurora-mint: hsl(145 85% 55% / 0.11);
+  --ds-pop-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.06) inset, 0 0 0 1px hsl(160 30% 80% / 0.1),
+    0 32px 80px -24px hsl(0 0% 0% / 0.85);
+}
 /* The window is white inside the app; the backdrop shows only around it. */
 :root:not(.dark):has([data-mellox-app]) {
   --sidebar-background: 0 0% 100%;
@@ -6308,7 +6351,7 @@ pre {
   background-size: 160% 160%;
   animation: mox-drift 32s ease-in-out infinite alternate;
   .dark & {
-    filter: brightness(0.42) saturate(1.1);
+    filter: brightness(0.6) saturate(1.15);
   }
 }
 @keyframes mox-drift {
@@ -6497,6 +6540,164 @@ pre {
   95% {
     transform: scaleY(0.1);
   }
+}
+/* A slow ring of Mox-coloured light (onboarding finish, Brain ring). */
+.mox-orbit {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgb(198 242 78 / 0.9) 60deg,
+    rgb(46 230 107 / 0.9) 120deg,
+    rgb(25 214 230 / 0.8) 180deg,
+    transparent 240deg
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  filter: drop-shadow(0 0 8px rgb(46 230 107 / 0.6));
+  animation: mox-spin 6s linear infinite;
+}
+@keyframes mox-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* MoxFace (the small 3D head): breathing, visor light, mood badges. */
+.mox-breathe {
+  animation: mox-breathe 3.8s ease-in-out infinite;
+  transform-origin: 50% 85%;
+}
+.mox-head-thinking .mox-breathe,
+.mox-head-scanning .mox-breathe {
+  animation: mox-ponder 2.6s ease-in-out infinite;
+}
+.mox-head-excited .mox-breathe,
+.mox-head-wow .mox-breathe {
+  animation: mox-hop 1.4s cubic-bezier(0.3, 1.4, 0.5, 1) infinite;
+}
+.mox-head-sleep .mox-breathe {
+  animation: mox-breathe 6s ease-in-out infinite;
+}
+.mox-head-sad .mox-breathe {
+  animation: none;
+  transform: rotate(-6deg) translateY(2%);
+}
+.mox-face:hover .mox-head {
+  rotate: -5deg;
+  scale: 1.05;
+  transition:
+    rotate 300ms cubic-bezier(0.3, 1.4, 0.5, 1),
+    scale 300ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.mox-visor-glint::after {
+  content: "";
+  position: absolute;
+  inset: -20% auto -20% -60%;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgb(255 255 255 / 0.75) 45%,
+    rgb(255 255 255 / 0.15) 60%,
+    transparent
+  );
+  mix-blend-mode: overlay;
+  animation: mox-glint 4.4s ease-in-out infinite;
+}
+.mox-visor-busy::after {
+  animation-duration: 1.3s;
+}
+.mox-think {
+  animation: mox-pop 420ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+.mox-zzz {
+  animation: mox-zzz 2.6s ease-in-out infinite;
+}
+.mox-sparkle {
+  animation: mox-sparkle 1.8s ease-in-out infinite;
+}
+@keyframes mox-breathe {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-3%) rotate(1.5deg);
+  }
+}
+@keyframes mox-ponder {
+  0%,
+  100% {
+    transform: rotate(-4deg) translateY(0);
+  }
+  50% {
+    transform: rotate(4deg) translateY(-2%);
+  }
+}
+@keyframes mox-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  25% {
+    transform: translateY(-8%) scale(1.04, 0.97);
+  }
+}
+@keyframes mox-glint {
+  0%,
+  55% {
+    left: -60%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+@keyframes mox-dot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-35%);
+    opacity: 1;
+  }
+}
+@keyframes mox-zzz {
+  0% {
+    transform: translate(0, 0) scale(0.7);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(40%, -60%) scale(1.1);
+    opacity: 0;
+  }
+}
+@keyframes mox-sparkle {
+  0%,
+  100% {
+    transform: scale(0.4) rotate(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1) rotate(45deg);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mox-breathe,
+  .mox-visor-glint::after,
+  .mox-zzz,
+  .mox-sparkle {
+    animation: none !important;
+  }
+}
+:root[data-chat-motion="reduced"] .mox-breathe,
+:root[data-chat-motion="reduced"] .mox-visor-glint::after {
+  animation: none !important;
 }
 /* Cards arrive in a short stagger: set --i on each one. */
 @utility ds-rise {

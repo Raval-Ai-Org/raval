@@ -75,6 +75,8 @@ export const viewport: Viewport = {
 // exactly as before.
 const PRE_HYDRATE = `(function(){try{
   var d=document.documentElement,ls=window.localStorage,mm=window.matchMedia;
+  /* Mellox 2.0: everyone starts on light once; dark stays a choice after. */
+  if(location.pathname!=='/'&&!ls.getItem('mellox:theme-v2')){ls.setItem('mellox:theme','light');ls.removeItem('reach-theme');ls.setItem('mellox:theme-v2','1');}
   var t=ls.getItem('mellox:theme')||ls.getItem('reach-theme')||(location.pathname==='/'?'system':'light');
   var dark = t==='dark' || (t!=='light' && !(mm&&mm('(prefers-color-scheme: light)').matches));
   d.classList.toggle('dark', dark);

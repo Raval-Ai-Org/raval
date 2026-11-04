@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Check, Search } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { MoxSpeech } from "@/components/app/surface/MoxParts";
 import { CONTENT_LANGUAGES, searchLanguages } from "@/lib/brand-look/languages";
+import { LanguageFlag } from "@/components/brand/LanguageFlag";
 import { cn } from "@/lib/utils";
 
 /**
@@ -110,20 +111,31 @@ export function LanguageGrid({
                 transition={{ delay: Math.min(i, 16) * 0.015, duration: 0.25 }}
                 whileTap={{ scale: 0.97 }}
                 className={cn(
-                  "flex min-h-12 w-full items-center gap-2.5 rounded-2xl border px-2.5 py-2 text-left transition",
+                  "flex min-h-14 w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition",
                   on
                     ? "border-transparent bg-[var(--mox-ink)] text-white shadow-[0_10px_24px_-14px_rgb(22_25_27/0.6)] dark:bg-white dark:text-[var(--mox-ink)]"
                     : "border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] hover:-translate-y-px hover:shadow-[var(--ds-card-shadow)]",
                 )}
               >
-                <span
-                  aria-hidden
-                  className={cn(
-                    "grid size-8 shrink-0 place-items-center rounded-full text-[10.5px] font-bold uppercase",
-                    on ? "ds-grad-pill" : "bg-[var(--ds-well-bg)] text-foreground/70",
+                <span aria-hidden className="relative shrink-0">
+                  <LanguageFlag
+                    country={l.country}
+                    className={cn(
+                      "size-9 transition-transform duration-300",
+                      on &&
+                        "scale-110 ring-2 ring-[var(--mox-green)] ring-offset-2 ring-offset-[var(--mox-ink)] dark:ring-offset-white",
+                    )}
+                  />
+                  {on && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 18 }}
+                      className="ds-grad-pill absolute -bottom-1 -right-1 grid size-4 place-items-center rounded-full"
+                    >
+                      <Check className="size-2.5" strokeWidth={3.5} />
+                    </motion.span>
                   )}
-                >
-                  {on ? <Check className="size-4" strokeWidth={3} /> : l.code.slice(0, 2)}
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-semibold">{l.native}</span>

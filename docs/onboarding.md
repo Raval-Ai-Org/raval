@@ -17,7 +17,7 @@ needs. The flow is pure and tested.
 | Brand DNA                             | `BrandReveal`                                                 | — (saves Brand DNA)                      |
 | Products                              | `ProductsStep` / `Catalogue`                                  | at least one product or service          |
 | Channels                              | `ChannelsStep` + `SocialAccountsSection variant="onboarding"` | optional                                 |
-| First posts                           | `FirstWinStep` + `useFirstPosts`                              | optional; "Later" enters the app         |
+| Ready (finish)                        | `FinishStep` + `HoldToEnter`                                  | press and hold; nothing is made          |
 
 Leaving Products marks the workspace onboarded. Channels and first posts are
 extras: a person who closes the tab there still has a set-up brand.
@@ -79,7 +79,7 @@ extras: a person who closes the tab there still has a set-up brand.
   `src/lib/products/products.test.ts`, `src/lib/onboarding/flow.test.ts`,
   `src/server/products/discover.server.test.ts`, and the goal cases in
   `src/lib/strategy/strategy.test.ts`.
-- **Visual:** `/onboarding-lab?step=goals|manual|products|channels|first|first-running|first-failed`
+- **Visual:** `/onboarding-lab?step=goals|manual|products|channels|language|finish`
   (`&saving=1` shows found items while they are saved, `&empty=1` an empty catalogue)
   (development only). It is covered by `tests/integration/onboarding-lab.spec.ts`
   at desktop and phone width.

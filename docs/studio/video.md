@@ -45,9 +45,18 @@ Decision record: [ADR-0041](../adr/0041-studio-video-kinds.md).
 | `product-motion`   | AI, no people                   | chain          | the picture / hero frame              |
 | `product-demo`     | AI, hands only                  | chain          | product at rest                       |
 | `broll-hook`       | AI + code words                 | cut (dissolve) | hero frame, hook line held throughout |
+| `motion-graphics`  | code (Opus design, Chromium)    | —              | the last frame, held                  |
 
 Ids are stored on jobs: add, never rename. A person talking to the camera is
 a Creator (UGC) video.
+
+The composer groups the cards under five headings (`group` on each kind,
+`VIDEO_KIND_GROUPS`): From your post, Show the product, Tell a story, Mood and
+B-roll, Words and offers. A kind that needs a picture says so on its card
+when there is none, and the note under the cards names the kind made
+instead. A kind drawn by code (Motion post, Motion graphics) is never made by
+a video model: `usableKind` turns a leftover one into a living picture, and
+switching "Make the video from" clears it.
 
 ## What makes each video different
 
@@ -75,9 +84,9 @@ a Creator (UGC) video.
 
 `repurposeTargets` offers these choices for a finished picture: Animate the
 product (`product-motion`, 24 s), Product demo (`product-demo`, 16 s), Bring it
-to life (`living-picture`, 8 s), Motion post (`videoMode: "recap"`,
+to life (`living-picture`, 16 s), Motion post (`videoMode: "recap"`,
 `recapMotion: "camera"`, one photo, priced as `photo_recap`) and Story video
-(`brand-story`, 16 s, opens on the post and ends back on it).
+(`brand-story`, 24 s, opens on the post and ends back on it).
 
 ## Models and cost
 

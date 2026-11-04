@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect } from "react";
 import { Bolt, Video } from "@/components/icons";
+import { emitAppEvent } from "@/lib/app-events";
 import { CREDIT_ACTIONS, type CreditAction } from "@/lib/billing/catalog";
 import { formatNumber, formatVideos } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
@@ -15,6 +19,7 @@ export function CostChip({
   credits: fixedCredits,
   free,
   compact,
+  announce,
   className,
 }: {
   action?: CreditAction;
@@ -25,8 +30,26 @@ export function CostChip({
   free?: boolean;
   /** Holo-style "⚡12" on a Create pill; the full price stays in the title. */
   compact?: boolean;
+  /** The price of what is being set up right now: the sidebar gauge shows it. */
+  announce?: boolean;
   className?: string;
 }) {
+  const announced =
+    typeof videoUnits === "number"
+      ? { videoUnits, label: `${formatVideos(videoUnits)} video credits` }
+      : !free && (action || fixedCredits !== undefined)
+        ? (() => {
+            const c = fixedCredits ?? Math.ceil(CREDIT_ACTIONS[action!].credits * quantity);
+            return { credits: c, label: `${formatNumber(c)} ${c === 1 ? "credit" : "credits"}` };
+          })()
+        : null;
+  const key = announce && announced ? announced.label : null;
+  useEffect(() => {
+    if (!key || !announced) return;
+    emitAppEvent("credits:preview", announced);
+    return () => emitAppEvent("credits:preview", null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the label
+  }, [key]);
   const base =
     "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium tabular-nums leading-4 text-muted-foreground";
   if (free) {

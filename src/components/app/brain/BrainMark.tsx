@@ -1,54 +1,19 @@
 "use client";
-// BrainMark — the four brains' marks (the Mellox Micro 5 glyphs: asterisk, at,
-// percent, hash) drawn as grids of cells, so each cell can move: they arrive
-// one by one, and ripple softly while a brain has something new.
-// Reduced motion draws them still.
+// BrainMark — the four brains' real logos (the brand kit SVGs in
+// public/brains), tinted with the brain's colour through a mask so a caller
+// can still recolour one. They pop in, and pulse softly while a brain has
+// something new. Reduced motion draws them still.
 import { motion } from "framer-motion";
 import { BRAINS, BRAIN_META, type BrainId } from "@/lib/brain/brain";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { cn } from "@/lib/utils";
 
-type Glyph = { cols: number; rows: number; cells: Array<[number, number]> };
-
-const rowsToCells = (rows: number[][]): Array<[number, number]> =>
-  rows.flatMap((cols, y) => cols.map((x) => [x, y] as [number, number]));
-
-/** Cell maps traced from the brand kit SVGs (Mellox Ai Brand kit/Micro 5 svg). */
-const GLYPHS: Record<BrainId, Glyph> = {
-  // Asterisk
-  brand: { cols: 3, rows: 3, cells: rowsToCells([[0, 2], [1], [0, 2]]) },
-  // At
-  audience: {
-    cols: 6,
-    rows: 7,
-    cells: rowsToCells([
-      [0, 1, 2, 3, 4, 5],
-      [0, 5],
-      [0, 2, 3, 4],
-      [0, 2, 4],
-      [0, 2, 3, 4, 5],
-      [0],
-      [0, 1, 2, 3],
-    ]),
-  },
-  // Percent
-  competitors: {
-    cols: 5,
-    rows: 5,
-    cells: rowsToCells([[0, 4], [3], [2], [1], [0, 4]]),
-  },
-  // Hash
-  market: {
-    cols: 5,
-    rows: 5,
-    cells: rowsToCells([
-      [2, 4],
-      [0, 1, 2, 3, 4],
-      [1, 3],
-      [0, 1, 2, 3, 4],
-      [0, 2],
-    ]),
-  },
+/** The brand kit's own brain logos (public/brains), never redrawn. */
+const LOGO: Record<BrainId, string> = {
+  brand: "/brains/brand.svg",
+  audience: "/brains/customer.svg",
+  competitors: "/brains/competitor.svg",
+  market: "/brains/market.svg",
 };
 
 export function BrainMark({
@@ -73,54 +38,40 @@ export function BrainMark({
   color?: string;
 }) {
   const reduce = useReducedMotionSafe();
-  const g = GLYPHS[brain];
-  const side = Math.max(g.cols, g.rows);
-  const ox = (side - g.cols) / 2;
-  const oy = (side - g.rows) / 2;
-  const fill = color ?? BRAIN_META[brain].color;
+  const url = `url(${LOGO[brain]})`;
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${side} ${side}`}
+    <motion.span
       aria-hidden
-      className={cn("shrink-0 transition-opacity duration-300", muted && "opacity-35", className)}
-      shapeRendering="crispEdges"
-    >
-      {g.cells.map(([x, y], i) => {
-        const cx = ox + x + 0.5;
-        const cy = oy + y + 0.5;
-        if (reduce) {
-          return <rect key={i} x={ox + x} y={oy + y} width={1.02} height={1.02} fill={fill} />;
-        }
-        return (
-          <motion.rect
-            key={i}
-            x={ox + x}
-            y={oy + y}
-            width={1.02}
-            height={1.02}
-            fill={fill}
-            style={{ transformOrigin: `${cx}px ${cy}px`, transformBox: "view-box" as never }}
-            initial={{ opacity: 0, scale: 0 }}
-            animate={
-              active ? { opacity: [1, 0.45, 1], scale: [1, 0.72, 1] } : { opacity: 1, scale: 1 }
-            }
-            transition={
-              active
-                ? {
-                    duration: 1.6,
-                    repeat: Infinity,
-                    repeatDelay: 1.2,
-                    delay: delay + (x + y) * 0.07,
-                    ease: "easeInOut",
-                  }
-                : { duration: 0.32, delay: delay + (x + y) * 0.035, ease: [0.16, 1, 0.3, 1] }
-            }
-          />
-        );
-      })}
-    </svg>
+      className={cn(
+        "inline-block shrink-0 transition-opacity duration-300",
+        muted && "opacity-35",
+        className,
+      )}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: color ?? BRAIN_META[brain].color,
+        WebkitMaskImage: url,
+        maskImage: url,
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+      initial={reduce ? false : { opacity: 0, scale: 0.6 }}
+      animate={
+        active && !reduce
+          ? { opacity: [1, 0.55, 1], scale: [1, 0.86, 1] }
+          : { opacity: 1, scale: 1 }
+      }
+      transition={
+        active && !reduce
+          ? { duration: 1.6, repeat: Infinity, repeatDelay: 1.2, delay, ease: "easeInOut" }
+          : { duration: 0.35, delay, ease: [0.16, 1, 0.3, 1] }
+      }
+    />
   );
 }
 

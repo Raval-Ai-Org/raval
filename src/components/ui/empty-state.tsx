@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { isInternalMessage } from "@/lib/user-errors";
 import { AlertTriangle, RefreshCw, type LucideIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { Mox } from "@/components/brand/mox/Mox";
 import { MoxFace, type MoxMood } from "@/components/brand/mox/MoxFace";
 
 type Size = "sm" | "md";
@@ -61,9 +62,14 @@ export function EmptyState({
     >
       {mood ? (
         <span aria-hidden className="ds-rise relative mb-1 inline-grid">
-          <span className="mox-float">
-            <MoxFace mood={mood} size={84} track />
-          </span>
+          {mood === "happy" ? (
+            // The full 3D render, Holo style ("Your inbox is waiting").
+            <Mox pose="wave" size={112} alt="" />
+          ) : (
+            <span className="mox-float">
+              <MoxFace mood={mood} size={92} track />
+            </span>
+          )}
           {Icon ? (
             <span className="ds-grad-pill absolute -bottom-1 -right-2 grid size-8 place-items-center rounded-full text-[var(--mox-ink)] ring-4 ring-background">
               <Icon className="size-4" />

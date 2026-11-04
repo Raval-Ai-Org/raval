@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { AnimatePresence, motion } from "framer-motion";
@@ -118,8 +118,12 @@ export function AppModalShell({
     typeof window !== "undefined" &&
     window.matchMedia("(max-width: 639px)").matches;
   const contentRef = useRef<HTMLDivElement>(null);
+  const big = size === "lg" || size === "xl" || size === "2xl";
+  // Mellox 2.0 (Holo): on a desktop inside the app, a big surface opens in
+  // the page, beside the sidebar, instead of floating over a blurred screen.
+  const embed = useEmbedRect(open && big);
   // Big workspaces (lg/xl) can become a full page; small forms stay popups.
-  const canMaximize = allowMaximize ?? (size === "lg" || size === "xl" || size === "2xl");
+  const canMaximize = !embed && (allowMaximize ?? big);
   useEffect(() => {
     if (!open) setMaximized(false);
   }, [open]);
@@ -141,7 +145,12 @@ export function AppModalShell({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
-                className="fixed inset-0 z-50 bg-[rgb(22_25_27/0.28)] backdrop-blur-[10px] dark:bg-black/55"
+                className={cn(
+                  "fixed inset-0 z-50",
+                  embed
+                    ? "bg-transparent"
+                    : "bg-[rgb(22_25_27/0.28)] backdrop-blur-[10px] dark:bg-black/55",
+                )}
               />
             </DialogPrimitive.Overlay>
 
@@ -177,33 +186,49 @@ export function AppModalShell({
                 // Centred with plain CSS (inset-0 + m-auto); the animation only fades,
                 // lifts 10px and scales a touch — no transform tug-of-war.
                 initial={
-                  phoneSheet
-                    ? { opacity: 1, scale: 1, y: "100%" }
-                    : { opacity: 0, scale: 0.94, y: 18 }
+                  embed
+                    ? { opacity: 0, x: 28, scale: 1, y: 0 }
+                    : phoneSheet
+                      ? { opacity: 1, scale: 1, y: "100%" }
+                      : { opacity: 0, scale: 0.94, y: 18 }
                 }
-                animate={{ opacity: 1, scale: 1, y: 0 }}
+                animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
                 exit={
-                  phoneSheet
-                    ? { y: "100%", transition: { duration: 0.22, ease: [0.4, 0, 1, 1] } }
-                    : {
-                        opacity: 0,
-                        scale: 0.985,
-                        y: 6,
-                        transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
-                      }
+                  embed
+                    ? { opacity: 0, x: 20, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }
+                    : phoneSheet
+                      ? { y: "100%", transition: { duration: 0.22, ease: [0.4, 0, 1, 1] } }
+                      : {
+                          opacity: 0,
+                          scale: 0.985,
+                          y: 6,
+                          transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
+                        }
                 }
                 // Mellox 2.0: a soft spring, Holo style.
                 transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
-                style={{ transformOrigin: "center" }}
+                style={
+                  embed && !maximized
+                    ? {
+                        transformOrigin: "center",
+                        left: embed.left,
+                        top: embed.top,
+                        width: embed.width,
+                        height: embed.height,
+                      }
+                    : { transformOrigin: "center" }
+                }
                 className={cn(
                   "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--ds-frame-bg)] outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
                   maximized
                     ? "m-0 h-dvh w-screen max-w-none rounded-none"
-                    : cn(
-                        "ds-window m-auto rounded-[var(--ds-pop-radius)] shadow-[var(--ds-pop-shadow)]",
-                        SIZE_MAP[size],
-                        (size === "sm" || size === "md") && "h-fit",
-                      ),
+                    : embed
+                      ? "m-0 max-w-none rounded-none border-l border-[var(--ds-card-border)]"
+                      : cn(
+                          "ds-window m-auto rounded-[var(--ds-pop-radius)] shadow-[var(--ds-pop-shadow)]",
+                          SIZE_MAP[size],
+                          (size === "sm" || size === "md") && "h-fit",
+                        ),
                   contentClassName,
                   maximized && "max-w-none",
                 )}
@@ -230,7 +255,8 @@ export function AppModalShell({
                 {/* Header */}
                 <header
                   className={cn(
-                    "relative z-10 flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-b border-[var(--ds-card-border)] px-3 py-2.5 sm:gap-3 sm:px-5",
+                    "relative z-10 flex min-h-16 shrink-0 flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5",
+                    !embed && "border-b border-[var(--ds-card-border)]",
                     maximized && "sm:px-8",
                   )}
                 >
@@ -245,13 +271,30 @@ export function AppModalShell({
                       <BackIcon className="h-4 w-4" />
                     </button>
                   )}
-                  {Icon && (
+                  {embed && !maximized && !hideClose && (
+                    // In the page (Holo): a Back pill, not a close cross.
+                    <DialogPrimitive.Close
+                      aria-label="Close dialog"
+                      disabled={disableClose}
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+                    >
+                      <BackIcon className="h-4 w-4" /> Back
+                    </DialogPrimitive.Close>
+                  )}
+                  {Icon && !embed && (
                     <span className="ds-grad-pill hidden h-10 w-10 shrink-0 place-items-center rounded-[14px] text-[var(--mox-ink)] shadow-[0_8px_18px_-10px_rgb(46_230_107/0.9)] min-[420px]:grid">
                       <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
                     </span>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <h2 className="break-words text-[18px] font-bold leading-tight tracking-[-0.02em] text-foreground">
+                  <div className={cn("min-w-0 flex-1", embed && "flex justify-center")}>
+                    <h2
+                      className={cn(
+                        "break-words font-bold leading-tight tracking-[-0.02em] text-foreground",
+                        embed
+                          ? "truncate rounded-full bg-[var(--ds-well-bg)] px-4 py-1.5 text-[13px] font-semibold"
+                          : "text-[18px]",
+                      )}
+                    >
                       {title}
                     </h2>
                     {description && (
@@ -281,7 +324,7 @@ export function AppModalShell({
                         )}
                       </button>
                     )}
-                    {!hideClose && (
+                    {!hideClose && !embed && (
                       <DialogPrimitive.Close
                         aria-label="Close dialog"
                         title="Close (Esc)"
@@ -310,4 +353,34 @@ export function AppModalShell({
       </AnimatePresence>
     </DialogPrimitive.Root>
   );
+}
+
+/**
+ * Where the app's main column is (`[data-workspace-main]`), on a desktop
+ * (1024px and up), while `on`. Null elsewhere: phones, labs, other pages.
+ */
+function useEmbedRect(on: boolean) {
+  const [rect, setRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (!on || typeof window === "undefined") {
+      setRect(null);
+      return;
+    }
+    const measure = () => {
+      const main = document.querySelector<HTMLElement>("[data-workspace-main]");
+      if (!main || window.innerWidth < 1024) return setRect(null);
+      const r = main.getBoundingClientRect();
+      if (r.width < 600) return setRect(null);
+      setRect({ left: r.left, top: r.top, width: r.width, height: r.height });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [on]);
+  return rect;
 }

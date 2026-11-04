@@ -4,24 +4,17 @@
 // the product catalogue (ADR-0035): each step with sample data, chosen with
 // `?step=`. Nothing here talks to a server; buttons record what they would do.
 import { useEffect, useRef, useState } from "react";
-import { decideGoals } from "@/lib/goals/decide";
-import { firstPostBriefs } from "@/lib/onboarding/flow";
 import type { Product, ProductCandidate } from "@/lib/products/catalog";
-import type { StudioJob } from "@/lib/studio/jobs";
 import { AmbientCanvas } from "./ui";
 import { ChannelsStep } from "./ChannelsStep";
-import { FirstWinStep, type FirstPostState } from "./FirstWinStep";
+import { FinishStep } from "./FinishStep";
 import { GoalStep, emptyGoalDraft, type GoalDraft } from "./GoalStep";
 import { ManualBrandStep, emptyManualBrand, type ManualBrand } from "./ManualBrandStep";
 import { ProductsStep } from "./ProductsStep";
 import { ScanStrip } from "./ScanStrip";
 import type { ProductDraft } from "./ProductCard";
 import { LanguageStep } from "./LanguageStep";
-import { HoldToEnter } from "./HoldToEnter";
-import { MoxSpeech } from "@/components/app/surface/MoxParts";
 import { VisorTransition, type Beat } from "@/components/brand/mox/VisorTransition";
-
-const WS = "00000000-0000-4000-8000-000000000001";
 
 const swatch = (bg: string, fg: string, label: string) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -109,31 +102,6 @@ const PRODUCTS: Product[] = [
   },
 ];
 
-const GOALS = (() => {
-  const d = decideGoals(
-    {
-      focus: "followers",
-      targets: [{ metric: "followers", platform: "instagram", target: 5000, baseline: 1200 }],
-      timeframeWeeks: 12,
-      postsPerWeek: 4,
-      channels: ["instagram", "tiktok"],
-    },
-    new Date("2026-11-01T00:00:00Z"),
-  );
-  return d.ok ? d.goals : null;
-})();
-
-const job = (n: number, status: StudioJob["status"], body: string): StudioJob =>
-  ({
-    id: `job-${n}`,
-    status,
-    output: {
-      variants: body
-        ? [{ platform: "instagram", title: "", body, hashtags: [], chars: body.length }]
-        : [],
-    },
-  }) as unknown as StudioJob;
-
 export function OnboardingLab() {
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState("goals");
@@ -166,33 +134,6 @@ export function OnboardingLab() {
   }, []);
 
   const record = (what: string) => () => setLast(what);
-  const briefs = firstPostBriefs({
-    workspaceId: WS,
-    brandName: "Northwind",
-    goals: GOALS,
-    product: PRODUCTS[0],
-    platform: "instagram",
-  });
-  const postStates: Record<string, Record<number, FirstPostState>> = {
-    first: {},
-    "first-running": {
-      1: {
-        status: "succeeded",
-        job: job(
-          1,
-          "succeeded",
-          "18 hours. That's how long our cold brew steeps before it meets a bottle.\n\nSave this for the next hot morning.",
-        ),
-      },
-      2: { status: "running", job: job(2, "running", "") },
-      3: { status: "starting" },
-    },
-    "first-failed": {
-      1: { status: "failed", error: "This post didn't finish. Try again." },
-      2: { status: "idle" },
-      3: { status: "idle" },
-    },
-  };
 
   return (
     <div
@@ -301,37 +242,6 @@ export function OnboardingLab() {
             </ChannelsStep>
           </div>
         )}
-        {step.startsWith("first") && (
-          <FirstWinStep
-            brandName="Northwind"
-            goalLine="Grow my following: 1,200 → 5,000 Instagram followers by 24 Jan"
-            briefs={briefs}
-            products={PRODUCTS}
-            productId={PRODUCTS[0].id}
-            platform="instagram"
-            platforms={["instagram", "tiktok"]}
-            priceLabel="6 credits"
-            posts={postStates[step] ?? {}}
-            billing={
-              step === "first-failed"
-                ? {
-                    message:
-                      "Your plan has run out of credits for new posts. You can finish setup and add more later.",
-                    href: "/pricing",
-                  }
-                : null
-            }
-            reduce
-            headingRef={headingRef}
-            onProduct={(id) => setLast(`product:${id}`)}
-            onPlatform={(id) => setLast(`platform:${id}`)}
-            onStart={record("first:start")}
-            onRetry={(n) => setLast(`retry:${n}`)}
-            onBack={record("back")}
-            onLibrary={record("library")}
-            onEnter={record("enter")}
-          />
-        )}
         {step === "language" && (
           <div className="mx-auto max-w-3xl">
             <LanguageStep
@@ -346,12 +256,17 @@ export function OnboardingLab() {
           </div>
         )}
         {/* `?step=finish`: press and hold plays the VR entry, then says so. */}
-        {step === "finish" && (
-          <div className="flex flex-col items-center gap-6 py-10">
-            <MoxSpeech pose="wave" size={140}>
-              <b>Woohoo! You made it.</b> Press and hold, I&apos;ll take you in.
-            </MoxSpeech>
-            <HoldToEnter onDone={() => setEntering(true)} />
+        {(step === "finish" || step === "first") && (
+          <div className="mx-auto max-w-3xl py-6">
+            <FinishStep
+              brandName="Northwind"
+              language={language}
+              products={PRODUCTS.length}
+              channels={1}
+              headingRef={headingRef}
+              onBack={record("back")}
+              onEnter={() => setEntering(true)}
+            />
           </div>
         )}
       </main>

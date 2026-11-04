@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { BrainIcon, BrainMark } from "./BrainMark";
 import { GoalCard } from "./home/GoalCard";
+import { BrainRing } from "./home/BrainRing";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -379,25 +380,30 @@ export function BrainHome({ overview, news, locked = {}, onOpen, onEditGoal }: B
   const columns = shown.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3";
   return (
     <div className="mx-auto w-full max-w-[1040px] px-4 pb-10 pt-5 sm:px-6">
-      <div className={cn("grid auto-rows-fr gap-3", columns)}>
-        {shown.map((brain, i) => (
-          <BrainTile
-            key={brain}
-            brain={brain}
-            card={overview.brains[brain]}
-            news={news[brain]}
-            lockedPlan={locked[brain]}
-            index={i}
-            onOpen={() => onOpen(brain)}
+      {shown.length === 4 ? (
+        <BrainRing overview={overview} news={news} locked={locked} onOpen={(b) => onOpen(b)} />
+      ) : (
+        <>
+          <div className={cn("grid auto-rows-fr gap-3", columns)}>
+            {shown.map((brain, i) => (
+              <BrainTile
+                key={brain}
+                brain={brain}
+                card={overview.brains[brain]}
+                news={news[brain]}
+                lockedPlan={locked[brain]}
+                index={i}
+                onOpen={() => onOpen(brain)}
+              />
+            ))}
+          </div>
+          <Flow
+            lit={shown.map((b) => overview.brains[b].ready)}
+            columns={columns.replace("grid-cols-2 ", "")}
           />
-        ))}
-      </div>
-
-      <Flow
-        lit={shown.map((b) => overview.brains[b].ready)}
-        columns={columns.replace("grid-cols-2 ", "")}
-      />
-      <div className="h-3 sm:hidden" />
+          <div className="h-3 sm:hidden" />
+        </>
+      )}
 
       <StrategyBar
         strategy={overview.strategy}

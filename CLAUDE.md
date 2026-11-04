@@ -267,7 +267,7 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
 
 - **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
   website → goal (asked while the scan runs) → Brand DNA → language → products
-  → channels → first posts. "I don't have a website" swaps the scan for three
+  → channels → finish. "I don't have a website" swaps the scan for three
   questions. New projects always start in onboarding. It ends with
   press-and-hold (`HoldToEnter`) and the visor cinematic (`VisorTransition`),
   then `StartHereModal` on Home. `/onboarding-lab` renders every new
@@ -325,10 +325,9 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
   stored per post; `recentLayouts` keeps the next concept off the latest two
   (left out of `archetypeMenu`, refused in `shapeOutput`, excluded in
   `pickArchetype`). A revision keeps its layout.
-- **First posts are a person's click.** Three ordinary Studio jobs through the
-  metered route, with the price on the button. Keys are fixed per post
-  (`onboarding-first:<workspaceId>:<n>`), so nothing is made or charged twice.
-  A 402 never blocks finishing setup.
+- **Onboarding makes no posts** (Mellox 2.0). The finish (`FinishStep`) shows
+  what Mox learned and press-and-hold; posts are made later, on a person's
+  click, through the normal metered Studio route.
 - Editing after onboarding: Brain → Brand → **Products** and **Goal** tiles.
 
 ## App tour (a new person's first look around)

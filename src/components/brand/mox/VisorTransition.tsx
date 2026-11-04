@@ -1,9 +1,11 @@
 "use client";
 
-// The way into the app (Mellox 2.0, ADR-0044; Holo's "teleport"): Mox waves,
-// puts the headset on, the visor lights up, the camera flies into it, a
-// tunnel of Mox-coloured light, a white flash. `onCovered` fires under the
-// flash: navigate then, and the app builds in behind (`EntryBloom`).
+// The way into the app (Mellox 2.0, ADR-0044; Holo's "teleport"). Mox, in
+// the VR headset, fills the screen; the visor lights up, a ring of light
+// leaves it, the camera flies into the glass, a tunnel of Mox-coloured light
+// rushes past, then a soft white flash. One continuous move, transforms and
+// opacity only (no filter animation), so it stays smooth. `onCovered` fires
+// under the flash: navigate then, and the app builds in behind (`EntryBloom`).
 // Reduced motion: a plain fade. The light tunnel only runs on capable devices.
 
 import { useEffect, useRef, useState } from "react";
@@ -12,20 +14,22 @@ import { Mox } from "./Mox";
 
 export type Beat = "wave" | "headset" | "glow" | "dolly" | "tunnel" | "flash";
 
+// "wave" is Mox arriving, "headset" a small nod, the rest as named.
 const AT: Record<Beat, number> = {
   wave: 0,
-  headset: 520,
-  glow: 1000,
-  dolly: 1420,
-  tunnel: 1760,
-  flash: 2380,
+  headset: 450,
+  glow: 850,
+  dolly: 1500,
+  tunnel: 2050,
+  flash: 2650,
 };
-const COVERED_AT = 2520;
+const COVERED_AT = 2820;
 
 /** Where the visor's middle sits on visor.webp, as a transform origin. */
 const VISOR_ORIGIN = "51.5% 43.5%";
 
 const PALETTE = ["#F2F23A", "#C6F24E", "#2EE66B", "#19D6E6", "#1E7BF5", "#ffffff"];
+const EASE_OUT = [0.22, 1, 0.36, 1] as const;
 
 function capable(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -33,7 +37,7 @@ function capable(): boolean {
   return (navigator.hardwareConcurrency ?? 4) >= 4 && !conn?.saveData;
 }
 
-/** Light streaks rushing past from the centre, drawn for under a second. */
+/** Light streaks rushing past from the centre; draws until unmounted. */
 function Tunnel() {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -41,48 +45,47 @@ function Tunnel() {
     if (!canvas || !capable()) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const w = (canvas.width = window.innerWidth * dpr);
     const h = (canvas.height = window.innerHeight * dpr);
     const cx = w / 2;
     const cy = h / 2;
-    const stars = Array.from({ length: 160 }, () => ({
+    const far = Math.hypot(cx, cy);
+    const seed = (near = false) => ({
       a: Math.random() * Math.PI * 2,
-      r: Math.random() * 40 * dpr,
-      v: (2 + Math.random() * 6) * dpr,
+      z: near ? 0.02 + Math.random() * 0.1 : 0.02 + Math.random() * 0.98,
       c: PALETTE[Math.floor(Math.random() * PALETTE.length)],
-      wd: (0.6 + Math.random() * 2.2) * dpr,
-    }));
+      wd: (0.8 + Math.random() * 2) * dpr,
+    });
+    const stars = Array.from({ length: 220 }, () => seed());
     const start = performance.now();
+    let prev = start;
     let raf = 0;
     const frame = (t: number) => {
-      const k = Math.min((t - start) / 900, 1);
-      ctx.fillStyle = `rgba(10, 30, 24, ${0.28 - k * 0.12})`;
+      const dt = Math.min(48, t - prev) / 1000;
+      prev = t;
+      const k = Math.min((t - start) / 700, 1); // speed ramps up, then holds
+      const speed = 0.6 + k * k * 2.6;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "rgba(6, 34, 26, 0.32)";
       ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = "lighter";
       for (const s of stars) {
-        const r0 = s.r;
-        s.v *= 1.07;
-        s.r += s.v;
-        const x0 = cx + Math.cos(s.a) * r0;
-        const y0 = cy + Math.sin(s.a) * r0;
-        const x1 = cx + Math.cos(s.a) * s.r;
-        const y1 = cy + Math.sin(s.a) * s.r;
+        const z0 = s.z;
+        s.z += s.z * speed * dt * 2.2;
+        const r0 = z0 * z0 * far;
+        const r1 = s.z * s.z * far;
         ctx.strokeStyle = s.c;
-        ctx.globalAlpha = 0.35 + k * 0.6;
-        ctx.lineWidth = s.wd * (1 + k * 2);
+        ctx.globalAlpha = Math.min(1, 0.25 + s.z);
+        ctx.lineWidth = s.wd * (0.6 + s.z * 2.4);
         ctx.beginPath();
-        ctx.moveTo(x0, y0);
-        ctx.lineTo(x1, y1);
+        ctx.moveTo(cx + Math.cos(s.a) * r0, cy + Math.sin(s.a) * r0);
+        ctx.lineTo(cx + Math.cos(s.a) * r1, cy + Math.sin(s.a) * r1);
         ctx.stroke();
-        if (s.r > Math.hypot(cx, cy)) {
-          s.r = Math.random() * 30 * dpr;
-          s.v = (2 + Math.random() * 6) * dpr;
-        }
+        if (s.z > 1.15) Object.assign(s, seed(true));
       }
       ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = "source-over";
-      if (k < 1) raf = requestAnimationFrame(frame);
+      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -101,8 +104,7 @@ export function VisorTransition({
   freeze?: Beat;
 }) {
   const [beat, setBeat] = useState<Beat>(freeze ?? "wave");
-  // Holo fills the screen with the character: size both renders to the
-  // viewport (visor.webp is 1456×1080, wave.webp 1142×1377).
+  // Holo fills the screen with the character (visor.webp is 1456×1080).
   const [view, setView] = useState({ w: 1440, h: 900 });
   useEffect(() => {
     const on = () => setView({ w: window.innerWidth, h: window.innerHeight });
@@ -110,8 +112,7 @@ export function VisorTransition({
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
-  const visorSize = Math.round(Math.min(view.w * 0.96, view.h * 1.05 * (1456 / 1080)));
-  const waveSize = Math.round(Math.min(view.w * 0.8, view.h * 0.92 * (1142 / 1377)));
+  const visorSize = Math.round(Math.min(view.w * 0.92, view.h * 0.95 * (1456 / 1080)));
   const done = useRef(onCovered);
   done.current = onCovered;
 
@@ -138,110 +139,99 @@ export function VisorTransition({
       className="fixed inset-0 z-[200] overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: reduced ? 0.3 : 0.35 }}
+      transition={{ duration: reduced ? 0.3 : 0.4, ease: EASE_OUT }}
       style={{ background: reduced ? "#ffffff" : "var(--mox-backdrop)" }}
     >
       {!reduced && (
         <>
-          <div aria-hidden className="absolute inset-0 bg-white/55" />
+          <div aria-hidden className="absolute inset-0 bg-white/60" />
+          {/* A soft aurora behind Mox that brightens with the visor. */}
+          <motion.div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(45% 40% at 50% 46%, rgba(46,230,107,0.45), rgba(25,214,230,0.18) 55%, transparent 75%)",
+            }}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: past("glow") ? 1 : 0.35, scale: past("glow") ? 1.1 : 0.9 }}
+            transition={{ duration: 0.9, ease: EASE_OUT }}
+          />
           <div className="absolute inset-0 grid place-items-center">
             <motion.div
-              className="relative"
+              className="relative will-change-transform"
               style={{ transformOrigin: VISOR_ORIGIN }}
-              initial={{ scale: 0.6, y: 30, opacity: 0 }}
+              initial={{ scale: 0.82, y: 40, opacity: 0 }}
               animate={
                 past("dolly")
-                  ? { scale: 5, y: 0, opacity: past("tunnel") ? 0 : 1, filter: "blur(6px)" }
+                  ? { scale: 7, y: 0, opacity: 1 }
                   : past("headset")
-                    ? { scale: 1, y: 0, opacity: 1, filter: "blur(0px)" }
-                    : { scale: 1, y: 0, opacity: 1, filter: "blur(0px)" }
+                    ? { scale: 1, y: [0, 8, 0], opacity: 1 }
+                    : { scale: 1, y: 0, opacity: 1 }
               }
               transition={
                 past("dolly")
-                  ? { duration: 0.62, ease: [0.7, 0, 0.84, 0] }
-                  : { type: "spring", stiffness: 260, damping: 18 }
+                  ? { duration: 0.75, ease: [0.64, 0, 0.78, 0] }
+                  : { duration: 0.6, ease: past("headset") ? "easeInOut" : EASE_OUT }
               }
             >
-              <AnimatePresence mode="popLayout" initial={false}>
-                {past("headset") ? (
-                  <motion.div
-                    key="visor"
-                    // Putting the headset on: a small dip as it settles.
-                    initial={{ opacity: 0, scale: 0.97, y: 0 }}
-                    animate={{ opacity: 1, scale: 1, y: [0, 5, 0] }}
-                    transition={{ duration: 0.42, ease: "easeInOut" }}
-                    className="relative"
-                  >
-                    <Mox
-                      pose="visor"
-                      size={visorSize}
-                      float={false}
-                      shadow={false}
-                      priority
-                      alt=""
-                    />
-                    {/* The visor lighting up: a sweep, then two pulses. */}
-                    <motion.span
-                      aria-hidden
-                      className="pointer-events-none absolute rounded-[40%] mix-blend-screen"
-                      style={{
-                        left: "27%",
-                        top: "30%",
-                        width: "47%",
-                        height: "27%",
-                        background:
-                          "linear-gradient(100deg, transparent 0%, rgba(217,245,58,0.95) 40%, rgba(46,230,107,0.9) 60%, transparent 100%)",
-                        backgroundSize: "220% 100%",
-                        filter: "blur(6px)",
-                      }}
-                      initial={{ opacity: 0, backgroundPositionX: "120%" }}
-                      animate={
-                        past("glow")
-                          ? { opacity: [0, 1, 0.55, 1, 0.8], backgroundPositionX: ["120%", "-20%"] }
-                          : { opacity: 0 }
-                      }
-                      transition={{ duration: 0.75, ease: "easeOut" }}
-                    />
-                    <motion.span
-                      aria-hidden
-                      className="pointer-events-none absolute rounded-full"
-                      style={{
-                        left: "18%",
-                        top: "18%",
-                        width: "66%",
-                        height: "52%",
-                        background:
-                          "radial-gradient(closest-side, rgba(46,230,107,0.55), transparent)",
-                        filter: "blur(18px)",
-                      }}
-                      initial={{ opacity: 0 }}
-                      animate={past("glow") ? { opacity: [0, 0.9, 0.5, 1] } : { opacity: 0 }}
-                      transition={{ duration: 0.8 }}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="wave"
-                    initial={{ opacity: 0, rotate: -6 }}
-                    animate={{ opacity: 1, rotate: [0, -4, 4, -2, 0] }}
-                    exit={{ opacity: 0, y: 4, scale: 0.97 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <Mox pose="wave" size={waveSize} float={false} shadow={false} priority alt="" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <Mox pose="visor" size={visorSize} float={false} shadow={false} priority alt="" />
+              {/* The visor lighting up: a light sweep, then a steady glow. */}
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute overflow-hidden rounded-[42%] mix-blend-screen"
+                style={{ left: "27%", top: "29%", width: "52%", height: "33%" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: past("glow") ? 1 : 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <motion.span
+                  className="absolute inset-y-0 block w-[60%]"
+                  style={{
+                    background:
+                      "linear-gradient(100deg, transparent, rgba(240,255,170,0.95) 45%, rgba(46,230,107,0.6) 65%, transparent)",
+                  }}
+                  initial={{ x: "-110%" }}
+                  animate={past("glow") ? { x: ["-110%", "190%"] } : { x: "-110%" }}
+                  transition={{ duration: 0.7, ease: "easeInOut" }}
+                />
+                <motion.span
+                  className="absolute inset-0 block"
+                  style={{
+                    background:
+                      "radial-gradient(closest-side, rgba(200,255,120,0.8), rgba(46,230,107,0.35) 60%, transparent)",
+                  }}
+                  initial={{ opacity: 0 }}
+                  animate={past("glow") ? { opacity: [0, 0.4, 0.75, 0.55, 0.9] } : { opacity: 0 }}
+                  transition={{ duration: 0.9, ease: "easeInOut", delay: 0.2 }}
+                />
+              </motion.span>
+              {/* A ring of light leaves the visor just before the fly-in. */}
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute rounded-[50%] border-[3px] border-[#C6F24E]"
+                style={{
+                  left: "27%",
+                  top: "29%",
+                  width: "52%",
+                  height: "33%",
+                  boxShadow: "0 0 24px rgba(46,230,107,0.8), inset 0 0 18px rgba(46,230,107,0.6)",
+                }}
+                initial={{ opacity: 0, scale: 1 }}
+                animate={past("glow") ? { opacity: [0, 0.9, 0], scale: [1, 1.9] } : { opacity: 0 }}
+                transition={{ duration: 0.9, ease: EASE_OUT, delay: 0.35 }}
+              />
             </motion.div>
           </div>
           {past("tunnel") && (
             <motion.div
               className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.18 }}
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.32, ease: EASE_OUT }}
               style={{
                 background:
-                  "radial-gradient(circle at 50% 50%, #2ee66b 0%, #0f9a4a 35%, #0b3d33 100%)",
+                  "radial-gradient(circle at 50% 50%, #c6f24e 0%, #2ee66b 18%, #0f7a52 48%, #062a20 100%)",
               }}
             >
               <Tunnel />
@@ -249,10 +239,11 @@ export function VisorTransition({
           )}
           <motion.div
             aria-hidden
-            className="absolute inset-0 bg-white"
+            className="absolute inset-0"
+            style={{ background: "radial-gradient(circle, #ffffff 40%, #f4ffe0)" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: past("flash") ? 1 : 0 }}
-            transition={{ duration: 0.16 }}
+            transition={{ duration: 0.2, ease: "easeIn" }}
           />
         </>
       )}
@@ -297,7 +288,7 @@ export function EntryBloom() {
           className="pointer-events-none fixed inset-0 z-[200] bg-white"
           initial={{ opacity: 1 }}
           animate={{ opacity: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
           onAnimationComplete={() => setOn(false)}
         />
       )}

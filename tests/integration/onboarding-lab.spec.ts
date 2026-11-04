@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * Onboarding's goal, product, channel and first-post steps at /onboarding-lab
  * (dev only, no sign-in, sample data). Checks the required-product gate, the
- * no-website path, that every button is a pill, the first-post states, and
+ * no-website path, that every button is a pill, the finish, and
  * that nothing scrolls sideways, at desktop and phone width.
  */
 
@@ -111,27 +111,6 @@ for (const vp of VIEWPORTS) {
       await noSideScroll(page);
     });
 
-    test("first posts: price before the click, then progress and retry", async ({ page }) => {
-      await openLab(page, "step=first");
-      await expect(page.getByRole("button", { name: /Make my first 3 posts/ })).toContainText(
-        "credits",
-      );
-      await page.getByRole("button", { name: /Make my first 3 posts/ }).click();
-      await expect(last(page)).toHaveText("first:start");
-      await noSideScroll(page);
-
-      await openLab(page, "step=first-running");
-      await expect(page.getByRole("heading", { name: "Writing your first posts…" })).toBeVisible();
-      await expect(page.getByLabel("Ready")).toHaveCount(1);
-      await expect(page.getByText("They keep writing if you go on.")).toBeVisible();
-
-      await openLab(page, "step=first-failed");
-      await page.getByRole("button", { name: /Try again/ }).click();
-      await expect(last(page)).toHaveText("retry:1");
-      await expect(page.locator("main").getByRole("alert")).toContainText("run out of credits");
-      await noSideScroll(page);
-    });
-
     test("language: search and pick what Mox writes in", async ({ page }) => {
       await openLab(page, "step=language");
       const grid = page.getByRole("radiogroup", { name: "Content language" });
@@ -145,8 +124,10 @@ for (const vp of VIEWPORTS) {
       await noSideScroll(page);
     });
 
-    test("finish: press and hold to enter", async ({ page }) => {
+    test("finish: no posts are made, press and hold to enter", async ({ page }) => {
       await openLab(page, "step=finish");
+      await expect(page.getByRole("list", { name: "What Mox learned" })).toContainText("Brand DNA");
+      await expect(page.getByText(/first 3 posts/i)).toHaveCount(0);
       await expect(
         page.getByRole("button", { name: "Press and hold to enter Mellox" }),
       ).toBeVisible();

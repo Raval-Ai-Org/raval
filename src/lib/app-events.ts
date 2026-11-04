@@ -29,6 +29,8 @@ export type AppEventMap = {
   /** Open Plan & billing, optionally on a tab. */
   "open:usage": { tab?: "overview" | "plans" | "topup" | "prices" | "history" } | undefined;
   "billing:changed": { balance?: number } | undefined;
+  /** What the thing being set up will cost (the sidebar gauge shows it); null clears it. */
+  "credits:preview": { credits?: number; videoUnits?: number; label: string } | null | undefined;
   "billing:blocked": {
     code: string;
     feature?: string;

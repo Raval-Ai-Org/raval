@@ -54,7 +54,6 @@ import { CommandBar } from "@/components/app/CommandBar";
 import { TopBarActions } from "@/components/app/TopBarActions";
 import { StudioRail } from "@/components/app/StudioRail";
 import { RecentChats } from "@/components/app/RecentChats";
-import { WorkspaceSwitcher } from "@/components/app/WorkspaceSwitcher";
 import { AccountMenu, AccountMenuCompact } from "@/components/app/AccountMenu";
 
 // Heavy modules — loaded on demand to shrink the initial workspace bundle.
@@ -151,7 +150,6 @@ function AppShell() {
   });
   const { data: autopilot } = useAutopilotStatus(workspaceId);
   const workspaceName = workspace.displayName;
-  const workspaceWebsite = workspace.websiteUrl;
   const homeHref = workspacePath(workspaceId);
 
   const { dna: brandDna } = useBrandDna(workspaceId);
@@ -468,9 +466,10 @@ function AppShell() {
   };
 
   const MobileNav = (
-    <div className="flex h-full flex-col overflow-y-auto px-2.5 pb-3">
-      {/* Brand row; height matches the top bar (h-14). */}
-      <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between px-1">
+    <div className="flex h-full flex-col px-2.5 pb-3">
+      {/* Brand row, on its own solid strip so the list never scrolls under
+          it; height matches the top bar (h-14). */}
+      <div className="relative z-10 flex h-14 shrink-0 items-center justify-between bg-[var(--ds-frame-bg)] px-1">
         <Link
           to={homeHref}
           onClick={closeNavOnPhone}
@@ -497,7 +496,8 @@ function AppShell() {
         </button>
       </div>
 
-      <div className="flex flex-col gap-4 pt-2">
+      {/* Only the list scrolls; Mox and the account stay in view. */}
+      <div className="-mx-2.5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-2.5 pb-3 pt-2 scrollbar-thin">
         <SidebarNav
           activeId={activeId}
           lockFor={lockFor}
@@ -524,14 +524,8 @@ function AppShell() {
         )}
       </div>
 
-      <div className="mt-auto flex flex-col gap-2 pt-5">
+      <div className="flex shrink-0 flex-col gap-1.5 border-t border-[var(--ds-card-border)] pt-2.5">
         <MoxGauge />
-        <WorkspaceSwitcher
-          workspaceId={workspaceId}
-          workspaceName={workspaceName}
-          workspaceWebsite={workspaceWebsite}
-          onSwitch={closeNavOnPhone}
-        />
         <div data-tour="account">
           <AccountMenu
             onOpenSettings={() => emitAppEvent("open:settings")}

@@ -30,11 +30,10 @@ import { LanguageStep, browserContentLanguage } from "@/components/onboarding/La
 import { withLanguage } from "@/lib/brand-look/languages";
 import { tidyLook } from "@/lib/inspo/look";
 import { VisorTransition, markEntryBloom } from "@/components/brand/mox/VisorTransition";
-import { FirstWinStep } from "@/components/onboarding/FirstWinStep";
+import { FinishStep } from "@/components/onboarding/FinishStep";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { hostOf, normalizeUrl, validUrl } from "@/components/onboarding/url";
 import { useOnboardingProducts } from "@/components/onboarding/use-onboarding-products";
-import { useFirstPosts } from "@/components/onboarding/use-first-posts";
 import { emptyDna, flushBrandDnaFor, saveBrandDnaFor, type BrandDna } from "@/hooks/use-brand-dna";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
@@ -51,11 +50,8 @@ import {
 } from "@/lib/competitors.functions";
 import { getGoals, saveGoals } from "@/lib/goals.functions";
 import type { WorkspaceGoals } from "@/lib/goals/contracts";
-import { goalLine } from "@/lib/goals/decide";
 import {
   blockedReason,
-  firstPostBriefs,
-  firstPostPlatform,
   indicatorIndex,
   indicatorSteps,
   nextStep,
@@ -611,36 +607,6 @@ function Onboarding() {
     navigate({ to: entering });
   };
 
-  // ── First posts ──
-  const [firstProductId, setFirstProductId] = useState<string | null>(null);
-  const firstProduct =
-    catalogue.products.find((x) => x.id === firstProductId) ??
-    catalogue.products.find((x) => x.images.length) ??
-    catalogue.products[0] ??
-    null;
-  const platformChoices = useMemo(() => {
-    const wanted = goals?.channels.length ? goals.channels : ["instagram", "linkedin", "facebook"];
-    return [...new Set([...connected.filter((c) => wanted.includes(c)), ...wanted])].slice(0, 5);
-  }, [goals, connected]);
-  const [platformPick, setPlatformPick] = useState<string | null>(null);
-  const platform = (platformPick ?? firstPostPlatform(goals, connected)) as ReturnType<
-    typeof firstPostPlatform
-  >;
-  const briefs = useMemo(
-    () =>
-      workspaceId && firstProduct
-        ? firstPostBriefs({
-            workspaceId,
-            brandName,
-            goals,
-            product: firstProduct,
-            platform,
-          })
-        : [],
-    [workspaceId, firstProduct, brandName, goals, platform],
-  );
-  const firstPosts = useFirstPosts(workspaceId, briefs);
-
   const centered = step === "website" || step === "scan" || step === "manual";
   const stepMotion = {
     initial: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
@@ -865,25 +831,14 @@ function Onboarding() {
                     </ChannelsStep>
                   )}
                   {step === "first" && (
-                    <FirstWinStep
+                    <FinishStep
                       brandName={brandName}
-                      goalLine={goals ? goalLine(goals) : null}
-                      briefs={briefs}
-                      products={catalogue.products}
-                      productId={firstProduct?.id ?? null}
-                      platform={platform}
-                      platforms={platformChoices}
-                      priceLabel={firstPosts.priceLabel}
-                      posts={firstPosts.posts}
-                      billing={firstPosts.billing}
+                      language={language}
+                      products={catalogue.products.length}
+                      channels={connected.length}
                       reduce={reduce}
                       headingRef={headingRef}
-                      onProduct={setFirstProductId}
-                      onPlatform={setPlatformPick}
-                      onStart={() => void firstPosts.start()}
-                      onRetry={(n) => void firstPosts.retry(n)}
                       onBack={() => back("first")}
-                      onLibrary={() => enterApp(workspacePath(workspace.id, "", { library: 1 }))}
                       onEnter={() => enterApp()}
                     />
                   )}

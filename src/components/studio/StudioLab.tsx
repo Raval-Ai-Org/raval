@@ -938,6 +938,20 @@ const SCENES: Scene[] = [
       }),
   },
   {
+    id: "brief-video-kind-needs-picture",
+    label: "Brief · Kind that needs a picture",
+    make: () =>
+      session("video", "intent", {
+        brief: "Our new oat-milk cold brew can",
+        controls: {
+          platforms: ["instagram"],
+          ratio: "9:16",
+          audio: true,
+          videoKind: "living-picture",
+        },
+      }),
+  },
+  {
     id: "brief-video-motion-post",
     label: "Brief · Motion post from a picture",
     make: () =>

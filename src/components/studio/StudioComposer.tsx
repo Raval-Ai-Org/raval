@@ -1035,9 +1035,13 @@ function StudioPrice({ session }: { session: StudioSession }) {
     videoResolution: session.controls.videoResolution,
   });
   const clip = charge === "studio_short_clip" ? shortClipPlan({ ...session, controls }) : null;
-  if (clip) return <CostChip credits={shortClipPrice(clip).credits} className="ml-auto shrink-0" />;
+  if (clip)
+    return (
+      <CostChip announce credits={shortClipPrice(clip).credits} className="ml-auto shrink-0" />
+    );
   return charge === "studio_video" ? (
     <CostChip
+      announce
       videoUnits={studioVideoUnits(
         // Animated recap photos are five seconds each, whatever length was picked.
         videoMode === "recap"
@@ -1047,6 +1051,6 @@ function StudioPrice({ session }: { session: StudioSession }) {
       className="ml-auto shrink-0"
     />
   ) : (
-    <CostChip action={charge as CreditAction} className="ml-auto shrink-0" />
+    <CostChip announce action={charge as CreditAction} className="ml-auto shrink-0" />
   );
 }

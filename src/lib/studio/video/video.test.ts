@@ -8,6 +8,7 @@ import {
   recommendedModel,
   studioVideoModelFor,
   usableKind,
+  VIDEO_KIND_GROUPS,
   VIDEO_KINDS,
   videoKind,
 } from "./kinds";
@@ -62,12 +63,38 @@ describe("video kinds", () => {
     ["Anything", { picture: true }, "living-picture"],
     ["Anything", { picture: true, product: true }, "product-motion"],
     ["Anything", { carousel: true }, "motion-post"],
+    ["Unboxing our new headphones", {}, "product-showcase"],
+    ["Launch video for our new perfume", {}, "product-showcase"],
+    ["Behind the scenes at our workshop", {}, "mood-broll"],
+    ["Our grand opening is this Saturday", {}, "offer-teaser"],
+    ["Explain what our service does", {}, "how-it-works"],
+    ["Showcase the features of our app", {}, "product-demo"],
+    ["Aesthetic b-roll of our bakery with text on top", {}, "broll-hook"],
   ] as const)("picks %s", (brief, source, kind) => {
     expect(pickVideoKind(brief, source)).toBe(kind);
   });
 
   it("a template wins over the brief", () => {
     expect(pickVideoKind("sale", {}, "video-process")).toBe("how-it-works");
+  });
+
+  it("every kind sits under one composer heading, and every heading has kinds", () => {
+    const groups = new Set(VIDEO_KIND_GROUPS.map((g) => g.id));
+    for (const kind of VIDEO_KINDS) expect(groups).toContain(kind.group);
+    for (const group of groups) expect(VIDEO_KINDS.some((kind) => kind.group === group)).toBe(true);
+  });
+
+  it("a kind drawn by code is never made by a video model", () => {
+    expect(usableKind("motion-post", {})).toBe("product-motion");
+    expect(usableKind("motion-graphics", { picture: true })).toBe("living-picture");
+    // A motion graphic left over after switching back to new footage.
+    const settled = settleVideoControls({
+      type: "video",
+      controls: { platforms: ["instagram"], videoMode: "generate", videoKind: "motion-graphics" },
+      brief: "Our new kettle",
+    });
+    expect(videoKind(settled.videoKind!).join).not.toBe("code");
+    expect(settled.videoKind).toBe("product-motion");
   });
 
   it("a kind that needs a post falls back to a product film, never a cast story", () => {
