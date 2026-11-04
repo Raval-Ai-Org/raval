@@ -343,7 +343,11 @@ describe("Studio async billing", () => {
           ugc: { allowed: true, requiredPlan: "starter" },
           video_1080p: { allowed: true, requiredPlan: "growth" },
         },
-        meters: { credits: { available: 5_000 }, video: { available } },
+        meters: {
+          credits: { available: 5_000 },
+          video: { available },
+          premium_video: { available: 0 },
+        },
       });
     beforeEach(() => {
       vi.stubEnv("VIDEO_PROVIDER_STANDARD", "kie");

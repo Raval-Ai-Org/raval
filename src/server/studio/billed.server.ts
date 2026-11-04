@@ -246,8 +246,8 @@ export async function createBilledStudioJob(args: {
     video && quoted ? (await getEntitlements({ workspaceId, userId, role })).meters : null;
   let videoQuote = quoted
     ? quoteStudioVideo(input.controls, {
-        videoBalance: wallets?.video.available ?? 0,
-        premiumBalance: wallets?.premium_video.available ?? 0,
+        videoBalance: wallets?.video?.available ?? 0,
+        premiumBalance: wallets?.premium_video?.available ?? 0,
       })
     : null;
   // A person's Generate button carries the quote it showed, which must still

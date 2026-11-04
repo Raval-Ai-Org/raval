@@ -56,6 +56,10 @@ export type AppEventMap = {
   "analytics:changed": undefined;
   "gen:queue:changed": undefined;
 
+  // ── Shell ───────────────────────────────────────────────────────────
+  /** A full window opened or closed; the sidebar highlights its row (nav.ts id). */
+  "shell:window": { id: string; open: boolean };
+
   // ── Chat ────────────────────────────────────────────────────────────
   /** Put text in the chat composer; `focus` defaults to true. */
   "chat:prefill": string | { text: string; focus?: boolean };

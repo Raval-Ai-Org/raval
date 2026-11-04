@@ -49,7 +49,7 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   balance only in `MoxGauge`, the top bar's corner shows the plan.
   Create is Holo's "choose a method" card grid (`CreateLauncher`); Home's
   Swipe ideas / Blog ideas open `IdeaSwipeDeck` (a pick only fills a brief);
-  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`): Back pill, step pills, a narrow centred form, `.studio-cta` is the Mox gradient pill. Mox is
+  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, an Options and an Ideas pill); goal, product, size and the rest live in the right side panel (Holo), ideas and templates in its Ideas tab; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
   the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
   Mox's gradient only on the canvas wash, the primary pill, progress bars, the
   visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).

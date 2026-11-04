@@ -1592,6 +1592,7 @@ export function StudioLab() {
                 <ComposerBody
                   session={sessionData}
                   isMobile={device === "phone"}
+                  embedded={device !== "phone"}
                   fixtures={{ ideas: IDEAS, ...current.fixtures }}
                 />
               ) : null}

@@ -116,7 +116,8 @@ const TOOL =
   "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-foreground transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
 const TOOL_ICON =
   "grid size-8 place-items-center rounded-full text-foreground/80 transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
-const FLOAT = "rounded-full bg-surface-3/90 p-1 shadow-2 ring-1 ring-border/70 backdrop-blur";
+const FLOAT =
+  "rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/90 p-1 shadow-[var(--ds-card-shadow)] backdrop-blur-xl";
 
 /** One storyboard line, short enough for a check row. */
 function shortLine(text: string): string {
@@ -253,6 +254,8 @@ export function ReviewPanel({
   const [expandChoices, setExpandChoices] = useState<PlatformId[]>([]);
   const [showExpand, setShowExpand] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Holo: a finished picture is shown alone; "Show as post" brings the mock back.
+  const [asPost, setAsPost] = useState(false);
   const [justApproved, setJustApproved] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // A result that finished moments ago gets a short "ready" beat on arrival.
@@ -718,6 +721,12 @@ export function ReviewPanel({
     }
   })();
 
+  const singlePicture =
+    !["article", "script", "story", "carousel", "ad"].includes(session.type) &&
+    media?.kind === "image";
+  const pictureOnly =
+    singlePicture && media?.status === "ready" && !!media.url && !editing && !asPost;
+
   const hasMedia = !!media && media.status !== "failed";
   // One Canva control per post: a carousel opens all its slides, anything
   // else its one picture.
@@ -1172,12 +1181,7 @@ export function ReviewPanel({
     // action pinned. Desktop: canvas and inspector scroll independently.
     <div className="flex h-full min-h-0 flex-col overflow-y-auto @5xl/composer:grid @5xl/composer:grid-cols-[minmax(0,1fr)_380px] @5xl/composer:grid-rows-[minmax(0,1fr)] @5xl/composer:overflow-hidden">
       {/* ── Canvas ── */}
-      <div className="studio-canvas relative flex shrink-0 flex-col @5xl/composer:min-h-0 @5xl/composer:overflow-y-auto">
-        <div
-          aria-hidden
-          className={`studio-aurora studio-aurora-soft studio-tone-${session.type} !bottom-auto h-[560px]`}
-        />
-
+      <div className="relative flex shrink-0 flex-col [scrollbar-width:thin] @5xl/composer:min-h-0 @5xl/composer:overflow-y-auto">
         {/* Floating toolbar */}
         <div className="pointer-events-none sticky top-0 z-20 flex flex-wrap items-center gap-2 px-3 pb-2 pt-3 @3xl/composer:px-5 @3xl/composer:pt-4">
           {multi ? (
@@ -1249,96 +1253,6 @@ export function ReviewPanel({
               <PlatformAppIcon platform={platforms[0]} size={28} label />
             </span>
           ) : null}
-
-          <AnimatePresence initial={false}>
-            {!editing ? (
-              <motion.div
-                key="tools"
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: duration.base }}
-                className={cn("pointer-events-auto ml-auto flex items-center", FLOAT)}
-              >
-                {session.type !== "script" ? (
-                  <button
-                    type="button"
-                    className={TOOL}
-                    onClick={() => setEditing(true)}
-                    disabled={revising || locked}
-                  >
-                    <Pencil />
-                    Edit
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={TOOL}
-                  onClick={() => void generate(session.id, { kind: "regenerate" })}
-                  disabled={revising || locked}
-                  title={`Same description, a new version · ${newTakePrice}`}
-                >
-                  <RefreshCw />
-                  <span className="hidden sm:inline">New take · {newTakePrice}</span>
-                </button>
-                <span aria-hidden className="mx-1 h-4 w-px bg-border" />
-                <button
-                  type="button"
-                  className={TOOL_ICON}
-                  onClick={copyText}
-                  aria-label="Copy text"
-                  title="Copy text"
-                >
-                  <Copy />
-                </button>
-                {mediaReady ? (
-                  <>
-                    <DownloadAssetButton
-                      url={media!.url}
-                      filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
-                      compact
-                    />
-                    <button
-                      type="button"
-                      className={TOOL_ICON}
-                      onClick={() => setExpanded(true)}
-                      aria-label="Open full size"
-                      title="Open full size"
-                    >
-                      <Maximize2 />
-                    </button>
-                  </>
-                ) : null}
-                {canvaSource ? (
-                  <CanvaEditButton
-                    variant="tool"
-                    {...canvaSource}
-                    onChanged={() => void refreshSessionJob(session.id)}
-                  />
-                ) : null}
-                {mediaReady && !fixtureRows && (
-                  <VisualFeedback
-                    key={job.id}
-                    workspaceId={session.workspaceId}
-                    jobId={job.id}
-                    disabled={revising}
-                  />
-                )}
-                {draft.artwork?.artStoragePath && !fixtureRows && (
-                  <EditVisualText
-                    workspaceId={session.workspaceId}
-                    jobId={job.id}
-                    headline={draft.artwork.headline}
-                    disabled={revising || locked}
-                    onChanged={() => {
-                      void refreshSessionJob(session.id);
-                      void loadRows();
-                    }}
-                  />
-                )}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </div>
 
         {/* Arrival beat */}
@@ -1445,10 +1359,131 @@ export function ReviewPanel({
               revising && "pointer-events-none opacity-45 blur-[1.5px] saturate-50",
             )}
           >
-            {preview}
+            {pictureOnly ? (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                aria-label="Open full size"
+                className="block overflow-hidden rounded-[18px] shadow-[0_34px_80px_-34px_rgb(0_0_0/0.5)] transition-transform duration-300 hover:scale-[1.01]"
+              >
+                <img
+                  src={media!.url!}
+                  alt={variant?.body?.slice(0, 120) ?? "Your picture"}
+                  className="block max-h-[min(62dvh,640px)] w-auto max-w-full object-contain"
+                />
+              </button>
+            ) : (
+              preview
+            )}
           </motion.div>
+          <div className="relative z-10 mt-6 flex justify-center">
+            <AnimatePresence initial={false}>
+              {!editing ? (
+                <motion.div
+                  key="tools"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: duration.base }}
+                  className={cn(
+                    "pointer-events-auto flex flex-wrap items-center justify-center",
+                    FLOAT,
+                  )}
+                >
+                  {session.type !== "script" ? (
+                    <button
+                      type="button"
+                      className={TOOL}
+                      onClick={() => setEditing(true)}
+                      disabled={revising || locked}
+                    >
+                      <Pencil />
+                      Edit
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={TOOL}
+                    onClick={() => void generate(session.id, { kind: "regenerate" })}
+                    disabled={revising || locked}
+                    title={`Same description, a new version · ${newTakePrice}`}
+                  >
+                    <RefreshCw />
+                    <span className="hidden sm:inline">New take · {newTakePrice}</span>
+                  </button>
+                  {singlePicture && media?.status === "ready" ? (
+                    <button
+                      type="button"
+                      className={TOOL}
+                      onClick={() => setAsPost((v) => !v)}
+                      aria-pressed={asPost}
+                    >
+                      <Eye />
+                      {asPost ? "Picture only" : "Show as post"}
+                    </button>
+                  ) : null}
+                  <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+                  <button
+                    type="button"
+                    className={TOOL_ICON}
+                    onClick={copyText}
+                    aria-label="Copy text"
+                    title="Copy text"
+                  >
+                    <Copy />
+                  </button>
+                  {mediaReady ? (
+                    <>
+                      <DownloadAssetButton
+                        url={media!.url}
+                        filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
+                        compact
+                      />
+                      <button
+                        type="button"
+                        className={TOOL_ICON}
+                        onClick={() => setExpanded(true)}
+                        aria-label="Open full size"
+                        title="Open full size"
+                      >
+                        <Maximize2 />
+                      </button>
+                    </>
+                  ) : null}
+                  {canvaSource ? (
+                    <CanvaEditButton
+                      variant="tool"
+                      {...canvaSource}
+                      onChanged={() => void refreshSessionJob(session.id)}
+                    />
+                  ) : null}
+                  {mediaReady && !fixtureRows && (
+                    <VisualFeedback
+                      key={job.id}
+                      workspaceId={session.workspaceId}
+                      jobId={job.id}
+                      disabled={revising}
+                    />
+                  )}
+                  {draft.artwork?.artStoragePath && !fixtureRows && (
+                    <EditVisualText
+                      workspaceId={session.workspaceId}
+                      jobId={job.id}
+                      headline={draft.artwork.headline}
+                      disabled={revising || locked}
+                      onChanged={() => {
+                        void refreshSessionJob(session.id);
+                        void loadRows();
+                      }}
+                    />
+                  )}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
           {!locked && media?.kind === "image" ? (
             <VersionStrip
+              rail={pictureOnly}
               media={draft.media}
               ratio={ratio.replace(":", " / ")}
               disabled={revising || editing}
@@ -1540,7 +1575,7 @@ export function ReviewPanel({
       {/* ── Inspector ── */}
       <aside
         id="studio-inspector"
-        className="flex flex-col border-t border-border/70 bg-surface-3 @5xl/composer:min-h-0 @5xl/composer:border-l @5xl/composer:border-t-0"
+        className="flex flex-col border-t border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] @5xl/composer:min-h-0 @5xl/composer:border-l @5xl/composer:border-t-0"
       >
         <div className="studio-stagger min-h-0 flex-1 divide-y divide-border/60 @5xl/composer:overflow-y-auto">
           {/* Status */}

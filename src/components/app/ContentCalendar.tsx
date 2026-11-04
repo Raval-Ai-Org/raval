@@ -877,6 +877,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
 
   return (
     <AppModalShell
+        navId="calendar"
       open={open}
       onOpenChange={setOpen}
       size="2xl"

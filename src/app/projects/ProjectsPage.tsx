@@ -271,7 +271,7 @@ function ProjectsPage() {
 
         <ProjectsStage>
           {/* Top bar */}
-          <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-4 sm:px-5">
+          <header className="sticky top-0 z-20 bg-[var(--ds-frame-bg)]/75 backdrop-blur-xl supports-[backdrop-filter]:bg-[var(--ds-frame-bg)]/60 flex h-14 items-center justify-between gap-3 px-4 sm:px-5">
             <Link
               to={WORKSPACES_HOME}
               aria-label="Mellox AI home"
@@ -743,7 +743,10 @@ export function ProjectCard({
             aria-hidden
             className="absolute -bottom-14 -left-10 size-40 rounded-full bg-white/30 blur-2xl transition-transform dark:bg-white/10 duration-700 group-hover/thumb:translate-x-6"
           />
-          <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/0 to-black/0 dark:from-black/30 dark:to-black/0" />
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-t from-black/0 to-black/0 dark:from-black/30 dark:to-black/0"
+          />
 
           {/* The site in a small browser window, when a screenshot exists. */}
           {screenshotUrl && (

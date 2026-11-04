@@ -165,6 +165,7 @@ export function CreateLauncher() {
   return (
     <>
       <AppModalShell
+        navId="create"
         open={open}
         onOpenChange={setOpen}
         size="sm"

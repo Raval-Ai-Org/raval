@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useEmbedRect } from "@/components/app/AppModalShell";
+import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { duration, ease, spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -17,7 +19,8 @@ type Fixtures = Pick<
 >;
 
 /**
- * The Library as a pop-up over the workspace. Opens from the sidebar, from
+ * The Library, in the canvas beside the sidebar on a desktop (Holo), a full
+ * screen on a phone and a window elsewhere. Opens from the sidebar, from
  * anywhere via the `open:library` app event, and from `?library=1` (the old
  * /app/library route redirects there). Escape steps back from a detail view
  * first, then closes.
@@ -28,6 +31,9 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
   const [status, setStatus] = useState<StageFilter | undefined>(undefined);
   const isMobile = useIsMobile();
   const backRef = useRef<(() => boolean) | null>(null);
+  const embed = useEmbedRect(open && !isMobile);
+  const inCanvas = Boolean(embed) || (open && !isMobile && canEmbedWindow());
+  useShellWindow("library", open);
 
   useEffect(() => {
     const on: Parameters<typeof addAppEventListener<"open:library">>[1] = (e) => {
@@ -53,7 +59,7 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
   }, []);
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
+    <DialogPrimitive.Root open={open} onOpenChange={setOpen} modal={!inCanvas}>
       <AnimatePresence>
         {open ? (
           <DialogPrimitive.Portal forceMount>
@@ -69,7 +75,7 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
             <div
               className={cn(
                 "pointer-events-none fixed inset-0 z-50 grid place-items-center",
-                !isMobile && "p-3",
+                !isMobile && !embed && "p-3",
               )}
             >
               <DialogPrimitive.Content
@@ -80,6 +86,8 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                   e.preventDefault();
                   (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
                 }}
+                onPointerDownOutside={(e) => inCanvas && closeOnlyFromSidebar(e)}
+                onInteractOutside={(e) => inCanvas && closeOnlyFromSidebar(e)}
                 onEscapeKeyDown={(e) => {
                   const t = e.target as HTMLElement | null;
                   if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
@@ -93,8 +101,19 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                 <motion.div
                   tabIndex={-1}
                   data-mellox-app
-                  initial={{ opacity: 0, y: 14, scale: 0.985 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  initial={embed ? { opacity: 0, x: 28 } : { opacity: 0, y: 14, scale: 0.985 }}
+                  animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                  style={
+                    embed
+                      ? {
+                          position: "fixed",
+                          left: embed.left,
+                          top: embed.top,
+                          width: embed.width,
+                          height: embed.height,
+                        }
+                      : undefined
+                  }
                   exit={{
                     opacity: 0,
                     y: 16,
@@ -103,10 +122,13 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                   }}
                   transition={spring.surface}
                   className={cn(
-                    "ds-glow pointer-events-auto relative flex flex-col overflow-hidden bg-background outline-none",
+                    "ds-glow pointer-events-auto relative flex flex-col overflow-hidden outline-none",
+                    !embed && "bg-background",
                     isMobile
                       ? "h-dvh w-screen"
-                      : "ds-window h-[min(92dvh,960px)] w-[min(calc(100vw-24px),1240px)]",
+                      : embed
+                        ? "ds-canvas rounded-tl-[var(--ds-canvas-radius)]"
+                        : "ds-window h-[min(92dvh,960px)] w-[min(calc(100vw-24px),1240px)]",
                   )}
                 >
                   <DialogPrimitive.Title className="sr-only">Library</DialogPrimitive.Title>

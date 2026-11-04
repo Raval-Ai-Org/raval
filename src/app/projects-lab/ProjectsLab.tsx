@@ -55,7 +55,7 @@ export function ProjectsLab() {
     <AppFrame>
       <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground">
         <ProjectsStage>
-          <header className="relative z-10 flex h-14 items-center px-5">
+          <header className="sticky top-0 z-20 bg-[var(--ds-frame-bg)]/75 backdrop-blur-xl supports-[backdrop-filter]:bg-[var(--ds-frame-bg)]/60 flex h-14 items-center px-5">
             <Logo height={30} />
           </header>
 

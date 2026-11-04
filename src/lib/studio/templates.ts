@@ -655,9 +655,9 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
   {
     id: "video-broll-hook",
     types: ["video"],
-    label: "B-roll with a hook",
-    tagline: "Aesthetic shots with one line of text",
-    beats: ["Hook line", "Beautiful B-roll", "Hero shot"],
+    label: "Beautiful shots, one line",
+    tagline: "Calm shots of your world with one line of text",
+    beats: ["Opening line", "Beautiful shots", "Main shot"],
     starter:
       "Aesthetic B-roll of [product or place] with the line: [one line people will stop for].",
     directive:

@@ -262,6 +262,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   } else {
     body = (
       <SurfaceLayout
+        variant="rail"
         items={items.map(({ id, label, icon }) => ({ id, label, icon }))}
         value={activeId(pathname)}
         onChange={(id) => {

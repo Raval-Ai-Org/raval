@@ -169,7 +169,19 @@ function AppShell() {
   const chatView = useRouterState({
     select: (s) => s.location.search.view === "chat",
   });
-  const activeId = activeNavId(path, homeHref, chatView || Boolean(activeConversationId));
+  const routeNavId = activeNavId(path, homeHref, chatView || Boolean(activeConversationId));
+  // A full window (Library, Calendar, Analytics, Create...) highlights its own
+  // row while it is open; otherwise the page's row.
+  const [windowNav, setWindowNav] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (event: CustomEvent<{ id: string; open: boolean }>) => {
+      const { id, open } = event.detail;
+      setWindowNav((current) => (open ? id : current === id ? null : current));
+    };
+    addAppEventListener("shell:window", on);
+    return () => removeAppEventListener("shell:window", on);
+  }, []);
+  const activeId = windowNav ?? routeNavId;
   const isCompact = useIsCompact();
   const [navOpen, setNavOpen] = useState(false);
   // Compact widths use an overlay drawer; desktop keeps an inline sidebar.
@@ -545,6 +557,7 @@ function AppShell() {
       {/* Collapsed: the icon rail, in the open sidebar's order. */}
       {!navOpen && (
         <aside
+          data-app-sidebar
           aria-label="Sidebar rail"
           className="hidden h-full w-[60px] flex-none flex-col items-center py-3 lg:flex"
         >
@@ -622,6 +635,7 @@ function AppShell() {
               />
             )}
             <motion.aside
+              data-app-sidebar
               id="app-inline-nav"
               key="app-inline-nav"
               initial={isCompact ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}

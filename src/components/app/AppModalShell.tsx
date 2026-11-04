@@ -6,6 +6,7 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
+import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
 
 type Size = "sm" | "md" | "lg" | "xl" | "2xl";
 
@@ -93,6 +94,7 @@ export function AppModalShell({
   bodyClassName,
   children,
   srDescription,
+  navId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -109,6 +111,8 @@ export function AppModalShell({
   bodyClassName?: string;
   children: ReactNode;
   srDescription?: string;
+  /** The sidebar row this window belongs to (nav.ts id), highlighted while open. */
+  navId?: string;
 }) {
   const [maximized, setMaximized] = useState(false);
   // Small windows on a phone are bottom sheets that slide up (see SIZE_MAP).
@@ -122,6 +126,9 @@ export function AppModalShell({
   // Mellox 2.0 (Holo): on a desktop inside the app, a big surface opens in
   // the page, beside the sidebar, instead of floating over a blurred screen.
   const embed = useEmbedRect(open && big);
+  // In the canvas the window is non-modal, so the sidebar keeps working.
+  const inCanvas = Boolean(embed) || (open && big && canEmbedWindow());
+  useShellWindow(navId, open);
   // Big workspaces (lg/xl) can become a full page; small forms stay popups.
   const canMaximize = !embed && (allowMaximize ?? big);
   useEffect(() => {
@@ -131,6 +138,7 @@ export function AppModalShell({
   return (
     <DialogPrimitive.Root
       open={open}
+      modal={!inCanvas}
       onOpenChange={(v) => {
         if (disableClose && !v) return;
         onOpenChange(v);
@@ -172,9 +180,11 @@ export function AppModalShell({
               }}
               onPointerDownOutside={(e) => {
                 if (disableClose) e.preventDefault();
+                else if (inCanvas) closeOnlyFromSidebar(e);
               }}
               onInteractOutside={(e) => {
                 if (disableClose) e.preventDefault();
+                else if (inCanvas) closeOnlyFromSidebar(e);
               }}
             >
               <motion.div

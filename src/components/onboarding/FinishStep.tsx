@@ -85,7 +85,10 @@ export function FinishStep({
                 : { duration: 0.3 }
             }
           >
+            {/* The render is cut at the shoulders; fade that edge so it never
+                shows as a hard line (dark theme especially). */}
             <div
+              className="[mask-image:linear-gradient(to_bottom,#000_72%,transparent_97%)]"
               style={{
                 transform: `scale(${1 + hold * 0.4})`,
                 transformOrigin: "50% 42%",

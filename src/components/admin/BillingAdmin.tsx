@@ -148,6 +148,7 @@ export function BillingAdmin() {
           </div>
         ) : (
           <SurfaceLayout
+        variant="rail"
             items={nav}
             value={accountId ? "accounts" : tab}
             onChange={(next) => {

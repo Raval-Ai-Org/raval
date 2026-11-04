@@ -191,7 +191,9 @@ export async function generateStudioIdeas(args: {
           system,
           user,
           schema: IdeasSchema,
-          maxTokens: 2200,
+          // Ten ideas plus the budget model's reasoning run to ~8k tokens;
+          // 2,200 cut half of them off and the repair doubled the wait.
+          maxTokens: 8000,
           temperature: 0.9,
           regenerate: args.refresh,
         });

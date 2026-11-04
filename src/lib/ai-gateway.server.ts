@@ -959,8 +959,12 @@ export const LLM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const LLM_MAX_IMAGES = 20;
 /** About ten minutes of the small mono MP3 Studio sends. */
 export const LLM_MAX_AUDIO_BYTES = 4 * 1024 * 1024;
-/** llmText callers assemble and cap their own prompts; this only stops abuse. */
-const PROMPT_MAX_INPUT_CHARS = 400_000;
+/**
+ * llmText and structured-prompt callers assemble and cap their own prompts;
+ * this only stops abuse. They must not get the chat budget (MAX_INPUT_CHARS):
+ * trimming cuts the end of the system prompt, which is where the JSON schema is.
+ */
+export const PROMPT_MAX_INPUT_CHARS = 400_000;
 
 function userContent(
   user: string,

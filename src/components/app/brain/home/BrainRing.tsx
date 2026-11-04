@@ -16,36 +16,36 @@ import { BrainMark } from "../BrainMark";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
-// Clockwise from the top left. `pad` pushes the label toward the outer edge.
-const PLACE: Record<
-  BrainId,
-  { box: string; radius: string; pad: string; out: { x: number; y: number } }
-> = {
+// Clockwise from the top left. `pad` pushes the label toward the outer edge;
+// `origin` is the ring's centre, so a quarter grows outward from it.
+const PLACE: Record<BrainId, { box: string; radius: string; pad: string; origin: string }> = {
   brand: {
     box: "left-0 top-0",
     radius: "rounded-tl-full",
-    pad: "pb-[6%] pr-[6%]",
-    out: { x: -5, y: -5 },
+    pad: "pb-[8%] pr-[8%]",
+    origin: "100% 100%",
   },
   audience: {
     box: "right-0 top-0",
     radius: "rounded-tr-full",
-    pad: "pb-[6%] pl-[6%]",
-    out: { x: 5, y: -5 },
+    pad: "pb-[8%] pl-[8%]",
+    origin: "0% 100%",
   },
   market: {
     box: "right-0 bottom-0",
     radius: "rounded-br-full",
-    pad: "pt-[6%] pl-[6%]",
-    out: { x: 5, y: 5 },
+    pad: "pt-[8%] pl-[8%]",
+    origin: "0% 0%",
   },
   competitors: {
     box: "left-0 bottom-0",
     radius: "rounded-bl-full",
-    pad: "pt-[6%] pr-[6%]",
-    out: { x: -5, y: 5 },
+    pad: "pt-[8%] pr-[8%]",
+    origin: "100% 0%",
   },
 };
+// Hover answers at once and settles softly; only the entrance is staggered.
+const HOVER = { type: "spring", stiffness: 380, damping: 26 } as const;
 
 export function BrainRing({
   overview,
@@ -62,9 +62,9 @@ export function BrainRing({
     BRAINS.reduce((sum, b) => sum + overview.brains[b].health, 0) / BRAINS.length,
   );
   return (
-    <div className="relative mx-auto mb-6 mt-1 aspect-square w-full max-w-[min(100%,500px)]">
-      {/* A slow ring of light around it all. */}
-      <span aria-hidden className="mox-orbit absolute -inset-2 rounded-full opacity-60" />
+    <div className="relative mx-auto mb-6 mt-3 aspect-square w-full max-w-[min(100%,460px)]">
+      {/* A slow ring of light around it all, evenly spaced from the quarters. */}
+      <span aria-hidden className="mox-orbit absolute -inset-[7px] rounded-full opacity-50" />
       {BRAINS.map((brain, i) => {
         const meta = BRAIN_META[brain];
         const card = overview.brains[brain];
@@ -78,20 +78,24 @@ export function BrainRing({
             type="button"
             onClick={() => onOpen(brain)}
             aria-label={`${meta.label}: ${line}${count ? `, ${count} new` : ""}`}
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            whileHover={{ x: p.out.x, y: p.out.y, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ duration: 0.55, delay: 0.05 + i * 0.07, ease: EASE }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              transition: { duration: 0.5, delay: 0.05 + i * 0.06, ease: EASE },
+            }}
+            whileHover={{ scale: 1.035, transition: HOVER }}
+            whileTap={{ scale: 0.985, transition: HOVER }}
             style={
               {
                 "--b": meta.color,
+                transformOrigin: p.origin,
                 background: `radial-gradient(120% 120% at 50% 50%, color-mix(in srgb, ${meta.color} 10%, var(--ds-card-bg)), color-mix(in srgb, ${meta.color} 22%, var(--ds-card-bg)))`,
                 borderColor: `color-mix(in srgb, ${meta.color} 26%, transparent)`,
               } as CSSProperties
             }
             className={cn(
-              "group absolute flex h-[calc(50%-5px)] w-[calc(50%-5px)] flex-col items-center justify-center border text-center shadow-[var(--ds-card-shadow)] transition-shadow duration-300 hover:shadow-[0_24px_48px_-24px_var(--b)]",
+              "group absolute flex h-[calc(50%-4px)] w-[calc(50%-4px)] flex-col items-center justify-center border text-center transition-shadow duration-300 hover:shadow-[0_22px_44px_-22px_var(--b)]",
               p.box,
               p.radius,
               p.pad,

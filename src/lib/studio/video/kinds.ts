@@ -250,7 +250,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   },
   {
     id: "broll-hook",
-    label: "B-roll with a hook",
+    label: "Beautiful shots, one line",
     group: "reach",
     hint: "Aesthetic shots of your world, one line of text on top",
     // Quick, separate shots joined with cuts: the Reels format where the
