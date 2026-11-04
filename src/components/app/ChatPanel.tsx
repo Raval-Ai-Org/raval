@@ -70,6 +70,8 @@ import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState"
 import { HomeBento } from "./home/HomeBento";
 import { useStartHere } from "./home/use-start-here";
 import { useOpenCreate } from "@/components/studio/use-open-create";
+import { IdeaSwipeDeck } from "@/components/studio/IdeaSwipeDeck";
+import type { StudioType } from "@/lib/studio/formats";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
 import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
@@ -1685,6 +1687,9 @@ export function ChatPanel({
   // Home's cards (free reads; a card only opens a place).
   const startHere = useStartHere(workspaceId);
   const openCreate = useOpenCreate();
+  // Home's idea cards (Holo's Idea swipe): the deck itself, any format or
+  // blog topics. Picking one opens the composer with it; nothing is made yet.
+  const [swipe, setSwipe] = useState<{ type?: StudioType } | null>(null);
   const openWaiting = () => {
     const place = pulse ? waitingPlace(pulse) : null;
     if (!place) return;
@@ -1702,6 +1707,15 @@ export function ChatPanel({
 
   return (
     <LayoutGroup id="mellox-chat">
+      {home && swipe ? (
+        <IdeaSwipeDeck
+          open
+          onOpenChange={(next) => !next && setSwipe(null)}
+          workspaceId={workspaceId}
+          type={swipe.type}
+          onPick={(idea) => openCreate.open(idea.type, { brief: idea.brief })}
+        />
+      ) : null}
       <div className="mx-chat relative flex h-full min-h-0 flex-col">
         {/* Conversation (or the greeting above the centered message box) */}
         <div
@@ -1720,10 +1734,9 @@ export function ChatPanel({
             <HomeBento
               start={startHere}
               create={openCreate}
-              name={userName}
               pulse={pulse}
               onOpenWaiting={openWaiting}
-              starters={<ChatStarters source={dna} pulse={pulse} onPick={pickStarter} />}
+              onSwipe={(type) => setSwipe({ type })}
             />
           ) : empty ? (
             <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
@@ -1874,8 +1887,8 @@ export function ChatPanel({
           layout="position"
           transition={layoutTransition}
           className={cn(
-            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6 before:pointer-events-none before:absolute before:inset-x-0 before:-top-12 before:h-12 before:bg-gradient-to-t before:from-[var(--ds-frame-bg)] before:to-transparent",
-            home ? "max-w-[880px] pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "max-w-3xl",
+            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6 before:pointer-events-none before:absolute before:inset-x-0 before:-top-12 before:h-12 before:bg-gradient-to-t before:from-[var(--ds-canvas-bg)] before:to-transparent",
+            home ? "max-w-[640px] pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "max-w-3xl",
           )}
         >
           <AnimatePresence>
@@ -1900,7 +1913,8 @@ export function ChatPanel({
           <FreeCreditStrip className="mb-2" />
           <ChatComposer
             ref={composerRef}
-            hero={empty}
+            // Home docks a slim Holo pill; a new chat keeps the big box.
+            hero={empty && !home}
             value={input}
             onChange={setInput}
             onSend={() => void send()}

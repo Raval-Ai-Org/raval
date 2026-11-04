@@ -1,26 +1,38 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { cn } from "@/lib/utils";
 
 const HOLD_MS = 1200;
+const RING = 2 * Math.PI * 15;
 
 /**
  * Onboarding's last button (Mellox 2.0, Holo's finish): press and hold to go
- * in. The pill fills over 1.2 s; letting go early drains it. Space or Enter
- * held works the same; a click from assistive tech (no press) goes straight in.
+ * in. A ring and the pill fill over 1.2 s; letting go early drains them.
+ * Space or Enter held works the same; a click from assistive tech (no press)
+ * goes straight in. `onProgress` lets the page react while it fills. With
+ * `autoAfterMs`, nobody pressing means it fills by itself and goes in (Holo).
  */
 export function HoldToEnter({
   onDone,
-  label = "Press & hold to enter",
+  onProgress,
+  autoAfterMs,
+  onHoverChange,
+  label = "Hold to enter",
   className,
 }: {
   onDone: () => void;
+  onProgress?: (value: number) => void;
+  /** Go in by itself after this long without a press. */
+  autoAfterMs?: number;
+  /** The pointer is over the button (the page can react). */
+  onHoverChange?: (over: boolean) => void;
   label?: string;
   className?: string;
 }) {
   const [fill, setFill] = useState(0);
+  const [auto, setAuto] = useState(false);
+  const autoRef = useRef(false);
   const holding = useRef(false);
   const pressed = useRef(false);
   const fired = useRef(false);
@@ -32,10 +44,14 @@ export function HoldToEnter({
     const dt = last.current ? t - last.current : 16;
     last.current = t;
     const next = holding.current
-      ? Math.min(1, value.current + dt / HOLD_MS)
+      ? Math.min(
+          1,
+          value.current + dt / (autoRef.current && !pressed.current ? HOLD_MS * 1.6 : HOLD_MS),
+        )
       : Math.max(0, value.current - dt / (HOLD_MS / 2.5));
     value.current = next;
     setFill(next);
+    onProgress?.(next);
     if (next >= 1 && !fired.current) {
       fired.current = true;
       onDone();
@@ -52,13 +68,28 @@ export function HoldToEnter({
     raf.current = requestAnimationFrame(tick);
   };
   const end = () => {
-    if (!holding.current) return;
+    // Letting go never stops the automatic entry.
+    if (!holding.current || autoRef.current) return;
     holding.current = false;
     last.current = 0;
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(tick);
   };
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  useEffect(() => {
+    if (!autoAfterMs) return;
+    const timer = window.setTimeout(() => {
+      if (fired.current || holding.current) return;
+      autoRef.current = true;
+      setAuto(true);
+      holding.current = true;
+      last.current = 0;
+      cancelAnimationFrame(raf.current);
+      raf.current = requestAnimationFrame(tick);
+    }, autoAfterMs);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAfterMs]);
 
   const onKeyDown = (e: KeyboardEvent) => {
     if ((e.key === " " || e.key === "Enter") && !e.repeat) {
@@ -83,7 +114,13 @@ export function HoldToEnter({
       }}
       onPointerUp={end}
       onPointerCancel={end}
-      onPointerLeave={end}
+      onPointerEnter={() => onHoverChange?.(true)}
+      onPointerLeave={() => {
+        onHoverChange?.(false);
+        end();
+      }}
+      onFocus={() => onHoverChange?.(true)}
+      onBlur={() => onHoverChange?.(false)}
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
       onClick={(e) => {
@@ -96,25 +133,42 @@ export function HoldToEnter({
       }}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        "group relative isolate inline-flex h-14 touch-none select-none items-center gap-3 overflow-hidden rounded-full bg-[var(--mox-ink)] pl-2 pr-6 text-[15px] font-bold text-white shadow-[0_18px_40px_-18px_rgb(22_25_27/0.7)] transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 dark:bg-white dark:text-[var(--mox-ink)]",
+        "group relative isolate inline-flex h-11 touch-none select-none items-center gap-2 overflow-hidden rounded-full bg-[var(--mox-ink)] pl-1.5 pr-5 text-[13.5px] font-bold text-white shadow-[0_18px_40px_-18px_rgb(22_25_27/0.7)] transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/40 dark:bg-white dark:text-[var(--mox-ink)]",
+        fill === 0 && "mox-hold-idle",
         className,
       )}
-      style={{ transform: `scale(${1 + fill * 0.04})` }}
+      style={{ transform: `scale(${1 + fill * 0.05})` }}
     >
       <span
         aria-hidden
         className="ds-grad-bar absolute inset-y-0 left-0 -z-10"
         style={{ width: `${fill * 100}%` }}
       />
-      <span
-        aria-hidden
-        className="grid size-10 place-items-center rounded-full bg-white/95"
-        style={{ boxShadow: `0 0 ${8 + fill * 26}px rgba(46,230,107,${0.3 + fill * 0.6})` }}
-      >
-        <MoxFace mood={fill > 0 ? "scanning" : "happy"} visor={fill > 0} size={34} />
-      </span>
+      {/* A ring that closes as you hold. */}
+      <svg aria-hidden viewBox="0 0 36 36" className="size-8 -rotate-90">
+        <circle
+          cx="18"
+          cy="18"
+          r="15"
+          fill="none"
+          strokeWidth="3"
+          className="stroke-current opacity-20"
+        />
+        <circle
+          cx="18"
+          cy="18"
+          r="15"
+          fill="none"
+          strokeWidth="3"
+          strokeLinecap="round"
+          stroke="var(--mox-green)"
+          strokeDasharray={RING}
+          strokeDashoffset={RING * (1 - fill)}
+          className={cn(fill > 0.45 && "stroke-[var(--mox-ink)]")}
+        />
+      </svg>
       <span className={cn("relative transition-colors", fill > 0.45 && "text-[var(--mox-ink)]")}>
-        {fill > 0 ? "Keep holding…" : label}
+        {auto ? "Taking you in" : fill > 0 ? "Keep holding" : label}
       </span>
     </button>
   );

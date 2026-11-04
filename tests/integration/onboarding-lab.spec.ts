@@ -92,8 +92,9 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByText(/Found 1 product on northwind\.example/)).toBeVisible();
       await expect(page.getByRole("tab", { name: /Services · 1/ })).toBeVisible();
       await page.getByRole("tab", { name: /Services · 1/ }).click();
-      await expect(page.getByText("Office coffee service")).toBeVisible();
-      await expect(page.getByText("Cold Brew, 1 L")).toBeHidden();
+      // The list row and the detail panel both name the chosen service.
+      await expect(page.getByRole("heading", { name: "Office coffee service" })).toBeVisible();
+      await expect(page.getByText("Cold Brew, 1 L")).toHaveCount(0);
       await page.getByRole("tab", { name: /All/ }).click();
       await expect(page.getByText(/Small photo/)).toBeVisible();
       await page.getByRole("button", { name: "Remove all" }).click();

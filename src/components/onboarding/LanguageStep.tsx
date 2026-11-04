@@ -123,7 +123,7 @@ export function LanguageGrid({
                     className={cn(
                       "size-9 transition-transform duration-300",
                       on &&
-                        "scale-110 ring-2 ring-[var(--mox-green)] ring-offset-2 ring-offset-[var(--mox-ink)] dark:ring-offset-white",
+                        "ring-2 ring-[var(--mox-green)] ring-offset-2 ring-offset-[var(--mox-ink)] dark:ring-offset-white",
                     )}
                   />
                   {on && (

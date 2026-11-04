@@ -27,8 +27,13 @@ describe("workspace sidebar", () => {
     }
   });
 
-  it("starts with Home and Chat, Holo style", () => {
-    expect(NAV_GROUPS[0].items.map((i) => i.id)).toEqual(["home", "chat"]);
+  it("starts with Home, Chat and Create, Holo style", () => {
+    expect(NAV_GROUPS[0].items.map((i) => i.id)).toEqual(["home", "chat", "create"]);
+  });
+
+  it("stays short: four groups, three rows each at most", () => {
+    expect(NAV_GROUPS).toHaveLength(4);
+    for (const g of NAV_GROUPS) expect(g.items.length).toBeLessThanOrEqual(3);
   });
 
   it("marks the row a path belongs to", () => {

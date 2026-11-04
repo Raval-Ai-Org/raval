@@ -102,6 +102,7 @@ const AppTour = lazy(() =>
 
 import { useStudioEntry } from "@/hooks/use-studio";
 import { StudioActivityWatcher, StudioButton } from "@/components/studio/StudioButton";
+import { GeneratingPanel } from "@/components/studio/GeneratingPanel";
 import { setStudioRailOpen } from "@/lib/studio/rail-state";
 import { useStudioStore } from "@/lib/studio/session-store";
 import { useIsCompact } from "@/hooks/use-mobile";
@@ -112,10 +113,11 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
-import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
+import { BillingPanel } from "@/components/app/BillingPanel";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import type { PlanId } from "@/lib/billing/catalog";
-import { AppFrame } from "@/components/app/shell/AppFrame";
+import { AppCanvas, AppFrame } from "@/components/app/shell/AppFrame";
+import { PlanChip } from "@/components/app/billing/WalletPill";
 import { BrandMeter } from "@/components/app/shell/BrandMeter";
 import { MoxGauge } from "@/components/app/shell/MoxGauge";
 import { SidebarNav } from "@/components/app/shell/SidebarNav";
@@ -182,7 +184,7 @@ function AppShell() {
       window.removeEventListener("orientationchange", on);
     };
   }, []);
-  const sidebarWidth = isCompact ? Math.min(320, Math.round(vw * 0.9)) : 240;
+  const sidebarWidth = isCompact ? Math.min(320, Math.round(vw * 0.9)) : 196;
 
   // Swipe gestures on mobile: right-swipe from left edge opens nav; left-swipe closes it.
   useSwipe({
@@ -537,7 +539,7 @@ function AppShell() {
   );
 
   return (
-    <AppFrame>
+    <AppFrame plain>
       <h1 className="sr-only">Mellox AI Workspace</h1>
 
       {/* Collapsed: the icon rail, in the open sidebar's order. */}
@@ -643,7 +645,7 @@ function AppShell() {
       </AnimatePresence>
 
       {/* Right column: top bar + the workspace. */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-workspace-column className="flex min-w-0 flex-1 flex-col">
         <AnnouncementsOutlet />
 
         <header
@@ -729,12 +731,8 @@ function AppShell() {
                     }
                   />
                 )}
-              <div className="hidden items-center gap-1.5 lg:flex">
-                <Suspense fallback={null}>
-                  <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />
-                </Suspense>
-                <WalletPill />
-              </div>
+              {/* Holo's corner: the plan only. The balance is Mox's gauge. */}
+              <PlanChip className="hidden lg:inline-flex" />
               <StudioButton />
 
               <DropdownMenu>
@@ -810,8 +808,8 @@ function AppShell() {
           </motion.div>
         </header>
 
-        {/* The workspace, to the right of the sidebar */}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* The workspace: Holo's canvas, to the right of the sidebar */}
+        <AppCanvas>
           <main data-workspace-main="true" className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <WorkspaceSurface
               workspaceId={workspaceId}
@@ -819,7 +817,7 @@ function AppShell() {
               chatView={chatView}
             />
           </main>
-        </div>
+        </AppCanvas>
         <nav
           aria-label="Mobile workspace navigation"
           className="flex shrink-0 items-center justify-around border-t border-border/50 bg-[var(--ds-frame-bg)] px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
@@ -1020,6 +1018,8 @@ function WorkspaceSurface({
           variant="centered"
           chatView={chatView}
         />
+        {/* Holo's "Generating…" card, while the Studio panel is shut. */}
+        {!isCompact && !studioOpen && <GeneratingPanel className="absolute right-4 top-4 z-20" />}
       </section>
 
       {/* Chat (Holo): past conversations on the right. On a phone they stay

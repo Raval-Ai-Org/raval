@@ -105,7 +105,10 @@ export function Segmented<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cn("inline-flex rounded-lg bg-surface-2 p-0.5 ring-1 ring-border", className)}
+      className={cn(
+        "inline-flex rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1",
+        className,
+      )}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -118,10 +121,10 @@ export function Segmented<T extends string | number>({
             title={o.hint}
             onClick={() => onChange(o.value)}
             className={cn(
-              "min-h-11 min-w-11 rounded-md px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast] lg:min-h-8 lg:min-w-0",
+              "min-h-11 min-w-11 rounded-full px-3.5 text-xs font-semibold transition-all duration-[--motion-duration-fast] lg:min-h-8 lg:min-w-0",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
               selected
-                ? "bg-surface-3 text-foreground shadow-1"
+                ? "bg-[var(--ds-card-bg)] text-foreground shadow-[0_2px_8px_-2px_rgb(15_23_20/0.18)]"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -426,43 +429,45 @@ export function RatioPicker({
   recommended?: AspectRatio;
 }) {
   return (
-    <div role="radiogroup" aria-label="Size" className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+    <div
+      role="radiogroup"
+      aria-label="Size"
+      className="flex flex-wrap gap-1 rounded-[18px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1 sm:inline-flex sm:rounded-full"
+    >
       {ratios.map((r) => {
         const meta = RATIOS[r];
         const selected = value === r;
-        const scale = 20 / Math.max(meta.w, meta.h);
+        const scale = 16 / Math.max(meta.w, meta.h);
         return (
           <button
             key={r}
             type="button"
             role="radio"
             aria-checked={selected}
+            aria-label={`${meta.label} ${r}${recommended === r ? ", recommended" : ""}`}
+            title={recommended === r ? `Recommended · ${meta.use}` : meta.use}
             onClick={() => onChange(r)}
             className={cn(
-              "flex min-h-14 items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors duration-[--motion-duration-fast]",
+              "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all duration-[--motion-duration-fast] sm:flex-none lg:min-h-9",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
               selected
-                ? "border-primary-border bg-primary-surface"
-                : "border-border bg-surface-3 hover:border-border-strong",
+                ? "bg-[var(--ds-card-bg)] text-foreground shadow-[0_2px_8px_-2px_rgb(15_23_20/0.18)]"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+            <span className="grid size-4 shrink-0 place-items-center" aria-hidden>
               <span
                 className={cn(
                   "rounded-[3px] border-[1.5px]",
-                  selected ? "border-primary" : "border-muted-foreground/60",
+                  selected ? "border-[var(--mox-green)]" : "border-current opacity-70",
                 )}
                 style={{ width: meta.w * scale, height: meta.h * scale }}
               />
             </span>
-            <span className="min-w-0">
-              <span className="block text-xs font-medium text-foreground">
-                {meta.label} <span className="text-muted-foreground">{r}</span>
-              </span>
-              <span className="block truncate text-[11px] text-muted-foreground">
-                {recommended === r ? "Recommended" : meta.use}
-              </span>
-            </span>
+            {r}
+            {recommended === r ? (
+              <span aria-hidden className="size-1.5 rounded-full bg-[var(--mox-green)]" />
+            ) : null}
           </button>
         );
       })}

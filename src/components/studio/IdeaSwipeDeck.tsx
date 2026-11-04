@@ -11,7 +11,9 @@ import {
   useTransform,
   type PanInfo,
 } from "framer-motion";
-import { ArrowRight, RefreshCw, RotateCcw, Sparkles, Star, Wand2, X } from "@/components/icons";
+import { ArrowRight, Heart, RefreshCw, RotateCcw, Wand2, X } from "@/components/icons";
+import { Illustration, type IlloKind } from "@/components/app/home/illustrations";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -138,15 +140,22 @@ export function IdeaSwipeDeck({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[440px] gap-4 overflow-hidden p-5 sm:p-6">
-        <div className="pr-10">
-          <DialogTitle className="flex items-center gap-1.5">
-            <Sparkles className="size-4 text-primary" />
-            Swipe through ideas
-          </DialogTitle>
-          <DialogDescription className="mt-1">
-            Right to save, left to skip. Make the one you like.
-          </DialogDescription>
+      <DialogContent className="max-w-[460px] gap-4 overflow-hidden rounded-[28px] p-5 sm:p-6">
+        <DialogTitle className="sr-only">Swipe through ideas</DialogTitle>
+        <DialogDescription className="sr-only">
+          Right to save, left to skip. Make the one you like.
+        </DialogDescription>
+        {/* Holo: Mox asks one question, with how many are left. */}
+        <div className="flex items-center gap-3 pr-10">
+          <MoxFace mood={status === "loading" ? "thinking" : top ? "happy" : "wow"} size={40} />
+          <div className="min-w-0">
+            <p className="text-[18px] font-bold leading-tight tracking-[-0.02em]">
+              {top ? "Keep this idea?" : "Ideas for you"}
+            </p>
+            <p className="text-[12px] text-muted-foreground">
+              {status === "ready" && top ? `${deck.queue.length} left` : "Swipe right to keep"}
+            </p>
+          </div>
         </div>
 
         <div className="relative h-[300px]" data-testid="idea-deck">
@@ -208,10 +217,11 @@ export function IdeaSwipeDeck({
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-3">
-          <RoundButton label="Skip" onClick={() => act("skip")} disabled={!top}>
-            <X className="size-5" />
-          </RoundButton>
+        {/* Holo's pair: Skip (soft red) and Save (green), undo between. */}
+        <div className="flex items-center gap-2">
+          <PillButton label="Skip" onClick={() => act("skip")} disabled={!top} tone="skip">
+            <X className="size-4" strokeWidth={2.6} />
+          </PillButton>
           <RoundButton
             label="Undo last swipe"
             onClick={() => update(undoSwipe(deck))}
@@ -220,14 +230,19 @@ export function IdeaSwipeDeck({
           >
             <RotateCcw className="size-4" />
           </RoundButton>
-          <RoundButton label="Save" onClick={() => act("save")} disabled={!top} tone="save">
-            <Star className="size-5" />
-          </RoundButton>
-          <Button className="ml-1 rounded-full" disabled={!top} onClick={() => top && make(top)}>
-            <Wand2 />
-            Make this
-          </Button>
+          <PillButton label="Save" onClick={() => act("save")} disabled={!top} tone="save">
+            <Heart className="size-4" strokeWidth={2.6} />
+          </PillButton>
         </div>
+        <button
+          type="button"
+          disabled={!top}
+          onClick={() => top && make(top)}
+          className="ds-grad-pill inline-flex h-11 w-full items-center justify-center gap-2 rounded-full text-[14px] font-bold transition active:scale-[0.98] disabled:opacity-40"
+        >
+          <Wand2 className="size-4" />
+          Make this
+        </button>
 
         {deck.saved.length ? (
           <div className="border-t border-border/60 pt-3">
@@ -329,15 +344,35 @@ function TopCard({
   );
 }
 
+const IDEA_ILLO: Record<StudioType, IlloKind> = {
+  video: "video",
+  script: "animate",
+  story: "story",
+  image: "post",
+  carousel: "carousel",
+  social: "swipe",
+  article: "article",
+  ad: "ad",
+};
+
 function CardFace({ idea, top }: { idea: StudioIdea; top?: boolean }) {
   return (
     <div
       className={cn(
-        `studio-tone-${idea.type} flex h-full flex-col rounded-[var(--ds-radius-tile)] border bg-surface-3 p-5 select-none`,
-        top ? "border-border shadow-4" : "border-border/60",
+        `studio-tone-${idea.type} relative flex h-full flex-col overflow-hidden rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] p-5 select-none`,
+        top && "shadow-[var(--ds-card-shadow-hover)]",
       )}
     >
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* A picture for the format in the card's corner, Holo style. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-6 size-36 rounded-full bg-[radial-gradient(closest-side,hsl(var(--tone)/0.18),transparent)]"
+      />
+      <Illustration
+        kind={IDEA_ILLO[idea.type]}
+        className="pointer-events-none absolute right-2 top-2 h-[78px] w-[96px]"
+      />
+      <div className="relative flex flex-wrap items-center gap-1.5 pr-24">
         <span className="inline-flex items-center gap-1 text-[12px] font-medium text-foreground/80">
           <TypeGlyph type={idea.type} size="sm" className="size-6 [&_svg]:size-3.5" />
           {STUDIO_FORMATS[idea.type].label}
@@ -346,7 +381,7 @@ function CardFace({ idea, top }: { idea: StudioIdea; top?: boolean }) {
           {IDEA_SOURCE_LABEL[idea.source]}
         </span>
       </div>
-      <p className="mt-4 text-[20px] font-semibold leading-snug tracking-tight text-foreground text-balance">
+      <p className="relative mt-6 text-[20px] font-bold leading-snug tracking-[-0.02em] text-foreground text-balance">
         {idea.title}
       </p>
       {idea.why ? (
@@ -356,6 +391,39 @@ function CardFace({ idea, top }: { idea: StudioIdea; top?: boolean }) {
         {idea.brief}
       </p>
     </div>
+  );
+}
+
+function PillButton({
+  children,
+  label,
+  onClick,
+  disabled,
+  tone,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone: "save" | "skip";
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      whileTap={{ scale: 0.95 }}
+      className={cn(
+        "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-[12.5px] font-bold uppercase tracking-wide transition-colors disabled:opacity-40",
+        tone === "save"
+          ? "border-2 border-[var(--mox-green)] text-[var(--mox-green-deep)] hover:bg-[var(--mox-green)]/10 dark:text-[var(--mox-lime)]"
+          : "bg-destructive/10 text-destructive hover:bg-destructive/15",
+      )}
+    >
+      {children}
+      {label}
+    </motion.button>
   );
 }
 

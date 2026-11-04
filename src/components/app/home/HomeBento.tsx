@@ -1,15 +1,15 @@
 "use client";
 
-// Home (Mellox 2.0, ADR-0044), Holo style: a greeting, a bento of cards and
+// Home (Mellox 2.0, ADR-0044), Holo style: straight into a bento of cards and
 // the real message box docked under it (ChatPanel keeps the box). Every card
 // opens an existing place; nothing here starts paid work by itself.
 
 import { useEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import { CardArrow } from "@/components/app/surface/MoxParts";
-import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import type { CreateChoice } from "@/components/studio/use-open-create";
 import type { PlanId } from "@/lib/billing/catalog";
+import type { StudioType } from "@/lib/studio/formats";
 import { emitAppEvent } from "@/lib/app-events";
 import { celebrate } from "@/lib/celebrate";
 import type { WorkspacePulse } from "@/lib/pulse/pulse";
@@ -21,13 +21,12 @@ const POPULAR: { choice: CreateChoice; label: string; line: string; illo: IlloKi
   { choice: "carousel", label: "Carousel", line: "Swipe-through story", illo: "carousel" },
   { choice: "story", label: "Story", line: "Full-screen frames", illo: "story" },
   { choice: "ad", label: "Ad", line: "Built to sell", illo: "ad" },
-  { choice: "script", label: "Video script", line: "Words for a reel", illo: "animate" },
 ];
 
 const BIG: { choice: CreateChoice; label: string; line: string; illo: IlloKind }[] = [
   { choice: "image", label: "Post", line: "A picture with captions", illo: "post" },
   { choice: "video", label: "Video", line: "A short clip for any app", illo: "video" },
-  { choice: "article", label: "Article", line: "A blog post for your site", illo: "article" },
+  { choice: "article", label: "Blog", line: "Posts for your website", illo: "article" },
 ];
 
 /** A card that leans toward the pointer (up to 4°) on devices that hover. */
@@ -81,14 +80,16 @@ const rise = (i: number) => ({ ["--i" as string]: i }) as CSSProperties;
 /** Presentational: ChatPanel wires it, `/home-lab` renders it with sample data. */
 export function HomeBento({
   start,
-  name,
   pulse,
   onOpenWaiting,
   create,
-  starters,
+  onSwipe,
 }: {
+  /** Opens the idea deck (any format, or blog topics). */
+  onSwipe?: (type?: StudioType) => void;
   start: StartHereView;
-  name: string | null;
+  /** Kept for callers; Home has no greeting any more (Holo). */
+  name?: string | null;
   pulse: WorkspacePulse | null | undefined;
   onOpenWaiting: () => void;
   /** `useOpenCreate()`: starts a format, or says which plan it needs. */
@@ -96,10 +97,9 @@ export function HomeBento({
     open: (choice: CreateChoice) => boolean;
     lockFor: (choice: CreateChoice) => PlanId | null;
   };
-  /** The "Try" ideas (ChatStarters), shown under the cards. */
+  /** Kept for callers; the cards replace the "Try" ideas. */
   starters?: ReactNode;
 }) {
-  const first = name?.trim().split(/\s+/)[0];
   const waiting = pulse?.waiting ?? 0;
   const autopilotOn = pulse?.autopilot.status === "running";
   // Confetti only when Start here finishes while you watch, never on load.
@@ -110,21 +110,7 @@ export function HomeBento({
   }, [start.complete]);
 
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 pb-6 pt-3 md:px-6 md:pt-6">
-      {/* Greeting */}
-      <div className="ds-rise mb-7 flex items-center gap-4" style={rise(0)}>
-        <span className="mox-float shrink-0">
-          <MoxFace mood="happy" size={60} track />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-[26px] font-bold leading-[1.1] tracking-[-0.03em] md:text-[32px]">
-            {first ? `Hi ${first}, ` : "Hi, "}
-            <span className="ds-grad-text">what are we making?</span>
-          </h2>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">Pick a card or ask Mox below.</p>
-        </div>
-      </div>
-
+    <div className="mx-auto w-full max-w-[880px] px-4 pb-6 pt-4 md:px-6 md:pt-8">
       {/* Bento */}
       <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-2 lg:grid-cols-3">
         {!start.complete ? (
@@ -136,7 +122,7 @@ export function HomeBento({
             label="Open Brain"
             onClick={() => emitAppEvent("open:brain")}
             style={rise(1)}
-            className="relative min-h-[150px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
+            className="relative min-h-[184px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
           >
             <h3 className="text-[18px] font-bold tracking-[-0.015em]">Mox knows your brand</h3>
             <p className="mt-1 text-[12px] text-muted-foreground">Everything is set up.</p>
@@ -150,9 +136,9 @@ export function HomeBento({
 
         <TiltCard
           label="Swipe ideas"
-          onClick={() => create.open("social")}
+          onClick={() => (onSwipe ? onSwipe() : create.open("social"))}
           style={rise(2)}
-          className="relative min-h-[150px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
+          className="relative min-h-[184px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
         >
           <span className="ds-grad-pill inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-bold">
             Popular
@@ -172,7 +158,7 @@ export function HomeBento({
           label={waiting ? "Open posts waiting" : "Open Autopilot"}
           onClick={() => (waiting ? onOpenWaiting() : emitAppEvent("open:autopilot"))}
           style={rise(3)}
-          className="relative min-h-[150px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] sm:col-span-2 lg:col-span-1"
+          className="relative min-h-[184px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] sm:col-span-2 lg:col-span-1"
         >
           {waiting ? (
             <>
@@ -240,13 +226,27 @@ export function HomeBento({
             </span>
           </TiltCard>
         ))}
+        {/* Blog topics to write about: the idea deck, articles only. */}
+        <TiltCard
+          label="Blog ideas"
+          onClick={() => (onSwipe ? onSwipe("article") : create.open("article"))}
+          style={rise(5 + POPULAR.length)}
+          className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
+        >
+          <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:scale-105">
+            <Illustration kind="article" className="size-11" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-semibold">Blog ideas</span>
+            <span className="block truncate text-[11px] text-muted-foreground">
+              Topics to write
+            </span>
+          </span>
+        </TiltCard>
       </div>
 
-      {/* Create */}
-      <h3 className="ds-rise mb-3 mt-8 text-[17px] font-bold tracking-[-0.015em]" style={rise(9)}>
-        Create
-      </h3>
-      <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-3">
+      {/* Create (Holo: the big three, no heading) */}
+      <div className="mt-[14px] grid grid-cols-1 gap-[14px] sm:grid-cols-3">
         {BIG.map((b, i) => {
           const lock = create.lockFor(b.choice);
           return (
@@ -275,12 +275,6 @@ export function HomeBento({
           );
         })}
       </div>
-
-      {starters ? (
-        <div className="ds-rise mt-7" style={rise(13)}>
-          {starters}
-        </div>
-      ) : null}
     </div>
   );
 }

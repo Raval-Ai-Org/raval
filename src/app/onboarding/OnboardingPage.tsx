@@ -653,7 +653,10 @@ function Onboarding() {
       <div className="ds-frame relative flex min-h-[calc(100dvh-2*var(--ds-frame-inset))] flex-1 flex-col overflow-x-clip text-foreground max-lg:min-h-[100dvh] max-lg:rounded-none">
         <div aria-hidden className="ds-aurora pointer-events-none absolute inset-0" />
         <AmbientCanvas />
-        <header className="relative z-10 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6">
+        {/* The finish is Mox alone, full screen (Holo): no logo or progress. */}
+        <header
+          className={`relative z-10 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6 ${step === "first" ? "hidden" : ""}`}
+        >
           <span className="sm:hidden">
             <Logo markOnly height={28} />
           </span>

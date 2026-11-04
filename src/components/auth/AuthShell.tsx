@@ -46,7 +46,8 @@ export function AuthShell({
   return (
     <AppFrame>
       <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto text-foreground lg:grid-cols-2">
-        <aside className="relative hidden p-3 lg:block">
+        {/* Phones and tablets get the same scenes, smaller, under the form. */}
+        <aside className="relative order-last h-[360px] shrink-0 p-3 sm:h-[480px] lg:order-none lg:h-auto">
           <AuthShowcase reduce={reduce} />
         </aside>
 

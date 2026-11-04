@@ -37,6 +37,7 @@ import { useBriefProduct, withProductPhotos } from "./ProductAndFormat";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
+import { useEmbedRect } from "@/components/app/AppModalShell";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
@@ -141,6 +142,8 @@ export function StudioComposer() {
   };
 
   const fullScreen = !!session && (isMobile || session.window === "maximized");
+  // Desktop (Holo): the composer fills the canvas, the sidebar stays in view.
+  const embed = useEmbedRect(!!session && !fullScreen);
 
   return (
     <DialogPrimitive.Root
@@ -162,7 +165,11 @@ export function StudioComposer() {
               <motion.div
                 className={cn(
                   "fixed inset-0 z-50 transition-[background-color,backdrop-filter] duration-[--motion-duration-slow]",
-                  fullScreen ? "bg-background" : "bg-black/45 backdrop-blur-[6px]",
+                  fullScreen
+                    ? "bg-background"
+                    : embed
+                      ? "bg-transparent"
+                      : "bg-black/45 backdrop-blur-[6px]",
                 )}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -220,12 +227,25 @@ export function StudioComposer() {
                   animate="open"
                   exit="exit"
                   transition={spring.surface}
+                  style={
+                    embed
+                      ? {
+                          position: "fixed",
+                          left: embed.left,
+                          top: embed.top,
+                          width: embed.width,
+                          height: embed.height,
+                        }
+                      : undefined
+                  }
                   className={cn(
-                    "pointer-events-auto relative flex flex-col overflow-hidden bg-surface-3 outline-none",
+                    "ds-canvas pointer-events-auto relative flex flex-col overflow-hidden outline-none",
                     "transition-[width,height,border-radius,box-shadow] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
                     fullScreen
                       ? "h-dvh w-screen rounded-none"
-                      : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
+                      : embed
+                        ? "rounded-none rounded-tl-[var(--ds-canvas-radius)]"
+                        : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
                   )}
                 >
                   <ComposerBody
@@ -292,7 +312,7 @@ export function ComposerBody({
   return (
     <div className="@container/composer flex h-full min-h-0 flex-col">
       <header
-        className="relative z-10 flex h-14 shrink-0 select-none items-center gap-2 border-b border-border/60 bg-surface-3 px-3 @3xl/composer:gap-3 @3xl/composer:px-5"
+        className="relative z-10 flex h-16 shrink-0 select-none items-center gap-2 px-3 @3xl/composer:gap-3 @3xl/composer:px-5"
         onDoubleClick={(e) => {
           // Standard window behaviour: double-click empty header space to maximize.
           if ((e.target as HTMLElement).closest("button, a, input, textarea, [role='tab']")) return;
@@ -300,16 +320,16 @@ export function ComposerBody({
         }}
       >
         {session.step === "review" && !session.pendingKey ? (
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="size-11 rounded-full lg:size-8"
+          <button
+            type="button"
             onClick={() => backToBrief(session.id)}
             aria-label="Back to description"
             title="Back to description"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:min-h-9"
           >
-            <ArrowLeft />
-          </Button>
+            <ArrowLeft className="size-4" />
+            <span className="hidden @3xl/composer:inline">Back</span>
+          </button>
         ) : null}
         {session.step === "intent" ? (
           <TypeSwitcher session={session} />
@@ -340,7 +360,7 @@ export function ComposerBody({
         <StepIndicator index={stepIndex} working={working} />
 
         <TooltipProvider delayDuration={300}>
-          <div className="flex shrink-0 items-center gap-0.5">
+          <div className="flex min-w-0 flex-1 shrink-0 items-center justify-end gap-0.5 @max-4xl/composer:flex-none">
             <WindowButton
               onClick={minimize}
               label={working ? "Minimize — keeps going" : "Minimize"}
@@ -438,7 +458,7 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
   const reduce = useReducedMotion();
   return (
     <ol
-      className="relative hidden items-center rounded-full bg-surface-2/80 p-1 ring-1 ring-border/60 @4xl/composer:flex"
+      className="relative hidden items-center gap-0.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1 @4xl/composer:flex"
       aria-label="Steps"
     >
       {STEPS.map((s, i) => {
@@ -452,7 +472,7 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
             {state === "current" ? (
               <motion.span
                 layoutId="composer-step"
-                className="absolute inset-0 rounded-full bg-surface-3 shadow-1 ring-1 ring-border/70"
+                className="absolute inset-0 rounded-full [background:var(--mox-gradient)] shadow-[0_6px_14px_-8px_rgb(46_230_107/0.9)]"
                 transition={
                   reduce ? { duration: 0 } : { duration: duration.medium, ease: ease.emphasized }
                 }
@@ -461,15 +481,15 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
             <span
               className={cn(
                 "relative grid size-4 place-items-center rounded-full text-[9px] font-semibold tabular-nums transition-colors duration-[--motion-duration-slow]",
-                state === "done" && "bg-primary text-primary-foreground",
-                state === "current" && "bg-foreground text-background",
+                state === "done" && "bg-[var(--mox-green)] text-white",
+                state === "current" && "bg-[var(--mox-ink)] text-white",
                 state === "todo" && "text-muted-foreground ring-1 ring-border-strong",
               )}
             >
               {state === "done" ? (
                 <Check className="size-2.5" strokeWidth={3.5} />
               ) : state === "current" && working && s.id === "generating" ? (
-                <span className="size-1.5 animate-pulse rounded-full bg-background" />
+                <span className="size-1.5 animate-pulse rounded-full bg-white" />
               ) : (
                 i + 1
               )}
@@ -478,7 +498,7 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
               className={cn(
                 "relative transition-colors",
                 state === "current"
-                  ? "font-medium text-foreground"
+                  ? "font-semibold text-[var(--mox-ink)]"
                   : state === "done"
                     ? "text-foreground/70"
                     : "text-muted-foreground",
@@ -673,8 +693,8 @@ export function IntentStep({
   return (
     <div className="flex h-full flex-col">
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto @5xl/composer:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] @5xl/composer:overflow-hidden">
-        <div className="min-w-0 p-5 @3xl/composer:p-8 @5xl/composer:overflow-y-auto">
-          <div className="studio-stagger mx-auto min-w-0 max-w-2xl space-y-7">
+        <div className="min-w-0 p-5 @3xl/composer:px-8 @3xl/composer:pb-8 @3xl/composer:pt-4 @5xl/composer:overflow-y-auto">
+          <div className="studio-stagger mx-auto min-w-0 max-w-[600px] space-y-6">
             {session.sourceScript ? (
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">Make your video</h2>
@@ -699,7 +719,7 @@ export function IntentStep({
               <div>
                 <label
                   htmlFor="studio-brief"
-                  className="block text-[24px] font-bold tracking-[-0.025em] text-foreground sm:text-[28px]"
+                  className="block text-center text-[22px] font-bold tracking-[-0.025em] text-foreground sm:text-[26px]"
                 >
                   Describe your <span className="ds-grad-text">{format.noun}</span>
                 </label>
@@ -707,7 +727,7 @@ export function IntentStep({
                 <div
                   {...media.dropProps}
                   className={cn(
-                    "relative mt-4 rounded-2xl border bg-surface-3 shadow-1 transition-[border-color,box-shadow]",
+                    "relative mt-4 rounded-[22px] border bg-[var(--ds-card-bg)] shadow-[var(--ds-card-shadow)] transition-[border-color,box-shadow]",
                     "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_22px_50px_-22px_hsl(var(--primary)/0.5)]",
                     session.error ? "border-danger-border" : "border-input",
                   )}
@@ -890,7 +910,7 @@ export function IntentStep({
           </div>
         </div>
 
-        <aside className="studio-stagger hidden flex-col gap-6 border-l border-border/60 bg-surface-1 p-5 @5xl/composer:flex @5xl/composer:overflow-y-auto">
+        <aside className="studio-stagger m-3 ml-0 hidden flex-col gap-6 rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-glass-bg)] p-5 backdrop-blur-xl @5xl/composer:flex @5xl/composer:overflow-y-auto">
           <WhatYoullGet session={session} />
           {!session.sourceScript ? (
             <IdeasPanel
@@ -905,7 +925,7 @@ export function IntentStep({
         </aside>
       </div>
 
-      <footer className="flex items-center gap-3 border-t border-border bg-surface-3 px-4 py-3 @3xl/composer:px-6">
+      <footer className="flex items-center gap-3 px-4 pb-4 pt-2 @3xl/composer:px-6">
         {!session.job && !session.lastGood ? (
           <Button variant="ghost" size="sm" onClick={backToFormats}>
             <ArrowLeft />
@@ -917,7 +937,7 @@ export function IntentStep({
           onClick={submit}
           disabled={!ready || busy || writer.busy}
           size="lg"
-          className="studio-cta"
+          className="studio-cta rounded-full px-6"
         >
           {busy ? <Spinner className="animate-spin" aria-hidden /> : <Wand2 />}
           {session.uploadingReference

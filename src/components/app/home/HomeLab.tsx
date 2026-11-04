@@ -5,7 +5,7 @@
 // that finished Start here; `?scene=waiting` shows posts waiting.
 
 import { useState } from "react";
-import { AppFrame } from "@/components/app/shell/AppFrame";
+import { AppCanvas, AppFrame } from "@/components/app/shell/AppFrame";
 import { SidebarNav } from "@/components/app/shell/SidebarNav";
 import { GradProgress } from "@/components/app/surface/MoxParts";
 import { Logo } from "@/components/brand/Logo";
@@ -20,6 +20,7 @@ import { startHere } from "@/lib/home/start-here";
 import { EMPTY_PULSE, type WorkspacePulse } from "@/lib/pulse/pulse";
 import { HomeBento } from "./HomeBento";
 import { StartHereList } from "./StartHere";
+import { GeneratingPanelView } from "@/components/studio/GeneratingPanel";
 
 export function HomeLab({ scene }: { scene?: string }) {
   const [active, setActive] = useState("home");
@@ -99,8 +100,8 @@ export function HomeLab({ scene }: { scene?: string }) {
   };
 
   return (
-    <AppFrame>
-      <aside className="hidden w-[224px] flex-none flex-col px-2.5 pb-3 lg:flex">
+    <AppFrame plain>
+      <aside className="hidden w-[196px] flex-none flex-col px-2.5 pb-3 lg:flex">
         <div className="flex h-14 items-center justify-between px-1">
           <span className="flex items-center gap-1.5">
             <Logo height={26} markOnly />
@@ -117,13 +118,14 @@ export function HomeLab({ scene }: { scene?: string }) {
           showFlag={() => true}
           onPick={(item) => setActive(item.id)}
         />
-        <div className="mt-auto rounded-[20px] bg-[var(--ds-well-bg)] p-3 text-center">
-          <MoxFace mood="happy" size={40} />
-          <p className="mt-1 text-[12px] font-bold">1,240 credits</p>
-          <GradProgress value={0.62} className="mt-2" />
+        <div className="mt-auto flex flex-col items-center pt-3 text-center">
+          <MoxFace mood="happy" size={42} />
+          <GradProgress value={0.62} className="mt-1 w-20" />
+          <p className="mt-1 text-[13px] font-bold tabular-nums">1,240</p>
+          <p className="text-[10px] text-muted-foreground">credits</p>
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div data-workspace-column className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between px-4">
           <span className="flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-[13px] font-semibold">
             <span className="grid size-6 place-items-center rounded-full bg-[var(--mox-lime)] text-[11px] font-bold text-[var(--mox-ink)]">
@@ -140,35 +142,55 @@ export function HomeLab({ scene }: { scene?: string }) {
               {start.done}/{start.total}
             </span>
           </span>
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[12.5px] font-semibold text-background">
-            <Share2 className="size-3.5" /> Share
+          <span className="flex items-center gap-1.5">
+            <span className="px-3 text-[12.5px] font-semibold text-foreground/80">Starter ↗</span>
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[12.5px] font-semibold text-background">
+              <Share2 className="size-3.5" /> Share
+            </span>
           </span>
         </header>
-        <main className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <HomeBento
-              start={start}
-              name="Sam Rivera"
-              pulse={pulse}
-              onOpenWaiting={() => undefined}
-              create={create}
-              starters={
-                <div className="flex flex-wrap gap-2">
-                  {["Plan my week", "Write a launch post", "What are rivals posting?"].map((t) => (
-                    <span key={t} className="mx-starter">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              }
+        <AppCanvas>
+          {scene === "generating" && (
+            <GeneratingPanelView
+              className="absolute right-4 top-4 z-20"
+              rows={[
+                { id: "a", type: "carousel", state: "working" },
+                { id: "b", type: "video", state: "done" },
+                { id: "c", type: "image", state: "done" },
+                { id: "d", type: "ad", state: "failed" },
+              ]}
+              onOpen={() => undefined}
+              onClose={() => undefined}
             />
-          </div>
-          <div className="mx-auto w-full max-w-[880px] px-6 pb-4">
-            <div className="ds-card flex h-[52px] items-center px-4 text-[14px] text-muted-foreground">
-              Ask Mox anything…
+          )}
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <HomeBento
+                start={start}
+                name="Sam Rivera"
+                pulse={pulse}
+                onOpenWaiting={() => undefined}
+                create={create}
+                starters={
+                  <div className="flex flex-wrap gap-2">
+                    {["Plan my week", "Write a launch post", "What are rivals posting?"].map(
+                      (t) => (
+                        <span key={t} className="mx-starter">
+                          {t}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                }
+              />
             </div>
-          </div>
-        </main>
+            <div className="mx-auto w-full max-w-[640px] px-6 pb-4">
+              <div className="ds-card flex h-[48px] items-center rounded-full px-5 text-[14px] text-muted-foreground">
+                Ask Mox anything…
+              </div>
+            </div>
+          </main>
+        </AppCanvas>
       </div>
       {scene === "modal" && (
         <AppModalShell

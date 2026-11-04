@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Camera,
   Check,
   Globe,
   Plus,
@@ -24,8 +23,14 @@ import {
 } from "@/lib/products/catalog";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { ProductCard, ProductForm, draftFrom, type ProductDraft } from "./ProductCard";
-import { Eyebrow } from "./ui";
+import { MoxSpeech } from "@/components/app/surface/MoxParts";
+import {
+  ProductDetail,
+  ProductForm,
+  ProductRow,
+  draftFrom,
+  type ProductDraft,
+} from "./ProductCard";
 
 export type ProductsStepProps = {
   brandName: string;
@@ -69,22 +74,26 @@ export function ProductsStep(p: ProductsStepProps) {
 
   return (
     <div>
-      <Eyebrow icon={ShoppingBag}>What you sell</Eyebrow>
-      <h1
-        ref={p.headingRef}
-        tabIndex={-1}
-        className="mt-4 text-[clamp(1.9rem,4.6vw,2.75rem)] font-semibold leading-[1.05] tracking-[-0.035em] outline-none"
-      >
+      {/* Holo: Mox asks, one line; the heading is for screen readers. */}
+      <MoxSpeech pose="face" size={96}>
+        {any ? (
+          <>
+            Check if I got your <b>products right.</b>
+          </>
+        ) : (
+          <>
+            What does {p.brandName || "your brand"} <b>sell?</b>
+          </>
+        )}
+      </MoxSpeech>
+      <h1 ref={p.headingRef} tabIndex={-1} className="sr-only outline-none">
         {any
           ? `What ${p.brandName || "you"} sells`
           : `What does ${p.brandName || "your brand"} sell?`}
       </h1>
-      <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-        Your real photos, never redrawn.
-      </p>
 
       <FoundBanner
-        className="mt-7"
+        className="mt-6"
         host={p.siteHost}
         found={found}
         incoming={p.incoming}
@@ -126,7 +135,7 @@ export function ProductsStep(p: ProductsStepProps) {
         <div
           role="tablist"
           aria-label="Show"
-          className="ds-well mt-7 inline-flex rounded-full p-1 text-[12.5px] font-medium"
+          className="ds-well mt-5 inline-flex rounded-full p-1 text-[12.5px] font-medium"
         >
           {(
             [
@@ -160,7 +169,7 @@ export function ProductsStep(p: ProductsStepProps) {
       )}
 
       <Catalogue
-        className={showFilter ? "mt-4" : "mt-8"}
+        className={showFilter ? "mt-4" : "mt-6"}
         products={p.products}
         incoming={p.incoming}
         filter={showFilter ? filter : "all"}
@@ -307,7 +316,7 @@ function FoundBanner({
               ? `${found.length} of ${total} saved, with their photos`
               : state === "looking"
                 ? "They'll appear here by themselves."
-                : "Already in your catalogue. Remove anything you don't sell anymore."}
+                : "Remove anything you don't sell."}
           </p>
         </div>
         {state === "done" && (
@@ -358,45 +367,56 @@ function FoundBanner({
   );
 }
 
-/** A found item while its photos are being saved: the real picture, gently shimmering. */
-function IncomingCard({ item }: { item: ProductCandidate }) {
-  const service = item.kind === "service";
-  const KindIcon = service ? Wrench : ShoppingBag;
+/** A found item while its photos are being saved: a list row, gently shimmering. */
+function IncomingRow({ item }: { item: ProductCandidate }) {
+  const KindIcon = item.kind === "service" ? Wrench : ShoppingBag;
   return (
-    <article className="ds-tile shimmer flex flex-col overflow-hidden" aria-busy="true">
-      <div className="relative aspect-[4/3] w-full bg-[var(--ds-well-bg)]">
+    <div className="shimmer flex items-center gap-3 rounded-[16px] p-2" aria-busy="true">
+      <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-[var(--ds-well-bg)]">
         {item.images[0] ? (
           <img
             src={item.images[0]}
             alt=""
             referrerPolicy="no-referrer"
             loading="lazy"
-            className="h-full w-full object-contain p-3 opacity-70"
+            className="h-full w-full object-contain p-1 opacity-70"
           />
         ) : (
-          <span className="grid h-full place-items-center text-muted-foreground/70">
-            <KindIcon className="h-7 w-7" aria-hidden />
-          </span>
+          <KindIcon className="size-4 text-muted-foreground" aria-hidden />
         )}
-        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/90 px-2 py-1 text-[11px] font-medium text-foreground/80 backdrop-blur">
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="line-clamp-2 block text-[13px] font-semibold leading-snug text-foreground/75">
+          {item.name}
+        </span>
+        <span className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
           <Spinner className="h-3 w-3 animate-spin text-primary" aria-hidden /> Saving
         </span>
-      </div>
-      <div className="p-3.5">
-        <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-foreground/80">
-          {item.name}
-        </p>
-        {item.price && (
-          <p className="mt-0.5 text-[12.5px] tabular-nums text-muted-foreground">{item.price}</p>
-        )}
-      </div>
-    </article>
+      </span>
+    </div>
+  );
+}
+
+/** An "add" row at the top of the list (Holo's "Add product manually"). */
+function AddRow({ kind, onClick }: { kind: ProductKind; onClick: () => void }) {
+  const Icon = kind === "service" ? Wrench : Plus;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center gap-3 rounded-full p-1.5 pr-3 text-left text-[13px] font-semibold text-foreground/80 transition hover:bg-[var(--ds-card-bg)] hover:text-foreground hover:shadow-[var(--ds-card-shadow)]"
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-full border-[1.5px] border-dashed border-[var(--mox-green)]/50 text-[var(--mox-green)] transition-transform group-hover:rotate-90">
+        <Icon className="size-3.5" aria-hidden />
+      </span>
+      {kind === "service" ? "Add a service" : "Add a product"}
+    </button>
   );
 }
 
 export type CatalogueProps = {
   products: Product[];
-  /** Found on the site and being saved: shown as cards that fill in. */
+  /** Found on the site and being saved: shown as rows that fill in. */
   incoming?: ProductCandidate[];
   filter?: ProductKind | "all";
   loading: boolean;
@@ -416,7 +436,11 @@ export type CatalogueProps = {
   onPrimary: (id: string, assetId: string) => void;
 };
 
-/** The brand's products and services as cards, with add, edit and photo upload. */
+/**
+ * The brand's products and services, Holo style: a list on the left (a small
+ * thumbnail per row, never an empty photo box) and the chosen one on the
+ * right, with its photos, words, edit and remove. Add is a row in the list.
+ */
 export function Catalogue({
   className,
   incoming = [],
@@ -425,132 +449,140 @@ export function Catalogue({
   ...p
 }: CatalogueProps) {
   const [formKind, setFormKind] = useState<ProductKind | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const shown = filter === "all" ? p.products : p.products.filter((x) => x.kind === filter);
   const waiting =
     filter === "all" ? incoming : incoming.filter((x) => (x.kind ?? "product") === filter);
-  const enter = (i: number) => ({
-    initial: p.reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 },
-    animate: { opacity: 1, y: 0, scale: 1 },
-    exit: p.reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 },
+  const selected = shown.find((x) => x.id === selectedId) ?? shown[0] ?? null;
+  const empty = !p.loading && !p.products.length && !incoming.length && !formKind && p.showEmpty;
+  const rise = (i: number) => ({
+    initial: p.reduce ? { opacity: 0 } : { opacity: 0, x: -8 },
+    animate: { opacity: 1, x: 0 },
+    exit: p.reduce ? { opacity: 0 } : { opacity: 0, x: -8 },
     transition: {
-      duration: duration.slow,
+      duration: duration.medium,
       ease: ease.emphasized,
-      delay: p.reduce ? 0 : Math.min(i, 8) * 0.04,
+      delay: p.reduce ? 0 : Math.min(i, 8) * 0.035,
     },
   });
-  const empty = !p.loading && !p.products.length && !incoming.length && !formKind && p.showEmpty;
+
   return (
     <section aria-labelledby="your-products" className={className}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p id="your-products" className="ds-label">
-          Your catalogue{p.products.length ? ` · ${p.products.length}` : ""}
-        </p>
-        {!formKind && !empty && (
-          <div className="flex gap-2">
+      <p id="your-products" className="ds-label">
+        Your catalogue{p.products.length ? ` · ${p.products.length}` : ""}
+      </p>
+
+      {empty ? (
+        <motion.div
+          {...rise(0)}
+          className="ds-well mt-3 flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
+            <ShoppingBag className="h-5 w-5" aria-hidden />
+          </span>
+          <p className="text-[14px] font-semibold">Add the first thing you sell</p>
+          <p className="max-w-sm text-[13px] text-muted-foreground">
+            {emptyHint ?? "One is enough to start."}
+          </p>
+          <div className="mt-1 flex flex-wrap justify-center gap-2">
             <button
               type="button"
               onClick={() => setFormKind("product")}
-              className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
+              className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
             >
-              <Plus className="h-3.5 w-3.5" aria-hidden /> Product
+              <Plus className="h-3.5 w-3.5" aria-hidden /> Add a product
             </button>
             <button
               type="button"
               onClick={() => setFormKind("service")}
-              className={cn(dsGhostBtn, "h-9 px-3.5 text-[13px]")}
+              className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
             >
-              <Wrench className="h-3.5 w-3.5" aria-hidden /> Service
+              <Wrench className="h-3.5 w-3.5" aria-hidden /> Add a service
             </button>
           </div>
-        )}
-      </div>
+        </motion.div>
+      ) : (
+        <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+          <div className="min-w-0 rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1.5">
+            <div className="flex flex-col gap-0.5 border-b border-[var(--ds-card-border)] pb-1.5">
+              <AddRow kind="product" onClick={() => setFormKind("product")} />
+              <AddRow kind="service" onClick={() => setFormKind("service")} />
+            </div>
+            <ul className="mt-1.5 flex max-h-[260px] flex-col gap-1 overflow-y-auto overscroll-contain scrollbar-thin md:max-h-[380px]">
+              <AnimatePresence initial={false}>
+                {shown.map((product, i) => (
+                  <motion.li key={product.id} layout={!p.reduce} {...rise(i)}>
+                    <ProductRow
+                      product={product}
+                      selected={!formKind && selected?.id === product.id}
+                      onSelect={() => {
+                        setFormKind(null);
+                        setSelectedId(product.id);
+                      }}
+                    />
+                  </motion.li>
+                ))}
+                {waiting.map((item, i) => (
+                  <motion.li
+                    key={`incoming:${item.fingerprint}`}
+                    layout={!p.reduce}
+                    {...rise(shown.length + i)}
+                  >
+                    <IncomingRow item={item} />
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+              {p.loading &&
+                !p.products.length &&
+                !incoming.length &&
+                [0, 1, 2].map((i) => (
+                  <li key={i} className="shimmer h-[60px] rounded-[16px] bg-[var(--ds-card-bg)]" />
+                ))}
+            </ul>
+          </div>
 
-      <ul className="mt-4 grid grid-cols-1 gap-3 min-[460px]:grid-cols-2 lg:grid-cols-3">
-        <AnimatePresence initial={false} mode="popLayout">
-          {formKind && (
-            <motion.li key="new" layout={!p.reduce} {...enter(0)} className="ds-tile p-3.5">
-              <p className="mb-3 text-[13px] font-semibold">
-                {formKind === "service" ? "Add a service" : "Add a product"}
-              </p>
-              <ProductForm
-                initial={draftFrom(null, formKind)}
-                saving={p.adding}
-                onCancel={() => setFormKind(null)}
-                onSave={(d) => {
-                  p.onAdd(d);
-                  setFormKind(null);
-                }}
-              />
-            </motion.li>
-          )}
-          {shown.map((product, i) => (
-            <motion.li key={product.id} layout={!p.reduce} {...enter(i)}>
-              <ProductCard
-                product={product}
-                busy={Boolean(p.busy[product.id])}
-                lowResolution={p.lowResolution[product.id]}
-                onSave={(d) => p.onSave(product.id, d)}
-                onArchive={() => p.onArchive(product.id)}
-                onUpload={(file) => p.onUpload(product.id, file)}
-                onPrimary={(assetId) => p.onPrimary(product.id, assetId)}
-              />
-            </motion.li>
-          ))}
-          {waiting.map((item, i) => (
-            <motion.li
-              key={`incoming:${item.fingerprint}`}
-              layout={!p.reduce}
-              {...enter(shown.length + i)}
-            >
-              <IncomingCard item={item} />
-            </motion.li>
-          ))}
-        </AnimatePresence>
-        {p.loading &&
-          !p.products.length &&
-          !incoming.length &&
-          [0, 1, 2].map((i) => (
-            <li key={i} className="ds-tile shimmer aspect-[4/5] bg-[var(--ds-well-bg)]" />
-          ))}
-        {empty && (
-          <li className="min-[460px]:col-span-2 lg:col-span-3">
+          <div className="min-w-0 rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] p-4 shadow-[var(--ds-card-shadow)] sm:p-5 md:self-start">
+            {/* Enter-only: an exit that waits could leave the panel blank. */}
             <motion.div
-              {...enter(0)}
-              className="ds-well flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center"
+              key={formKind ? `new:${formKind}` : (selected?.id ?? "none")}
+              initial={p.reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: duration.medium, ease: ease.emphasized }}
             >
-              <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
-                <ShoppingBag className="h-5 w-5" aria-hidden />
-              </span>
-              <p className="text-[14px] font-medium">Add the first thing you sell</p>
-              <p className="max-w-sm text-[13px] text-muted-foreground">
-                {emptyHint ?? "One is enough to start. Your first posts will be about it."}
-              </p>
-              <div className="mt-1 flex flex-wrap justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormKind("product")}
-                  className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden /> Add a product
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormKind("service")}
-                  className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
-                >
-                  <Wrench className="h-3.5 w-3.5" aria-hidden /> Add a service
-                </button>
-              </div>
+              {formKind ? (
+                <>
+                  <p className="mb-3 text-[15px] font-bold">
+                    {formKind === "service" ? "Add a service" : "Add a product"}
+                  </p>
+                  <ProductForm
+                    initial={draftFrom(null, formKind)}
+                    saving={p.adding}
+                    onCancel={() => setFormKind(null)}
+                    onSave={(d) => {
+                      p.onAdd(d);
+                      setFormKind(null);
+                    }}
+                  />
+                </>
+              ) : selected ? (
+                <ProductDetail
+                  key={selected.id}
+                  product={selected}
+                  busy={Boolean(p.busy[selected.id])}
+                  lowResolution={p.lowResolution[selected.id]}
+                  onSave={(d) => p.onSave(selected.id, d)}
+                  onArchive={() => p.onArchive(selected.id)}
+                  onUpload={(file) => p.onUpload(selected.id, file)}
+                  onPrimary={(assetId) => p.onPrimary(selected.id, assetId)}
+                />
+              ) : (
+                <div className="grid min-h-[180px] place-items-center text-center text-[13px] text-muted-foreground">
+                  {waiting.length ? "Saving what we found…" : "Pick something on the left."}
+                </div>
+              )}
             </motion.div>
-          </li>
-        )}
-      </ul>
-
-      {p.products.some((x) => x.kind === "product" && !x.images.length) && (
-        <p className="mt-4 inline-flex items-start gap-2 rounded-2xl bg-primary/[0.06] px-4 py-3 text-[13px] leading-relaxed text-foreground/85">
-          <Camera className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-          Add a real photo to each product.
-        </p>
+          </div>
+        </div>
       )}
     </section>
   );

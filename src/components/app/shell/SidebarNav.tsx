@@ -13,10 +13,9 @@ import {
   Megaphone,
   MessageCircle,
   Palette,
-  Rocket,
-  Share2,
-  Sparkles,
+  Search,
   Trophy,
+  Wand2,
   Users,
   type LucideIcon,
 } from "@/components/icons";
@@ -30,6 +29,7 @@ import { cn } from "@/lib/utils";
 const ICONS: Record<NavIcon, LucideIcon> = {
   home: Home,
   chat: MessageCircle,
+  create: Wand2,
   // The four-brain mark, drawn at the row's icon size.
   brain: ((p: { className?: string }) => (
     <BrainIcon className={p.className} size={16} />
@@ -39,11 +39,9 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   campaigns: Megaphone,
   calendar: CalendarIcon,
   analytics: BarChart3,
-  visibility: Sparkles,
+  visibility: Search,
   communities: Users,
   experiments: Trophy,
-  share: Share2,
-  portal: Rocket,
 };
 
 export function SidebarNav({

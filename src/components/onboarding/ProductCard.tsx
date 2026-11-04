@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import {
-  Camera,
   Check,
   ImagePlus,
   Pencil,
@@ -12,7 +11,7 @@ import {
   Wrench,
   AlertTriangle,
 } from "@/components/icons";
-import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import type { Product, ProductKind } from "@/lib/products/catalog";
 import { cn } from "@/lib/utils";
 
@@ -140,7 +139,65 @@ export function ProductForm({
   );
 }
 
-export function ProductCard({
+/**
+ * One row in the catalogue list (Holo): a small thumbnail, the name and one
+ * grey line. A piece with no photo shows its kind's glyph, never an empty box.
+ */
+export function ProductRow({
+  product,
+  selected,
+  onSelect,
+}: {
+  product: Product;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const primary =
+    product.images.find((i) => i.assetId === product.primaryAssetId) ?? product.images[0] ?? null;
+  const service = product.kind === "service";
+  const KindIcon = service ? Wrench : ShoppingBag;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        "group flex w-full min-w-0 items-center gap-3 rounded-[16px] p-2 text-left transition-[background-color,box-shadow] duration-200",
+        selected
+          ? "bg-[var(--ds-card-bg)] shadow-[0_0_0_1.5px_var(--mox-green),0_10px_24px_-16px_rgb(46_230_107/0.9)]"
+          : "hover:bg-[var(--ds-card-bg)] hover:shadow-[var(--ds-card-shadow)]",
+      )}
+    >
+      <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-[var(--ds-well-bg)]">
+        {primary?.url ? (
+          <img
+            src={primary.url}
+            alt=""
+            className="h-full w-full object-contain p-1"
+            draggable={false}
+          />
+        ) : (
+          <KindIcon className="size-4 text-muted-foreground" aria-hidden />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="line-clamp-2 block text-[13px] font-semibold leading-snug">
+          {product.name}
+        </span>
+        <span className="mt-0.5 block truncate text-[11.5px] capitalize text-muted-foreground">
+          {product.price ? `${product.price} · ${product.kind}` : product.kind}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The chosen piece (Holo's product panel): its photos as tiles with an add
+ * tile beside them, then the name, price and description, editable in place.
+ * A piece with no photo gets one small add tile, not a big empty frame.
+ */
+export function ProductDetail({
   product,
   busy,
   lowResolution,
@@ -163,55 +220,60 @@ export function ProductCard({
   const fileRef = useRef<HTMLInputElement>(null);
   const primary =
     product.images.find((i) => i.assetId === product.primaryAssetId) ?? product.images[0] ?? null;
+  const others = product.images.filter((i) => i.assetId !== primary?.assetId).slice(0, 4);
   const service = product.kind === "service";
   const KindIcon = service ? Wrench : ShoppingBag;
 
   return (
-    <article className="ds-tile flex flex-col overflow-hidden">
-      <div className="relative aspect-[4/3] w-full bg-[var(--ds-well-bg)]">
+    <article className="min-w-0">
+      <p className="ds-label">Photos</p>
+      <div className="mt-2 flex flex-wrap items-start gap-2.5">
         {primary?.url ? (
-          <img
-            src={primary.url}
-            alt={product.name}
-            className="h-full w-full object-contain p-3"
-            draggable={false}
-          />
-        ) : (
+          <div className="relative size-36 overflow-hidden rounded-[18px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] sm:size-40">
+            <img
+              src={primary.url}
+              alt={product.name}
+              className="h-full w-full object-contain p-2"
+              draggable={false}
+            />
+            <span className="ds-grad-pill absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold">
+              Main
+            </span>
+          </div>
+        ) : null}
+        {others.map((img) => (
+          <button
+            key={img.assetId}
+            type="button"
+            disabled={readOnly}
+            aria-label="Use this photo"
+            onClick={() => onPrimary(img.assetId)}
+            className="size-[4.5rem] overflow-hidden rounded-[14px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] transition hover:-translate-y-0.5 hover:shadow-[var(--ds-card-shadow)]"
+          >
+            {img.url && <img src={img.url} alt="" className="h-full w-full object-contain p-1" />}
+          </button>
+        ))}
+        {!readOnly && (
           <button
             type="button"
-            disabled={readOnly || busy}
+            disabled={busy}
             onClick={() => fileRef.current?.click()}
-            className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
+            className={cn(
+              "flex items-center justify-center gap-1.5 border-[1.5px] border-dashed border-[var(--mox-green)]/45 bg-[var(--mox-green)]/[0.05] text-[11.5px] font-semibold text-foreground/70 transition hover:border-[var(--mox-green)] hover:bg-[var(--mox-green)]/10 hover:text-foreground disabled:opacity-50",
+              primary?.url ? "size-[4.5rem] flex-col rounded-[14px]" : "h-12 rounded-full px-4",
+            )}
           >
-            <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
-              {service ? (
-                <KindIcon className="h-5 w-5" aria-hidden />
-              ) : (
-                <ImagePlus className="h-5 w-5" aria-hidden />
-              )}
-            </span>
-            <span className="text-[12.5px] font-medium">
-              {service ? "Add a photo (optional)" : "Add a real photo"}
-            </span>
+            {busy ? (
+              <Spinner
+                className="size-4 animate-spin text-[var(--mox-green)]"
+                aria-label="Saving"
+              />
+            ) : (
+              <ImagePlus className="size-4 text-[var(--mox-green)]" aria-hidden />
+            )}
+            {primary?.url ? "Add" : service ? "Add a photo (optional)" : "Add a real photo"}
           </button>
         )}
-        {busy && (
-          <span className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-[1px]">
-            <Spinner className="h-5 w-5 animate-spin text-primary" aria-label="Saving" />
-          </span>
-        )}
-        {primary?.url && !readOnly && (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="absolute bottom-2 right-2 inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[12px] font-medium backdrop-blur hover:bg-card"
-          >
-            <Camera className="h-3.5 w-3.5" aria-hidden /> Change
-          </button>
-        )}
-        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/90 px-2 py-1 text-[11px] font-medium capitalize text-foreground/80 backdrop-blur">
-          <KindIcon className="h-3 w-3" aria-hidden /> {product.kind}
-        </span>
         <input
           ref={fileRef}
           type="file"
@@ -226,29 +288,14 @@ export function ProductCard({
           }}
         />
       </div>
-
-      {product.images.length > 1 && (
-        <div className="flex gap-1.5 px-3 pt-3">
-          {product.images.slice(0, 5).map((img) => (
-            <button
-              key={img.assetId}
-              type="button"
-              disabled={readOnly}
-              aria-label="Use this photo"
-              aria-pressed={img.assetId === primary?.assetId}
-              onClick={() => onPrimary(img.assetId)}
-              className={cn(
-                "h-9 w-9 overflow-hidden rounded-lg border bg-[var(--ds-well-bg)]",
-                img.assetId === primary?.assetId ? "border-primary" : "border-border/60",
-              )}
-            >
-              {img.url && <img src={img.url} alt="" className="h-full w-full object-cover" />}
-            </button>
-          ))}
-        </div>
+      {lowResolution && (
+        <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-warning-surface px-2.5 py-1 text-[11.5px] text-warning">
+          <AlertTriangle className="h-3 w-3" aria-hidden /> Small photo. A larger one makes sharper
+          posts.
+        </p>
       )}
 
-      <div className="flex flex-1 flex-col p-3.5">
+      <div className="mt-5">
         {editing ? (
           <ProductForm
             initial={draftFrom(product)}
@@ -261,48 +308,45 @@ export function ProductCard({
           />
         ) : (
           <>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground">
+                <KindIcon className="size-3.5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[17px] font-bold leading-snug tracking-[-0.01em]">
                   {product.name}
                 </h3>
                 {product.price && (
-                  <p className="mt-0.5 text-[12.5px] tabular-nums text-muted-foreground">
+                  <p className="mt-0.5 text-[13px] tabular-nums text-muted-foreground">
                     {product.price}
                   </p>
                 )}
               </div>
-              {!readOnly && (
-                <div className="flex shrink-0 items-center">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className={dsIconBtn}
-                    aria-label={`Edit ${product.name}`}
-                  >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onArchive}
-                    className={dsIconBtn}
-                    aria-label={`Remove ${product.name}`}
-                  >
-                    <Trash className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                </div>
-              )}
             </div>
-            {product.description && (
-              <p className="mt-1.5 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
+            {product.description ? (
+              <p className="mt-3 line-clamp-5 text-[13px] leading-relaxed text-foreground/75">
                 {product.description}
               </p>
-            )}
-            {lowResolution && (
-              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-warning-surface px-2.5 py-1 text-[11.5px] text-warning">
-                <AlertTriangle className="h-3 w-3" aria-hidden /> Small photo. A larger one makes
-                sharper posts.
-              </p>
+            ) : null}
+            {!readOnly && (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onArchive}
+                  aria-label={`Remove ${product.name}`}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-destructive/25 px-3.5 text-[12.5px] font-semibold text-destructive transition hover:bg-destructive/[0.07]"
+                >
+                  <Trash className="h-3.5 w-3.5" aria-hidden /> Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  aria-label={`Edit ${product.name}`}
+                  className={cn(dsGhostBtn, "h-9 px-3.5 text-[12.5px]")}
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                </button>
+              </div>
             )}
           </>
         )}

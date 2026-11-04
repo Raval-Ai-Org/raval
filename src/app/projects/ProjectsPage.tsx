@@ -727,48 +727,58 @@ export function ProjectCard({
     >
       <button
         onClick={onOpen}
-        className="group/thumb relative block w-full rounded-[var(--ds-radius-tile)] text-left transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-0.5 hover:shadow-[var(--ds-tile-shadow-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        aria-label={`Open ${workspace.name || domain || "project"}`}
+        className="group/thumb relative block w-full rounded-[24px] text-left transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-1 hover:shadow-[0_24px_50px_-26px_rgb(15_60_40/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2 ring-1 ring-border/60">
-          {/* Monochrome canvas — becomes colorful on hover */}
-          <div className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-0 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--foreground)/0.06),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--foreground)/0.05),transparent_55%)]" />
-          <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--brand-green)/0.12),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--brand-blue)/0.08),transparent_55%)]" />
-          {/* Faint grid */}
-          <div
-            className="absolute inset-0 opacity-[0.06] transition-opacity duration-500 group-hover:opacity-[0.04]"
-            style={{
-              backgroundImage:
-                "linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)",
-              backgroundSize: "22px 22px",
-            }}
+        {/* Mellox 2.0: every brand gets its own soft Mox-palette cover. */}
+        <div
+          className="relative aspect-[16/10] w-full overflow-hidden rounded-[24px] ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
+          style={{ backgroundImage: coverFor(workspace.name || domain || "") }}
+        >
+          <span
+            aria-hidden
+            className="absolute -right-10 -top-12 size-44 rounded-full bg-white/45 blur-2xl transition-transform dark:bg-white/20 duration-700 group-hover/thumb:-translate-x-6 group-hover/thumb:translate-y-4"
           />
+          <span
+            aria-hidden
+            className="absolute -bottom-14 -left-10 size-40 rounded-full bg-white/30 blur-2xl transition-transform dark:bg-white/10 duration-700 group-hover/thumb:translate-x-6"
+          />
+          <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/0 to-black/0 dark:from-black/30 dark:to-black/0" />
 
-          {/* Site screenshot (monochrome) */}
+          {/* The site in a small browser window, when a screenshot exists. */}
           {screenshotUrl && (
-            <img
-              src={screenshotUrl}
-              alt=""
-              loading="lazy"
-              draggable={false}
-              onLoad={(e) => {
-                // mshots returns a ~400x300 WordPress placeholder while generating.
-                // Real screenshots come back at 720px wide — require that to avoid showing the placeholder.
-                const img = e.currentTarget;
-                if (img.naturalWidth >= 600) setShotOk(true);
-              }}
-              onError={() => setShotOk(false)}
+            <div
               className={cn(
-                "absolute inset-0 h-full w-full object-cover object-top transition-all duration-500",
-                "opacity-0 duration-700 group-hover/thumb:scale-[1.015]",
-                shotOk && "opacity-100",
+                "absolute inset-x-[10%] -bottom-[6%] top-[20%] overflow-hidden rounded-t-[14px] bg-white shadow-[0_18px_40px_-18px_rgb(0_0_0/0.45)] transition-[transform,opacity] duration-500 group-hover/thumb:-translate-y-1.5",
+                shotOk ? "opacity-100" : "pointer-events-none opacity-0",
               )}
-            />
+            >
+              <div className="flex h-5 items-center gap-1 border-b border-black/5 px-2">
+                <span className="size-1.5 rounded-full bg-black/15" />
+                <span className="size-1.5 rounded-full bg-black/15" />
+                <span className="size-1.5 rounded-full bg-black/15" />
+              </div>
+              <img
+                src={screenshotUrl}
+                alt=""
+                loading="lazy"
+                draggable={false}
+                onLoad={(e) => {
+                  // mshots returns a ~400x300 WordPress placeholder while generating.
+                  // Real screenshots come back at 720px wide — require that to avoid showing the placeholder.
+                  const img = e.currentTarget;
+                  if (img.naturalWidth >= 600) setShotOk(true);
+                }}
+                onError={() => setShotOk(false)}
+                className="h-full w-full object-cover object-top"
+              />
+            </div>
           )}
 
-          {/* Brand mark when no screenshot — clean monochrome lockup */}
+          {/* No screenshot: the brand's mark on a glass tile. */}
           {!shotOk && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-full bg-background ring-1 ring-border/70 shadow-sm">
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="grid size-[4.5rem] place-items-center overflow-hidden rounded-[22px] bg-white/85 shadow-[0_14px_30px_-14px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.9)] backdrop-blur transition-transform duration-500 group-hover/thumb:-rotate-6 group-hover/thumb:scale-110">
                 {faviconUrl && (
                   <img
                     src={faviconUrl}
@@ -776,21 +786,18 @@ export function ProjectCard({
                     onLoad={() => setFaviconOk(true)}
                     onError={() => setFaviconOk(false)}
                     className={cn(
-                      "h-7 w-7 object-contain transition-opacity",
-                      faviconOk ? "opacity-100" : "opacity-0 absolute",
+                      "h-9 w-9 object-contain transition-opacity",
+                      faviconOk ? "opacity-100" : "absolute opacity-0",
                     )}
                     draggable={false}
                   />
                 )}
                 {!faviconOk && (
-                  <span className="text-[13px] font-semibold tracking-tight text-foreground/80">
+                  <span className="text-[22px] font-bold tracking-[-0.03em] text-[var(--mox-ink)]">
                     {initials}
                   </span>
                 )}
               </div>
-              <span className="font-display text-[18px] leading-none tracking-tight text-foreground/80">
-                {domain || workspace.name}
-              </span>
             </div>
           )}
 
@@ -798,7 +805,7 @@ export function ProjectCard({
           {(() => {
             const tag = projectTag(workspace);
             return (
-              <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2 py-0.5 text-[10.5px] font-semibold text-neutral-900 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)]">
+              <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-neutral-900 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.45)]">
                 <span className={cn("h-1.5 w-1.5 rounded-full", tag.dot)} />
                 {tag.label}
               </span>
@@ -806,21 +813,27 @@ export function ProjectCard({
           })()}
           {workspace.duplicateOf && (
             <span
-              className="absolute right-2.5 top-2.5 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 backdrop-blur dark:text-amber-300"
+              className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-50/95 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
               title={`Same website as ${duplicateOfName ?? "another workspace"}. Review and delete the copy you don't need.`}
             >
               Possible duplicate
             </span>
           )}
           {!workspace.duplicateOf && lastOpened && (
-            <span className="absolute right-2.5 top-2.5 inline-flex items-center rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-semibold text-white backdrop-blur">
+            <span className="absolute right-3 top-3 inline-flex items-center rounded-full bg-[var(--mox-ink)]/85 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
               Last opened
             </span>
           )}
+          <span
+            aria-hidden
+            className="absolute bottom-3 right-3 inline-flex h-8 translate-y-1 items-center gap-1 rounded-full bg-white px-3 text-[12px] font-bold text-[var(--mox-ink)] opacity-0 shadow-[0_8px_20px_-10px_rgb(0_0_0/0.5)] transition-all duration-300 group-hover/thumb:translate-y-0 group-hover/thumb:opacity-100 [@media(hover:none)]:hidden"
+          >
+            Open <ArrowRight className="h-3.5 w-3.5" />
+          </span>
         </div>
       </button>
 
-      <div className="flex items-center gap-2.5 px-1 pt-2.5">
+      <div className="flex items-center gap-2.5 px-1 pt-3">
         <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <div className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-[11px] font-semibold text-foreground ring-1 ring-border/60">
             {faviconUrl && (
@@ -905,6 +918,20 @@ export function ProjectCard({
       </div>
     </motion.div>
   );
+}
+
+/** Soft Mox-palette covers; each brand keeps the same one (picked from its name). */
+const COVERS = [
+  "linear-gradient(135deg,#ecfbb4 0%,#9ef0c2 55%,#a3e6f5 100%)",
+  "linear-gradient(135deg,#d2f8e6 0%,#94e2f0 58%,#b3cdff 100%)",
+  "linear-gradient(135deg,#f5f9ad 0%,#c6f24e 48%,#62e8a3 100%)",
+  "linear-gradient(135deg,#dbf6ff 0%,#a3dbff 52%,#bdf4d4 100%)",
+  "linear-gradient(135deg,#eaffd9 0%,#b8f5a8 50%,#80e1d3 100%)",
+];
+function coverFor(seed: string): string {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COVERS[h % COVERS.length];
 }
 
 /** This workspace's own numbers — never aggregated with another workspace. */

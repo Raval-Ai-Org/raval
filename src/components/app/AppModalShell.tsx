@@ -219,11 +219,12 @@ export function AppModalShell({
                     : { transformOrigin: "center" }
                 }
                 className={cn(
-                  "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--ds-frame-bg)] outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
+                  "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
+                  !(embed && !maximized) && "bg-[var(--ds-frame-bg)]",
                   maximized
                     ? "m-0 h-dvh w-screen max-w-none rounded-none"
                     : embed
-                      ? "m-0 max-w-none rounded-none border-l border-[var(--ds-card-border)]"
+                      ? "ds-canvas m-0 max-w-none rounded-none rounded-tl-[var(--ds-canvas-radius)]"
                       : cn(
                           "ds-window m-auto rounded-[var(--ds-pop-radius)] shadow-[var(--ds-pop-shadow)]",
                           SIZE_MAP[size],
@@ -242,10 +243,12 @@ export function AppModalShell({
                   )}
                 </VisuallyHidden>
 
-                <div
-                  aria-hidden
-                  className="ds-aurora pointer-events-none absolute inset-x-0 top-0 h-48 opacity-80"
-                />
+                {!embed && (
+                  <div
+                    aria-hidden
+                    className="ds-aurora pointer-events-none absolute inset-x-0 top-0 h-48 opacity-80"
+                  />
+                )}
                 {(size === "sm" || size === "md") && !maximized && (
                   <span
                     aria-hidden
@@ -356,10 +359,10 @@ export function AppModalShell({
 }
 
 /**
- * Where the app's main column is (`[data-workspace-main]`), on a desktop
+ * Where the workspace column (top bar + canvas, `[data-workspace-column]`) is, on a desktop
  * (1024px and up), while `on`. Null elsewhere: phones, labs, other pages.
  */
-function useEmbedRect(on: boolean) {
+export function useEmbedRect(on: boolean) {
   const [rect, setRect] = useState<{
     left: number;
     top: number;
@@ -372,7 +375,7 @@ function useEmbedRect(on: boolean) {
       return;
     }
     const measure = () => {
-      const main = document.querySelector<HTMLElement>("[data-workspace-main]");
+      const main = document.querySelector<HTMLElement>("[data-workspace-column]");
       if (!main || window.innerWidth < 1024) return setRect(null);
       const r = main.getBoundingClientRect();
       if (r.width < 600) return setRect(null);

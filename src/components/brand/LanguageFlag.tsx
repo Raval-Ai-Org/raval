@@ -1,4 +1,5 @@
-// A content language's flag (Mellox 2.0, Holo's flag grid). Real SVG flags,
+// A content language's flag (Mellox 2.0, Holo's flag grid). Real square SVG flags
+// (1x1, drawn for round stickers, so nothing is cut off in the circle),
 // because Windows can't draw flag emoji. Only the flags the language list
 // uses are imported, so the rest never reach the bundle.
 
@@ -40,7 +41,7 @@ import {
   UA,
   VN,
   ZA,
-} from "country-flag-icons/react/3x2";
+} from "country-flag-icons/react/1x1";
 import { cn } from "@/lib/utils";
 
 const FLAGS = {

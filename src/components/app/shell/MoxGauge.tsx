@@ -1,11 +1,10 @@
 "use client";
 
 // The bottom of the sidebar, Holo style: Mox peeking over a half-circle
-// gauge. The balance itself is in the top bar, so this shows what the thing
-// you're setting up will cost (the "credits:preview" event, sent by an
-// announcing CostChip in Studio): the slice it takes lights up and the
-// price is written under Mox. With nothing being set up, the arc just shows
-// how full the month's allowance is. A click opens Plan & billing; owners on
+// gauge. This is the one place the balance shows (the top bar has only the
+// plan). While something is being set up (the "credits:preview" event, sent
+// by an announcing CostChip in Studio) the slice it would take lights up and
+// its price replaces the balance under Mox. A click opens Plan & billing; owners on
 // Free also get Upgrade. Mox looks worried when the balance runs low.
 
 import { useState } from "react";
@@ -13,7 +12,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { useAppEvent } from "@/hooks/use-app-event";
 import { emitAppEvent, type AppEventMap } from "@/lib/app-events";
-import { walletView } from "@/lib/billing/present";
+import { formatNumber, walletView } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
 
@@ -163,24 +162,29 @@ export function MoxGauge({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="pt-0.5 text-[10.5px] font-medium text-muted-foreground"
+                  className="flex flex-col items-center leading-tight"
                 >
-                  Costs show here
+                  <span
+                    className={cn(
+                      "text-[13px] font-bold tabular-nums",
+                      w?.tone === "empty"
+                        ? "text-destructive"
+                        : w?.tone === "low"
+                          ? "text-warning"
+                          : "text-foreground",
+                    )}
+                  >
+                    {w ? formatNumber(w.points ?? w.credits) : "…"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {w?.points !== null && w?.points !== undefined ? "points" : "credits"}
+                  </span>
                 </motion.span>
               )}
             </AnimatePresence>
           </span>
         )}
       </button>
-      {!compact && w?.canUpgrade && (
-        <button
-          type="button"
-          onClick={() => emitAppEvent("open:upgrade")}
-          className="ds-grad-pill mt-1 h-7 rounded-full px-3 text-[11.5px]"
-        >
-          Upgrade
-        </button>
-      )}
     </div>
   );
 }

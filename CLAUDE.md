@@ -42,9 +42,16 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   from `PlatformLogoGrid` (`studio-ui.tsx`), never as a row of text names. Never restyle the
   public landing page (`src/app/page.tsx`) as part of app UI work.
 - **Mellox 2.0 / Mox** ([ADR-0044](docs/adr/0044-mellox-2-mox.md)): app screens
-  sit in `AppFrame` (white window on Mox's gradient), light by default. Mox is
+  sit in `AppFrame`: sidebar and top bar on plain white, every screen on
+  `AppCanvas` (Holo's rounded canvas with a soft Mox wash), light by default.
+  Big `AppModalShell` windows fill the canvas column (Back pill, title pill).
+  The sidebar is four short groups; Share lives only in the top bar, the
+  balance only in `MoxGauge`, the top bar's corner shows the plan.
+  Create is Holo's "choose a method" card grid (`CreateLauncher`); Home's
+  Swipe ideas / Blog ideas open `IdeaSwipeDeck` (a pick only fills a brief);
+  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`): Back pill, step pills, a narrow centred form, `.studio-cta` is the Mox gradient pill. Mox is
   the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
-  Mox's gradient only on the backdrop, the primary pill, progress bars, the
+  Mox's gradient only on the canvas wash, the primary pill, progress bars, the
   visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
   Home is `HomeBento` above the message box (`/home-lab`); its cards only open
   existing places via `useOpenCreate`. Chat has its own entry (`chatPath`).
@@ -270,7 +277,10 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
   → channels → finish. "I don't have a website" swaps the scan for three
   questions. New projects always start in onboarding. It ends with
   press-and-hold (`HoldToEnter`) and the visor cinematic (`VisorTransition`),
-  then `StartHereModal` on Home. `/onboarding-lab` renders every new
+  then `StartHereModal` on Home. The finish is the big visor Mox and one
+  small hold pill, no visible words (header hidden); it goes in by itself
+  after 6 s. Products show Holo-style: a list on the left, the chosen one on
+  the right (`ProductRow` / `ProductDetail`), never empty photo boxes. `/onboarding-lab` renders every new
   step with sample data (`tests/integration/onboarding-lab.spec.ts`).
 - **Goals are the person's numbers** (`workspace_goals`).
   - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the

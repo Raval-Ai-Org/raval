@@ -1,13 +1,16 @@
 // The workspace sidebar as data (Mellox 2.0, ADR-0044). Holo's grouping:
-// a short label over a few rows. The shell renders this list expanded and as
-// the collapsed icon rail, so the two never drift apart. Pure and
-// browser-safe; `nav.test.ts` checks the tour names and events.
+// a short label over a few one-word rows. Share and the client portal live
+// in the top bar's Share menu, so they are not repeated here. The shell
+// renders this list expanded and as the collapsed icon rail, so the two never
+// drift apart. Pure and browser-safe; `nav.test.ts` checks the tour names and
+// events.
 
 import type { FeatureKey } from "@/lib/billing/catalog";
 
 export type NavIcon =
   | "home"
   | "chat"
+  | "create"
   | "brain"
   | "inspo"
   | "library"
@@ -16,9 +19,7 @@ export type NavIcon =
   | "analytics"
   | "visibility"
   | "communities"
-  | "experiments"
-  | "share"
-  | "portal";
+  | "experiments";
 
 /** Where a row goes. Routes are workspace pages; events open a window. */
 export type NavTarget =
@@ -31,11 +32,7 @@ export type NavTarget =
   | {
       kind: "event";
       event:
-        | "open:library"
-        | "open:content-calendar"
-        | "open:ai-visibility"
-        | "open:share"
-        | "open:client-portal";
+        "open:create-launcher" | "open:library" | "open:content-calendar" | "open:ai-visibility";
     };
 
 export type NavItem = {
@@ -75,6 +72,13 @@ export const NAV_GROUPS: NavGroup[] = [
         target: { kind: "route", place: "chat" },
         rail: true,
       },
+      {
+        id: "create",
+        label: "Create",
+        icon: "create",
+        target: { kind: "event", event: "open:create-launcher" },
+        rail: true,
+      },
     ],
   },
   {
@@ -107,30 +111,24 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "create",
-    label: "Create",
+    id: "social",
+    label: "Social",
     items: [
-      {
-        id: "campaigns",
-        label: "Campaigns",
-        icon: "campaigns",
-        target: { kind: "route", place: "campaigns" },
-        tour: "campaigns",
-        rail: true,
-      },
       {
         id: "calendar",
         label: "Calendar",
         icon: "calendar",
         target: { kind: "event", event: "open:content-calendar" },
         tour: "calendar",
+        rail: true,
       },
-    ],
-  },
-  {
-    id: "grow",
-    label: "Grow",
-    items: [
+      {
+        id: "campaigns",
+        label: "Campaigns",
+        icon: "campaigns",
+        target: { kind: "route", place: "campaigns" },
+        tour: "campaigns",
+      },
       {
         id: "analytics",
         label: "Analytics",
@@ -139,9 +137,15 @@ export const NAV_GROUPS: NavGroup[] = [
         tour: "analytics",
         rail: true,
       },
+    ],
+  },
+  {
+    id: "grow",
+    label: "Grow",
+    items: [
       {
         id: "visibility",
-        label: "AI Visibility",
+        label: "AI search",
         icon: "visibility",
         target: { kind: "event", event: "open:ai-visibility" },
         tour: "visibility",
@@ -155,30 +159,11 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "experiments",
-        label: "Experiments",
+        label: "Tests",
         icon: "experiments",
         target: { kind: "route", place: "experiments" },
         feature: "experiments",
         flag: "experiments",
-      },
-    ],
-  },
-  {
-    id: "team",
-    label: "Team",
-    items: [
-      {
-        id: "share",
-        label: "Share",
-        icon: "share",
-        target: { kind: "event", event: "open:share" },
-      },
-      {
-        id: "portal",
-        label: "Client portal",
-        icon: "portal",
-        target: { kind: "event", event: "open:client-portal" },
-        feature: "client_portal",
       },
     ],
   },
