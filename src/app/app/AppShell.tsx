@@ -621,7 +621,7 @@ function AppShell() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setNavOpen(false)}
-                className="fixed inset-0 z-30 bg-black/25 backdrop-blur-sm"
+                className="ds-scrim fixed inset-0 z-30"
                 aria-hidden
               />
             )}
@@ -636,7 +636,7 @@ function AppShell() {
               className={cn(
                 "h-full overflow-hidden [will-change:width,transform]",
                 isCompact
-                  ? "ds-frame fixed inset-y-0 left-0 z-40 rounded-l-none bg-[var(--ds-frame-bg)] shadow-2xl"
+                  ? "fixed inset-y-0 left-0 z-40 rounded-r-[28px] bg-[var(--ds-frame-bg)] shadow-[var(--ds-pop-shadow)]"
                   : "flex-none",
               )}
             >

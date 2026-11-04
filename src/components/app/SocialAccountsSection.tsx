@@ -550,7 +550,7 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
 
       {chooserOpen && (
         <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
+          className="fixed inset-0 z-[60] ds-scrim grid place-items-center p-4"
           role="presentation"
           onClick={() => setChooserOpen(false)}
         >
@@ -558,7 +558,7 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="social-chooser-title"
-            className="max-h-[calc(100dvh-2rem)] w-[min(100%,28rem)] overflow-y-auto rounded-2xl border border-border bg-background p-4 shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-[min(100%,28rem)] overflow-y-auto ds-pop p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
@@ -607,14 +607,14 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
 
       {pendingPlatform && (
         <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
+          className="fixed inset-0 z-[60] ds-scrim grid place-items-center p-4"
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="social-connect-title"
-            className="max-h-[calc(100dvh-2rem)] w-[min(100%,24rem)] overflow-y-auto rounded-2xl border border-border bg-background p-5 shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-[min(100%,24rem)] overflow-y-auto ds-pop p-6"
           >
             <h4 id="social-connect-title" className="text-sm font-semibold">
               Connect {pendingLabel}
@@ -648,14 +648,14 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
 
       {confirmDisconnect && (
         <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
+          className="fixed inset-0 z-[60] ds-scrim grid place-items-center p-4"
           role="presentation"
         >
           <div
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="social-disconnect-title"
-            className="w-[min(100%,24rem)] rounded-2xl border border-border bg-background p-5 shadow-2xl"
+            className="w-[min(100%,24rem)] ds-pop p-6"
           >
             <h4 id="social-disconnect-title" className="text-sm font-semibold">
               Disconnect {confirmDisconnect.displayName || confirmDisconnect.platformUsername}?

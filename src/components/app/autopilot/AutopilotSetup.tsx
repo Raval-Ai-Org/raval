@@ -3,9 +3,10 @@
 // the person reads one screen and presses one button. Every setting is a row
 // that opens in place, so nothing has to be filled in to get started. The same
 // rows are the Settings page afterwards.
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Bot, Check, ChevronDown } from "@/components/icons";
+import { Check, ChevronDown } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
@@ -760,11 +761,11 @@ export function AutopilotSetup({
   return (
     <SurfacePage width="narrow">
       <div className="ds-enter mx-auto max-w-[640px] pb-4 pt-2">
-        <span className="grid h-12 w-12 place-items-center rounded-full bg-primary/12 text-primary">
-          <Bot className="h-6 w-6" />
+        <span className="mox-float inline-block">
+          <MoxFace mood="happy" visor size={64} />
         </span>
-        <h3 className="mt-4 text-[26px] font-semibold leading-tight tracking-tight">
-          Let Mellox run your marketing
+        <h3 className="mt-3 text-[28px] font-bold leading-tight tracking-[-0.03em]">
+          Let Mellox run <span className="ds-grad-text">your marketing</span>
         </h3>
         <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">
           Set it up once. Mellox plans, writes, posts and learns, every week.

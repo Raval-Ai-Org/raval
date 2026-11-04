@@ -4,13 +4,14 @@
 // the real message box docked under it (ChatPanel keeps the box). Every card
 // opens an existing place; nothing here starts paid work by itself.
 
-import { useRef, type CSSProperties, type ReactNode, type PointerEvent } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import { CardArrow } from "@/components/app/surface/MoxParts";
 import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import type { CreateChoice } from "@/components/studio/use-open-create";
 import type { PlanId } from "@/lib/billing/catalog";
 import { emitAppEvent } from "@/lib/app-events";
+import { celebrate } from "@/lib/celebrate";
 import type { WorkspacePulse } from "@/lib/pulse/pulse";
 import { cn } from "@/lib/utils";
 import { Illustration, type IlloKind } from "./illustrations";
@@ -66,7 +67,7 @@ function TiltCard({
       onPointerLeave={leave}
       style={style}
       className={cn(
-        "ds-card ds-card-hover ds-rise group text-left will-change-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        "ds-card ds-card-hover ds-rise group flex flex-col items-start text-left will-change-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         className,
       )}
     >
@@ -101,18 +102,26 @@ export function HomeBento({
   const first = name?.trim().split(/\s+/)[0];
   const waiting = pulse?.waiting ?? 0;
   const autopilotOn = pulse?.autopilot.status === "running";
+  // Confetti only when Start here finishes while you watch, never on load.
+  const wasComplete = useRef(start.complete);
+  useEffect(() => {
+    if (start.complete && !wasComplete.current) celebrate();
+    wasComplete.current = start.complete;
+  }, [start.complete]);
 
   return (
     <div className="mx-auto w-full max-w-[880px] px-4 pb-6 pt-6 md:px-6 md:pt-10">
       {/* Greeting */}
-      <div className="ds-rise mb-6 flex items-center gap-3" style={rise(0)}>
-        <MoxFace mood="happy" size={44} track />
+      <div className="ds-rise mb-7 flex items-center gap-4" style={rise(0)}>
+        <span className="mox-float shrink-0">
+          <MoxFace mood="happy" size={60} track />
+        </span>
         <div className="min-w-0">
-          <h2 className="text-[24px] font-bold leading-tight tracking-[-0.022em] md:text-[28px]">
+          <h2 className="text-[26px] font-bold leading-[1.1] tracking-[-0.03em] md:text-[32px]">
             {first ? `Hi ${first}, ` : "Hi, "}
             <span className="ds-grad-text">what are we making?</span>
           </h2>
-          <p className="text-[13px] text-muted-foreground">Pick a card or ask Mox below.</p>
+          <p className="mt-1 text-[13.5px] text-muted-foreground">Pick a card or ask Mox below.</p>
         </div>
       </div>
 
@@ -127,15 +136,15 @@ export function HomeBento({
             label="Open Brain"
             onClick={() => emitAppEvent("open:brain")}
             style={rise(1)}
-            className="relative min-h-[210px] overflow-hidden p-[18px]"
+            className="relative min-h-[220px] overflow-hidden p-5 [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
           >
-            <h3 className="text-[16px] font-bold">Mox knows your brand</h3>
+            <h3 className="text-[18px] font-bold tracking-[-0.015em]">Mox knows your brand</h3>
             <p className="mt-1 text-[12px] text-muted-foreground">Everything is set up.</p>
             <Illustration
               kind="rocket"
-              className="absolute -bottom-2 -right-2 h-[130px] w-[170px]"
+              className="absolute -bottom-3 -right-3 h-[150px] w-[195px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
             />
-            <CardArrow className="absolute bottom-[18px] left-[18px]" />
+            <CardArrow className="absolute bottom-5 left-5" />
           </TiltCard>
         )}
 
@@ -143,24 +152,27 @@ export function HomeBento({
           label="Swipe ideas"
           onClick={() => create.open("social")}
           style={rise(2)}
-          className="relative min-h-[210px] overflow-hidden p-[18px]"
+          className="relative min-h-[220px] overflow-hidden p-5 [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
         >
           <span className="ds-grad-pill inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-bold">
             Popular
           </span>
-          <h3 className="mt-2 text-[16px] font-bold">Swipe ideas</h3>
-          <p className="mt-1 max-w-[60%] text-[12px] text-muted-foreground">
+          <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Swipe ideas</h3>
+          <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
             Keep the ones you like. Mox writes them.
           </p>
-          <Illustration kind="swipe" className="absolute -bottom-3 -right-3 h-[140px] w-[180px]" />
-          <CardArrow className="absolute bottom-[18px] left-[18px]" />
+          <Illustration
+            kind="swipe"
+            className="absolute -bottom-3 -right-3 h-[160px] w-[205px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
+          />
+          <CardArrow className="absolute bottom-5 left-5" />
         </TiltCard>
 
         <TiltCard
           label={waiting ? "Open posts waiting" : "Open Autopilot"}
           onClick={() => (waiting ? onOpenWaiting() : emitAppEvent("open:autopilot"))}
           style={rise(3)}
-          className="relative min-h-[210px] overflow-hidden p-[18px] sm:col-span-2 lg:col-span-1"
+          className="relative min-h-[220px] overflow-hidden p-5 [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] sm:col-span-2 lg:col-span-1"
         >
           {waiting ? (
             <>
@@ -168,8 +180,8 @@ export function HomeBento({
                 <span className="size-1.5 animate-pulse rounded-full bg-[var(--mox-ink)]" />
                 {waiting} waiting
               </span>
-              <h3 className="mt-2 text-[16px] font-bold">Posts need a yes</h3>
-              <p className="mt-1 max-w-[60%] text-[12px] text-muted-foreground">
+              <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Posts need a yes</h3>
+              <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
                 Check them before they go out.
               </p>
             </>
@@ -185,20 +197,23 @@ export function HomeBento({
               >
                 {autopilotOn ? "On" : "Off"}
               </span>
-              <h3 className="mt-2 text-[16px] font-bold">Autopilot</h3>
-              <p className="mt-1 max-w-[60%] text-[12px] text-muted-foreground">
+              <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Autopilot</h3>
+              <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
                 {autopilotOn ? "Posting every week for you." : "Posts every week by itself."}
               </p>
             </>
           )}
-          <Illustration kind="rocket" className="absolute -bottom-3 -right-2 h-[140px] w-[170px]" />
-          <CardArrow className="absolute bottom-[18px] left-[18px]" />
+          <Illustration
+            kind="rocket"
+            className="absolute -bottom-3 -right-2 h-[160px] w-[195px] transition-transform duration-500 group-hover:-translate-y-2"
+          />
+          <CardArrow className="absolute bottom-5 left-5" />
         </TiltCard>
       </div>
 
       {/* Most popular */}
-      <div className="ds-rise mb-2 mt-7 flex items-center justify-between" style={rise(4)}>
-        <h3 className="text-[15px] font-bold">Most popular</h3>
+      <div className="ds-rise mb-3 mt-8 flex items-center justify-between" style={rise(4)}>
+        <h3 className="text-[17px] font-bold tracking-[-0.015em]">Most popular</h3>
         <button
           type="button"
           onClick={() => emitAppEvent("open:create-launcher")}
@@ -207,16 +222,16 @@ export function HomeBento({
           See all
         </button>
       </div>
-      <div className="-mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+      <div className="-mx-2 -my-2 flex snap-x gap-2.5 overflow-x-auto overflow-y-hidden px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {POPULAR.map((p, i) => (
           <TiltCard
             key={p.choice}
             label={p.label}
             onClick={() => create.open(p.choice)}
             style={rise(5 + i)}
-            className="flex h-14 min-w-[200px] flex-1 snap-start items-center gap-2.5 px-2"
+            className="h-16 min-w-[200px] flex-1 snap-start !flex-row !items-center gap-3 px-2.5"
           >
-            <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--ds-well-bg)]">
+            <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:scale-105">
               <Illustration kind={p.illo} className="size-11" />
             </span>
             <span className="min-w-0 flex-1">
@@ -228,7 +243,7 @@ export function HomeBento({
       </div>
 
       {/* Create */}
-      <h3 className="ds-rise mb-2 mt-7 text-[15px] font-bold" style={rise(9)}>
+      <h3 className="ds-rise mb-3 mt-8 text-[17px] font-bold tracking-[-0.015em]" style={rise(9)}>
         Create
       </h3>
       <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-3">
@@ -240,14 +255,14 @@ export function HomeBento({
               label={`Create ${b.label}`}
               onClick={() => create.open(b.choice)}
               style={rise(10 + i)}
-              className="relative flex min-h-[128px] flex-col overflow-hidden p-[18px]"
+              className="relative min-h-[140px] overflow-hidden p-5"
             >
               <Illustration
                 kind={b.illo}
-                className="absolute -bottom-3 -right-4 h-[86px] w-[112px] transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-3deg]"
+                className="absolute -bottom-3 -right-4 h-[100px] w-[130px] transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-3deg]"
               />
               <span className="relative flex items-center gap-2">
-                <span className="text-[18px] font-bold tracking-tight">{b.label}</span>
+                <span className="text-[20px] font-bold tracking-[-0.02em]">{b.label}</span>
                 {lock && <PlanLock plan={lock} />}
               </span>
               <span className="relative mt-0.5 block max-w-[56%] text-[12px] leading-snug text-muted-foreground">

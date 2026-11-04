@@ -92,6 +92,7 @@ import {
   MonthView,
   WeekView,
 } from "./calendar/views";
+import { celebrateOnce } from "@/lib/celebrate";
 
 type View = "month" | "week" | "list";
 
@@ -591,6 +592,7 @@ export function ContentCalendar({ workspaceId }: { workspaceId: string | null })
           description: outcome?.reason ?? "Check that the account is connected.",
         });
       } else {
+        celebrateOnce("first-scheduled");
         toast.success("Scheduled", {
           description: parseYMD(current.date).toLocaleDateString(undefined, {
             weekday: "long",

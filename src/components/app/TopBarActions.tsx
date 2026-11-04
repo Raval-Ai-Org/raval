@@ -38,6 +38,7 @@ import {
 } from "@/lib/schedules.functions";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { celebrateOnce } from "@/lib/celebrate";
 
 // Segment style — borderless inner button used inside the unified Status Cluster.
 const SEG =
@@ -224,6 +225,7 @@ export function ScheduleButton({ workspaceId }: { workspaceId: string | null }) 
       setTitle("");
       setDue("");
       setPrompt("");
+      celebrateOnce("first-scheduled");
       toast.success("Scheduled", { description: new Date(iso).toLocaleString() });
       refresh();
     } catch (e) {

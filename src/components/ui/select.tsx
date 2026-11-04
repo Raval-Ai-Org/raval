@@ -69,7 +69,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-w-[calc(100vw-1rem)] max-h-(--radix-select-content-available-height) overscroll-contain min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-2xl border border-border/70 bg-popover p-1 text-popover-foreground shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-select-content-transform-origin)",
+        "relative z-50 max-w-[calc(100vw-1rem)] max-h-(--radix-select-content-available-height) overscroll-contain min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-[20px] border border-[var(--ds-card-border)] bg-[var(--ds-frame-bg)] shadow-[var(--ds-pop-shadow)] p-1.5 text-popover-foreground duration-200 ease-[cubic-bezier(0.34,1.36,0.64,1)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-select-content-transform-origin)",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,
@@ -112,7 +112,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex min-w-0 w-full [overflow-wrap:anywhere] cursor-default select-none items-center rounded-lg py-2 pl-2.5 pr-8 text-sm outline-none focus:bg-surface-2 focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex min-w-0 w-full [overflow-wrap:anywhere] cursor-default select-none items-center rounded-xl py-2 pl-2.5 pr-8 text-[13.5px] font-medium outline-none focus:bg-[var(--ds-well-bg)] focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     {...props}

@@ -10,7 +10,7 @@ type ToasterProps = React.ComponentProps<typeof Sonner>;
 // bottom of the screen). Mellox 2.0: one white card per notice, Holo style,
 // with a coloured status icon, at most three at once.
 const base =
-  "pointer-events-auto flex w-[min(360px,calc(100vw-2rem))] items-start gap-3 rounded-[20px] bg-[var(--ds-card-bg)] p-3.5 pr-10 text-foreground shadow-[var(--ds-frame-shadow)] ring-1 ring-[var(--ds-card-border)]";
+  "pointer-events-auto flex w-[min(360px,calc(100vw-2rem))] items-start gap-3 rounded-[20px] bg-[var(--ds-card-bg)] p-3.5 pr-10 text-foreground shadow-[var(--ds-pop-shadow)] ring-1 ring-[var(--ds-card-border)]";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme } = useTheme();

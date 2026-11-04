@@ -11,8 +11,9 @@ type Size = "sm" | "md" | "lg" | "xl" | "2xl";
 
 /** Standard (windowed) sizes. Large surfaces open as a comfortable medium window and can be maximized. */
 const SIZE_MAP: Record<Size, string> = {
-  sm: "w-[calc(100vw-24px)] max-w-[560px] h-auto max-h-[86dvh]",
-  md: "w-[calc(100vw-24px)] max-w-[760px] h-auto max-h-[88dvh]",
+  // On phones the small windows rise from the bottom as a sheet.
+  sm: "w-[calc(100vw-24px)] max-w-[560px] h-auto max-h-[86dvh] max-sm:mx-0 max-sm:mb-0 max-sm:w-screen max-sm:max-w-none max-sm:rounded-b-none max-sm:max-h-[92dvh]",
+  md: "w-[calc(100vw-24px)] max-w-[760px] h-auto max-h-[88dvh] max-sm:mx-0 max-sm:mb-0 max-sm:w-screen max-sm:max-w-none max-sm:rounded-b-none max-sm:max-h-[92dvh]",
   lg: "w-[calc(100vw-24px)] max-w-[920px] h-[min(86dvh,860px)] max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none",
   xl: "w-[calc(100vw-24px)] max-w-[1040px] h-[min(88dvh,900px)] max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none",
   "2xl":
@@ -20,7 +21,7 @@ const SIZE_MAP: Record<Size, string> = {
 };
 
 const iconBtn =
-  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40 lg:h-8 lg:w-8";
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground transition-[background-color,color,transform] duration-300 hover:bg-[var(--ds-well-bg-hover)] active:scale-90 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40 lg:h-8 lg:w-8";
 
 function MaximizeIcon({ className }: { className?: string }) {
   return (
@@ -110,6 +111,12 @@ export function AppModalShell({
   srDescription?: string;
 }) {
   const [maximized, setMaximized] = useState(false);
+  // Small windows on a phone are bottom sheets that slide up (see SIZE_MAP).
+  const phoneSheet =
+    (size === "sm" || size === "md") &&
+    !maximized &&
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 639px)").matches;
   const contentRef = useRef<HTMLDivElement>(null);
   // Big workspaces (lg/xl) can become a full page; small forms stay popups.
   const canMaximize = allowMaximize ?? (size === "lg" || size === "xl" || size === "2xl");
@@ -169,23 +176,31 @@ export function AppModalShell({
                 // fights a CSS translate (which caused off-centre popups).
                 // Centred with plain CSS (inset-0 + m-auto); the animation only fades,
                 // lifts 10px and scales a touch — no transform tug-of-war.
-                initial={{ opacity: 0, scale: 0.96, y: 14 }}
+                initial={
+                  phoneSheet
+                    ? { opacity: 1, scale: 1, y: "100%" }
+                    : { opacity: 0, scale: 0.94, y: 18 }
+                }
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{
-                  opacity: 0,
-                  scale: 0.985,
-                  y: 6,
-                  transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
-                }}
+                exit={
+                  phoneSheet
+                    ? { y: "100%", transition: { duration: 0.22, ease: [0.4, 0, 1, 1] } }
+                    : {
+                        opacity: 0,
+                        scale: 0.985,
+                        y: 6,
+                        transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
+                      }
+                }
                 // Mellox 2.0: a soft spring, Holo style.
                 transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
                 style={{ transformOrigin: "center" }}
                 className={cn(
-                  "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden bg-background outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
+                  "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--ds-frame-bg)] outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
                   maximized
                     ? "m-0 h-dvh w-screen max-w-none rounded-none"
                     : cn(
-                        "ds-window m-auto rounded-[var(--ds-frame-radius)] shadow-[var(--ds-frame-shadow)]",
+                        "ds-window m-auto rounded-[var(--ds-pop-radius)] shadow-[var(--ds-pop-shadow)]",
                         SIZE_MAP[size],
                         (size === "sm" || size === "md") && "h-fit",
                       ),
@@ -202,10 +217,20 @@ export function AppModalShell({
                   )}
                 </VisuallyHidden>
 
+                <div
+                  aria-hidden
+                  className="ds-aurora pointer-events-none absolute inset-x-0 top-0 h-48 opacity-80"
+                />
+                {(size === "sm" || size === "md") && !maximized && (
+                  <span
+                    aria-hidden
+                    className="relative z-10 mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-foreground/15 sm:hidden"
+                  />
+                )}
                 {/* Header */}
                 <header
                   className={cn(
-                    "relative z-10 flex min-h-16 shrink-0 flex-wrap items-center gap-2 bg-background/70 px-3 py-2 backdrop-blur-xl sm:gap-3 sm:px-5",
+                    "relative z-10 flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-b border-[var(--ds-card-border)] px-3 py-2.5 sm:gap-3 sm:px-5",
                     maximized && "sm:px-8",
                   )}
                 >
@@ -221,12 +246,12 @@ export function AppModalShell({
                     </button>
                   )}
                   {Icon && (
-                    <span className="ds-grad-pill hidden h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--mox-ink)] min-[420px]:grid">
+                    <span className="ds-grad-pill hidden h-10 w-10 shrink-0 place-items-center rounded-[14px] text-[var(--mox-ink)] shadow-[0_8px_18px_-10px_rgb(46_230_107/0.9)] min-[420px]:grid">
                       <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
-                    <h2 className="break-words text-[17px] font-bold leading-tight tracking-[-0.02em] text-foreground">
+                    <h2 className="break-words text-[18px] font-bold leading-tight tracking-[-0.02em] text-foreground">
                       {title}
                     </h2>
                     {description && (
@@ -261,7 +286,7 @@ export function AppModalShell({
                         aria-label="Close dialog"
                         title="Close (Esc)"
                         disabled={disableClose}
-                        className={iconBtn}
+                        className={cn(iconBtn, "hover:rotate-90")}
                       >
                         <X className="h-4 w-4" />
                       </DialogPrimitive.Close>

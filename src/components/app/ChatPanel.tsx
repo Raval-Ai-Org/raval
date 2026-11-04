@@ -1874,7 +1874,7 @@ export function ChatPanel({
           layout="position"
           transition={layoutTransition}
           className={cn(
-            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6",
+            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6 before:pointer-events-none before:absolute before:inset-x-0 before:-top-12 before:h-12 before:bg-gradient-to-t before:from-[var(--ds-frame-bg)] before:to-transparent",
             home ? "max-w-[880px] pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "max-w-3xl",
           )}
         >

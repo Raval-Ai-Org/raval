@@ -4070,30 +4070,32 @@ pre {
    the creative workspace has colour and every piece is recognisable at a
    glance. Light values hold contrast on white; dark values glow on black. */
 :root {
-  --tone-social: 84 58% 34%;
-  --tone-carousel: 34 92% 44%;
-  --tone-image: 342 74% 52%;
-  --tone-ad: 14 86% 50%;
-  --tone-video: 258 64% 56%;
+  /* Mellox 2.0: every format hue comes from Mox’s family (lime → green →
+     teal → cyan → blue, plus the backdrop yellow). */
+  --tone-social: 84 62% 36%;
+  --tone-carousel: 50 92% 40%;
+  --tone-image: 145 70% 36%;
+  --tone-ad: 40 95% 44%;
+  --tone-video: 214 88% 50%;
   --tone-script: 170 72% 32%;
-  --tone-article: 199 80% 40%;
-  --tone-ugc: 316 78% 46%;
-  --tone-story: 286 70% 48%;
+  --tone-article: 192 82% 38%;
+  --tone-ugc: 128 60% 38%;
+  --tone-story: 226 76% 56%;
   /* Ink for a solid format-tone fill. Several light tones (orange, teal and
      green) are too bright for white icons; the dark palette is brighter still. */
   --tone-foreground: 0 0% 0%;
 }
 .dark {
-  --tone-social: 70 75% 64%;
-  --tone-carousel: 38 95% 60%;
-  --tone-image: 340 88% 70%;
-  --tone-ad: 16 94% 64%;
-  --tone-video: 258 92% 76%;
+  --tone-social: 76 80% 62%;
+  --tone-carousel: 54 95% 60%;
+  --tone-image: 145 75% 58%;
+  --tone-ad: 42 95% 60%;
+  --tone-video: 212 95% 68%;
   --tone-script: 166 72% 55%;
-  --tone-article: 198 92% 64%;
-  --tone-ugc: 316 90% 70%;
+  --tone-article: 190 90% 60%;
+  --tone-ugc: 128 70% 60%;
   --tone-upload: 186 78% 53%;
-  --tone-story: 286 85% 74%;
+  --tone-story: 226 90% 74%;
 }
 .studio-tone-story {
   --tone: var(--tone-story);
@@ -4627,10 +4629,9 @@ pre {
 
   /* ── Greeting + starters ── */
   .mx-greeting {
-    font-family: var(--font-display);
-    font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
-    font-weight: 500;
-    letter-spacing: -0.035em;
+    font-size: clamp(1.9rem, 1.3rem + 1.8vw, 2.75rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
     line-height: 1.15;
     color: hsl(var(--foreground));
     text-wrap: balance;
@@ -5468,9 +5469,9 @@ pre {
 }
 
 @utility ds-window {
-  border-radius: var(--ds-radius-window);
-  background-color: hsl(var(--background));
-  box-shadow: var(--ds-window-shadow);
+  border-radius: var(--ds-pop-radius, var(--ds-radius-window));
+  background-color: var(--ds-frame-bg, hsl(var(--background)));
+  box-shadow: var(--ds-pop-shadow, var(--ds-window-shadow));
 }
 @utility ds-glow {
   background-image:
@@ -5479,8 +5480,10 @@ pre {
 }
 @utility ds-tile {
   border-radius: var(--ds-radius-tile);
-  border: 1px solid var(--ds-tile-border);
-  background-color: var(--ds-tile-bg);
+  border: 1px solid var(--ds-card-border, var(--ds-tile-border));
+  background-color: var(--ds-card-bg, var(--ds-tile-bg));
+  /* Mellox 2.0: Holo cards rest on a whisper of shadow. */
+  box-shadow: 0 1px 2px hsl(160 20% 10% / 0.04), 0 6px 18px -14px hsl(160 30% 12% / 0.14);
 }
 /* A tile that opens something lifts a little on hover, the way a pin does. */
 @utility ds-tile-hover {
@@ -5489,8 +5492,11 @@ pre {
     transform 300ms var(--ds-ease),
     box-shadow 300ms var(--ds-ease);
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--ds-tile-shadow-hover);
+    transform: translateY(-3px);
+    box-shadow: var(--ds-card-shadow-hover, var(--ds-tile-shadow-hover));
+  }
+  &:active {
+    transform: translateY(-1px) scale(0.99);
   }
 }
 @utility ds-well {
@@ -5498,10 +5504,10 @@ pre {
   background-color: var(--ds-well-bg);
 }
 @utility ds-page-title {
-  font-size: 24px;
-  line-height: 1.2;
+  font-size: 26px;
+  line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.022em;
+  letter-spacing: -0.03em;
   color: hsl(var(--foreground));
 }
 /* A plain sentence-case heading over a group, not an uppercase eyebrow. */
@@ -6257,11 +6263,16 @@ pre {
     radial-gradient(55% 65% at 100% 0%, #1e7bf5 0%, transparent 62%),
     linear-gradient(125deg, #e8f53c 0%, #7fee3c 24%, #2bea4e 42%, #19d6e6 72%, #1e7bf5 100%);
 
-  --ds-frame-inset: 14px;
-  --ds-frame-radius: 26px;
+  /* The app fills the screen edge to edge (no gradient border). */
+  --ds-frame-inset: 0px;
+  --ds-frame-radius: 0px;
   --ds-frame-bg: #ffffff;
-  --ds-frame-shadow:
-    0 40px 90px -40px hsl(160 80% 12% / 0.55), 0 0 0 1px hsl(0 0% 100% / 0.65) inset;
+  --ds-frame-shadow: none;
+  /* Pop-ups: floating white windows with a soft, deep shadow. */
+  --ds-pop-radius: 28px;
+  --ds-pop-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.9) inset, 0 0 0 1px hsl(160 12% 18% / 0.07),
+    0 32px 80px -24px hsl(160 45% 10% / 0.38), 0 12px 28px -18px hsl(160 30% 10% / 0.22);
   --ds-aurora-cool: hsl(188 92% 62% / 0.16);
   --ds-aurora-warm: hsl(78 95% 60% / 0.2);
   --ds-aurora-mint: hsl(145 85% 60% / 0.12);
@@ -6275,7 +6286,9 @@ pre {
 }
 .dark {
   --ds-frame-bg: #0c0e0d;
-  --ds-frame-shadow: 0 40px 90px -40px hsl(0 0% 0% / 0.9), 0 0 0 1px hsl(0 0% 100% / 0.07) inset;
+  --ds-frame-shadow: none;
+  --ds-pop-shadow:
+    0 0 0 1px hsl(0 0% 100% / 0.08), 0 32px 80px -24px hsl(0 0% 0% / 0.85);
   --ds-aurora-cool: hsl(188 92% 50% / 0.08);
   --ds-aurora-warm: hsl(78 95% 55% / 0.09);
   --ds-aurora-mint: hsl(145 85% 50% / 0.06);
@@ -6519,4 +6532,121 @@ pre {
 /* A progress bar is a "working" cue, so it keeps flowing (slower). */
 :root[data-chat-motion="reduced"] .ds-grad-bar {
   animation: ds-grad-flow 7s linear infinite !important;
+}
+
+/* ═══ Pop-ups (Mellox 2.0) ═══════════════════════════════════════════════
+ *   ds-scrim   the soft blurred backdrop behind any pop-up
+ *   ds-pop     a floating white window that springs in
+ *   ds-sheet-r a panel that slides in from the right edge
+ * ═══════════════════════════════════════════════════════════════════════ */
+@utility ds-scrim {
+  background-color: rgb(22 25 27 / 0.3);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: ds-scrim-in 220ms ease-out both;
+  .dark & {
+    background-color: rgb(0 0 0 / 0.6);
+  }
+}
+@utility ds-pop {
+  border-radius: var(--ds-pop-radius);
+  background-color: var(--ds-frame-bg);
+  box-shadow: var(--ds-pop-shadow);
+  animation: ds-pop-in 420ms cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+@utility ds-sheet-r {
+  background-color: var(--ds-frame-bg);
+  box-shadow: var(--ds-pop-shadow);
+  border-radius: var(--ds-pop-radius) 0 0 var(--ds-pop-radius);
+  animation: ds-sheet-r-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes ds-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ds-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+}
+@keyframes ds-sheet-r-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(40px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-scrim,
+  .ds-pop,
+  .ds-sheet-r {
+    animation: none;
+  }
+}
+:root[data-chat-motion="reduced"] .ds-scrim,
+:root[data-chat-motion="reduced"] .ds-pop,
+:root[data-chat-motion="reduced"] .ds-sheet-r {
+  animation: none;
+}
+
+/* Mellox 2.0: inside the app, off-palette hues fall back to Mox’s family
+   (violet/indigo → blue, purple → cyan, fuchsia → green, pink → lime).
+   The landing page has no data-mellox-app, so it keeps its colours. */
+[data-mellox-app] {
+  --color-violet-50: #eef8ff;
+  --color-violet-100: #d9efff;
+  --color-violet-200: #bce2ff;
+  --color-violet-300: #8ed0ff;
+  --color-violet-400: #59b4ff;
+  --color-violet-500: #1e7bf5;
+  --color-violet-600: #1665d8;
+  --color-violet-700: #1550af;
+  --color-violet-800: #17458a;
+  --color-violet-900: #183c71;
+  --color-violet-950: #132649;
+  --color-purple-50: #ecfeff;
+  --color-purple-100: #cff9fe;
+  --color-purple-200: #a5f1fc;
+  --color-purple-300: #67e4f9;
+  --color-purple-400: #22cdee;
+  --color-purple-500: #19b8d6;
+  --color-purple-600: #0891b2;
+  --color-purple-700: #0e7490;
+  --color-purple-800: #155e75;
+  --color-purple-900: #164e63;
+  --color-purple-950: #083344;
+  --color-fuchsia-50: #f0fdf4;
+  --color-fuchsia-100: #dcfce7;
+  --color-fuchsia-200: #bbf7d0;
+  --color-fuchsia-300: #86efac;
+  --color-fuchsia-400: #4ade80;
+  --color-fuchsia-500: #2ee66b;
+  --color-fuchsia-600: #16a34a;
+  --color-fuchsia-700: #15803d;
+  --color-fuchsia-800: #166534;
+  --color-fuchsia-900: #14532d;
+  --color-fuchsia-950: #052e16;
+  --color-pink-50: #f7fee7;
+  --color-pink-100: #ecfccb;
+  --color-pink-200: #d9f99d;
+  --color-pink-300: #bef264;
+  --color-pink-400: #a3e635;
+  --color-pink-500: #7cc21a;
+  --color-pink-600: #65a30d;
+  --color-pink-700: #4d7c0f;
+  --color-pink-800: #3f6212;
+  --color-pink-900: #365314;
+  --color-pink-950: #1a2e05;
+  --color-indigo-50: #eef8ff;
+  --color-indigo-100: #d9efff;
+  --color-indigo-200: #bce2ff;
+  --color-indigo-300: #8ed0ff;
+  --color-indigo-400: #59b4ff;
+  --color-indigo-500: #1e7bf5;
+  --color-indigo-600: #1665d8;
+  --color-indigo-700: #1550af;
+  --color-indigo-800: #17458a;
+  --color-indigo-900: #183c71;
+  --color-indigo-950: #132649;
 }

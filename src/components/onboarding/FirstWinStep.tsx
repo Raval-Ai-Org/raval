@@ -1,6 +1,6 @@
 "use client";
 
-import type { Ref } from "react";
+import { useEffect, useRef, type Ref } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, RefreshCw, Sparkles, Spinner, Wand } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
@@ -11,6 +11,7 @@ import type { FirstPostBrief } from "@/lib/onboarding/flow";
 import type { Product } from "@/lib/products/catalog";
 import type { StudioJob } from "@/lib/studio/jobs";
 import { duration, ease } from "@/lib/motion";
+import { celebrate } from "@/lib/celebrate";
 import { cn } from "@/lib/utils";
 import { Eyebrow } from "./ui";
 import { HoldToEnter } from "./HoldToEnter";
@@ -56,6 +57,13 @@ export function FirstWinStep(p: FirstWinStepProps) {
   const states = p.briefs.map((b) => p.posts[b.n] ?? { status: "idle" as const });
   const working = states.some((s) => s.status === "starting" || s.status === "running");
   const ready = states.filter((s) => s.status === "succeeded").length;
+  const allReady = p.briefs.length > 0 && ready === p.briefs.length;
+  // Confetti once, when the last first post lands while you watch.
+  const wasReady = useRef(allReady);
+  useEffect(() => {
+    if (allReady && !wasReady.current) celebrate();
+    wasReady.current = allReady;
+  }, [allReady]);
   const product = p.products.find((x) => x.id === p.productId) ?? null;
 
   return (

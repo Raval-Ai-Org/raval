@@ -400,7 +400,7 @@ function BoxScene({ log }: { log: (name: string) => (...args: unknown[]) => void
           busy={false}
           modelId="mellox-flash"
           onModelChange={() => {}}
-          placeholder="How can Mellox help today?"
+          placeholder="Ask Mox anything…"
           autopilot={covered ? stage : stage === "on" ? "on" : null}
           toolbarSlot={
             <AutopilotToggle

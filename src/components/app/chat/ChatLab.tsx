@@ -243,7 +243,7 @@ export function ChatLab() {
               busy={false}
               modelId={CHAT_MODELS[0].id}
               onModelChange={() => {}}
-              placeholder={empty ? "How can Mellox help today?" : "Reply to Mellox…"}
+              placeholder={empty ? "Ask Mox anything…" : "Reply to Mox…"}
               toolbarSlot={<WaitingChip pulse={LAB_PULSE} onOpen={() => {}} />}
             />
           </motion.div>

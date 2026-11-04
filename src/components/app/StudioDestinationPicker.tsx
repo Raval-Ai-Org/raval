@@ -146,14 +146,14 @@ export function StudioDestinationPicker({
 
       {pendingMeta && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 ds-scrim grid place-items-center p-4"
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="destination-connect-title"
-            className="w-full max-w-sm rounded-xl border border-border bg-background p-5 shadow-2xl"
+            className="ds-pop w-full max-w-sm p-6"
           >
             <h4 id="destination-connect-title" className="text-sm font-semibold text-foreground">
               Connect {pendingMeta.label}

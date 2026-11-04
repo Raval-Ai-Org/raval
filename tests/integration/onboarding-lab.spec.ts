@@ -147,7 +147,9 @@ for (const vp of VIEWPORTS) {
 
     test("finish: press and hold to enter", async ({ page }) => {
       await openLab(page, "step=finish");
-      await expect(page.getByRole("button", { name: "Press and hold to enter Mellox" })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Press and hold to enter Mellox" }),
+      ).toBeVisible();
       await noSideScroll(page);
     });
   });

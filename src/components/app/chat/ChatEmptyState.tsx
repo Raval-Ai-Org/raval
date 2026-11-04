@@ -71,12 +71,18 @@ export function ChatGreeting({
         transition={{ ...spring.control, delay: 0.05 }}
         className="mb-4 grid place-items-center [@media(max-height:500px)]:hidden"
       >
-        <MoxFace mood="happy" size={64} track />
+        <span className="mox-float">
+          <MoxFace mood="happy" size={92} track />
+        </span>
       </motion.span>
       <h2 className="mx-greeting [@media(max-height:500px)]:text-xl">
         <span>
           {greeting ?? "Hello"}
-          {first ? `, ${first}` : ""}
+          {first ? (
+            <>
+              , <span className="ds-grad-text">{first}</span>
+            </>
+          ) : null}
         </span>
       </h2>
       <p className="mt-2 text-[15px] text-muted-foreground [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:text-xs">

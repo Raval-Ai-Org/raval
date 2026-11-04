@@ -699,12 +699,9 @@ export function IntentStep({
               <div>
                 <label
                   htmlFor="studio-brief"
-                  className="block text-xl font-semibold tracking-tight text-foreground"
+                  className="block text-[24px] font-bold tracking-[-0.025em] text-foreground sm:text-[28px]"
                 >
-                  Describe your{" "}
-                  <span className={`studio-gradient-text studio-tone-${session.type}`}>
-                    {format.noun}
-                  </span>
+                  Describe your <span className="ds-grad-text">{format.noun}</span>
                 </label>
 
                 <div
