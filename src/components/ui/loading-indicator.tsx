@@ -21,6 +21,7 @@
 
 import * as React from "react";
 import { Loader2 } from "@/components/ui/gemini-icons";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { cn } from "@/lib/utils";
 
 type Size = "xs" | "sm" | "md" | "lg";
@@ -67,7 +68,14 @@ export function LoadingIndicator({
       )}
       {...rest}
     >
-      <Loader2 className={cn(SIZE[size], "animate-spin")} aria-hidden />
+      {variant === "block" && (size === "md" || size === "lg") ? (
+        <span aria-hidden className="flex flex-col items-center gap-2">
+          <MoxFace mood="thinking" size={size === "lg" ? 44 : 34} />
+          <span className="ds-grad-bar h-1 w-16 animate-pulse rounded-full" />
+        </span>
+      ) : (
+        <Loader2 className={cn(SIZE[size], "animate-spin")} aria-hidden />
+      )}
       {showLabel ? (
         <span className="text-[12.5px]">{label}</span>
       ) : (

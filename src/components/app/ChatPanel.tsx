@@ -67,6 +67,9 @@ import { autopilotPath, useComposerAutopilot } from "./autopilot/composer/useCom
 import { useWorkspacePulse } from "./pulse/use-pulse";
 import { WaitingChip } from "./pulse/WaitingChip";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
+import { HomeBento } from "./home/HomeBento";
+import { useStartHere } from "./home/use-start-here";
+import { useOpenCreate } from "@/components/studio/use-open-create";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
 import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
@@ -162,12 +165,15 @@ export function ChatPanel({
   workspaceId,
   conversationId = null,
   mobileAccessory,
+  chatView = false,
 }: {
   workspaceId: string;
   conversationId?: string | null;
   /** Kept for callers; the chat always uses the centered layout. */
   variant?: "rail" | "centered";
   mobileAccessory?: ReactNode;
+  /** The Chat entry (`?view=chat`): an empty thread instead of Home's cards. */
+  chatView?: boolean;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -1642,6 +1648,9 @@ export function ChatPanel({
   /* ───────────── render ───────────── */
 
   const empty = messages.length === 0 && !historyLoading;
+  // Home (Mellox 2.0): a new chat outside the Chat entry shows the cards, with
+  // the message box docked under them. Sending moves to the conversation.
+  const home = empty && !conversationId && !chatView;
   const last = messages[messages.length - 1];
   const lastTextIdx = messages
     .map((m) => m.kind === "text" && m.role === "assistant")
@@ -1660,8 +1669,8 @@ export function ChatPanel({
   const placeholder = attachments.length
     ? "Ask something about your files…"
     : empty
-      ? "How can Mellox help today?"
-      : "Reply to Mellox…";
+      ? "Ask Mox anything…"
+      : "Reply to Mox…";
 
   // Autopilot lives in the message box: a switch when it's off, the whole box
   // when it's on. Typing hands the box straight back.
@@ -1673,6 +1682,9 @@ export function ChatPanel({
   // What waits for a person and what is running, read once for the box and
   // the ideas under it (src/lib/pulse/pulse.ts). Free; starts nothing.
   const pulse = useWorkspacePulse(workspaceId).data;
+  // Home's cards (free reads; a card only opens a place).
+  const startHere = useStartHere(workspaceId);
+  const openCreate = useOpenCreate();
   const openWaiting = () => {
     const place = pulse ? waitingPlace(pulse) : null;
     if (!place) return;
@@ -1697,12 +1709,23 @@ export function ChatPanel({
           onScroll={onChatScroll}
           className={cn(
             "mx-scroll min-h-0 overflow-y-auto overscroll-contain",
-            empty
-              ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
-              : "flex-1",
+            home
+              ? "flex-1"
+              : empty
+                ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
+                : "flex-1",
           )}
         >
-          {empty ? (
+          {home ? (
+            <HomeBento
+              start={startHere}
+              create={openCreate}
+              name={userName}
+              pulse={pulse}
+              onOpenWaiting={openWaiting}
+              starters={<ChatStarters source={dna} pulse={pulse} onPick={pickStarter} />}
+            />
+          ) : empty ? (
             <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
           ) : (
             <div
@@ -1850,7 +1873,10 @@ export function ChatPanel({
         <motion.div
           layout="position"
           transition={layoutTransition}
-          className="relative z-10 mx-auto w-full max-w-3xl shrink-0 px-3 md:px-6"
+          className={cn(
+            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6",
+            home ? "max-w-[880px] pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "max-w-3xl",
+          )}
         >
           <AnimatePresence>
             {showJumpToLatest && !empty ? (
@@ -1906,8 +1932,10 @@ export function ChatPanel({
           />
         </motion.div>
 
-        {/* Starters under the centered box, or a quiet note under the bottom one */}
+        {/* Starters under the centered box, or a quiet note under the bottom one.
+            On Home the starters sit in the cards instead. */}
         <div
+          hidden={home}
           className={cn(
             "shrink-0 px-3 md:px-6",
             empty

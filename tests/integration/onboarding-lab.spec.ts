@@ -131,5 +131,24 @@ for (const vp of VIEWPORTS) {
       await expect(page.locator("main").getByRole("alert")).toContainText("run out of credits");
       await noSideScroll(page);
     });
+
+    test("language: search and pick what Mox writes in", async ({ page }) => {
+      await openLab(page, "step=language");
+      const grid = page.getByRole("radiogroup", { name: "Content language" });
+      await page.getByRole("textbox", { name: "Search languages" }).fill("urdu");
+      await grid.getByRole("radio", { name: /Urdu/ }).click();
+      await expect(grid.getByRole("radio", { name: /Urdu/ })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      await expect(page.getByRole("button", { name: /Continue/ })).toBeEnabled();
+      await noSideScroll(page);
+    });
+
+    test("finish: press and hold to enter", async ({ page }) => {
+      await openLab(page, "step=finish");
+      await expect(page.getByRole("button", { name: "Press and hold to enter Mellox" })).toBeVisible();
+      await noSideScroll(page);
+    });
   });
 }

@@ -9,7 +9,16 @@ import { goalLine } from "@/lib/goals/decide";
 import type { Product } from "@/lib/products/catalog";
 
 export type OnboardingStep =
-  "website" | "manual" | "goals" | "scan" | "review" | "products" | "channels" | "first" | "done";
+  | "website"
+  | "manual"
+  | "goals"
+  | "scan"
+  | "review"
+  | "language"
+  | "products"
+  | "channels"
+  | "first"
+  | "done";
 
 export type FlowMode = "site" | "manual";
 export type ScanState = "idle" | "loading" | "ok" | "error";
@@ -28,11 +37,13 @@ export function nextStep(step: OnboardingStep, s: FlowState): OnboardingStep {
     case "manual":
       return "goals";
     case "goals":
-      if (s.mode === "manual") return "products";
+      if (s.mode === "manual") return "language";
       return s.scan === "ok" ? "review" : "scan";
     case "scan":
       return "review";
     case "review":
+      return "language";
+    case "language":
       return "products";
     case "products":
       return "channels";
@@ -53,8 +64,10 @@ export function previousStep(step: OnboardingStep, s: FlowState): OnboardingStep
     case "scan":
     case "review":
       return "goals";
-    case "products":
+    case "language":
       return s.mode === "manual" ? "goals" : "review";
+    case "products":
+      return "language";
     case "channels":
       return "products";
     case "first":
@@ -80,6 +93,7 @@ export type IndicatorStep = { id: string; label: string; covers: OnboardingStep[
 /** The numbered steps in the header. The scan sits under "Your goal" (it runs meanwhile). */
 export function indicatorSteps(mode: FlowMode): IndicatorStep[] {
   const tail: IndicatorStep[] = [
+    { id: "language", label: "Language", covers: ["language"] },
     { id: "products", label: "Products", covers: ["products"] },
     { id: "channels", label: "Channels", covers: ["channels"] },
     { id: "first", label: "First posts", covers: ["first", "done"] },

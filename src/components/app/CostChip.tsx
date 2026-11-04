@@ -14,6 +14,7 @@ export function CostChip({
   videoUnits,
   credits: fixedCredits,
   free,
+  compact,
   className,
 }: {
   action?: CreditAction;
@@ -22,6 +23,8 @@ export function CostChip({
   credits?: number;
   /** Included in the plan (first scan, scheduled refresh): shows "Free". */
   free?: boolean;
+  /** Holo-style "⚡12" on a Create pill; the full price stays in the title. */
+  compact?: boolean;
   className?: string;
 }) {
   const base =
@@ -48,10 +51,16 @@ export function CostChip({
   }
   if (!action && fixedCredits === undefined) return null;
   const credits = fixedCredits ?? Math.ceil(CREDIT_ACTIONS[action!].credits * quantity);
+  const label = `${formatNumber(credits)} ${credits === 1 ? "credit" : "credits"}`;
   return (
-    <span data-slot="cost-chip" className={cn(base, className)} title="Charged only if it works">
+    <span
+      data-slot="cost-chip"
+      className={cn(base, className)}
+      title={`${label}. Charged only if it works`}
+      aria-label={compact ? label : undefined}
+    >
       <Bolt className="h-3 w-3 shrink-0" aria-hidden />
-      {formatNumber(credits)} {credits === 1 ? "credit" : "credits"}
+      {compact ? formatNumber(credits) : label}
     </span>
   );
 }

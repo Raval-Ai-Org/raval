@@ -114,6 +114,15 @@ export function inWorkspace(workspaceId: string, path: string): string {
   return `/w/${workspaceId}/app${rest}`;
 }
 
+/**
+ * Chat with no conversation open (Mellox 2.0): Home is the bento, this is the
+ * empty thread with the conversations list beside it.
+ *   chatPath(id) → /w/<id>/app?view=chat
+ */
+export function chatPath(workspaceId: string): string {
+  return `${workspacePath(workspaceId)}?view=chat`;
+}
+
 export function conversationPath(workspaceId: string, conversationId: string): string {
   return workspacePath(workspaceId, `chat/${encodeURIComponent(conversationId)}`);
 }

@@ -28,7 +28,7 @@ import {
   CheckCircle2,
   Clock,
 } from "@/components/ui/gemini-icons";
-import { StarAgent } from "@/components/StarAgent";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import type { Agent } from "@/lib/agents";
 import { useAgentTasks } from "@/hooks/use-agent-tasks";
 import { useAgentRuntime } from "@/hooks/use-agent-runtime";
@@ -126,7 +126,7 @@ export function AgentManageDialog({ agent, open, onOpenChange }: Props) {
                 boxShadow: `0 0 0 1px ${accentSoft}, 0 8px 32px -8px ${accent}`,
               }}
             >
-              <StarAgent mood={mood.mood} size={52} animate={on} hue={agent.accentHue} />
+              <MoxFace mood={mood.mood} size={52} track={on} />
             </div>
             <div className="min-w-0 flex-1">
               <DialogHeader className="space-y-1.5 text-left">

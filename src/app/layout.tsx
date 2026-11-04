@@ -61,7 +61,7 @@ export const viewport: Viewport = {
   // renders a different colour than the page it frames.
   themeColor: [
     { color: "#000000", media: "(prefers-color-scheme: dark)" },
-    { color: "#f3f4f7", media: "(prefers-color-scheme: light)" },
+    { color: "#ffffff", media: "(prefers-color-scheme: light)" },
   ],
 };
 
@@ -70,11 +70,12 @@ export const viewport: Viewport = {
 // src/hooks/use-theme.tsx; 'reach-theme' is the superseded key, read once so
 // existing users keep the theme they picked.
 //
-// An absent preference means "system", which is why prefers-color-scheme is
-// consulted here rather than defaulting everyone to dark.
+// Mellox 2.0 (ADR-0044): inside the app an absent preference means light. The
+// public landing page ("/") keeps its old rule, "system", so it renders
+// exactly as before.
 const PRE_HYDRATE = `(function(){try{
   var d=document.documentElement,ls=window.localStorage,mm=window.matchMedia;
-  var t=ls.getItem('mellox:theme')||ls.getItem('reach-theme')||'system';
+  var t=ls.getItem('mellox:theme')||ls.getItem('reach-theme')||(location.pathname==='/'?'system':'light');
   var dark = t==='dark' || (t!=='light' && !(mm&&mm('(prefers-color-scheme: light)').matches));
   d.classList.toggle('dark', dark);
   var den=ls.getItem('chat-density'); d.dataset.chatDensity=(den==='compact'||den==='comfortable')?den:'comfortable';
@@ -87,7 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`dark ${googleSansFlex.variable} ${michroma.variable}`}
+      className={`${googleSansFlex.variable} ${michroma.variable}`}
       style={
         {
           "--font-sans":

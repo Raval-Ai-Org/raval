@@ -15,6 +15,9 @@
  * It is now `AuthShowcase`: a light stage that plays short scenes of the
  * product itself, drawn as interface cards. No network request, and a still
  * scene for reduced motion.
+ *
+ * Mellox 2.0: both halves sit in the app's white frame on Mox's gradient,
+ * with Mox above the form.
  */
 
 import { motion } from "framer-motion";
@@ -22,6 +25,8 @@ import type { ReactNode } from "react";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Logo } from "@/components/brand/Logo";
 import { AuthShowcase } from "@/components/auth/AuthShowcase";
+import { AppFrame } from "@/components/app/shell/AppFrame";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { duration, ease } from "@/lib/motion";
 
 export function AuthShell({
@@ -39,16 +44,21 @@ export function AuthShell({
   const reduce = useReducedMotionSafe();
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
-      <div className="relative z-10 mx-auto grid min-h-dvh w-full max-w-[1440px] lg:grid-cols-2">
+    <AppFrame>
+      <div className="relative z-10 mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 overflow-y-auto text-foreground lg:grid-cols-2">
         <aside className="relative hidden p-3 lg:block">
           <AuthShowcase reduce={reduce} />
         </aside>
 
         <section className="relative flex items-center justify-center px-5 py-10 sm:px-8">
           <div className="w-full max-w-[380px]">
-            <div className="mb-8 flex justify-center lg:hidden">
-              <Logo height={30} />
+            <div className="mb-6 flex flex-col items-center gap-4">
+              <span className="lg:hidden">
+                <Logo height={30} />
+              </span>
+              <span className="mox-float">
+                <MoxFace mood="happy" size={72} track />
+              </span>
             </div>
 
             {/* One short entrance. The previous version chained a 0.7s card
@@ -63,7 +73,7 @@ export function AuthShell({
                 ease: ease.emphasized,
               }}
             >
-              <h1 className="text-center font-display text-2xl font-semibold tracking-tight text-foreground">
+              <h1 className="text-center text-[28px] font-bold tracking-[-0.03em] text-foreground">
                 {title}
               </h1>
               {subtitle ? (
@@ -76,7 +86,7 @@ export function AuthShell({
           </div>
         </section>
       </div>
-    </div>
+    </AppFrame>
   );
 }
 

@@ -2,32 +2,24 @@
 
 // Top bar: credits left (click → Plan & billing) and, for owners on Free, an
 // Upgrade button. The number turns amber when under 20% of the month's
-// allowance and red when empty. On Free the pill says the credits are the free
-// ones, and the Upgrade button glows once they run low.
+// allowance and red when empty (walletView, shared with Mox's gauge). On Free
+// the pill says the credits are the free ones, and the Upgrade button glows
+// once they run low.
 
 import { Bolt, Crown } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
-import { PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
-import { asPlan, formatNumber } from "@/lib/billing/present";
+import { formatNumber, walletView } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
 
 export function WalletPill({ className }: { className?: string }) {
   const { data } = useEntitlements();
   if (!data) return null;
-  const plan = asPlan(data.entitledPlan);
-  const credits = data.meters.credits.available;
-  const points = data.creation?.active ? data.meters.creation.available : null;
-  const reserved = data.meters.credits.held;
-  const allowance = plan === "free" ? SIGNUP_GRANT.credits : PLANS[plan].allowances.credits;
+  const w = walletView(data);
+  const { credits, points, reserved, free } = w;
   const tone =
-    credits <= 0
-      ? "text-destructive"
-      : allowance > 0 && credits / allowance <= 0.2
-        ? "text-warning"
-        : "text-foreground";
-  const free = plan === "free";
-  const low = tone !== "text-foreground";
+    w.tone === "empty" ? "text-destructive" : w.tone === "low" ? "text-warning" : "text-foreground";
+  const low = w.tone !== "ok";
   return (
     <div className={cn("inline-flex items-center gap-1.5", className)}>
       <button
@@ -35,24 +27,27 @@ export function WalletPill({ className }: { className?: string }) {
         onClick={() => emitAppEvent("open:usage")}
         title={`${points === null ? "" : `${formatNumber(points)} creation points · `}${formatNumber(credits)} wallet credits available${reserved > 0 ? ` · ${formatNumber(reserved)} reserved for pending work` : ""}. Open Plan & billing`}
         aria-label={`${points === null ? "" : `${formatNumber(points)} creation points, `}${formatNumber(credits)} wallet credits available, ${formatNumber(reserved)} reserved. Open Plan & billing`}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 bg-card/80 px-3 text-[12.5px] font-medium tabular-nums transition-colors hover:bg-secondary"
+        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-3 text-[12.5px] font-semibold tabular-nums shadow-[var(--ds-card-shadow)] transition-all hover:-translate-y-px hover:shadow-[var(--ds-card-shadow-hover)]"
       >
-        <Bolt className="h-3.5 w-3.5 text-primary" aria-hidden />
+        <Bolt
+          className="h-3.5 w-3.5 text-[var(--mox-green-deep)] dark:text-[var(--mox-lime)]"
+          aria-hidden
+        />
         <span className={points === null ? tone : points <= 0 ? "text-warning" : "text-foreground"}>
           {points === null ? formatNumber(credits) : `${formatNumber(points)} points`}
         </span>
         {reserved > 0 && (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] font-medium text-muted-foreground">
             + {formatNumber(reserved)} reserved
           </span>
         )}
         {free && (
-          <span className="hidden text-muted-foreground lg:inline">
+          <span className="hidden font-medium text-muted-foreground lg:inline">
             {credits === 1 ? "free credit" : "free credits"}
           </span>
         )}
       </button>
-      {data.isOwner && free && (
+      {w.canUpgrade && (
         <button
           type="button"
           onClick={() =>
@@ -62,9 +57,8 @@ export function WalletPill({ className }: { className?: string }) {
             )
           }
           className={cn(
-            "inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90",
-            low &&
-              "shadow-[0_0_0_3px_hsl(var(--primary)/0.22),0_8px_22px_-8px_hsl(var(--primary)/0.9)]",
+            "ds-grad-pill inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12.5px]",
+            low && "animate-pulse",
           )}
         >
           <Crown className="h-3.5 w-3.5" aria-hidden />

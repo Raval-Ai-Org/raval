@@ -1,5 +1,10 @@
 # Mellox design system
 
+**Mellox 2.0** ([ADR-0044](adr/0044-mellox-2-mox.md)) puts the app in a white
+window on Mox's gradient, with Mox, the mascot, as the guide everywhere. Light
+is the default theme. The section "Mellox 2.0: frame, Mox and motion" below
+wins where it disagrees with an older rule.
+
 One look for the whole app, in the Pinterest language: the content is the
 interface, pictures sit at their true shape in rounded pins, every control is a
 pill, and there is very little text. It keeps Mellox's own brand: **Ultra Moss lime is the only accent colour, in both themes**, and icons
@@ -21,8 +26,9 @@ must not change when the app's styling does (see "Scope" below).
    little on hover, like a pin; windows carry the only standing depth.
 5. **Pictures first.** Anything visual is a pin in a masonry wall, never a
    cropped thumbnail in a fixed grid.
-6. **Calm motion.** Pages fade up 6px; the rail highlight slides; nothing
-   bounces. Reduced motion turns it off.
+6. **Alive, not busy.** Pages fade up; cards rise in a short stagger and tilt
+   up to 4° toward the pointer; windows open on a soft spring; Mox blinks,
+   floats and looks at the pointer. Reduced motion turns all of it off.
 
 ## Tokens (`src/styles.css`, "Mellox surface system")
 
@@ -81,8 +87,8 @@ Type scale: 11px meta · 12px controls · 13px card titles · 15px window title 
 
 - **Windows:** `AppModalShell` (`src/components/app/AppModalShell.tsx`). Sizes
   `sm`, `md`, `lg`, `xl`, and `2xl` for data-heavy surfaces. The header is
-  an icon chip (lime, round) and a title; a `description` is read to screen
-  readers only.
+  a gradient icon tile and a bold 17px title; a `description` is read to
+  screen readers only. It opens on a soft spring over a light blur.
   The window focuses itself on open, so no button opens wearing a focus ring.
 - **Rail layout:** `SurfaceLayout`, `SurfacePage`, `Tile`, `Stat`,
   `GroupLabel` (`src/components/app/surface/SurfaceLayout.tsx`). Used by AI
@@ -95,13 +101,17 @@ Type scale: 11px meta · 12px controls · 13px card titles · 15px window title 
   fallback) and `EngineMark` (ChatGPT, Claude and Gemini logos).
 - **Primitives:** tabs are a soft segmented pill; inputs and select triggers
   are pills and textareas are tile-rounded, with a soft fill; menus and popovers are rounded with
-  rounded items; tooltips are neutral (never lime); empty states use a
-  lime-tinted icon.
+  rounded items; tooltips are neutral (never lime); `EmptyState` /
+  `ErrorState` show Mox's face (`mox` mood, the icon as a small badge) at
+  full size and the icon alone at `sm`.
 
 ## Colour
 
-- Lime (`--primary`) for the primary action, the active item, focus and the
-  glow. Never a gradient to blue or purple.
+- Lime (`--primary`) for the active item, focus and the glow.
+- Mox's gradient (lime → green → cyan → blue) only on: the frame backdrop,
+  the primary pill (`ds-grad-pill`, ink text), progress bars
+  (`ds-grad-bar`), Mox's visor, and gradient headline words
+  (`ds-grad-text`). Nowhere else.
 - Status colours (`success`, `warning`, `destructive`, `info`) only for state.
 - Colour that carries meaning stays: brand marks of other companies, persona
   accents, status chips, charts.
@@ -114,12 +124,39 @@ contains an element with `data-mellox-app`: the workspace shell, projects,
 agency, onboarding and every `AppModalShell` window set it. The landing page
 does not, so it renders exactly as before.
 
+## Mellox 2.0: frame, Mox and motion
+
+- **Frame:** `AppFrame` (`src/components/app/shell/AppFrame.tsx`) wraps the
+  workspace shell, Projects and sign-in: `ds-backdrop` gradient, a white
+  `ds-frame` window (26px radius, 14px inset; full-bleed on phones) and a
+  faint `ds-aurora`. Onboarding uses the same parts.
+- **Sidebar as data:** `src/lib/shell/nav.ts` (groups Workspace, Brand,
+  Create, Grow, Team), drawn by `SidebarNav`. Add an entry there, keeping its
+  `data-tour` value, event and plan lock. The bottom is `MoxGauge` (credits),
+  the workspace switcher and the account menu.
+- **Mox:** `Mox` (3D renders in `public/brand/mox/`: visor, face, hero, wave)
+  for heroes, and `MoxFace` (drawn SVG; moods happy, thinking, wow, sad,
+  sleep, excited, scanning; `visor`, `track`) for avatars, loaders, empty
+  states, the tour and toasts. `MoxSpeech` is Mox with a speech bubble.
+- **Home** is `HomeBento` (`src/components/app/home/`) above the docked
+  message box: greeting, Start here, Swipe ideas, Autopilot, Most popular and
+  Post / Video / Article cards with glass `Illustration`s. Every card opens an
+  existing place through `useOpenCreate`; nothing paid starts from a card.
+  `/home-lab` renders it (scenes `done`, `waiting`, `modal`, `language`,
+  `states`, `faces`).
+- **Type:** page headings 22–28px bold, card titles 16–18px bold, body
+  12–13px. Fewer words.
+- **Toasts** are white cards top-right (top-centre on phones).
+- **Entry:** onboarding ends with `HoldToEnter` and the `VisorTransition`
+  (Mox waves, puts the headset on, the camera flies through the visor), then
+  `StartHereModal` on Home. Reduced motion is a plain fade.
+
 ## Checklist for a new surface
 
 - [ ] Opens in `AppModalShell` (or a route that renders one)
 - [ ] More than one section? Use `SurfaceLayout`
 - [ ] One `ds-page-title` per page, no subtitles or explanatory paragraphs
 - [ ] Pictures are pins (`PinCard` in `Masonry`), never cropped thumbnails
-- [ ] One lime primary action
+- [ ] One primary action (gradient pill)
 - [ ] Tiles are `Tile` / `ds-tile`; no ad-hoc borders or shadows
 - [ ] Works at 390px wide and in light and dark

@@ -10,7 +10,7 @@
 // buttons are a person's own click, handed to `onClose`.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Logo } from "@/components/brand/Logo";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { BrainIcon } from "@/components/app/brain/BrainMark";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import {
@@ -19,7 +19,6 @@ import {
   BookOpen,
   Bot,
   CalendarIcon,
-  Check,
   MessageCircle,
   PanelRightOpen,
   Settings,
@@ -312,7 +311,7 @@ export function AppTour({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={cn(
-          "ds-window ds-glow absolute left-0 top-0 max-h-[calc(100dvh-24px)] overflow-y-auto outline-none",
+          "ds-window ds-glow absolute left-0 top-0 max-h-[calc(100dvh-24px)] overflow-y-auto rounded-[22px] outline-none",
           phase === "stop" ? "w-[min(360px,calc(100vw-24px))]" : "w-[min(440px,calc(100vw-24px))]",
           move,
         )}
@@ -326,15 +325,14 @@ export function AppTour({
             key="welcome"
             className="ds-enter flex flex-col items-center px-6 pb-6 pt-8 text-center"
           >
-            <span className="grid h-14 w-14 place-items-center rounded-full bg-primary/12 ring-1 ring-primary/25">
-              <Logo markOnly height={30} />
+            <span className="mox-float">
+              <MoxFace mood="happy" size={72} track />
             </span>
-            <h2 id={titleId} className="mt-4 text-[20px] font-semibold tracking-tight">
+            <h2 id={titleId} className="mt-3 text-[22px] font-bold tracking-[-0.02em]">
               Welcome to Mellox{name ? `, ${name}` : ""}
             </h2>
             <p className="mt-2 max-w-[340px] text-[14px] leading-relaxed text-muted-foreground">
-              Mellox learns your brand, makes your marketing and helps people find you. Take a
-              one-minute look around.
+              I learn your brand and make your marketing. Let me show you around.
             </p>
             <div className="mt-5 grid w-full grid-cols-3 gap-2">
               {(
@@ -396,13 +394,10 @@ export function AppTour({
             </div>
             <div key={stop.id} className="ds-enter" aria-live="polite">
               <div className="mt-2 flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+                <span className="ds-grad-pill grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--mox-ink)]">
                   <Icon className="h-[18px] w-[18px]" aria-hidden />
                 </span>
-                <h2
-                  id={titleId}
-                  className="text-[16.5px] font-semibold leading-snug tracking-tight"
-                >
+                <h2 id={titleId} className="text-[17px] font-bold leading-snug tracking-[-0.015em]">
                   {stop.title}
                 </h2>
               </div>
@@ -422,8 +417,8 @@ export function AppTour({
                     key={s.id}
                     className={cn(
                       "h-1.5 rounded-full transition-all duration-300 ease-[var(--ds-ease)]",
-                      i === step ? "w-4 bg-primary" : "w-1.5",
-                      i < step && "bg-primary/45",
+                      i === step ? "ds-grad-bar w-5" : "w-1.5",
+                      i < step && "bg-[var(--mox-green)]/60",
                       i > step && "bg-foreground/15",
                     )}
                   />
@@ -449,10 +444,10 @@ export function AppTour({
 
         {phase === "finish" && (
           <div key="finish" className="ds-enter flex flex-col px-6 pb-6 pt-8">
-            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/25">
-              <Check className="h-6 w-6" aria-hidden />
+            <span className="mox-float mx-auto">
+              <MoxFace mood="excited" size={72} />
             </span>
-            <h2 id={titleId} className="mt-4 text-center text-[20px] font-semibold tracking-tight">
+            <h2 id={titleId} className="mt-3 text-center text-[22px] font-bold tracking-[-0.02em]">
               You&apos;re ready
             </h2>
             <p className="mt-2 text-center text-[14px] text-muted-foreground">Pick a first step.</p>

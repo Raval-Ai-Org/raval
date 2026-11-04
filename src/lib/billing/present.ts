@@ -334,3 +334,63 @@ export function blockHeadline(block: BillingBlock): string {
       return "This needs a plan change";
   }
 }
+
+export type WalletTone = "ok" | "low" | "empty";
+
+/**
+ * What the wallet shows: the balance (creation points when that meter is on,
+ * else credits), how full it is against the month's allowance, and its tone.
+ * Shared by the top-bar pill and Mox's gauge so the two always agree. Low is
+ * 20% of the allowance or less; empty is nothing left.
+ */
+export function walletView(data: {
+  entitledPlan: unknown;
+  isOwner?: boolean;
+  meters: { credits: { available: number; held: number }; creation?: { available: number } };
+  creation?: { active?: boolean } | null;
+}): {
+  plan: PlanId;
+  free: boolean;
+  credits: number;
+  points: number | null;
+  reserved: number;
+  allowance: number;
+  /** 0..1 of the month's allowance left. */
+  fill: number;
+  tone: WalletTone;
+  canUpgrade: boolean;
+} {
+  const plan = asPlan(data.entitledPlan);
+  const credits = data.meters.credits.available;
+  const points = data.creation?.active ? (data.meters.creation?.available ?? 0) : null;
+  const reserved = data.meters.credits.held;
+  const allowance = plan === "free" ? SIGNUP_GRANT.credits : PLANS[plan].allowances.credits;
+  const shown = points ?? credits;
+  const tone: WalletTone =
+    shown <= 0
+      ? "empty"
+      : points === null && allowance > 0 && credits / allowance <= 0.2
+        ? "low"
+        : "ok";
+  const fill =
+    points !== null
+      ? points > 0
+        ? 1
+        : 0
+      : allowance > 0
+        ? Math.max(0, Math.min(1, credits / allowance))
+        : credits > 0
+          ? 1
+          : 0;
+  return {
+    plan,
+    free: plan === "free",
+    credits,
+    points,
+    reserved,
+    allowance,
+    fill,
+    tone,
+    canUpgrade: Boolean(data.isOwner) && plan === "free",
+  };
+}

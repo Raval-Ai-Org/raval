@@ -2,15 +2,7 @@
 
 import type { Ref } from "react";
 import { motion } from "framer-motion";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  RefreshCw,
-  Sparkles,
-  Spinner,
-  Wand,
-} from "@/components/icons";
+import { ArrowLeft, Check, RefreshCw, Sparkles, Spinner, Wand } from "@/components/icons";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { isPlatformAppIconId, PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
 import { PlatformLogoGrid } from "@/components/studio/studio-ui";
@@ -21,6 +13,7 @@ import type { StudioJob } from "@/lib/studio/jobs";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Eyebrow } from "./ui";
+import { HoldToEnter } from "./HoldToEnter";
 
 export type FirstPostState =
   | { status: "idle" }
@@ -273,14 +266,7 @@ export function FirstWinStep(p: FirstWinStepProps) {
                   They keep writing if you go on.
                 </span>
               )}
-              <button
-                type="button"
-                onClick={p.onEnter}
-                className={cn(working ? dsGhostBtn : dsPrimaryBtn, "h-12 px-6 text-[14.5px]")}
-              >
-                Enter Mellox
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </button>
+              <HoldToEnter onDone={p.onEnter} />
             </>
           )}
         </div>

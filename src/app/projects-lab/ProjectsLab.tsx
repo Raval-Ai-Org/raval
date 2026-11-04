@@ -1,7 +1,8 @@
 "use client";
 
 import { Logo } from "@/components/brand/Logo";
-import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
+import { AppFrame } from "@/components/app/shell/AppFrame";
 import {
   PasteLinkBar,
   ProjectCard,
@@ -51,48 +52,49 @@ const SAMPLES: WorkspaceSummary[] = [
 
 export function ProjectsLab() {
   return (
-    <div
-      data-mellox-app
-      className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background text-foreground"
-    >
-      <ProjectsStage>
-        <header className="relative z-10 flex h-14 items-center px-5">
-          <Logo height={30} />
-        </header>
+    <AppFrame>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground">
+        <ProjectsStage>
+          <header className="relative z-10 flex h-14 items-center px-5">
+            <Logo height={30} />
+          </header>
 
-        <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
-          <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
-          <h1 className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]">
-            Which brand today?
-          </h1>
-          <p className="mt-2 text-[14px] text-muted-foreground">
-            Open your brand or add another one you run.
-          </p>
-          <div className="mx-auto mt-8 w-full max-w-xl">
-            <PasteLinkBar existing={SAMPLES} onCreated={() => {}} onOpenAdvanced={() => {}} />
+          <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
+            <span className="mox-float mx-auto mb-2 inline-block">
+              <MoxFace mood="happy" size={96} track />
+            </span>
+            <h1 className="mt-2 text-[34px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[44px]">
+              Which brand today?
+            </h1>
+            <p className="mt-2 text-[14px] text-muted-foreground">
+              Open your brand or add another one you run.
+            </p>
+            <div className="mx-auto mt-8 w-full max-w-xl">
+              <PasteLinkBar existing={SAMPLES} onCreated={() => {}} onOpenAdvanced={() => {}} />
+            </div>
+          </section>
+        </ProjectsStage>
+
+        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
+          <div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {SAMPLES.map((w, i) => (
+                <ProjectCard
+                  key={w.id}
+                  workspace={w}
+                  index={i}
+                  lastOpened={i === 0}
+                  onOpen={() => {}}
+                  onRename={() => {}}
+                  onStatusChange={() => {}}
+                />
+              ))}
+            </div>
           </div>
         </section>
-      </ProjectsStage>
 
-      <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
-        <div className="rounded-3xl border border-border/70 bg-card/70 p-5 backdrop-blur-xl sm:p-7">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {SAMPLES.map((w, i) => (
-              <ProjectCard
-                key={w.id}
-                workspace={w}
-                index={i}
-                lastOpened={i === 0}
-                onOpen={() => {}}
-                onRename={() => {}}
-                onStatusChange={() => {}}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <ProjectsFoot />
-    </div>
+        <ProjectsFoot />
+      </div>
+    </AppFrame>
   );
 }

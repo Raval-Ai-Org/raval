@@ -16,6 +16,10 @@ import { ManualBrandStep, emptyManualBrand, type ManualBrand } from "./ManualBra
 import { ProductsStep } from "./ProductsStep";
 import { ScanStrip } from "./ScanStrip";
 import type { ProductDraft } from "./ProductCard";
+import { LanguageStep } from "./LanguageStep";
+import { HoldToEnter } from "./HoldToEnter";
+import { MoxSpeech } from "@/components/app/surface/MoxParts";
+import { VisorTransition, type Beat } from "@/components/brand/mox/VisorTransition";
 
 const WS = "00000000-0000-4000-8000-000000000001";
 
@@ -134,6 +138,10 @@ export function OnboardingLab() {
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState("goals");
   const [last, setLast] = useState("");
+  const [language, setLanguage] = useState("English");
+  const [entering, setEntering] = useState(false);
+  // `?step=finish&beat=glow`: hold the VR entry on one beat.
+  const [beat, setBeat] = useState<Beat | null>(null);
   const [goal, setGoal] = useState<GoalDraft>({
     ...emptyGoalDraft,
     focus: "followers",
@@ -147,6 +155,7 @@ export function OnboardingLab() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setStep(params.get("step") ?? "goals");
+    setBeat((params.get("beat") as Beat | null) ?? null);
     if (params.get("empty") === "1") setProducts([]);
     // `?saving=1`: what the scan found is still being kept.
     if (params.get("saving") === "1") {
@@ -323,7 +332,38 @@ export function OnboardingLab() {
             onEnter={record("enter")}
           />
         )}
+        {step === "language" && (
+          <div className="mx-auto max-w-3xl">
+            <LanguageStep
+              value={language}
+              onChange={(l) => {
+                setLanguage(l);
+                setLast(`language:${l}`);
+              }}
+              onBack={record("back")}
+              onContinue={record("language:continue")}
+            />
+          </div>
+        )}
+        {/* `?step=finish`: press and hold plays the VR entry, then says so. */}
+        {step === "finish" && (
+          <div className="flex flex-col items-center gap-6 py-10">
+            <MoxSpeech pose="wave" size={140}>
+              <b>Woohoo! You made it.</b> Press and hold, I&apos;ll take you in.
+            </MoxSpeech>
+            <HoldToEnter onDone={() => setEntering(true)} />
+          </div>
+        )}
       </main>
+      {(entering || beat) && (
+        <VisorTransition
+          freeze={beat ?? undefined}
+          onCovered={() => {
+            setEntering(false);
+            setLast("entered");
+          }}
+        />
+      )}
     </div>
   );
 }

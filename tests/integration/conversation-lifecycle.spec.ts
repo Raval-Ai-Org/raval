@@ -164,7 +164,7 @@ test("keeps follow-ups in one conversation and separates New Chat", async ({ pag
   await expect(page.getByRole("tabpanel", { name: "Checklist" })).toBeVisible();
   await page.getByRole("button", { name: "Collapse Marketing Coach" }).click();
   await expect(page.getByRole("button", { name: "Expand Marketing Coach" })).toBeVisible();
-  const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
+  const composer = page.getByRole("textbox", { name: "Message Mellox" }).first();
   await expect(composer).toBeVisible({ timeout: 15_000 });
   await composer.fill("Plan my launch");
   await page.getByRole("button", { name: /Send message/i }).click();

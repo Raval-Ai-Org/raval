@@ -134,7 +134,7 @@ export function AppModalShell({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
-                className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md"
+                className="fixed inset-0 z-50 bg-[rgb(22_25_27/0.28)] backdrop-blur-[10px] dark:bg-black/55"
               />
             </DialogPrimitive.Overlay>
 
@@ -169,7 +169,7 @@ export function AppModalShell({
                 // fights a CSS translate (which caused off-centre popups).
                 // Centred with plain CSS (inset-0 + m-auto); the animation only fades,
                 // lifts 10px and scales a touch — no transform tug-of-war.
-                initial={{ opacity: 0, scale: 0.985, y: 10 }}
+                initial={{ opacity: 0, scale: 0.96, y: 14 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{
                   opacity: 0,
@@ -177,14 +177,15 @@ export function AppModalShell({
                   y: 6,
                   transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
                 }}
-                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                // Mellox 2.0: a soft spring, Holo style.
+                transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.8 }}
                 style={{ transformOrigin: "center" }}
                 className={cn(
                   "ds-glow @container/modal fixed inset-0 z-50 flex min-h-0 min-w-0 flex-col overflow-hidden bg-background outline-none transition-[width,height,max-width,max-height,border-radius] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform",
                   maximized
                     ? "m-0 h-dvh w-screen max-w-none rounded-none"
                     : cn(
-                        "ds-window m-auto",
+                        "ds-window m-auto rounded-[var(--ds-frame-radius)] shadow-[var(--ds-frame-shadow)]",
                         SIZE_MAP[size],
                         (size === "sm" || size === "md") && "h-fit",
                       ),
@@ -204,7 +205,7 @@ export function AppModalShell({
                 {/* Header */}
                 <header
                   className={cn(
-                    "relative z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-border/50 bg-background/60 px-3 py-1.5 backdrop-blur-xl sm:gap-3 sm:px-5",
+                    "relative z-10 flex min-h-16 shrink-0 flex-wrap items-center gap-2 bg-background/70 px-3 py-2 backdrop-blur-xl sm:gap-3 sm:px-5",
                     maximized && "sm:px-8",
                   )}
                 >
@@ -220,12 +221,12 @@ export function AppModalShell({
                     </button>
                   )}
                   {Icon && (
-                    <span className="hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20 min-[420px]:grid">
-                      <Icon className="h-4 w-4" strokeWidth={2.2} />
+                    <span className="ds-grad-pill hidden h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--mox-ink)] min-[420px]:grid">
+                      <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
-                    <h2 className="break-words text-[15px] font-semibold leading-tight tracking-tight text-foreground">
+                    <h2 className="break-words text-[17px] font-bold leading-tight tracking-[-0.02em] text-foreground">
                       {title}
                     </h2>
                     {description && (

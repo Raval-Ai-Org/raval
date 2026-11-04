@@ -136,7 +136,7 @@ async function seed(page: import("@playwright/test").Page) {
 }
 
 async function typeAndSend(page: import("@playwright/test").Page, text: string) {
-  const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
+  const composer = page.getByRole("textbox", { name: "Message Mellox" }).first();
   await expect(composer).toBeVisible({ timeout: 15_000 });
   await composer.click();
   await composer.fill(text);
@@ -168,7 +168,7 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/Ask Mellox AI/i).first()).toBeVisible({
+    await expect(page.getByRole("textbox", { name: "Message Mellox" }).first()).toBeVisible({
       timeout: 15_000,
     });
     await typeAndSend(page, "First try � should hit rate limit");
@@ -181,7 +181,7 @@ test.describe("Chat error handling", () => {
     // 2. Composer & Send button recover (not stuck streaming).
     const sendBtn = page.getByRole("button", { name: /Send message/i });
     await expect(sendBtn).toBeVisible({ timeout: 10_000 });
-    const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
+    const composer = page.getByRole("textbox", { name: "Message Mellox" }).first();
     await expect(composer).toBeEnabled();
 
     // 3. User can retry � the next send now succeeds.
@@ -217,7 +217,7 @@ test.describe("Chat error handling", () => {
 
     await seed(page);
     await page.goto("/app", { waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/Ask Mellox AI/i).first()).toBeVisible({
+    await expect(page.getByRole("textbox", { name: "Message Mellox" }).first()).toBeVisible({
       timeout: 15_000,
     });
     await typeAndSend(page, "First try � should hit credits");
@@ -228,7 +228,7 @@ test.describe("Chat error handling", () => {
     // 2. Composer & Send button recover.
     const sendBtn = page.getByRole("button", { name: /Send message/i });
     await expect(sendBtn).toBeVisible({ timeout: 10_000 });
-    const composer = page.getByPlaceholder(/Ask Mellox AI/i).first();
+    const composer = page.getByRole("textbox", { name: "Message Mellox" }).first();
     await expect(composer).toBeEnabled();
 
     // 3. User can retry after topping up credits.

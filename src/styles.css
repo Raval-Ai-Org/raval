@@ -240,13 +240,13 @@
      allows while still clearing 6.3:1 against white — so it reads as a
      genuinely bright, colourful green, not a muted corporate tone. Dark mode
      needs no rotation — the swatch is already legible on black. */
-  --brand: 70 75% 64.5%; /* Ultra Moss */
+  --brand: 77 87% 63%; /* Ultra Moss */
 
-  --primary: 97 100% 20%; /* vivid moss — 7:1 with white ink */
+  --primary: 128 80% 25%; /* vivid moss — 7:1 with white ink */
   --primary-foreground: 0 0% 100%;
-  --primary-surface: 97 70% 92%; /* tinted plate — a real green wash, not a hint */
-  --primary-border: 97 55% 72%;
-  --accent: 97 100% 20%;
+  --primary-surface: 128 60% 93%; /* tinted plate — a real green wash, not a hint */
+  --primary-border: 128 45% 74%;
+  --accent: 128 80% 25%;
   --accent-foreground: 0 0% 100%;
 
   /* ── Lines & focus ────────────────────────────────────────────────── */
@@ -255,7 +255,7 @@
   --border: 220 16% 83%; /* hairline — visible, never a divider wall */
   --border-strong: 220 14% 72%; /* emphasis: table rules, active outlines */
   --input: 220 16% 78%;
-  --ring: 97 100% 28%;
+  --ring: 128 80% 32%;
 
   /* ── Status ───────────────────────────────────────────────────────── */
   /* Full-saturation ink plus richer tinted surfaces (was a near-white hint
@@ -286,12 +286,12 @@
      rail reads as its own zone the way Lovable's does. */
   --sidebar-background: 220 18% 93%;
   --sidebar-foreground: 220 20% 12%;
-  --sidebar-primary: 97 100% 20%;
+  --sidebar-primary: 128 80% 25%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 220 18% 87%;
   --sidebar-accent-foreground: 0 0% 0%;
   --sidebar-border: 220 16% 80%;
-  --sidebar-ring: 97 100% 28%;
+  --sidebar-ring: 128 80% 32%;
 
   /* ── Shape ────────────────────────────────────────────────────────── */
   --radius: 0.75rem; /* 12px — the family; ±4px via --radius-sm/-lg/-xl */
@@ -388,17 +388,17 @@
   --secondary-foreground: 0 0% 97%;
 
   /* Full-strength Ultra Moss on black, paired with near-black ink (12.4:1). */
-  --primary: 70 75% 64.5%;
+  --primary: 77 87% 63%;
   --primary-foreground: 70 40% 7%;
   --primary-surface: 70 38% 11%;
   --primary-border: 70 26% 26%;
-  --accent: 70 75% 64.5%;
+  --accent: 77 87% 63%;
   --accent-foreground: 70 40% 7%;
 
   --border: 0 0% 16%;
   --border-strong: 0 0% 26%;
   --input: 0 0% 22%;
-  --ring: 70 75% 64.5%;
+  --ring: 77 87% 63%;
 
   --success: 146 58% 62%;
   --success-surface: 146 40% 10%;
@@ -421,12 +421,12 @@
 
   --sidebar-background: 0 0% 0%;
   --sidebar-foreground: 0 0% 68%;
-  --sidebar-primary: 70 75% 64.5%;
+  --sidebar-primary: 77 87% 63%;
   --sidebar-primary-foreground: 70 40% 7%;
   --sidebar-accent: 0 0% 7%;
   --sidebar-accent-foreground: 0 0% 97%;
   --sidebar-border: 0 0% 13%;
-  --sidebar-ring: 70 75% 64.5%;
+  --sidebar-ring: 77 87% 63%;
 
   --shadow-1: 0 1px 2px hsl(0 0% 0% / 0.7);
   --shadow-2: 0 1px 2px hsl(0 0% 0% / 0.6), 0 4px 10px -3px hsl(0 0% 0% / 0.6);
@@ -486,7 +486,7 @@
 }
 
 .dark {
-  --brand: 70 75% 64.5%;
+  --brand: 77 87% 63%;
 }
 
 .dark .logo-mark-dark {
@@ -4959,10 +4959,19 @@ pre {
     padding: 0.65rem 1rem;
     border-radius: 1.25rem;
     border-bottom-right-radius: 0.4rem;
-    background: var(--mx-user-bg);
-    color: hsl(var(--foreground));
+    /* Mellox 2.0 (Holo): the person's words are an ink pill. */
+    background: var(--mox-ink);
+    color: #fff;
     font-size: 15px;
     line-height: 1.6;
+    box-shadow: 0 10px 24px -16px rgb(22 25 27 / 0.55);
+  }
+  .dark .mx-user-bubble {
+    background: hsl(0 0% 100% / 0.1);
+    color: hsl(var(--foreground));
+  }
+  .mx-user-bubble a {
+    color: inherit;
   }
   .mx-assistant {
     font-size: 15.5px;
@@ -5146,7 +5155,13 @@ pre {
   }
   .mx-pulse__orbit {
     opacity: 0;
-    background: conic-gradient(from 0deg, transparent 0 70%, hsl(var(--primary) / 0.55) 100%);
+    background: conic-gradient(
+      from 0deg,
+      transparent 0 55%,
+      var(--mox-lime) 75%,
+      var(--mox-green) 88%,
+      var(--mox-cyan) 100%
+    );
     -webkit-mask: radial-gradient(
       farthest-side,
       transparent calc(100% - 2px),
@@ -5483,17 +5498,17 @@ pre {
   background-color: var(--ds-well-bg);
 }
 @utility ds-page-title {
-  font-size: 20px;
-  line-height: 1.25;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.022em;
   color: hsl(var(--foreground));
 }
 /* A plain sentence-case heading over a group, not an uppercase eyebrow. */
 @utility ds-label {
   font-size: 13px;
   line-height: 1.25;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.005em;
   color: hsl(var(--foreground) / 0.8);
 }
@@ -6201,4 +6216,307 @@ pre {
   .ap-dots > span {
     animation: none !important;
   }
+}
+
+/* ═══ Mellox 2.0 — the Mox frame (ADR-0044) ════════════════════════════════
+ * The app is a white window floating on Mox's gradient, the way Holo frames
+ * its app. Colours come from the Mox renders (public/brand/mox/): the lime
+ * body, the visor's lime → green → teal, and the hero backdrop's yellow →
+ * green → cyan → blue.
+ *
+ * The gradient is allowed in four places only: the frame backdrop, the one
+ * primary pill on a screen, progress bars, and Mox's visor. Everything else
+ * stays neutral so the content carries the colour.
+ *
+ *   ds-backdrop      the full-bleed Mox gradient behind the window (drifts)
+ *   ds-frame         the floating white window
+ *   ds-aurora        the faint lime / cyan wash inside the window
+ *   ds-card          a Holo card: white, hairline, soft resting shadow
+ *   ds-card-hover    a card that opens something: lift, sheen, arrow nudge
+ *   ds-grad-pill     the primary action (ink text on the Mox gradient)
+ *   ds-grad-bar      a progress fill
+ *   ds-grad-text     gradient words (headlines only)
+ *   ds-glass         the frosted surface used by popovers over the backdrop
+ *   mox-float        a render bobbing gently
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --mox-lime: #c6f24e;
+  --mox-lime-deep: #7cc21a;
+  --mox-green: #2ee66b;
+  --mox-green-deep: #0f9a4a;
+  --mox-teal: #0e7f6e;
+  --mox-cyan: #19d6e6;
+  --mox-blue: #1e7bf5;
+  --mox-yellow: #f2f23a;
+  --mox-ink: #16191b;
+  --mox-gradient: linear-gradient(100deg, #d9f53a 0%, #9cf03f 28%, #3fe46e 58%, #1fd6c4 100%);
+  --mox-gradient-deep: linear-gradient(100deg, #5aa80c 0%, #0f9a4a 55%, #0b8a8a 100%);
+  --mox-visor: linear-gradient(110deg, #d9f53a 0%, #2ee66b 48%, #0e7f6e 100%);
+  --mox-backdrop:
+    radial-gradient(60% 70% at 0% 100%, #f2f23a 0%, transparent 60%),
+    radial-gradient(55% 65% at 100% 0%, #1e7bf5 0%, transparent 62%),
+    linear-gradient(125deg, #e8f53c 0%, #7fee3c 24%, #2bea4e 42%, #19d6e6 72%, #1e7bf5 100%);
+
+  --ds-frame-inset: 14px;
+  --ds-frame-radius: 26px;
+  --ds-frame-bg: #ffffff;
+  --ds-frame-shadow:
+    0 40px 90px -40px hsl(160 80% 12% / 0.55), 0 0 0 1px hsl(0 0% 100% / 0.65) inset;
+  --ds-aurora-cool: hsl(188 92% 62% / 0.16);
+  --ds-aurora-warm: hsl(78 95% 60% / 0.2);
+  --ds-aurora-mint: hsl(145 85% 60% / 0.12);
+
+  --ds-card-bg: #ffffff;
+  --ds-card-border: hsl(160 10% 20% / 0.07);
+  --ds-card-shadow: 0 1px 2px hsl(160 20% 10% / 0.04), 0 10px 28px -16px hsl(160 30% 12% / 0.16);
+  --ds-card-shadow-hover:
+    0 2px 4px hsl(160 20% 10% / 0.05), 0 22px 44px -20px hsl(160 40% 14% / 0.28);
+  --ds-glass-bg: hsl(0 0% 100% / 0.78);
+}
+.dark {
+  --ds-frame-bg: #0c0e0d;
+  --ds-frame-shadow: 0 40px 90px -40px hsl(0 0% 0% / 0.9), 0 0 0 1px hsl(0 0% 100% / 0.07) inset;
+  --ds-aurora-cool: hsl(188 92% 50% / 0.08);
+  --ds-aurora-warm: hsl(78 95% 55% / 0.09);
+  --ds-aurora-mint: hsl(145 85% 50% / 0.06);
+  --ds-card-bg: hsl(0 0% 100% / 0.04);
+  --ds-card-border: hsl(0 0% 100% / 0.08);
+  --ds-card-shadow: 0 1px 2px hsl(0 0% 0% / 0.5);
+  --ds-card-shadow-hover: 0 22px 44px -20px hsl(0 0% 0% / 0.9);
+  --ds-glass-bg: hsl(0 0% 8% / 0.82);
+}
+/* The window is white inside the app; the backdrop shows only around it. */
+:root:not(.dark):has([data-mellox-app]) {
+  --sidebar-background: 0 0% 100%;
+}
+
+@utility ds-backdrop {
+  background: var(--mox-backdrop);
+  background-size: 160% 160%;
+  animation: mox-drift 32s ease-in-out infinite alternate;
+  .dark & {
+    filter: brightness(0.42) saturate(1.1);
+  }
+}
+@keyframes mox-drift {
+  0% {
+    background-position: 0% 40%;
+  }
+  100% {
+    background-position: 100% 60%;
+  }
+}
+@utility ds-frame {
+  border-radius: var(--ds-frame-radius);
+  background-color: var(--ds-frame-bg);
+  box-shadow: var(--ds-frame-shadow);
+}
+@utility ds-aurora {
+  background-image:
+    radial-gradient(42% 38% at 8% 0%, var(--ds-aurora-cool), transparent 70%),
+    radial-gradient(46% 42% at 100% 4%, var(--ds-aurora-warm), transparent 72%),
+    radial-gradient(40% 40% at 60% 100%, var(--ds-aurora-mint), transparent 70%);
+}
+@utility ds-card {
+  border-radius: var(--ds-radius-tile);
+  border: 1px solid var(--ds-card-border);
+  background-color: var(--ds-card-bg);
+  box-shadow: var(--ds-card-shadow);
+}
+@utility ds-card-hover {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 320ms var(--ds-ease),
+    box-shadow 320ms var(--ds-ease),
+    border-color 320ms var(--ds-ease);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      transparent 35%,
+      hsl(0 0% 100% / 0.55) 50%,
+      transparent 65%
+    );
+    transform: translateX(-120%);
+    transition: transform 700ms var(--ds-ease);
+  }
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ds-card-shadow-hover);
+    border-color: hsl(var(--primary) / 0.22);
+  }
+  &:hover::after {
+    transform: translateX(120%);
+  }
+  &:active {
+    transform: translateY(0) scale(0.985);
+  }
+  & [data-arrow] {
+    transition: transform 320ms var(--ds-ease);
+  }
+  &:hover [data-arrow] {
+    transform: translateX(2px);
+  }
+  & [data-illo] {
+    transition: transform 520ms var(--ds-ease);
+  }
+  &:hover [data-illo] {
+    transform: translateY(-4px) rotate(-2deg) scale(1.03);
+  }
+}
+.dark .ds-card-hover::after {
+  background: linear-gradient(105deg, transparent 35%, hsl(0 0% 100% / 0.07) 50%, transparent 65%);
+}
+@utility ds-grad-pill {
+  position: relative;
+  overflow: hidden;
+  background-image: var(--mox-gradient);
+  color: var(--mox-ink);
+  font-weight: 650;
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.6) inset,
+    0 10px 24px -12px hsl(150 90% 30% / 0.75);
+  transition:
+    transform 160ms var(--ds-ease),
+    box-shadow 240ms var(--ds-ease),
+    filter 240ms var(--ds-ease);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent 30%, hsl(0 0% 100% / 0.6) 50%, transparent 70%);
+    transform: translateX(-130%);
+  }
+  &:hover {
+    filter: saturate(1.12) brightness(1.03);
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.6) inset,
+      0 14px 30px -12px hsl(150 90% 30% / 0.85);
+  }
+  &:hover::after {
+    animation: ds-grad-sheen 900ms var(--ds-ease);
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+  &:disabled,
+  &[aria-disabled="true"] {
+    filter: grayscale(0.6) opacity(0.55);
+    box-shadow: none;
+  }
+}
+@keyframes ds-grad-sheen {
+  to {
+    transform: translateX(130%);
+  }
+}
+@utility ds-grad-bar {
+  background-image: var(--mox-gradient);
+  background-size: 200% 100%;
+  animation: ds-grad-flow 3.5s linear infinite;
+}
+@keyframes ds-grad-flow {
+  to {
+    background-position: -200% 0;
+  }
+}
+@utility ds-grad-text {
+  background-image: var(--mox-gradient-deep);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  .dark & {
+    background-image: var(--mox-gradient);
+  }
+}
+@utility ds-glass {
+  background-color: var(--ds-glass-bg);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+@utility mox-float {
+  animation: mox-float 4.2s ease-in-out infinite;
+}
+@keyframes mox-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes mox-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.32;
+  }
+  50% {
+    transform: scaleX(0.82);
+    opacity: 0.2;
+  }
+}
+@keyframes mox-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(8px);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.06) translateY(-2px);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes mox-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+/* Cards arrive in a short stagger: set --i on each one. */
+@utility ds-rise {
+  animation: ds-rise 560ms var(--ds-ease) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes ds-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-backdrop,
+  .mox-float,
+  .ds-rise {
+    animation: none;
+  }
+  .ds-card-hover::after,
+  .ds-grad-pill::after {
+    display: none;
+  }
+}
+:root[data-chat-motion="reduced"] .ds-backdrop,
+:root[data-chat-motion="reduced"] .mox-float,
+:root[data-chat-motion="reduced"] .ds-rise {
+  animation: none;
+}
+/* A progress bar is a "working" cue, so it keeps flowing (slower). */
+:root[data-chat-motion="reduced"] .ds-grad-bar {
+  animation: ds-grad-flow 7s linear infinite !important;
 }

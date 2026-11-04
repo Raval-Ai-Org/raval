@@ -11,8 +11,10 @@ import { AppTour } from "./AppTour";
 const SIDEBAR: { tour: string; label: string }[] = [
   { tour: "library", label: "Library" },
   { tour: "brain", label: "Brain" },
+  { tour: "inspo", label: "Inspo" },
   { tour: "analytics", label: "Analytics" },
   { tour: "campaigns", label: "Campaigns" },
+  { tour: "communities", label: "Communities" },
   { tour: "visibility", label: "AI Visibility" },
 ];
 

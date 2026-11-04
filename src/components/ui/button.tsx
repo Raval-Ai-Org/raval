@@ -41,11 +41,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // Mellox 2.0: the one primary action is the Mox gradient pill
+        // (ds-grad-pill in styles.css), ink text on lime → green → cyan.
         default: [
-          "bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)]",
-          "[&_[data-slot=cost-chip]]:bg-primary-foreground/15 [&_[data-slot=cost-chip]]:text-primary-foreground",
-          "hover:bg-[color-mix(in_oklab,hsl(var(--primary))_88%,hsl(var(--foreground)))] hover:text-primary-foreground",
-          "hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] active:shadow-none",
+          "ds-grad-pill",
+          "[&_[data-slot=cost-chip]]:bg-black/10 [&_[data-slot=cost-chip]]:text-[var(--mox-ink)]",
         ].join(" "),
         destructive: [
           "bg-destructive text-destructive-foreground shadow-1",

@@ -145,6 +145,8 @@ export type AppEventMap = {
   "open:publish": undefined;
   "open:rename": undefined;
   "open:schedule": undefined;
+  /** The "Start here" checklist (Mellox 2.0), from the top bar or after onboarding. */
+  "open:start-here": undefined;
   /**
    * Settings, optionally on a section. "analytics" and "website" are older
    * names: both open Connectors (on Google Analytics / the website connectors).
@@ -160,6 +162,7 @@ export type AppEventMap = {
           | "assistants"
           | "agents"
           | "memory"
+          | "language"
           | "preferences";
         connector?: string;
       }

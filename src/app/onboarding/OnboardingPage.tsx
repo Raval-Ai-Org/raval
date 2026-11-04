@@ -26,6 +26,10 @@ import {
 } from "@/components/onboarding/ManualBrandStep";
 import { ProductsStep } from "@/components/onboarding/ProductsStep";
 import { ChannelsStep } from "@/components/onboarding/ChannelsStep";
+import { LanguageStep, browserContentLanguage } from "@/components/onboarding/LanguageStep";
+import { withLanguage } from "@/lib/brand-look/languages";
+import { tidyLook } from "@/lib/inspo/look";
+import { VisorTransition, markEntryBloom } from "@/components/brand/mox/VisorTransition";
 import { FirstWinStep } from "@/components/onboarding/FirstWinStep";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { hostOf, normalizeUrl, validUrl } from "@/components/onboarding/url";
@@ -80,6 +84,7 @@ const STEP_WIDTH: Record<Step, string> = {
   goals: "max-w-3xl",
   scan: "max-w-[460px]",
   review: "max-w-6xl",
+  language: "max-w-3xl",
   products: "max-w-5xl",
   channels: "max-w-3xl",
   first: "max-w-5xl",
@@ -126,6 +131,10 @@ function Onboarding() {
   const [result, setResult] = useState<BrandExtractResult | null>(null);
   const [edits, setEdits] = useState<BrandEdits>({});
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
+  // The brand's content language (Mellox 2.0): what Mox writes in. Starts
+  // from the browser's language; saved on the look before products.
+  const [language, setLanguage] = useState("English");
+  useEffect(() => setLanguage(browserContentLanguage()), []);
   const [discoveries, setDiscoveries] = useState<Discoveries>({});
   const [phase, setPhase] = useState(0);
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
@@ -141,7 +150,6 @@ function Onboarding() {
   const [goalWarnings, setGoalWarnings] = useState<string[]>([]);
   const [connected, setConnected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [leaving, setLeaving] = useState(false);
   const scanFor = useRef<string | null>(null);
   const resultFor = useRef<string | null>(null);
   const scanAbort = useRef<AbortController | null>(null);
@@ -466,6 +474,7 @@ function Onboarding() {
     const summary = productsSummary(catalogue.products);
     return {
       ...base,
+      look: tidyLook(withLanguage(base.look ?? {}, language)),
       // The catalogue is what the brand sells; the scan's guess is only a fallback.
       products: summary || base.products,
       status: mode === "site" && scanStatus === "ok" ? "ok" : "idle",
@@ -486,6 +495,14 @@ function Onboarding() {
       });
       return false;
     }
+  };
+
+  const continueFromLanguage = async () => {
+    if (saving) return;
+    setSaving(true);
+    const ok = await saveDna();
+    setSaving(false);
+    if (ok) go("language");
   };
 
   const continueFromReview = async () => {
@@ -575,10 +592,23 @@ function Onboarding() {
     navigate({ to: workspacePath(workspaceId) });
   };
 
+  // Going in plays the VR entry (VisorTransition); the app builds in behind
+  // its flash and, on Home, opens "Start here" once.
+  const [entering, setEntering] = useState<string | null>(null);
   const enterApp = (target = workspacePath(workspace.id)) => {
-    if (leaving) return;
-    setLeaving(true);
-    window.setTimeout(() => navigate({ to: target }), reduce ? 0 : duration.slow * 1000);
+    if (entering) return;
+    setEntering(target);
+  };
+  const finishEntering = () => {
+    if (!entering) return;
+    markEntryBloom();
+    try {
+      if (entering === workspacePath(workspace.id))
+        sessionStorage.setItem("mox:entered", workspace.id);
+    } catch {
+      /* storage unavailable */
+    }
+    navigate({ to: entering });
   };
 
   // ── First posts ──
@@ -648,253 +678,265 @@ function Onboarding() {
     ) : undefined;
 
   return (
-    <motion.div
+    // Mellox 2.0: onboarding sits in the same white window on Mox's backdrop
+    // as the app, with a gradient progress line at the top (Holo's layout).
+    <div
       data-mellox-app
-      className="relative flex min-h-[100dvh] flex-col overflow-x-clip bg-background text-foreground"
-      animate={{ opacity: leaving ? 0 : 1 }}
-      transition={{ duration: duration.slow, ease: ease.accelerate }}
+      className="ds-backdrop relative flex min-h-[100dvh] flex-col lg:p-[var(--ds-frame-inset)]"
     >
-      <AmbientCanvas />
-      <header className="relative z-10 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border/70 px-4 sm:px-6">
-        <span className="sm:hidden">
-          <Logo markOnly height={28} />
-        </span>
-        <span className="hidden sm:block">
-          <Logo height={30} />
-        </span>
-        <StepIndicator mode={mode} step={step} />
-        <div className="justify-self-end">
-          {step !== "done" && step !== "channels" && step !== "first" && (
-            <button
-              type="button"
-              onClick={() => void skip()}
-              disabled={saving}
-              className="inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> Saving…
-                </>
-              ) : (
-                "Skip for now"
-              )}
-            </button>
-          )}
-        </div>
-      </header>
+      <div className="ds-frame relative flex min-h-[calc(100dvh-2*var(--ds-frame-inset))] flex-1 flex-col overflow-x-clip text-foreground max-lg:min-h-[100dvh] max-lg:rounded-none">
+        <div aria-hidden className="ds-aurora pointer-events-none absolute inset-0" />
+        <AmbientCanvas />
+        <header className="relative z-10 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6">
+          <span className="sm:hidden">
+            <Logo markOnly height={28} />
+          </span>
+          <span className="hidden sm:block">
+            <Logo height={30} />
+          </span>
+          <StepIndicator mode={mode} step={step} />
+          <div className="justify-self-end">
+            {step !== "done" && step !== "channels" && step !== "first" && (
+              <button
+                type="button"
+                onClick={() => void skip()}
+                disabled={saving}
+                className="inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> Saving…
+                  </>
+                ) : (
+                  "Skip for now"
+                )}
+              </button>
+            )}
+          </div>
+        </header>
 
-      <main
-        className={`relative z-10 flex flex-1 justify-center px-4 py-8 sm:px-6 sm:py-12 ${centered ? "items-center" : "items-start"}`}
-      >
-        {/* One child: the global `main > * + *` rhythm would offset the entering step. */}
-        <div className="relative flex w-full justify-center">
-          <LayoutGroup>
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.div key={step} {...stepMotion} className={`w-full ${STEP_WIDTH[step]}`}>
-                {step === "website" && (
-                  <UrlStep
-                    value={websiteUrl}
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    onChange={setWebsiteUrl}
-                    onSubmit={() => {
-                      setMode("site");
-                      setStep("goals");
-                      void runScan(websiteUrl);
-                    }}
-                    onNoWebsite={() => {
-                      scanAbort.current?.abort();
-                      setWebsiteUrl("");
-                      setMode("manual");
-                      setStep("manual");
-                    }}
-                  />
-                )}
-                {step === "manual" && (
-                  <ManualBrandStep
-                    value={manual}
-                    headingRef={headingRef}
-                    onChange={(patch) => setManual((m) => ({ ...m, ...patch }))}
-                    onBack={() => {
-                      setMode("site");
-                      setStep("website");
-                    }}
-                    onContinue={() => go("manual")}
-                  />
-                )}
-                {step === "goals" && (
-                  <GoalStep
-                    draft={goalDraft}
-                    saving={goalSaving}
-                    error={goalError}
-                    warnings={goalWarnings}
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    scanStrip={scanStrip}
-                    onChange={(patch) => {
-                      setGoalError(null);
-                      setGoalDraft((d) => ({ ...d, ...patch }));
-                    }}
-                    onBack={() => back("goals")}
-                    onContinue={() => void submitGoals()}
-                  />
-                )}
-                {step === "scan" && (
-                  <ScanStage
-                    url={websiteUrl}
-                    status={scanStatus}
-                    progress={progress}
-                    phase={phase}
-                    discoveries={discoveries}
-                    competitors={competitors}
-                    competitorResearchStatus={competitorResearchStatus}
-                    error={scanError}
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    onRetry={() => void runScan(websiteUrl)}
-                    onEdit={() => setStep("website")}
-                    onSkip={() => {
-                      // No usable scan: carry on by hand from the brand questions.
-                      scanAbort.current?.abort();
-                      setMode("manual");
-                      setStep("manual");
-                    }}
-                  />
-                )}
-                {step === "review" && (
-                  <BrandReveal
-                    brand={brand}
-                    competitors={competitors}
-                    competitorResearchStatus={competitorResearchStatus}
-                    url={websiteUrl}
-                    saving={saving}
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    onChange={(patch) => setEdits((current) => ({ ...current, ...patch }))}
-                    onContinue={() => void continueFromReview()}
-                    onRescan={rescan}
-                    onChangeUrl={() => setStep("website")}
-                  />
-                )}
-                {step === "products" && (
-                  <ProductsStep
-                    brandName={brandName}
-                    siteHost={mode === "site" && websiteUrl ? hostOf(websiteUrl) : null}
-                    scanning={mode === "site" && scanStatus === "loading"}
-                    incoming={catalogue.incoming}
-                    failed={catalogue.failed}
-                    products={catalogue.products}
-                    loading={catalogue.loading}
-                    busy={catalogue.busy}
-                    lowResolution={catalogue.lowResolution}
-                    adding={catalogue.adding}
-                    error={catalogue.error}
-                    blockedReason={
-                      saving
-                        ? "Saving…"
-                        : !catalogue.products.length && catalogue.incoming.length
-                          ? "Adding what we found on your site…"
-                          : blockedReason("products", flow)
-                    }
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    onRetry={catalogue.retryFailed}
-                    onRemoveFound={() => void catalogue.removeFound()}
-                    onAdd={(d) => void catalogue.add(d)}
-                    onSave={(id, d) => void catalogue.save(id, d)}
-                    onArchive={(id) => void catalogue.archive(id)}
-                    onUpload={(id, file) => void catalogue.upload(id, file)}
-                    onPrimary={(id, assetId) => void catalogue.setPrimary(id, assetId)}
-                    onBack={() => back("products")}
-                    onContinue={() => void finishSetup()}
-                  />
-                )}
-                {step === "channels" && (
-                  <ChannelsStep
-                    connectedCount={connected.length}
-                    headingRef={headingRef}
-                    onBack={() => back("channels")}
-                    onContinue={() => go("channels")}
-                  >
-                    <SocialAccountsSection variant="onboarding" onConnectedChange={setConnected} />
-                  </ChannelsStep>
-                )}
-                {step === "first" && (
-                  <FirstWinStep
-                    brandName={brandName}
-                    goalLine={goals ? goalLine(goals) : null}
-                    briefs={briefs}
-                    products={catalogue.products}
-                    productId={firstProduct?.id ?? null}
-                    platform={platform}
-                    platforms={platformChoices}
-                    priceLabel={firstPosts.priceLabel}
-                    posts={firstPosts.posts}
-                    billing={firstPosts.billing}
-                    reduce={reduce}
-                    headingRef={headingRef}
-                    onProduct={setFirstProductId}
-                    onPlatform={setPlatformPick}
-                    onStart={() => void firstPosts.start()}
-                    onRetry={(n) => void firstPosts.retry(n)}
-                    onBack={() => back("first")}
-                    onLibrary={() => enterApp(workspacePath(workspace.id, "", { library: 1 }))}
-                    onEnter={() => enterApp()}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
-          </LayoutGroup>
-        </div>
-      </main>
-    </motion.div>
+        <main
+          className={`relative z-10 flex flex-1 justify-center px-4 py-8 sm:px-6 sm:py-12 ${centered ? "items-center" : "items-start"}`}
+        >
+          {/* One child: the global `main > * + *` rhythm would offset the entering step. */}
+          <div className="relative flex w-full justify-center">
+            <LayoutGroup>
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.div key={step} {...stepMotion} className={`w-full ${STEP_WIDTH[step]}`}>
+                  {step === "website" && (
+                    <UrlStep
+                      value={websiteUrl}
+                      reduce={reduce}
+                      headingRef={headingRef}
+                      onChange={setWebsiteUrl}
+                      onSubmit={() => {
+                        setMode("site");
+                        setStep("goals");
+                        void runScan(websiteUrl);
+                      }}
+                      onNoWebsite={() => {
+                        scanAbort.current?.abort();
+                        setWebsiteUrl("");
+                        setMode("manual");
+                        setStep("manual");
+                      }}
+                    />
+                  )}
+                  {step === "manual" && (
+                    <ManualBrandStep
+                      value={manual}
+                      headingRef={headingRef}
+                      onChange={(patch) => setManual((m) => ({ ...m, ...patch }))}
+                      onBack={() => {
+                        setMode("site");
+                        setStep("website");
+                      }}
+                      onContinue={() => go("manual")}
+                    />
+                  )}
+                  {step === "goals" && (
+                    <GoalStep
+                      draft={goalDraft}
+                      saving={goalSaving}
+                      error={goalError}
+                      warnings={goalWarnings}
+                      reduce={reduce}
+                      headingRef={headingRef}
+                      scanStrip={scanStrip}
+                      onChange={(patch) => {
+                        setGoalError(null);
+                        setGoalDraft((d) => ({ ...d, ...patch }));
+                      }}
+                      onBack={() => back("goals")}
+                      onContinue={() => void submitGoals()}
+                    />
+                  )}
+                  {step === "scan" && (
+                    <ScanStage
+                      url={websiteUrl}
+                      status={scanStatus}
+                      progress={progress}
+                      phase={phase}
+                      discoveries={discoveries}
+                      competitors={competitors}
+                      competitorResearchStatus={competitorResearchStatus}
+                      error={scanError}
+                      reduce={reduce}
+                      headingRef={headingRef}
+                      onRetry={() => void runScan(websiteUrl)}
+                      onEdit={() => setStep("website")}
+                      onSkip={() => {
+                        // No usable scan: carry on by hand from the brand questions.
+                        scanAbort.current?.abort();
+                        setMode("manual");
+                        setStep("manual");
+                      }}
+                    />
+                  )}
+                  {step === "review" && (
+                    <BrandReveal
+                      brand={brand}
+                      competitors={competitors}
+                      competitorResearchStatus={competitorResearchStatus}
+                      url={websiteUrl}
+                      saving={saving}
+                      reduce={reduce}
+                      headingRef={headingRef}
+                      onChange={(patch) => setEdits((current) => ({ ...current, ...patch }))}
+                      onContinue={() => void continueFromReview()}
+                      onRescan={rescan}
+                      onChangeUrl={() => setStep("website")}
+                    />
+                  )}
+                  {step === "language" && (
+                    <LanguageStep
+                      value={language}
+                      saving={saving}
+                      headingRef={headingRef}
+                      onChange={setLanguage}
+                      onBack={() => back("language")}
+                      onContinue={() => void continueFromLanguage()}
+                    />
+                  )}
+                  {step === "products" && (
+                    <ProductsStep
+                      brandName={brandName}
+                      siteHost={mode === "site" && websiteUrl ? hostOf(websiteUrl) : null}
+                      scanning={mode === "site" && scanStatus === "loading"}
+                      incoming={catalogue.incoming}
+                      failed={catalogue.failed}
+                      products={catalogue.products}
+                      loading={catalogue.loading}
+                      busy={catalogue.busy}
+                      lowResolution={catalogue.lowResolution}
+                      adding={catalogue.adding}
+                      error={catalogue.error}
+                      blockedReason={
+                        saving
+                          ? "Saving…"
+                          : !catalogue.products.length && catalogue.incoming.length
+                            ? "Adding what we found on your site…"
+                            : blockedReason("products", flow)
+                      }
+                      reduce={reduce}
+                      headingRef={headingRef}
+                      onRetry={catalogue.retryFailed}
+                      onRemoveFound={() => void catalogue.removeFound()}
+                      onAdd={(d) => void catalogue.add(d)}
+                      onSave={(id, d) => void catalogue.save(id, d)}
+                      onArchive={(id) => void catalogue.archive(id)}
+                      onUpload={(id, file) => void catalogue.upload(id, file)}
+                      onPrimary={(id, assetId) => void catalogue.setPrimary(id, assetId)}
+                      onBack={() => back("products")}
+                      onContinue={() => void finishSetup()}
+                    />
+                  )}
+                  {step === "channels" && (
+                    <ChannelsStep
+                      connectedCount={connected.length}
+                      headingRef={headingRef}
+                      onBack={() => back("channels")}
+                      onContinue={() => go("channels")}
+                    >
+                      <SocialAccountsSection
+                        variant="onboarding"
+                        onConnectedChange={setConnected}
+                      />
+                    </ChannelsStep>
+                  )}
+                  {step === "first" && (
+                    <FirstWinStep
+                      brandName={brandName}
+                      goalLine={goals ? goalLine(goals) : null}
+                      briefs={briefs}
+                      products={catalogue.products}
+                      productId={firstProduct?.id ?? null}
+                      platform={platform}
+                      platforms={platformChoices}
+                      priceLabel={firstPosts.priceLabel}
+                      posts={firstPosts.posts}
+                      billing={firstPosts.billing}
+                      reduce={reduce}
+                      headingRef={headingRef}
+                      onProduct={setFirstProductId}
+                      onPlatform={setPlatformPick}
+                      onStart={() => void firstPosts.start()}
+                      onRetry={(n) => void firstPosts.retry(n)}
+                      onBack={() => back("first")}
+                      onLibrary={() => enterApp(workspacePath(workspace.id, "", { library: 1 }))}
+                      onEnter={() => enterApp()}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </LayoutGroup>
+          </div>
+        </main>
+      </div>
+      {entering && <VisorTransition reduced={reduce} onCovered={finishEntering} />}
+    </div>
   );
 }
 
 function StepIndicator({ mode, step }: { mode: FlowMode; step: Step }) {
   const steps = indicatorSteps(mode);
   const current = indicatorIndex(mode, step);
+  // Holo's progress line: one gradient bar, with the step name under it.
+  const value = Math.min(1, (current + 0.5) / steps.length);
   return (
-    <ol
-      aria-label="Setup progress"
-      className="grid w-[168px] sm:w-[420px]"
-      style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
-    >
-      {steps.map((item, index) => {
-        const state = index < current ? "done" : index === current ? "active" : "pending";
-        return (
-          <li
-            key={item.id}
-            aria-current={state === "active" ? "step" : undefined}
-            className="relative flex min-w-0 flex-col items-center gap-1"
-          >
-            {index > 0 && (
-              <span
-                aria-hidden
-                className={`absolute right-1/2 top-[13px] h-px w-full transition-colors duration-500 ${index <= current ? "bg-primary/50" : "bg-border"}`}
-              />
-            )}
-            <span
-              className={`relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[11px] font-semibold leading-none tabular-nums transition-colors duration-300 ${
-                state === "done"
-                  ? "border-primary/30 bg-primary/10 text-primary"
-                  : state === "active"
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm ring-4 ring-primary/10"
-                    : "border-border bg-background text-muted-foreground"
-              }`}
-            >
-              {index + 1}
-            </span>
-            <span
-              className={`hidden whitespace-nowrap text-[11px] font-medium leading-none sm:block ${state === "pending" ? "text-muted-foreground" : "text-foreground"}`}
-            >
-              {item.label}
-            </span>
-            <span className="sr-only sm:hidden">{item.label}</span>
-            {state === "done" && <span className="sr-only">(complete)</span>}
-          </li>
-        );
-      })}
+    <div className="flex w-[168px] flex-col items-center gap-1.5 sm:w-[300px]">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--ds-well-bg)]">
+        <motion.div
+          className="ds-grad-bar h-full rounded-full"
+          initial={false}
+          animate={{ width: `${value * 100}%` }}
+          transition={{ type: "spring", stiffness: 140, damping: 24 }}
+        />
+      </div>
+      <span className="text-[11px] font-semibold text-muted-foreground">
+        {steps[current] ? `${current + 1} of ${steps.length} · ${steps[current].label}` : "Done"}
+      </span>
+      <StepList steps={steps} current={current} />
+    </div>
+  );
+}
+
+/** The steps for screen readers; the bar above is what people see. */
+function StepList({
+  steps,
+  current,
+}: {
+  steps: ReturnType<typeof indicatorSteps>;
+  current: number;
+}) {
+  return (
+    <ol aria-label="Setup progress" className="sr-only">
+      {steps.map((item, index) => (
+        <li key={item.id} aria-current={index === current ? "step" : undefined}>
+          {item.label}
+          {index < current ? " (complete)" : ""}
+        </li>
+      ))}
     </ol>
   );
 }

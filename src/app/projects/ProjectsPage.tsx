@@ -28,9 +28,8 @@ import { normalizeDomain, toWebsiteUrl } from "@/lib/workspace/domain";
 import { onboardingPath, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
 import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
-import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
-import { AURORA, MelloxAurora } from "@/components/brand/MelloxAurora";
-import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
+import { AppFrame } from "@/components/app/shell/AppFrame";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -266,242 +265,243 @@ function ProjectsPage() {
   }
 
   return (
-    <div
-      data-mellox-app
-      className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background text-foreground"
-    >
-      {sessionReady && <BillingPanel />}
+    <AppFrame>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground">
+        {sessionReady && <BillingPanel />}
 
-      <ProjectsStage>
-        {/* Top bar */}
-        <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-4 sm:px-5">
-          <Link
-            to={WORKSPACES_HOME}
-            aria-label="Mellox AI home"
-            className="flex h-9 shrink-0 items-center"
-          >
-            <Logo height={30} />
-          </Link>
-          <div className="flex items-center gap-2 sm:gap-3">
-            {sessionReady && <WalletPill />}
-            <AgencyHqPill
-              waiting={workspaces.reduce(
-                (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
-                0,
-              )}
-            />
-            <AccountMenu
-              email={userEmail}
-              name={userName}
-              avatarUrl={userAvatar}
-              onSignOut={signOut}
-            />
-          </div>
-        </header>
-
-        {/* Hero */}
-        <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
-          <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-            className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]"
-          >
-            {loading ? (
-              <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
-            ) : workspaceListFailed ? (
-              "Your workspaces couldn't load"
-            ) : workspaces.length === 0 ? (
-              copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
-            ) : (
-              copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
-            )}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15, duration: 0.4 }}
-            className="mt-2 text-[14px] text-muted-foreground"
-          >
-            {workspaceListFailed
-              ? workspaceRouteMissing
-                ? "Please try again in a moment."
-                : "Please try again."
-              : workspaces.length === 0
-                ? copy.firstSubhead
-                : copy.returningSubhead}
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto mt-8 w-full max-w-xl"
-          >
-            {workspaceListFailed ? (
-              <ErrorState
-                title="Couldn't load your workspaces"
-                description={
-                  workspaceRouteMissing
-                    ? "Refresh the page and try again."
-                    : "Try again before adding another brand."
-                }
-                detail={
-                  workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null
-                }
-                onRetry={() => void workspacesQuery.refetch()}
+        <ProjectsStage>
+          {/* Top bar */}
+          <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-4 sm:px-5">
+            <Link
+              to={WORKSPACES_HOME}
+              aria-label="Mellox AI home"
+              className="flex h-9 shrink-0 items-center"
+            >
+              <Logo height={30} />
+            </Link>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {sessionReady && <WalletPill />}
+              <AgencyHqPill
+                waiting={workspaces.reduce(
+                  (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
+                  0,
+                )}
               />
-            ) : (
-              <PasteLinkBar
-                existing={workspaces}
-                initialUrl={pendingAddUrl}
-                onCreated={afterCreate}
-                onOpenAdvanced={() => setDialogOpen(true)}
-                onManage={showBrandList}
+              <AccountMenu
+                email={userEmail}
+                name={userName}
+                avatarUrl={userAvatar}
+                onSignOut={signOut}
               />
-            )}
-            <NewProjectDialog
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-              copy={copy}
-              existing={workspaces}
-              onCreated={afterCreate}
-              onManage={() => {
-                setDialogOpen(false);
-                showBrandList();
-              }}
-            />
-          </motion.div>
-        </section>
-      </ProjectsStage>
-
-      {/* Projects panel — only shown when at least one client exists */}
-      {!loading && workspaces.length > 0 && (
-        <section
-          id="your-brands"
-          className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-4 px-5 pb-12 pt-8"
-        >
-          <div>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[12px] font-medium text-foreground">
-                  {copy.sectionTitle}
-                </span>
-                <span className="text-[12px] text-muted-foreground">
-                  {workspaces.length} {workspaces.length === 1 ? copy.noun : copy.nounPlural}
-                </span>
-                <BrandPlaces />
-                <select
-                  aria-label="Filter by status"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                  className={PILL_SELECT}
-                >
-                  <option value="all">All</option>
-                  <option value="attention">Needs attention</option>
-                  <option value="setup">Finish setup</option>
-                  <option value="paused">Paused</option>
-                </select>
-              </div>
-
-              <div className="flex w-full items-center gap-2 sm:w-auto">
-                <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-surface-2/80 px-3 ring-1 ring-border/60 focus-within:ring-2 focus-within:ring-ring/55 sm:flex-none">
-                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={copy.searchPlaceholder}
-                    className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground sm:w-56"
-                  />
-                </div>
-                <Button
-                  onClick={() => setDialogOpen(true)}
-                  className="btn-aura h-9 shrink-0 gap-1.5 rounded-full px-3.5 text-[13px]"
-                >
-                  <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New</span>
-                </Button>
-              </div>
             </div>
+          </header>
 
-            {filtered.length === 0 ? (
-              <div className="grid place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2/60 px-6 py-12 text-center">
-                <Search className="h-5 w-5 text-muted-foreground" />
-                <p className="mt-2 text-[13px] text-muted-foreground">
-                  No {copy.nounPlural} match {query ? `"${query}"` : "this filter"}
-                </p>
-                <button
-                  onClick={() => {
-                    setQuery("");
-                    setStatusFilter("all");
-                  }}
-                  className="mt-3 text-[12px] font-medium text-foreground underline-offset-4 hover:underline"
-                >
-                  Clear search
-                </button>
-              </div>
-            ) : (
-              <motion.div
-                layout
-                className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3"
-              >
-                <AnimatePresence initial={false}>
-                  {filtered.map((w, i) => (
-                    <ProjectCard
-                      key={w.id}
-                      workspace={w}
-                      index={i}
-                      lastOpened={w.id === lastOpened}
-                      duplicateOfName={
-                        w.duplicateOf
-                          ? (workspaces.find((x) => x.id === w.duplicateOf)?.name ?? null)
-                          : null
-                      }
-                      onOpen={() => openProject(w)}
-                      onRename={() => setRenameTarget(w)}
-                      onDelete={w.isOwner ? () => setDeleteTarget(w) : undefined}
-                      onStatusChange={(s) => handleStatus(w.id, s)}
-                    />
-                  ))}
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </div>
-        </section>
-      )}
+          {/* Hero */}
+          <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
+            <span className="mox-float mx-auto mb-2 inline-block">
+              <MoxFace mood="happy" size={96} track />
+            </span>
+            <motion.h1
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-2 text-[34px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[44px]"
+            >
+              {loading ? (
+                <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
+              ) : workspaceListFailed ? (
+                "Your workspaces couldn't load"
+              ) : workspaces.length === 0 ? (
+                copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
+              ) : (
+                copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
+              )}
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.15, duration: 0.4 }}
+              className="mt-2 text-[14px] text-muted-foreground"
+            >
+              {workspaceListFailed
+                ? workspaceRouteMissing
+                  ? "Please try again in a moment."
+                  : "Please try again."
+                : workspaces.length === 0
+                  ? copy.firstSubhead
+                  : copy.returningSubhead}
+            </motion.p>
 
-      {loading && (
-        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
-          <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="mx-skel aspect-[16/10] rounded-[var(--ds-radius-tile)]"
-                style={{ ["--mx-skel-delay" as string]: `${i * 0.12}s` }}
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto mt-8 w-full max-w-xl"
+            >
+              {workspaceListFailed ? (
+                <ErrorState
+                  title="Couldn't load your workspaces"
+                  description={
+                    workspaceRouteMissing
+                      ? "Refresh the page and try again."
+                      : "Try again before adding another brand."
+                  }
+                  detail={
+                    workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null
+                  }
+                  onRetry={() => void workspacesQuery.refetch()}
+                />
+              ) : (
+                <PasteLinkBar
+                  existing={workspaces}
+                  initialUrl={pendingAddUrl}
+                  onCreated={afterCreate}
+                  onOpenAdvanced={() => setDialogOpen(true)}
+                  onManage={showBrandList}
+                />
+              )}
+              <NewProjectDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                copy={copy}
+                existing={workspaces}
+                onCreated={afterCreate}
+                onManage={() => {
+                  setDialogOpen(false);
+                  showBrandList();
+                }}
               />
-            ))}
-          </div>
-        </section>
-      )}
+            </motion.div>
+          </section>
+        </ProjectsStage>
 
-      <ProjectsFoot />
+        {/* Projects panel — only shown when at least one client exists */}
+        {!loading && workspaces.length > 0 && (
+          <section
+            id="your-brands"
+            className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-4 px-5 pb-12 pt-8"
+          >
+            <div>
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[12px] font-medium text-foreground">
+                    {copy.sectionTitle}
+                  </span>
+                  <span className="text-[12px] text-muted-foreground">
+                    {workspaces.length} {workspaces.length === 1 ? copy.noun : copy.nounPlural}
+                  </span>
+                  <BrandPlaces />
+                  <select
+                    aria-label="Filter by status"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                    className={PILL_SELECT}
+                  >
+                    <option value="all">All</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="setup">Finish setup</option>
+                    <option value="paused">Paused</option>
+                  </select>
+                </div>
 
-      {/* Rename dialog */}
-      <RenameDialog
-        workspace={renameTarget}
-        onClose={() => setRenameTarget(null)}
-        onSave={handleRename}
-      />
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-surface-2/80 px-3 ring-1 ring-border/60 focus-within:ring-2 focus-within:ring-ring/55 sm:flex-none">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={copy.searchPlaceholder}
+                      className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground sm:w-56"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => setDialogOpen(true)}
+                    className="btn-aura h-9 shrink-0 gap-1.5 rounded-full px-3.5 text-[13px]"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New</span>
+                  </Button>
+                </div>
+              </div>
 
-      {/* Delete confirmation — typed CONFIRM, server-side, owner only */}
-      <DeleteWorkspaceDialog
-        workspace={deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        onDeleted={(id) => {
-          if (lastOpened === id) setLastOpened(null);
-        }}
-      />
-    </div>
+              {filtered.length === 0 ? (
+                <div className="grid place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2/60 px-6 py-12 text-center">
+                  <Search className="h-5 w-5 text-muted-foreground" />
+                  <p className="mt-2 text-[13px] text-muted-foreground">
+                    No {copy.nounPlural} match {query ? `"${query}"` : "this filter"}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setQuery("");
+                      setStatusFilter("all");
+                    }}
+                    className="mt-3 text-[12px] font-medium text-foreground underline-offset-4 hover:underline"
+                  >
+                    Clear search
+                  </button>
+                </div>
+              ) : (
+                <motion.div
+                  layout
+                  className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  <AnimatePresence initial={false}>
+                    {filtered.map((w, i) => (
+                      <ProjectCard
+                        key={w.id}
+                        workspace={w}
+                        index={i}
+                        lastOpened={w.id === lastOpened}
+                        duplicateOfName={
+                          w.duplicateOf
+                            ? (workspaces.find((x) => x.id === w.duplicateOf)?.name ?? null)
+                            : null
+                        }
+                        onOpen={() => openProject(w)}
+                        onRename={() => setRenameTarget(w)}
+                        onDelete={w.isOwner ? () => setDeleteTarget(w) : undefined}
+                        onStatusChange={(s) => handleStatus(w.id, s)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {loading && (
+          <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="mx-skel aspect-[16/10] rounded-[var(--ds-radius-tile)]"
+                  style={{ ["--mx-skel-delay" as string]: `${i * 0.12}s` }}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <ProjectsFoot />
+
+        {/* Rename dialog */}
+        <RenameDialog
+          workspace={renameTarget}
+          onClose={() => setRenameTarget(null)}
+          onSave={handleRename}
+        />
+
+        {/* Delete confirmation — typed CONFIRM, server-side, owner only */}
+        <DeleteWorkspaceDialog
+          workspace={deleteTarget}
+          onOpenChange={(o) => !o && setDeleteTarget(null)}
+          onDeleted={(id) => {
+            if (lastOpened === id) setLastOpened(null);
+          }}
+        />
+      </div>
+    </AppFrame>
   );
 }
 
@@ -1316,25 +1316,11 @@ function RenameDialog({
 }
 
 /**
- * The top of the page: the public site's hero sky behind the top bar, the
- * heading and the website bar. The `dark` class gives everything inside the
- * dark theme's colours, so it reads the same in both app themes.
+ * The top of the page (Mellox 2.0): the top bar, Mox, the heading and the
+ * website bar, on the frame's own white window and aurora.
  */
 export function ProjectsStage({ children }: { children: React.ReactNode }) {
-  const reduce = useReducedMotionSafe();
-  return (
-    <div className="relative z-10 px-2 pt-2 sm:px-3 sm:pt-3">
-      <div
-        className="dark relative isolate overflow-hidden rounded-[28px] text-foreground ring-1 ring-inset ring-white/[0.08]"
-        style={{ backgroundColor: AURORA.sky }}
-      >
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <MelloxAurora reduce={reduce} />
-        </div>
-        {children}
-      </div>
-    </div>
-  );
+  return <div className="relative z-10">{children}</div>;
 }
 
 const FOOT_LINKS = [
@@ -1347,25 +1333,18 @@ const FOOT_LINKS = [
 ] as const;
 
 /**
- * The foot of the page: the public site's aurora and wordmark on a dark panel
- * (dark in both app themes, like the sign-in showcase), then a quiet row of
- * links. Decoration and links only; it starts nothing.
+ * The foot of the page: Mox's gradient with the wordmark rising out of it,
+ * then a quiet row of links. Decoration and links only; it starts nothing.
  */
 export function ProjectsFoot() {
-  const reduce = useReducedMotionSafe();
   return (
     <footer className="relative z-10 mx-auto mt-auto w-full max-w-6xl px-5 pb-6 pt-6">
-      <div
-        className="relative isolate h-[280px] overflow-hidden rounded-[28px] text-white ring-1 ring-inset ring-white/[0.08] sm:h-[320px]"
-        style={{ backgroundColor: AURORA.sky }}
-      >
-        <MelloxAurora reduce={reduce} />
-
+      <div className="ds-backdrop relative isolate h-[260px] overflow-hidden rounded-[26px] text-[var(--mox-ink)] sm:h-[300px]">
         <div className="relative flex flex-col items-center px-6 pt-10 text-center sm:pt-12">
-          <p className="font-display text-[26px] leading-[1.1] tracking-tight sm:text-[34px]">
-            Don&apos;t just rank. <span style={{ color: AURORA.lime }}>Be recommended.</span>
+          <p className="text-[26px] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[34px]">
+            Don&apos;t just rank. Be recommended.
           </p>
-          <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-white/60">
+          <p className="mt-3 max-w-md text-[13.5px] font-medium leading-relaxed text-[var(--mox-ink)]/70">
             Everything your marketing needs, in one workspace.
           </p>
         </div>
@@ -1376,7 +1355,7 @@ export function ProjectsFoot() {
           className="absolute inset-x-0 bottom-0 translate-y-[24%] select-none text-center font-display text-[clamp(72px,17vw,210px)] font-semibold leading-none tracking-[0.12em]"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 62%, transparent 90%)",
+              "linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.2) 62%, transparent 90%)",
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
             color: "transparent",

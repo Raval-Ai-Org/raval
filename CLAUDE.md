@@ -41,6 +41,17 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   is shown by its app icon (`PlatformAppIcon`, `src/components/brand/`), and picked
   from `PlatformLogoGrid` (`studio-ui.tsx`), never as a row of text names. Never restyle the
   public landing page (`src/app/page.tsx`) as part of app UI work.
+- **Mellox 2.0 / Mox** ([ADR-0044](docs/adr/0044-mellox-2-mox.md)): app screens
+  sit in `AppFrame` (white window on Mox's gradient), light by default. Mox is
+  the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
+  Mox's gradient only on the backdrop, the primary pill, progress bars, the
+  visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
+  Home is `HomeBento` above the message box (`/home-lab`); its cards only open
+  existing places via `useOpenCreate`. Chat has its own entry (`chatPath`).
+- **Content language:** what Mox writes in, an English label in
+  `dna.look.writing.language` (`src/lib/brand-look/languages.ts`), chosen in
+  onboarding's Language step and Settings → Language, reaching generators only
+  through `lookTextFor`. The app's own text stays English.
 - **Background work:** no queue service — job rows with leases claimed via
   SKIP LOCKED RPCs, advanced by pg_cron → `/api/public/hooks/*` and `after()`.
 
@@ -255,9 +266,11 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
 [ADR-0035](docs/adr/0035-goals-and-product-catalog.md).
 
 - **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
-  website → goal (asked while the scan runs) → Brand DNA → products → channels
-  → first posts. "I don't have a website" swaps the scan for three questions.
-  New projects always start in onboarding. `/onboarding-lab` renders every new
+  website → goal (asked while the scan runs) → Brand DNA → language → products
+  → channels → first posts. "I don't have a website" swaps the scan for three
+  questions. New projects always start in onboarding. It ends with
+  press-and-hold (`HoldToEnter`) and the visor cinematic (`VisorTransition`),
+  then `StartHereModal` on Home. `/onboarding-lab` renders every new
   step with sample data (`tests/integration/onboarding-lab.spec.ts`).
 - **Goals are the person's numbers** (`workspace_goals`).
   - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the

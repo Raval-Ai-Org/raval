@@ -214,7 +214,7 @@ export const PLACES: readonly Place[] = [
     label: "Settings",
     hint: "Workspace settings",
     group: "Workspace",
-    keywords: ["preferences", "theme"],
+    keywords: ["preferences", "theme", "language"],
     event: "open:settings",
   }),
   place({

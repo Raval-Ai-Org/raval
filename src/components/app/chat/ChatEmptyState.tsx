@@ -12,7 +12,7 @@ import {
   X,
   type LucideIcon,
 } from "@/components/icons";
-import { Logo } from "@/components/brand/Logo";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import {
   buildStarters,
   starterFacts,
@@ -69,9 +69,9 @@ export function ChatGreeting({
         initial={reducedMotion ? false : { scale: 0.6, rotate: -30, opacity: 0 }}
         animate={{ scale: 1, rotate: 0, opacity: 1 }}
         transition={{ ...spring.control, delay: 0.05 }}
-        className="mb-4 grid size-12 place-items-center [@media(max-height:500px)]:hidden"
+        className="mb-4 grid place-items-center [@media(max-height:500px)]:hidden"
       >
-        <Logo height={40} markOnly />
+        <MoxFace mood="happy" size={64} track />
       </motion.span>
       <h2 className="mx-greeting [@media(max-height:500px)]:text-xl">
         <span>

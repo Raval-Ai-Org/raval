@@ -3,9 +3,7 @@
 // The one entry point for making something: pick a category, then a format when
 // there is more than one choice. Standard formats open the Studio composer on
 // the description step; the creator video ad opens its own studio.
-import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
-import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { useEffect, useState } from "react";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import {
@@ -22,9 +20,7 @@ import {
   type LucideIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
-import { rememberStudioType } from "@/hooks/use-studio";
-import { chooseType, openComposer } from "@/lib/studio/session-store";
+import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import {
   STUDIO_FORMATS,
   STUDIO_GROUPS,
@@ -33,6 +29,7 @@ import {
 } from "@/lib/studio/formats";
 import { UGC_ENTRY } from "@/lib/studio/ugc-entry";
 import { TypeGlyph } from "./studio-ui";
+import { useOpenCreate } from "./use-open-create";
 import { UploadCreationFlow } from "./UploadCreationFlow";
 
 const GROUP_ICON: Record<StudioGroup, LucideIcon> = {
@@ -103,30 +100,13 @@ export function CreateLauncher() {
   };
 
   // Video (Studio clip and creator video ads) needs a plan with videos.
-  const billing = useEntitlements();
-  const videoLock =
-    billing.data && !billing.data.features.ugc.allowed
-      ? billing.data.features.ugc.requiredPlan
-      : null;
-  const lockFor = (option: Option) =>
-    option.kind === "ugc" || option.type === "video" ? videoLock : null;
+  const create = useOpenCreate();
+  const choiceOf = (option: Option) => (option.kind === "ugc" ? "ugc" : option.type);
+  const lockFor = (option: Option) => create.lockFor(choiceOf(option));
 
   const pick = (option: Option) => {
-    if (lockFor(option)) {
-      setOpen(false);
-      openFeatureUpgrade("ugc");
-      return;
-    }
-    if (option.kind === "ugc") {
-      setOpen(false);
-      emitAppEvent("open:ugc-studio");
-      return;
-    }
-    rememberStudioType(option.type);
-    const id = openComposer({ type: option.type });
-    if (!id) return; // openComposer already explained why (e.g. no workspace)
-    chooseType(id, option.type);
-    setOpen(false);
+    // A locked pick closes too: the upgrade screen takes its place.
+    if (create.open(choiceOf(option)) || lockFor(option)) setOpen(false);
   };
 
   const enter = (id: StudioGroup) => {

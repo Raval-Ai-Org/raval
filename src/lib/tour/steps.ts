@@ -40,8 +40,8 @@ const STOPS: TourStop[] = [
   {
     id: "chat",
     icon: "chat",
-    title: "Ask Mellox for anything",
-    body: "Type what you need: a post, a plan, an idea. Mellox already knows your brand.",
+    title: "Ask Mox for anything",
+    body: "A post, a plan, an idea. Mox already knows your brand.",
     tip: "Type / to jump to any part of the app.",
     anchors: ["chat"],
     side: "top",
