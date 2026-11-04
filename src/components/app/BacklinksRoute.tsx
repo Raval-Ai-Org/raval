@@ -22,6 +22,7 @@ export default function BacklinksRoute() {
 
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
         // Closing leaves the route rather than hiding a page that is still the

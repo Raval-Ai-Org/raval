@@ -53,13 +53,19 @@ const SAMPLES: WorkspaceSummary[] = [
 export function ProjectsLab() {
   return (
     <AppFrame>
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground">
+      <div
+        className="group/projects relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground"
+        // The bar is clear over the colour wash and only frosts once the page moves.
+        onScroll={(e) =>
+          e.currentTarget.toggleAttribute("data-scrolled", e.currentTarget.scrollTop > 8)
+        }
+      >
         <ProjectsStage>
-          <header className="sticky top-0 z-20 bg-[var(--ds-frame-bg)]/75 backdrop-blur-xl supports-[backdrop-filter]:bg-[var(--ds-frame-bg)]/60 flex h-14 items-center px-5">
+          <header className="sticky top-0 z-20 flex h-16 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 group-data-[scrolled]/projects:border-[var(--ds-card-border)] group-data-[scrolled]/projects:bg-[var(--ds-frame-bg)]/80 group-data-[scrolled]/projects:backdrop-blur-xl items-center px-5">
             <Logo height={30} />
           </header>
 
-          <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
+          <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-6 pt-8 text-center sm:pb-8 sm:pt-10">
             <span className="mox-float mx-auto mb-2 inline-block">
               <MoxFace mood="happy" size={96} track />
             </span>

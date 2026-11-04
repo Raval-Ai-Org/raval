@@ -110,7 +110,7 @@ export function HomeBento({
   }, [start.complete]);
 
   return (
-    <div className="mx-auto w-full max-w-[880px] px-4 pb-6 pt-4 md:px-6 md:pt-8">
+    <div className="mx-auto w-full max-w-[1040px] px-4 pb-6 pt-4 md:px-8 md:pt-8">
       {/* Bento */}
       <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-2 lg:grid-cols-3">
         {!start.complete ? (

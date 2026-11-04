@@ -51,23 +51,19 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
       />
       {!markOnly && (
         <span
-          className="text-foreground leading-none"
+          className="logo-word leading-none"
           style={{
             fontFamily: "var(--font-brand)",
             fontSize: textCss,
-            fontWeight: 400,
+            fontWeight: 600,
             letterSpacing: "0",
           }}
         >
           Mellox
           <span
-            style={{
-              marginLeft: "0.28em",
-              fontWeight: 400,
-              // Tie to --primary so both themes stay WCAG-AA against their surface.
-              color: "hsl(var(--primary))",
-              letterSpacing: "0",
-            }}
+            // Mox green: deep enough to read on white, bright on dark (.logo-ai).
+            className="logo-ai"
+            style={{ marginLeft: "0.28em", fontWeight: 700, letterSpacing: "0" }}
           >
             AI
           </span>

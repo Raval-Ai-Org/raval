@@ -23,6 +23,7 @@ function Inner() {
   const workspaceId = useOptionalWorkspaceId();
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");

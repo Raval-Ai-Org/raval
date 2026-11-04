@@ -42,6 +42,7 @@ function Inner() {
   const tab = readTab(params);
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");

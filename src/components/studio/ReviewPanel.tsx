@@ -1181,9 +1181,9 @@ export function ReviewPanel({
     // action pinned. Desktop: canvas and inspector scroll independently.
     <div className="flex h-full min-h-0 flex-col overflow-y-auto @5xl/composer:grid @5xl/composer:grid-cols-[minmax(0,1fr)_380px] @5xl/composer:grid-rows-[minmax(0,1fr)] @5xl/composer:overflow-hidden">
       {/* ── Canvas ── */}
-      <div className="relative flex shrink-0 flex-col [scrollbar-width:thin] @5xl/composer:min-h-0 @5xl/composer:overflow-y-auto">
+      <div className="relative flex shrink-0 flex-col [scrollbar-width:thin] @5xl/composer:min-h-0 @5xl/composer:overflow-y-auto @5xl/composer:pt-16">
         {/* Floating toolbar */}
-        <div className="pointer-events-none sticky top-0 z-20 flex flex-wrap items-center gap-2 px-3 pb-2 pt-3 @3xl/composer:px-5 @3xl/composer:pt-4">
+        <div className="pointer-events-none sticky top-0 z-20 flex flex-wrap items-center gap-2 px-3 pb-2 pt-3 @5xl/composer:top-16 @3xl/composer:px-5 @3xl/composer:pt-4">
           {multi ? (
             <div
               role="tablist"

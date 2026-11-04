@@ -53,6 +53,13 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
   Mox's gradient only on the canvas wash, the primary pill, progress bars, the
   visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
+  Generate closes Studio: the piece is made on the server and `GeneratingPanel`
+  (the corner list, phones too) follows it and opens it. Back is always one
+  step out. On desktop the top bar sits on the canvas; route windows (Brain,
+  Inspo…) pass `routed` to `AppModalShell` so a sidebar press goes straight
+  to the place pressed.
+  Home's message box is `ChatComposer slim`: a one-line pill with its tools
+  beside it, growing once a person writes; it sits under the cards, never on them.
   Home is `HomeBento` above the message box (`/home-lab`); its cards only open
   existing places via `useOpenCreate`. Chat has its own entry (`chatPath`).
 - **Content language:** what Mox writes in, an English label in

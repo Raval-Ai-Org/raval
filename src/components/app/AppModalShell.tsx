@@ -90,6 +90,7 @@ export function AppModalShell({
   hideClose = false,
   disableClose = false,
   allowMaximize,
+  routed = false,
   contentClassName,
   bodyClassName,
   children,
@@ -107,6 +108,12 @@ export function AppModalShell({
   disableClose?: boolean;
   /** Show the maximize / restore control (default on). */
   allowMaximize?: boolean;
+  /**
+   * The window is a page of its own (/brain, /inspo…). A sidebar press then
+   * just navigates and the route unmounts it; closing it here too would send
+   * the person Home on top of where they asked to go.
+   */
+  routed?: boolean;
   contentClassName?: string;
   bodyClassName?: string;
   children: ReactNode;
@@ -179,11 +186,11 @@ export function AppModalShell({
                 }
               }}
               onPointerDownOutside={(e) => {
-                if (disableClose) e.preventDefault();
+                if (disableClose || (inCanvas && routed)) e.preventDefault();
                 else if (inCanvas) closeOnlyFromSidebar(e);
               }}
               onInteractOutside={(e) => {
-                if (disableClose) e.preventDefault();
+                if (disableClose || (inCanvas && routed)) e.preventDefault();
                 else if (inCanvas) closeOnlyFromSidebar(e);
               }}
             >

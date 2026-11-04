@@ -19,12 +19,14 @@ import { toast } from "@/lib/toast";
 import { startHere } from "@/lib/home/start-here";
 import { EMPTY_PULSE, type WorkspacePulse } from "@/lib/pulse/pulse";
 import { HomeBento } from "./HomeBento";
+import { ChatComposer, CHAT_MODELS } from "@/components/app/chat/ChatComposer";
 import { StartHereList } from "./StartHere";
 import { GeneratingPanelView } from "@/components/studio/GeneratingPanel";
 
 export function HomeLab({ scene }: { scene?: string }) {
   const [active, setActive] = useState("home");
   const [language, setLanguage] = useState("English");
+  const [draft, setDraft] = useState("");
   const done = scene === "done";
   const start = {
     ...startHere({
@@ -154,9 +156,15 @@ export function HomeLab({ scene }: { scene?: string }) {
             <GeneratingPanelView
               className="absolute right-4 top-4 z-20"
               rows={[
-                { id: "a", type: "carousel", state: "working" },
-                { id: "b", type: "video", state: "done" },
-                { id: "c", type: "image", state: "done" },
+                {
+                  id: "a",
+                  type: "carousel",
+                  state: "working",
+                  title: "5 cold brew mistakes",
+                  step: "Writing the slides",
+                },
+                { id: "b", type: "video", state: "done", title: "Harvest morning in Huila" },
+                { id: "c", type: "image", state: "done", title: "New single origin is here" },
                 { id: "d", type: "ad", state: "failed" },
               ]}
               onOpen={() => undefined}
@@ -184,10 +192,22 @@ export function HomeLab({ scene }: { scene?: string }) {
                 }
               />
             </div>
-            <div className="mx-auto w-full max-w-[640px] px-6 pb-4">
-              <div className="ds-card flex h-[48px] items-center rounded-full px-5 text-[14px] text-muted-foreground">
-                Ask Mox anything…
-              </div>
+            <div className="mx-auto w-full max-w-[760px] shrink-0 px-3 pb-3.5 pt-2 md:px-6">
+              <ChatComposer
+                slim
+                value={draft}
+                onChange={setDraft}
+                onSend={() => setDraft("")}
+                onStop={() => undefined}
+                onAddFiles={() => undefined}
+                onRemoveAttachment={() => undefined}
+                attachments={[]}
+                streaming={false}
+                busy={false}
+                modelId={CHAT_MODELS[0].id}
+                onModelChange={() => undefined}
+                placeholder="Ask Mox anything…"
+              />
             </div>
           </main>
         </AppCanvas>

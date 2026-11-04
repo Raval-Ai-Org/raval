@@ -49,6 +49,8 @@ type Props = {
   onModelChange: (id: string) => void;
   placeholder: string;
   hero?: boolean;
+  /** One line with the tools beside it; grows once a person writes (Home's dock). */
+  slim?: boolean;
   /** Extra control next to "Add files" (the Autopilot switch). */
   toolbarSlot?: React.ReactNode;
   /** Shown in place of the text box and its toolbar (Autopilot, while it is on). */
@@ -74,6 +76,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     onModelChange,
     placeholder,
     hero,
+    slim,
     toolbarSlot,
     cover,
     autopilot,
@@ -99,6 +102,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
   const shellRef = useRef<HTMLDivElement>(null);
+  // Slim: one line with the tools beside it until a person starts writing.
+  const [writing, setWriting] = useState(false);
+  const isSlim = Boolean(slim) && !covered && !writing && !value && attachments.length === 0;
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
@@ -110,7 +116,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     const max = hero ? 260 : 220;
     ta.style.height = `${Math.min(ta.scrollHeight, max)}px`;
     ta.style.overflowY = ta.scrollHeight > max ? "auto" : "hidden";
-  }, [value, hero, covered]);
+  }, [value, hero, covered, isSlim]);
 
   const model = CHAT_MODELS.find((m) => m.id === modelId) ?? CHAT_MODELS[0];
   const billing = useEntitlements();
@@ -125,6 +131,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
       ref={shellRef}
       data-tour="chat"
       className={cn("mx-composer group/composer", hero && "mx-composer--hero")}
+      data-slim={isSlim ? "" : undefined}
+      onBlur={(e) => {
+        // Leaving the box entirely folds it back; moving to its own tools doesn't.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setWriting(false);
+      }}
       data-autopilot={autopilot && autopilot !== "off" ? autopilot : undefined}
       data-covered={covered ? "" : undefined}
       onDragEnter={(e) => {
@@ -199,6 +210,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
 
           <textarea
             ref={textareaRef}
+            onFocus={() => setWriting(true)}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
@@ -298,7 +310,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
             </ul>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap sm:group-data-[slim]/composer:shrink-0 sm:group-data-[slim]/composer:pb-0 sm:group-data-[slim]/composer:pl-0 sm:group-data-[slim]/composer:pr-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -426,7 +438,7 @@ function ComposerBody({ children }: { children: React.ReactNode }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: duration.base }}
-      className="flex flex-col"
+      className="flex flex-col sm:group-data-[slim]/composer:flex-row sm:group-data-[slim]/composer:items-center"
     >
       {children}
     </motion.div>

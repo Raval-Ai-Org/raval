@@ -20,7 +20,6 @@ import {
   ThumbsDown,
   Video as VideoIcon,
   Wand2,
-  X,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
@@ -56,7 +55,7 @@ import {
 import { openComposer, openJob } from "@/lib/studio/session-store";
 import type { Reaction, TasteView } from "@/lib/taste/contracts";
 import { LibraryTile, type TileAction } from "./library/LibraryTile";
-import { Masonry, PILL_SELECT, PILL_TRACK, PillTabs, PinGridSkeleton, SearchPill } from "./pins";
+import { Masonry, PILL_SELECT, PILL_TRACK, PinGridSkeleton, SearchPill } from "./pins";
 import { TasteStrip } from "./library/TasteStrip";
 import { useLibraryTaste, type ReactTarget } from "./library/useLibraryTaste";
 
@@ -105,6 +104,8 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
 ];
 
 const SELECT = PILL_SELECT;
+const BACK_PILL =
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55";
 
 const SEEN_KEY = "library:last-seen";
 
@@ -628,28 +629,23 @@ export function LibraryPage({
     selected && taste.available ? (taste.reactions[selected.subject] ?? null) : undefined;
 
   return (
-    <div className="@container/library flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <div className="@container/library flex h-full min-h-0 flex-col overflow-hidden text-foreground">
       {/* ── Header ── */}
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl @3xl/library:px-5">
-        {/* Back only when drilled into an item; the X closes the window. */}
-        {selected ? (
+      <header className="flex h-16 shrink-0 items-center gap-2 px-3 @3xl/library:px-5">
+        {/* Holo: one Back pill. In an item it returns to the boards; otherwise it leaves. */}
+        {selected || onClose ? (
           <button
             type="button"
-            onClick={() => setSelected(null)}
-            aria-label="Back to library"
-            title="Back to library"
-            className="grid size-9 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+            onClick={() => (selected ? setSelected(null) : onClose?.())}
+            aria-label={selected ? "Back to library" : "Close library"}
+            title={selected ? "Back to library" : "Back"}
+            className={BACK_PILL}
           >
             <ArrowLeft className="size-4" />
+            Back
           </button>
         ) : null}
-        <span
-          aria-hidden
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
-        >
-          <LayoutGrid className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
+        <div className={cn("min-w-0 flex-1", !selected && "[&>*]:sr-only")}>
           {selected ? (
             <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <button
@@ -696,17 +692,6 @@ export function LibraryPage({
           <Wand2 />
           Create
         </Button>
-        {onClose ? (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close library"
-            title="Close (Esc)"
-            className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
-          >
-            <X className="size-4" />
-          </button>
-        ) : null}
       </header>
 
       {selected ? (
@@ -735,29 +720,62 @@ export function LibraryPage({
       ) : (
         <>
           {/* ── Toolbar ── */}
-          <div className="shrink-0 border-b border-border/50 px-3 py-3 @3xl/library:px-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <PillTabs
-                label="Library filter"
-                layoutId="library-tab"
-                value={tab}
-                onChange={setTab}
-                tabs={tabs.map((t) => ({
-                  id: t.id,
-                  label: t.label,
-                  count: loading ? null : t.count,
-                  icon:
-                    t.id === "loved" ? (
-                      <Heart
-                        className={cn(
-                          "size-3.5",
-                          tab === "loved" ? "fill-primary text-primary" : "text-current",
-                        )}
-                      />
-                    ) : undefined,
-                }))}
-              />
-
+          <div className="mx-auto w-full max-w-[1280px] shrink-0 px-3 pb-3 pt-1 @3xl/library:px-8">
+            <h2 className="text-[24px] font-bold tracking-[-0.03em]">Library</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              {loading ? "Loading…" : summary}
+            </p>
+            {/* Holo's boards: one card chip per shelf. */}
+            <div
+              role="tablist"
+              aria-label="Library filter"
+              className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"
+            >
+              {tabs.map((t) => {
+                const on = tab === t.id;
+                const Icon =
+                  t.id === "loved"
+                    ? Heart
+                    : t.id === "posts"
+                      ? FileText
+                      : t.id === "media"
+                        ? ImageIcon
+                        : LayoutGrid;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setTab(t.id)}
+                    className={cn(
+                      "flex h-12 shrink-0 items-center gap-2.5 rounded-2xl border pl-1.5 pr-4 text-left transition duration-200",
+                      on
+                        ? "border-[var(--mox-green)]/50 bg-[var(--ds-card-bg)] shadow-[0_10px_24px_-14px_rgb(46_230_107/0.8)]"
+                        : "border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/70 hover:-translate-y-px hover:bg-[var(--ds-card-bg)]",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-9 place-items-center rounded-xl",
+                        on
+                          ? "ds-grad-pill text-[var(--mox-ink)]"
+                          : "bg-[var(--ds-well-bg)] text-foreground/70",
+                      )}
+                    >
+                      <Icon className={cn("size-4", t.id === "loved" && on && "fill-current")} />
+                    </span>
+                    <span className="leading-tight">
+                      <span className="block text-[13px] font-semibold">{t.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {loading ? "…" : `${t.count} ${t.count === 1 ? "item" : "items"}`}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <SearchPill
                 ref={searchRef}
                 value={query}
@@ -853,7 +871,7 @@ export function LibraryPage({
           </div>
 
           {/* ── Results ── */}
-          <main className="min-h-0 flex-1 overflow-y-auto p-3 @3xl/library:p-5">
+          <main className="mx-auto min-h-0 w-full max-w-[1280px] flex-1 overflow-y-auto px-3 pb-6 pt-1 @3xl/library:px-8">
             {taste.available && taste.summary && !loading && !error ? (
               <div className="mb-3">
                 <TasteStrip

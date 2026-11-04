@@ -309,8 +309,8 @@ export function GenerationProgress({
 
       {/* ── The result taking shape ── */}
       <div className="order-1 p-3 @3xl/composer:order-none @3xl/composer:p-4 @3xl/composer:pl-0">
-        <div className="studio-canvas studio-ring studio-ring-slow relative flex h-[380px] items-center justify-center overflow-hidden rounded-2xl ring-1 ring-border/70 @3xl/composer:h-full @3xl/composer:min-h-[420px]">
-          <div aria-hidden className="studio-aurora" />
+        {/* Holo: the piece takes shape right on the canvas, no frame around it. */}
+        <div className="relative flex h-[380px] items-center justify-center overflow-hidden @3xl/composer:h-full @3xl/composer:min-h-[420px]">
           <div className="relative flex max-h-full w-full origin-center scale-[0.7] items-center justify-center overflow-visible px-6 pb-6 pt-12 @3xl/composer:scale-100">
             <PreviewSkeleton
               session={session}

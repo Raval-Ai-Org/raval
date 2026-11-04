@@ -2,9 +2,11 @@
 
 // Holo's "Generating…" card: floats at the canvas's top right while pieces
 // are being made, one row per piece, each turning green when it is ready.
+// Generate closes Studio, so this list is where a person follows the work:
+// each row names the piece and the step it is on, and any row opens it.
 // Only work seen running in this tab is listed, so a page load never shows
-// old pieces. A ready row opens the piece; the card goes when closed and
-// comes back with the next piece. Presentational half: GeneratingPanelView.
+// old pieces. The card goes when closed and comes back with the next piece.
+// Presentational half: GeneratingPanelView.
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -20,6 +22,10 @@ export type GeneratingRow = {
   id: string;
   type: StudioJob["type"];
   state: "working" | "done" | "failed";
+  /** What the piece is about (the job's title or brief). */
+  title?: string;
+  /** The step it is on while working ("Writing captions"). */
+  step?: string;
 };
 
 export function GeneratingPanelView({
@@ -34,7 +40,7 @@ export function GeneratingPanelView({
   className?: string;
 }) {
   const reduce = useReducedMotion();
-  const working = rows.some((r) => r.state === "working");
+  const working = rows.filter((r) => r.state === "working").length;
   return (
     <motion.section
       aria-label="Generating"
@@ -43,12 +49,22 @@ export function GeneratingPanelView({
       exit={reduce ? { opacity: 0 } : { opacity: 0, x: 24 }}
       transition={{ type: "spring", stiffness: 380, damping: 32 }}
       className={cn(
-        "w-[248px] rounded-[20px] border border-[var(--ds-card-border)] bg-[var(--ds-glass-bg)] p-2 shadow-[var(--ds-pop-shadow)] backdrop-blur-xl",
+        "w-[300px] rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-glass-bg)] p-2 shadow-[var(--ds-pop-shadow)] backdrop-blur-xl",
         className,
       )}
     >
       <div className="flex items-center justify-between px-2 pb-1.5 pt-1">
-        <p className="text-[12.5px] font-bold">{working ? "Generating…" : "All done"}</p>
+        <p className="flex items-center gap-2 text-[13px] font-bold">
+          {working ? (
+            <span aria-hidden className="relative flex size-2">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--mox-green)] opacity-60" />
+              <span className="relative inline-flex size-2 rounded-full bg-[var(--mox-green)]" />
+            </span>
+          ) : (
+            <Check className="size-3.5 text-[var(--mox-green)]" strokeWidth={3} />
+          )}
+          {working ? `Making ${working} ${working === 1 ? "piece" : "pieces"}` : "All done"}
+        </p>
         <button
           type="button"
           onClick={onClose}
@@ -72,21 +88,39 @@ export function GeneratingPanelView({
               >
                 <button
                   type="button"
-                  disabled={r.state === "working"}
                   onClick={() => onOpen(r.id)}
+                  aria-label={`${r.title ?? label}: ${r.state === "working" ? (r.step ?? "in progress") : r.state === "done" ? "ready, open it" : "failed, open it"}`}
                   className={cn(
-                    "group flex h-11 w-full items-center gap-2.5 rounded-[14px] px-2 text-left text-[12.5px] font-semibold transition-colors",
+                    "group relative flex min-h-[52px] w-full items-center gap-2.5 overflow-hidden rounded-[14px] px-2 py-1.5 text-left text-[12.5px] font-semibold transition-colors",
                     r.state === "done"
                       ? "bg-[var(--mox-green)]/12 text-[var(--mox-green-deep)] hover:bg-[var(--mox-green)]/20 dark:text-[var(--mox-lime)]"
                       : r.state === "failed"
                         ? "bg-destructive/10 text-destructive hover:bg-destructive/15"
-                        : "bg-[var(--ds-well-bg)] text-foreground/80",
+                        : "bg-[var(--ds-well-bg)] text-foreground/80 hover:bg-[var(--ds-well-bg-hover)]",
                   )}
                 >
+                  {r.state === "working" ? (
+                    <span
+                      aria-hidden
+                      className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden"
+                    >
+                      <motion.span
+                        className="absolute inset-y-0 w-1/3 rounded-full [background:var(--mox-gradient)]"
+                        animate={reduce ? undefined : { x: ["-100%", "320%"] }}
+                        transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                    </span>
+                  ) : null}
                   <TypeGlyph type={r.type} size="sm" className="size-7 shrink-0 [&_svg]:size-3.5" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {label}{" "}
-                    {r.state === "working" ? "in progress" : r.state === "done" ? "done" : "failed"}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{r.title || label}</span>
+                    <span className="block truncate text-[11px] font-medium opacity-70">
+                      {r.state === "working"
+                        ? (r.step ?? "In progress") + "…"
+                        : r.state === "done"
+                          ? `${label} ready`
+                          : `${label} failed`}
+                    </span>
                   </span>
                   {r.state === "working" ? (
                     <span
@@ -139,7 +173,8 @@ export function GeneratingPanel({ className }: { className?: string }) {
     const j = jobs.find((x) => x.id === id);
     if (!j || j.status === "cancelled") return [];
     const state = isActiveJob(j) ? "working" : j.status === "succeeded" ? "done" : "failed";
-    return [{ id, type: j.type, state }];
+    const step = STUDIO_FORMATS[j.type]?.stages.find((s) => s.id === j.stage)?.label;
+    return [{ id, type: j.type, state, title: j.title || undefined, step }];
   });
 
   return (

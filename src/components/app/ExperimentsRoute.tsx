@@ -36,6 +36,7 @@ export default function ExperimentsRoute() {
   const home = workspaceId ? workspacePath(workspaceId) : "/projects";
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");

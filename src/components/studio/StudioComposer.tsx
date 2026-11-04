@@ -325,26 +325,48 @@ export function ComposerBody({
   };
 
   return (
-    <div className="@container/composer flex h-full min-h-0 flex-col">
+    <div className="@container/composer relative flex h-full min-h-0 flex-col">
       <header
-        className="relative z-10 flex h-16 shrink-0 select-none items-center gap-2 px-3 @3xl/composer:gap-2.5 @3xl/composer:px-5"
+        className={cn(
+          "relative z-10 flex h-16 shrink-0 select-none items-center gap-2 px-3 @3xl/composer:gap-2.5 @3xl/composer:px-5",
+          // Review on a wide screen: the side panel runs the full height (Holo),
+          // so the header floats over the picture side only.
+          session.step === "review" &&
+            "@5xl/composer:absolute @5xl/composer:left-0 @5xl/composer:right-[380px] @5xl/composer:top-0",
+        )}
         onDoubleClick={(e) => {
           // Standard window behaviour: double-click empty header space to maximize.
           if ((e.target as HTMLElement).closest("button, a, input, textarea, [role='tab']")) return;
           resize();
         }}
       >
-        {session.step !== "generating" && !session.pendingKey ? (
+        {session.step !== "review" || !session.pendingKey ? (
           <button
             type="button"
             onClick={() => {
-              if (session.step === "review") return backToBrief(session.id);
+              // While a piece is being made, Back leaves it running in the
+              // background (the dock and GeneratingPanel follow it).
+              if (working) return minimize();
+              // One step out: a finished piece is already in the Library.
+              if (session.step === "review") return closeSession(session.id);
               // A typed brief is kept in the dock; an empty one is simply closed.
               closeSession(session.id);
               emitAppEvent("open:create-launcher");
             }}
-            aria-label={session.step === "review" ? "Back to description" : "Back to formats"}
-            title={session.step === "review" ? "Back to description" : "Back to formats"}
+            aria-label={
+              working
+                ? "Back, keep making it in the background"
+                : session.step === "review"
+                  ? "Close"
+                  : "Back to formats"
+            }
+            title={
+              working
+                ? "Keeps going in the background"
+                : session.step === "review"
+                  ? "Close, it is saved in your Library"
+                  : "Back to formats"
+            }
             className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:min-h-9"
           >
             <ArrowLeft className="size-4" />
@@ -377,10 +399,26 @@ export function ComposerBody({
           </motion.div>
         </AnimatePresence>
 
-        <StepIndicator index={stepIndex} working={working} />
+        <StepIndicator
+          index={stepIndex}
+          working={working}
+          onDescribe={
+            session.step === "review" && !working ? () => backToBrief(session.id) : undefined
+          }
+        />
 
         <TooltipProvider delayDuration={300}>
           <div className="flex min-w-0 flex-1 shrink-0 items-center justify-end gap-0.5 @max-4xl/composer:flex-none">
+            {working ? (
+              <button
+                type="button"
+                onClick={minimize}
+                className="mr-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-3.5 text-[13px] font-semibold text-foreground shadow-[var(--ds-card-shadow)] transition hover:-translate-y-px lg:min-h-9"
+              >
+                <Minus className="size-4" />
+                Run in background
+              </button>
+            ) : null}
             {session.step === "intent" && !isMobile ? (
               <button
                 type="button"
@@ -500,7 +538,16 @@ export function ComposerBody({
 }
 
 /** Describe → Generate → Review, with a sliding highlight on the current step. */
-function StepIndicator({ index, working }: { index: number; working: boolean }) {
+function StepIndicator({
+  index,
+  working,
+  onDescribe,
+}: {
+  index: number;
+  working: boolean;
+  /** From a finished piece, the Describe pill goes back to its brief. */
+  onDescribe?: () => void;
+}) {
   const reduce = useReducedMotion();
   return (
     <ol
@@ -515,6 +562,15 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
             aria-current={state === "current" ? "step" : undefined}
             className="relative flex h-7 items-center gap-1.5 px-3 text-xs"
           >
+            {s.id === "intent" && onDescribe ? (
+              <button
+                type="button"
+                onClick={onDescribe}
+                aria-label="Back to description"
+                title="Change the description"
+                className="absolute inset-0 rounded-full transition-colors hover:bg-[var(--ds-card-bg)]"
+              />
+            ) : null}
             {state === "current" ? (
               <motion.span
                 layoutId="composer-step"
@@ -659,8 +715,15 @@ export function IntentStep({
   }, [session.id, session.type, isMobile]);
 
   const submit = () => {
-    if (ready && !busy && !writer.busy)
-      void generate(session.id, { kind: session.lastGood ? "regenerate" : "generate" });
+    if (!ready || busy || writer.busy) return;
+    const id = session.id;
+    // Holo: Generate hands the piece to the corner list and gets out of the
+    // way. It is made on the server; the list shows it and opens it when
+    // ready. A refusal (price, missing brief) keeps the page open to say why.
+    void generate(id, { kind: session.lastGood ? "regenerate" : "generate" }).then(() => {
+      const s = getSession(id);
+      if (s?.job && isActiveJob(s.job) && !s.error && !s.billing) minimizeSession(id);
+    });
   };
 
   const pickAndClose = (idea: StudioIdea) => {

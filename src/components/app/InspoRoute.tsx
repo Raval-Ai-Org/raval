@@ -23,6 +23,7 @@ function Inner() {
   const section = parseInspoSection(params.get("s"));
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
         if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");

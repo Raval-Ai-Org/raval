@@ -461,6 +461,15 @@ function AppShell() {
     if (lock && item.feature) return openFeatureUpgrade(item.feature);
     const t = item.target;
     if (t.kind === "brain") return openBrain();
+    // A window opened from a page of its own (Brain, Inspo…) opens over Home,
+    // so its Back lands somewhere sensible and nothing is stacked.
+    if (
+      (t.kind === "analytics" || t.kind === "event") &&
+      routeNavId &&
+      routeNavId !== "home" &&
+      routeNavId !== "chat"
+    )
+      navigate({ to: homeHref });
     if (t.kind === "analytics") return setAnalyticsOpen(true);
     if (t.kind === "event") return emitAppEvent(t.event);
     const to =
@@ -658,8 +667,12 @@ function AppShell() {
         )}
       </AnimatePresence>
 
-      {/* Right column: top bar + the workspace. */}
-      <div data-workspace-column className="flex min-w-0 flex-1 flex-col">
+      {/* Right column: top bar + the workspace. On a desktop the canvas starts at
+          the very top (Holo): the top bar sits on it, not on a white strip. */}
+      <div
+        data-workspace-column
+        className="flex min-w-0 flex-1 flex-col lg:ds-canvas lg:overflow-hidden lg:rounded-tl-[var(--ds-canvas-radius)]"
+      >
         <AnnouncementsOutlet />
 
         <header
@@ -823,7 +836,7 @@ function AppShell() {
         </header>
 
         {/* The workspace: Holo's canvas, to the right of the sidebar */}
-        <AppCanvas>
+        <AppCanvas className="lg:rounded-none lg:bg-transparent lg:bg-none lg:shadow-none">
           <main data-workspace-main="true" className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <WorkspaceSurface
               workspaceId={workspaceId}
@@ -1033,7 +1046,14 @@ function WorkspaceSurface({
           chatView={chatView}
         />
         {/* Holo's "Generating…" card, while the Studio panel is shut. */}
-        {!isCompact && !studioOpen && <GeneratingPanel className="absolute right-4 top-4 z-20" />}
+        {!studioOpen && (
+          // Generate closes Studio, so this list must show on a phone too.
+          <GeneratingPanel
+            className={
+              isCompact ? "fixed inset-x-3 bottom-24 z-40 w-auto" : "absolute right-4 top-4 z-20"
+            }
+          />
+        )}
       </section>
 
       {/* Chat (Holo): past conversations on the right. On a phone they stay

@@ -1887,8 +1887,10 @@ export function ChatPanel({
           layout="position"
           transition={layoutTransition}
           className={cn(
-            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6 before:pointer-events-none before:absolute before:inset-x-0 before:-top-12 before:h-12 before:bg-gradient-to-t before:from-[var(--ds-canvas-bg)] before:to-transparent",
-            home ? "max-w-[640px] pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "max-w-3xl",
+            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6 before:pointer-events-none before:absolute before:inset-x-0 before:bg-gradient-to-t before:from-[var(--ds-canvas-bg)] before:to-transparent",
+            home
+              ? "max-w-[760px] pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-2 before:-top-4 before:h-4"
+              : "max-w-3xl before:-top-12 before:h-12",
           )}
         >
           <AnimatePresence>
@@ -1915,6 +1917,7 @@ export function ChatPanel({
             ref={composerRef}
             // Home docks a slim Holo pill; a new chat keeps the big box.
             hero={empty && !home}
+            slim={home}
             value={input}
             onChange={setInput}
             onSend={() => void send()}
