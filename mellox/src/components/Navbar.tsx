@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import ThemeToggle from "./ThemeToggle";
 
 const APP_URL = "https://app.mellox.ai";
 
@@ -106,7 +107,7 @@ function Menu({ link }: { link: NavLink }) {
       >
         <ul
           role="menu"
-          className="rounded-3xl border border-white/10 bg-[#0b0e14]/95 p-2 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.8)] backdrop-blur-xl"
+          className="rounded-3xl border border-white/10 bg-[var(--mx-panel)]/95 p-2 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.8)] backdrop-blur-xl"
         >
           {link.children!.map((c, i, all) => {
             // show a group heading only where the group changes from the previous item
@@ -170,6 +171,7 @@ export default function Navbar() {
         </nav>
 
         <div className="flex items-center justify-end gap-2 justify-self-end xl:gap-3">
+          <ThemeToggle />
           <a
             href={APP_URL}
             className="glass-link hidden whitespace-nowrap rounded-full px-4 py-3 text-[16px] font-medium text-white/85 transition hover:text-white min-[1180px]:inline-block xl:text-[17px]"

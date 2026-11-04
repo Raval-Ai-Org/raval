@@ -7,7 +7,7 @@ import { postForMeDb, getPostForMeDeps } from "@/lib/postforme/workspace.server"
 
 export const dynamic = "force-dynamic";
 
-const Event = z.object({ event_type: z.string(), data: z.record(z.unknown()) });
+const Event = z.object({ event_type: z.string(), data: z.record(z.string(), z.unknown()) });
 const secretMatches = (given: string | null, expected: string) => {
   if (!given || !expected) return false;
   const a = Buffer.from(given);

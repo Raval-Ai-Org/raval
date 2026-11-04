@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 const SELECTION_TYPES: readonly string[] = ["account", "platform", "all"];
 
 // Fields are validated individually below with the messages clients rely on.
-const BodySchema = z.record(z.unknown());
+const BodySchema = z.record(z.string(), z.unknown());
 
 export function readDistributionOptions(raw: unknown): { tiktokPrivacyLevel: string | null } {
   const value = (raw as { tiktokPrivacyLevel?: unknown } | null)?.tiktokPrivacyLevel;

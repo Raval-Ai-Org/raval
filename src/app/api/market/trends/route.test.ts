@@ -27,7 +27,7 @@ const ensureMarketBrainSchedule = vi.hoisted(() => vi.fn(async () => ({ ok: true
 vi.mock("@/lib/market-signals-collection.server", () => ({
   requestMarketSignalsCollection: vi.fn(async () => ({
     state: "completed",
-    collectionId: "11111111-1111-1111-1111-111111111111",
+    collectionId: "11111111-1111-4111-8111-111111111111",
     data: {
       keywords: ["AI marketing"],
       location: "United States",
@@ -44,7 +44,7 @@ vi.mock("@/lib/market-signals-collection.server", () => ({
   })),
   pollMarketSignalsCollection: vi.fn(async () => ({
     state: "completed",
-    collectionId: "11111111-1111-1111-1111-111111111111",
+    collectionId: "11111111-1111-4111-8111-111111111111",
     data: {
       keywords: ["AI marketing"],
       location: "United States",
@@ -71,7 +71,7 @@ describe("POST /api/market/trends", () => {
       new Request("http://localhost/api/market/trends", {
         method: "POST",
         body: JSON.stringify({
-          workspaceId: "22222222-2222-2222-2222-222222222222",
+          workspaceId: "22222222-2222-4222-8222-222222222222",
           keywords: ["AI marketing"],
           location: "United States",
         }),
@@ -84,7 +84,7 @@ describe("POST /api/market/trends", () => {
     expect(runMetered).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "market_brain_manual",
-        workspaceId: "22222222-2222-2222-2222-222222222222",
+        workspaceId: "22222222-2222-4222-8222-222222222222",
       }),
       expect.any(Function),
     );
@@ -95,15 +95,15 @@ describe("POST /api/market/trends", () => {
       await import("./route")
     ).GET(
       new Request(
-        "http://localhost/api/market/trends?collectionId=11111111-1111-1111-1111-111111111111&workspaceId=22222222-2222-2222-2222-222222222222",
+        "http://localhost/api/market/trends?collectionId=11111111-1111-4111-8111-111111111111&workspaceId=22222222-2222-4222-8222-222222222222",
       ),
     );
 
     expect(response.status).toBe(200);
     expect((await response.json()).state).toBe("completed");
     expect(pollMarketSignalsCollection).toHaveBeenCalledWith(
-      "11111111-1111-1111-1111-111111111111",
-      "22222222-2222-2222-2222-222222222222",
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
       expect.stringMatching(/^market-poll-/),
     );
   });
@@ -113,7 +113,7 @@ describe("POST /api/market/trends", () => {
       new Request("http://localhost/api/market/trends", {
         method: "POST",
         body: JSON.stringify({
-          workspaceId: "22222222-2222-2222-2222-222222222222",
+          workspaceId: "22222222-2222-4222-8222-222222222222",
           keywords: ["AI marketing"],
           location: "United States",
         }),
@@ -122,7 +122,7 @@ describe("POST /api/market/trends", () => {
 
     expect(response.status).toBe(200);
     expect(ensureMarketBrainSchedule).toHaveBeenCalledWith({
-      workspaceId: "22222222-2222-2222-2222-222222222222",
+      workspaceId: "22222222-2222-4222-8222-222222222222",
       location: "United States",
       keywords: ["AI marketing"],
     });
@@ -133,7 +133,7 @@ describe("POST /api/market/trends", () => {
       new Request("http://localhost/api/market/trends", {
         method: "POST",
         body: JSON.stringify({
-          workspaceId: "22222222-2222-2222-2222-222222222222",
+          workspaceId: "22222222-2222-4222-8222-222222222222",
           keywords: [
             "AI-powered marketing",
             "D2C brands",
@@ -155,7 +155,7 @@ describe("POST /api/market/trends", () => {
       new Request("http://localhost/api/market/trends", {
         method: "POST",
         body: JSON.stringify({
-          workspaceId: "22222222-2222-2222-2222-222222222222",
+          workspaceId: "22222222-2222-4222-8222-222222222222",
           keywords: ["broken\nkeyword"],
           location: "United States",
         }),

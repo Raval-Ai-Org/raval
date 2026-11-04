@@ -73,7 +73,7 @@ export default function CompareWins() {
             <h3 style={{ marginTop: 12 }}>One workspace for the whole loop.</h3>
             <p style={{ marginTop: 22 }}>
               <span className="cx-s-total">{STACK.mellox}</span>
-              <span style={{ marginLeft: 8, color: "#8b97c2" }}>/mo, or $41 billed annually</span>
+              <span style={{ marginLeft: 8, color: "var(--mx-t1)" }}>/mo, or $41 billed annually</span>
             </p>
             <ul>
               {[

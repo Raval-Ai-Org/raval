@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   workspaceId: z.unknown(),
-  contentItemId: z.string({ required_error: "contentItemId required" }),
+  contentItemId: z.string({ error: "contentItemId required" }),
 });
 
 export const POST = defineRoute({

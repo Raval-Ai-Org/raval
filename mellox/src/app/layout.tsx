@@ -54,7 +54,17 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = { themeColor: "#0d1114" };
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f7f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1114" },
+  ],
+  colorScheme: "light dark",
+};
+
+// Pick the theme before first paint: a saved choice wins, otherwise the system setting. No flash.
+const THEME_SCRIPT =
+  "try{var t=localStorage.getItem('mx-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.setAttribute('data-theme',t)}catch(e){}";
 
 // Skip the intro for returning visitors (same session) and for touch-first devices, which get a static site.
 const PRELOADER_SKIP_SCRIPT =
@@ -68,6 +78,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={cn("h-full", "antialiased", michroma.variable, googleSansFlex.variable, micro5.variable, "font-sans")}
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         {/* Returning visitors (same session) skip the intro. Runs before first paint, so there is no flash. */}
         <script dangerouslySetInnerHTML={{ __html: PRELOADER_SKIP_SCRIPT }} />
         <noscript>

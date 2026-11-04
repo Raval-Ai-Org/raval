@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
-    <div className="relative flex min-h-screen flex-1 flex-col overflow-x-clip bg-[#030405] text-white">
+    <div className="relative flex min-h-screen flex-1 flex-col overflow-x-clip bg-[var(--mx-bg)] text-white">
       <JsonLd data={faqJsonLd(faqs.slice(0, FEATURED))} />
       <main className="flex flex-1 flex-col">
         {/* Hero: aurora + copy + chat. Its bottom edge is where the dashboard peeks in. */}

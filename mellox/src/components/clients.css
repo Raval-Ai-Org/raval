@@ -39,3 +39,7 @@
 @media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
   .logo-track { animation: none; }
 }
+
+/* Light theme: the logos are pale grey for a dark page, so darken them */
+:root[data-theme="light"] .logo-item img { filter: brightness(0.25); opacity: 0.5; }
+:root[data-theme="light"] .logo-item img:hover { opacity: 0.85; }

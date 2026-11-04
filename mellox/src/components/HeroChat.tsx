@@ -66,7 +66,7 @@ function Menu({
       {open && (
         <ul
           role="listbox"
-          className={`absolute bottom-full z-20 mb-3 min-w-[190px] overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f10]/95 p-1.5 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl ${
+          className={`absolute bottom-full z-20 mb-3 min-w-[190px] overflow-hidden rounded-2xl border border-white/10 bg-[var(--mx-panel)]/95 p-1.5 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >
@@ -79,7 +79,7 @@ function Menu({
                   setOpen(false);
                 }}
                 className={`flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2 text-left text-[15px] transition-colors hover:bg-white/[0.07] ${
-                  o === value ? "text-lime" : "text-white/80"
+                  o === value ? "text-[var(--mx-lime-text)]" : "text-white/80"
                 }`}
               >
                 {o}
@@ -106,9 +106,9 @@ export default function HeroChat() {
       }}
       className="hero-chat group relative w-full max-w-[760px] rounded-[30px] p-[1px] sm:rounded-full"
     >
-      <div className="relative flex flex-wrap items-center gap-y-1 rounded-[29px] bg-[#0b0d0e]/90 p-2 backdrop-blur-xl sm:flex-nowrap sm:gap-1 sm:rounded-full sm:py-2 sm:pl-3 sm:pr-2">
+      <div className="relative flex flex-wrap items-center gap-y-1 rounded-[29px] bg-[var(--mx-panel)]/90 p-2 backdrop-blur-xl sm:flex-nowrap sm:gap-1 sm:rounded-full sm:py-2 sm:pl-3 sm:pr-2">
         <div className="flex min-w-0 basis-full items-center gap-3 pl-3 pr-2 pt-1.5 sm:basis-auto sm:flex-1 sm:pt-0">
-          <svg className="shrink-0 text-white/35 transition-colors group-focus-within:text-lime" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg className="shrink-0 text-white/35 transition-colors group-focus-within:text-[var(--mx-lime-text)]" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18" />
             <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z" />

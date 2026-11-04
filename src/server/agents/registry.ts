@@ -36,7 +36,7 @@ const publicationsSummary: ToolDefinition<{ days: number }, Record<string, numbe
   effect: "read",
   minRole: "viewer",
   input: z.object({ days: z.number().int().min(1).max(30).default(7) }),
-  output: z.record(z.number()),
+  output: z.record(z.string(), z.number()),
   timeoutMs: 10_000,
   idempotent: true,
   async handler({ days }, ctx) {

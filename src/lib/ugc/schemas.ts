@@ -63,7 +63,7 @@ export const BriefSchema = z.object({
       vibe: z.enum(ids(CREATOR_VIBES)).default("friendly"),
       setting: z.enum(ids(SETTINGS)).default("auto"),
     })
-    .default({}),
+    .prefault({}),
   instructions: text(1000).default(""),
   /** Imported scripts skip concept generation, including when reopened. */
   scriptSource: z.literal("studio").optional(),
@@ -120,7 +120,7 @@ export const CreateProjectBody = z.object({
   workspaceId: uuid,
   title: text(200).optional(),
   product: ProductSchema,
-  brief: BriefSchema.default({}),
+  brief: BriefSchema.prefault({}),
   script: ScriptSchema.optional(),
   referenceAssetIds: z.array(uuid).max(9).default([]),
 });

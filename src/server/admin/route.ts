@@ -17,7 +17,7 @@
 // cannot tell a real admin route from a missing one by the error it returns.
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { z, ZodError, type ZodType, type ZodTypeDef } from "zod";
+import { z, ZodError, type ZodType } from "zod";
 import { assuranceOf, isFreshMfa } from "@/lib/admin/assurance";
 import { hasPermission, type Permission } from "@/lib/admin/permissions";
 import { jsonError, requireUserId } from "@/server/api-auth";
@@ -29,7 +29,7 @@ import { resolveAdmin, type AdminIdentity } from "./access.server";
 import { auditContext, recordAdminAudit, type AuditContext } from "./audit.server";
 import { adminMfaRequired } from "./config.server";
 
-type Schema<T> = ZodType<T, ZodTypeDef, unknown>;
+type Schema<T> = ZodType<T, unknown>;
 
 export type AdminContext<TBody, TQuery> = {
   request: Request;

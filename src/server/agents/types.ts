@@ -6,7 +6,7 @@
 // Tools receive a workspace-scoped context — never raw credentials, never SQL,
 // never another tenant.
 import "server-only";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 import type { WorkspaceRole } from "@/server/api-auth";
 
 /** What calling the tool does to the world. */
@@ -35,7 +35,7 @@ export type ToolContext = {
   now: () => Date;
 };
 
-type Schema<T> = ZodType<T, ZodTypeDef, unknown>;
+type Schema<T> = ZodType<T, unknown>;
 
 export type ToolDefinition<I = any, O = any> = {
   name: string;

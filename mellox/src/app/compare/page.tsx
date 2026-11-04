@@ -93,7 +93,7 @@ export default function ComparePage() {
                 Nobody else under <b>$100 a month</b> bundles brand memory content generation with AEO and GEO
                 monitoring in one loop.
               </p>
-              <p style={{ marginTop: 18, fontSize: "clamp(1rem, 1.5vw, 1.2rem)", color: "#8b97c2", maxWidth: "62ch" }}>
+              <p style={{ marginTop: 18, fontSize: "clamp(1rem, 1.5vw, 1.2rem)", color: "var(--mx-t1)", maxWidth: "62ch" }}>
                 Mellox does not win by out-featuring the specialists. It closes the gap between a free generation tool
                 and a visibility-only tool that neither side is built to serve.
               </p>
