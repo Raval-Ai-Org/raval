@@ -61,7 +61,13 @@ import {
   storyboardSummary,
   type VideoStoryboard,
 } from "@/lib/studio/video/storyboard";
-import { NOT_DELIVERED_MESSAGE, passedNote, redoPlan } from "@/lib/studio/video/checks";
+import {
+  canDeliverWithVisualWarning,
+  NOT_DELIVERED_MESSAGE,
+  passedNote,
+  redoPlan,
+  requiresSourceAudio,
+} from "@/lib/studio/video/checks";
 import { platformVideoNote } from "@/lib/studio/video-ad";
 import type { UgcModelKey } from "@/lib/ugc/models";
 import type { VideoRenderRequest } from "@/server/ugc/providers/types";
@@ -3475,6 +3481,9 @@ async function finishStoryboardVideo(
     video.soundtrackWaitSince ??= Date.now();
     if (Date.now() - video.soundtrackWaitSince < SOUNDTRACK_WAIT_MS) return { state: "wait" };
   }
+  // A completed voice or music bed will be mixed after the visual checks.
+  // Do not reject an otherwise valid silent provider clip before that happens.
+  const soundtrackAvailable = Boolean(sound?.voiceUrl || sound?.musicUrl);
   let dataUrl = check.dataUrl;
   if (!dataUrl) {
     const { safeFetch } = await import("@/server/safe-fetch");
@@ -3506,9 +3515,10 @@ async function finishStoryboardVideo(
     kind: plan.kind,
     plan: clips,
     storyboard: plan.storyboard,
-    audio: video.audio,
+    audio: requiresSourceAudio({ requested: video.audio, soundtrackAvailable }),
     reference,
   });
+  const warnings: string[] = [];
   // The frames the checker saw are kept for staff, never shown as the piece.
   for (const [index, frame] of result.frames.entries())
     await persistAsset({
@@ -3524,35 +3534,47 @@ async function finishStoryboardVideo(
     const redo = redoPlan(result.failures, clips.length, { chained: !!video.chain, redone });
     if (!redo) {
       plan.check = { passed: false, redone, notes: result.failures.map((f) => f.reason) };
-      return { state: "failed" };
-    }
-    if (isComposedTask(task.taskId)) {
-      if (!(await redoComposedClips(task.taskId, redo.clips, redo.notes)))
+      // Safety is checked before this point by routedVideoProvider.check(). A
+      // file-level defect still fails, but a finished safe video that only
+      // misses the subjective visual bar after its free repair is delivered
+      // for review instead of becoming the late, generic failure users saw.
+      if (!canDeliverWithVisualWarning(result.failures, result.technicalFailures))
         return { state: "failed" };
+      warnings.push(
+        "We made the best available version after an automatic repair. Please review it before publishing.",
+      );
     } else {
-      const restarted = await resubmitStudioVideo(row, task, {
-        clips: redo.clips,
-        text: redo.notes,
-      });
-      if (!restarted) return { state: "failed" };
-      Object.assign(task, restarted);
+      if (isComposedTask(task.taskId)) {
+        if (!(await redoComposedClips(task.taskId, redo.clips, redo.notes)))
+          return { state: "failed" };
+      } else {
+        const restarted = await resubmitStudioVideo(row, task, {
+          clips: redo.clips,
+          text: redo.notes,
+        });
+        if (!restarted) return { state: "failed" };
+        Object.assign(task, restarted);
+      }
+      task.qaRedos = redone + 1;
+      task.checkErrors = 0;
+      task.startedAt = Date.now();
+      return { state: "redo" };
     }
-    task.qaRedos = redone + 1;
-    task.checkErrors = 0;
-    task.startedAt = Date.now();
-    return { state: "redo" };
   }
   const kind = videoKind(plan.kind);
   // The made voice and music go under the whole video, the clips' own sound ducked beneath.
   let hasAudio = video.audio && result.probe.hasAudio;
-  if (sound && (sound.voiceUrl || sound.musicUrl)) {
+  if (soundtrackAvailable && sound) {
+    const original = dataUrl;
     const mixed = await mixSoundtrack(dataUrl, sound, {
       seconds: result.probe.duration,
       // The clips' own sound stays only when they speak the voiceover themselves.
       keepClipAudio: !sound.musicUrl || (plan.voice && !video.soundtrack?.voice),
     });
     // A silent clip with a voice or music laid under it now has sound to keep.
-    if (mixed !== dataUrl) hasAudio = true;
+    if (mixed !== original) hasAudio = true;
+    else if (!hasAudio)
+      warnings.push("The soundtrack could not be added, so this video is silent.");
     dataUrl = mixed;
   }
   // The storyboard's words, spelled exactly, before the ending (never on the post or the card).
@@ -3594,13 +3616,13 @@ async function finishStoryboardVideo(
       workspaceId: row.workspace_id,
       userId: getRequestScope().userId ?? null,
     });
-  plan.check = { passed: true, redone, notes: [passedNote(plan.kind, clips.length)] };
+  plan.check ??= { passed: true, redone, notes: [passedNote(plan.kind, clips.length)] };
+  if (result.visualUnavailable)
+    warnings.push("The picture check was unavailable for this video. Watch it before publishing.");
   return {
     state: "ok",
     dataUrl,
-    warnings: result.visualUnavailable
-      ? ["The picture check was unavailable for this video. Watch it before publishing."]
-      : [],
+    warnings,
   };
 }
 

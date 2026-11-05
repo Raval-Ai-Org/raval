@@ -23,8 +23,10 @@ import {
   type VideoStoryboard,
 } from "./storyboard";
 import {
+  canDeliverWithVisualWarning,
   qaFrameTimes,
   redoPlan,
+  requiresSourceAudio,
   technicalIssues,
   visualFailures,
   VIDEO_REDO_ROUNDS,
@@ -362,6 +364,30 @@ describe("storyboard", () => {
 });
 
 describe("video checks", () => {
+  it("uses a completed Mellox soundtrack when the provider clip is silent", () => {
+    expect(requiresSourceAudio({ requested: true, soundtrackAvailable: true })).toBe(false);
+    expect(requiresSourceAudio({ requested: true, soundtrackAvailable: false })).toBe(true);
+    expect(requiresSourceAudio({ requested: false, soundtrackAvailable: false })).toBe(false);
+  });
+
+  it("does not turn an unusable individual judge score into a false rejection", () => {
+    const judge = VideoJudgeSchema.parse({
+      clips: [{ clip: 1, sameSubject: "unavailable", clean: 9, followsPlan: 9, problem: "" }],
+      ending: 9,
+      summary: "",
+    });
+    expect(judge.clips[0]?.sameSubject).toBe(10);
+    expect(visualFailures(judge, "brand-story", plan16)).toEqual([]);
+  });
+
+  it("delivers an unresolved visual concern for review but never broken media", () => {
+    const visual = [{ clip: 0, reason: "The person changes in this clip." }];
+    expect(canDeliverWithVisualWarning(visual, [])).toBe(true);
+    expect(canDeliverWithVisualWarning(visual, [{ clip: 0, reason: "The end is missing." }])).toBe(
+      false,
+    );
+  });
+
   it("samples every clip and every join", () => {
     const times = qaFrameTimes(plan16);
     expect(times).toHaveLength(6);

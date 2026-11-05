@@ -25,8 +25,11 @@ Decision record: [ADR-0041](../adr/0041-studio-video-kinds.md).
 4. **Check** (`finishStoryboardVideo`, `src/server/studio/video/qa.server.ts`,
    pure verdicts in `checks.ts`). FFmpeg probe + vision judge
    (`studio.video.qa`) on frames from every clip. Fail → `redoPlan` →
-   `redoComposedClips` (one round, Mellox's cost). Still failing → the job
-   fails with `NOT_DELIVERED_MESSAGE` and the hold is released.
+   `redoComposedClips` (one round, Mellox's cost). A broken file (missing
+   footage, dead frames, wrong size or required audio) still fails and releases
+   the hold. A completed, safety-cleared file with only an unresolved visual
+   concern is delivered with a review warning instead of being discarded at the
+   finish line.
 5. **Ending** (`finish.server.tsx`). `back-to-source` dissolves to the exact
    post; `end-card` adds a card drawn with next/og.
 

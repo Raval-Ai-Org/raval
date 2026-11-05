@@ -20,6 +20,8 @@ import { probeVideo, sampleFrames } from "./finish.server";
 
 export type VideoCheckResult = {
   failures: ClipFailure[];
+  /** File-level defects that must be repaired; never delivered as a warning. */
+  technicalFailures: ClipFailure[];
   /** The frames the checker saw, kept for staff. */
   frames: { time: number; bytes: Buffer }[];
   probe: VideoProbe;
@@ -56,10 +58,11 @@ export async function checkStudioVideo(args: {
   const kind = videoKind(args.kind);
   const dissolve = kind.join === "cut" ? DISSOLVE_SECONDS : 0;
   const probe = await probeVideo(args.dataUrl);
-  const failures = technicalIssues(probe, args.plan, {
+  const technicalFailures = technicalIssues(probe, args.plan, {
     audio: args.audio,
     dissolveSeconds: dissolve,
   });
+  const failures = [...technicalFailures];
   // Frame times on the joined timeline (dissolves pull later clips earlier).
   const times = qaFrameTimes(args.plan).map((frame) => ({
     ...frame,
@@ -112,13 +115,13 @@ export async function checkStudioVideo(args: {
       images: [...(args.reference ? [jpeg(args.reference)] : []), ...bytes.map(jpeg)],
     });
     failures.push(...visualFailures(judge, args.kind, args.plan));
-    return { failures, frames, probe };
+    return { failures, technicalFailures, frames, probe };
   } catch (error) {
     // The file itself was still checked; a checker outage never loses a video.
     console.warn(
       "[studio] video check unavailable",
       error instanceof Error ? error.message : error,
     );
-    return { failures, frames, probe, visualUnavailable: true };
+    return { failures, technicalFailures, frames, probe, visualUnavailable: true };
   }
 }

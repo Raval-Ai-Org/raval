@@ -52,10 +52,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPanel } from "@/components/app/ChatPanel";
 import { CommandBar } from "@/components/app/CommandBar";
+import { LibraryDialog } from "@/components/app/LibraryDialog";
 import { TopBarActions } from "@/components/app/TopBarActions";
 import { StudioRail } from "@/components/app/StudioRail";
 import { RecentChats } from "@/components/app/RecentChats";
 import { AccountMenu, AccountMenuCompact } from "@/components/app/AccountMenu";
+import { WorkspaceDialogs } from "@/components/app/WorkspaceDialogs";
+import { ContentCalendar } from "@/components/app/ContentCalendar";
 
 // Heavy modules — loaded on demand to shrink the initial workspace bundle.
 const AnalyticsModal = lazy(() =>
@@ -66,15 +69,6 @@ const StudioComposer = lazy(() =>
 );
 const ContentItemDialog = lazy(() =>
   import("@/components/studio/ContentItemDialog").then((m) => ({ default: m.ContentItemDialog })),
-);
-const LibraryDialog = lazy(() =>
-  import("@/components/app/LibraryDialog").then((m) => ({ default: m.LibraryDialog })),
-);
-const ContentCalendar = lazy(() =>
-  import("@/components/app/ContentCalendar").then((m) => ({ default: m.ContentCalendar })),
-);
-const WorkspaceDialogs = lazy(() =>
-  import("@/components/app/WorkspaceDialogs").then((m) => ({ default: m.WorkspaceDialogs })),
 );
 const PublishDialog = lazy(() =>
   import("@/components/app/PublishDialog").then((m) => ({ default: m.PublishDialog })),

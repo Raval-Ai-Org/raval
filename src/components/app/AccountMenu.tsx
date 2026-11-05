@@ -64,6 +64,14 @@ function initialsFrom(name: string, email: string) {
   return src.slice(0, 2).toUpperCase();
 }
 
+// Radix completes a menu's focus restoration and pointer-lock cleanup after
+// `onSelect` returns. Launching another overlay in that same callback can make
+// the new layer inherit the closing menu's teardown. Queue overlay actions for
+// the next task so each surface owns its own lifecycle.
+function afterMenuCloses(action: () => void) {
+  window.setTimeout(action, 0);
+}
+
 export function AccountMenu({
   onOpenSettings,
   onClose,
@@ -141,8 +149,10 @@ export function AccountMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            onOpenSettings?.();
-            onClose?.();
+            afterMenuCloses(() => {
+              onOpenSettings?.();
+              onClose?.();
+            });
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
@@ -151,8 +161,10 @@ export function AccountMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            emitAppEvent("open:settings", { section: "memory" });
-            onClose?.();
+            afterMenuCloses(() => {
+              emitAppEvent("open:settings", { section: "memory" });
+              onClose?.();
+            });
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
@@ -175,8 +187,10 @@ export function AccountMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            emitAppEvent("open:usage");
-            onClose?.();
+            afterMenuCloses(() => {
+              emitAppEvent("open:usage");
+              onClose?.();
+            });
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
@@ -185,8 +199,10 @@ export function AccountMenu({
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            emitAppEvent("open:tour");
-            onClose?.();
+            afterMenuCloses(() => {
+              emitAppEvent("open:tour");
+              onClose?.();
+            });
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
@@ -269,13 +285,15 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => onOpenSettings?.()}
+          onSelect={() => afterMenuCloses(() => onOpenSettings?.())}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Settings className="h-4 w-4 text-muted-foreground" /> Settings
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => emitAppEvent("open:settings", { section: "memory" })}
+          onSelect={() =>
+            afterMenuCloses(() => emitAppEvent("open:settings", { section: "memory" }))
+          }
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Brain className="h-4 w-4 text-muted-foreground" /> Memory
@@ -295,13 +313,13 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           {theme === "dark" ? "Light mode" : "Dark mode"}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => emitAppEvent("open:usage")}
+          onSelect={() => afterMenuCloses(() => emitAppEvent("open:usage"))}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Wallet className="h-4 w-4 text-primary" /> Plan & billing
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => emitAppEvent("open:tour")}
+          onSelect={() => afterMenuCloses(() => emitAppEvent("open:tour"))}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
           <Compass className="h-4 w-4 text-muted-foreground" /> Take the tour

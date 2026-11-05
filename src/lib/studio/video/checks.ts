@@ -1,7 +1,8 @@
 // Checks a finished Studio video before anyone sees it. Pure and
 // browser-safe: the server measures the file (FFmpeg) and asks a vision model
-// to score sampled frames; this module alone decides what passes, which clips
-// are made again, and when a video is not delivered at all.
+// to score sampled frames; this module decides what needs a free repair and
+// which file-level defects cannot be delivered at all. A safety-cleared video
+// with only an unresolved visual concern is delivered with a review warning.
 //
 // The rule: a bad clip is never shown as finished. One round of re-making is
 // on Mellox; a video that still fails ends plainly and costs the person nothing.
@@ -81,7 +82,11 @@ export function qaFrameTimes(plan: ClipPlan): { time: number; clip: number; labe
   return out;
 }
 
-const score = z.coerce.number().min(0).max(10).catch(5);
+// A malformed individual score is a checker outage, not evidence that the
+// clip is bad. `checkStudioVideo` already fails open when the whole review is
+// unavailable; keep the same rule for one bad field so a flaky judge cannot
+// discard an otherwise usable render.
+const score = z.coerce.number().min(0).max(10).catch(10);
 
 /** What the judge returns; it only scores, code decides. */
 export const VideoJudgeSchema = z.object({
@@ -102,6 +107,32 @@ export const VideoJudgeSchema = z.object({
 });
 
 export type VideoJudge = z.infer<typeof VideoJudgeSchema>;
+
+/**
+ * Provider audio is required only when Mellox has no completed soundtrack to
+ * lay under the picture. Video models occasionally return a valid silent
+ * clip; rejecting it before the ready voice or music is mixed turns a
+ * recoverable audio gap into a full video-generation failure.
+ */
+export function requiresSourceAudio(opts: {
+  requested: boolean;
+  soundtrackAvailable: boolean;
+}): boolean {
+  return opts.requested && !opts.soundtrackAvailable;
+}
+
+/**
+ * A completed, safety-cleared video can be delivered with a review warning
+ * when only the visual judge remains unhappy after its bounded repair. Broken
+ * media (duration, dead frames, resolution or required audio) is never
+ * treated as a usable result.
+ */
+export function canDeliverWithVisualWarning(
+  failures: readonly ClipFailure[],
+  technicalFailures: readonly ClipFailure[],
+): boolean {
+  return failures.length > 0 && technicalFailures.length === 0;
+}
 
 /** Which clips the judge's scores fail, with the reason in plain words. */
 export function visualFailures(

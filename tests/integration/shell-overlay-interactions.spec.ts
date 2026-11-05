@@ -234,7 +234,9 @@ test("mocked background generation does not block navigation and completes off-s
   const library = page.getByRole("dialog", { name: "Library" });
   await expect(library).toBeVisible();
   await expect(page.getByRole("button", { name: /Studio: creating 1 piece/ })).toBeVisible();
-  await page.waitForTimeout(3_000);
+  // Keep the background job active long enough to cover the delayed transition
+  // that previously left a stale interaction layer over Library and Settings.
+  await page.waitForTimeout(10_000);
   await library.getByRole("tab", { name: /Media/ }).click();
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   await expect(library).toHaveCount(0);
