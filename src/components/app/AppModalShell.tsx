@@ -137,11 +137,7 @@ export function AppModalShell({
   const inCanvas = Boolean(embed) || (open && big && canEmbedWindow());
   // A canvas window steps aside when a sidebar row is pressed; a routed one is
   // unmounted by the navigation instead.
-  useShellWindow(
-    navId,
-    open,
-    inCanvas && !routed && !disableClose ? () => onOpenChange(false) : undefined,
-  );
+  useShellWindow(navId, open, !routed && !disableClose ? () => onOpenChange(false) : undefined);
   // Big workspaces (lg/xl) can become a full page; small forms stay popups.
   const canMaximize = !embed && (allowMaximize ?? big);
   useEffect(() => {

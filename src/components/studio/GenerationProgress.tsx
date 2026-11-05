@@ -8,7 +8,6 @@ import {
   Check,
   Compass,
   ListTree,
-  Minus,
   Palette,
   PenLine,
   Save,
@@ -85,12 +84,10 @@ const CANVAS_CAPTION: Record<StageId, string> = {
 export function GenerationProgress({
   session,
   onCancel,
-  onMinimize,
   cancelling,
 }: {
   session: StudioSession;
   onCancel: () => void;
-  onMinimize: () => void;
   cancelling?: boolean;
 }) {
   const format = STUDIO_FORMATS[session.type];
@@ -288,10 +285,6 @@ export function GenerationProgress({
               transition={{ duration: duration.base }}
               className="flex flex-wrap items-center gap-2"
             >
-              <Button variant="outline" size="sm" onClick={onMinimize}>
-                <Minus />
-                Run in background
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"

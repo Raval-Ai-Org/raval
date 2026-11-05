@@ -76,11 +76,19 @@ export function useBodyPointerGuard() {
       }, 120);
     };
     const observer = new MutationObserver(check);
-    // Style changes, and portals leaving <body> when a window closes.
+    // Body locking and portal mounts/unmounts.
     observer.observe(body, { attributes: true, attributeFilter: ["style"], childList: true });
+    const stateObserver = new MutationObserver(check);
+    // Radix updates open/closed state on the portal descendants.
+    stateObserver.observe(body, {
+      attributes: true,
+      attributeFilter: ["data-state", "aria-hidden", "data-aria-hidden"],
+      subtree: true,
+    });
     check();
     return () => {
       observer.disconnect();
+      stateObserver.disconnect();
       window.clearTimeout(timer);
     };
   }, []);

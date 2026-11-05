@@ -147,22 +147,16 @@ export function StudioComposer() {
   const inCanvas = Boolean(embed) || (!!session && !fullScreen && canEmbedWindow());
   // A sidebar press leaves Studio: work in progress (or a typed brief) goes to
   // the corner list / dock, an empty page simply closes.
-  useShellWindow(
-    "create",
-    !!session,
-    inCanvas
-      ? () => {
-          const s = sessionId ? getSession(sessionId) : undefined;
-          if (!s) return;
-          const keeps =
-            !!s.pendingKey ||
-            !!(s.job && isActiveJob(s.job)) ||
-            (s.step === "intent" && s.brief.trim().length > 0 && !s.lastGood);
-          setExitTo(keeps ? "dock" : "close");
-          closeSession(s.id);
-        }
-      : undefined,
-  );
+  useShellWindow("create", !!session, () => {
+    const s = sessionId ? getSession(sessionId) : undefined;
+    if (!s) return;
+    const keeps =
+      !!s.pendingKey ||
+      !!(s.job && isActiveJob(s.job)) ||
+      (s.step === "intent" && s.brief.trim().length > 0 && !s.lastGood);
+    setExitTo(keeps ? "dock" : "close");
+    closeSession(s.id);
+  });
 
   return (
     <DialogPrimitive.Root
@@ -505,7 +499,6 @@ export function ComposerBody({
               <GenerationProgress
                 session={session}
                 cancelling={cancelling}
-                onMinimize={minimize}
                 onCancel={async () => {
                   setCancelling(true);
                   await cancelSession(session.id);
