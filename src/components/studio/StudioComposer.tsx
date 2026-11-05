@@ -175,28 +175,25 @@ export function StudioComposer() {
       <AnimatePresence custom={exitTo}>
         {session ? (
           <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Overlay asChild>
-              <motion.div
-                className={cn(
-                  "fixed inset-0 z-50 transition-[background-color,backdrop-filter] duration-[--motion-duration-slow]",
-                  fullScreen
-                    ? "bg-background"
-                    : embed
-                      ? "bg-transparent"
-                      : "bg-black/45 backdrop-blur-[6px]",
-                )}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: duration.slow } }}
-                transition={{ duration: duration.base }}
-              />
-            </DialogPrimitive.Overlay>
+            {!inCanvas && (
+              <DialogPrimitive.Overlay asChild>
+                <motion.div
+                  className={cn(
+                    "fixed inset-0 z-50 transition-[background-color,backdrop-filter] duration-[--motion-duration-slow]",
+                    fullScreen ? "bg-background" : "bg-black/45 backdrop-blur-[6px]",
+                  )}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: duration.slow } }}
+                  transition={{ duration: duration.base }}
+                />
+              </DialogPrimitive.Overlay>
+            )}
             <div
               className={cn(
                 "pointer-events-none fixed inset-0 z-50 grid place-items-center transition-[padding] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
                 fullScreen ? "p-0" : "p-4",
               )}
-              data-modal={inCanvas ? "false" : "true"}
             >
               <DialogPrimitive.Content
                 asChild
@@ -222,6 +219,7 @@ export function StudioComposer() {
                 <motion.div
                   key={session.id}
                   custom={exitTo}
+                  data-modal={inCanvas ? "false" : "true"}
                   variants={{
                     // On the canvas it is a page, so it fades in like one (no window zoom).
                     initial: embed

@@ -228,6 +228,17 @@ type ReceivedDetail<K extends AppEventName> = undefined extends AppEventMap[K]
 export type AppEvent<K extends AppEventName> = CustomEvent<ReceivedDetail<K>>;
 export type AppEventHandler<K extends AppEventName> = (event: AppEvent<K>) => void;
 
+const appEventListeners = new Map<AppEventName, Set<EventListener>>();
+const pendingOpenEvents = new Map<
+  AppEventName,
+  { event: CustomEvent<unknown>; workspaceId: string | null }
+>();
+
+function activeWorkspaceId(): string | null {
+  if (typeof window.location === "undefined") return null;
+  return window.location.pathname.match(/^\/w\/([^/]+)\/app(?:\/|$)/)?.[1] ?? null;
+}
+
 // Events whose payload may be omitted take an optional detail argument.
 type DetailArgs<K extends AppEventName> = undefined extends AppEventMap[K]
   ? [detail?: AppEventMap[K]]
@@ -235,21 +246,51 @@ type DetailArgs<K extends AppEventName> = undefined extends AppEventMap[K]
 
 export function emitAppEvent<K extends AppEventName>(name: K, ...args: DetailArgs<K>): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(name, { detail: args[0] }));
+  const event = new CustomEvent(name, { detail: args[0] });
+  if (name.startsWith("open:") && !appEventListeners.get(name)?.size) {
+    pendingOpenEvents.set(name, {
+      event: event as CustomEvent<unknown>,
+      workspaceId: activeWorkspaceId(),
+    });
+  }
+  if (name === "workspace:changed") {
+    const workspaceId = (args[0] as AppEvent<"workspace:changed">["detail"])?.id;
+    for (const [pendingName, pending] of pendingOpenEvents) {
+      if (!workspaceId || pending.workspaceId !== workspaceId)
+        pendingOpenEvents.delete(pendingName);
+    }
+  }
+  window.dispatchEvent(event);
 }
 
 export function addAppEventListener<K extends AppEventName>(
   name: K,
   handler: AppEventHandler<K>,
 ): void {
-  window.addEventListener(name, handler as EventListener);
+  const listener = handler as EventListener;
+  window.addEventListener(name, listener);
+  const listeners = appEventListeners.get(name) ?? new Set<EventListener>();
+  listeners.add(listener);
+  appEventListeners.set(name, listeners);
+
+  const pending = pendingOpenEvents.get(name);
+  if (pending && pending.workspaceId === activeWorkspaceId()) {
+    pendingOpenEvents.delete(name);
+    window.dispatchEvent(pending.event);
+  } else if (pending) {
+    pendingOpenEvents.delete(name);
+  }
 }
 
 export function removeAppEventListener<K extends AppEventName>(
   name: K,
   handler: AppEventHandler<K>,
 ): void {
-  window.removeEventListener(name, handler as EventListener);
+  const listener = handler as EventListener;
+  window.removeEventListener(name, listener);
+  const listeners = appEventListeners.get(name);
+  listeners?.delete(listener);
+  if (!listeners?.size) appEventListeners.delete(name);
 }
 
 /** Subscribe outside React; returns the unsubscribe function. */

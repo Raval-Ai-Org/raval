@@ -76,6 +76,7 @@ const SelectContent = React.forwardRef<
       )}
       position={position}
       {...props}
+      data-modal="true"
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport

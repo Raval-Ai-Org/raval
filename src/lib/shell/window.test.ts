@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { clearStaleBodyPointerEvents, OPEN_MODAL_SELECTOR } from "./window";
 
 describe("body pointer-lock recovery", () => {
-  it("only keeps the lock for active modal surfaces", () => {
-    expect(OPEN_MODAL_SELECTOR).not.toContain("data-aria-hidden");
+  it("only recognizes surfaces explicitly marked modal", () => {
+    expect(OPEN_MODAL_SELECTOR).toContain('[data-modal="true"][data-state="open"]');
+    expect(OPEN_MODAL_SELECTOR).toContain('[aria-modal="true"]:not([data-state="closed"])');
+    expect(OPEN_MODAL_SELECTOR).not.toContain('[role="dialog"]');
     expect(OPEN_MODAL_SELECTOR).not.toContain("data-radix-popper-content-wrapper");
-    expect(OPEN_MODAL_SELECTOR).toContain(':not([data-modal="false"])');
   });
 
   it("clears a stale lock but preserves an active modal lock", () => {

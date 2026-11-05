@@ -156,20 +156,17 @@ export function AppModalShell({
       <AnimatePresence>
         {open && (
           <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Overlay asChild>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
-                className={cn(
-                  "fixed inset-0 z-50",
-                  embed
-                    ? "bg-transparent"
-                    : "bg-[rgb(22_25_27/0.28)] backdrop-blur-[10px] dark:bg-black/55",
-                )}
-              />
-            </DialogPrimitive.Overlay>
+            {!inCanvas && (
+              <DialogPrimitive.Overlay asChild>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                  className="fixed inset-0 z-50 bg-[rgb(22_25_27/0.28)] backdrop-blur-[10px] dark:bg-black/55"
+                />
+              </DialogPrimitive.Overlay>
+            )}
 
             <DialogPrimitive.Content
               asChild

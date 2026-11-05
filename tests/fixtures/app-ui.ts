@@ -3,6 +3,7 @@ import { FEATURES, PLANS } from "../../src/lib/billing/catalog";
 import { STORAGE_KEY, SUPABASE_HOST } from "./supabase-ref";
 
 export const AUDIT_WORKSPACE = "00000000-0000-4000-8000-000000000001";
+const APP_ORIGIN = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:8080").origin;
 const user = {
   id: "00000000-0000-4000-8000-000000000002",
   email: "qa@example.test",
@@ -38,13 +39,16 @@ export async function prepareAppUi(page: Page, theme: "light" | "dark") {
     {
       name: STORAGE_KEY,
       value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
-      url: "http://localhost:8080",
+      url: APP_ORIGIN,
       sameSite: "Lax",
     },
   ]);
   // Keep analytics and provider scripts outside this deterministic UI run.
   // More-specific Supabase fixtures below override this external-network rule.
-  await page.context().route(/^https?:\/\/(?!localhost:8080)/, (route) => route.abort());
+  await page.context().route(/^https?:\/\//, (route) => {
+    if (new URL(route.request().url()).origin !== APP_ORIGIN) return route.abort();
+    return route.continue();
+  });
   await page.context().route(new RegExp(`https?://${SUPABASE_HOST}/(auth|rest)/v1/.*`), (route) => {
     const url = route.request().url();
     if (url.includes("/auth/v1/user")) return route.fulfill({ json: user });
@@ -143,6 +147,10 @@ export async function openAppUi(page: Page) {
   // Use the production shell behind the development-only lab route. Fake
   // browser sessions cannot pass the proxy's server-side signature check.
   await page.goto("/workspace-lab", { waitUntil: "domcontentloaded" });
+  await page.evaluate(
+    (workspaceId) => window.history.replaceState(window.history.state, "", `/w/${workspaceId}/app`),
+    AUDIT_WORKSPACE,
+  );
   // Next's development indicator overlaps the bottom-left account control.
   // It is absent in production and must not intercept app interaction tests.
   await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });

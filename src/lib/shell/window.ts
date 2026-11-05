@@ -8,10 +8,8 @@ import { useEffect, useRef } from "react";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 
 export const OPEN_MODAL_SELECTOR = [
-  '[role="dialog"][data-state="open"]:not([data-modal="false"])',
-  '[role="alertdialog"][data-state="open"]:not([data-modal="false"])',
-  '[role="menu"][data-state="open"]:not([data-modal="false"])',
-  '[aria-modal="true"][data-state="open"]:not([data-modal="false"])',
+  '[data-modal="true"][data-state="open"]',
+  '[aria-modal="true"]:not([data-state="closed"])',
 ].join(", ");
 
 export function clearStaleBodyPointerEvents(

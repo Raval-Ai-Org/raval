@@ -63,15 +63,17 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
       <AnimatePresence>
         {open ? (
           <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Overlay asChild>
-              <motion.div
-                className="fixed inset-0 z-50 bg-background/60 backdrop-blur-[3px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: duration.base } }}
-                transition={{ duration: duration.base }}
-              />
-            </DialogPrimitive.Overlay>
+            {!inCanvas && (
+              <DialogPrimitive.Overlay asChild>
+                <motion.div
+                  className="fixed inset-0 z-50 bg-background/60 backdrop-blur-[3px]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: duration.base } }}
+                  transition={{ duration: duration.base }}
+                />
+              </DialogPrimitive.Overlay>
+            )}
             <div
               className={cn(
                 "pointer-events-none fixed inset-0 z-50 grid place-items-center",

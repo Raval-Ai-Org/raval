@@ -25,6 +25,7 @@ const PopoverContent = React.forwardRef<
         className,
       )}
       {...props}
+      data-modal="false"
     />
   </PopoverPrimitive.Portal>
 ));
