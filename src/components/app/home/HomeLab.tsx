@@ -166,6 +166,12 @@ export function HomeLab({ scene }: { scene?: string }) {
                 { id: "b", type: "video", state: "done", title: "Harvest morning in Huila" },
                 { id: "c", type: "image", state: "done", title: "New single origin is here" },
                 { id: "d", type: "ad", state: "failed" },
+                {
+                  id: "task:strategy",
+                  title: "Marketing strategy",
+                  state: "done",
+                  doneLabel: "Ready to review",
+                },
               ]}
               onOpen={() => undefined}
               onClose={() => undefined}

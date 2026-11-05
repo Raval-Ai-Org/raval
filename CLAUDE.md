@@ -58,6 +58,12 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   step out. On desktop the top bar sits on the canvas; route windows (Brain,
   Inspo…) pass `routed` to `AppModalShell` so a sidebar press goes straight
   to the place pressed.
+  A sidebar press emits `shell:leave`: every canvas window steps aside
+  (`useShellWindow(id, open, close)`), so nothing is left open over the new
+  place; `useBodyPointerGuard` clears a `pointer-events: none` Radix left on
+  <body>. Long background work that isn't a Studio piece (strategy, campaign
+  plan) sends `work:update` to the corner list instead of a toast. On Home the
+  Autopilot deck is the short one (`compact`).
   Home's message box is `ChatComposer slim`: a one-line pill with its tools
   beside it, growing once a person writes; it sits under the cards, never on them.
   Home is `HomeBento` above the message box (`/home-lab`); its cards only open

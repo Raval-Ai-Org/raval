@@ -41,9 +41,12 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function useComposerAutopilot({
   workspaceId,
   hero,
+  compact = false,
   onType,
 }: {
   workspaceId: string;
+  /** Home's dock: a short deck (see AutopilotDeck). */
+  compact?: boolean;
   /** The box is the centred one of a new chat, where the deck shows by itself. */
   hero: boolean;
   /** Hand the box back to the keyboard, with the key that was pressed if any. */
@@ -120,6 +123,7 @@ export function useComposerAutopilot({
 
   const cover = covered ? (
     <AutopilotDeck
+      compact={compact}
       view={view}
       failed={Boolean(query.error)}
       suggestion={{

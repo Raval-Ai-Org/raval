@@ -361,9 +361,12 @@ export function AutopilotDeck({
   failed,
   suggestion,
   handlers,
+  compact = false,
 }: {
   /** Undefined while it loads. */
   view: AutopilotView | undefined;
+  /** Home: the summary and buttons only, so the cards above keep their room. */
+  compact?: boolean;
   failed?: boolean;
   suggestion: SuggestionState;
   handlers: DeckHandlers;
@@ -389,13 +392,21 @@ export function AutopilotDeck({
     );
   }
   return view.program ? (
-    <LiveDeck view={view} handlers={handlers} />
+    <LiveDeck view={view} handlers={handlers} compact={compact} />
   ) : (
     <SetupDeck view={view} suggestion={suggestion} handlers={handlers} />
   );
 }
 
-function LiveDeck({ view, handlers }: { view: AutopilotView; handlers: DeckHandlers }) {
+function LiveDeck({
+  view,
+  handlers,
+  compact,
+}: {
+  view: AutopilotView;
+  handlers: DeckHandlers;
+  compact?: boolean;
+}) {
   const program = view.program!;
   const paused = program.status !== "running";
   const next = nextSteps(view, { limit: 1 })[0];
@@ -449,12 +460,16 @@ function LiveDeck({ view, handlers }: { view: AutopilotView; handlers: DeckHandl
 
       <Flow view={view} />
 
-      <div className="flex items-end gap-4">
-        <Week view={view} />
-        <Budget view={view} />
-      </div>
+      {compact ? null : (
+        <>
+          <div className="flex items-end gap-4">
+            <Week view={view} />
+            <Budget view={view} />
+          </div>
 
-      <AlsoRunning view={view} />
+          <AlsoRunning view={view} />
+        </>
+      )}
 
       <div className="ap-deck__bar">
         <DeckButton icon={Type} onClick={handlers.write}>

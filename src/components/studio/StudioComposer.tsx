@@ -145,7 +145,24 @@ export function StudioComposer() {
   const embed = useEmbedRect(!!session && !fullScreen);
   // In the canvas the composer is non-modal: the sidebar stays usable.
   const inCanvas = Boolean(embed) || (!!session && !fullScreen && canEmbedWindow());
-  useShellWindow("create", !!session);
+  // A sidebar press leaves Studio: work in progress (or a typed brief) goes to
+  // the corner list / dock, an empty page simply closes.
+  useShellWindow(
+    "create",
+    !!session,
+    inCanvas
+      ? () => {
+          const s = sessionId ? getSession(sessionId) : undefined;
+          if (!s) return;
+          const keeps =
+            !!s.pendingKey ||
+            !!(s.job && isActiveJob(s.job)) ||
+            (s.step === "intent" && s.brief.trim().length > 0 && !s.lastGood);
+          setExitTo(keeps ? "dock" : "close");
+          closeSession(s.id);
+        }
+      : undefined,
+  );
 
   return (
     <DialogPrimitive.Root
@@ -340,39 +357,38 @@ export function ComposerBody({
           resize();
         }}
       >
-        {session.step !== "review" || !session.pendingKey ? (
-          <button
-            type="button"
-            onClick={() => {
-              // While a piece is being made, Back leaves it running in the
-              // background (the dock and GeneratingPanel follow it).
-              if (working) return minimize();
-              // One step out: a finished piece is already in the Library.
-              if (session.step === "review") return closeSession(session.id);
-              // A typed brief is kept in the dock; an empty one is simply closed.
-              closeSession(session.id);
-              emitAppEvent("open:create-launcher");
-            }}
-            aria-label={
-              working
-                ? "Back, keep making it in the background"
-                : session.step === "review"
-                  ? "Close"
-                  : "Back to formats"
-            }
-            title={
-              working
-                ? "Keeps going in the background"
-                : session.step === "review"
-                  ? "Close, it is saved in your Library"
-                  : "Back to formats"
-            }
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:min-h-9"
-          >
-            <ArrowLeft className="size-4" />
-            <span className="hidden @3xl/composer:inline">Back</span>
-          </button>
-        ) : null}
+        {/* Back is always there, so nobody is ever stuck on this page. */}
+        <button
+          type="button"
+          onClick={() => {
+            // While a piece is being made (or changed), Back leaves it running
+            // in the background; the corner list follows it.
+            if (working || session.pendingKey) return minimize();
+            // One step out: a finished piece is already in the Library.
+            if (session.step === "review") return closeSession(session.id);
+            // A typed brief is kept in the dock; an empty one is simply closed.
+            closeSession(session.id);
+            emitAppEvent("open:create-launcher");
+          }}
+          aria-label={
+            working || session.pendingKey
+              ? "Back, keep making it in the background"
+              : session.step === "review"
+                ? "Close"
+                : "Back to formats"
+          }
+          title={
+            working || session.pendingKey
+              ? "Keeps going in the background"
+              : session.step === "review"
+                ? "Close, it is saved in your Library"
+                : "Back to formats"
+          }
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:min-h-9"
+        >
+          <ArrowLeft className="size-4" />
+          <span className="hidden @3xl/composer:inline">Back</span>
+        </button>
         {session.step === "intent" ? (
           <TypeSwitcher session={session} />
         ) : (
@@ -409,33 +425,6 @@ export function ComposerBody({
 
         <TooltipProvider delayDuration={300}>
           <div className="flex min-w-0 flex-1 shrink-0 items-center justify-end gap-0.5 @max-4xl/composer:flex-none">
-            {working ? (
-              <button
-                type="button"
-                onClick={minimize}
-                className="mr-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-3.5 text-[13px] font-semibold text-foreground shadow-[var(--ds-card-shadow)] transition hover:-translate-y-px lg:min-h-9"
-              >
-                <Minus className="size-4" />
-                Run in background
-              </button>
-            ) : null}
-            {session.step === "intent" && !isMobile ? (
-              <button
-                type="button"
-                onClick={() => setDrawer((o) => !o)}
-                aria-expanded={drawer}
-                aria-controls="studio-drawer"
-                className={cn(
-                  "mr-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition lg:min-h-9",
-                  drawer
-                    ? "border-transparent bg-[var(--mox-ink)] text-white"
-                    : "border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] text-foreground hover:-translate-y-px",
-                )}
-              >
-                <SlidersHorizontal className="size-4" />
-                Options
-              </button>
-            ) : null}
             {embedded ? null : (
               <>
                 <WindowButton

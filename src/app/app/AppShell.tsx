@@ -3,6 +3,7 @@
 import { OpeningPill } from "@/components/ui/page-loader";
 import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import { useBodyPointerGuard } from "@/lib/shell/window";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
 import { Link, useRouterState, useNavigate } from "@/lib/navigation";
 
@@ -182,6 +183,8 @@ function AppShell() {
     return () => removeAppEventListener("shell:window", on);
   }, []);
   const activeId = windowNav ?? routeNavId;
+  // Never let a closed window leave the whole app unclickable.
+  useBodyPointerGuard();
   const isCompact = useIsCompact();
   const [navOpen, setNavOpen] = useState(false);
   // Compact widths use an overlay drawer; desktop keeps an inline sidebar.
@@ -460,6 +463,11 @@ function AppShell() {
     closeNavOnPhone();
     if (lock && item.feature) return openFeatureUpgrade(item.feature);
     const t = item.target;
+    // Whatever window is open steps aside, and the highlight moves at once.
+    if (item.id !== activeId) {
+      emitAppEvent("shell:leave");
+      setWindowNav(null);
+    }
     if (t.kind === "brain") return openBrain();
     // A window opened from a page of its own (Brain, Inspo…) opens over Home,
     // so its Back lands somewhere sensible and nothing is stacked.

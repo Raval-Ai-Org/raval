@@ -135,7 +135,13 @@ export function AppModalShell({
   const embed = useEmbedRect(open && big);
   // In the canvas the window is non-modal, so the sidebar keeps working.
   const inCanvas = Boolean(embed) || (open && big && canEmbedWindow());
-  useShellWindow(navId, open);
+  // A canvas window steps aside when a sidebar row is pressed; a routed one is
+  // unmounted by the navigation instead.
+  useShellWindow(
+    navId,
+    open,
+    inCanvas && !routed && !disableClose ? () => onOpenChange(false) : undefined,
+  );
   // Big workspaces (lg/xl) can become a full page; small forms stay popups.
   const canMaximize = !embed && (allowMaximize ?? big);
   useEffect(() => {

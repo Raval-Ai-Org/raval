@@ -1680,7 +1680,12 @@ export function ChatPanel({
     if (char) setInput((v) => v + char);
     requestAnimationFrame(() => composerRef.current?.focus());
   }, []);
-  const autopilot = useComposerAutopilot({ workspaceId, hero: empty, onType: onAutopilotType });
+  const autopilot = useComposerAutopilot({
+    workspaceId,
+    hero: empty,
+    compact: home,
+    onType: onAutopilotType,
+  });
   // What waits for a person and what is running, read once for the box and
   // the ideas under it (src/lib/pulse/pulse.ts). Free; starts nothing.
   const pulse = useWorkspacePulse(workspaceId).data;

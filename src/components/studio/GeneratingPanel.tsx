@@ -10,7 +10,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, Check, ChevronRight, X } from "@/components/icons";
+import { AlertTriangle, Check, ChevronRight, Sparkles, X } from "@/components/icons";
+import { addAppEventListener, removeAppEventListener, type AppEvent } from "@/lib/app-events";
+import { useNavigate } from "@/lib/navigation";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
@@ -20,7 +22,10 @@ import { TypeGlyph } from "./studio-ui";
 
 export type GeneratingRow = {
   id: string;
-  type: StudioJob["type"];
+  /** A Studio piece's format; other work (a strategy, a plan) has none. */
+  type?: StudioJob["type"];
+  /** For other work: what the row says when it is done ("Strategy ready"). */
+  doneLabel?: string;
   state: "working" | "done" | "failed";
   /** What the piece is about (the job's title or brief). */
   title?: string;
@@ -63,7 +68,11 @@ export function GeneratingPanelView({
           ) : (
             <Check className="size-3.5 text-[var(--mox-green)]" strokeWidth={3} />
           )}
-          {working ? `Making ${working} ${working === 1 ? "piece" : "pieces"}` : "All done"}
+          {working
+            ? rows.every((r) => r.type)
+              ? `Making ${working} ${working === 1 ? "piece" : "pieces"}`
+              : `Working on ${working}`
+            : "All done"}
         </p>
         <button
           type="button"
@@ -77,7 +86,7 @@ export function GeneratingPanelView({
       <ul className="flex flex-col gap-1">
         <AnimatePresence initial={false}>
           {rows.map((r) => {
-            const label = STUDIO_FORMATS[r.type]?.label ?? "Piece";
+            const label = (r.type && STUDIO_FORMATS[r.type]?.label) || "Piece";
             return (
               <motion.li
                 key={r.id}
@@ -111,15 +120,27 @@ export function GeneratingPanelView({
                       />
                     </span>
                   ) : null}
-                  <TypeGlyph type={r.type} size="sm" className="size-7 shrink-0 [&_svg]:size-3.5" />
+                  {r.type ? (
+                    <TypeGlyph
+                      type={r.type}
+                      size="sm"
+                      className="size-7 shrink-0 [&_svg]:size-3.5"
+                    />
+                  ) : (
+                    <span className="ds-grad-pill grid size-7 shrink-0 place-items-center rounded-[10px] text-[var(--mox-ink)]">
+                      <Sparkles className="size-3.5" />
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{r.title || label}</span>
                     <span className="block truncate text-[11px] font-medium opacity-70">
                       {r.state === "working"
                         ? (r.step ?? "In progress") + "…"
                         : r.state === "done"
-                          ? `${label} ready`
-                          : `${label} failed`}
+                          ? (r.doneLabel ?? `${label} ready`)
+                          : r.type
+                            ? `${label} failed`
+                            : "Didn't finish"}
                     </span>
                   </span>
                   {r.state === "working" ? (
@@ -153,6 +174,19 @@ export function GeneratingPanel({ className }: { className?: string }) {
   const seen = useRef<string[]>([]);
   const [, bump] = useState(0);
   const [closed, setClosed] = useState(false);
+  const navigate = useNavigate();
+  // Other background work, newest first (see the `work:update` event).
+  const [tasks, setTasks] = useState<(GeneratingRow & { href?: string })[]>([]);
+  useEffect(() => {
+    const on = (e: AppEvent<"work:update">) => {
+      const { id, title, state, step, doneLabel, href } = e.detail;
+      const row = { id: `task:${id}`, title, state, step, doneLabel, href };
+      setTasks((list) => [row, ...list.filter((r) => r.id !== row.id)].slice(0, 4));
+      setClosed(false);
+    };
+    addAppEventListener("work:update", on);
+    return () => removeAppEventListener("work:update", on);
+  }, []);
 
   useEffect(() => {
     let added = false;
@@ -174,19 +208,25 @@ export function GeneratingPanel({ className }: { className?: string }) {
     if (!j || j.status === "cancelled") return [];
     const state = isActiveJob(j) ? "working" : j.status === "succeeded" ? "done" : "failed";
     const step = STUDIO_FORMATS[j.type]?.stages.find((s) => s.id === j.stage)?.label;
-    return [{ id, type: j.type, state, title: j.title || undefined, step }];
+    return [{ id, type: j.type, state, title: j.title || undefined, step } as GeneratingRow];
   });
+  const all = [...tasks, ...rows];
 
   return (
     <AnimatePresence>
-      {!closed && rows.length > 0 ? (
+      {!closed && all.length > 0 ? (
         <GeneratingPanelView
           key="generating"
-          rows={rows}
+          rows={all}
           className={className}
-          onOpen={(id) => void openJob(id, workspaceId)}
+          onOpen={(id) => {
+            const task = tasks.find((t) => t.id === id);
+            if (!task) return void openJob(id, workspaceId);
+            if (task.href) navigate({ to: task.href });
+          }}
           onClose={() => {
             setClosed(true);
+            setTasks((list) => list.filter((t) => t.state === "working"));
             seen.current = seen.current.filter((id) => {
               const j = jobs.find((x) => x.id === id);
               return j ? isActiveJob(j) : false;

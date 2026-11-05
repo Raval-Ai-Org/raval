@@ -28,7 +28,7 @@ import { useNavigate } from "@/lib/navigation";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { workspacePath } from "@/lib/workspace/paths";
+import { campaignsPath, workspacePath } from "@/lib/workspace/paths";
 import { CampaignsScreen } from "./CampaignsScreen";
 import type { CampaignsHandlers, CampaignsMode, CampaignsTab, CampaignsView } from "./types";
 
@@ -165,15 +165,23 @@ export function CampaignsPanel({
       }
     },
     plan: async (id) => {
-      await act(
-        `plan:${id}`,
-        "Couldn't write the plan",
-        () =>
-          planCampaign({
-            data: { workspaceId, campaignId: id, idempotencyKey: crypto.randomUUID() },
-          }),
-        "Plan written. Check it, then start the campaign.",
+      // Writing a plan takes a while: it shows in the corner list.
+      const work = (state: "working" | "done" | "failed") =>
+        emitAppEvent("work:update", {
+          id: `campaign-plan:${id}`,
+          title: "Campaign plan",
+          state,
+          step: "Writing it",
+          doneLabel: "Check it, then start",
+          href: campaignsPath(workspaceId, { c: id }),
+        });
+      work("working");
+      const view = await act(`plan:${id}`, "Couldn't write the plan", () =>
+        planCampaign({
+          data: { workspaceId, campaignId: id, idempotencyKey: crypto.randomUUID() },
+        }),
       );
+      work(view ? "done" : "failed");
     },
     start: (id) =>
       void act(

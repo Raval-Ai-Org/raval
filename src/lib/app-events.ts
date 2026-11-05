@@ -59,6 +59,21 @@ export type AppEventMap = {
   // ── Shell ───────────────────────────────────────────────────────────
   /** A full window opened or closed; the sidebar highlights its row (nav.ts id). */
   "shell:window": { id: string; open: boolean };
+  /** A sidebar row was pressed: every window on the canvas steps aside for it. */
+  "shell:leave": undefined;
+  /**
+   * Background work that isn't a Studio piece (a strategy, a campaign plan…)
+   * shows in the corner list (GeneratingPanel) instead of a pop-up. Send the
+   * same id again with the new state; `href` is where a press on the row goes.
+   */
+  "work:update": {
+    id: string;
+    title: string;
+    state: "working" | "done" | "failed";
+    step?: string;
+    doneLabel?: string;
+    href?: string;
+  };
 
   // ── Chat ────────────────────────────────────────────────────────────
   /** Put text in the chat composer; `focus` defaults to true. */

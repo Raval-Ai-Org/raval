@@ -33,7 +33,7 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
   const backRef = useRef<(() => boolean) | null>(null);
   const embed = useEmbedRect(open && !isMobile);
   const inCanvas = Boolean(embed) || (open && !isMobile && canEmbedWindow());
-  useShellWindow("library", open);
+  useShellWindow("library", open, inCanvas ? () => setOpen(false) : undefined);
 
   useEffect(() => {
     const on: Parameters<typeof addAppEventListener<"open:library">>[1] = (e) => {

@@ -4,8 +4,8 @@
 // the sidebar closes the window (and the row opens its place), any other
 // press outside leaves it open. Browser-only helpers, no React.
 
-import { useEffect } from "react";
-import { emitAppEvent } from "@/lib/app-events";
+import { useEffect, useRef } from "react";
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 
 /** The sidebar and its collapsed rail carry this attribute (AppShell). */
 export const SIDEBAR_ATTR = "data-app-sidebar";
@@ -22,11 +22,66 @@ export function canEmbedWindow() {
   return Boolean(document.querySelector("[data-workspace-column]"));
 }
 
-/** Tell the sidebar which row this window belongs to while it is open. */
-export function useShellWindow(id: string | undefined, open: boolean) {
+/**
+ * Tell the sidebar which row this window belongs to while it is open, and
+ * step aside (`close`) when a sidebar row is pressed. The press itself may not
+ * reach the window (keyboard, a window that opened modal), so the sidebar says
+ * so out loud rather than relying on Radix's "pressed outside".
+ */
+export function useShellWindow(id: string | undefined, open: boolean, close?: () => void) {
   useEffect(() => {
     if (!id || !open) return;
     emitAppEvent("shell:window", { id, open: true });
     return () => emitAppEvent("shell:window", { id, open: false });
   }, [id, open]);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  const canClose = Boolean(close);
+  useEffect(() => {
+    if (!open || !canClose) return;
+    const on = () => closeRef.current?.();
+    addAppEventListener("shell:leave", on);
+    return () => removeAppEventListener("shell:leave", on);
+  }, [open, canClose]);
+}
+
+/**
+ * Radix sets `pointer-events: none` on <body> while a modal is open and can
+ * leave it behind when one window closes as another menu or dialog opens
+ * (Settings from the account menu, say). The whole app then ignores clicks:
+ * the "stuck screen". Mounted once in the shell, this clears it whenever
+ * nothing modal is actually open.
+ */
+export function useBodyPointerGuard() {
+  useEffect(() => {
+    const body = document.body;
+    let timer = 0;
+    const selector = [
+      '[data-aria-hidden="true"]',
+      '[role="dialog"][data-state="open"]',
+      '[role="alertdialog"][data-state="open"]',
+      '[role="menu"][data-state="open"]',
+      '[aria-modal="true"][data-state="open"]',
+      '[data-radix-popper-content-wrapper][data-state="open"]',
+    ].join(", ");
+
+    const check = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (body.style.pointerEvents !== "none") return;
+        // Real modal and popover surfaces temporarily freeze the page behind them.
+        // If no such surface remains open, the Radix state leak has to be cleared.
+        const modalOpen = document.querySelector(selector);
+        if (!modalOpen) body.style.pointerEvents = "";
+      }, 120);
+    };
+    const observer = new MutationObserver(check);
+    // Style changes, and portals leaving <body> when a window closes.
+    observer.observe(body, { attributes: true, attributeFilter: ["style"], childList: true });
+    check();
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, []);
 }
