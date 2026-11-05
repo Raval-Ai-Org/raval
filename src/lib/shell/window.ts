@@ -7,6 +7,21 @@
 import { useEffect, useRef } from "react";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 
+export const OPEN_MODAL_SELECTOR = [
+  '[role="dialog"][data-state="open"]:not([data-modal="false"])',
+  '[role="alertdialog"][data-state="open"]:not([data-modal="false"])',
+  '[role="menu"][data-state="open"]:not([data-modal="false"])',
+  '[aria-modal="true"][data-state="open"]:not([data-modal="false"])',
+].join(", ");
+
+export function clearStaleBodyPointerEvents(
+  body: { style: { pointerEvents: string } },
+  modalOpen: boolean,
+) {
+  if (body.style.pointerEvents !== "none" || modalOpen) return;
+  body.style.pointerEvents = "";
+}
+
 /** The sidebar and its collapsed rail carry this attribute (AppShell). */
 export const SIDEBAR_ATTR = "data-app-sidebar";
 
@@ -56,23 +71,11 @@ export function useBodyPointerGuard() {
   useEffect(() => {
     const body = document.body;
     let timer = 0;
-    const selector = [
-      '[data-aria-hidden="true"]',
-      '[role="dialog"][data-state="open"]',
-      '[role="alertdialog"][data-state="open"]',
-      '[role="menu"][data-state="open"]',
-      '[aria-modal="true"][data-state="open"]',
-      '[data-radix-popper-content-wrapper][data-state="open"]',
-    ].join(", ");
 
     const check = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        if (body.style.pointerEvents !== "none") return;
-        // Real modal and popover surfaces temporarily freeze the page behind them.
-        // If no such surface remains open, the Radix state leak has to be cleared.
-        const modalOpen = document.querySelector(selector);
-        if (!modalOpen) body.style.pointerEvents = "";
+        clearStaleBodyPointerEvents(body, Boolean(document.querySelector(OPEN_MODAL_SELECTOR)));
       }, 120);
     };
     const observer = new MutationObserver(check);
@@ -82,7 +85,7 @@ export function useBodyPointerGuard() {
     // Radix updates open/closed state on the portal descendants.
     stateObserver.observe(body, {
       attributes: true,
-      attributeFilter: ["data-state", "aria-hidden", "data-aria-hidden"],
+      attributeFilter: ["data-state"],
       subtree: true,
     });
     check();

@@ -196,6 +196,7 @@ export function StudioComposer() {
                 "pointer-events-none fixed inset-0 z-50 grid place-items-center transition-[padding] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
                 fullScreen ? "p-0" : "p-4",
               )}
+              data-modal={inCanvas ? "false" : "true"}
             >
               <DialogPrimitive.Content
                 asChild

@@ -200,6 +200,7 @@ export function AppModalShell({
                 ref={contentRef}
                 tabIndex={-1}
                 data-mellox-app
+                data-modal={inCanvas ? "false" : "true"}
                 // Centering lives in the animated transform so the animation never
                 // fights a CSS translate (which caused off-centre popups).
                 // Centred with plain CSS (inset-0 + m-auto); the animation only fades,

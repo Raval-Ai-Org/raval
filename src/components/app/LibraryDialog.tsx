@@ -101,6 +101,7 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                 <motion.div
                   tabIndex={-1}
                   data-mellox-app
+                  data-modal={inCanvas ? "false" : "true"}
                   initial={embed ? { opacity: 0, x: 28 } : { opacity: 0, y: 14, scale: 0.985 }}
                   animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
                   style={
