@@ -224,7 +224,7 @@ export function GoalStep({
               <span
                 className={cn(
                   "grid h-8 w-8 place-items-center rounded-full transition-colors",
-                  selected ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary",
+                  selected ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary-ink",
                 )}
               >
                 <Icon className="h-4 w-4" aria-hidden />

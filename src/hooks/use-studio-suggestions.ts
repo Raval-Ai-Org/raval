@@ -79,10 +79,14 @@ export function useStudioSuggestions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const request = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
 
   const load = useCallback(
     async (refresh = false) => {
       const id = ++request.current;
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
       if (!workspaceId) {
         setIdeas([]);
         setLoading(false);
@@ -92,20 +96,26 @@ export function useStudioSuggestions() {
       setError(false);
       try {
         const dismissed = readDismissed(workspaceId);
-        const result = await studioApi.ideas({
-          workspaceId,
-          brand: readBrandPayload(workspaceId),
-          dismissed: dismissed.map((item) => item.title).slice(-30),
-          limit: 8,
-          refresh,
-        });
+        const result = await studioApi.ideas(
+          {
+            workspaceId,
+            brand: readBrandPayload(workspaceId),
+            dismissed: dismissed.map((item) => item.title).slice(-30),
+            limit: 8,
+            refresh,
+          },
+          controller.signal,
+        );
         if (id !== request.current) return;
         const hidden = new Set(dismissed.map((item) => item.id));
         setIdeas(result.ideas.filter((idea) => !hidden.has(idea.id)));
       } catch {
-        if (id === request.current) setError(true);
+        if (id === request.current && !controller.signal.aborted) setError(true);
       } finally {
-        if (id === request.current) setLoading(false);
+        if (id === request.current) {
+          setLoading(false);
+          inFlight.current = null;
+        }
       }
     },
     [workspaceId],
@@ -114,7 +124,23 @@ export function useStudioSuggestions() {
   useEffect(() => {
     setIdeas([]);
     void load();
-    const onChange = () => void load();
+    // While a piece is being made, `content:changed` fires again and again
+    // (drafts written, saved, finished). Each used to start another model call
+    // of up to a minute or two, never cancelled, until they filled the
+    // browser's connections and the whole app stopped answering. Coalesce:
+    // one quiet reload a few seconds after the last change, and never on top
+    // of a request that is still running.
+    let timer = 0;
+    const onChange = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function retry() {
+        if (inFlight.current) {
+          timer = window.setTimeout(retry, 5_000);
+          return;
+        }
+        void load();
+      }, 4_000);
+    };
     const onBrandChange = () => void load(true);
     addAppEventListener("brand-dna:saved", onBrandChange);
     addAppEventListener("content:changed", onChange);
@@ -123,6 +149,8 @@ export function useStudioSuggestions() {
       removeAppEventListener("brand-dna:saved", onBrandChange);
       removeAppEventListener("content:changed", onChange);
       removeAppEventListener("geo:audit-complete", onChange);
+      window.clearTimeout(timer);
+      inFlight.current?.abort();
     };
   }, [load]);
 

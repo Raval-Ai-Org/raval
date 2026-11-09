@@ -21,9 +21,25 @@ import type { InspoHandlers, InspoTaste, InspoView } from "./types";
 
 const WS = "00000000-0000-4000-8000-000000000099";
 
+/** A small designed poster: soft light, a subject, and a headline that always fits. */
 function art(w: number, h: number, bg: string, fg: string, word: string) {
+  const m = Math.min(w, h);
+  const size = Math.min(w * 0.11, (w * 0.84) / Math.max(4, word.length * 0.56));
   return `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="${bg}"/><circle cx="${w * 0.62}" cy="${h * 0.42}" r="${Math.min(w, h) * 0.28}" fill="${fg}"/><text x="${w * 0.08}" y="${h * 0.88}" font-family="Georgia" font-size="${w * 0.09}" fill="#fff">${word}</text></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${bg}"/><stop offset="1" stop-color="${bg}" stop-opacity="0.78"/></linearGradient>
+        <radialGradient id="l" cx="0.3" cy="0.2" r="0.8"><stop offset="0" stop-color="#fff" stop-opacity="0.28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect width="${w}" height="${h}" fill="#111"/><rect width="${w}" height="${h}" fill="url(#g)"/>
+      <circle cx="${w * 0.72}" cy="${h * 0.3}" r="${m * 0.34}" fill="${fg}" opacity="0.9"/>
+      <ellipse cx="${w * 0.5}" cy="${h * 0.7}" rx="${m * 0.36}" ry="${m * 0.06}" fill="#000" opacity="0.18"/>
+      <rect x="${w * 0.38}" y="${h * 0.38}" width="${m * 0.24}" height="${m * 0.3}" rx="${m * 0.05}" fill="#fff" opacity="0.92"/>
+      <rect x="${w * 0.41}" y="${h * 0.44}" width="${m * 0.18}" height="${m * 0.025}" rx="${m * 0.012}" fill="${bg}" opacity="0.7"/>
+      <rect width="${w}" height="${h}" fill="url(#l)"/>
+      <rect x="${w * 0.08}" y="${h * 0.08}" width="${m * 0.16}" height="${m * 0.04}" rx="${m * 0.02}" fill="#fff" opacity="0.85"/>
+      <text x="${w / 2}" y="${h * 0.88}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="800" letter-spacing="-1" font-size="${size}" fill="#fff">${word}</text>
+    </svg>`,
   )}`;
 }
 

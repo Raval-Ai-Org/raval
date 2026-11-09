@@ -174,7 +174,7 @@ function CheckRow({ check, index }: { check: Check; index: number }) {
       <span
         className={cn(
           "grid size-5 shrink-0 place-items-center rounded-full",
-          check.state === "ok" && "bg-primary-surface text-primary ring-1 ring-primary-border",
+          check.state === "ok" && "bg-primary-surface text-primary-ink ring-1 ring-primary-border",
           check.state === "warn" && "bg-warning-surface text-warning ring-1 ring-warning-border",
           check.state === "fail" && "bg-danger-surface text-danger ring-1 ring-danger-border",
           check.state === "busy" && "bg-surface-2 text-muted-foreground ring-1 ring-border",
@@ -1535,7 +1535,7 @@ export function ReviewPanel({
               aria-live="polite"
             >
               <div className="flex items-center gap-3 py-1.5 pl-4 pr-1.5">
-                <Sparkles className="size-4 text-primary" />
+                <Sparkles className="size-4 text-primary-ink" />
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.span
                     key={session.job?.stage ?? "start"}
@@ -1619,7 +1619,7 @@ export function ReviewPanel({
               ) : null}
               {draft.angle ? (
                 <span className="inline-flex h-6 items-center gap-1 rounded-full bg-primary-surface px-2.5 text-[11px] font-medium text-foreground ring-1 ring-primary-border">
-                  <Sparkles className="size-3 text-primary" />
+                  <Sparkles className="size-3 text-primary-ink" />
                   {draft.angle}
                 </span>
               ) : null}

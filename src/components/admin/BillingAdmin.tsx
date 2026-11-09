@@ -112,7 +112,7 @@ export function BillingAdmin() {
     <div data-mellox-app className="flex h-dvh flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary-ink">
             <Shield className="h-4 w-4" />
           </span>
           <h1 className="text-[15px] font-semibold">Mellox admin</h1>
@@ -545,7 +545,7 @@ function AccountPage({ id, back }: { id: string; back: () => void }) {
             <p className="text-[13px]">Account owner: {account.email ?? account.ownerUserId}</p>
             <Link
               href={`/admin/users/${encodeURIComponent(account.ownerUserId)}`}
-              className="text-[13px] font-medium text-primary hover:underline"
+              className="text-[13px] font-medium text-primary-ink hover:underline"
             >
               View customer profile
             </Link>

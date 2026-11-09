@@ -17,7 +17,9 @@ export async function readPulse(
 ): Promise<WorkspacePulse> {
   const autopilotOn = isAutopilotEnabled(workspaceId);
   const campaignsOn = isCampaignsEnabled(workspaceId);
-  const [program, waiting, campaigns, products, goal] = await Promise.all([
+  // The top bar's streak: finished pieces, not revisions, last 60 days.
+  const since = new Date(today.getTime() - 60 * 86_400_000).toISOString();
+  const [program, waiting, campaigns, products, goal, madeCount, madeRecent] = await Promise.all([
     autopilotOn
       ? client
           .from("autopilot_programs")
@@ -52,6 +54,21 @@ export async function readPulse(
       .order("position", { ascending: true })
       .limit(6),
     client.from("workspace_goals").select("goals").eq("workspace_id", workspaceId).maybeSingle(),
+    client
+      .from("studio_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "succeeded")
+      .is("parent_job_id", null),
+    client
+      .from("studio_jobs")
+      .select("completed_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "succeeded")
+      .is("parent_job_id", null)
+      .gte("completed_at", since)
+      .order("completed_at", { ascending: false })
+      .limit(400),
   ]);
 
   const ymd = today.toISOString().slice(0, 10);
@@ -80,6 +97,13 @@ export async function readPulse(
     goal: ((goal.data as { goals?: { focus?: unknown } } | null)?.goals ?? null) as {
       focus?: unknown;
     } | null,
+    made:
+      madeCount.error || madeRecent.error
+        ? null
+        : {
+            total: madeCount.count ?? null,
+            recent: (madeRecent.data ?? []) as { completed_at: string | null }[],
+          },
   };
   return buildPulse(rows);
 }

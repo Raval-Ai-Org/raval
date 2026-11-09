@@ -112,7 +112,7 @@ export function SidebarNav({
           >
             {group.label}
           </p>
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1">
             {group.items.map((item) => {
               const Icon = ICONS[item.icon];
               const active = activeId === item.id;
@@ -159,6 +159,19 @@ export function SidebarNav({
                     aria-hidden
                   />
                   <span className="relative min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.badge && !lock && !hint ? (
+                    // Holo: a tiny pill riding the row's top-right corner.
+                    <span
+                      className={cn(
+                        "pointer-events-none absolute -top-1.5 right-1 z-10 rounded-full px-1.5 py-px text-[9px] font-bold leading-[14px] shadow-[0_3px_8px_-3px_rgb(0_0_0/0.35)]",
+                        item.badge === "Beta"
+                          ? "bg-[#8B7CF6] text-white"
+                          : "bg-[#FF5C7A] text-white",
+                      )}
+                    >
+                      {item.badge}
+                    </span>
+                  ) : null}
                   {lock ? (
                     <span className="relative">
                       <PlanLock plan={lock} />

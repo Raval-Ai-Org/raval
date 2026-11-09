@@ -128,7 +128,7 @@ export function FreeCreditStripView({
         className,
       )}
     >
-      <Bolt className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+      <Bolt className="h-3.5 w-3.5 shrink-0 text-primary-ink" aria-hidden />
       <span className="min-w-0 truncate">
         <span className="font-semibold">{nudge.title}.</span>{" "}
         <span className="text-muted-foreground max-sm:hidden">{nudge.text}</span>

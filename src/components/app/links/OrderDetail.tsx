@@ -177,7 +177,7 @@ export function OrderDetail({
                         href={placement.publishedUrl}
                         target="_blank"
                         rel="noopener noreferrer nofollow"
-                        className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-[13.5px] text-primary underline-offset-4 hover:underline"
+                        className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-[13.5px] text-primary-ink underline-offset-4 hover:underline"
                       >
                         <span className="truncate">
                           {placement.publishedUrl.replace(/^https?:\/\//, "")}

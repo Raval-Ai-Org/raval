@@ -88,6 +88,11 @@ export async function createBilledStudioJob(args: {
    * for a worker acting without a person, also one for a selling brief.
    */
   autoProduct?: "named" | "any";
+  /**
+   * A person's request: answer once the job exists and make it after the
+   * response (see `createStudioJob`). Workers leave this off.
+   */
+  background?: boolean;
 }): Promise<BilledStudioJob> {
   const { client, workspaceId, userId, role, input } = args;
   // A piece about a catalogue product (ADR-0035) must name one of this
@@ -413,6 +418,12 @@ export async function createBilledStudioJob(args: {
             workspaceId,
             userId,
             input,
+            background: args.background,
+            onFinished: async (done) => {
+              // The request has answered by now; settle the hold here so the
+              // charge never waits for someone to poll the job.
+              if (createdHere && billingLinked) await settleStudioBilling(done);
+            },
             onCreated: async (created) => {
               createdHere = true;
               if (captionEditId) await linkCaptionEdit(captionEditId, created.id);

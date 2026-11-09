@@ -811,7 +811,7 @@ export function OperationsInbox() {
                       {a.run_id ? (
                         <button
                           type="button"
-                          className="mt-2 text-[12px] text-primary"
+                          className="mt-2 text-[12px] text-primary-ink"
                           onClick={() => {
                             setTab("runs");
                             void openRun(a.run_id!);
@@ -869,7 +869,7 @@ export function OperationsInbox() {
               <button
                 type="button"
                 onClick={() => setRunDetail(null)}
-                className="mb-2 text-[12px] text-primary"
+                className="mb-2 text-[12px] text-primary-ink"
               >
                 ← All runs
               </button>

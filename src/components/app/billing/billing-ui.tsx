@@ -39,7 +39,7 @@ export function IntervalToggle({
         >
           {option === "month" ? "Monthly" : "Yearly"}
           {option === "year" && (
-            <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary">
+            <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary-ink">
               2 months free
             </span>
           )}
@@ -123,7 +123,7 @@ export function PlanLock({ plan, className }: { plan: PlanId; className?: string
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-semibold text-primary",
+        "inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-semibold text-primary-ink",
         className,
       )}
     >

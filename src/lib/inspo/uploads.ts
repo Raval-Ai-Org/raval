@@ -4,16 +4,16 @@
 
 import type { ClipAnalysis } from "@/lib/studio/smart-cut";
 
-export const MAX_FILES_PER_BATCH = 30;
-export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+export const MAX_FILES_PER_BATCH = 100;
+export const MAX_IMAGE_BYTES = 100 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 export const MAX_VIDEO_SECONDS = 180;
 /** Still frames kept per video: one per scene, at most this many. */
 export const MAX_VIDEO_FRAMES = 8;
 /** Board and Media references per brand. A video's frames don't count. */
-export const MAX_REFERENCES = 300;
+export const MAX_REFERENCES = 1000;
 /** Files uploaded at the same time from one browser. */
-export const PARALLEL_UPLOADS = 3;
+export const PARALLEL_UPLOADS = 4;
 
 export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 export const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"] as const;
@@ -25,7 +25,7 @@ export type UploadFileInfo = { name: string; type: string; size: number };
 export const UPLOAD_MESSAGES = {
   type: "Use a PNG, JPEG or WebP photo, or an MP4, MOV or WebM video.",
   empty: "This file is empty.",
-  imageSize: "Too big: photos up to 25 MB.",
+  imageSize: "Too big: photos up to 100 MB.",
   videoSize: "Too big: videos up to 300 MB.",
   tooLong: "Too long: up to 3 minutes.",
   unreadable: "This video format can't be read.",

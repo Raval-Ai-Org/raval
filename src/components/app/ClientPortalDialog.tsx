@@ -617,7 +617,7 @@ function NewShareView({ workspaceId, onDone }: { workspaceId: string | null; onD
   if (created) {
     return (
       <div className="ds-tile mx-auto max-w-lg p-6 text-center">
-        <span className="mx-auto grid size-11 place-items-center rounded-full bg-primary/15 text-primary">
+        <span className="mx-auto grid size-11 place-items-center rounded-full bg-primary/15 text-primary-ink">
           <Check className="size-5" />
         </span>
         <p className="mt-3 text-[15px] font-semibold">Your link is ready</p>

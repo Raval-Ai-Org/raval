@@ -201,7 +201,7 @@ export function CmsFixAllPanel({
                   className={cn(
                     "shrink-0 text-[11.5px]",
                     phase === "ready" || phase === "fixed"
-                      ? "text-primary"
+                      ? "text-primary-ink"
                       : "text-muted-foreground",
                   )}
                 >

@@ -197,6 +197,28 @@ export function InspoPanel({
     }
   }, []);
 
+  // The brand was already scanned, so the first look at its site is read by
+  // itself the first time an editor opens Inspo. It is the included first
+  // analysis (no charge); a repeat is always a person's click with its price.
+  const autoRead = useRef(false);
+  const site = dna.websiteUrl?.trim() ?? "";
+  useEffect(() => {
+    if (autoRead.current || !view || !site) return;
+    if (!view.available || !view.canEdit) return;
+    if (view.profiles.length || view.jobs.length) return;
+    autoRead.current = true;
+    void perform("scan", () =>
+      scanVisualWebsite({
+        data: {
+          workspaceId,
+          url: /^https?:\/\//i.test(site) ? site : `https://${site}`,
+          maxPages: 4,
+          idempotencyKey: crypto.randomUUID(),
+        },
+      }),
+    );
+  }, [view, site, workspaceId, perform]);
+
   const call = useCallback(
     async (path: string, init: { body: BodyInit; json?: boolean }) => {
       const {

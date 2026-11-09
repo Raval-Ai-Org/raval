@@ -63,7 +63,7 @@ const buttonVariants = cva(
           "hover:bg-[color-mix(in_oklab,hsl(var(--surface-2))_92%,hsl(var(--foreground)))]",
         ].join(" "),
         ghost: "text-foreground hover:bg-surface-2",
-        link: "h-auto p-0 text-primary underline-offset-4 hover:underline",
+        link: "h-auto p-0 text-primary-ink underline-offset-4 hover:underline",
       },
       size: {
         sm: "h-auto min-h-8 px-3 py-1.5 text-xs [&_svg]:size-4",

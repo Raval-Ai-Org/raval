@@ -455,7 +455,7 @@ function LensEditor({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20 @md:grid">
+        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/12 text-primary-ink ring-1 ring-primary/20 @md:grid">
           <MapPin className="h-4 w-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">

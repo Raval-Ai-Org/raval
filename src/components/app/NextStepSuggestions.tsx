@@ -99,7 +99,7 @@ export function NextStepSuggestions({
           {s.brand ? (
             <BrandLogo name={s.brand} brand size={14} />
           ) : (
-            <ArrowRight className="size-4 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-primary" />
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-primary-ink" />
           )}
           <span className="min-w-0 flex-1 truncate">{s.label}</span>
           <ArrowUpRight className="size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />

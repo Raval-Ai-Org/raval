@@ -2,7 +2,7 @@
 
 // Browser client for the Studio API. Every call goes through authedFetch so
 // the session token and workspace attribution travel with it.
-import { authedFetch, type AuthedFetchInit } from "@/lib/authed-fetch";
+import { authedFetch, type AuthedFetchInit, type FetchLane } from "@/lib/authed-fetch";
 import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import type { StudioType } from "./formats";
 import type { StudioIdea } from "./ideas";
@@ -84,14 +84,17 @@ export const studioApi = {
       billingInline: true,
     }).then((r) => r.job);
   },
-  getJob(workspaceId: string, id: string) {
+  /** `lane: "poll"` for background progress checks (see authedFetch). */
+  getJob(workspaceId: string, id: string, opts: { lane?: FetchLane } = {}) {
     return call<{ job: StudioJob }>(
       `/api/studio/jobs/${id}?workspaceId=${encodeURIComponent(workspaceId)}`,
+      { lane: opts.lane },
     ).then((r) => r.job);
   },
-  listJobs(workspaceId: string) {
+  listJobs(workspaceId: string, opts: { lane?: FetchLane } = {}) {
     return call<{ jobs: StudioJob[] }>(
       `/api/studio/jobs?workspaceId=${encodeURIComponent(workspaceId)}`,
+      { lane: opts.lane },
     ).then((r) => r.jobs);
   },
   findJob(workspaceId: string, requestKey: string) {
@@ -119,20 +122,29 @@ export const studioApi = {
       body: JSON.stringify({ workspaceId }),
     }).then((r) => r.job);
   },
-  ideas(args: {
-    workspaceId: string;
-    type?: StudioType;
-    brand: Record<string, unknown> | null;
-    dismissed?: string[];
-    refresh?: boolean;
-    limit?: number;
-  }) {
+  ideas(
+    args: {
+      workspaceId: string;
+      type?: StudioType;
+      brand: Record<string, unknown> | null;
+      dismissed?: string[];
+      refresh?: boolean;
+      limit?: number;
+    },
+    signal?: AbortSignal,
+  ) {
+    // A model call that can take a minute: callers cancel it when they no
+    // longer need the answer, so it never holds one of the browser's few
+    // connections to this site while the person goes elsewhere.
     return call<{ ideas: StudioIdea[]; generated: "model" | "fallback"; cached: boolean }>(
       "/api/studio/ideas",
       {
         method: "POST",
         body: JSON.stringify(args),
         headers: { "Idempotency-Key": crypto.randomUUID() },
+        signal,
+        // Nobody is waiting on suggestions: one at a time, in the background.
+        lane: "ai",
       },
     );
   },

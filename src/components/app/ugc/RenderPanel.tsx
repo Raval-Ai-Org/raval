@@ -404,7 +404,7 @@ function ActionTile({
       disabled={disabled || loading}
       className="flex flex-col items-center gap-1.5 rounded-2xl bg-[var(--ds-well-bg)] px-2 py-3 text-[11.5px] font-medium transition-colors hover:bg-primary/15 disabled:opacity-50"
     >
-      <span className="grid size-8 place-items-center rounded-full bg-background text-primary">
+      <span className="grid size-8 place-items-center rounded-full bg-background text-primary-ink">
         {loading ? (
           <span className="size-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         ) : (
@@ -431,7 +431,7 @@ function StageTrack({ stageIndex }: { stageIndex: number }) {
                 current
                   ? "bg-primary text-primary-foreground"
                   : done
-                    ? "bg-primary/15 text-primary"
+                    ? "bg-primary/15 text-primary-ink"
                     : "bg-[var(--ds-well-bg)] text-muted-foreground",
               )}
               aria-current={current ? "step" : undefined}

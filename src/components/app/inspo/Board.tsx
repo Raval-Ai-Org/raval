@@ -119,7 +119,7 @@ export function Board({
                 </motion.li>
               ))
             ) : (
-              <li className="flex items-center gap-2 text-[12.5px] font-medium text-primary">
+              <li className="flex items-center gap-2 text-[12.5px] font-medium text-primary-ink">
                 <Check className="h-4 w-4" /> All set
               </li>
             )}
@@ -137,7 +137,7 @@ export function Board({
               className="inline-flex h-10 items-center gap-2 rounded-full bg-primary/12 px-4 text-[13px] font-semibold ring-1 ring-primary/25"
               role="status"
             >
-              <Spinner className="h-4 w-4 animate-spin text-primary" />
+              <Spinner className="h-4 w-4 animate-spin text-primary-ink" />
               {taste?.running?.stage === "capturing"
                 ? "Reading your site…"
                 : "Learning your style…"}
@@ -146,12 +146,14 @@ export function Board({
             <>
               <button
                 type="button"
-                className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
+                className={cn(taste?.active ? dsGhostBtn : dsPrimaryBtn, "h-10 px-4 text-[13px]")}
                 disabled={!canEdit || !canLearn(view.cards) || !!view.busy}
                 onClick={handlers.learn}
                 data-testid="inspo-learn"
+                title="Your look already comes from the Brand DNA scan. This adds what you put on the board."
               >
-                <Sparkles className="h-4 w-4" /> Learn my style{" "}
+                <Sparkles className="h-4 w-4" />{" "}
+                {taste?.active ? "Update from board" : "Learn my style"}{" "}
                 <Price credits={taste?.learnPrice ?? 0} />
               </button>
               {view.dna.websiteUrl && (
@@ -240,7 +242,7 @@ export function Board({
                     />
                     <div className="mt-2.5 flex items-center justify-between gap-2 px-1 text-[13px] font-semibold">
                       <span className="truncate">{d.name}</span>
-                      {on && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                      {on && <Check className="h-4 w-4 shrink-0 text-primary-ink" />}
                     </div>
                   </motion.button>
                 );

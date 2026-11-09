@@ -101,7 +101,7 @@ export function FormatChip({ format, className }: { format: CampaignFormat; clas
 const STATE_TONE: Record<PieceState, string> = {
   idea: "bg-[var(--ds-well-bg)] text-muted-foreground",
   planned: "bg-[var(--ds-well-bg)] text-foreground/70",
-  making: "bg-primary/12 text-primary",
+  making: "bg-primary/12 text-primary-ink",
   waiting: "bg-primary text-primary-foreground shadow-[0_6px_16px_-8px_hsl(var(--primary)/0.8)]",
   scheduled: "bg-primary/15 text-foreground",
   out: "bg-foreground text-background",

@@ -98,6 +98,7 @@
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-ink: hsl(var(--primary-ink));
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
@@ -242,12 +243,16 @@
      needs no rotation — the swatch is already legible on black. */
   --brand: 77 87% 63%; /* Ultra Moss */
 
-  --primary: 128 80% 25%; /* vivid moss — 7:1 with white ink */
-  --primary-foreground: 0 0% 100%;
+  /* Fills (buttons, send, highlights): bright Mox green #23FD36 with dark
+     ink on top (white on it would be ~1.4:1). Green used AS TEXT on white
+     uses --primary-ink (text-primary-ink), the deep moss that reads 7:1. */
+  --primary: 125 98% 56%; /* #23FD36 */
+  --primary-foreground: 130 60% 7%;
+  --primary-ink: 128 80% 25%;
   --primary-surface: 128 60% 93%; /* tinted plate — a real green wash, not a hint */
   --primary-border: 128 45% 74%;
-  --accent: 128 80% 25%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 125 98% 56%;
+  --accent-foreground: 130 60% 7%;
 
   /* ── Lines & focus ────────────────────────────────────────────────── */
   /* Darker than the previous pass so edges and inputs read crisply at a
@@ -255,7 +260,7 @@
   --border: 220 16% 83%; /* hairline — visible, never a divider wall */
   --border-strong: 220 14% 72%; /* emphasis: table rules, active outlines */
   --input: 220 16% 78%;
-  --ring: 128 80% 32%;
+  --ring: 125 85% 42%;
 
   /* ── Status ───────────────────────────────────────────────────────── */
   /* Full-saturation ink plus richer tinted surfaces (was a near-white hint
@@ -286,12 +291,12 @@
      rail reads as its own zone the way Lovable's does. */
   --sidebar-background: 220 18% 93%;
   --sidebar-foreground: 220 20% 12%;
-  --sidebar-primary: 128 80% 25%;
-  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary: 125 98% 56%;
+  --sidebar-primary-foreground: 130 60% 7%;
   --sidebar-accent: 220 18% 87%;
   --sidebar-accent-foreground: 0 0% 0%;
   --sidebar-border: 220 16% 80%;
-  --sidebar-ring: 128 80% 32%;
+  --sidebar-ring: 125 85% 42%;
 
   /* ── Shape ────────────────────────────────────────────────────────── */
   --radius: 0.75rem; /* 12px — the family; ±4px via --radius-sm/-lg/-xl */
@@ -390,6 +395,7 @@
   /* Full-strength Ultra Moss on black, paired with near-black ink (12.4:1). */
   --primary: 77 87% 63%;
   --primary-foreground: 70 40% 7%;
+  --primary-ink: 77 87% 63%;
   --primary-surface: 70 38% 11%;
   --primary-border: 70 26% 26%;
   --accent: 77 87% 63%;
@@ -922,7 +928,7 @@ h6 {
   .font-display em,
   .display em {
     font-style: italic;
-    color: hsl(var(--primary));
+    color: hsl(var(--primary-ink));
   }
 
   /* Escape hatch: force sans on a heading when the design needs it (chips, badges, app chrome titles) */
@@ -1080,7 +1086,7 @@ h6 {
       0 0 18px -2px hsl(var(--brand-green) / 0.45);
   }
   .text-green-glow {
-    color: hsl(var(--brand-green));
+    color: hsl(var(--primary-ink));
     text-shadow: 0 0 18px hsl(var(--brand-green) / 0.55);
   }
   @keyframes green-pulse {
@@ -2083,7 +2089,7 @@ h6 {
   content: "▍";
   margin-left: 2px;
   animation: caret 1s steps(2, end) infinite;
-  color: hsl(var(--primary));
+  color: hsl(var(--primary-ink));
 }
 @keyframes caret {
   50% {
@@ -2800,7 +2806,7 @@ h6 {
   height: 34px;
   border-radius: 10px;
   background: hsl(var(--brand-green) / 0.1);
-  color: hsl(var(--brand-green));
+  color: hsl(var(--primary-ink));
   margin-bottom: 4px;
 }
 
@@ -3081,7 +3087,7 @@ h6 {
   content: "▍";
   margin-left: 2px;
   animation: rv-caret-blink 1s steps(1) infinite;
-  color: hsl(var(--brand-green));
+  color: hsl(var(--primary-ink));
 }
 
 /* ---------- Global, automatic polish ---------- */
@@ -3699,7 +3705,12 @@ svg [data-series="bar"]:hover rect:not(:hover) {
   section:not([data-no-rhythm]) + section:not([data-no-rhythm]) {
     margin-top: var(--gap-section);
   }
-  main > * + * {
+  /* Only visible blocks count: a <script> or <template> that React or Next
+     puts first inside <main> must not push the page down (it left a blank
+     strip at the top of Projects). */
+  main
+    > :where(:not(script, style, template, link, noscript))
+    ~ :where(:not(script, style, template, link, noscript)) {
     margin-top: var(--gap-group);
   }
 
@@ -4773,14 +4784,16 @@ pre {
     position: relative;
     display: flex;
     flex-direction: column;
-    border-radius: var(--mx-radius);
-    background: var(--mx-box-bg);
-    border: 1px solid var(--mx-box-border);
+    /* Fallbacks: the box also renders outside .mx-chat (labs, other docks). */
+    border-radius: var(--mx-radius, 1.75rem);
+    background: var(--mx-box-bg, hsl(var(--card)));
+    border: 1px solid var(--mx-box-border, hsl(var(--border)));
     box-shadow:
       0 1px 2px hsl(var(--foreground) / 0.04),
       0 8px 28px -12px hsl(var(--foreground) / 0.12);
     transition:
       border-color 0.2s ease,
+      border-radius 0.32s var(--mx-ease),
       box-shadow 0.3s var(--mx-ease);
     cursor: text;
   }
@@ -4808,8 +4821,10 @@ pre {
   }
   /* Home's dock at rest: a one-line pill, the tools on the same row. */
   @media (min-width: 640px) {
+    /* Half the pill's height, not 9999px: a real radius eases into the
+       open box's corners instead of snapping. */
     .mx-composer[data-slim] {
-      border-radius: 9999px;
+      border-radius: 1.75rem;
     }
     .mx-composer[data-slim] .mx-composer__input {
       flex: 1 1 auto;
@@ -6946,4 +6961,15 @@ pre {
 }
 .dark .logo-ai {
   background-image: linear-gradient(100deg, #c6f24e 0%, #2ee66b 60%, #1fd6c4 100%);
+}
+
+/* Mellox 2.0: inside the app a solid primary fill is never flat neon lime.
+   Every `bg-primary text-primary-foreground` (main pills, picked chips,
+   ticks, today's date, the default Badge) paints the Mox gradient with ink
+   text, the same as `ds-grad-pill`. Only an image is added, so hover and
+   opacity utilities on the colour still work. The landing page uses no
+   solid primary fill, so it is untouched. */
+.bg-primary.text-primary-foreground {
+  background-image: var(--mox-gradient);
+  color: var(--mox-ink);
 }

@@ -333,7 +333,7 @@ export function NotesBoard({ workspaceId }: { workspaceId: string }) {
       {/* ── the board ── */}
       {shown.length === 0 ? (
         <div className="grid place-items-center rounded-[20px] border border-dashed border-border/70 px-4 py-14 text-center">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary-ink">
             {query ? <Search className="h-5 w-5" /> : <StickyNote className="h-5 w-5" />}
           </span>
           <p className="mt-3 text-[14px] font-medium">{query ? "No match" : "No notes yet"}</p>

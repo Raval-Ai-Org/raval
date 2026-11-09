@@ -237,7 +237,7 @@ function UgcHome({
         <div className="relative flex flex-col items-center gap-6 md:flex-row md:justify-between">
           <div className="max-w-md space-y-5 text-center md:text-left">
             <h3 className="text-2xl font-semibold tracking-tight sm:text-[28px] sm:leading-tight">
-              Your product, <span className="text-primary">filmed by a creator</span>
+              Your product, <span className="text-primary-ink">filmed by a creator</span>
             </h3>
             <ol className="flex items-center justify-center gap-2 md:justify-start">
               {FLOW.map((f, i) => (
@@ -249,7 +249,7 @@ function UgcHome({
                   className="flex items-center gap-2"
                 >
                   <span className="flex items-center gap-1.5 rounded-full bg-[var(--ds-well-bg)] px-3 py-1.5 text-xs font-medium">
-                    <f.icon className="size-3.5 text-primary" aria-hidden />
+                    <f.icon className="size-3.5 text-primary-ink" aria-hidden />
                     {f.label}
                   </span>
                   {i < FLOW.length - 1 ? (
@@ -296,7 +296,7 @@ function UgcHome({
                 onClick={onNew}
                 className="group flex aspect-[9/16] w-full flex-col items-center justify-center gap-3 rounded-[22px] border-2 border-dashed border-[var(--ds-tile-border)] text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
               >
-                <span className="grid size-12 place-items-center rounded-full bg-primary/15 text-primary transition-transform group-hover:scale-110">
+                <span className="grid size-12 place-items-center rounded-full bg-primary/15 text-primary-ink transition-transform group-hover:scale-110">
                   <Plus className="size-5" aria-hidden />
                 </span>
                 <span className="text-sm font-medium">New</span>

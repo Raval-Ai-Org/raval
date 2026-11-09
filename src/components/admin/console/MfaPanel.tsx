@@ -92,7 +92,7 @@ export function MfaPanel({
 
   return (
     <div className={cn("ds-tile mx-auto w-full max-w-sm space-y-4 p-6 text-center", className)}>
-      <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-primary/15 text-primary">
+      <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-primary/15 text-primary-ink">
         <Shield className="h-5 w-5" />
       </span>
       <div className="space-y-1">

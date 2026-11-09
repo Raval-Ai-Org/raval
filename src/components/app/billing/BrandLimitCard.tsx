@@ -76,7 +76,7 @@ export function BrandLimitCardView({
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink">
           <Crown className="h-4 w-4" strokeWidth={2.2} />
         </span>
         <div className="min-w-0 flex-1">

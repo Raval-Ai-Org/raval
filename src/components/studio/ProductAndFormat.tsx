@@ -307,7 +307,7 @@ function FormatTile({
 function Thumb({ kind }: { kind?: AdFormatThumb }) {
   const ink = "fill-foreground/70";
   const soft = "fill-foreground/20";
-  const accent = "fill-primary";
+  const accent = "fill-primary-ink";
   const product = (x: number, y: number, w: number, h: number) => (
     <rect x={x} y={y} width={w} height={h} rx={6} className="fill-foreground/45" />
   );
@@ -346,7 +346,7 @@ function Thumb({ kind }: { kind?: AdFormatThumb }) {
           <>
             {line(14, 10, 72, ink, 7)}
             <rect x={6} y={24} width={42} height={92} rx={6} className="fill-foreground/10" />
-            <rect x={52} y={24} width={42} height={92} rx={6} className="fill-primary/40" />
+            <rect x={52} y={24} width={42} height={92} rx={6} className="fill-primary-ink/40" />
             {[38, 54, 70].map((y) => (
               <g key={y}>
                 {line(12, y, 30)}
@@ -360,7 +360,7 @@ function Thumb({ kind }: { kind?: AdFormatThumb }) {
         return (
           <>
             <rect x={0} y={0} width={50} height={125} className="fill-foreground/10" />
-            <rect x={50} y={0} width={50} height={125} className="fill-primary/25" />
+            <rect x={50} y={0} width={50} height={125} className="fill-primary-ink/25" />
             {product(62, 46, 26, 38)}
             {line(14, 104, 72, ink, 7)}
           </>

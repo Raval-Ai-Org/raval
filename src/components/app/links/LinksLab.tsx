@@ -106,7 +106,7 @@ export function LinksLab() {
           <div className="rounded-[20px] border border-border/50 bg-surface-3 dark:border-white/[0.06] dark:bg-white/[0.035] p-6">
             <div className="mx-auto flex w-full max-w-xl flex-col items-center py-8 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-surface">
-                <Link2 className="h-6 w-6 text-primary" aria-hidden />
+                <Link2 className="h-6 w-6 text-primary-ink" aria-hidden />
               </span>
               <h2 className="mt-6 text-[30px] font-semibold leading-tight tracking-tight text-foreground">
                 Get other sites linking to you

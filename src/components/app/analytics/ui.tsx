@@ -202,7 +202,7 @@ export function MiniSpark({ values, className }: { values: number[]; className?:
       viewBox={`0 0 ${w} ${h}`}
       preserveAspectRatio="none"
       aria-hidden
-      className={cn("h-full w-full text-primary", className)}
+      className={cn("h-full w-full text-primary-ink", className)}
     >
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">

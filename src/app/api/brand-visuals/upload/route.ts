@@ -34,8 +34,8 @@ export const POST = defineRoute({
     const purpose = String(form.get("purpose") ?? "style");
     if (!PURPOSES.includes(purpose as (typeof PURPOSES)[number]))
       return jsonError(400, "Choose what this reference is for.");
-    if (file instanceof File && (!file.size || file.size > 20 * 1024 * 1024))
-      return jsonError(400, "Choose an image or short video, up to 20 MB.");
+    if (file instanceof File && (!file.size || file.size > MAX_IMAGE_BYTES))
+      return jsonError(400, UPLOAD_MESSAGES.imageSize);
     const format = String(form.get("format") ?? "all");
     if (format !== "all" && !FORMATS.includes(format as (typeof FORMATS)[number]))
       return jsonError(400, "Choose a supported format.");

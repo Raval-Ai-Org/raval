@@ -289,14 +289,14 @@ export function GroupLabel({ children, action }: { children: ReactNode; action?:
 
 const TONE_TEXT = {
   default: "text-foreground",
-  primary: "text-primary",
+  primary: "text-primary-ink",
   success: "text-success",
   warning: "text-warning",
   destructive: "text-destructive",
 } as const;
 const TONE_ICON = {
   default: "bg-foreground/[0.06] text-foreground/80",
-  primary: "bg-primary/12 text-primary",
+  primary: "bg-primary/12 text-primary-ink",
   success: "bg-success/12 text-success",
   warning: "bg-warning/12 text-warning",
   destructive: "bg-destructive/12 text-destructive",

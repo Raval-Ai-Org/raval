@@ -215,7 +215,7 @@ h1{font-size:22px;margin:0}.sub{color:#666;font-size:13px;margin:2px 0 24px}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee}
 th{font-size:11px;color:#666;font-weight:600}td.r,th.r{text-align:right}h2{font-size:14px;margin:28px 0 8px}
 li{font-size:13px;margin:4px 0}.foot{margin-top:32px;color:#999;font-size:11px}</style></head><body>
-<h1>Client report</h1><div class="sub">${esc(d.dateLabel)} · Mellox AI</div>
+<h1>Client report</h1><div class="sub">${esc(d.dateLabel)} · Mellox</div>
 <div class="stats"><div class="s"><div class="n">${d.clients}</div><div class="l">Clients</div></div>
 <div class="s"><div class="n">${d.review}</div><div class="l">To review</div></div>
 <div class="s"><div class="n">${d.ready}</div><div class="l">Ready to post</div></div>

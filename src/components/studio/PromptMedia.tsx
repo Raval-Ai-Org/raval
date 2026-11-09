@@ -164,7 +164,7 @@ export function usePromptMedia(session: StudioSession, disabled?: boolean) {
     const added: Photo[] = [];
     for (const file of files.slice(0, room)) {
       if (file.size > MAX_PHOTO_BYTES) {
-        toast.error(`${file.name}: choose a photo under 20 MB.`);
+        toast.error(`${file.name}: choose a photo under 100 MB.`);
         continue;
       }
       const photo = await uploadStudioMedia(session.workspaceId, file, "photo");
@@ -192,7 +192,7 @@ export function usePromptMedia(session: StudioSession, disabled?: boolean) {
     const added: { id: string; name: string; preview: string }[] = [];
     for (const file of files.slice(0, room)) {
       if (file.size > MAX_CLIP_BYTES) {
-        toast.error(`${file.name}: choose a clip under 50 MB.`);
+        toast.error(`${file.name}: choose a clip under 200 MB.`);
         continue;
       }
       const clip = await uploadStudioMedia(session.workspaceId, file, "clip");

@@ -456,7 +456,7 @@ export function CampaignFlow({
                     <button
                       type="button"
                       onClick={onTopUp}
-                      className="mt-1 text-[14px] font-medium text-primary underline-offset-4 hover:underline"
+                      className="mt-1 text-[14px] font-medium text-primary-ink underline-offset-4 hover:underline"
                     >
                       Add balance
                     </button>
@@ -475,7 +475,7 @@ export function CampaignFlow({
                     "If a placement never appears, we refund it.",
                   ].map((line) => (
                     <li key={line} className="flex gap-2.5 text-[13.5px] leading-relaxed">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-ink" aria-hidden />
                       <span className="text-muted-foreground">{line}</span>
                     </li>
                   ))}

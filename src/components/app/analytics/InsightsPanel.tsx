@@ -70,7 +70,7 @@ function InsightCard({ item, signals }: { item: InsightItem; signals: Signal[] }
         </ul>
       )}
       <div className="mt-3 flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/5 p-2.5 text-[12.5px]">
-        <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+        <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-ink" aria-hidden />
         <span>{item.recommendation}</span>
       </div>
       <button

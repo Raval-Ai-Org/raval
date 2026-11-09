@@ -241,7 +241,7 @@ function BrainsRow({
           <>
             <BrainMark brain={brain} size={30} muted={!on} active={pulsing && on} delay={i * 0.1} />
             <span className="mt-2 text-[12.5px] font-medium">{BRAIN_META[brain].label}</span>
-            <span className={cn("text-[11px]", on ? "text-primary" : "text-muted-foreground")}>
+            <span className={cn("text-[11px]", on ? "text-primary-ink" : "text-muted-foreground")}>
               {on ? "Ready" : "Empty"}
             </span>
           </>
@@ -413,7 +413,7 @@ export function StrategyScreen({
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1 text-[12px] font-medium">
-            <Check className="h-3.5 w-3.5 text-primary" /> In use
+            <Check className="h-3.5 w-3.5 text-primary-ink" /> In use
           </span>
         )}
         <span className="flex items-center gap-1.5" title="Built from">
@@ -486,7 +486,7 @@ export function StrategyScreen({
             className="overflow-hidden"
           >
             <div className="ds-well mb-4 flex flex-wrap items-center gap-3 rounded-[16px] px-4 py-3">
-              <RefreshCw className="h-4 w-4 text-primary" />
+              <RefreshCw className="h-4 w-4 text-primary-ink" />
               <span className="min-w-0 flex-1 text-[13px] font-medium">
                 {view.stale ? "Your brains changed." : "Write it again?"}
               </span>
@@ -577,7 +577,7 @@ export function StrategyScreen({
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         {/* ── goal ── */}
         <Block title="Goal" index={1}>
-          <div className="text-[13px] font-medium text-primary">{goalLabel}</div>
+          <div className="text-[13px] font-medium text-primary-ink">{goalLabel}</div>
           <div className="mt-1 text-[14px] leading-snug">
             <T
               value={s.goal.summary}
@@ -912,7 +912,7 @@ export function StrategyScreen({
                       key={k}
                       className="flex items-start gap-2 text-[12.5px] text-muted-foreground"
                     >
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" /> {a}
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary-ink" /> {a}
                     </li>
                   ))}
                 </ul>
@@ -967,7 +967,7 @@ export function StrategyScreen({
                         className={cn(
                           "mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full",
                           kind === "do"
-                            ? "bg-primary/20 text-primary"
+                            ? "bg-primary/20 text-primary-ink"
                             : "bg-destructive/15 text-destructive",
                         )}
                       >

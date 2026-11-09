@@ -386,7 +386,7 @@ function ActionRow({
               aria-label={open ? "Hide the fix" : "Show the fix"}
               title={open ? "Hide the fix" : "Show the fix"}
               onClick={() => setOpen((v) => !v)}
-              className={cn(iconBtn, open && "bg-primary/12 text-primary")}
+              className={cn(iconBtn, open && "bg-primary/12 text-primary-ink")}
             >
               <Wand className="h-4 w-4" strokeWidth={2.1} />
             </button>
@@ -717,7 +717,7 @@ export function OverviewTab({
                 <button
                   type="button"
                   onClick={() => onOpenFindings({})}
-                  className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary-ink hover:underline"
                 >
                   All issues <ArrowRight className="h-3.5 w-3.5" />
                 </button>
@@ -783,7 +783,7 @@ export function OverviewTab({
                   report.snapshot.schemaTypes.slice(0, 6).map((t) => (
                     <span
                       key={t}
-                      className="rounded-full bg-primary/10 px-2 py-0.5 text-[11.5px] font-medium text-primary"
+                      className="rounded-full bg-primary/10 px-2 py-0.5 text-[11.5px] font-medium text-primary-ink"
                     >
                       {t}
                     </span>

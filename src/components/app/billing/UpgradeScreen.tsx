@@ -193,7 +193,7 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
           <button
             type="button"
             onClick={() => props.onViewChange("plans")}
-            className="inline-flex items-center justify-center gap-1 text-[13px] font-medium text-primary hover:underline"
+            className="inline-flex items-center justify-center gap-1 text-[13px] font-medium text-primary-ink hover:underline"
           >
             Get credits every month with a plan
             <ArrowRight className="h-3.5 w-3.5" />
@@ -216,7 +216,7 @@ function CheckoutNotice({ available }: { available: boolean }) {
       role={available ? undefined : "status"}
     >
       <ShieldCheck
-        className={cn("mt-0.5 h-4 w-4 shrink-0", available ? "text-primary" : "text-warning")}
+        className={cn("mt-0.5 h-4 w-4 shrink-0", available ? "text-primary-ink" : "text-warning")}
         strokeWidth={2.3}
       />
       <span>
@@ -244,7 +244,7 @@ function Glow() {
       <div className="absolute inset-0 bg-[radial-gradient(70%_100%_at_0%_0%,hsl(var(--primary)/0.16),transparent_70%)]" />
       <svg
         viewBox="0 0 200 200"
-        className="absolute -right-16 -top-24 h-72 w-72 text-primary"
+        className="absolute -right-16 -top-24 h-72 w-72 text-primary-ink"
         fill="none"
         stroke="currentColor"
       >
@@ -324,7 +324,7 @@ function Hero({
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <h3 className="text-[21px] font-semibold leading-tight tracking-tight">{title}</h3>
           {tag && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/12 px-2.5 py-0.5 text-[11.5px] font-semibold text-primary">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/12 px-2.5 py-0.5 text-[11.5px] font-semibold text-primary-ink">
               <Lock className="h-3 w-3" strokeWidth={2.4} aria-hidden />
               {tag}
             </span>
@@ -342,7 +342,7 @@ function Hero({
 
 function Tick() {
   return (
-    <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+    <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink">
       <Check className="h-2.5 w-2.5" strokeWidth={3} />
     </span>
   );
@@ -404,7 +404,7 @@ function BuyButton({
   }
   if (!canBuy) {
     return askSent ? (
-      <p className={cn("grid place-items-center text-[13px] font-medium text-primary", className)}>
+      <p className={cn("grid place-items-center text-[13px] font-medium text-primary-ink", className)}>
         Sent to the owner
       </p>
     ) : (
@@ -491,7 +491,7 @@ function PlanCard(
             <span>
               {formatUsd(price.billed)} a year · {perDay(price.billed)} a day
             </span>
-            <span className="rounded-full bg-primary/12 px-2 py-px font-semibold text-primary">
+            <span className="rounded-full bg-primary/12 px-2 py-px font-semibold text-primary-ink">
               Save {formatUsd(price.savings)}
             </span>
           </>
@@ -501,7 +501,7 @@ function PlanCard(
             <button
               type="button"
               onClick={() => onIntervalChange("year")}
-              className="font-medium text-primary hover:underline"
+              className="font-medium text-primary-ink hover:underline"
             >
               Save {formatUsd(yearlySaving)} with yearly
             </button>
@@ -514,7 +514,7 @@ function PlanCard(
       <ul className="mt-3.5 space-y-1.5 border-t border-border/50 pt-3.5 text-[13px]">
         {planNumbers(plan).map((row) => (
           <li key={row.main} className="flex items-center gap-2 whitespace-nowrap">
-            <row.Icon className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.2} />
+            <row.Icon className="h-3.5 w-3.5 shrink-0 text-primary-ink" strokeWidth={2.2} />
             <span className="text-[13px] font-semibold">{row.main}</span>
             {row.note && (
               <span className="truncate text-[12px] text-muted-foreground">· {row.note}</span>
@@ -584,9 +584,9 @@ function Promises({ items }: { items: string[] }) {
       {items.map((item, index) => (
         <li key={item} className="flex items-center gap-1.5 text-[12px]">
           {index === 0 ? (
-            <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
+            <ShieldCheck className="h-3.5 w-3.5 text-primary-ink" aria-hidden />
           ) : (
-            <Check className="h-3 w-3 text-primary" strokeWidth={3} aria-hidden />
+            <Check className="h-3 w-3 text-primary-ink" strokeWidth={3} aria-hidden />
           )}
           {item}
         </li>
@@ -684,7 +684,7 @@ function OwnerOnly({
     <div className="ds-well flex flex-wrap items-center justify-between gap-3 p-4 text-[13.5px]">
       <span>Only the account owner can buy this.</span>
       {askSent ? (
-        <span className="font-medium text-primary">Sent to the owner</span>
+        <span className="font-medium text-primary-ink">Sent to the owner</span>
       ) : (
         <PrimaryButton className="h-9" disabled={busy} onClick={onAsk}>
           Ask the owner
@@ -759,7 +759,7 @@ function PackGrid({
             <span className="block text-[14px] font-semibold tabular-nums">{row.title}</span>
             <span className="block text-[12px] text-muted-foreground">
               {row.price}
-              {row.bonus && <span className="font-medium text-primary"> · {row.bonus}</span>}
+              {row.bonus && <span className="font-medium text-primary-ink"> · {row.bonus}</span>}
             </span>
           </span>
         </button>

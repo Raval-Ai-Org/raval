@@ -54,4 +54,25 @@ describe("buildPulse", () => {
       label: "Sell more",
     });
   });
+
+  it("keeps finished pieces only when the read worked", () => {
+    expect(buildPulse(base).made).toBeNull();
+    expect(buildPulse({ ...base, made: { total: null, recent: [] } }).made).toBeNull();
+    const made = buildPulse({
+      ...base,
+      made: {
+        total: 1,
+        recent: [
+          { completed_at: "2026-11-09T10:00:00Z" },
+          { completed_at: null },
+          { completed_at: "bad" },
+          { completed_at: "2026-11-08T10:00:00Z" },
+        ],
+      },
+    }).made;
+    expect(made).toEqual({
+      total: 2,
+      recent: ["2026-11-09T10:00:00Z", "2026-11-08T10:00:00Z"],
+    });
+  });
 });

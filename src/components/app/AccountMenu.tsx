@@ -194,7 +194,7 @@ export function AccountMenu({
           }}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          <Wallet className="h-4 w-4 text-primary" />
+          <Wallet className="h-4 w-4 text-primary-ink" />
           Plan & billing
         </DropdownMenuItem>
         <DropdownMenuItem
@@ -316,7 +316,7 @@ export function AccountMenuCompact({ onOpenSettings }: { onOpenSettings?: () => 
           onSelect={() => afterMenuCloses(() => emitAppEvent("open:usage"))}
           className="gap-2 rounded-lg px-2 py-1.5 text-[13px]"
         >
-          <Wallet className="h-4 w-4 text-primary" /> Plan & billing
+          <Wallet className="h-4 w-4 text-primary-ink" /> Plan & billing
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => afterMenuCloses(() => emitAppEvent("open:tour"))}

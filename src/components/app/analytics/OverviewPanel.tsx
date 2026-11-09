@@ -318,7 +318,7 @@ export function OverviewPanel({ onTabChange }: { onTabChange: (t: AnalyticsTab) 
         </Card>
         <Card title="AI Visibility" source="geo">
           <div className="flex items-center gap-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary-ink ring-1 ring-primary/20">
               <Target className="size-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">

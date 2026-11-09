@@ -237,7 +237,7 @@ function StrategyBar({
             <h3 className="text-[15px] font-semibold leading-none tracking-tight">Strategy</h3>
             {strategy.status === "confirmed" && (
               <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary/15 px-2 text-[11px] font-medium leading-none">
-                <Check className="h-3 w-3 text-primary" /> In use
+                <Check className="h-3 w-3 text-primary-ink" /> In use
               </span>
             )}
             {strategy.status === "draft" && (
@@ -471,7 +471,7 @@ export function BrainHome({ overview, news, locked = {}, onOpen, onEditGoal }: B
             </ul>
           ) : (
             <div className="ds-tile grid min-h-[52px] grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5 px-3 py-2">
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/15 text-primary">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/15 text-primary-ink">
                 <Check className="h-4 w-4" />
               </span>
               <span className="text-[13px] font-medium">All set</span>

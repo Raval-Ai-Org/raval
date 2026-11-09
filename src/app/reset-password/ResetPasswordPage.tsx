@@ -89,7 +89,7 @@ function ResetPasswordPage() {
         </div>
         <div className="rounded-3xl border border-border/70 bg-card/85 p-6 shadow-card backdrop-blur-xl sm:p-8">
           <div className="mb-7 text-center">
-            <KeyRound className="mx-auto h-9 w-9 text-primary" />
+            <KeyRound className="mx-auto h-9 w-9 text-primary-ink" />
             <h1 className="mt-4 text-3xl font-semibold">Set new password</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {checking

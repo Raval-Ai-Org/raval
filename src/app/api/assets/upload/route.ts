@@ -9,7 +9,7 @@ export const POST = defineRoute({
   name: "assets/upload",
   auth: "workspace",
   minRole: "editor",
-  rateLimit: "generate",
+  rateLimit: "upload",
   query: z.object({
     workspaceId: z.string().uuid(),
     requestId: z.string().uuid(),
@@ -31,7 +31,7 @@ export const POST = defineRoute({
     )
       return jsonError(415, "Unsupported media type");
     if (Number(request.headers.get("content-length")) > MAX_ASSET_BYTES)
-      return jsonError(413, "Media must be under 50 MB");
+      return jsonError(413, "Media must be under 200 MB");
     const reader = request.body?.getReader();
     if (!reader) return jsonError(400, "Media is required");
     const chunks: Uint8Array[] = [];
@@ -43,7 +43,7 @@ export const POST = defineRoute({
         size += value.byteLength;
         if (size > MAX_ASSET_BYTES) {
           await reader.cancel();
-          return jsonError(413, "Media must be under 50 MB");
+          return jsonError(413, "Media must be under 200 MB");
         }
         chunks.push(value);
       }

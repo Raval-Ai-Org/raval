@@ -182,7 +182,7 @@ function NextUp({ steps }: { steps: NextStep[] }) {
               <Icon
                 className={cn(
                   "h-[18px] w-[18px] shrink-0",
-                  live ? "text-primary" : "text-muted-foreground",
+                  live ? "text-primary-ink" : "text-muted-foreground",
                 )}
               />
               <div className="min-w-0 flex-1">
@@ -196,7 +196,7 @@ function NextUp({ steps }: { steps: NextStep[] }) {
               <span
                 className={cn(
                   "shrink-0 text-[12.5px] font-medium tabular-nums",
-                  live ? "text-primary" : "text-muted-foreground",
+                  live ? "text-primary-ink" : "text-muted-foreground",
                 )}
               >
                 {live ? "Now" : stepWhen(step.at)}
@@ -609,7 +609,7 @@ export function Home({
                         key={line}
                         className="flex items-start gap-2.5 text-[13.5px] leading-snug"
                       >
-                        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary-ink" />
                         {line}
                       </li>
                     ))}

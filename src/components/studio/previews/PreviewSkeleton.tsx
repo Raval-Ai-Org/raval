@@ -622,7 +622,7 @@ function MediaStage({
             transition={{ duration: duration.medium, ease: ease.emphasized }}
             className="inline-flex items-center gap-1.5 rounded-full bg-surface-3/90 px-2.5 py-1 text-[10.5px] font-medium text-foreground/75 shadow-1 backdrop-blur"
           >
-            {developed ? <Check className="size-3 text-primary" strokeWidth={3} /> : null}
+            {developed ? <Check className="size-3 text-primary-ink" strokeWidth={3} /> : null}
             {label}
           </motion.span>
         </div>
@@ -708,9 +708,9 @@ function Signals({
           )}
         >
           {gathering ? (
-            <Sparkles className="size-3 text-primary" />
+            <Sparkles className="size-3 text-primary-ink" />
           ) : (
-            <Check className="size-3 text-primary" strokeWidth={3} />
+            <Check className="size-3 text-primary-ink" strokeWidth={3} />
           )}
           {item.label}
         </motion.li>

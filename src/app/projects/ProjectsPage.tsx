@@ -280,7 +280,7 @@ function ProjectsPage() {
           <header className="sticky top-0 z-20 flex h-16 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 group-data-[scrolled]/projects:border-[var(--ds-card-border)] group-data-[scrolled]/projects:bg-[var(--ds-frame-bg)]/80 group-data-[scrolled]/projects:backdrop-blur-xl items-center justify-between gap-3 px-4 sm:px-5">
             <Link
               to={WORKSPACES_HOME}
-              aria-label="Mellox AI home"
+              aria-label="Mellox home"
               className="flex h-9 shrink-0 items-center"
             >
               <Logo height={30} />
@@ -1020,7 +1020,7 @@ function BrandPlaces() {
           {" · "}
           <button
             type="button"
-            className="font-medium text-primary underline-offset-2 hover:underline"
+            className="font-medium text-primary-ink underline-offset-2 hover:underline"
             onClick={() => openBrandUpgrade(room.used, room.max)}
           >
             Upgrade
@@ -1118,7 +1118,7 @@ export function PasteLinkBar({
           onClick={onPasteShortcut}
           aria-label="Paste from clipboard"
           title="Paste from clipboard"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground group-focus-within:text-primary"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground group-focus-within:text-primary-ink"
         >
           <Globe className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </button>
@@ -1402,7 +1402,7 @@ export function ProjectsFoot() {
       </div>
 
       <div className="mt-4 flex flex-col items-center justify-between gap-3 px-1 text-[12px] text-muted-foreground sm:flex-row">
-        <span>&copy; {new Date().getFullYear()} Mellox AI</span>
+        <span>&copy; {new Date().getFullYear()} Mellox</span>
         <nav
           aria-label="Footer"
           className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1"

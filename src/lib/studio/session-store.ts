@@ -501,9 +501,21 @@ export function startInBackground(opts: {
 }
 
 /** Open review for an existing job (from the rail, a deep link, or a notification). */
-export async function openJob(jobId: string, workspaceId?: string | null): Promise<string | null> {
-  hydrate();
+/** Opens already on their way, by job: repeated clicks join, never add a second session. */
+const opening = new Map<string, Promise<string | null>>();
+
+export function openJob(jobId: string, workspaceId?: string | null): Promise<string | null> {
   const ws = workspaceId ?? getActiveWorkspaceId();
+  const key = `${ws}:${jobId}`;
+  const pending = opening.get(key);
+  if (pending) return pending;
+  const run = openJobNow(jobId, ws).finally(() => opening.delete(key));
+  opening.set(key, run);
+  return run;
+}
+
+async function openJobNow(jobId: string, ws: string | null): Promise<string | null> {
+  hydrate();
   if (!ws) return null;
   const existing = state.sessions.find(
     (s) => s.workspaceId === ws && (s.job?.id === jobId || s.lastGood?.id === jobId),
@@ -1079,7 +1091,7 @@ export async function refreshWorkspaceJobs(workspaceId?: string | null) {
   const ws = workspaceId ?? getActiveWorkspaceId();
   if (!ws) return;
   try {
-    const jobs = await studioApi.listJobs(ws);
+    const jobs = await studioApi.listJobs(ws, { lane: "poll" });
     // Replace only this workspace's jobs; other workspaces' stay as they were.
     const own = new Set(jobs.map((j) => j.id));
     setState(
@@ -1145,7 +1157,7 @@ async function pollOnce() {
       if (!job || !isActiveJob(job) || s.pendingKey) continue;
       tracked.add(job.id);
       try {
-        applyJob(s.id, await studioApi.getJob(s.workspaceId, job.id));
+        applyJob(s.id, await studioApi.getJob(s.workspaceId, job.id, { lane: "poll" }));
       } catch (error) {
         if (error instanceof StudioApiError && error.status === 404) {
           patchSession(s.id, { job: null, step: s.lastGood ? "review" : "intent" });
@@ -1160,7 +1172,7 @@ async function pollOnce() {
       const pendingCreate = state.sessions.some((s) => s.pendingKey === job.idempotency_key);
       if (pendingCreate && job.stage !== "render" && job.stage !== "save") continue;
       try {
-        const next = await studioApi.getJob(job.workspace_id, job.id);
+        const next = await studioApi.getJob(job.workspace_id, job.id, { lane: "poll" });
         upsertJobs([next]);
         if (!isActiveJob(next)) emitAppEvent("content:changed");
       } catch {

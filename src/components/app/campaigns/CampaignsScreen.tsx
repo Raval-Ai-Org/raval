@@ -363,7 +363,7 @@ function CampaignCard({
         className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full bg-primary/10 blur-2xl transition-opacity duration-500 group-hover:opacity-100 @md:opacity-70"
       />
       <div className="relative flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary ring-1 ring-primary/20">
+        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary-ink ring-1 ring-primary/20">
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -383,7 +383,7 @@ function CampaignCard({
           <p className="font-medium tabular-nums text-foreground/85">
             {c.progress.out} of {c.progress.pieces} out
             {c.progress.waiting ? (
-              <span className="text-primary"> · {c.progress.waiting} waiting for you</span>
+              <span className="text-primary-ink"> · {c.progress.waiting} waiting for you</span>
             ) : null}
           </p>
           <p className="truncate text-muted-foreground">
@@ -445,7 +445,7 @@ function Suggestions({
           >
             <div className="ds-tile flex h-full flex-col gap-3 p-4">
               <div className="flex items-center gap-2">
-                <span className="grid size-8 place-items-center rounded-xl bg-primary/12 text-primary">
+                <span className="grid size-8 place-items-center rounded-xl bg-primary/12 text-primary-ink">
                   <Icon className="size-4" />
                 </span>
                 <span className="text-[11px] font-medium text-muted-foreground">

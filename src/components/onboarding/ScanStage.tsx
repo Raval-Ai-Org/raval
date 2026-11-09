@@ -105,7 +105,7 @@ export function ScanStage({
             {failed ? (
               <AlertCircle className="h-3.5 w-3.5 text-danger" />
             ) : complete ? (
-              <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
+              <Check className="h-3.5 w-3.5 text-primary-ink" strokeWidth={2.5} />
             ) : (
               <Spinner className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             )}

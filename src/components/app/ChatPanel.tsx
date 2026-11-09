@@ -71,6 +71,7 @@ import { HomeBento } from "./home/HomeBento";
 import { useStartHere } from "./home/use-start-here";
 import { useOpenCreate } from "@/components/studio/use-open-create";
 import { IdeaSwipeDeck } from "@/components/studio/IdeaSwipeDeck";
+import { prefetchIdeas, prefetchIdeasWhenIdle } from "@/lib/studio/idea-cache";
 import type { StudioType } from "@/lib/studio/formats";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
@@ -1695,6 +1696,11 @@ export function ChatPanel({
   // Home's idea cards (Holo's Idea swipe): the deck itself, any format or
   // blog topics. Picking one opens the composer with it; nothing is made yet.
   const [swipe, setSwipe] = useState<{ type?: StudioType } | null>(null);
+  // Swipe ideas opens with ideas already there: fetch them once Home is idle.
+  useEffect(() => {
+    if (!home) return;
+    return prefetchIdeasWhenIdle(workspaceId);
+  }, [home, workspaceId]);
   const openWaiting = () => {
     const place = pulse ? waitingPlace(pulse) : null;
     if (!place) return;
@@ -1732,7 +1738,8 @@ export function ChatPanel({
               ? "flex-1"
               : empty
                 ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
-                : "flex-1",
+                : // Messages fade out just above the box, whatever the canvas.
+                  "flex-1 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]",
           )}
         >
           {home ? (
@@ -1742,6 +1749,7 @@ export function ChatPanel({
               pulse={pulse}
               onOpenWaiting={openWaiting}
               onSwipe={(type) => setSwipe({ type })}
+              onWarmIdeas={(type) => prefetchIdeas(workspaceId, type)}
             />
           ) : empty ? (
             <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
@@ -1892,10 +1900,13 @@ export function ChatPanel({
           layout="position"
           transition={layoutTransition}
           className={cn(
-            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6 before:pointer-events-none before:absolute before:inset-x-0 before:bg-gradient-to-t before:from-[var(--ds-canvas-bg)] before:to-transparent",
+            // No painted fade here: a flat canvas-grey band can't match the
+            // tinted wash, and on the greeting it lay over the headline. The
+            // conversation fades out by a mask on its own scroll area instead.
+            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6",
             home
-              ? "max-w-[760px] pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-2 before:-top-4 before:h-4"
-              : "max-w-3xl before:-top-12 before:h-12",
+              ? "max-w-[760px] pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-2"
+              : "max-w-3xl",
           )}
         >
           <AnimatePresence>
@@ -1915,7 +1926,6 @@ export function ChatPanel({
               </motion.button>
             ) : null}
           </AnimatePresence>
-          {!empty ? <div className="mx-composer-fade" aria-hidden /> : null}
           {mobileAccessory ? <div className="mb-2">{mobileAccessory}</div> : null}
           <FreeCreditStrip className="mb-2" />
           <ChatComposer

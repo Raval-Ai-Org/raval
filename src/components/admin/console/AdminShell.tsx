@@ -285,7 +285,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div data-mellox-app className="flex h-dvh flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary/15 text-primary-ink">
             <Shield className="h-4 w-4" />
           </span>
           <h1 className="text-[15px] font-semibold">Mellox admin</h1>

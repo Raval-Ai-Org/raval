@@ -44,7 +44,7 @@ export function SectionLabel({
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
       <span className="ds-label flex items-center gap-1.5 text-[11px]">
-        {Icon ? <Icon className="size-3.5 text-primary" aria-hidden /> : null}
+        {Icon ? <Icon className="size-3.5 text-primary-ink" aria-hidden /> : null}
         {children}
       </span>
       {trailing}
@@ -360,7 +360,7 @@ export function Stepper({
                     active
                       ? "bg-primary text-primary-foreground shadow-[0_0_0_6px_hsl(var(--primary)/0.18)]"
                       : done
-                        ? "bg-primary/20 text-primary"
+                        ? "bg-primary/20 text-primary-ink"
                         : "bg-surface-2 text-muted-foreground",
                     enabled && !active && "group-hover:text-foreground",
                   )}
@@ -402,7 +402,7 @@ export function StepHeader({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 className="ds-page-title flex items-center gap-2.5 text-lg">
-        <span className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary">
+        <span className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary-ink">
           <Icon className="size-4" aria-hidden />
         </span>
         {title}
@@ -439,7 +439,7 @@ export function Disclosure({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-[var(--ds-well-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
       >
-        {Icon ? <Icon className="size-4 text-primary" aria-hidden /> : null}
+        {Icon ? <Icon className="size-4 text-primary-ink" aria-hidden /> : null}
         <span className="mr-auto">{label}</span>
         {badge}
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={motionPreset.base}>
@@ -505,7 +505,7 @@ export function ThinkingLoader({
           animate={{ rotate: 360 }}
           transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }}
         />
-        <span className="relative grid size-14 place-items-center rounded-full bg-background text-primary shadow-[0_0_30px_-4px_hsl(var(--primary)/0.6)]">
+        <span className="relative grid size-14 place-items-center rounded-full bg-background text-primary-ink shadow-[0_0_30px_-4px_hsl(var(--primary)/0.6)]">
           <Icon className="size-6" aria-hidden />
         </span>
       </div>

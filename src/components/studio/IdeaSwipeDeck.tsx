@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
-import { readBrandPayload, studioApi } from "@/lib/studio/client";
+import { cachedIdeas, loadIdeas } from "@/lib/studio/idea-cache";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { IDEA_SOURCE_LABEL, type StudioIdea } from "@/lib/studio/ideas";
 import {
@@ -54,24 +54,24 @@ export function IdeaSwipeDeck({
   fixtureIdeas?: StudioIdea[];
 }) {
   const reduce = useReducedMotion();
-  const [deck, setDeck] = useState<Deck>(() => newDeck([], [], []));
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  // Ideas Home already fetched (or the last batch kept in this browser) are
+  // shown at once; the shimmer shows only when there is nothing in hand.
+  const initial = fixtureIdeas ?? cachedIdeas(workspaceId, type)?.ideas ?? null;
+  const [deck, setDeck] = useState<Deck>(() =>
+    initial
+      ? newDeck(initial, readSavedIdeas(workspaceId), readSkippedIdeas(workspaceId))
+      : newDeck([], [], []),
+  );
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    initial ? "ready" : "loading",
+  );
   const [loadingMore, setLoadingMore] = useState(false);
   const [exit, setExit] = useState<DeckAction>("skip");
 
   const fetchIdeas = useCallback(
     async (refresh: boolean) => {
       if (fixtureIdeas) return fixtureIdeas;
-      const skipped = readSkippedIdeas(workspaceId);
-      const res = await studioApi.ideas({
-        workspaceId,
-        type,
-        brand: readBrandPayload(workspaceId),
-        dismissed: skipped.map((d) => d.title).slice(-30),
-        refresh,
-        limit: 8,
-      });
-      return res.ideas;
+      return loadIdeas(workspaceId, type, { refresh });
     },
     [workspaceId, type, fixtureIdeas],
   );
@@ -79,18 +79,39 @@ export function IdeaSwipeDeck({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setStatus("loading");
-    void fetchIdeas(false)
-      .then((ideas) => {
-        if (cancelled) return;
-        setDeck(newDeck(ideas, readSavedIdeas(workspaceId), readSkippedIdeas(workspaceId)));
-        setStatus("ready");
-      })
-      .catch(() => !cancelled && setStatus("error"));
+    const saved = () => readSavedIdeas(workspaceId);
+    const skipped = () => readSkippedIdeas(workspaceId);
+    if (fixtureIdeas) {
+      setDeck(newDeck(fixtureIdeas, saved(), skipped()));
+      setStatus("ready");
+      return;
+    }
+    const inHand = cachedIdeas(workspaceId, type);
+    if (inHand) {
+      setDeck(newDeck(inHand.ideas, saved(), skipped()));
+      setStatus("ready");
+      if (inHand.fresh) return;
+      // An older batch: swipe it now, new ideas join the end of the stack
+      // when they arrive (never reshuffling the card under the finger).
+      void fetchIdeas(false)
+        .then((ideas) => !cancelled && setDeck((d) => addIdeas(d, ideas)))
+        .catch(() => {});
+    } else {
+      setStatus("loading");
+      // Not aborted on close: the request is shared, its answer is kept for
+      // the next opening, and it runs in the background lane either way.
+      void fetchIdeas(false)
+        .then((ideas) => {
+          if (cancelled) return;
+          setDeck(newDeck(ideas, saved(), skipped()));
+          setStatus("ready");
+        })
+        .catch(() => !cancelled && setStatus("error"));
+    }
     return () => {
       cancelled = true;
     };
-  }, [open, fetchIdeas, workspaceId]);
+  }, [open, fetchIdeas, workspaceId, type, fixtureIdeas]);
 
   const update = useCallback(
     (next: Deck) => {
@@ -160,9 +181,20 @@ export function IdeaSwipeDeck({
 
         <div className="relative h-[300px]" data-testid="idea-deck">
           {status === "loading" ? (
-            <div className="absolute inset-0 overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2">
+            <div
+              role="status"
+              className="absolute inset-0 overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2"
+            >
               <span className="studio-weave absolute inset-0" aria-hidden />
-              <span className="sr-only">Loading ideas</span>
+              {/* A card's shape, so the first ideas land where the eye already is. */}
+              <div className="relative flex h-full flex-col justify-end gap-2.5 p-5" aria-hidden>
+                <span className="h-5 w-24 rounded-full bg-foreground/[0.07]" />
+                <span className="h-5 w-4/5 rounded-full bg-foreground/[0.09]" />
+                <span className="h-3.5 w-3/5 rounded-full bg-foreground/[0.06]" />
+              </div>
+              <p className="absolute inset-x-0 top-5 text-center text-[12.5px] font-medium text-muted-foreground">
+                Mox is thinking up ideas for your brand…
+              </p>
             </div>
           ) : status === "error" ? (
             <div className="grid h-full place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2 p-6 text-center text-sm text-muted-foreground">
@@ -330,7 +362,7 @@ function TopCard({
       <CardFace idea={idea} top />
       <motion.span
         style={{ opacity: saveOpacity }}
-        className="pointer-events-none absolute left-4 top-16 -rotate-6 rounded-lg border-2 border-primary px-2 py-0.5 text-sm font-bold uppercase tracking-wide text-primary"
+        className="pointer-events-none absolute left-4 top-16 -rotate-6 rounded-lg border-2 border-primary px-2 py-0.5 text-sm font-bold uppercase tracking-wide text-primary-ink"
       >
         Save
       </motion.span>
@@ -453,7 +485,7 @@ function RoundButton({
       className={cn(
         "grid place-items-center rounded-full bg-surface-3 shadow-2 ring-1 ring-border transition-colors disabled:opacity-40",
         small ? "size-9 text-muted-foreground" : "size-12",
-        tone === "save" ? "text-primary hover:bg-primary/10" : "text-foreground hover:bg-surface-2",
+        tone === "save" ? "text-primary-ink hover:bg-primary/10" : "text-foreground hover:bg-surface-2",
       )}
     >
       {children}

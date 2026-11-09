@@ -97,7 +97,7 @@ export function StepPills({
               )}
             >
               {done ? (
-                <Check className="h-3 w-3 text-primary" aria-hidden />
+                <Check className="h-3 w-3 text-primary-ink" aria-hidden />
               ) : (
                 <span className="tabular-nums">{i + 1}.</span>
               )}

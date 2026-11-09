@@ -54,7 +54,7 @@ export function CostChip({
     "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium tabular-nums leading-4 text-muted-foreground";
   if (free) {
     return (
-      <span data-slot="cost-chip" className={cn(base, "bg-primary/12 text-primary", className)}>
+      <span data-slot="cost-chip" className={cn(base, "bg-primary/12 text-primary-ink", className)}>
         Free
       </span>
     );

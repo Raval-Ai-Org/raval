@@ -48,6 +48,8 @@ export type NavItem = {
   flag?: "experiments";
   /** In the collapsed rail too. */
   rail?: boolean;
+  /** Holo's corner pill for something new or still being tried. */
+  badge?: "New" | "Beta";
 };
 
 export type NavGroup = { id: string; label: string; items: NavItem[] };
@@ -78,6 +80,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: "create",
         target: { kind: "event", event: "open:create-launcher" },
         rail: true,
+        badge: "New",
       },
     ],
   },
@@ -128,6 +131,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: "campaigns",
         target: { kind: "route", place: "campaigns" },
         tour: "campaigns",
+        badge: "New",
       },
       {
         id: "analytics",
@@ -156,6 +160,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: "communities",
         target: { kind: "route", place: "communities" },
         tour: "communities",
+        badge: "Beta",
       },
       {
         id: "experiments",

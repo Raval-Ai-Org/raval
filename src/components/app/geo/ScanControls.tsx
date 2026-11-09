@@ -229,7 +229,7 @@ export function ScanProgress({ scan, onCancel }: { scan: GeoScanView; onCancel: 
               {done ? (
                 <CheckCircle className="h-4 w-4 text-success" strokeWidth={2.2} />
               ) : now ? (
-                <Spinner className="h-4 w-4 animate-spin text-primary" />
+                <Spinner className="h-4 w-4 animate-spin text-primary-ink" />
               ) : (
                 <span className="grid h-4 w-4 place-items-center">
                   <span className="h-1.5 w-1.5 rounded-full bg-border" />

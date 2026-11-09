@@ -17,9 +17,15 @@ import { cn } from "@/lib/utils";
 import { Illustration, type IlloKind } from "./illustrations";
 import { StartHereCard, type StartHereView } from "./StartHere";
 
-const POPULAR: { choice: CreateChoice; label: string; line: string; illo: IlloKind }[] = [
+/** Holo's "Most popular" row: Animate first, then the formats people reach for. */
+const POPULAR: {
+  choice: CreateChoice | "animate";
+  label: string;
+  line: string;
+  illo: IlloKind;
+}[] = [
+  { choice: "animate", label: "Animate", line: "Turn pictures into videos", illo: "animate" },
   { choice: "carousel", label: "Carousel", line: "Swipe-through story", illo: "carousel" },
-  { choice: "story", label: "Story", line: "Full-screen frames", illo: "story" },
   { choice: "ad", label: "Ad", line: "Built to sell", illo: "ad" },
 ];
 
@@ -35,12 +41,15 @@ function TiltCard({
   className,
   style,
   onClick,
+  onWarm,
   label,
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
   onClick: () => void;
+  /** Pointer or focus arrived: load what the click will need. */
+  onWarm?: () => void;
   label: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -63,6 +72,8 @@ function TiltCard({
       aria-label={label}
       onClick={onClick}
       onPointerMove={move}
+      onPointerEnter={onWarm}
+      onFocus={onWarm}
       onPointerLeave={leave}
       style={style}
       className={cn(
@@ -84,9 +95,12 @@ export function HomeBento({
   onOpenWaiting,
   create,
   onSwipe,
+  onWarmIdeas,
 }: {
   /** Opens the idea deck (any format, or blog topics). */
   onSwipe?: (type?: StudioType) => void;
+  /** A pointer reached an ideas card: fetch that deck's ideas ahead. */
+  onWarmIdeas?: (type?: StudioType) => void;
   start: StartHereView;
   /** Kept for callers; Home has no greeting any more (Holo). */
   name?: string | null;
@@ -111,169 +125,198 @@ export function HomeBento({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-4 pb-6 pt-4 md:px-8 md:pt-8">
-      {/* Bento */}
-      <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-2 lg:grid-cols-3">
-        {!start.complete ? (
-          <div className="ds-rise sm:row-span-2 lg:row-span-1" style={rise(1)}>
-            <StartHereCard start={start} />
-          </div>
-        ) : (
+      {/* Columns follow the canvas, not the window: with the Studio rail open
+          the canvas is narrow, and three squeezed columns broke words apart. */}
+      <div className="@container">
+        {/* Bento */}
+        <div className="grid grid-cols-1 gap-[14px] @xl:grid-cols-2 @3xl:grid-cols-3">
+          {!start.complete ? (
+            <div className="ds-rise @xl:row-span-2 @3xl:row-span-1" style={rise(1)}>
+              <StartHereCard start={start} />
+            </div>
+          ) : (
+            <TiltCard
+              label="Open Brain"
+              onClick={() => emitAppEvent("open:brain")}
+              style={rise(1)}
+              className="relative min-h-[184px] overflow-hidden p-5 @xl:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
+            >
+              <h3 className="text-[18px] font-bold tracking-[-0.015em]">Mox knows your brand</h3>
+              <p className="mt-1 text-[12px] text-muted-foreground">Everything is set up.</p>
+              <Illustration
+                kind="rocket"
+                className="absolute -bottom-3 -right-3 h-[110px] w-[145px] @xl:h-[150px] @xl:w-[195px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
+              />
+              <CardArrow className="absolute bottom-5 left-5" />
+            </TiltCard>
+          )}
+
           <TiltCard
-            label="Open Brain"
-            onClick={() => emitAppEvent("open:brain")}
-            style={rise(1)}
-            className="relative min-h-[184px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
+            label="Swipe ideas"
+            onClick={() => (onSwipe ? onSwipe() : create.open("social"))}
+            onWarm={() => onWarmIdeas?.()}
+            style={rise(2)}
+            className="relative min-h-[184px] overflow-hidden p-5 @xl:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
           >
-            <h3 className="text-[18px] font-bold tracking-[-0.015em]">Mox knows your brand</h3>
-            <p className="mt-1 text-[12px] text-muted-foreground">Everything is set up.</p>
+            <span className="ds-grad-pill inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-bold">
+              Popular
+            </span>
+            <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Swipe ideas</h3>
+            <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
+              Keep the ones you like. Mox writes them.
+            </p>
+            <Illustration
+              kind="swipe"
+              className="absolute -bottom-3 -right-3 h-[115px] w-[150px] @xl:h-[160px] @xl:w-[205px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
+            />
+            {/* Holo's "Create swipes" link, a gradient underline under it. */}
+            <span className="absolute bottom-5 left-5 inline-flex flex-col gap-1">
+              <span className="inline-flex items-center gap-1 text-[12.5px] font-bold text-foreground/85 transition-colors group-hover:text-foreground">
+                Create swipes
+                <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+                  →
+                </span>
+              </span>
+              <span
+                aria-hidden
+                className="h-[2px] w-full origin-left rounded-full [background:var(--mox-gradient)] transition-transform duration-300 group-hover:scale-x-110"
+              />
+            </span>
+          </TiltCard>
+
+          <TiltCard
+            label={waiting ? "Open posts waiting" : "Open Autopilot"}
+            onClick={() => (waiting ? onOpenWaiting() : emitAppEvent("open:autopilot"))}
+            style={rise(3)}
+            className="relative min-h-[184px] overflow-hidden p-5 @xl:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] @xl:col-span-2 @3xl:col-span-1"
+          >
+            {waiting ? (
+              <>
+                <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-[var(--mox-yellow)] px-2.5 text-[11px] font-bold text-[var(--mox-ink)]">
+                  <span className="size-1.5 animate-pulse rounded-full bg-[var(--mox-ink)]" />
+                  {waiting} waiting
+                </span>
+                <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">
+                  Posts need a yes
+                </h3>
+                <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
+                  Check them before they go out.
+                </p>
+              </>
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    "inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold",
+                    autopilotOn
+                      ? "bg-[var(--mox-green)] text-white"
+                      : "bg-[var(--ds-well-bg)] text-foreground/70",
+                  )}
+                >
+                  {autopilotOn ? "On" : "Off"}
+                </span>
+                <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Autopilot</h3>
+                <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
+                  {autopilotOn ? "Posting every week for you." : "Posts every week by itself."}
+                </p>
+              </>
+            )}
             <Illustration
               kind="rocket"
-              className="absolute -bottom-3 -right-3 h-[110px] w-[145px] sm:h-[150px] sm:w-[195px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
+              className="absolute -bottom-3 -right-2 h-[160px] w-[195px] transition-transform duration-500 group-hover:-translate-y-2"
             />
             <CardArrow className="absolute bottom-5 left-5" />
           </TiltCard>
-        )}
+        </div>
 
-        <TiltCard
-          label="Swipe ideas"
-          onClick={() => (onSwipe ? onSwipe() : create.open("social"))}
-          style={rise(2)}
-          className="relative min-h-[184px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
-        >
-          <span className="ds-grad-pill inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-bold">
-            Popular
-          </span>
-          <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Swipe ideas</h3>
-          <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
-            Keep the ones you like. Mox writes them.
-          </p>
-          <Illustration
-            kind="swipe"
-            className="absolute -bottom-3 -right-3 h-[115px] w-[150px] sm:h-[160px] sm:w-[205px] transition-transform duration-500 group-hover:-translate-y-1.5 group-hover:rotate-[-2deg]"
-          />
-          <CardArrow className="absolute bottom-5 left-5" />
-        </TiltCard>
-
-        <TiltCard
-          label={waiting ? "Open posts waiting" : "Open Autopilot"}
-          onClick={() => (waiting ? onOpenWaiting() : emitAppEvent("open:autopilot"))}
-          style={rise(3)}
-          className="relative min-h-[184px] overflow-hidden p-5 sm:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] sm:col-span-2 lg:col-span-1"
-        >
-          {waiting ? (
-            <>
-              <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-[var(--mox-yellow)] px-2.5 text-[11px] font-bold text-[var(--mox-ink)]">
-                <span className="size-1.5 animate-pulse rounded-full bg-[var(--mox-ink)]" />
-                {waiting} waiting
+        {/* Most popular */}
+        <div className="ds-rise mb-3 mt-8 flex items-center justify-between" style={rise(4)}>
+          <h3 className="text-[17px] font-bold tracking-[-0.015em]">Most popular</h3>
+          <button
+            type="button"
+            onClick={() => emitAppEvent("open:create-launcher")}
+            className="rounded-full px-2.5 py-1 text-[12px] font-semibold text-muted-foreground hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+          >
+            See all
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 @3xl:grid-cols-4">
+          {POPULAR.map((p, i) => (
+            <TiltCard
+              key={p.choice}
+              label={p.label}
+              onClick={() =>
+                p.choice === "animate" ? emitAppEvent("open:animate") : create.open(p.choice)
+              }
+              style={rise(5 + i)}
+              className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
+            >
+              <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:scale-105">
+                <Illustration kind={p.illo} className="size-11" />
               </span>
-              <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Posts need a yes</h3>
-              <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
-                Check them before they go out.
-              </p>
-            </>
-          ) : (
-            <>
-              <span
-                className={cn(
-                  "inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold",
-                  autopilotOn
-                    ? "bg-[var(--mox-green)] text-white"
-                    : "bg-[var(--ds-well-bg)] text-foreground/70",
-                )}
-              >
-                {autopilotOn ? "On" : "Off"}
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-[13px] font-semibold">{p.label}</span>
+                  {p.choice === "animate" && (
+                    <span className="ds-grad-pill shrink-0 rounded-full px-1.5 py-px text-[9.5px] font-bold">
+                      New
+                    </span>
+                  )}
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">{p.line}</span>
               </span>
-              <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Autopilot</h3>
-              <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
-                {autopilotOn ? "Posting every week for you." : "Posts every week by itself."}
-              </p>
-            </>
-          )}
-          <Illustration
-            kind="rocket"
-            className="absolute -bottom-3 -right-2 h-[160px] w-[195px] transition-transform duration-500 group-hover:-translate-y-2"
-          />
-          <CardArrow className="absolute bottom-5 left-5" />
-        </TiltCard>
-      </div>
-
-      {/* Most popular */}
-      <div className="ds-rise mb-3 mt-8 flex items-center justify-between" style={rise(4)}>
-        <h3 className="text-[17px] font-bold tracking-[-0.015em]">Most popular</h3>
-        <button
-          type="button"
-          onClick={() => emitAppEvent("open:create-launcher")}
-          className="rounded-full px-2.5 py-1 text-[12px] font-semibold text-muted-foreground hover:bg-[var(--ds-well-bg)] hover:text-foreground"
-        >
-          See all
-        </button>
-      </div>
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {POPULAR.map((p, i) => (
+            </TiltCard>
+          ))}
+          {/* Blog topics to write about: the idea deck, articles only. */}
           <TiltCard
-            key={p.choice}
-            label={p.label}
-            onClick={() => create.open(p.choice)}
-            style={rise(5 + i)}
+            label="Blog ideas"
+            onClick={() => (onSwipe ? onSwipe("article") : create.open("article"))}
+            onWarm={() => onWarmIdeas?.("article")}
+            style={rise(5 + POPULAR.length)}
             className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
           >
             <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:scale-105">
-              <Illustration kind={p.illo} className="size-11" />
+              <Illustration kind="article" className="size-11" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-semibold">{p.label}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{p.line}</span>
+              <span className="block truncate text-[13px] font-semibold">Blog ideas</span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                Topics to write
+              </span>
             </span>
           </TiltCard>
-        ))}
-        {/* Blog topics to write about: the idea deck, articles only. */}
-        <TiltCard
-          label="Blog ideas"
-          onClick={() => (onSwipe ? onSwipe("article") : create.open("article"))}
-          style={rise(5 + POPULAR.length)}
-          className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
-        >
-          <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:scale-105">
-            <Illustration kind="article" className="size-11" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-semibold">Blog ideas</span>
-            <span className="block truncate text-[11px] text-muted-foreground">
-              Topics to write
-            </span>
-          </span>
-        </TiltCard>
-      </div>
+        </div>
 
-      {/* Create (Holo: the big three, no heading) */}
-      <div className="mt-[14px] grid grid-cols-1 gap-[14px] sm:grid-cols-3">
-        {BIG.map((b, i) => {
-          const lock = create.lockFor(b.choice);
-          return (
-            <TiltCard
-              key={b.choice}
-              label={`Create ${b.label}`}
-              onClick={() => create.open(b.choice)}
-              style={rise(10 + i)}
-              className="relative min-h-[140px] overflow-hidden p-5"
-            >
-              <Illustration
-                kind={b.illo}
-                className="absolute -bottom-3 -right-4 h-[100px] w-[130px] transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-3deg]"
-              />
-              <span className="relative flex items-center gap-2">
-                <span className="text-[20px] font-bold tracking-[-0.02em]">{b.label}</span>
-                {lock && <PlanLock plan={lock} />}
-              </span>
-              <span className="relative mt-0.5 block max-w-[56%] text-[12px] leading-snug text-muted-foreground">
-                {b.line}
-              </span>
-              <span className="relative mt-auto pt-3">
-                <CardArrow />
-              </span>
-            </TiltCard>
-          );
-        })}
+        {/* Create (Holo: the big three, no heading) */}
+        <div className="mt-[14px] grid grid-cols-1 gap-[14px] @xl:grid-cols-3">
+          {BIG.map((b, i) => {
+            const lock = create.lockFor(b.choice);
+            return (
+              <TiltCard
+                key={b.choice}
+                label={`Create ${b.label}`}
+                onClick={() => create.open(b.choice)}
+                style={rise(10 + i)}
+                className="relative min-h-[140px] overflow-hidden p-5"
+              >
+                <Illustration
+                  kind={b.illo}
+                  className="absolute -bottom-3 -right-4 h-[100px] w-[130px] transition-transform duration-500 group-hover:-translate-y-1 group-hover:rotate-[-3deg]"
+                />
+                <span className="relative flex items-center gap-2">
+                  <span className="text-[20px] font-bold tracking-[-0.02em]">{b.label}</span>
+                  {lock && <PlanLock plan={lock} />}
+                </span>
+                <span className="relative mt-0.5 block max-w-[56%] text-[12px] leading-snug text-muted-foreground">
+                  {b.line}
+                </span>
+                <span className="relative mt-auto pt-3">
+                  <CardArrow />
+                </span>
+              </TiltCard>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -54,7 +54,7 @@ export function TourLab() {
             : "hidden",
         )}
       >
-        <div className="px-2 py-3 text-[13px] font-semibold">Mellox AI</div>
+        <div className="px-2 py-3 text-[13px] font-semibold">Mellox</div>
         {SIDEBAR.map((item) => (
           <button
             key={item.tour}

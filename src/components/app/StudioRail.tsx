@@ -253,7 +253,7 @@ function BrandDnaCta() {
       onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
       className="flex min-h-10 w-full items-center gap-2.5 rounded-lg border border-dashed border-primary-border bg-primary-surface px-3 py-2 text-left text-xs text-foreground transition-colors hover:border-primary"
     >
-      <Sparkles className="size-3.5 shrink-0 text-primary" />
+      <Sparkles className="size-3.5 shrink-0 text-primary-ink" />
       <span className="min-w-0 flex-1">
         <span className="block font-medium">Complete your Brand DNA</span>
         <span className="block text-muted-foreground">Sharper ideas and on-voice drafts</span>
@@ -389,7 +389,7 @@ function ActiveJobRow({
           aria-expanded={open}
           className="mt-2 flex w-full items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
         >
-          <WorkingRing className="size-3.5 shrink-0 text-primary" />
+          <WorkingRing className="size-3.5 shrink-0 text-primary-ink" />
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
               key={current}
@@ -433,11 +433,11 @@ function ActiveJobRow({
                   <li key={step.id} className="flex items-center gap-2.5 text-[11.5px] leading-4">
                     <span className="grid size-4 shrink-0 place-items-center">
                       {done ? (
-                        <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-primary">
+                        <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-primary-ink">
                           <Check className="size-2.5" strokeWidth={3.5} />
                         </span>
                       ) : now ? (
-                        <WorkingRing className="size-3.5 text-primary" />
+                        <WorkingRing className="size-3.5 text-primary-ink" />
                       ) : (
                         <span className="size-1.5 rounded-full bg-muted-foreground/40" />
                       )}
@@ -863,7 +863,7 @@ export function PipelineSection({
                   <span aria-hidden className="studio-ring absolute inset-0 rounded-full" />
                 ) : null}
                 {busy && !on ? (
-                  <Spinner className="size-4 animate-spin text-primary" />
+                  <Spinner className="size-4 animate-spin text-primary-ink" />
                 ) : (
                   <Icon className="size-4" />
                 )}
@@ -1042,7 +1042,7 @@ export function PipelineSection({
           onClick={() => openLibrary(publishedThisWeek ? "published" : undefined)}
           className="group mt-3 flex w-full items-center gap-2 rounded-xl bg-surface-2/60 px-3 py-2 text-left text-[11px] text-muted-foreground ring-1 ring-border/50 transition-colors hover:bg-surface-2 hover:text-foreground"
         >
-          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-surface text-primary ring-1 ring-primary-border">
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-surface text-primary-ink ring-1 ring-primary-border">
             <Check className="size-3" strokeWidth={3} />
           </span>
           <span className="min-w-0 flex-1 truncate">
@@ -1113,7 +1113,7 @@ function CreatingRow({ title, type }: { title: string; type: StudioType | "legac
           />
         </span>
         <span className="mt-2 flex items-center gap-2 text-xs font-medium text-foreground">
-          <WorkingRing className="size-3.5 shrink-0 text-primary" />
+          <WorkingRing className="size-3.5 shrink-0 text-primary-ink" />
           Getting started
         </span>
       </div>
@@ -1518,7 +1518,7 @@ function SuggestionsSection() {
     <section data-no-rhythm>
       <div className="mb-1.5 flex items-center justify-between px-0.5">
         <h3 className="ui-eyebrow">
-          <Sparkles className="h-2.5 w-2.5 text-primary" strokeWidth={2.5} />
+          <Sparkles className="h-2.5 w-2.5 text-primary-ink" strokeWidth={2.5} />
           Suggestions for you
         </h3>
         <button

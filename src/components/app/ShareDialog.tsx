@@ -342,7 +342,7 @@ export function ShareDialog({
                 role="status"
                 className="ds-well flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3"
               >
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink">
                   <Check className="size-3.5" />
                 </span>
                 <div className="min-w-0 flex-1 basis-[200px]">

@@ -532,7 +532,9 @@ function StepIndicator({
   const reduce = useReducedMotion();
   return (
     <ol
-      className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded-full bg-[var(--ds-well-bg)] p-1 @4xl/composer:flex"
+      // In the row's flow, between two flex-1 spacers: centred when there is
+      // room, and never drawn over the Back and format pills when there isn't.
+      className="hidden shrink-0 items-center gap-0.5 rounded-full bg-[var(--ds-well-bg)] p-1 @4xl/composer:flex"
       aria-label="Steps"
     >
       {STEPS.map((s, i) => {
@@ -738,7 +740,7 @@ export function IntentStep({
                 }
               >
                 {session.goal === g.id ? (
-                  <Check className="size-3 text-primary" strokeWidth={3} />
+                  <Check className="size-3 text-primary-ink" strokeWidth={3} />
                 ) : null}
                 {g.label}
               </ChipButton>
@@ -803,7 +805,7 @@ export function IntentStep({
                       className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground"
                       data-testid="studio-source-strip"
                     >
-                      <Repeat2 className="size-3.5 text-primary" />
+                      <Repeat2 className="size-3.5 text-primary-ink" />
                       <span className="min-w-0 flex-1 truncate">
                         Made from{" "}
                         <span className="font-medium text-foreground">
@@ -842,7 +844,7 @@ export function IntentStep({
                     </div>
                   ) : session.ideaId ? (
                     <div className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
-                      <Sparkles className="size-3.5 text-primary" />
+                      <Sparkles className="size-3.5 text-primary-ink" />
                       <span className="flex-1">From a suggested idea</span>
                       <button
                         type="button"
@@ -895,7 +897,7 @@ export function IntentStep({
                         onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
                         className="inline-flex items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
                       >
-                        <Sparkles className="size-3.5 text-primary" />
+                        <Sparkles className="size-3.5 text-primary-ink" />
                         Add Brand DNA
                       </button>
                     ) : null}

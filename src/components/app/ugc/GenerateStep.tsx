@@ -287,7 +287,7 @@ export function GenerateStep({
                 <button
                   type="button"
                   onClick={onBack}
-                  className="mt-2 text-left text-xs text-primary underline underline-offset-2"
+                  className="mt-2 text-left text-xs text-primary-ink underline underline-offset-2"
                 >
                   Review your script for the new {settings.durationSec}s length
                 </button>
@@ -423,7 +423,7 @@ export function GenerateStep({
 function Stat({ icon: Icon, value, label }: { icon: typeof Clock; value: string; label: string }) {
   return (
     <div className="rounded-2xl bg-[var(--ds-well-bg)] px-1 py-2">
-      <Icon className="mx-auto size-3.5 text-primary" aria-hidden />
+      <Icon className="mx-auto size-3.5 text-primary-ink" aria-hidden />
       <p className="mt-1 text-sm font-semibold tabular-nums">{value}</p>
       <p className="text-[10px] text-muted-foreground">{label}</p>
     </div>

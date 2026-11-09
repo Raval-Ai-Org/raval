@@ -230,7 +230,7 @@ export function TodayBrief({ workspaceId, brandContext }: Props) {
     <div className="space-y-3">
       {!briefing && !loading && !error && (
         <div className="ds-tile flex flex-col items-center gap-3 p-8 text-center">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary-ink">
             <Target className="h-5 w-5" aria-hidden="true" />
           </span>
           <p className="text-[14px] font-medium text-foreground">What to do today</p>

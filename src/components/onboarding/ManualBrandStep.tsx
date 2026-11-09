@@ -118,7 +118,7 @@ export function ManualBrandStep({
                     : "ds-tile-hover text-foreground/80",
                 )}
               >
-                <Icon className="h-4 w-4 text-primary" aria-hidden />
+                <Icon className="h-4 w-4 text-primary-ink" aria-hidden />
                 {label}
               </button>
             ))}

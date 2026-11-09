@@ -328,7 +328,7 @@ function ConceptCard({
           {score !== null ? <ScoreChip overall={score} /> : null}
         </div>
         {topPick ? (
-          <p className="text-[11.5px] font-medium text-primary">Your audience's top pick</p>
+          <p className="text-[11.5px] font-medium text-primary-ink">Your audience's top pick</p>
         ) : null}
         {concept.angle ? (
           <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
@@ -374,7 +374,7 @@ function ConceptCard({
           <Layers className="size-3.5" aria-hidden /> {scenes}
         </span>
         <span className="inline-flex items-center gap-1" title="Facts used">
-          <CheckCircle className="size-3.5 text-primary" aria-hidden />{" "}
+          <CheckCircle className="size-3.5 text-primary-ink" aria-hidden />{" "}
           {concept.script.factIds.length}
         </span>
         {concept.warnings.length ? (

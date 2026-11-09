@@ -87,7 +87,8 @@ export type RateLimitTier =
   | "setup-write"
   | "product-import"
   | "integration-read"
-  | "integration-write";
+  | "integration-write"
+  | "upload";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -241,6 +242,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "admin-read": { limit: 240, windowSeconds: 60, label: "admin" },
   "admin-write": { limit: 60, windowSeconds: 60, label: "admin change" },
   "admin-danger": { limit: 10, windowSeconds: 600, label: "sensitive admin change" },
+  // A person's own files going into Library or Inspo: storage and a read-back,
+  // no paid model. One request per file, so a 100-photo drop must fit.
+  upload: { limit: 240, windowSeconds: 600, label: "upload" },
 };
 
 export type RateLimitResult = {

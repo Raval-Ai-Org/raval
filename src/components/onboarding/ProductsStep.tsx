@@ -293,7 +293,7 @@ function FoundBanner({
               {!reduce && (
                 <span className="absolute inset-0 animate-ping rounded-full bg-primary/20 [animation-duration:1.8s]" />
               )}
-              <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary/12 text-primary">
+              <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary/12 text-primary-ink">
                 {state === "saving" ? (
                   <Spinner className="h-4.5 w-4.5 animate-spin" aria-hidden />
                 ) : (
@@ -390,7 +390,7 @@ function IncomingRow({ item }: { item: ProductCandidate }) {
           {item.name}
         </span>
         <span className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
-          <Spinner className="h-3 w-3 animate-spin text-primary" aria-hidden /> Saving
+          <Spinner className="h-3 w-3 animate-spin text-primary-ink" aria-hidden /> Saving
         </span>
       </span>
     </div>
@@ -477,7 +477,7 @@ export function Catalogue({
           {...rise(0)}
           className="ds-well mt-3 flex flex-col items-center gap-3 rounded-[var(--ds-radius-tile)] px-6 py-10 text-center"
         >
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary-ink">
             <ShoppingBag className="h-5 w-5" aria-hidden />
           </span>
           <p className="text-[14px] font-semibold">Add the first thing you sell</p>

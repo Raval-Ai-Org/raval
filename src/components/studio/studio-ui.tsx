@@ -390,17 +390,23 @@ export function PlatformLogoGrid<T extends PlatformAppIconId>({
               <span
                 aria-hidden
                 className={cn(
-                  "pointer-events-none absolute -inset-[3px] rounded-[calc(var(--r)+3px)] ring-2 transition-[box-shadow,opacity] duration-[--motion-duration-fast]",
-                  selected ? "ring-primary opacity-100" : "ring-transparent opacity-0",
+                  // A Mox gradient border (masked to the edge), not a flat lime ring.
+                  "pointer-events-none absolute -inset-[3px] rounded-[calc(var(--r)+3px)] p-[2px] [background:var(--mox-gradient)] transition-opacity duration-[--motion-duration-fast]",
+                  selected ? "opacity-100" : "opacity-0",
                 )}
-                style={{ ["--r" as string]: `${Math.round(size * 0.26)}px` }}
+                style={{
+                  ["--r" as string]: `${Math.round(size * 0.26)}px`,
+                  WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+                  WebkitMaskComposite: "xor",
+                  mask: "linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)",
+                }}
               />
               <motion.span
                 aria-hidden
                 initial={false}
                 animate={selected ? { scale: 1, opacity: 1 } : { scale: 0.4, opacity: 0 }}
                 transition={spring.control}
-                className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-surface-2"
+                className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full text-[var(--mox-ink)] shadow-[0_4px_10px_-3px_rgb(31_214_196/0.7)] ring-2 ring-white [background:var(--mox-gradient)] dark:ring-[var(--ds-card-bg)]"
               >
                 <Check className="size-2.5" />
               </motion.span>

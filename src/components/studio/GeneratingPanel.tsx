@@ -16,7 +16,7 @@ import { useNavigate } from "@/lib/navigation";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import { isActiveJob, type StudioJob } from "@/lib/studio/jobs";
-import { openJob, useStudioStore } from "@/lib/studio/session-store";
+import { focusSession, openJob, useStudioStore } from "@/lib/studio/session-store";
 import { cn } from "@/lib/utils";
 import { TypeGlyph } from "./studio-ui";
 
@@ -170,6 +170,7 @@ export function GeneratingPanelView({
 export function GeneratingPanel({ className }: { className?: string }) {
   const workspaceId = useOptionalWorkspaceId();
   const jobs = useStudioStore((s) => s.jobs);
+  const sessions = useStudioStore((s) => s.sessions);
   // Ids seen running in this tab, newest first.
   const seen = useRef<string[]>([]);
   const [, bump] = useState(0);
@@ -210,7 +211,24 @@ export function GeneratingPanel({ className }: { className?: string }) {
     const step = STUDIO_FORMATS[j.type]?.stages.find((s) => s.id === j.stage)?.label;
     return [{ id, type: j.type, state, title: j.title || undefined, step } as GeneratingRow];
   });
-  const all = [...tasks, ...rows];
+  // A piece whose start request hasn't answered yet has no job to follow;
+  // list it too, so pressing Generate always shows something here.
+  const starting: GeneratingRow[] = sessions
+    .filter(
+      (s) =>
+        s.pendingKey &&
+        !s.job &&
+        s.window === "minimized" &&
+        (!workspaceId || s.workspaceId === workspaceId),
+    )
+    .map((s) => ({
+      id: `session:${s.id}`,
+      type: s.type,
+      state: "working",
+      title: s.brief.trim().slice(0, 80) || undefined,
+      step: "Starting",
+    }));
+  const all = [...tasks, ...starting, ...rows];
 
   return (
     <AnimatePresence>
@@ -220,6 +238,7 @@ export function GeneratingPanel({ className }: { className?: string }) {
           rows={all}
           className={className}
           onOpen={(id) => {
+            if (id.startsWith("session:")) return focusSession(id.slice("session:".length));
             const task = tasks.find((t) => t.id === id);
             if (!task) return void openJob(id, workspaceId);
             if (task.href) navigate({ to: task.href });

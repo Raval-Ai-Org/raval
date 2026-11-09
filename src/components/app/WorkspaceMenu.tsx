@@ -207,7 +207,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
 
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
                   {active && (
-                    <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />
+                    <Check className="h-3.5 w-3.5 text-primary-ink" aria-hidden />
                   )}
                 </button>
               );

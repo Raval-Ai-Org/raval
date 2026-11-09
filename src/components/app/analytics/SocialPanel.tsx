@@ -109,7 +109,7 @@ export function SocialStatusNotice({ status }: { status: SocialReport["status"] 
         role="status"
         className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border/80 bg-card/40 px-6 py-12 text-center"
       >
-        <Loader2 className="size-5 animate-spin text-primary" aria-hidden />
+        <Loader2 className="size-5 animate-spin text-primary-ink" aria-hidden />
         <h3 className="mt-1 text-[13.5px] font-semibold">Reading your posts</h3>
         <p className="max-w-xs text-[12px] text-muted-foreground">
           Mellox is reading your accounts. This takes a minute or two.

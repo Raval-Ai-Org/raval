@@ -248,7 +248,7 @@ export function GeneratePostImageButton({
                   />
                 ) : status === "loading" ? (
                   <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center">
-                    <Sparkles className="h-4 w-4 animate-pulse text-brand-green" />
+                    <Sparkles className="h-4 w-4 animate-pulse text-primary-ink" />
                     <p className="text-[11px] text-muted-foreground">Rendering… {progress}%</p>
                   </div>
                 ) : status === "error" ? (

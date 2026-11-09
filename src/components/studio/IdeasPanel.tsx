@@ -81,30 +81,37 @@ export function IdeasPanel({
   const [refreshing, setRefreshing] = useState(false);
   const [swiping, setSwiping] = useState(false);
   const request = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
 
   const load = useCallback(
     async (refresh = false) => {
       if (fixtureIdeas) return;
       const id = ++request.current;
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
       if (refresh) setRefreshing(true);
       else setStatus("loading");
       setError(null);
       try {
         const dismissed = readDismissed(workspaceId);
-        const res = await studioApi.ideas({
-          workspaceId,
-          type,
-          brand: readBrandPayload(workspaceId),
-          dismissed: dismissed.map((d) => d.title),
-          refresh,
-          limit,
-        });
+        const res = await studioApi.ideas(
+          {
+            workspaceId,
+            type,
+            brand: readBrandPayload(workspaceId),
+            dismissed: dismissed.map((d) => d.title),
+            refresh,
+            limit,
+          },
+          controller.signal,
+        );
         if (id !== request.current) return;
         const hidden = new Set(dismissed.map((d) => d.id));
         setIdeas(res.ideas.filter((i) => !hidden.has(i.id)));
         setStatus("ready");
       } catch (e) {
-        if (id !== request.current) return;
+        if (id !== request.current || controller.signal.aborted) return;
         setError(e instanceof Error ? e.message : "Couldn't load ideas");
         setStatus("error");
       } finally {
@@ -116,6 +123,7 @@ export function IdeasPanel({
 
   useEffect(() => {
     void load(false);
+    return () => inFlight.current?.abort();
   }, [load]);
 
   const dismiss = (idea: StudioIdea) => {
@@ -150,7 +158,7 @@ export function IdeasPanel({
             id="studio-ideas-heading"
             className="flex items-center gap-1.5 text-sm font-medium text-foreground"
           >
-            <Sparkles className="size-4 text-primary" />
+            <Sparkles className="size-4 text-primary-ink" />
             {heading}
           </h3>
         )}
@@ -160,7 +168,7 @@ export function IdeasPanel({
             onClick={() => setSwiping(true)}
             className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-2"
           >
-            <Layers className="size-3.5 text-primary" />
+            <Layers className="size-3.5 text-primary-ink" />
             Swipe
           </button>
           <button
@@ -285,7 +293,7 @@ export function IdeasPanel({
                       </span>
                     ) : null}
                     {onGenerate ? null : (
-                      <span className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <span className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-primary-ink opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                         Use this idea <ArrowRight className="size-3.5" />
                       </span>
                     )}

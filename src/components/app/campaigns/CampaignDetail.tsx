@@ -103,7 +103,7 @@ function Detail({
           Campaigns
         </button>
         <div className="relative flex flex-wrap items-start gap-4">
-          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary ring-1 ring-primary/20">
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary-ink ring-1 ring-primary/20">
             <Icon className="size-6" />
           </span>
           <div className="min-w-0 flex-1">
@@ -265,7 +265,7 @@ function Detail({
 
       {c.plan.bigIdea && (
         <p className="mt-6 max-w-3xl text-[15px] leading-relaxed text-foreground/85">
-          <span className="mr-2 text-[11px] font-semibold uppercase tracking-wider text-primary">
+          <span className="mr-2 text-[11px] font-semibold uppercase tracking-wider text-primary-ink">
             The idea
           </span>
           {c.plan.bigIdea}
@@ -274,7 +274,7 @@ function Detail({
 
       {c.status === "draft" && !c.plan.written && (
         <div className="ds-tile mt-6 flex flex-wrap items-center gap-3 p-4">
-          <Sparkles className="size-5 shrink-0 text-primary" />
+          <Sparkles className="size-5 shrink-0 text-primary-ink" />
           <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
             The dates and formats are set. Write the plan and Mellox fills in what each post says,
             from your brief and Brand DNA.
@@ -411,7 +411,7 @@ function Stat({
       <p
         className={cn(
           "text-[20px] font-semibold tabular-nums leading-none tracking-tight",
-          accent && "text-primary",
+          accent && "text-primary-ink",
         )}
       >
         {value}
@@ -532,7 +532,7 @@ function GoalBox({
             }}
             className={dsIconBtn}
           >
-            {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+            {copied ? <Check className="size-3.5 text-primary-ink" /> : <Copy className="size-3.5" />}
           </button>
           <a
             href={link}
@@ -612,7 +612,7 @@ function PieceCard({
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <p className="text-[11.5px] font-medium tabular-nums text-muted-foreground">
           {shortDate(piece.date)} · {piece.time}
-          {link === "caption" && <span className="ml-1.5 text-primary">· link in caption</span>}
+          {link === "caption" && <span className="ml-1.5 text-primary-ink">· link in caption</span>}
           {link === "bio" && <span className="ml-1.5">· link in bio</span>}
         </p>
         {editing ? (

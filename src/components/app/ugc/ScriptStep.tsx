@@ -339,7 +339,7 @@ export function ScriptStep({
                   onClick={() => onRewrite(script, q.instruction)}
                   className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--ds-well-bg)] px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-primary/15 hover:text-foreground disabled:opacity-50"
                 >
-                  <q.icon className="size-3.5 text-primary" aria-hidden />
+                  <q.icon className="size-3.5 text-primary-ink" aria-hidden />
                   {q.label}
                 </button>
               ))}
@@ -443,7 +443,7 @@ export function ScriptStep({
             label="Facts"
             icon={CheckCircle}
             badge={
-              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary tabular-nums">
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary-ink tabular-nums">
                 {product.facts.length}
               </span>
             }
@@ -533,7 +533,7 @@ function SpeakingRing({
           fill="none"
           strokeWidth="3.5"
           strokeLinecap="round"
-          className={over ? "stroke-danger" : "stroke-primary"}
+          className={over ? "stroke-danger" : "stroke-primary-ink"}
           strokeDasharray={c}
           initial={false}
           animate={{ strokeDashoffset: c * (1 - pct) }}
@@ -582,7 +582,7 @@ function SceneCard({
         <span
           className={cn(
             "grid size-6 place-items-center rounded-full text-[11px] font-semibold transition-colors",
-            active ? "bg-primary text-primary-foreground" : "bg-primary/15 text-primary",
+            active ? "bg-primary text-primary-foreground" : "bg-primary/15 text-primary-ink",
           )}
         >
           {index + 1}
@@ -605,7 +605,7 @@ function SceneCard({
           className={cn(
             "grid size-7 place-items-center rounded-full transition-colors",
             details
-              ? "bg-primary/15 text-primary"
+              ? "bg-primary/15 text-primary-ink"
               : "text-muted-foreground hover:bg-[var(--ds-well-bg)] hover:text-foreground",
           )}
         >

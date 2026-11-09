@@ -88,6 +88,9 @@ const UgcStudioDialog = lazy(() =>
 const CreateLauncher = lazy(() =>
   import("@/components/studio/CreateLauncher").then((m) => ({ default: m.CreateLauncher })),
 );
+const AnimateFlow = lazy(() =>
+  import("@/components/studio/AnimateFlow").then((m) => ({ default: m.AnimateFlow })),
+);
 const BrainPulse = lazy(() =>
   import("@/components/app/brain/BrainPulse").then((m) => ({ default: m.BrainPulse })),
 );
@@ -98,7 +101,7 @@ const AppTour = lazy(() =>
 import { useStudioEntry } from "@/hooks/use-studio";
 import { StudioActivityWatcher, StudioButton } from "@/components/studio/StudioButton";
 import { GeneratingPanel } from "@/components/studio/GeneratingPanel";
-import { setStudioRailOpen } from "@/lib/studio/rail-state";
+import { setStudioRailOpen, useStudioRail } from "@/lib/studio/rail-state";
 import { useStudioStore } from "@/lib/studio/session-store";
 import { useIsCompact } from "@/hooks/use-mobile";
 import { Logo } from "@/components/brand/Logo";
@@ -113,7 +116,7 @@ import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import type { PlanId } from "@/lib/billing/catalog";
 import { AppCanvas, AppFrame } from "@/components/app/shell/AppFrame";
 import { PlanChip } from "@/components/app/billing/WalletPill";
-import { BrandMeter } from "@/components/app/shell/BrandMeter";
+import { StreakChip } from "@/components/app/shell/Momentum";
 import { MoxGauge } from "@/components/app/shell/MoxGauge";
 import { SidebarNav } from "@/components/app/shell/SidebarNav";
 import { StartHereModal } from "@/components/app/home/StartHere";
@@ -180,6 +183,7 @@ function AppShell() {
   // Never let a closed window leave the whole app unclickable.
   useBodyPointerGuard();
   const isCompact = useIsCompact();
+  const studioRail = useStudioRail();
   const [navOpen, setNavOpen] = useState(false);
   // Compact widths use an overlay drawer; desktop keeps an inline sidebar.
   const [vw, setVw] = useState<number>(1024);
@@ -498,7 +502,7 @@ function AppShell() {
         <Link
           to={homeHref}
           onClick={closeNavOnPhone}
-          aria-label="Mellox AI — workspace home"
+          aria-label="Mellox — workspace home"
           title="Workspace home"
           className="group flex h-9 items-center gap-1.5 rounded-full pl-1 pr-2.5 transition-colors hover:bg-[var(--ds-well-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
@@ -507,7 +511,7 @@ function AppShell() {
             className="text-[13px] leading-none text-foreground"
             style={{ fontFamily: "var(--font-brand)" }}
           >
-            Mellox AI
+            Mellox
           </span>
         </Link>
         <button
@@ -576,7 +580,7 @@ function AppShell() {
             <div className="group relative mb-4 h-9 w-9">
               <Link
                 to={homeHref}
-                aria-label="Mellox AI — workspace home"
+                aria-label="Mellox — workspace home"
                 title="Workspace home"
                 className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
@@ -681,6 +685,15 @@ function AppShell() {
           role="banner"
           className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-2 px-3 sm:px-4"
         >
+          {/* With the Studio rail open on a desktop, the rail runs the full
+              height: its panel continues behind the top bar's corner, so
+              Scale, Studio and Share sit on the rail, not on a strip above it. */}
+          {studioRail.open && !isCompact ? (
+            <div
+              aria-hidden
+              className="ds-enter pointer-events-none absolute inset-y-0 right-0 -z-10 w-[320px] border-l border-border/60 bg-sidebar"
+            />
+          ) : null}
           {/* LEFT — menu (phone) · workspace */}
           <div className="flex min-w-0 items-center gap-2">
             <button
@@ -726,10 +739,9 @@ function AppShell() {
                 </motion.button>
               }
             />
+            {/* Holo's streak chip: days in a row with a finished piece. */}
+            <StreakChip workspaceId={workspaceId} className="hidden md:inline-flex" />
           </div>
-
-          {/* CENTRE — what Mox knows about the brand (Holo's progress line). */}
-          <BrandMeter workspaceId={workspaceId} />
 
           {/* RIGHT — status and actions */}
           <motion.div
@@ -792,7 +804,7 @@ function AppShell() {
                     }}
                     className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Share2 className="h-4 w-4 text-primary" />
+                    <Share2 className="h-4 w-4 text-primary-ink" />
                     <span className="text-[13px] font-medium">Invite teammates</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -802,7 +814,7 @@ function AppShell() {
                     }}
                     className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Users className="h-4 w-4 text-primary" />
+                    <Users className="h-4 w-4 text-primary-ink" />
                     <span className="text-[13px] font-medium">Client portal</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -831,6 +843,7 @@ function AppShell() {
                 <AiVisibilityDialog workspaceId={workspaceId} />
                 <UgcStudioDialog workspaceId={workspaceId} />
                 <CreateLauncher />
+                <AnimateFlow />
               </Suspense>
               <BillingPanel />
             </div>

@@ -195,7 +195,7 @@ function CompanyPulse({
                   {fmtNumber(data.users.active7d)} signed in during the last 7 days.
                 </p>
               </div>
-              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary-ink">
                 <Activity className="size-5" />
               </span>
             </div>
@@ -233,7 +233,7 @@ function CompanyPulse({
                 <p
                   className={cn(
                     "mt-1 text-[19px] font-semibold tabular-nums",
-                    data.billing.pendingRequests > 0 && "text-primary",
+                    data.billing.pendingRequests > 0 && "text-primary-ink",
                   )}
                 >
                   {fmtNumber(data.billing.pendingRequests)}
@@ -416,7 +416,7 @@ function ActionCenter({
                     "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
                     action.tone === "danger" && "bg-destructive/10 text-destructive",
                     action.tone === "warning" && "bg-warning/10 text-warning",
-                    action.tone === "primary" && "bg-primary/10 text-primary",
+                    action.tone === "primary" && "bg-primary/10 text-primary-ink",
                   )}
                 >
                   <AlertTriangle className="size-3.5" />
@@ -426,7 +426,7 @@ function ActionCenter({
                   <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
                     {action.detail}
                   </p>
-                  <p className="mt-auto pt-3 text-[11.5px] font-medium text-primary">
+                  <p className="mt-auto pt-3 text-[11.5px] font-medium text-primary-ink">
                     Review now →
                   </p>
                 </div>
@@ -540,7 +540,7 @@ function WhatsNew({ activity }: { activity: AdminOverview["activity"] }) {
         <Tile className="overflow-hidden p-0">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.07] via-primary/[0.025] to-transparent px-4 py-4 sm:px-5">
             <div className="flex items-start gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+              <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary-ink">
                 <Sparkles className="size-4.5" />
               </span>
               <div>
@@ -585,7 +585,7 @@ function WhatsNew({ activity }: { activity: AdminOverview["activity"] }) {
                             className={cn(
                               "mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl",
                               item.tone === "success" && "bg-success/10 text-success",
-                              item.tone === "primary" && "bg-primary/10 text-primary",
+                              item.tone === "primary" && "bg-primary/10 text-primary-ink",
                               item.tone === "warning" && "bg-warning/10 text-warning",
                               item.tone === "danger" && "bg-destructive/10 text-destructive",
                               item.tone === "neutral" &&
@@ -670,13 +670,13 @@ function WhatsNew({ activity }: { activity: AdminOverview["activity"] }) {
                 label: "New users",
                 value: signups,
                 icon: UserPlus,
-                tone: "text-primary bg-primary/10",
+                tone: "text-primary-ink bg-primary/10",
               },
               {
                 label: "Workspaces",
                 value: workspaces,
                 icon: Building2,
-                tone: "text-primary bg-primary/10",
+                tone: "text-primary-ink bg-primary/10",
               },
               {
                 label: "Updates",
@@ -947,7 +947,7 @@ function FundingDashboard({ data }: { data: AdminFundingOverview }) {
                   <td className={td}>
                     <Link
                       href={`/admin/billing?account=${encodeURIComponent(account.accountId)}`}
-                      className="font-medium text-primary hover:underline"
+                      className="font-medium text-primary-ink hover:underline"
                     >
                       {account.ownerEmail ?? `${account.accountId.slice(0, 8)}…`}
                     </Link>

@@ -43,7 +43,7 @@ export function Gallery({
                         "grid size-10 shrink-0 place-items-center rounded-full transition-colors",
                         on
                           ? "bg-primary text-primary-foreground"
-                          : "bg-primary/12 text-primary group-hover:bg-primary/18",
+                          : "bg-primary/12 text-primary-ink group-hover:bg-primary/18",
                       )}
                     >
                       <Icon className="size-[18px]" />

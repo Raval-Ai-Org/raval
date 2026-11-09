@@ -51,7 +51,7 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
           transition={{ duration: 0.14 }}
           className="grid place-items-center"
         >
-          {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+          {copied ? <Check className="size-3.5 text-primary-ink" /> : <Copy className="size-3.5" />}
         </motion.span>
       </AnimatePresence>
     </button>
@@ -151,7 +151,7 @@ export function AssistantMessage({
           isLast && !typing ? "mx-msg-actions is-visible" : "mx-msg-actions",
         )}
       >
-        {isLast ? <MelloxPulse active={typing} className="mr-0.5 text-primary" /> : null}
+        {isLast ? <MelloxPulse active={typing} className="mr-0.5 text-primary-ink" /> : null}
         {!typing ? (
           <>
             <CopyButton text={content} label="Copy reply" />

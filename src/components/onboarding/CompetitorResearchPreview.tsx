@@ -28,7 +28,7 @@ export function CompetitorResearchPreview({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary-ink">
             <Search className="h-3.5 w-3.5" aria-hidden />
           </span>
           <div className="min-w-0">
@@ -45,7 +45,7 @@ export function CompetitorResearchPreview({
           </div>
         </div>
         {pending && (
-          <Spinner className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+          <Spinner className="h-3.5 w-3.5 shrink-0 animate-spin text-primary-ink" aria-hidden />
         )}
       </div>
       {visible.length ? (
@@ -70,7 +70,7 @@ export function CompetitorResearchPreview({
                 </span>
                 {!compact && (
                   <ExternalLink
-                    className="h-3 w-3 shrink-0 text-muted-foreground group-hover:text-primary"
+                    className="h-3 w-3 shrink-0 text-muted-foreground group-hover:text-primary-ink"
                     aria-hidden
                   />
                 )}

@@ -570,7 +570,7 @@ function StatusPill({
         icon: CheckCircle2,
         spin: false,
         label: extractedAt ? `Synced ${timeAgo(extractedAt)}` : "Synced",
-        tone: "text-[hsl(var(--brand-green))]",
+        tone: "text-primary-ink",
       };
     return { icon: Link2, spin: false, label: "Not synced", tone: "text-muted-foreground" };
   }, [status, extractedAt, progress]);
@@ -1748,7 +1748,7 @@ function BrandHero({
 
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">
-            <Brain className="h-3 w-3 shrink-0 text-[hsl(var(--brand-green))]" />
+            <Brain className="h-3 w-3 shrink-0 text-primary-ink" />
             <span className="truncate">Memory</span>
             <span className="ml-1 shrink-0 rounded-full bg-secondary/70 px-1.5 py-px text-[10px] font-medium tabular-nums tracking-normal text-muted-foreground">
               {pct}%
@@ -2104,7 +2104,7 @@ function UrlConnectStep({
     if (status === "ok" || extractedAt)
       return {
         icon: CheckCircle2,
-        color: "text-[hsl(var(--brand-green))]",
+        color: "text-primary-ink",
         spin: false,
         label: extractedAt ? `Synced ${new Date(extractedAt).toLocaleTimeString()}` : "Synced",
       };
@@ -2214,13 +2214,13 @@ function UrlConnectStep({
               className="group relative flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-full border border-border/70 bg-card/70 px-4 py-2 transition-colors hover:border-[hsl(var(--brand-green))]/40"
             >
               <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                <Globe className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-[hsl(var(--brand-green))]" />
+                <Globe className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary-ink" />
               </span>
               <a
                 href={connectedUrl!}
                 target="_blank"
                 rel="noreferrer"
-                className="min-w-0 flex-1 truncate text-[14px] text-foreground transition-colors hover:text-[hsl(var(--brand-green))]"
+                className="min-w-0 flex-1 truncate text-[14px] text-foreground transition-colors hover:text-primary-ink"
               >
                 {connectedUrl!.replace(/^https?:\/\//, "").replace(/\/$/, "")}
               </a>

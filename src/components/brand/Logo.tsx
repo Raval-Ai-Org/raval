@@ -12,7 +12,7 @@ type LogoProps = {
 };
 
 /**
- * Mellox AI brand lockup using the canonical mark and brand typeface.
+ * Mellox brand lockup: the mark and the word "Mellox" (no "AI") using the canonical mark and brand typeface.
  */
 function LogoBase({ className = "", height: heightProp = 18, markOnly = false }: LogoProps) {
   // Responsive scaling: base size fluidly interpolates between a mobile floor
@@ -30,7 +30,7 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
     <div
       className={`inline-flex items-center select-none ${className}`}
       style={{ height: heightCss, gap: gapCss }}
-      aria-label="Mellox AI"
+      aria-label="Mellox"
       role="img"
     >
       <img
@@ -42,7 +42,7 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
         style={{ width: markCss, height: markCss, objectFit: "contain" }}
       />
       <img
-        src="/assets/Dark-Logo.svg"
+        src="/assets/Light-Logo-Green.svg"
         alt=""
         aria-hidden="true"
         draggable={false}
@@ -60,13 +60,6 @@ function LogoBase({ className = "", height: heightProp = 18, markOnly = false }:
           }}
         >
           Mellox
-          <span
-            // Mox green: deep enough to read on white, bright on dark (.logo-ai).
-            className="logo-ai"
-            style={{ marginLeft: "0.28em", fontWeight: 700, letterSpacing: "0" }}
-          >
-            AI
-          </span>
         </span>
       )}
     </div>

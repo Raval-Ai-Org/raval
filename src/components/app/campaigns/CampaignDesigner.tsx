@@ -241,7 +241,7 @@ export function CampaignDesigner({
         >
           <ArrowLeft className="size-4" />
         </button>
-        <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
+        <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary-ink">
           <Icon className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
@@ -479,7 +479,7 @@ function Chip({
           : "bg-[var(--ds-tile-bg)] text-foreground/75 ring-border/70 hover:text-foreground hover:ring-foreground/20",
       )}
     >
-      {on && <Check className="size-3.5 text-primary" />}
+      {on && <Check className="size-3.5 text-primary-ink" />}
       {children}
     </button>
   );
@@ -668,7 +668,7 @@ function Have({
             {busy === "write" ? (
               <Spinner className="size-4 animate-spin" />
             ) : (
-              <Sparkles className="size-4 text-primary" />
+              <Sparkles className="size-4 text-primary-ink" />
             )}
             Write it for me
             <span className="rounded-full bg-[var(--ds-well-bg)] px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
@@ -1142,7 +1142,7 @@ function PreviewChip({
         </span>
         <span className="mt-0.5 flex items-center gap-1">
           <FormatChip format={piece.format} className="h-5 px-1.5 text-[10px]" />
-          {link === "caption" && <span className="text-[10px] font-medium text-primary">link</span>}
+          {link === "caption" && <span className="text-[10px] font-medium text-primary-ink">link</span>}
           {link === "bio" && <span className="text-[10px] text-muted-foreground">link in bio</span>}
         </span>
       </span>

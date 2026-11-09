@@ -98,7 +98,7 @@ function MomentLine({ moments }: { moments: MarketingMoment[] }) {
   if (!moments.length) return null;
   return (
     <span
-      className="flex min-w-0 items-center gap-1 truncate text-[10px] font-medium text-primary"
+      className="flex min-w-0 items-center gap-1 truncate text-[10px] font-medium text-primary-ink"
       title={moments.map((m) => m.name).join(", ")}
     >
       <Star className="h-2.5 w-2.5 shrink-0" />
@@ -451,7 +451,7 @@ export function ListView({
         return (
           <div key={date}>
             <div className="mb-1.5 flex items-center gap-2 px-1">
-              <h3 className={cn("text-[12.5px] font-semibold", date === p.today && "text-primary")}>
+              <h3 className={cn("text-[12.5px] font-semibold", date === p.today && "text-primary-ink")}>
                 {d.toLocaleDateString(undefined, {
                   weekday: "long",
                   month: "short",
@@ -569,13 +569,13 @@ export function DayPanel({
       {moments.map((m) => (
         <div key={m.id} className="rounded-2xl bg-primary/10 p-3">
           <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
-            <Star className="h-3.5 w-3.5 text-primary" /> {m.name}
+            <Star className="h-3.5 w-3.5 text-primary-ink" /> {m.name}
           </div>
           <p className="mt-1 text-[11.5px] text-muted-foreground">{m.angle}</p>
           <button
             type="button"
             onClick={() => onAdd(date, m.name)}
-            className="mt-2 text-[11.5px] font-medium text-primary hover:underline"
+            className="mt-2 text-[11.5px] font-medium text-primary-ink hover:underline"
           >
             Add a post for this
           </button>

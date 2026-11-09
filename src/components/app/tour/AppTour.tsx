@@ -346,7 +346,7 @@ export function AppTour({
                   key={label}
                   className="ds-tile flex flex-col items-center gap-1.5 px-2 py-3 text-[12.5px] font-medium"
                 >
-                  <PillarIcon className="h-[18px] w-[18px] text-primary" aria-hidden />
+                  <PillarIcon className="h-[18px] w-[18px] text-primary-ink" aria-hidden />
                   {label}
                 </div>
               ))}
@@ -461,7 +461,7 @@ export function AppTour({
                     onClick={() => onClose(action.id)}
                     className="ds-tile ds-tile-hover group flex items-center gap-3 px-3.5 py-3 text-left text-[13.5px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary-ink">
                       <ActionIcon className="h-4 w-4" aria-hidden />
                     </span>
                     <span className="min-w-0 flex-1">{action.label}</span>

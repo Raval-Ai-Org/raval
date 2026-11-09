@@ -41,14 +41,14 @@ function Section({
 const userLink = (id: string) => (
   <Link
     href={`/admin/users/${id}`}
-    className="font-mono text-[12.5px] text-primary hover:underline"
+    className="font-mono text-[12.5px] text-primary-ink hover:underline"
   >
     {shortId(id)}
   </Link>
 );
 
 const workspaceLink = (id: string, name: string | null) => (
-  <Link href={`/admin/workspaces/${id}`} className="text-primary hover:underline">
+  <Link href={`/admin/workspaces/${id}`} className="text-primary-ink hover:underline">
     {name ?? shortId(id)}
   </Link>
 );

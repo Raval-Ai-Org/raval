@@ -2251,6 +2251,17 @@ export async function createStudioJob(args: {
   input: CreateJobInput;
   /** Persist the billing hold before provider work can begin. */
   onCreated?: (job: StudioJob) => Promise<void>;
+  /**
+   * Answer as soon as the job exists and make the piece after the response
+   * (`after()`), so a person's request never stays open for the whole
+   * generation. A browser has six connections per site: one request open for
+   * minutes, plus the polls around it, used to queue every other request and
+   * leave the app looking frozen until the piece was done. Workers that need
+   * the finished job leave this off.
+   */
+  background?: boolean;
+  /** Background only: called with the job once it has stopped running. */
+  onFinished?: (job: StudioJob) => Promise<void>;
 }): Promise<StudioJob> {
   const client = db(args.client);
   const { workspaceId, input } = args;
@@ -2325,10 +2336,7 @@ export async function createStudioJob(args: {
   }
 
   const job = inserted as JobRow;
-  try {
-    if (args.onCreated) await args.onCreated(await presentJob(job));
-    await executeJob(client, job, input, parent);
-  } catch (err) {
+  const fail = async (err: unknown) => {
     const classified = classify(err);
     await patchJob(client, job.id, {
       status: "failed",
@@ -2341,6 +2349,44 @@ export async function createStudioJob(args: {
         workspaceId,
         (await getJobRow(client, workspaceId, job.id))?.content_item_ids ?? [],
       );
+  };
+
+  if (args.background) {
+    // The billing hold is stored before anything else, inside the request.
+    try {
+      if (args.onCreated) await args.onCreated(await presentJob(job));
+    } catch (err) {
+      await fail(err);
+      const failed = await getJobRow(client, workspaceId, job.id);
+      return presentJob(failed ?? job);
+    }
+    const run = async () => {
+      try {
+        await executeJob(client, job, input, parent);
+      } catch (err) {
+        await fail(err).catch((e) => console.error("[studio] could not mark job failed", e));
+      }
+      try {
+        const done = await getJobRow(client, workspaceId, job.id);
+        if (done && args.onFinished) await args.onFinished(await presentJob(done));
+      } catch (err) {
+        console.error("[studio] finishing job failed", job.id, err);
+      }
+    };
+    try {
+      after(run);
+    } catch {
+      // No request to wait behind (a worker or a test): run it detached.
+      void run();
+    }
+    return presentJob(job);
+  }
+
+  try {
+    if (args.onCreated) await args.onCreated(await presentJob(job));
+    await executeJob(client, job, input, parent);
+  } catch (err) {
+    await fail(err);
   }
   const fresh = await getJobRow(client, workspaceId, job.id);
   return presentJob(fresh ?? job);

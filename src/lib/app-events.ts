@@ -146,6 +146,8 @@ export type AppEventMap = {
     | undefined;
   /** The "Create" launcher: pick a category (Video/Picture/Text/Ads), then a format. */
   "open:create-launcher": undefined;
+  /** Home → Animate: pick a Library picture and a way to move it. */
+  "open:animate": undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;
   /** Opens Brain → Competitors. */

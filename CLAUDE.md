@@ -68,6 +68,20 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   beside it, growing once a person writes; it sits under the cards, never on them.
   Home is `HomeBento` above the message box (`/home-lab`); its cards only open
   existing places via `useOpenCreate`. Chat has its own entry (`chatPath`).
+  A solid primary fill (`bg-primary text-primary-foreground`) paints the Mox
+  gradient with ink text (rule at the end of `styles.css`); never draw a flat
+  neon-lime pill, tick or ring. Sidebar rows may carry a `badge`
+  ("New" / "Beta") in `nav.ts`.
+  **Momentum** (Holo's streak and "improves with every piece"): the top bar's
+  `StreakChip`, whose popover also holds the level (no meter in the top bar)
+  (`shell/Momentum.tsx`, pure `src/lib/home/momentum.ts`, levels
+  `MOMENTUM_LEVELS`, add never reorder). Counted only from finished Studio
+  jobs that aren't revisions, read in the free pulse (`made`); a failed read
+  shows nothing, never a zero streak. It only reads and opens Create.
+  **Animate** (Home → Most popular, `open:animate`, `studio/AnimateFlow.tsx`):
+  pick a Library picture, then a motion style; `animateOpen` (repurpose.ts)
+  opens the video draft with the picture kept. Nothing is made or charged
+  until Generate.
 - **Content language:** what Mox writes in, an English label in
   `dna.look.writing.language` (`src/lib/brand-look/languages.ts`), chosen in
   onboarding's Language step and Settings → Language, reaching generators only
@@ -1105,6 +1119,11 @@ hearts, RPCs answer 404, no prompt block, no lean.
 - **Nothing is cropped.** Library tiles are masonry at each piece's true shape
   (`src/lib/library-grid.ts`, `src/components/app/library/`), pictures
   `object-contain`. Never go back to fixed-ratio `object-cover` tiles.
+- **Bulk uploads** (Library → Upload, `library/LibraryUpload.tsx`; Inspo's
+  board and media): up to 100 files a pick, four at a time, one summary
+  toast. Photos up to 100 MB, videos 200 MB (Inspo videos 300 MB). Every
+  upload route uses the `upload` rate tier, never `generate`. The bucket cap
+  is raised by migration `20261109120000_raise_asset_upload_limit.sql`.
 - **One reaction per piece per brand** (`content_reactions`, `love` / `less`,
   shared by the team). A post's subject is its `group_id`; a post's picture
   belongs to its post.

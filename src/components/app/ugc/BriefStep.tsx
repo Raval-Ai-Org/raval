@@ -279,7 +279,7 @@ export function BriefStep({
             </PhoneFrame>
           </div>
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-            <RatioShape ratio={platform.aspectRatio} className="text-primary" />
+            <RatioShape ratio={platform.aspectRatio} className="text-primary-ink" />
             {platform.aspectRatio} · {PLATFORM_SHORT[platform.id]}
           </div>
           <div className="space-y-3">

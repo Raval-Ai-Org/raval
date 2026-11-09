@@ -129,7 +129,7 @@ function AuthCallbackPage() {
           <Logo height={32} />
         </div>
         {state.status === "loading" ? (
-          <Loader2 className="mx-auto h-9 w-9 animate-spin text-primary" />
+          <Loader2 className="mx-auto h-9 w-9 animate-spin text-primary-ink" />
         ) : state.status === "success" ? (
           <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-500" />
         ) : (

@@ -236,3 +236,48 @@ export function repurposeSourceFromJob(
     picture,
   };
 }
+
+/** The ways a picture can move (Home → Animate): the picture videos, in order. */
+export function animateStyles(): RepurposeTarget[] {
+  return repurposeTargets("image", true).filter((t) => t.animate);
+}
+
+const MAX_NOTE = 600;
+
+/**
+ * Home → Animate: a Library picture and a way to move becomes a video draft.
+ * A picture from a post starts from that post (its facts and channels), the
+ * same as "Make more from this"; an uploaded picture opens the video with the
+ * picture kept and no source post. The person's own words follow the brief.
+ * Nothing is made until Generate.
+ */
+export function animateOpen(args: {
+  picture: {
+    assetId: string;
+    ratio?: string;
+    postId?: string | null;
+    title?: string | null;
+    type?: StudioType | null;
+  };
+  target: RepurposeTarget;
+  note?: string;
+}): Omit<RepurposeOpen, "sourceContentId" | "sourceLabel"> & {
+  sourceContentId?: string;
+  sourceLabel?: string;
+} {
+  const from: StudioType =
+    args.picture.type && canAnimatePiece(args.picture.type) ? args.picture.type : "image";
+  const open = repurposeOpen({
+    from,
+    target: { ...args.target, type: "video", animate: true },
+    contentItemId: args.picture.postId ?? "",
+    title: args.picture.title,
+    platforms: [],
+    picture: { assetId: args.picture.assetId, ratio: args.picture.ratio },
+  });
+  const note = args.note?.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE);
+  const brief = note ? `${open.brief}\n\n${note}` : open.brief;
+  if (args.picture.postId) return { ...open, brief };
+  const { sourceContentId: _id, sourceLabel: _label, ...rest } = open;
+  return { ...rest, brief };
+}

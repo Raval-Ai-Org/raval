@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import {
@@ -20,7 +21,10 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { listProducts } from "@/lib/products.functions";
+import type { Product as CatalogueProduct } from "@/lib/products/catalog";
 import { ugcApi, UgcApiError } from "@/lib/ugc/client";
+import { ugcProductFromCatalogue } from "@/lib/ugc/from-catalogue";
 import type { Product, ReferenceImageView } from "@/lib/ugc/schemas";
 import { cn } from "@/lib/utils";
 import {
@@ -98,6 +102,21 @@ export function ProductStep({
   useEffect(() => {
     if (!initialProduct?.url) setUrl(workspaceWebsite ?? "");
   }, [initialProduct?.url, workspaceWebsite]);
+
+  // What the Brand DNA scan already found: pick it instead of reading a page again.
+  const catalogue = useQuery({
+    queryKey: ["workspace", workspaceId, "products", "ugc"],
+    staleTime: 60_000,
+    queryFn: () => listProducts({ data: { workspaceId } }),
+  });
+  const known = (catalogue.data ?? []).filter((p) => p.status === "active");
+  const pickKnown = (item: CatalogueProduct) => {
+    const picked = ugcProductFromCatalogue(item, workspaceName);
+    setProduct(picked.product);
+    setReferences(picked.references);
+    setAnalyzed(true);
+    setExtractError(null);
+  };
 
   const addReference = (ref: ReferenceImageView) =>
     setReferences((refs) =>
@@ -227,6 +246,23 @@ export function ProductStep({
           </span>
         </motion.div>
         <h3 className="ds-page-title text-2xl">What are we promoting?</h3>
+        {known.length ? (
+          <KnownProducts items={known} onPick={pickKnown} />
+        ) : catalogue.isPending ? (
+          <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="h-[148px] animate-pulse rounded-2xl bg-[var(--ds-well-bg)]"
+              />
+            ))}
+          </div>
+        ) : null}
+        {known.length ? (
+          <p className="-mb-3 text-[12px] font-medium text-muted-foreground">
+            Something else? Paste its link.
+          </p>
+        ) : null}
         <div className="w-full">{linkForm(false)}</div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           {workspaceWebsite ? (
@@ -427,7 +463,7 @@ export function ProductStep({
                   )}
                 >
                   {uploading ? (
-                    <Loader2 className="size-5 animate-spin text-primary" aria-hidden />
+                    <Loader2 className="size-5 animate-spin text-primary-ink" aria-hidden />
                   ) : (
                     <Plus className="size-5" aria-hidden />
                   )}
@@ -521,6 +557,66 @@ export function ProductStep({
   );
 }
 
+/** Products the Brand DNA scan found, as picture cards (no second scan). */
+function KnownProducts({
+  items,
+  onPick,
+}: {
+  items: CatalogueProduct[];
+  onPick: (item: CatalogueProduct) => void;
+}) {
+  return (
+    <div className="w-full text-left">
+      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-foreground/75">
+        <Sparkles className="size-3.5" aria-hidden />
+        From your Brand DNA
+      </p>
+      <motion.ul
+        variants={listVariants}
+        initial="hidden"
+        animate="show"
+        className="grid max-h-[340px] grid-cols-2 gap-2.5 overflow-y-auto p-0.5 sm:grid-cols-3"
+      >
+        {items.slice(0, 24).map((item) => {
+          const cover =
+            item.images.find((i) => i.assetId === item.primaryAssetId)?.url ??
+            item.images[0]?.url ??
+            null;
+          return (
+            <motion.li key={item.id} variants={itemVariants}>
+              <button
+                type="button"
+                onClick={() => onPick(item)}
+                className="group flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] text-left shadow-[var(--ds-card-shadow)] transition hover:-translate-y-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <span className="relative grid aspect-[4/3] place-items-center overflow-hidden bg-[var(--ds-well-bg)]">
+                  {cover ? (
+                    <img
+                      src={cover}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="size-full object-contain transition-transform duration-500 group-hover:scale-[1.04]"
+                    />
+                  ) : (
+                    <ShoppingBag className="size-6 text-muted-foreground" aria-hidden />
+                  )}
+                </span>
+                <span className="min-w-0 px-3 py-2">
+                  <span className="block truncate text-[12.5px] font-semibold">{item.name}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {item.price || (item.kind === "service" ? "Service" : "Product")}
+                  </span>
+                </span>
+              </button>
+            </motion.li>
+          );
+        })}
+      </motion.ul>
+    </div>
+  );
+}
+
 /** A mock web page with a lime scan line sweeping over it while we read. */
 function ScanningPage({ url }: { url: string }) {
   return (
@@ -555,7 +651,7 @@ function ScanningPage({ url }: { url: string }) {
         {[0, 1, 2].map((i) => (
           <motion.span
             key={i}
-            className="flex h-5 items-center gap-1 rounded-full bg-primary/15 px-2 text-[9.5px] font-medium text-primary"
+            className="flex h-5 items-center gap-1 rounded-full bg-primary/15 px-2 text-[9.5px] font-medium text-primary-ink"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: [0, 1, 1, 0], scale: [0.8, 1, 1, 0.9] }}
             transition={{ duration: 4, repeat: Infinity, delay: 1 + i * 0.7 }}
@@ -635,7 +731,7 @@ function FactsEditor({
               transition={motionPreset.base}
               className="group flex items-center gap-2 rounded-xl bg-[var(--ds-well-bg)] px-2.5 py-1.5 text-[13px]"
             >
-              <CheckCircle className="size-4 shrink-0 text-primary" aria-hidden />
+              <CheckCircle className="size-4 shrink-0 text-primary-ink" aria-hidden />
               <input
                 aria-label="Fact"
                 value={fact.text}
@@ -693,7 +789,7 @@ function FactsEditor({
             className={cn(
               "rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
               product.facts.length
-                ? "bg-primary/15 text-primary"
+                ? "bg-primary/15 text-primary-ink"
                 : "bg-[var(--ds-well-bg)] text-muted-foreground",
             )}
           >

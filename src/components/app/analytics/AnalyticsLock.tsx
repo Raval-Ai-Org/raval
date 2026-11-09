@@ -129,7 +129,7 @@ function LockCard({
         className={cn(
           "mx-auto grid size-12 place-items-center rounded-2xl ring-1",
           tone === "primary"
-            ? "bg-primary/10 text-primary ring-primary/25"
+            ? "bg-primary/10 text-primary-ink ring-primary/25"
             : "bg-warning/10 text-warning ring-warning/25",
         )}
       >
@@ -229,7 +229,7 @@ function LockedScreen({ state, view }: { state: AccessState; view?: GoogleConnec
               <ConnectGoogleButton />
             </div>
             <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
-              <ShieldCheck className="size-3.5 text-primary" aria-hidden />
+              <ShieldCheck className="size-3.5 text-primary-ink" aria-hidden />
               Read-only. Mellox never changes anything in Google.
             </p>
             <button

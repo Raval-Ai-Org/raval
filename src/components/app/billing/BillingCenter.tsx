@@ -212,7 +212,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       {/* Your plan */}
       <section className="ds-tile flex flex-col gap-5 bg-gradient-to-br from-primary/[0.09] via-transparent to-transparent p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex items-center gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary-ink">
             <Crown className="h-5 w-5" />
           </span>
           <div className="space-y-0.5">
@@ -254,7 +254,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           <h3 className="ds-label">Payment method</h3>
           <div className="ds-tile flex flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary-ink">
                 <Wallet className="h-4.5 w-4.5" />
               </span>
               {payment.isLoading ? (
@@ -445,7 +445,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
                 {brand.frozen_at ? (
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 ) : (
-                  <Check className="h-3.5 w-3.5 text-primary" />
+                  <Check className="h-3.5 w-3.5 text-primary-ink" />
                 )}
                 {brand.name}
               </span>
@@ -588,7 +588,7 @@ function RecentActivity() {
             <span
               className={cn(
                 "shrink-0 font-medium tabular-nums",
-                entry.amount > 0 ? "text-primary" : "text-foreground",
+                entry.amount > 0 ? "text-primary-ink" : "text-foreground",
               )}
             >
               {entry.kind === "hold" ? "" : entry.amount > 0 ? "+" : "−"}

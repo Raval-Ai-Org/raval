@@ -236,7 +236,7 @@ export function StudioPublishFlow({
             role="status"
             aria-live="polite"
           >
-            <span className="relative mx-auto grid size-20 place-items-center rounded-full bg-primary-surface text-primary ring-1 ring-primary-border">
+            <span className="relative mx-auto grid size-20 place-items-center rounded-full bg-primary-surface text-primary-ink ring-1 ring-primary-border">
               <span className="absolute inset-0 animate-ping rounded-full bg-primary/10" />
               <Spinner className="relative size-8 animate-spin" />
             </span>

@@ -493,7 +493,7 @@ function SettingsDialog({
                           : "border-border/50 bg-surface-3 text-muted-foreground hover:text-foreground dark:border-white/[0.06] dark:bg-white/[0.035]",
                       )}
                     >
-                      <Icon className={cn("h-5 w-5", selected && "text-primary")} />
+                      <Icon className={cn("h-5 w-5", selected && "text-primary-ink")} />
                       {t.label}
                     </button>
                   );

@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Layers, RotateCcw, Send, Spinner, Wand2 } from "@/components/icons";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { AIM_LABEL, editTarget, planEdit, replyFor, type EditAim } from "@/lib/studio/edit-chat";
@@ -159,7 +158,7 @@ export function EditChat({
                     )}
                   >
                     {state === "working" ? (
-                      <Spinner className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
+                      <Spinner className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary-ink" />
                     ) : null}
                     <span className="min-w-0 flex-1">
                       <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -212,13 +211,13 @@ export function EditChat({
 
       <form
         data-no-rhythm
-        className="rounded-xl bg-surface-2 p-1 ring-1 ring-border transition-shadow focus-within:ring-2 focus-within:ring-primary"
+        className="rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] p-1 shadow-[var(--ds-card-shadow)] transition-shadow focus-within:ring-2 focus-within:ring-primary/45"
         onSubmit={(e) => {
           e.preventDefault();
           if (text.trim().length >= 2) send(text);
         }}
       >
-        <div className="flex items-center gap-1 pl-2">
+        <div className="flex items-center gap-1 pl-2.5">
           <Wand2 className="size-4 shrink-0 text-muted-foreground" />
           <input
             value={text}
@@ -228,15 +227,16 @@ export function EditChat({
             aria-label="Describe a change"
             className="h-9 min-w-0 flex-1 !border-0 !bg-transparent px-1.5 text-sm !shadow-none outline-none placeholder:text-muted-foreground focus-visible:!ring-0 disabled:opacity-50"
           />
-          <Button
+          {/* Holo: a labelled gradient Send pill, not a bare icon. */}
+          <button
             type="submit"
-            size="icon-sm"
-            className="rounded-lg"
             disabled={text.trim().length < 2 || busy || disabled}
             aria-label="Send change"
+            className="studio-cta inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-bold disabled:cursor-not-allowed disabled:opacity-45"
           >
-            <Send />
-          </Button>
+            Send
+            <Send className="size-3.5" />
+          </button>
         </div>
         <AnimatePresence initial={false}>
           {aim ? (
@@ -315,7 +315,7 @@ export function EditChat({
 
       {canVersion ? (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-surface-2/70 px-3 py-2">
-          <Layers className="size-4 shrink-0 text-primary" />
+          <Layers className="size-4 shrink-0 text-primary-ink" />
           <span className="min-w-0 flex-1 text-[12.5px] text-foreground">
             More versions to choose from
           </span>
@@ -352,7 +352,7 @@ function Chip({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex h-8 items-center rounded-full bg-surface-2/70 px-3 text-xs font-medium text-foreground ring-1 ring-transparent transition-[background-color,box-shadow,translate] duration-[--motion-duration-fast] hover:-translate-y-px hover:bg-primary-surface hover:shadow-1 hover:ring-primary-border disabled:opacity-45"
+      className="inline-flex h-8 items-center rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-3 text-[12px] font-semibold text-foreground/85 shadow-[var(--ds-card-shadow)] transition-[background-color,box-shadow,translate,color] duration-[--motion-duration-fast] hover:-translate-y-px hover:border-[var(--mox-green)] hover:text-foreground disabled:opacity-45"
     >
       {children}
     </button>

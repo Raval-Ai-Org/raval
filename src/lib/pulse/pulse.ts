@@ -25,6 +25,12 @@ export type WorkspacePulse = {
   /** Names of products the brand sells, in the team's own order. */
   products: string[];
   goal: { focus: GoalFocus; label: string } | null;
+  /**
+   * Finished Studio pieces (not revisions): the all-time count and when each
+   * of the recent ones finished, for the top bar's streak and level. Null
+   * when the read failed, so nothing claims a zero streak.
+   */
+  made: { total: number; recent: string[] } | null;
 };
 
 export const EMPTY_PULSE: WorkspacePulse = {
@@ -33,6 +39,7 @@ export const EMPTY_PULSE: WorkspacePulse = {
   campaigns: [],
   products: [],
   goal: null,
+  made: null,
 };
 
 export type PulseRows = {
@@ -42,9 +49,21 @@ export type PulseRows = {
   campaigns: { id: string; name: string; key_date: string | null; phase: string | null }[];
   products: { name: string }[];
   goal: { focus?: unknown } | null;
+  /** Finished pieces; left out when the read failed. */
+  made?: { total: number | null; recent: { completed_at: string | null }[] } | null;
 };
 
 const MAX_PRODUCTS = 3;
+const MAX_RECENT = 400;
+
+function madeFrom(rows: PulseRows["made"]): WorkspacePulse["made"] {
+  if (!rows || rows.total === null || !Number.isFinite(rows.total)) return null;
+  const recent = rows.recent
+    .map((r) => r.completed_at)
+    .filter((at): at is string => typeof at === "string" && !Number.isNaN(Date.parse(at)))
+    .slice(0, MAX_RECENT);
+  return { total: Math.max(rows.total, recent.length), recent };
+}
 
 export function buildPulse(rows: PulseRows): WorkspacePulse {
   const byCampaign = new Map<string, number>();
@@ -80,6 +99,7 @@ export function buildPulse(rows: PulseRows): WorkspacePulse {
     campaigns,
     products: [...new Set(names)].slice(0, MAX_PRODUCTS),
     goal: focus ? { focus, label: FOCUS_LABELS[focus].label } : null,
+    made: madeFrom(rows.made),
   };
 }
 

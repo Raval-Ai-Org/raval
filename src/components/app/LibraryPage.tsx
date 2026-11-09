@@ -55,6 +55,7 @@ import {
 import { openComposer, openJob } from "@/lib/studio/session-store";
 import type { Reaction, TasteView } from "@/lib/taste/contracts";
 import { LibraryTile, type TileAction } from "./library/LibraryTile";
+import { LibraryUpload } from "./library/LibraryUpload";
 import { Masonry, PILL_SELECT, PILL_TRACK, PinGridSkeleton, SearchPill } from "./pins";
 import { TasteStrip } from "./library/TasteStrip";
 import { useLibraryTaste, type ReactTarget } from "./library/useLibraryTaste";
@@ -681,6 +682,9 @@ export function LibraryPage({
             <RefreshCw className={loading ? "animate-spin" : undefined} />
           </Button>
         ) : null}
+        {!selected ? (
+          <LibraryUpload workspaceId={fixtures ? null : workspaceId} onDone={() => void load()} />
+        ) : null}
         <Button
           size="sm"
           className="studio-cta hidden rounded-full @2xl/library:inline-flex"
@@ -1027,7 +1031,10 @@ function ListRow({
         <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <span className="truncate">{item.title}</span>
           {loved ? (
-            <Heart aria-label="Loved" className="size-3.5 shrink-0 fill-primary text-primary" />
+            <Heart
+              aria-label="Loved"
+              className="size-3.5 shrink-0 fill-primary-ink text-primary-ink"
+            />
           ) : null}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">

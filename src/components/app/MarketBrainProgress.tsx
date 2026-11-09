@@ -233,7 +233,7 @@ function PulseOrb({ phase }: { phase: ScanPhase }) {
         />
       ))}
       <motion.span
-        className="relative grid h-9 w-9 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/25"
+        className="relative grid h-9 w-9 place-items-center rounded-full bg-primary/12 text-primary-ink ring-1 ring-primary/25"
         animate={{ scale: [1, 1.06, 1] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
       >

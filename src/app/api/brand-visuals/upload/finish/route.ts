@@ -14,7 +14,7 @@ export const POST = defineRoute({
   name: "brand-visuals/upload/finish",
   auth: "workspace",
   minRole: "editor",
-  rateLimit: "generate",
+  rateLimit: "upload",
   query: z.object({ workspaceId: z.string().uuid() }),
   body: z.object({
     purpose: z.enum(PURPOSES),

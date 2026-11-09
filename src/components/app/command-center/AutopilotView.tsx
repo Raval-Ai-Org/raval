@@ -64,7 +64,7 @@ function Count({
         ? "text-destructive"
         : tone === "warn"
           ? "text-warning"
-          : "text-primary";
+          : "text-primary-ink";
   const body = (
     <>
       <span className={cn("text-[17px] font-semibold tabular-nums leading-none", colour)}>
@@ -204,7 +204,7 @@ export function AutopilotView({
                       ? "bg-destructive/12 text-destructive"
                       : item.tone === "warn"
                         ? "bg-warning/12 text-warning"
-                        : "bg-primary/12 text-primary",
+                        : "bg-primary/12 text-primary-ink",
                   )}
                 >
                   {item.tone === "risk" ? (

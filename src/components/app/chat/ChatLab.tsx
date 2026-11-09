@@ -66,6 +66,7 @@ const LAB_PULSE: WorkspacePulse = {
   ],
   products: ["Oat latte kit"],
   goal: { focus: "sales", label: "Sell more" },
+  made: null,
 };
 
 export function ChatLab() {

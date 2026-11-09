@@ -46,8 +46,8 @@ const ACCEPT: Record<Exclude<UploadKind, "text">, string> = {
   video: "video/mp4,video/quicktime,video/webm",
 };
 const MAX_BYTES: Record<Exclude<UploadKind, "text">, number> = {
-  photo: 20 * 1024 * 1024,
-  video: 50 * 1024 * 1024,
+  photo: 100 * 1024 * 1024,
+  video: 200 * 1024 * 1024,
 };
 const FIELD =
   "w-full rounded-lg border border-input bg-surface-3 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55";
@@ -471,8 +471,8 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
                   <FieldLabel
                     hint={
                       kind === "photo"
-                        ? "JPG, PNG or WebP · up to 20 MB"
-                        : "MP4, MOV or WebM · up to 50 MB"
+                        ? "JPG, PNG or WebP · up to 100 MB"
+                        : "MP4, MOV or WebM · up to 200 MB"
                     }
                   >
                     {kind === "photo" ? "Photo" : "Video"}

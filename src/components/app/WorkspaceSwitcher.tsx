@@ -144,11 +144,11 @@ export function WorkspaceSwitcher({
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
                   {switchingId === w.id ? (
                     <Loader2
-                      className="h-3.5 w-3.5 animate-spin text-[hsl(var(--brand-green))]"
+                      className="h-3.5 w-3.5 animate-spin text-primary-ink"
                       aria-hidden
                     />
                   ) : active ? (
-                    <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />
+                    <Check className="h-3.5 w-3.5 text-primary-ink" aria-hidden />
                   ) : null}
                 </button>
               );

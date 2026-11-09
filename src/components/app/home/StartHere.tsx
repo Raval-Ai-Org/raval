@@ -2,7 +2,7 @@
 
 // "Start here" (Holo's checklist): the four things Mox needs to know, from
 // free reads only. The same list is a card on Home and a window that opens
-// after onboarding or from the top bar's meter (`open:start-here`).
+// after onboarding or from `open:start-here`.
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -47,31 +47,32 @@ export function StartHereList({
           <button
             type="button"
             onClick={() => onPick(s.id)}
-            className="group flex h-11 w-full items-center gap-2.5 rounded-2xl px-1.5 text-left transition hover:bg-[var(--ds-well-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className={cn(
+              "group flex h-12 w-full items-center gap-2.5 rounded-2xl border px-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              // Holo: a finished step is a soft green row with a tick, not crossed out.
+              s.done
+                ? "border-[color-mix(in_srgb,var(--mox-green)_35%,transparent)] bg-[color-mix(in_srgb,var(--mox-lime)_16%,transparent)]"
+                : "border-transparent hover:bg-[var(--ds-well-bg)]",
+            )}
           >
-            <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--ds-well-bg)]">
-              {s.done ? (
-                <span className="grid size-8 place-items-center rounded-xl bg-[var(--mox-green)] text-white">
-                  <Check className="size-4" strokeWidth={3} aria-hidden />
-                </span>
-              ) : (
-                <Illustration kind={ILLO[s.id]} className="size-9" />
-              )}
+            <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105">
+              <Illustration kind={ILLO[s.id]} className="size-10" />
             </span>
             <span className="min-w-0 flex-1">
-              <span
-                className={cn(
-                  "block text-[13px] font-semibold leading-tight",
-                  s.done ? "text-muted-foreground line-through decoration-1" : "text-foreground",
-                )}
-              >
+              <span className="block text-[13px] font-semibold leading-tight text-foreground">
                 {s.label}
               </span>
               <span className="block text-[11px] leading-tight text-muted-foreground">
                 {s.hint}
               </span>
             </span>
-            {!s.done && <CardArrow />}
+            {s.done ? (
+              <span className="mr-1.5 grid size-6 shrink-0 place-items-center rounded-full text-[var(--mox-green-deep)] dark:text-[var(--mox-lime)]">
+                <Check className="size-4" strokeWidth={3} aria-label="Done" />
+              </span>
+            ) : (
+              <CardArrow />
+            )}
           </button>
         </li>
       ))}
