@@ -23,8 +23,18 @@ export function clearStaleBodyPointerEvents(
 /** The sidebar and its collapsed rail carry this attribute (AppShell). */
 export const SIDEBAR_ATTR = "data-app-sidebar";
 
-/** For Radix `onInteractOutside`: close only when the press is on the sidebar. */
+/**
+ * For Radix `onInteractOutside`: close only when the press is on the sidebar.
+ * Focus moving to the sidebar never closes a window: a menu there (the
+ * account menu) hands focus back to its button as it closes, which would
+ * shut the very window it just opened (Settings). A real sidebar press is
+ * also announced by `shell:leave`.
+ */
 export function closeOnlyFromSidebar(event: Event) {
+  if (event.type === "dismissableLayer.focusOutside") {
+    event.preventDefault();
+    return;
+  }
   const target = event.target as Element | null;
   if (!target?.closest?.(`[${SIDEBAR_ATTR}]`)) event.preventDefault();
 }

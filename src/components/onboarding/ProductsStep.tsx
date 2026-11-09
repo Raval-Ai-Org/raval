@@ -34,6 +34,8 @@ import {
 
 export type ProductsStepProps = {
   brandName: string;
+  /** Which kind to offer first when the catalogue is empty (a services brand: service). */
+  defaultKind?: ProductKind;
   /** The site the scan read, or null when the brand has none. */
   siteHost: string | null;
   /** True while the scan may still find more. */
@@ -179,6 +181,7 @@ export function ProductsStep(p: ProductsStepProps) {
         adding={p.adding}
         reduce={p.reduce}
         showEmpty={!p.scanning}
+        preferKind={p.defaultKind}
         emptyHint={
           p.siteHost
             ? `We couldn't spot anything for sale on ${p.siteHost}. Add the first thing you sell — one is enough to start.`
@@ -428,6 +431,8 @@ export type CatalogueProps = {
   showEmpty: boolean;
   /** What the empty panel says (onboarding names the site it read). */
   emptyHint?: string;
+  /** The kind offered as the main button when empty. */
+  preferKind?: ProductKind;
   className?: string;
   onAdd: (draft: ProductDraft) => void;
   onSave: (id: string, draft: ProductDraft) => void;
@@ -446,6 +451,7 @@ export function Catalogue({
   incoming = [],
   filter = "all",
   emptyHint,
+  preferKind = "product",
   ...p
 }: CatalogueProps) {
   const [formKind, setFormKind] = useState<ProductKind | null>(null);
@@ -484,18 +490,29 @@ export function Catalogue({
           <p className="max-w-sm text-[13px] text-muted-foreground">
             {emptyHint ?? "One is enough to start."}
           </p>
-          <div className="mt-1 flex flex-wrap justify-center gap-2">
+          <div
+            className={cn(
+              "mt-1 flex flex-wrap justify-center gap-2",
+              preferKind === "service" && "flex-row-reverse",
+            )}
+          >
             <button
               type="button"
               onClick={() => setFormKind("product")}
-              className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
+              className={cn(
+                preferKind === "service" ? dsGhostBtn : dsPrimaryBtn,
+                "h-10 px-4 text-[13px]",
+              )}
             >
               <Plus className="h-3.5 w-3.5" aria-hidden /> Add a product
             </button>
             <button
               type="button"
               onClick={() => setFormKind("service")}
-              className={cn(dsGhostBtn, "h-10 px-4 text-[13px]")}
+              className={cn(
+                preferKind === "service" ? dsPrimaryBtn : dsGhostBtn,
+                "h-10 px-4 text-[13px]",
+              )}
             >
               <Wrench className="h-3.5 w-3.5" aria-hidden /> Add a service
             </button>

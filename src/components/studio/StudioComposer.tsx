@@ -3,6 +3,7 @@
 import { Spinner } from "@/components/icons";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
@@ -10,6 +11,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronLeft,
   LayoutTemplate,
   Minus,
   Repeat2,
@@ -24,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useIsMobile } from "@/hooks/use-mobile";
 import { rememberStudioType } from "@/hooks/use-studio";
 import { emitAppEvent } from "@/lib/app-events";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { duration, ease, spring } from "@/lib/motion";
 import { isActiveJob } from "@/lib/studio/jobs";
@@ -50,7 +53,9 @@ import {
   cancelSession,
   chooseType,
   closeSession,
+  focusSession,
   generate,
+  getActiveSessionId,
   getSession,
   minimizeSession,
   toggleMaximize,
@@ -69,6 +74,7 @@ import {
 } from "./PromptMedia";
 import { GenerationProgress } from "./GenerationProgress";
 import { IdeasPanel } from "./IdeasPanel";
+import { VideoCanvasSettings } from "./VideoCanvasSettings";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
 import { usePromptWriter, WriteForMeButton, WritingOverlay, WrittenNote } from "./PromptWriter";
 import { ScriptPreview } from "./previews/ScriptPreview";
@@ -301,6 +307,9 @@ export function ComposerBody({
   const [cancelling, setCancelling] = useState(false);
   // Holo: extras (ideas, templates) slide in from the right, never stack in the page.
   const [drawer, setDrawer] = useState(false);
+  // The side panel runs the full height of the composer, over the header too,
+  // so it is drawn into this layer rather than inside the step's page.
+  const [panelHost, setPanelHost] = useState<HTMLDivElement | null>(null);
   const stepIndex = Math.max(
     0,
     STEPS.findIndex((s) => s.id === session.step),
@@ -490,6 +499,7 @@ export function ComposerBody({
               isMobile={isMobile}
               drawerOpen={drawer}
               onDrawerChange={setDrawer}
+              panelHost={panelHost}
               fixtureIdeas={fixtures?.ideas}
               onPickIdea={pickIdea}
             />
@@ -514,6 +524,10 @@ export function ComposerBody({
           ) : null}
         </motion.div>
       </div>
+      <div
+        ref={setPanelHost}
+        className="pointer-events-none absolute inset-0 z-30 [&>*]:pointer-events-auto"
+      />
     </div>
   );
 }
@@ -665,6 +679,7 @@ export function IntentStep({
   fixtureIdeas,
   drawerOpen = false,
   onDrawerChange,
+  panelHost,
 }: {
   session: StudioSession;
   isMobile: boolean;
@@ -673,6 +688,8 @@ export function IntentStep({
   /** Holo's side panel: options, ideas and templates. */
   drawerOpen?: boolean;
   onDrawerChange?: (open: boolean) => void;
+  /** Where the side panel is drawn: the whole composer, header included. */
+  panelHost?: HTMLElement | null;
 }) {
   const format = STUDIO_FORMATS[session.type];
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -700,12 +717,23 @@ export function IntentStep({
   const submit = () => {
     if (!ready || busy || writer.busy) return;
     const id = session.id;
-    // Holo: Generate hands the piece to the corner list and gets out of the
-    // way. It is made on the server; the list shows it and opens it when
-    // ready. A refusal (price, missing brief) keeps the page open to say why.
-    void generate(id, { kind: session.lastGood ? "regenerate" : "generate" }).then(() => {
+    // Holo: Generate hands the piece to the corner list at once and gets out
+    // of the way: nobody waits on a loading page. It is made on the server;
+    // the list shows it ("Starting…" until the server answers) and opens it
+    // when ready. A refusal checked before sending (price still loading, a
+    // photo uploading) never starts, so the page stays to say why.
+    const started = generate(id, { kind: session.lastGood ? "regenerate" : "generate" });
+    if (getSession(id)?.pendingKey) minimizeSession(id);
+    void started.then(() => {
       const s = getSession(id);
-      if (s?.job && isActiveJob(s.job) && !s.error && !s.billing) minimizeSession(id);
+      if (!s || (!s.error && !s.billing)) return;
+      // Refused by the server (credits, plan, a bad brief): bring the page
+      // back only if nothing else is open, otherwise say so with a button.
+      const active = getActiveSessionId();
+      if (!active || active === id) return focusSession(id);
+      toast.error(s.billing ? "That piece needs more credits." : (s.error ?? "It didn't start."), {
+        action: { label: "Open", onClick: () => focusSession(id) },
+      });
     });
   };
 
@@ -926,6 +954,8 @@ export function IntentStep({
 
             <PlatformControls session={session} disabled={busy} />
 
+            <VideoCanvasSettings session={session} media={media} disabled={busy} />
+
             {sidePanel ? (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 <PanelChip
@@ -950,101 +980,119 @@ export function IntentStep({
         </div>
       </div>
 
-      <AnimatePresence>
-        {drawerOpen ? (
-          <motion.div
-            key="studio-panel-shade"
-            aria-hidden
-            onClick={() => onDrawerChange?.(false)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-20 bg-[var(--ds-canvas-bg)]/40 backdrop-blur-[6px]"
-          />
-        ) : null}
-        {drawerOpen ? (
-          <motion.aside
-            key="studio-panel"
-            id="studio-drawer"
-            aria-label="Options and ideas"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%", transition: { duration: duration.base, ease: ease.accelerate } }}
-            transition={spring.surface}
-            className="absolute bottom-0 right-0 top-0 z-30 flex w-[min(100%,380px)] flex-col border-l border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] shadow-[-30px_0_80px_-40px_rgb(0_0_0/0.35)]"
-          >
-            <div className="flex flex-col gap-3 px-5 pb-3 pt-4">
-              <button
-                type="button"
-                onClick={() => onDrawerChange?.(false)}
-                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] py-1.5 pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5"
-              >
-                <ArrowLeft className="size-4" />
-                Back
-              </button>
-              {!session.sourceScript ? (
-                <div
-                  role="tablist"
-                  aria-label="Panel"
-                  className="grid grid-cols-2 rounded-full bg-[var(--ds-well-bg)] p-1"
+      {sidePanel
+        ? portalInto(
+            panelHost,
+            <AnimatePresence>
+              {!drawerOpen ? (
+                <PanelHandle
+                  key="studio-panel-handle"
+                  marked={!!session.goal || !!session.controls.productId}
+                  onOpen={() => openPanel("options")}
+                />
+              ) : null}
+            </AnimatePresence>,
+          )
+        : null}
+
+      {portalInto(
+        panelHost,
+        <AnimatePresence>
+          {drawerOpen ? (
+            <motion.div
+              key="studio-panel-shade"
+              aria-hidden
+              onClick={() => onDrawerChange?.(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-20 bg-[var(--ds-canvas-bg)]/40 backdrop-blur-[6px]"
+            />
+          ) : null}
+          {drawerOpen ? (
+            <motion.aside
+              key="studio-panel"
+              id="studio-drawer"
+              aria-label="Options and ideas"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%", transition: { duration: duration.base, ease: ease.accelerate } }}
+              transition={spring.surface}
+              className="absolute bottom-0 right-0 top-0 z-30 flex w-[min(100%,380px)] flex-col border-l border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] shadow-[-30px_0_80px_-40px_rgb(0_0_0/0.35)]"
+            >
+              <div className="flex flex-col gap-3 px-5 pb-3 pt-3.5">
+                <button
+                  type="button"
+                  onClick={() => onDrawerChange?.(false)}
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] py-1.5 pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5"
                 >
-                  {(["options", "ideas"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab === t}
-                      onClick={() => setTab(t)}
-                      className="relative h-8 rounded-full text-[13px] font-semibold"
-                    >
-                      {tab === t ? (
-                        <motion.span
-                          layoutId="studio-panel-tab"
-                          className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[0_4px_14px_-6px_rgb(0_0_0/0.18)]"
-                        />
-                      ) : null}
-                      <span
-                        className={cn(
-                          "relative",
-                          tab === t ? "text-foreground" : "text-muted-foreground",
-                        )}
+                  <ArrowLeft className="size-4" />
+                  Back
+                </button>
+                {!session.sourceScript ? (
+                  <div
+                    role="tablist"
+                    aria-label="Panel"
+                    className="grid grid-cols-2 rounded-full bg-[var(--ds-well-bg)] p-1"
+                  >
+                    {(["options", "ideas"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === t}
+                        onClick={() => setTab(t)}
+                        className="relative h-8 rounded-full text-[13px] font-semibold"
                       >
-                        {t === "options" ? "Options" : "Ideas"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-5 pb-5 [scrollbar-width:thin]">
-              {tab === "ideas" && !session.sourceScript ? (
-                <>
-                  <IdeasPanel
-                    workspaceId={session.workspaceId}
-                    type={session.type}
-                    selectedId={session.ideaId}
-                    onPick={pickAndClose}
-                    limit={4}
-                    fixtureIdeas={fixtureIdeas}
-                  />
-                  <TemplateGallery session={session} textareaRef={textarea} title="Templates" />
-                </>
-              ) : sidePanel ? (
-                options
-              ) : null}
-            </div>
-            <div className="px-5 pb-5 pt-2">
-              <Button
-                onClick={() => onDrawerChange?.(false)}
-                size="lg"
-                className="studio-cta w-full rounded-full"
-              >
-                Done
-              </Button>
-            </div>
-          </motion.aside>
-        ) : null}
-      </AnimatePresence>
+                        {tab === t ? (
+                          <motion.span
+                            layoutId="studio-panel-tab"
+                            className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[0_4px_14px_-6px_rgb(0_0_0/0.18)]"
+                          />
+                        ) : null}
+                        <span
+                          className={cn(
+                            "relative",
+                            tab === t ? "text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {t === "options" ? "Options" : "Ideas"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-5 pb-5 [scrollbar-width:thin]">
+                {tab === "ideas" && !session.sourceScript ? (
+                  <>
+                    <IdeasPanel
+                      workspaceId={session.workspaceId}
+                      type={session.type}
+                      selectedId={session.ideaId}
+                      onPick={pickAndClose}
+                      limit={4}
+                      fixtureIdeas={fixtureIdeas}
+                    />
+                    <TemplateGallery session={session} textareaRef={textarea} title="Templates" />
+                  </>
+                ) : sidePanel ? (
+                  options
+                ) : null}
+              </div>
+              <div className="px-5 pb-5 pt-2">
+                <Button
+                  onClick={() => onDrawerChange?.(false)}
+                  size="lg"
+                  className="studio-cta w-full rounded-full"
+                >
+                  Done
+                </Button>
+              </div>
+            </motion.aside>
+          ) : null}
+        </AnimatePresence>,
+      )}
 
       {/* Holo: the price and one gradient pill float in the corner. */}
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-3 px-4 pb-4 @3xl/composer:px-6 @3xl/composer:pb-5">
@@ -1068,6 +1116,49 @@ export function IntentStep({
         </div>
       </footer>
     </div>
+  );
+}
+
+/** Draw into `host` when it exists (the composer's full-height layer), else in place. */
+function portalInto(host: HTMLElement | null | undefined, node: React.ReactNode) {
+  return host ? createPortal(node, host) : node;
+}
+
+/**
+ * Holo's side-panel handle: a slim tab centred on the canvas's right edge.
+ * It opens the options panel from wherever the person is on the page, and
+ * carries a dot when something is already set inside (a goal, a product).
+ */
+function PanelHandle({ marked, onOpen }: { marked: boolean; onOpen: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 12, transition: { duration: duration.fast } }}
+      transition={spring.surface}
+      style={{ y: "-50%" }}
+      className="absolute right-0 top-1/2 z-20"
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label="Open options and ideas"
+        aria-controls="studio-drawer"
+        title="Options and ideas"
+        className={cn(
+          "group relative flex h-14 w-7 items-center justify-center rounded-l-2xl border border-r-0 border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/90 text-muted-foreground shadow-[-10px_0_30px_-16px_rgb(0_0_0/0.35)] backdrop-blur-xl transition-[width,color] duration-200 hover:w-9 hover:text-foreground focus-visible:w-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
+          marked && "panel-handle-nudge",
+        )}
+      >
+        <ChevronLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
+        {marked ? (
+          <span
+            aria-hidden
+            className="absolute right-1.5 top-2 size-1.5 rounded-full [background:var(--mox-gradient)]"
+          />
+        ) : null}
+      </button>
+    </motion.div>
   );
 }
 

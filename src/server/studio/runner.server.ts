@@ -50,6 +50,7 @@ import {
   type PeopleRule,
   type VideoKindId,
 } from "@/lib/studio/video/kinds";
+import { acceptsEndFrame, END_FRAME_NOTE } from "@/lib/studio/video/end-frame";
 import { clipPlan, clipSeconds } from "@/lib/studio/video/lengths";
 import { pickVideoHook } from "@/lib/studio/video/hooks";
 import { textCues } from "@/lib/studio/video/overlay";
@@ -306,6 +307,8 @@ type ProviderTask = {
     firstFramePath?: string;
     /** The last clip settles back on the framed picture (a kind that ends on its source). */
     loopsToSource?: boolean;
+    /** A still the person chose for the ending, framed for the video (Animate's "End frame"). */
+    lastFramePath?: string;
     /** An offer video's code-drawn end card: the brand's name and colours. */
     endCardStyle?: {
       brandName: string;
@@ -1327,6 +1330,33 @@ async function startStoryboardVideo(a: {
     firstFrameUrl = await signAssetPath(firstFramePath, 6 * 3600);
     if (!firstFrameUrl) throw new StudioJobError(503, "Could not prepare the post's picture.");
   }
+  // The person's closing still: only for a kind that opens on its picture and
+  // would otherwise return to it (video/end-frame.ts), checked against the
+  // workspace like every chosen photo and framed the same way.
+  let lastFramePath: string | undefined;
+  let lastFrameUrl: string | null = null;
+  if (firstFrameUrl && input.controls.endFrameAssetId && acceptsEndFrame(plan.kind)) {
+    const [end] = await resolveStudioReferences(a.client, job.workspace_id, [
+      input.controls.endFrameAssetId,
+    ]);
+    const downloaded = await downloadAssetObject(a.client, end.storagePath);
+    if (downloaded.error || !downloaded.data)
+      throw new StudioJobError(503, "Could not open the end frame. Try again.");
+    const framed = await frameForVideo(Buffer.from(await downloaded.data.arrayBuffer()), a.ratio);
+    const saved = await persistAsset({
+      workspaceId: job.workspace_id,
+      idempotencyKey: `video-last-frame:${job.id}:${job.attempt}`,
+      bytes: framed,
+      assetType: "image",
+      mimeType: "image/jpeg",
+      metadata: { source: "video_last_frame", job_id: job.id },
+    });
+    if (!saved.ok || !saved.asset.storage_path)
+      throw new StudioJobError(503, "Could not prepare the end frame. Try again.");
+    lastFramePath = saved.asset.storage_path;
+    lastFrameUrl = await signAssetPath(lastFramePath, 6 * 3600);
+    if (!lastFrameUrl) throw new StudioJobError(503, "Could not prepare the end frame.");
+  }
   const lead = firstFrameUrl ? [firstFrameUrl] : a.referenceUrl ? [a.referenceUrl] : [];
   // A living picture keeps to its picture alone; a video from a post adds
   // only the person's own photos; anything else also gets the brand's
@@ -1348,6 +1378,7 @@ async function startStoryboardVideo(a: {
     ctx.brandText ? `Brand context:\n${(ctx.visualBrandText ?? ctx.brandText).slice(0, 900)}` : "",
     ctx.visualTaste?.rules ?? ctx.visualFeedbackRules ?? "",
     ...a.notes,
+    lastFrameUrl ? END_FRAME_NOTE : "",
   ].filter((note): note is string => !!note);
   const script = input.intent.sourceScript;
   const total = clips.reduce((sum, clip) => sum + clip.seconds, 0);
@@ -1405,14 +1436,15 @@ async function startStoryboardVideo(a: {
   };
   // The picture is the real first frame, not a look-alike reference; a kind
   // that ends on its source settles back on it, so the ending meets it exactly.
-  const loopsToSource = !!firstFrameUrl && kind.ending === "back-to-source";
+  // A chosen end frame takes the place of that return.
+  const loopsToSource = !!firstFrameUrl && !lastFrameUrl && kind.ending === "back-to-source";
   const started = await startStudioVideo({
     ...settings,
     prompt: prompts[0],
     imageUrls,
     styleReferenceCount,
     firstFrame: !!firstFrameUrl,
-    lastFrameUrl: loopsToSource ? firstFrameUrl! : undefined,
+    lastFrameUrl: lastFrameUrl ?? (loopsToSource ? firstFrameUrl! : undefined),
     clips: prompts.map((prompt, i) => ({ seconds: clips[i].seconds, prompt })),
     chain: chained
       ? {
@@ -1446,6 +1478,7 @@ async function startStoryboardVideo(a: {
       ...composed,
       firstFramePath,
       loopsToSource,
+      ...(lastFramePath ? { lastFramePath } : {}),
       wordStyle: {
         font: ctx.style?.visual.typography?.heading,
         accent: ctx.style?.visual.palette.accent,
@@ -3474,10 +3507,18 @@ async function resubmitStudioVideo(
   );
   const clipSeconds = row.output?.videoPlan?.clipSeconds;
   const firstFrameUrl = video.firstFramePath ? own[0] : undefined;
+  // The chosen end frame is signed again from its own workspace path.
+  const endUrl =
+    firstFrameUrl &&
+    video.lastFramePath &&
+    isWorkspaceStoragePath(video.lastFramePath, row.workspace_id)
+      ? await signAssetPath(video.lastFramePath)
+      : undefined;
+  if (video.lastFramePath && firstFrameUrl && !endUrl) return null;
   const started = await startStudioVideo({
     ...video,
     firstFrame: !!firstFrameUrl,
-    lastFrameUrl: video.loopsToSource ? firstFrameUrl : undefined,
+    lastFrameUrl: endUrl ?? (video.loopsToSource ? firstFrameUrl : undefined),
     prompt: clipPrompts?.[0] ?? task.prompt,
     imageUrls,
     styleReferenceCount: imageUrls.length - Math.min(own.length, imageUrls.length),

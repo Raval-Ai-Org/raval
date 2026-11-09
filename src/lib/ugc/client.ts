@@ -66,7 +66,26 @@ const q = (workspaceId: string) => `workspaceId=${encodeURIComponent(workspaceId
 
 export type ReferenceUpload = ReferenceImageView & { width: number; height: number };
 
+export type CustomCreatorInput = {
+  name: string;
+  look: string;
+  gender: "woman" | "man" | "person";
+  age: string;
+  setting: string;
+};
+
 export const ugcApi = {
+  /** "Create your own creator": one paid photo, saved as one of the brand's people. */
+  createCreator(workspaceId: string, input: CustomCreatorInput) {
+    return call<{ person: { assetId: string; url: string | null; name: string } }>(
+      "/api/ugc/creators",
+      {
+        method: "POST",
+        workspaceId,
+        body: JSON.stringify({ workspaceId, idempotencyKey: crypto.randomUUID(), ...input }),
+      },
+    ).then((r) => r.person);
+  },
   models(workspaceId: string) {
     return call<{ models: ModelView[]; defaultModel: string; allowance: AllowanceView }>(
       `/api/ugc/models?${q(workspaceId)}`,

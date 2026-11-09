@@ -37,9 +37,9 @@ import {
   StatePill,
   StatusPill,
   countdown,
-  kindIcon,
   shortDate,
 } from "./kit";
+import { CampaignArt } from "./CampaignArt";
 import type { CampaignsHandlers, CampaignsView, PiecePatch } from "./types";
 
 export function CampaignDetail({
@@ -77,7 +77,6 @@ function Detail({
   handlers: CampaignsHandlers;
 }) {
   const playbook = playbookById(c.type);
-  const Icon = kindIcon(playbook?.icon);
   const busy = view.busy;
   const live = c.status === "running" || c.status === "paused";
   const over = c.status === "done" || c.status === "ended";
@@ -103,9 +102,7 @@ function Detail({
           Campaigns
         </button>
         <div className="relative flex flex-wrap items-start gap-4">
-          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary-ink ring-1 ring-primary/20">
-            <Icon className="size-6" />
-          </span>
+          <CampaignArt title={c.name} type={c.type} size="tile" className="size-12" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-[24px] font-semibold leading-tight tracking-tight">
@@ -532,7 +529,11 @@ function GoalBox({
             }}
             className={dsIconBtn}
           >
-            {copied ? <Check className="size-3.5 text-primary-ink" /> : <Copy className="size-3.5" />}
+            {copied ? (
+              <Check className="size-3.5 text-primary-ink" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
           </button>
           <a
             href={link}

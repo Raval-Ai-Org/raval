@@ -138,6 +138,25 @@ export * from "./social";
 export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
 // Studio motion graphics (ADR-0043), lucide until a bespoke glyph exists.
 export { Shapes } from "lucide-react";
+// Onboarding's brand categories (no-website setup), lucide until bespoke glyphs exist.
+export {
+  Baby,
+  Briefcase,
+  Car,
+  Dumbbell,
+  Gem,
+  GraduationCap,
+  Laptop,
+  Leaf,
+  Paintbrush,
+  PawPrint,
+  Plane,
+  Shirt,
+  Sofa,
+  Stethoscope,
+  Store,
+  UtensilsCrossed,
+} from "lucide-react";
 export { type IconProps, ICON_STROKE, createIcon } from "./icon-base";
 
 import {

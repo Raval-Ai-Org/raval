@@ -6973,3 +6973,46 @@ pre {
   background-image: var(--mox-gradient);
   color: var(--mox-ink);
 }
+
+/* A frame that lands in its slot (Animate's first and end frames): a short
+   settle from a little larger, so a pick reads as placed, not swapped. */
+@keyframes frame-in {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.animate-frame-in {
+  animation: frame-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Holo's side-panel handle: a slim tab on the canvas's right edge that opens
+   the panel. It breathes once when something new waits inside. */
+@keyframes panel-handle-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateX(-4px);
+  }
+}
+.panel-handle-nudge {
+  animation: panel-handle-nudge 900ms cubic-bezier(0.22, 1, 0.36, 1) 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-frame-in,
+  .panel-handle-nudge {
+    animation: none;
+  }
+}
+:root[data-chat-motion="reduced"] .animate-frame-in,
+:root[data-chat-motion="reduced"] .panel-handle-nudge {
+  animation: none;
+}

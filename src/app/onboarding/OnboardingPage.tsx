@@ -24,6 +24,8 @@ import {
   emptyManualBrand,
   type ManualBrand,
 } from "@/components/onboarding/ManualBrandStep";
+import { useManualInspiration } from "@/components/onboarding/manual/use-manual-inspiration";
+import { manualDnaFields, readManualDraft, type ManualPart } from "@/lib/onboarding/manual-brand";
 import { ProductsStep } from "@/components/onboarding/ProductsStep";
 import { ChannelsStep } from "@/components/onboarding/ChannelsStep";
 import { LanguageStep, browserContentLanguage } from "@/components/onboarding/LanguageStep";
@@ -76,7 +78,7 @@ function isDuplicateDomainError(error: { code?: string; message?: string } | nul
 
 const STEP_WIDTH: Record<Step, string> = {
   website: "max-w-2xl",
-  manual: "max-w-xl",
+  manual: "max-w-5xl",
   goals: "max-w-3xl",
   scan: "max-w-[460px]",
   review: "max-w-6xl",
@@ -127,6 +129,7 @@ function Onboarding() {
   const [result, setResult] = useState<BrandExtractResult | null>(null);
   const [edits, setEdits] = useState<BrandEdits>({});
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
+  const [manualPart, setManualPart] = useState<ManualPart>("basics");
   // The brand's content language (Mellox 2.0): what Mox writes in. Starts
   // from the browser's language; saved on the look before products.
   const [language, setLanguage] = useState("English");
@@ -156,12 +159,17 @@ function Onboarding() {
   const firstStep = useRef(true);
 
   const urlKey = (id: string) => `onboarding:website:${id}`;
+  // The no-website brand kit survives a refresh (this browser only).
+  const manualKey = (id: string) => `onboarding:manual:${id}`;
+  const inspiration = useManualInspiration(workspaceId);
   const brand: BrandExtractResult =
     mode === "manual"
       ? {
           brandName: manual.brandName,
           oneLiner: manual.oneLiner,
           industry: manual.industry,
+          about: manual.about,
+          audience: manual.audience,
         }
       : { ...result, ...edits };
   const brandName = brand.brandName?.trim() || workspace.name || "";
@@ -198,9 +206,20 @@ function Onboarding() {
       /* storage unavailable */
     }
     recovered ||= workspace.websiteUrl ?? "";
+    let draft: ManualBrand | null = null;
+    try {
+      draft = readManualDraft(JSON.parse(localStorage.getItem(manualKey(workspace.id)) || "null"));
+    } catch {
+      /* storage unavailable or unreadable */
+    }
     if (recovered) {
       setWebsiteUrl(recovered);
       setStep("goals");
+    } else if (draft) {
+      // A brand kit typed before a refresh: back to it, nothing lost.
+      setManual(draft);
+      setMode("manual");
+      setStep("manual");
     }
     // A goal set before a refresh is kept.
     void getGoals({ data: { workspaceId: workspace.id } })
@@ -218,6 +237,18 @@ function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
+  useEffect(() => {
+    if (!workspaceId || mode !== "manual") return;
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(manualKey(workspaceId), JSON.stringify(manual));
+      } catch {
+        /* storage full or unavailable */
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [workspaceId, mode, manual]);
+
   // Each new step moves focus to its heading, so keyboard and screen-reader
   // users land on the new content instead of a control that no longer exists.
   useEffect(() => {
@@ -228,7 +259,7 @@ function Onboarding() {
     if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
     const timer = window.setTimeout(() => headingRef.current?.focus({ preventScroll: true }), 60);
     return () => window.clearTimeout(timer);
-  }, [step, reduce]);
+  }, [step, reduce, manualPart]);
 
   const startCompetitorResearch = (site: SiteDiscovery) => {
     if (!workspaceId || competitorFor.current === site.hostname) return;
@@ -453,19 +484,7 @@ function Onboarding() {
     const finalUrl = siteUrl();
     const base =
       mode === "manual"
-        ? {
-            ...emptyDna,
-            brandName: manual.brandName.trim(),
-            oneLiner: manual.oneLiner.trim(),
-            industry: manual.industry.trim(),
-            businessModel:
-              manual.sells === "services"
-                ? "Services"
-                : manual.sells === "both"
-                  ? "Products and services"
-                  : "Products",
-            websiteUrl: finalUrl,
-          }
+        ? { ...emptyDna, ...manualDnaFields(manual), websiteUrl: finalUrl }
         : buildBrandDna(result, edits, finalUrl);
     const summary = productsSummary(catalogue.products);
     return {
@@ -541,11 +560,23 @@ function Onboarding() {
     if (!ok) return;
     try {
       localStorage.removeItem(urlKey(workspaceId));
+      localStorage.removeItem(manualKey(workspaceId));
     } catch {
       /* storage unavailable */
     }
     // The early website search ran alongside the scan. Reconcile it with the
     // completed Brand DNA without adding another onboarding step.
+    if (mode === "manual" && manual.competitors.length) {
+      // The competitors typed in are on Brand DNA; the included first research
+      // lifts them into Brain → Competitors (looking up a site from a name).
+      // A plan without competitor tracking skips this quietly.
+      void bootstrapCompetitors({ data: { workspaceId } })
+        .then((research) => {
+          setCompetitors(research.competitors);
+          setCompetitorResearchStatus("ready");
+        })
+        .catch(() => undefined);
+    }
     if (mode === "site") {
       void (async () => {
         await competitorRun.current?.catch(() => undefined);
@@ -581,6 +612,7 @@ function Onboarding() {
     saveBrandDnaFor(workspaceId, { ...currentDna(), status: "idle", extractedAt: null }, true);
     try {
       localStorage.removeItem(urlKey(workspaceId));
+      localStorage.removeItem(manualKey(workspaceId));
     } catch {
       /* storage unavailable */
     }
@@ -607,7 +639,7 @@ function Onboarding() {
     navigate({ to: entering });
   };
 
-  const centered = step === "website" || step === "scan" || step === "manual";
+  const centered = step === "website" || step === "scan";
   const stepMotion = {
     initial: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
     animate: { opacity: 1, y: 0, transition: { duration: duration.xslow, ease: ease.emphasized } },
@@ -714,13 +746,21 @@ function Onboarding() {
                   {step === "manual" && (
                     <ManualBrandStep
                       value={manual}
+                      part={manualPart}
+                      inspirations={inspiration.items}
+                      reduce={reduce}
                       headingRef={headingRef}
                       onChange={(patch) => setManual((m) => ({ ...m, ...patch }))}
-                      onBack={() => {
+                      onPart={setManualPart}
+                      onAddInspoFiles={inspiration.addFiles}
+                      onAddInspoLink={inspiration.addLink}
+                      onRemoveInspo={(key) => void inspiration.remove(key)}
+                      onRetryInspo={inspiration.retry}
+                      onHaveWebsite={() => {
                         setMode("site");
                         setStep("website");
                       }}
-                      onContinue={() => go("manual")}
+                      onDone={() => go("manual")}
                     />
                   )}
                   {step === "goals" && (
@@ -790,6 +830,9 @@ function Onboarding() {
                   {step === "products" && (
                     <ProductsStep
                       brandName={brandName}
+                      defaultKind={
+                        mode === "manual" && manual.sells === "services" ? "service" : "product"
+                      }
                       siteHost={mode === "site" && websiteUrl ? hostOf(websiteUrl) : null}
                       scanning={mode === "site" && scanStatus === "loading"}
                       incoming={catalogue.incoming}

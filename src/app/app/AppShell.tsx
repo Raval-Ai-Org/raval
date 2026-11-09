@@ -5,7 +5,7 @@ import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useBodyPointerGuard } from "@/lib/shell/window";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
-import { Link, useRouterState, useNavigate } from "@/lib/navigation";
+import { Link, useRouterState, useNavigate, usePrefetch } from "@/lib/navigation";
 
 // Remember a chat/suggestion scan request until the lazy AI Visibility dialog mounts.
 ensureGeoRunCapture();
@@ -168,6 +168,20 @@ function AppShell() {
     select: (s) => s.location.search.view === "chat",
   });
   const routeNavId = activeNavId(path, homeHref, chatView || Boolean(activeConversationId));
+  // A new section fades in. Opacity only, on the page that is already there:
+  // nothing remounts (chat keeps its state) and fixed panels stay put.
+  const mainRef = useRef<HTMLElement>(null);
+  const shownSection = useRef(routeNavId);
+  useEffect(() => {
+    if (shownSection.current === routeNavId) return;
+    shownSection.current = routeNavId;
+    const el = mainRef.current;
+    if (!el?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate([{ opacity: 0.35 }, { opacity: 1 }], {
+      duration: 260,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    });
+  }, [routeNavId]);
   // A full window (Library, Calendar, Analytics, Create...) highlights its own
   // row while it is open; otherwise the page's row.
   const [windowNav, setWindowNav] = useState<string | null>(null);
@@ -457,6 +471,36 @@ function AppShell() {
     item.feature && billing.data && !billing.data.features[item.feature].allowed
       ? billing.data.features[item.feature].requiredPlan
       : null;
+  // Hovering a sidebar row loads its page or window code ahead of the press,
+  // so a section opens at once. Once per row; it never fetches data.
+  const prefetch = usePrefetch();
+  const warmed = useRef(new Set<string>());
+  const warmNav = (item: NavItem) => {
+    if (warmed.current.has(item.id)) return;
+    warmed.current.add(item.id);
+    const t = item.target;
+    if (t.kind === "brain") return prefetch(brainPath(workspaceId));
+    if (t.kind === "analytics") return void import("@/components/app/AnalyticsModal");
+    if (t.kind === "event") {
+      if (t.event === "open:create-launcher") void import("@/components/studio/CreateLauncher");
+      if (t.event === "open:ai-visibility") void import("@/components/app/AiVisibilityDialog");
+      return;
+    }
+    prefetch(
+      t.place === "home"
+        ? homeHref
+        : t.place === "chat"
+          ? chatPath(workspaceId)
+          : t.place === "inspo"
+            ? inspoPath(workspaceId)
+            : t.place === "campaigns"
+              ? campaignsPath(workspaceId)
+              : t.place === "communities"
+                ? communitiesPath(workspaceId)
+                : workspacePath(workspaceId, "experiments"),
+    );
+  };
+
   const pickNav = (item: NavItem, lock: PlanId | null) => {
     closeNavOnPhone();
     if (lock && item.feature) return openFeatureUpgrade(item.feature);
@@ -533,6 +577,7 @@ function AppShell() {
           hintFor={(item) => (item.id === "brain" && brainNews ? `${brainNews}` : undefined)}
           showFlag={(flag) => flag === "experiments" && Boolean(proofEngine?.enabled)}
           onPick={pickNav}
+          onWarm={warmNav}
         />
 
         {/* On a phone the drawer is the only way to past chats. */}
@@ -609,6 +654,7 @@ function AppShell() {
                 lockFor={lockFor}
                 showFlag={(flag) => flag === "experiments" && Boolean(proofEngine?.enabled)}
                 onPick={pickNav}
+                onWarm={warmNav}
               />
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -852,7 +898,11 @@ function AppShell() {
 
         {/* The workspace: Holo's canvas, to the right of the sidebar */}
         <AppCanvas className="lg:rounded-none lg:bg-transparent lg:bg-none lg:shadow-none">
-          <main data-workspace-main="true" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <main
+            ref={mainRef}
+            data-workspace-main="true"
+            className="flex min-w-0 flex-1 flex-col overflow-hidden"
+          >
             <WorkspaceSurface
               workspaceId={workspaceId}
               activeConversationId={activeConversationId}

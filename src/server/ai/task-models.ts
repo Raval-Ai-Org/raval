@@ -316,6 +316,7 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "audience.run",
   "ugc/renders:create",
   "ugc/projects:concepts",
+  "ugc/creators:create",
   "market/trends",
   "generate-image",
   "studio/jobs:advance",

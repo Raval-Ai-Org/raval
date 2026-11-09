@@ -51,6 +51,7 @@ export function SidebarNav({
   hintFor,
   showFlag,
   onPick,
+  onWarm,
 }: {
   activeId: string | null;
   collapsed?: boolean;
@@ -59,6 +60,8 @@ export function SidebarNav({
   hintFor?: (item: NavItem) => string | undefined;
   showFlag: (flag: NonNullable<NavItem["flag"]>) => boolean;
   onPick: (item: NavItem, lockedPlan: PlanId | null) => void;
+  /** A pointer or focus reached a row: load what its press will need. */
+  onWarm?: (item: NavItem) => void;
 }) {
   const groups = NAV_GROUPS.map((g) => ({
     ...g,
@@ -81,6 +84,8 @@ export function SidebarNav({
                     type="button"
                     data-tour={item.tour}
                     onClick={() => onPick(item, lock)}
+                    onPointerEnter={() => onWarm?.(item)}
+                    onFocus={() => onWarm?.(item)}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
                     className={cn(
@@ -124,6 +129,8 @@ export function SidebarNav({
                   type="button"
                   data-tour={item.tour}
                   onClick={() => onPick(item, lock)}
+                  onPointerEnter={() => onWarm?.(item)}
+                  onFocus={() => onWarm?.(item)}
                   aria-current={active ? "page" : undefined}
                   aria-label={
                     lock ? `${item.label} (needs the ${PLANS[lock].label} plan)` : undefined

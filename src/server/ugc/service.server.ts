@@ -23,6 +23,8 @@ import { buildModelPrompt } from "@/lib/ugc/prompt-adapters";
 import { styleBlockFor, ugcStyleNotes } from "@/lib/brand-look/prompt";
 import { loadBrandLook } from "@/server/brand-look/resolve.server";
 import { routeVideo } from "@/lib/ugc/router";
+import { stockCreator } from "@/lib/ugc/creators";
+import { stockCreatorAsset } from "./creator-photo.server";
 import {
   ACTIVE_RENDER_STATUSES,
   BriefSchema,
@@ -30,6 +32,7 @@ import {
   ProductSchema,
   ScriptSchema,
   type AllowanceView,
+  type Brief,
   type Concept,
   type ProjectSummary,
   type ProjectView,
@@ -335,6 +338,35 @@ async function projectLook(workspaceId: string) {
   }
 }
 
+/**
+ * A brief with no creator picked follows the brand's own creator
+ * (`look.video.creator`, Inspo / the creator picker). Never throws.
+ */
+async function withBrandCreator(workspaceId: string, brief: Brief): Promise<Brief> {
+  if (brief.creator.characterId || brief.creator.personAssetId) return brief;
+  try {
+    const chosen = (await loadBrandLook(workspaceId)).look.video.creator;
+    if (chosen?.id && stockCreator(chosen.id)) {
+      const stock = stockCreator(chosen.id)!;
+      return {
+        ...brief,
+        creator: {
+          ...brief.creator,
+          characterId: stock.id,
+          gender: stock.gender,
+          age: stock.age,
+          vibe: stock.vibe,
+        },
+      };
+    }
+    if (chosen?.personAssetId)
+      return { ...brief, creator: { ...brief.creator, personAssetId: chosen.personAssetId } };
+  } catch {
+    // No look: the brief's own creator settings stand.
+  }
+  return brief;
+}
+
 /** Image asset ids that really belong to this workspace and are stored. */
 async function ownedImageAssetIds(workspaceId: string, ids: string[]): Promise<string[]> {
   const unique = [...new Set(ids)].slice(0, 9);
@@ -595,7 +627,15 @@ export async function startRender(
   const ctx = await projectContext(db, input.workspaceId, input.projectId);
   if (!ctx.script)
     throw new HttpError(400, "Choose a concept and finish the script before generating.");
-  const refs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
+  const brief = await withBrandCreator(input.workspaceId, ctx.brief);
+  const productRefs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
+  // One of the brand's own people as the creator: re-checked against this workspace.
+  // A ready-made creator with a photo sends that photo, so every video shows the same face.
+  const person = brief.creator.personAssetId
+    ? ((await ownedImageAssetIds(input.workspaceId, [brief.creator.personAssetId]))[0] ?? null)
+    : brief.creator.characterId
+      ? await stockCreatorAsset(input.workspaceId, brief.creator.characterId)
+      : null;
   const requestedModel = isUgcModelKey(input.model) ? input.model : "auto";
   const entitlements = await getEntitlements({
     workspaceId: input.workspaceId,
@@ -621,11 +661,11 @@ export async function startRender(
   const route = routeVideo(
     {
       product: ctx.product,
-      brief: ctx.brief,
+      brief,
       script: ctx.script,
-      platform: ctx.brief.platform,
+      platform: brief.platform,
       durationSec: input.durationSec,
-      referenceCount: refs.length,
+      referenceCount: productRefs.length + (person ? 1 : 0),
       brand: ctx.brand,
       requestedModel,
     },
@@ -635,6 +675,12 @@ export async function startRender(
     throw new HttpError(400, "No suitable video model is available.");
   // Validated against the provider that will run it (VIDEO_PROVIDER).
   const model = activeModel(route.model);
+  // The person photo goes first, only to a model that takes several references;
+  // a first-frame model opens on the product and the creator is described instead.
+  const withPerson = !!person && model.images?.mode === "references" && model.images.max >= 2;
+  const refs = withPerson
+    ? [person, ...productRefs.filter((id) => id !== person)]
+    : productRefs.filter((id) => id !== person);
   const imageCount = usableImageCount(model, refs.length);
   const settings = {
     model: model.key,
@@ -685,7 +731,7 @@ export async function startRender(
     typeof ctx.brand.voice === "string" && ctx.brand.voice.trim() ? ctx.brand.voice : undefined;
   const prompt = buildModelPrompt({
     product: ctx.product,
-    brief: ctx.brief,
+    brief,
     script: ctx.script,
     model,
     durationSec: settings.durationSec,
@@ -693,6 +739,7 @@ export async function startRender(
     imageCount,
     brandVoice,
     styleNotes: ctx.styleNotes || undefined,
+    creatorImage: withPerson,
   });
 
   let inserted;

@@ -331,6 +331,7 @@ export function openComposer(
       | "recapMotion"
       | "videoKind"
       | "videoPeople"
+      | "endFrameAssetId"
     >;
   } = {},
 ): string | null {
@@ -612,6 +613,11 @@ export function focusSession(id: string) {
         : { ...s, window: "minimized" as const },
   );
   setState({ sessions, activeId: id });
+}
+
+/** The composer that is open right now, if any. */
+export function getActiveSessionId(): string | null {
+  return state.activeId;
 }
 
 export function minimizeSession(id: string) {

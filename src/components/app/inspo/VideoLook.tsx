@@ -1,11 +1,15 @@
 "use client";
 
-// Inspo → Video look: pace, captions and motion (`dna.look.video`).
+// Inspo → Video look: the brand face, pace, captions and motion (`dna.look.video`).
 import { motion } from "framer-motion";
 import { dsFocus } from "@/components/app/surface/buttons";
 import { VideoPreview } from "@/components/app/brain/brand/look/preview";
 import type { BrandLook } from "@/lib/brand-look/resolve";
 import type { BrandLookSpec, VideoStyle } from "@/lib/brand-look/spec";
+import { CreatorFace } from "@/components/app/ugc/CreatorPortrait";
+import { User } from "@/components/icons";
+import { emitAppEvent } from "@/lib/app-events";
+import { stockCreator } from "@/lib/ugc/creators";
 import { cn } from "@/lib/utils";
 import { Block, EASE } from "./parts";
 import { LivePreview } from "./PostLook";
@@ -41,6 +45,11 @@ export function VideoLook({
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
       <div className="min-w-0 space-y-4">
+        <BrandFace
+          creator={vid.creator}
+          onChoose={() => emitAppEvent("open:ugc-studio", undefined)}
+          onRemove={() => set({ creator: undefined })}
+        />
         <Block label="Pace">
           <div className="grid grid-cols-3 gap-2.5">
             {PACES.map((p) => {
@@ -148,5 +157,61 @@ export function VideoLook({
         <VideoPreview resolved={resolved} />
       </LivePreview>
     </div>
+  );
+}
+
+/** The one creator every Creator video ad uses, picked in the creator studio. */
+function BrandFace({
+  creator,
+  onChoose,
+  onRemove,
+}: {
+  creator: VideoStyle["creator"];
+  onChoose: () => void;
+  onRemove: () => void;
+}) {
+  const stock = stockCreator(creator?.id);
+  const name = stock?.name ?? creator?.name ?? (creator?.personAssetId ? "Your person" : null);
+  return (
+    <Block label="Brand face">
+      <div className="flex items-center gap-3">
+        <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[var(--ds-well-bg)]">
+          {stock ? (
+            <CreatorFace creator={stock} />
+          ) : (
+            <User className="size-5 text-muted-foreground" aria-hidden />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13.5px] font-semibold">{name ?? "No brand face yet"}</p>
+          <p className="text-xs text-muted-foreground">
+            {name
+              ? "Every creator video ad uses this person, so your brand has one face."
+              : "Pick one creator for all your video ads, from ready-made creators or your own people."}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          <button
+            type="button"
+            onClick={onChoose}
+            className={cn("ds-well h-9 rounded-full px-4 text-[13px] font-semibold", dsFocus)}
+          >
+            {name ? "Change" : "Choose"}
+          </button>
+          {name ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              className={cn(
+                "h-9 rounded-full px-3 text-[13px] text-muted-foreground hover:text-foreground",
+                dsFocus,
+              )}
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </Block>
   );
 }

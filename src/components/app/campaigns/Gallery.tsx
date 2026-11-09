@@ -4,7 +4,7 @@
 // first step of the designer. Hovering a card brings up its phases.
 import { PLAYBOOKS, PLAYBOOK_GROUPS } from "@/lib/campaigns/playbooks";
 import { cn } from "@/lib/utils";
-import { kindIcon } from "./kit";
+import { CampaignArt } from "./CampaignArt";
 
 export function Gallery({
   onPick,
@@ -23,7 +23,6 @@ export function Gallery({
             <p className="ds-label mb-2">{g.label}</p>
             <div className="grid grid-cols-1 gap-2.5 @md/campaigns:grid-cols-2 @3xl/campaigns:grid-cols-3 @5xl/campaigns:grid-cols-4">
               {list.map((p) => {
-                const Icon = kindIcon(p.icon);
                 const on = selected === p.id;
                 return (
                   <button
@@ -38,16 +37,11 @@ export function Gallery({
                       on && "ring-2 ring-primary/60",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "grid size-10 shrink-0 place-items-center rounded-full transition-colors",
-                        on
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-primary/12 text-primary-ink group-hover:bg-primary/18",
-                      )}
-                    >
-                      <Icon className="size-[18px]" />
-                    </span>
+                    <CampaignArt
+                      type={p.id}
+                      size="tile"
+                      className={cn(on && "ring-2 ring-primary/60")}
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13.5px] font-semibold">{p.label}</span>
                       <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">

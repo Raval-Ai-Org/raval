@@ -1,11 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { prepareAppUi, AUDIT_WORKSPACE } from "../fixtures/app-ui";
-import {
-  CreateProjectBody,
-  ProductSchema,
-  type ModelView,
-  type ProjectView,
-} from "../../src/lib/ugc/schemas";
+import { CreateProjectBody, type ModelView, type ProjectView } from "../../src/lib/ugc/schemas";
 
 test("script review offers only the relevant video paths and carries its complete snapshot", async ({
   page,
@@ -77,6 +72,46 @@ test("creator handoff saves the supplied script, skips ideas, and renders that p
   let project: ProjectView | null = null;
   const renders: Record<string, unknown>[] = [];
   let conceptCalls = 0;
+  await page.route("**/api/rpc/**", async (route) => {
+    const fn = new URL(route.request().url()).pathname.replace("/api/rpc/", "");
+    if (fn === "products/listProducts")
+      return route.fulfill({
+        json: {
+          result: [
+            {
+              id: "00000000-0000-4000-8000-000000000071",
+              kind: "product",
+              name: "Daily moisturiser",
+              description: "Made without fragrance.",
+              price: "",
+              url: null,
+              category: "Skincare",
+              benefits: ["Made without fragrance"],
+              images: [],
+              primaryAssetId: null,
+              source: "scan",
+              position: 0,
+              status: "active",
+            },
+          ],
+        },
+      });
+    if (fn === "brand-visuals/getVisualTaste")
+      return route.fulfill({
+        json: {
+          result: {
+            available: true,
+            canEdit: true,
+            activeId: null,
+            profiles: [],
+            sources: [],
+            jobs: [],
+            feedback: [],
+          },
+        },
+      });
+    return route.fallback();
+  });
   await page.route("**/api/ugc/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/models"))
@@ -90,16 +125,6 @@ test("creator handoff saves the supplied script, skips ideas, and renders that p
             activeRenders: 0,
             maxConcurrent: 3,
           },
-        },
-      });
-    if (path.endsWith("/extract"))
-      return route.fulfill({
-        json: {
-          product: ProductSchema.parse({
-            name: "Daily moisturiser",
-            description: "Made without fragrance.",
-          }),
-          analyzed: true,
         },
       });
     if (path.endsWith("/concepts")) {
@@ -125,8 +150,8 @@ test("creator handoff saves the supplied script, skips ideas, and renders that p
       return route.fulfill({ json: { project } });
     }
     if (path.startsWith("/api/ugc/projects/")) return route.fulfill({ json: { project } });
-    if (path === "/api/ugc/renders") {
-      renders.push(route.request().postDataJSON());
+    if (path === "/api/ugc/renders" || path === "/api/ugc/renders/render-fixture") {
+      if (route.request().method() === "POST") renders.push(route.request().postDataJSON());
       return route.fulfill({
         json: {
           render: {
@@ -148,37 +173,40 @@ test("creator handoff saves the supplied script, skips ideas, and renders that p
     return route.fulfill({ json: {} });
   });
   await page.goto("/layout-lab?scene=ugc-script-video");
-  await expect(page.getByRole("textbox", { name: "Product page link" })).toBeVisible({
-    timeout: 60_000,
-  });
+  const box = page.getByRole("textbox", { name: "Script" });
+  await expect(box).toBeVisible({ timeout: 60_000 });
   await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
-  await expect(page.getByRole("button", { name: "Idea", exact: true })).toHaveCount(0);
-  await page
-    .getByRole("textbox", { name: "Product page link" })
-    .fill("https://example.test/product");
-  await page.getByRole("button", { name: "Analyze", exact: true }).click();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Create video", exact: true })).toBeVisible();
-  expect(project!.brief.scriptSource).toBe("studio");
-  expect(project!.brief.platform).toBe("reels");
-  expect(project!.script!.scenes.map((scene) => scene.dialogue)).toEqual([
-    "Keep your routine simple.",
-    "See the moisturiser today.",
-  ]);
-  expect(conceptCalls).toBe(0);
-  await page.getByRole("button", { name: /Script used in this video/ }).click();
-  await expect(page.getByText("See the moisturiser today.", { exact: true })).toBeVisible();
+  // The reviewed script is carried over word for word; no link is read.
+  await expect(box).toHaveValue(
+    ["Keep your routine simple.", "See the moisturiser today."].join("\n"),
+  );
+  await expect(page.getByRole("textbox", { name: "Product page link" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Daily moisturiser/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: /^Maya,/ }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
     path: testInfo.outputPath("creator-script-video-mobile.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Create video", exact: true }).click();
+  await page.getByRole("button", { name: "Generate video", exact: true }).click();
   await expect.poll(() => renders.length).toBe(1);
+  expect(project!.brief.scriptSource).toBe("studio");
+  expect(project!.brief.platform).toBe("reels");
+  expect(project!.brief.creator.characterId).toBe("maya");
+  expect(project!.script!.scenes.map((scene) => scene.dialogue)).toEqual([
+    "Keep your routine simple.",
+    "See the moisturiser today.",
+  ]);
   expect(renders[0]).toMatchObject({
     workspaceId: AUDIT_WORKSPACE,
     projectId: project!.id,
     durationSec: 10,
   });
   expect(conceptCalls).toBe(0);
+  // The started video shows straight away, with the script's opening line.
+  await expect(page.getByText("Keep your routine simple.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Progress" })).toBeVisible();
 });

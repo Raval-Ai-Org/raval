@@ -62,7 +62,7 @@ for (const vp of VIEWPORTS) {
       await everyButtonIsAPill(page);
     });
 
-    test("no website: three answers, then on", async ({ page }) => {
+    test("no website: the basics, then every other part can be skipped", async ({ page }) => {
       await openLab(page, "step=manual");
       const next = page.getByRole("button", { name: /Continue/ });
       await expect(next).toBeDisabled();
@@ -70,10 +70,36 @@ for (const vp of VIEWPORTS) {
       await page
         .getByLabel("What you do, in one line")
         .fill("Small-batch coffee, delivered weekly");
-      await page.getByRole("radio", { name: "Services" }).click();
+      await page.getByRole("radio", { name: /Services/ }).click();
+      await expect(page.getByRole("complementary")).toContainText("Northwind");
       await next.click();
+      await expect(last(page)).toHaveText("part:category");
+      await page.getByRole("radio", { name: /Food & drink/ }).click();
+      await expect(page.getByRole("complementary")).toContainText("Food & drink");
+      await next.click();
+      await expect(last(page)).toHaveText("part:look");
+      await page.getByRole("button", { name: /Ocean/ }).click();
+      await expect(page.getByRole("button", { name: /Primary #0B3D91/ })).toBeVisible();
+      await page.getByRole("button", { name: "Bold" }).click();
+      await next.click();
+      await page.getByRole("button", { name: "Skip for now" }).click();
+      await expect(last(page)).toHaveText("part:competitors");
+      await page.getByLabel("Competitor name").fill("Bean Bros");
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await expect(page.getByText("Mellox will look up their site")).toBeVisible();
+      await page.getByRole("button", { name: /Looks good/ }).click();
       await expect(last(page)).toHaveText("manual:continue");
       await noSideScroll(page);
+      await everyButtonIsAPill(page);
+    });
+
+    test("no website: a filled kit shows in the live card", async ({ page }) => {
+      await openLab(page, "step=manual&part=inspiration");
+      await expect(page.getByRole("complementary")).toContainText("Northwind Coffee");
+      await expect(page.getByLabel("Uploading")).toBeVisible();
+      await expect(page.getByRole("button", { name: /Uploading/ })).toBeDisabled();
+      await noSideScroll(page);
+      await everyButtonIsAPill(page);
     });
 
     test("an empty catalogue can't be passed until something is added", async ({ page }) => {

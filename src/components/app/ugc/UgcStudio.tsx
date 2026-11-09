@@ -1,50 +1,64 @@
 "use client";
 
+// Creator video ads (UGC). One Holo-style screen: pick a creator, a product
+// from Brand DNA, write (or have Mox write) what they say, Generate. The
+// product is never read from a page again: the Brand DNA scan already found
+// it (ADR-0035). "Your videos" lists what was made.
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "@/lib/toast";
-import { ArrowLeft, ArrowRight, Globe, Lightbulb, Plus, Trash2, Video } from "@/components/icons";
-import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBrandDna } from "@/hooks/use-brand-dna";
 import { emitAppEvent } from "@/lib/app-events";
+import { creditsFor } from "@/lib/billing/catalog";
+import { parseLook } from "@/lib/brand-look/spec";
+import { getVisualTaste } from "@/lib/brand-visuals.functions";
+import { tidyLook } from "@/lib/inspo/look";
+import { listProducts } from "@/lib/products.functions";
+import { creatorBrief, toCreatorScript, type ScriptVideoSource } from "@/lib/studio/script-video";
 import { ugcApi, UgcApiError } from "@/lib/ugc/client";
-import { platformPreset } from "@/lib/ugc/options";
+import {
+  STOCK_CREATORS,
+  creatorsInOrder,
+  stockCreator,
+  suggestCreators,
+  type BrandCreatorRef,
+} from "@/lib/ugc/creators";
+import { ugcProductFromCatalogue } from "@/lib/ugc/from-catalogue";
+import { LANGUAGES, platformPreset } from "@/lib/ugc/options";
+import { allowedDurations, coerceSettings } from "@/lib/ugc/render-settings";
 import {
   ACTIVE_RENDER_STATUSES,
   BriefSchema,
   type AllowanceView,
   type Brief,
   type ModelView,
-  type Product,
   type ProjectSummary,
   type ProjectView,
-  type ReferenceImageView,
   type RenderView,
   type Script,
 } from "@/lib/ugc/schemas";
+import { scriptFromText, scriptToText } from "@/lib/ugc/script-text";
 import { cn } from "@/lib/utils";
-import { creatorBrief, toCreatorScript, type ScriptVideoSource } from "@/lib/studio/script-video";
-import { BriefStep } from "./BriefStep";
-import { applyHook, ConceptsStep, ConceptsWriting } from "./ConceptsStep";
-import { coerceSettings, GenerateStep, type RenderSettingsState } from "./GenerateStep";
-import { ProductStep } from "./ProductStep";
-import { RenderPanel } from "./RenderPanel";
-import { ScriptStep } from "./ScriptStep";
 import {
-  CreatorSilhouette,
-  itemVariants,
-  listVariants,
-  Panel,
-  PhoneFrame,
-  RenderStatusChip,
-  StepFrame,
-  Stepper,
-  type StepId,
-} from "./ugc-ui";
+  CreatorComposer,
+  sameChoice,
+  type BrandPerson,
+  type ComposerProduct,
+  type CreatorChoice,
+  type CreatorDraft,
+  type NewCreator,
+} from "./CreatorComposer";
+import { RenderPanel } from "./RenderPanel";
+import { CreatorSilhouette, itemVariants, listVariants, RenderStatusChip } from "./ugc-ui";
 
-type View = { kind: "home" } | { kind: "new" } | { kind: "project"; id: string };
+type Catalog = { models: ModelView[]; defaultModel: string; allowance: AllowanceView };
+type Tab = "create" | "videos";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof UgcApiError ? error.message : fallback;
@@ -59,18 +73,11 @@ export function UgcStudio({
   initialProjectId?: string | null;
   source?: ScriptVideoSource | null;
 }) {
-  const [view, setView] = useState<View>(
-    initialProjectId
-      ? { kind: "project", id: initialProjectId }
-      : source
-        ? { kind: "new" }
-        : { kind: "home" },
-  );
-  const [catalog, setCatalog] = useState<{
-    models: ModelView[];
-    defaultModel: string;
-    allowance: AllowanceView;
-  } | null>(null);
+  const [tab, setTab] = useState<Tab>("create");
+  const [projectId, setProjectId] = useState<string | null>(initialProjectId ?? null);
+  // A new composer per opened project (or a fresh one).
+  const [session, setSession] = useState(0);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const loadCatalog = useCallback(() => {
@@ -82,13 +89,10 @@ export function UgcStudio({
       })
       .catch((e) => setCatalogError(errorMessage(e, "Couldn't load video models.")));
   }, [workspaceId]);
+  useEffect(() => loadCatalog(), [loadCatalog]);
 
   useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
-
-  useEffect(() => {
-    if (initialProjectId) setView({ kind: "project", id: initialProjectId });
+    if (initialProjectId) setProjectId(initialProjectId);
   }, [initialProjectId]);
 
   if (catalogError) {
@@ -101,116 +105,580 @@ export function UgcStudio({
     );
   }
 
-  if (view.kind === "home") {
-    return (
-      <UgcHome
-        workspaceId={workspaceId}
-        allowance={catalog?.allowance ?? null}
-        onNew={() => setView({ kind: "new" })}
-        onOpen={(id) => setView({ kind: "project", id })}
-      />
-    );
-  }
+  const open = (id: string | null) => {
+    setProjectId(id);
+    setSession((n) => n + 1);
+    setTab("create");
+  };
 
   return (
-    <ProjectEditor
-      key={view.kind === "project" ? view.id : "new"}
-      workspaceId={workspaceId}
-      projectId={view.kind === "project" ? view.id : null}
-      source={view.kind === "new" ? source : null}
-      catalog={catalog}
-      refreshAllowance={loadCatalog}
-      onCreated={(id) => setView({ kind: "project", id })}
-      onExit={() => setView({ kind: "home" })}
-    />
-  );
-}
-
-const HERO_HOOKS = ["Okay, I didn't expect this…", "3 reasons I switched", "Watch what happens"];
-
-const FLOW = [
-  { icon: Globe, label: "Link" },
-  { icon: Lightbulb, label: "Idea" },
-  { icon: Video, label: "Video" },
-] as const;
-
-/** Three phones fanned out, each cycling a creator hook: the product in one glance. */
-function HeroPhones() {
-  const reduce = useReducedMotion();
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (reduce) return;
-    const id = window.setInterval(() => setTick((t) => t + 1), 2600);
-    return () => window.clearInterval(id);
-  }, [reduce]);
-  const placements = [
-    { rotate: -9, x: -58, y: 12, z: 0 },
-    { rotate: 0, x: 0, y: 0, z: 2 },
-    { rotate: 9, x: 58, y: 12, z: 1 },
-  ];
-  return (
-    <div className="relative mx-auto h-[210px] w-[250px] shrink-0" aria-hidden>
-      {placements.map((p, i) => (
-        <motion.div
-          key={i}
-          className="absolute left-1/2 top-0 w-[104px]"
-          style={{ zIndex: p.z, marginLeft: -52 }}
-          initial={reduce ? false : { opacity: 0, y: 30, rotate: 0, x: 0 }}
-          animate={
-            reduce
-              ? { rotate: p.rotate, x: p.x, y: p.y }
-              : {
-                  opacity: 1,
-                  rotate: p.rotate,
-                  x: p.x,
-                  y: [p.y, p.y - 6, p.y],
-                }
-          }
-          transition={
-            reduce
-              ? undefined
-              : {
-                  opacity: { duration: 0.5, delay: i * 0.12 },
-                  rotate: { duration: 0.7, delay: i * 0.12, ease: [0.22, 1, 0.36, 1] },
-                  x: { duration: 0.7, delay: i * 0.12, ease: [0.22, 1, 0.36, 1] },
-                  y: { duration: 4, delay: i * 0.6, repeat: Infinity, ease: "easeInOut" },
-                }
-          }
+    <div className="space-y-5">
+      <div className="flex justify-center">
+        <div
+          role="tablist"
+          aria-label="Creator videos"
+          className="inline-flex rounded-full bg-[var(--ds-well-bg)] p-1"
         >
-          <PhoneFrame className="rounded-[20px] p-[3px]" screenClassName="rounded-[17px]">
-            <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_0%,hsl(var(--primary)/0.35),transparent_60%)]" />
-            <div className="absolute inset-x-3 bottom-0 top-8">
-              <CreatorSilhouette />
-            </div>
-            <div className="absolute inset-x-1.5 bottom-3">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={(tick + i) % HERO_HOOKS.length}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.3 }}
-                  className="rounded-md bg-black/70 px-1.5 py-1 text-center text-[8.5px] font-semibold leading-tight"
-                >
-                  {HERO_HOOKS[(tick + i) % HERO_HOOKS.length]}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-          </PhoneFrame>
-        </motion.div>
-      ))}
+          {(
+            [
+              ["create", "Create"],
+              ["videos", "Your videos"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={cn(
+                "h-8 rounded-full px-4 text-xs font-medium transition-colors",
+                tab === id
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "videos" ? (
+        <VideoList workspaceId={workspaceId} onNew={() => open(null)} onOpen={(id) => open(id)} />
+      ) : (
+        <VideoProject
+          key={session}
+          workspaceId={workspaceId}
+          projectId={projectId}
+          source={projectId ? null : source}
+          catalog={catalog}
+          refreshAllowance={loadCatalog}
+          onCreated={setProjectId}
+          onNew={() => open(null)}
+        />
+      )}
     </div>
   );
 }
 
-function UgcHome({
+/* ── One video: the composer, or the render once it was started ───────── */
+
+function VideoProject({
   workspaceId,
-  allowance,
+  projectId,
+  source,
+  catalog,
+  refreshAllowance,
+  onCreated,
+  onNew,
+}: {
+  workspaceId: string;
+  projectId: string | null;
+  source?: ScriptVideoSource | null;
+  catalog: Catalog | null;
+  refreshAllowance: () => void;
+  onCreated: (id: string) => void;
+  onNew: () => void;
+}) {
+  const [project, setProject] = useState<ProjectView | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeRender, setActiveRender] = useState<RenderView | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  // A project this screen just created is already in hand; never reload it over a started render.
+  const createdHere = useRef<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!projectId || projectId === createdHere.current) return;
+    setLoadError(null);
+    try {
+      const p = await ugcApi.getProject(workspaceId, projectId);
+      setProject(p);
+      setActiveRender(
+        p.renders.find((r) => ACTIVE_RENDER_STATUSES.includes(r.status)) ?? p.renders[0] ?? null,
+      );
+    } catch (e) {
+      setLoadError(errorMessage(e, "Couldn't open this video."));
+    }
+  }, [workspaceId, projectId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onSettled = useCallback(
+    (render: RenderView) => {
+      setProject((p) =>
+        p ? { ...p, renders: p.renders.map((r) => (r.id === render.id ? render : r)) } : p,
+      );
+      refreshAllowance();
+      if (render.status === "succeeded") {
+        emitAppEvent("assets:changed");
+        toast.success("Your video ad is ready");
+      }
+    },
+    [refreshAllowance],
+  );
+
+  const started = (p: ProjectView, render: RenderView) => {
+    setProject({ ...p, renders: [render, ...p.renders.filter((r) => r.id !== render.id)] });
+    setActiveRender(render);
+    refreshAllowance();
+  };
+
+  const regenerate = async () => {
+    if (!project || !activeRender || regenerating) return;
+    setRegenerating(true);
+    try {
+      const { render } = await ugcApi.startRender(workspaceId, {
+        projectId: project.id,
+        idempotencyKey: crypto.randomUUID(),
+        model: "auto",
+        durationSec: activeRender.durationSec,
+        aspectRatio: activeRender.aspectRatio,
+        resolution: activeRender.resolution,
+        referenceAssetIds: project.references.map((r) => r.assetId),
+      });
+      started(project, render);
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't start the video."));
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  if (loadError) {
+    return (
+      <ErrorState
+        title="Couldn't open this video"
+        description={loadError}
+        onRetry={() => void load()}
+      />
+    );
+  }
+  if (projectId && !project) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Skeleton className="h-[520px] rounded-[22px]" />
+        <Skeleton className="h-[520px] rounded-[22px]" />
+      </div>
+    );
+  }
+
+  if (project && activeRender) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="min-w-0 truncate text-sm font-semibold">{project.title}</h3>
+          <button
+            type="button"
+            onClick={onNew}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[var(--ds-well-bg)] px-3 text-xs font-medium"
+          >
+            <Plus className="size-3.5" aria-hidden /> New video
+          </button>
+        </div>
+        <RenderPanel
+          key={activeRender.id}
+          workspaceId={workspaceId}
+          render={activeRender}
+          script={project.script}
+          history={project.renders}
+          onSettled={onSettled}
+          regenerating={regenerating}
+          onRegenerate={() => void regenerate()}
+          onEditSettings={() => setActiveRender(null)}
+          onSelectRender={setActiveRender}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <ComposerContainer
+      workspaceId={workspaceId}
+      project={project}
+      source={source ?? null}
+      catalog={catalog}
+      onProject={(p) => {
+        setProject(p);
+        if (!projectId) {
+          createdHere.current = p.id;
+          onCreated(p.id);
+        }
+      }}
+      onStarted={started}
+    />
+  );
+}
+
+/* ── The composer's data: Brand DNA products, the brand's people, suggestions ── */
+
+const PERSON_NAME = "Your person";
+const orderedCreators = creatorsInOrder(STOCK_CREATORS);
+
+function ComposerContainer({
+  workspaceId,
+  project,
+  source,
+  catalog,
+  onProject,
+  onStarted,
+}: {
+  workspaceId: string;
+  project: ProjectView | null;
+  source: ScriptVideoSource | null;
+  catalog: Catalog | null;
+  onProject: (p: ProjectView) => void;
+  onStarted: (p: ProjectView, render: RenderView) => void;
+}) {
+  const workspace = useWorkspace();
+  const { dna, save } = useBrandDna(workspaceId);
+  const look = useMemo(() => parseLook(dna.look), [dna.look]);
+  const brandCreator: BrandCreatorRef | null = look.video?.creator ?? null;
+
+  // What the Brand DNA scan already found: picked, never read again.
+  const catalogue = useQuery({
+    queryKey: ["workspace", workspaceId, "products", "ugc"],
+    staleTime: 60_000,
+    queryFn: () => listProducts({ data: { workspaceId } }),
+  });
+  // Creators made here this session, shown before the people list reloads.
+  const [made, setMade] = useState<BrandPerson[]>([]);
+  // The brand's own people (Inspo → Media, "Person").
+  const visuals = useQuery({
+    queryKey: ["workspace", workspaceId, "visual-taste", "ugc-people"],
+    staleTime: 60_000,
+    queryFn: () => getVisualTaste({ data: { workspaceId } }),
+  });
+
+  const people: BrandPerson[] = useMemo(
+    () =>
+      (visuals.data?.sources ?? [])
+        .filter((s) => s.purpose === "person" && s.status !== "removed")
+        .filter((s) => (s.asset?.mime_type ?? "image/").startsWith("image/"))
+        .map((s): BrandPerson => ({
+          assetId: s.asset_id,
+          url: s.asset?.thumbnailUrl ?? s.asset?.url ?? null,
+          name: s.label?.trim() || PERSON_NAME,
+          fromSite: s.kind === "website",
+        }))
+        .concat(made.filter((m) => !visuals.data?.sources.some((s) => s.asset_id === m.assetId))),
+    [visuals.data, made],
+  );
+
+  const products: ComposerProduct[] | null = useMemo(() => {
+    if (catalogue.isPending) return project ? [currentProduct(project)] : null;
+    const known = (catalogue.data ?? [])
+      .filter((p) => p.status === "active")
+      .map((item) => {
+        const picked = ugcProductFromCatalogue(item, workspace.name);
+        return {
+          key: `cat:${item.id}`,
+          name: item.name,
+          imageUrl: picked.references[0]?.url ?? picked.product.images[0]?.url ?? null,
+          product: picked.product,
+          references: picked.references,
+        };
+      });
+    if (!project) return known;
+    const same = known.find((k) => k.name.trim() === project.product.name.trim());
+    return same ? known : [currentProduct(project), ...known];
+  }, [catalogue.isPending, catalogue.data, project, workspace.name]);
+
+  const suggested = useMemo(
+    () =>
+      suggestCreators({
+        industry: dna.industry,
+        audience: dna.audience,
+        audienceTags: dna.audienceTags,
+        products: (catalogue.data ?? []).flatMap((p) => [p.name, p.category]),
+      }),
+    [dna.industry, dna.audience, dna.audienceTags, catalogue.data],
+  );
+
+  const model =
+    catalog?.models.find((m) => m.key === catalog.defaultModel) ?? catalog?.models[0] ?? null;
+
+  /* Draft ------------------------------------------------------------- */
+
+  const baseScript = useRef<Script | null>(
+    project?.script ?? (source ? toCreatorScript(source.script) : null),
+  );
+  const [draft, setDraft] = useState<CreatorDraft>(() => {
+    const brief = project?.brief ?? (source ? creatorBrief(source) : BriefSchema.parse({}));
+    return {
+      creator: choiceFrom(brief) ?? choiceFromRef(brandCreator),
+      productKey: project ? `project:${project.id}` : null,
+      scriptText: scriptToText(baseScript.current),
+      tone: brief.tone,
+      setting: brief.creator.setting,
+      platform: brief.platform,
+      durationSec: brief.durationSec ?? platformPreset(brief.platform).durationSec,
+    };
+  });
+  const patch = (p: Partial<CreatorDraft>) => setDraft((d) => ({ ...d, ...p }));
+
+  // The brand's creator arrives with Brand DNA; use it until a person picks one.
+  const pickedCreator = useRef(!!draft.creator);
+  useEffect(() => {
+    if (pickedCreator.current || !brandCreator) return;
+    const choice = choiceFromRef(brandCreator);
+    if (choice) setDraft((d) => (d.creator ? d : { ...d, creator: choice }));
+  }, [brandCreator]);
+
+  // First product by default; a catalogue twin of the project's product stands in for it.
+  useEffect(() => {
+    if (!products?.length) return;
+    setDraft((d) =>
+      d.productKey && products.some((p) => p.key === d.productKey)
+        ? d
+        : { ...d, productKey: products[0].key },
+    );
+  }, [products]);
+
+  const product = products?.find((p) => p.key === draft.productKey) ?? null;
+  const refIds = product?.references.map((r) => r.assetId) ?? [];
+  const durations = model ? allowedDurations(model, refIds.length ? 1 : 0) : [5, 10, 15];
+  useEffect(() => {
+    if (!durations.includes(draft.durationSec)) {
+      const nearest = durations.reduce((best, d) =>
+        Math.abs(d - draft.durationSec) < Math.abs(best - draft.durationSec) ? d : best,
+      );
+      patch({ durationSec: nearest });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durations.join(","), draft.durationSec]);
+
+  /* Actions ----------------------------------------------------------- */
+
+  const [busy, setBusy] = useState<null | "write" | "generate">(null);
+  const [current, setCurrent] = useState<ProjectView | null>(project);
+
+  const brief = (): Brief => {
+    const base = current?.brief ?? (source ? creatorBrief(source) : BriefSchema.parse({}));
+    const stock = draft.creator?.kind === "stock" ? stockCreator(draft.creator.id) : null;
+    const personAssetId = draft.creator?.kind === "person" ? draft.creator.assetId : undefined;
+    const contentLanguage = LANGUAGES.find((l) => l.label === look.writing?.language)?.id;
+    return BriefSchema.parse({
+      ...base,
+      platform: draft.platform,
+      tone: draft.tone,
+      durationSec: draft.durationSec,
+      language: current ? base.language : (contentLanguage ?? base.language),
+      audience: base.audience || product?.product.audienceHints[0] || "",
+      creator: {
+        ...base.creator,
+        setting: draft.setting,
+        gender: stock?.gender ?? base.creator.gender,
+        age: stock?.age ?? base.creator.age,
+        vibe: stock?.vibe ?? base.creator.vibe,
+        characterId: stock?.id,
+        personAssetId,
+      },
+    });
+  };
+
+  const creatorName = () =>
+    draft.creator?.kind === "stock"
+      ? (stockCreator(draft.creator.id)?.name ?? "")
+      : draft.creator?.kind === "person"
+        ? (people.find((p) => p.assetId === (draft.creator as { assetId: string }).assetId)?.name ??
+          PERSON_NAME)
+        : "";
+
+  const saveProject = async (script: Script | null): Promise<ProjectView> => {
+    if (!product) throw new UgcApiError(400, "Pick a product first.");
+    const title = [product.product.name, creatorName()].filter(Boolean).join(" · ").slice(0, 200);
+    const next = current
+      ? await ugcApi.updateProject(workspaceId, current.id, {
+          product: product.product,
+          brief: brief(),
+          referenceAssetIds: refIds,
+          title,
+          ...(script ? { script } : {}),
+        })
+      : await ugcApi.createProject(workspaceId, {
+          product: product.product,
+          brief: brief(),
+          referenceAssetIds: refIds,
+          title,
+          script: script ?? undefined,
+        });
+    setCurrent(next);
+    onProject(next);
+    return next;
+  };
+
+  /** The script as typed; an untouched stored or written script keeps its shots. */
+  const currentScript = (): Script | null => {
+    const base = baseScript.current;
+    if (base && scriptToText(base).trim() === draft.scriptText.trim()) return base;
+    return scriptFromText(draft.scriptText, draft.durationSec, { cta: base?.cta });
+  };
+
+  const run = async (kind: "write" | "generate", fallback: string, fn: () => Promise<void>) => {
+    setBusy(kind);
+    try {
+      await fn();
+    } catch (e) {
+      toast.error(errorMessage(e, fallback));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const write = () =>
+    run("write", "Couldn't write ideas.", async () => {
+      const p = await saveProject(null);
+      const { project: next, warnings } = await ugcApi.generateConcepts(
+        workspaceId,
+        p.id,
+        draft.durationSec,
+      );
+      setCurrent(next);
+      onProject(next);
+      const first = next.concepts[0];
+      if (!first) return;
+      baseScript.current = first.script;
+      patch({ scriptText: scriptToText(first.script) });
+      if (warnings.length) toast.message("Check the flagged lines before you generate.");
+    });
+
+  const pickIdea = (id: string) => {
+    const concept = current?.concepts.find((c) => c.id === id);
+    if (!concept) return;
+    baseScript.current = concept.script;
+    patch({ scriptText: scriptToText(concept.script) });
+  };
+
+  const generate = () =>
+    run("generate", "Couldn't start the video.", async () => {
+      if (!model) throw new UgcApiError(503, "Video models are still loading.");
+      const script = currentScript();
+      if (!script) throw new UgcApiError(400, "Write what the creator says first.");
+      const p = await saveProject(script);
+      const preset = platformPreset(draft.platform);
+      const settings = coerceSettings(
+        model,
+        {
+          model: model.key,
+          durationSec: draft.durationSec,
+          aspectRatio: preset.aspectRatio,
+          resolution: model.defaultResolution,
+          referenceIds: refIds,
+        },
+        preset.aspectRatio,
+      );
+      const { render } = await ugcApi.startRender(workspaceId, {
+        projectId: p.id,
+        idempotencyKey: crypto.randomUUID(),
+        model: "auto",
+        durationSec: settings.durationSec,
+        aspectRatio: settings.aspectRatio,
+        resolution: settings.resolution,
+        referenceAssetIds: refIds,
+      });
+      onStarted(p, render);
+    });
+
+  const createCreator = async (input: NewCreator): Promise<boolean> => {
+    try {
+      const person = await ugcApi.createCreator(workspaceId, input);
+      setMade((list) => [{ ...person }, ...list]);
+      pickedCreator.current = true;
+      patch({ creator: { kind: "person", assetId: person.assetId } });
+      void visuals.refetch();
+      toast.success(`${person.name} is ready. Make them your brand face to use them every time.`);
+      return true;
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't create that creator."));
+      return false;
+    }
+  };
+
+  const toggleBrandCreator = () => {
+    if (!draft.creator) return;
+    const isBrand = sameChoice(draft.creator, brandCreator);
+    const ref: BrandCreatorRef =
+      draft.creator.kind === "stock"
+        ? { id: draft.creator.id, name: creatorName() }
+        : { personAssetId: draft.creator.assetId, name: creatorName().slice(0, 60) };
+    save({
+      look: tidyLook({ ...look, video: { ...look.video, creator: isBrand ? undefined : ref } }),
+    });
+    toast.success(
+      isBrand ? "Brand face removed" : `${creatorName()} is now your brand face for every video ad`,
+    );
+  };
+
+  const videosLeft = catalog
+    ? Math.max(
+        0,
+        catalog.allowance.videos.limit -
+          catalog.allowance.videos.used -
+          catalog.allowance.videos.held,
+      )
+    : null;
+
+  return (
+    <CreatorComposer
+      draft={draft}
+      onDraft={(p) => {
+        if (p.creator) pickedCreator.current = true;
+        patch(p);
+      }}
+      creators={orderedCreators}
+      suggested={suggested}
+      people={people}
+      brandCreator={brandCreator}
+      products={products}
+      durations={durations}
+      ideas={(current?.concepts ?? []).map((c) => ({ id: c.id, title: c.title }))}
+      conceptPrice={creditsFor("ugc_concepts")}
+      videosLeft={videosLeft}
+      busy={busy}
+      onWrite={() => void write()}
+      onPickIdea={pickIdea}
+      onGenerate={() => void generate()}
+      onToggleBrandCreator={toggleBrandCreator}
+      onAddProducts={() => emitAppEvent("open:brain", { section: "brand", tab: "products" })}
+      onAddPeople={() => emitAppEvent("open:inspo", { section: "media" })}
+      creatorPrice={creditsFor("image_standard")}
+      onCreateCreator={createCreator}
+    />
+  );
+}
+
+function currentProduct(project: ProjectView): ComposerProduct {
+  return {
+    key: `project:${project.id}`,
+    name: project.product.name || "Your product",
+    imageUrl: project.references[0]?.url ?? project.product.images[0]?.url ?? null,
+    product: project.product,
+    references: project.references,
+  };
+}
+
+function choiceFrom(brief: Brief): CreatorChoice | null {
+  if (brief.creator.characterId) return { kind: "stock", id: brief.creator.characterId };
+  if (brief.creator.personAssetId) return { kind: "person", assetId: brief.creator.personAssetId };
+  return null;
+}
+
+function choiceFromRef(ref: BrandCreatorRef | null): CreatorChoice | null {
+  if (ref?.id && stockCreator(ref.id)) return { kind: "stock", id: ref.id };
+  if (ref?.personAssetId) return { kind: "person", assetId: ref.personAssetId };
+  return null;
+}
+
+/* ── Your videos ──────────────────────────────────────────────────────── */
+
+function VideoList({
+  workspaceId,
   onNew,
   onOpen,
 }: {
   workspaceId: string;
-  allowance: AllowanceView | null;
   onNew: () => void;
   onOpen: (id: string) => void;
 }) {
@@ -223,105 +691,59 @@ function UgcHome({
     ugcApi
       .listProjects(workspaceId)
       .then(setProjects)
-      .catch((e) => setError(errorMessage(e, "Couldn't load your ads.")));
+      .catch((e) => setError(errorMessage(e, "Couldn't load your videos.")));
   }, [workspaceId]);
   useEffect(() => load(), [load]);
 
-  const videosLeft = allowance
-    ? Math.max(0, allowance.videos.limit - allowance.videos.used - allowance.videos.held)
-    : null;
+  if (error)
+    return (
+      <ErrorState size="sm" title="Couldn't load your videos" description={error} onRetry={load} />
+    );
+  if (projects === null)
+    return (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="aspect-[9/16] rounded-[22px]" />
+        ))}
+      </div>
+    );
 
   return (
-    <div className="space-y-7 pb-4">
-      <Panel className="ds-glow relative overflow-hidden p-5 sm:p-7">
-        <div className="relative flex flex-col items-center gap-6 md:flex-row md:justify-between">
-          <div className="max-w-md space-y-5 text-center md:text-left">
-            <h3 className="text-2xl font-semibold tracking-tight sm:text-[28px] sm:leading-tight">
-              Your product, <span className="text-primary-ink">filmed by a creator</span>
-            </h3>
-            <ol className="flex items-center justify-center gap-2 md:justify-start">
-              {FLOW.map((f, i) => (
-                <motion.li
-                  key={f.label}
-                  initial={reduce ? false : { opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.15 + i * 0.12, duration: 0.35 }}
-                  className="flex items-center gap-2"
-                >
-                  <span className="flex items-center gap-1.5 rounded-full bg-[var(--ds-well-bg)] px-3 py-1.5 text-xs font-medium">
-                    <f.icon className="size-3.5 text-primary-ink" aria-hidden />
-                    {f.label}
-                  </span>
-                  {i < FLOW.length - 1 ? (
-                    <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden />
-                  ) : null}
-                </motion.li>
-              ))}
-            </ol>
-            <div className="flex flex-col items-center gap-2 sm:flex-row md:justify-start">
-              <Button size="xl" onClick={onNew}>
-                <Plus aria-hidden /> New video ad
-              </Button>
-              {videosLeft !== null ? (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {videosLeft} video{videosLeft === 1 ? "" : "s"} left this month
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <HeroPhones />
-        </div>
-      </Panel>
-
-      <section className="space-y-3">
-        <h4 className="ds-label text-[11px]">Your ads</h4>
-        {error ? (
-          <ErrorState size="sm" title="Couldn't load your ads" description={error} onRetry={load} />
-        ) : projects === null ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="aspect-[9/16] rounded-[22px]" />
-            ))}
-          </div>
-        ) : (
-          <motion.ul
-            initial={reduce ? false : "hidden"}
-            animate="show"
-            variants={listVariants}
-            className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
-          >
-            <motion.li variants={reduce ? undefined : itemVariants}>
-              <button
-                type="button"
-                onClick={onNew}
-                className="group flex aspect-[9/16] w-full flex-col items-center justify-center gap-3 rounded-[22px] border-2 border-dashed border-[var(--ds-tile-border)] text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-              >
-                <span className="grid size-12 place-items-center rounded-full bg-primary/15 text-primary-ink transition-transform group-hover:scale-110">
-                  <Plus className="size-5" aria-hidden />
-                </span>
-                <span className="text-sm font-medium">New</span>
-              </button>
-            </motion.li>
-            {projects.map((p) => (
-              <motion.li key={p.id} variants={reduce ? undefined : itemVariants}>
-                <AdCard
-                  project={p}
-                  onOpen={() => onOpen(p.id)}
-                  onArchive={async () => {
-                    try {
-                      await ugcApi.archiveProject(workspaceId, p.id);
-                      setProjects((list) => list?.filter((x) => x.id !== p.id) ?? null);
-                    } catch (e) {
-                      toast.error(errorMessage(e, "Couldn't archive that ad."));
-                    }
-                  }}
-                />
-              </motion.li>
-            ))}
-          </motion.ul>
-        )}
-      </section>
-    </div>
+    <motion.ul
+      initial={reduce ? false : "hidden"}
+      animate="show"
+      variants={listVariants}
+      className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"
+    >
+      <motion.li variants={reduce ? undefined : itemVariants}>
+        <button
+          type="button"
+          onClick={onNew}
+          className="group flex aspect-[9/16] w-full flex-col items-center justify-center gap-3 rounded-[22px] border-2 border-dashed border-[var(--ds-tile-border)] text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <span className="grid size-12 place-items-center rounded-full bg-primary/15 text-primary-ink transition-transform group-hover:scale-110">
+            <Plus className="size-5" aria-hidden />
+          </span>
+          <span className="text-sm font-medium">New video</span>
+        </button>
+      </motion.li>
+      {projects.map((p) => (
+        <motion.li key={p.id} variants={reduce ? undefined : itemVariants}>
+          <AdCard
+            project={p}
+            onOpen={() => onOpen(p.id)}
+            onArchive={async () => {
+              try {
+                await ugcApi.archiveProject(workspaceId, p.id);
+                setProjects((list) => list?.filter((x) => x.id !== p.id) ?? null);
+              } catch (e) {
+                toast.error(errorMessage(e, "Couldn't archive that video."));
+              }
+            }}
+          />
+        </motion.li>
+      ))}
+    </motion.ul>
   );
 }
 
@@ -348,7 +770,7 @@ function AdCard({
         }
       }}
     >
-      <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-neutral-900 ring-1 ring-[var(--ds-tile-border)] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_40px_-20px_hsl(var(--primary)/0.7)]">
+      <div className="relative aspect-[9/16] overflow-hidden rounded-[22px] bg-neutral-900 ring-1 ring-[var(--ds-tile-border)] transition-[transform,box-shadow] duration-300 group-hover:-translate-y-1">
         {p.latestRender?.videoUrl ? (
           <video
             ref={videoRef}
@@ -402,427 +824,6 @@ function AdCard({
       >
         <Trash2 className="size-4" aria-hidden />
       </button>
-    </div>
-  );
-}
-
-function defaultStep(project: ProjectView): StepId {
-  if (project.renders.length) return "generate";
-  if (project.script) return project.brief.scriptSource === "studio" ? "generate" : "script";
-  if (project.concepts.length) return "concepts";
-  return "brief";
-}
-
-function ProjectEditor({
-  workspaceId,
-  projectId,
-  catalog,
-  refreshAllowance,
-  onCreated,
-  onExit,
-  source,
-}: {
-  workspaceId: string;
-  projectId: string | null;
-  catalog: { models: ModelView[]; defaultModel: string; allowance: AllowanceView } | null;
-  refreshAllowance: () => void;
-  onCreated: (id: string) => void;
-  onExit: () => void;
-  source?: ScriptVideoSource | null;
-}) {
-  const workspace = useWorkspace();
-  const [project, setProject] = useState<ProjectView | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [step, setStep] = useState<StepId>("product");
-  const [busy, setBusy] = useState<null | "saving" | "concepts" | "rewrite" | "render">(null);
-  const [settings, setSettings] = useState<RenderSettingsState | null>(null);
-  const [activeRender, setActiveRender] = useState<RenderView | null>(null);
-
-  const load = useCallback(async () => {
-    if (!projectId) return;
-    setLoadError(null);
-    try {
-      const p = await ugcApi.getProject(workspaceId, projectId);
-      setProject(p);
-      setStep(defaultStep(p));
-      const live =
-        p.renders.find((r) => ACTIVE_RENDER_STATUSES.includes(r.status)) ?? p.renders[0] ?? null;
-      setActiveRender(live);
-    } catch (e) {
-      setLoadError(errorMessage(e, "Couldn't open this ad."));
-    }
-  }, [workspaceId, projectId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // Initial render settings once the model catalog and project are known.
-  useEffect(() => {
-    if (!catalog || settings || (projectId && !project)) return;
-    const model = catalog.models.find((m) => m.key === catalog.defaultModel) ?? catalog.models[0];
-    if (!model) return;
-    const preset = platformPreset(project?.brief.platform ?? "tiktok");
-    setSettings({
-      ...coerceSettings(
-        model,
-        {
-          model: model.key,
-          durationSec:
-            project?.brief.durationSec ?? source?.script.durationSec ?? preset.durationSec,
-          aspectRatio: preset.aspectRatio,
-          resolution: model.defaultResolution,
-          referenceIds: project?.references.map((r) => r.assetId) ?? [],
-        },
-        preset.aspectRatio,
-      ),
-      model: "auto",
-    });
-  }, [catalog, project, projectId, settings, source]);
-
-  const model =
-    catalog?.models.find((m) => m.key === settings?.model) ??
-    catalog?.models.find((m) => m.key === catalog.defaultModel) ??
-    catalog?.models[0];
-  const durationSec = settings?.durationSec ?? 10;
-
-  const guard = async <T,>(
-    kind: NonNullable<typeof busy>,
-    fallback: string,
-    fn: () => Promise<T>,
-  ) => {
-    setBusy(kind);
-    try {
-      return await fn();
-    } catch (e) {
-      toast.error(errorMessage(e, fallback));
-      return undefined;
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const saveProduct = (product: Product, references: ReferenceImageView[]) =>
-    guard("saving", "Couldn't save the product.", async () => {
-      const referenceAssetIds = references.map((r) => r.assetId);
-      if (!project) {
-        const created = await ugcApi.createProject(workspaceId, {
-          product,
-          brief: source
-            ? creatorBrief(source)
-            : BriefSchema.parse({ audience: product.audienceHints[0] ?? "" }),
-          script: source ? toCreatorScript(source.script) : undefined,
-          title: source?.script.title,
-          referenceAssetIds,
-        });
-        setProject(created);
-        setSettings((s) => (s ? { ...s, referenceIds: referenceAssetIds } : s));
-        setStep(source ? "generate" : "brief");
-        onCreated(created.id);
-        return;
-      }
-      const updated = await ugcApi.updateProject(workspaceId, project.id, {
-        product,
-        referenceAssetIds,
-      });
-      setProject(updated);
-      setSettings((s) => (s ? { ...s, referenceIds: referenceAssetIds } : s));
-      setStep(updated.brief.scriptSource === "studio" ? "generate" : "brief");
-    });
-
-  const applyBriefToSettings = (brief: Brief) => {
-    if (!model || !settings) return;
-    const preset = platformPreset(brief.platform);
-    setSettings({ ...coerceSettings(model, settings, preset.aspectRatio), model: settings.model });
-  };
-
-  const generateConcepts = (brief: Brief) =>
-    guard("concepts", "Couldn't write ideas.", async () => {
-      if (!project) return;
-      applyBriefToSettings(brief);
-      setStep("concepts");
-      try {
-        await ugcApi.updateProject(workspaceId, project.id, { brief: { ...brief, durationSec } });
-        const { project: next } = await ugcApi.generateConcepts(
-          workspaceId,
-          project.id,
-          durationSec,
-        );
-        setProject(next);
-        // Defensive: the server always returns at least one concept on success.
-        if (!next.concepts.length) setStep("brief");
-      } catch (error) {
-        setStep("brief");
-        throw error;
-      }
-    });
-
-  const keepConcepts = (brief: Brief) =>
-    guard("saving", "Couldn't save the details.", async () => {
-      if (!project) return;
-      applyBriefToSettings(brief);
-      setProject(
-        await ugcApi.updateProject(workspaceId, project.id, { brief: { ...brief, durationSec } }),
-      );
-      setStep("concepts");
-    });
-
-  const chooseConcept = (conceptId: string, script: Script) =>
-    guard("saving", "Couldn't select that idea.", async () => {
-      if (!project) return;
-      setProject(
-        await ugcApi.updateProject(workspaceId, project.id, {
-          selectedConceptId: conceptId,
-          script,
-        }),
-      );
-      setStep("script");
-    });
-
-  const saveScript = (script: Script, next: StepId) =>
-    guard("saving", "Couldn't save the script.", async () => {
-      if (!project) return;
-      setProject(await ugcApi.updateProject(workspaceId, project.id, { script }));
-      setStep(next);
-    });
-
-  const rewrite = (script: Script, instruction: string) =>
-    guard("rewrite", "Couldn't rewrite the script.", async () => {
-      if (!project) return;
-      await ugcApi.updateProject(workspaceId, project.id, { script });
-      const { project: next, warnings } = await ugcApi.rewriteScript(
-        workspaceId,
-        project.id,
-        instruction,
-        durationSec,
-      );
-      setProject(next);
-      toast.success(warnings.length ? "Rewritten — check the flagged lines" : "Script rewritten");
-    });
-
-  const startRender = () =>
-    guard("render", "Couldn't start the video.", async () => {
-      if (!project || !settings) return;
-      if (busy) return;
-      if (project.brief.durationSec !== settings.durationSec) {
-        const updated = await ugcApi.updateProject(workspaceId, project.id, {
-          brief: { ...project.brief, durationSec: settings.durationSec },
-        });
-        setProject(updated);
-      }
-      const { render } = await ugcApi.startRender(workspaceId, {
-        projectId: project.id,
-        idempotencyKey: crypto.randomUUID(),
-        model: settings.model,
-        durationSec: settings.durationSec,
-        aspectRatio: settings.aspectRatio,
-        resolution: settings.resolution,
-        referenceAssetIds: settings.referenceIds,
-      });
-      setActiveRender(render);
-      setProject((p) =>
-        p ? { ...p, renders: [render, ...p.renders.filter((r) => r.id !== render.id)] } : p,
-      );
-      refreshAllowance();
-    });
-
-  const onSettled = useCallback(
-    (render: RenderView) => {
-      setProject((p) =>
-        p ? { ...p, renders: p.renders.map((r) => (r.id === render.id ? render : r)) } : p,
-      );
-      refreshAllowance();
-      if (render.status === "succeeded") {
-        emitAppEvent("assets:changed");
-        toast.success("Your video ad is ready");
-      }
-    },
-    [refreshAllowance],
-  );
-
-  const reachable = useMemo(
-    () => (id: StepId) => {
-      if (!project) return id === "product";
-      if (id === "product" || id === "brief") return true;
-      if (id === "concepts") return project.concepts.length > 0;
-      return Boolean(project.script);
-    },
-    [project],
-  );
-
-  if (loadError) {
-    return (
-      <ErrorState
-        title="Couldn't open this ad"
-        description={loadError}
-        onRetry={() => void load()}
-      />
-    );
-  }
-  if (projectId && !project) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-14 w-full rounded-full" />
-        <Skeleton className="h-80 rounded-[20px]" />
-      </div>
-    );
-  }
-
-  const showRender = step === "generate" && activeRender;
-  const cover = project?.references[0]?.url ?? project?.product.images[0]?.url ?? null;
-  const imported = !!source || project?.brief.scriptSource === "studio";
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon-sm" aria-label="All video ads" onClick={onExit}>
-          <ArrowLeft aria-hidden />
-        </Button>
-        <span
-          className={cn(
-            "grid size-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-[var(--ds-well-bg)]",
-          )}
-        >
-          {cover ? (
-            <img
-              src={cover}
-              alt=""
-              className="size-full! object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <Video className="size-4 text-muted-foreground" aria-hidden />
-          )}
-        </span>
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
-          {project?.title ?? "New video ad"}
-        </h3>
-      </div>
-      <Stepper current={step} reachable={reachable} onSelect={setStep} imported={imported} />
-      {imported && step === "product" ? (
-        <p className="text-sm text-muted-foreground">
-          Your script is carried over. Add the product to show in your video, then review the video
-          settings.
-        </p>
-      ) : null}
-
-      <AnimatePresence mode="wait">
-        {step === "product" ? (
-          <StepFrame key="product" stepKey="product">
-            <ProductStep
-              workspaceId={workspaceId}
-              workspaceWebsite={workspace.websiteUrl}
-              workspaceName={workspace.name}
-              initialProduct={project?.product ?? null}
-              initialReferences={project?.references ?? []}
-              saving={busy === "saving"}
-              onContinue={saveProduct}
-            />
-          </StepFrame>
-        ) : step === "brief" && project ? (
-          <StepFrame key="brief" stepKey="brief">
-            <BriefStep
-              workspaceId={workspaceId}
-              projectId={project.id}
-              initialBrief={project.brief}
-              product={project.product}
-              hasConcepts={project.concepts.length > 0}
-              busy={busy === "concepts" || busy === "saving"}
-              durationSec={durationSec}
-              onDurationChange={(seconds) =>
-                setSettings((s) => (s ? { ...s, durationSec: seconds } : s))
-              }
-              onBack={() => setStep("product")}
-              onGenerate={(brief) => void generateConcepts(brief)}
-              onSkipToConcepts={(brief) => void keepConcepts(brief)}
-            />
-          </StepFrame>
-        ) : step === "concepts" && project ? (
-          <StepFrame key="concepts" stepKey="concepts">
-            {busy === "concepts" || !project.concepts.length ? (
-              <ConceptsWriting />
-            ) : (
-              <ConceptsStep
-                workspaceId={workspaceId}
-                concepts={project.concepts}
-                selectedConceptId={project.selectedConceptId}
-                productImage={cover}
-                busy={false}
-                onBack={() => setStep("brief")}
-                onRegenerate={() => void generateConcepts(project.brief)}
-                onChoose={(concept, hook) => {
-                  const current =
-                    concept.id === project.selectedConceptId && project.script
-                      ? project.script
-                      : concept.script;
-                  void chooseConcept(concept.id, applyHook(current, hook));
-                }}
-              />
-            )}
-          </StepFrame>
-        ) : step === "script" && project?.script ? (
-          <StepFrame key="script" stepKey="script">
-            <ScriptStep
-              key={project.updatedAt}
-              initialScript={project.script}
-              product={project.product}
-              brief={project.brief}
-              durationSec={durationSec}
-              aspectRatio={
-                settings?.aspectRatio ?? platformPreset(project.brief.platform).aspectRatio
-              }
-              productImage={cover}
-              rewriting={busy === "rewrite"}
-              saving={busy === "saving"}
-              onBack={(script) => void saveScript(script, imported ? "product" : "concepts")}
-              onRewrite={(script, instruction) => void rewrite(script, instruction)}
-              onContinue={(script) => void saveScript(script, "generate")}
-            />
-          </StepFrame>
-        ) : step === "generate" && project && settings ? (
-          <StepFrame
-            key={showRender ? `render-${activeRender.id}` : "generate"}
-            stepKey={showRender ? `render-${activeRender.id}` : "generate"}
-          >
-            {showRender ? (
-              <RenderPanel
-                key={activeRender.id}
-                workspaceId={workspaceId}
-                render={activeRender}
-                script={project.script}
-                history={project.renders}
-                onSettled={onSettled}
-                regenerating={busy === "render"}
-                onRegenerate={() => void startRender()}
-                onEditSettings={() => setActiveRender(null)}
-                onSelectRender={setActiveRender}
-              />
-            ) : (
-              <GenerateStep
-                defaultModel={catalog?.defaultModel}
-                models={catalog?.models ?? []}
-                allowance={catalog?.allowance ?? null}
-                loadingModels={!catalog}
-                settings={settings}
-                references={project.references}
-                hook={project.script?.hook ?? ""}
-                script={project.script}
-                scriptDurationSec={Math.max(
-                  ...(project.script?.scenes.map((scene) => scene.end) ?? [durationSec]),
-                )}
-                generating={busy === "render"}
-                onChange={setSettings}
-                onBack={() => setStep("script")}
-                onGenerate={() => void startRender()}
-              />
-            )}
-          </StepFrame>
-        ) : (
-          <StepFrame key="fallback" stepKey="fallback">
-            <Panel className="text-sm text-muted-foreground">Finish the earlier steps first.</Panel>
-          </StepFrame>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

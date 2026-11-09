@@ -189,4 +189,44 @@ describe("Home → Animate", () => {
     expect(open.referenceAssetIds).toEqual(["a2"]);
     expect(open.extraControls).toMatchObject({ videoMode: "recap", recapMotion: "camera" });
   });
+
+  it("keeps an end frame only for a style that ends on its picture", () => {
+    const kept = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("living-picture"),
+      endFrame: { assetId: "b2" },
+    });
+    expect(kept.extraControls?.endFrameAssetId).toBe("b2");
+    expect(kept.brief).toContain("closing frame");
+    const story = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("brand-story"),
+      endFrame: { assetId: "b2" },
+    });
+    expect(story.extraControls?.endFrameAssetId).toBeUndefined();
+    // The same picture at both ends is just the default return.
+    const same = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("product-motion"),
+      endFrame: { assetId: "a1" },
+    });
+    expect(same.extraControls?.endFrameAssetId).toBeUndefined();
+  });
+
+  it("uses the shape and length picked on the canvas", () => {
+    const open = animateOpen({
+      picture: { assetId: "a1", ratio: "9:16", type: "image" },
+      target: style("living-picture"),
+      ratio: "16:9",
+      durationSec: 8,
+    });
+    expect(open.ratio).toBe("16:9");
+    expect(open.durationSec).toBe(8);
+    const motion = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("motion-post"),
+      durationSec: 8,
+    });
+    expect(motion.durationSec).toBeUndefined();
+  });
 });

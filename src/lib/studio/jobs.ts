@@ -106,6 +106,12 @@ export const ControlsSchema = z.object({
    * own photo and staged as a poster (ADR-0040); set by the server only.
    */
   referenceMode: z.enum(["preserve", "design", "edit", "inspire", "hero"]).optional(),
+  /**
+   * Video: a still the video settles on (Animate's "End frame"), checked
+   * against this workspace. Used only by the kinds in
+   * src/lib/studio/video/end-frame.ts, and only when the video opens on a picture.
+   */
+  endFrameAssetId: z.string().uuid().optional(),
   /** Design mode: keep the photos exact (default) or let the model blend them in. */
   photoFidelity: z.enum(["exact", "blend"]).optional(),
   /**

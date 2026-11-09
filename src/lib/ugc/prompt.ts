@@ -16,6 +16,7 @@ import {
   platformPreset,
   type ToneId,
 } from "./options";
+import { creatorPrompt, stockCreator } from "./creators";
 import type { Brief, Product, Scene, Script } from "./schemas";
 
 /** Natural conversational speech runs ~2.5 words/s; leave room to breathe. */
@@ -91,16 +92,28 @@ function aspectPhrase(ratio: UgcAspectRatio): string {
   }
 }
 
-function creatorPhrase(brief: Brief): string {
+function creatorPhrase(brief: Brief, creatorImage: boolean): string {
+  const audience = brief.audience
+    ? ` Someone the target audience (${brief.audience}) relates to.`
+    : "";
+  const stock = stockCreator(brief.creator.characterId);
+  if (creatorImage) {
+    const named = stock ? ` ${creatorPrompt(stock)}` : "";
+    return `The person in the first reference image, exactly as they look there: same face, hair, skin tone and build.${named}${audience} Natural look, real skin texture. The same person throughout.`;
+  }
+  if (stock) {
+    const vibe = CREATOR_VIBES.find((v) => v.id === stock.vibe)?.prompt ?? "warm and approachable";
+    return `One everyday content creator: ${creatorPrompt(stock)} Comes across ${vibe}.${audience} Natural look, real skin texture. The same person throughout, looking exactly as described.`;
+  }
   const who =
     brief.creator.gender === "woman" ? "woman" : brief.creator.gender === "man" ? "man" : "person";
   const age = brief.creator.age === "any" ? "" : ` aged ${brief.creator.age.replace("-", " to ")}`;
   const vibe =
     CREATOR_VIBES.find((v) => v.id === brief.creator.vibe)?.prompt ?? "warm and approachable";
-  const audience = brief.audience
+  const relates = brief.audience
     ? `, someone the target audience (${brief.audience}) relates to`
     : "";
-  return `One everyday content creator: a ${who}${age}, ${vibe}${audience}. Natural look, real skin texture, casual clothing. The same person throughout.`;
+  return `One everyday content creator: a ${who}${age}, ${vibe}${relates}. Natural look, real skin texture, casual clothing. The same person throughout.`;
 }
 
 function settingPhrase(brief: Brief, product: Product): string {
@@ -126,6 +139,8 @@ export type PromptInput = {
   brandVoice?: string;
   /** Look and pacing from the Brand Kit Style (ugcStyleNotes), if any. */
   styleNotes?: string;
+  /** The first image sent is the creator (one of the brand's people), the rest the product. */
+  creatorImage?: boolean;
 };
 
 export function buildVideoPrompt(input: PromptInput): string {
@@ -147,7 +162,8 @@ export function buildVideoPrompt(input: PromptInput): string {
     `${aspectPhrase(aspectRatio)} ${durationSec}-second user-generated-content (UGC) video ad for ${productName}, filmed as a ${platform.native}.`,
   );
   lines.push("");
-  lines.push(`CREATOR: ${creatorPhrase(brief)}`);
+  const creatorImage = !!input.creatorImage && imageMode === "references";
+  lines.push(`CREATOR: ${creatorPhrase(brief, creatorImage)}`);
   lines.push(`SETTING: ${settingPhrase(brief, product)}`);
   lines.push(
     `CAMERA & LOOK: ${CAMERA_BY_TONE[brief.tone]}. Realistic smartphone footage, true-to-life colour, no cinematic grading, no film look, no slow-motion, no drone or crane shots.`,
@@ -163,11 +179,12 @@ export function buildVideoPrompt(input: PromptInput): string {
   const productLine = [
     `PRODUCT: ${productName}${product.category ? ` (${product.category})` : ""}.`,
   ];
-  if (imageMode === "references") {
+  const productImages = creatorImage ? input.imageCount - 1 : input.imageCount;
+  if (imageMode === "references" && productImages > 0) {
     productLine.push(
-      "It must look exactly like the product in the reference image(s): same shape, colours, materials, label and packaging design. Do not redesign, recolour or add parts.",
+      `It must look exactly like the product in the ${creatorImage ? "other reference image(s)" : "reference image(s)"}: same shape, colours, materials, label and packaging design. Do not redesign, recolour or add parts.`,
     );
-  } else if (imageMode === "first_frame") {
+  } else if (imageMode === "first_frame" && !creatorImage) {
     productLine.push(
       "The video opens on the provided product image; keep the product identical to that image for the whole video.",
     );

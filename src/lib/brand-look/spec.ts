@@ -172,6 +172,18 @@ export const VideoSchema = z.object({
   outro: short(200).optional(),
   music: short(160).optional(),
   notes: short(600).optional(),
+  /**
+   * The brand's own creator for every Creator (UGC) video: a ready-made
+   * creator id (src/lib/ugc/creators.ts) or one of the brand's people (an
+   * Inspo "Person" asset). Not a style: it doesn't make the look "customized".
+   */
+  creator: z
+    .object({
+      id: short(40).optional(),
+      personAssetId: z.string().uuid().optional(),
+      name: short(60).optional(),
+    })
+    .optional(),
 });
 export type VideoStyle = z.infer<typeof VideoSchema>;
 

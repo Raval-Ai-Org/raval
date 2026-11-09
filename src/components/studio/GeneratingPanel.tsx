@@ -213,21 +213,25 @@ export function GeneratingPanel({ className }: { className?: string }) {
   });
   // A piece whose start request hasn't answered yet has no job to follow;
   // list it too, so pressing Generate always shows something here.
-  const starting: GeneratingRow[] = sessions
-    .filter(
-      (s) =>
-        s.pendingKey &&
-        !s.job &&
-        s.window === "minimized" &&
-        (!workspaceId || s.workspaceId === workspaceId),
-    )
-    .map((s) => ({
-      id: `session:${s.id}`,
-      type: s.type,
-      state: "working",
-      title: s.brief.trim().slice(0, 80) || undefined,
-      step: "Starting",
-    }));
+  const startingSessions = sessions.filter(
+    (s) =>
+      s.pendingKey &&
+      !(s.job && isActiveJob(s.job)) &&
+      s.window === "minimized" &&
+      (!workspaceId || s.workspaceId === workspaceId),
+  );
+  // A new piece always brings the card back, even after it was closed.
+  const startingKey = startingSessions.map((s) => s.pendingKey).join(",");
+  useEffect(() => {
+    if (startingKey) setClosed(false);
+  }, [startingKey]);
+  const starting: GeneratingRow[] = startingSessions.map((s) => ({
+    id: `session:${s.id}`,
+    type: s.type,
+    state: "working",
+    title: s.brief.trim().slice(0, 80) || undefined,
+    step: "Starting",
+  }));
   const all = [...tasks, ...starting, ...rows];
 
   return (

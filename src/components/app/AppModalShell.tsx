@@ -96,6 +96,7 @@ export function AppModalShell({
   children,
   srDescription,
   navId,
+  onBack,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -120,6 +121,11 @@ export function AppModalShell({
   srDescription?: string;
   /** The sidebar row this window belongs to (nav.ts id), highlighted while open. */
   navId?: string;
+  /**
+   * In the canvas, Back steps one level out (a pick inside the window)
+   * instead of closing it. Esc does the same. Leave unset at the top level.
+   */
+  onBack?: () => void;
 }) {
   const [maximized, setMaximized] = useState(false);
   // Small windows on a phone are bottom sheets that slide up (see SIZE_MAP).
@@ -178,7 +184,10 @@ export function AppModalShell({
               }}
               onEscapeKeyDown={(e) => {
                 if (disableClose) e.preventDefault();
-                else if (maximized) {
+                else if (onBack) {
+                  e.preventDefault();
+                  onBack();
+                } else if (maximized) {
                   // Esc first returns from the full page to the window.
                   e.preventDefault();
                   setMaximized(false);
@@ -291,7 +300,17 @@ export function AppModalShell({
                       <BackIcon className="h-4 w-4" />
                     </button>
                   )}
-                  {embed && !maximized && !hideClose && (
+                  {embed && !maximized && !hideClose && onBack && (
+                    <button
+                      type="button"
+                      onClick={onBack}
+                      aria-label="Back one step"
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                      <BackIcon className="h-4 w-4" /> Back
+                    </button>
+                  )}
+                  {embed && !maximized && !hideClose && !onBack && (
                     // In the page (Holo): a Back pill, not a close cross.
                     <DialogPrimitive.Close
                       aria-label="Close dialog"
@@ -301,7 +320,18 @@ export function AppModalShell({
                       <BackIcon className="h-4 w-4" /> Back
                     </DialogPrimitive.Close>
                   )}
-                  {Icon && !embed && (
+                  {!embed && !maximized && onBack && (
+                    <button
+                      type="button"
+                      onClick={onBack}
+                      aria-label="Back one step"
+                      title="Back"
+                      className={iconBtn}
+                    >
+                      <BackIcon className="h-4 w-4" />
+                    </button>
+                  )}
+                  {Icon && !embed && !onBack && (
                     <span className="ds-grad-pill hidden h-10 w-10 shrink-0 place-items-center rounded-[14px] text-[var(--mox-ink)] shadow-[0_8px_18px_-10px_rgb(46_230_107/0.9)] min-[420px]:grid">
                       <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
                     </span>

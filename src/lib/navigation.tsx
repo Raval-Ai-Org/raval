@@ -71,6 +71,21 @@ export function useNavigate() {
   );
 }
 
+/** Warm a page before it is opened (a pointer reached its link). */
+export function usePrefetch() {
+  const router = useRouter();
+  return useCallback(
+    (to: string) => {
+      try {
+        router.prefetch(buildHref(to));
+      } catch {
+        // Prefetching is a nicety; a failure changes nothing.
+      }
+    },
+    [router],
+  );
+}
+
 export type RouterState = {
   location: { pathname: string; search: Record<string, string>; href: string };
   isLoading: boolean;

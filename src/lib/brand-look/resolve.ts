@@ -103,6 +103,12 @@ export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
     video: spec.video ?? {},
     rules: { do: d.doRules?.trim() || null, dont: d.dontRules?.trim() || null },
     logoUrl: d.logoUrl || null,
-    customized: !!(spec.writing || spec.visual || spec.video),
+    // The brand's creator alone is a choice of person, not a style.
+    customized: !!(spec.writing || spec.visual || videoStyled(spec.video)),
   };
+}
+
+function videoStyled(video: VideoStyle | undefined): boolean {
+  if (!video) return false;
+  return Object.entries(video).some(([key, value]) => key !== "creator" && value !== undefined);
 }

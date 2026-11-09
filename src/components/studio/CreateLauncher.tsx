@@ -1,15 +1,18 @@
 "use client";
 
-// The one entry point for making something (Holo's "Choose creation method"):
-// a banner, then a two-column grid of choices, each with a picture. Pick a
-// category, then a format when there is more than one. Standard formats open
-// the Studio composer on the description step; the creator video ad opens
-// its own studio.
+// The one entry point for making something (Holo's "Choose creation method").
+// On desktop it is a page on the canvas, not a pop-up: a centred two-column
+// grid of method cards. Pick a category, then a format when there is more
+// than one; the grid slides to the next step in place and Back is one step
+// out. Standard formats open the Studio composer (also on the canvas); the
+// creator video ad opens its own studio.
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { useEffect, useState, type CSSProperties } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Illustration, type IlloKind } from "@/components/app/home/illustrations";
-import { ArrowLeft, ArrowRight, Sparkles } from "@/components/icons";
+import { ArrowRight, Sparkles } from "@/components/icons";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import {
   STUDIO_FORMATS,
@@ -40,7 +43,7 @@ const TYPE_ILLO: Record<StudioType, IlloKind> = {
   ad: "ad",
 };
 
-/** One short line per category (the banner and the card). */
+/** One short line per category (the heading and the card). */
 const GROUP_LINE: Record<StudioGroup, string> = {
   video: "Clips and reels",
   stories: "Full-screen frames",
@@ -69,7 +72,7 @@ function optionsFor(group: StudioGroup): Option[] {
 
 const rise = (i: number) => ({ ["--i" as string]: i }) as CSSProperties;
 
-/** A Holo method card: picture tile, bold title, one grey line. */
+/** A Holo method card: picture on the left, bold title, one grey line. */
 function MethodCard({
   label,
   line,
@@ -92,37 +95,44 @@ function MethodCard({
       type="button"
       onClick={onClick}
       style={rise(index)}
-      className="ds-card ds-card-hover ds-rise group relative flex min-h-[76px] min-w-0 items-center gap-3 p-2.5 text-left active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:p-1.5"
+      className="ds-card ds-card-hover ds-rise group relative flex min-h-[84px] min-w-0 items-center gap-3.5 p-2.5 pr-4 text-left active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-[419px]:min-h-0 max-[419px]:flex-col max-[419px]:items-start max-[419px]:gap-1.5 max-[419px]:pr-2.5 [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:p-1.5"
     >
       <span className="sr-only">{label}</span>
       <span
         aria-hidden
-        className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105 max-[359px]:size-11 [@media(max-height:500px)]:size-10"
+        className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-[18px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105 max-[419px]:size-12 max-[419px]:rounded-[14px] [@media(max-height:500px)]:size-10"
       >
-        <Illustration kind={illo} className="size-14 max-[359px]:size-11" />
+        <Illustration
+          kind={illo}
+          className="size-16 max-[419px]:size-12 [@media(max-height:500px)]:size-10"
+        />
       </span>
-      <span aria-hidden className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-[14.5px] font-bold tracking-[-0.01em] max-[359px]:text-[13px]">
+      <span
+        aria-hidden
+        className={`min-w-0 flex-1 max-[419px]:w-full${badge ? " pr-10 max-[419px]:pr-0" : ""}`}
+      >
+        <span className="flex items-center gap-1.5 text-[16px] font-bold tracking-[-0.015em] max-[419px]:text-[14px]">
           <span className="truncate">{label}</span>
           {lock}
         </span>
-        <span className="mt-0.5 line-clamp-2 block text-[11.5px] leading-snug text-muted-foreground max-[359px]:text-[11px]">
+        <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-muted-foreground max-[419px]:text-[11px] [@media(max-height:500px)]:line-clamp-1">
           {line}
         </span>
       </span>
       {badge ? (
+        // Holo's sticker: a tilted pill in the card's corner (inside it: the
+        // hover card clips what overhangs).
         <span
           aria-hidden
-          className="ds-grad-pill shrink-0 self-start rounded-full px-2 py-0.5 text-[10px] font-bold shadow-[0_6px_14px_-6px_rgb(46_230_107/0.9)]"
+          className="ds-grad-pill absolute right-2 top-2 rotate-[6deg] rounded-full px-2.5 py-0.5 text-[10.5px] font-bold shadow-[0_6px_14px_-6px_rgb(46_230_107/0.9)] transition-transform group-hover:rotate-0"
         >
           {badge}
         </span>
-      ) : (
-        <ArrowRight
-          aria-hidden
-          className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 max-[359px]:hidden"
-        />
-      )}
+      ) : null}
+      <ArrowRight
+        aria-hidden
+        className="size-4 shrink-0 text-muted-foreground opacity-0 transition-[opacity,transform] group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100 max-[419px]:hidden"
+      />
     </button>
   );
 }
@@ -131,6 +141,7 @@ export function CreateLauncher() {
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState<StudioGroup | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const reduce = useReducedMotionSafe();
 
   useEffect(() => {
     const onOpen = () => {
@@ -161,6 +172,9 @@ export function CreateLauncher() {
   };
 
   const group = STUDIO_GROUPS.find((g) => g.id === groupId) ?? null;
+  // Forward slides in from the right, Back from the left.
+  const dir = group ? 1 : -1;
+  const shift = reduce ? 0 : 36;
 
   return (
     <>
@@ -168,93 +182,97 @@ export function CreateLauncher() {
         navId="create"
         open={open}
         onOpenChange={setOpen}
-        size="sm"
+        // Big, so on desktop it is a page on the canvas (Back pill, no
+        // blurred backdrop); on phones it is a full screen.
+        size="xl"
+        allowMaximize={false}
         Icon={Sparkles}
-        title="Create"
+        title={group ? group.label : "Create"}
+        onBack={group ? () => setGroupId(null) : undefined}
         srDescription="Choose what to make, then pick a format if there are multiple options."
-        headerAccessory={
-          group ? (
-            <button
-              type="button"
-              onClick={() => setGroupId(null)}
-              aria-label="Back to all categories"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 lg:min-h-9"
-            >
-              <ArrowLeft className="size-4" />
-              Back
-            </button>
-          ) : null
-        }
-        bodyClassName="overflow-x-hidden px-3 pb-4 pt-1 sm:px-5 sm:pb-5 [@media(max-height:500px)]:p-2"
+        bodyClassName="overflow-x-hidden px-4 pb-6 pt-1 sm:px-8 [@media(max-height:500px)]:p-2"
       >
-        {/* Banner (Holo): the Mox wash, one bold line and a picture. Hidden
-            on short screens so the choices always fit. */}
-        <div
-          key={group?.id ?? "all"}
-          className="ds-enter relative mb-4 h-[112px] overflow-hidden rounded-[20px] [background:var(--mox-gradient)] px-5 py-4 [@media(max-height:700px)]:hidden"
-        >
-          <span
-            aria-hidden
-            className="absolute inset-0 bg-[radial-gradient(70%_120%_at_100%_100%,rgb(255_255_255/0.55),transparent_60%)]"
-          />
-          <p className="relative text-[20px] font-bold leading-tight tracking-[-0.02em] text-[var(--mox-ink)]">
-            {group ? group.label : "Make something new"}
-          </p>
-          <p className="relative mt-1 text-[12.5px] font-medium text-[var(--mox-ink)]/70">
-            {group ? GROUP_LINE[group.id] : "On brand, every time."}
-          </p>
-          <Illustration
-            kind={group ? GROUP_ILLO[group.id] : "rocket"}
-            className="mox-float absolute -bottom-3 right-3 h-[120px] w-[150px]"
-          />
+        <div className="flex min-h-full flex-col items-center justify-center py-2 sm:py-8 [@media(max-height:500px)]:py-0">
+          <div className="w-full max-w-[720px]">
+            <AnimatePresence mode="wait" initial={false} custom={dir}>
+              <motion.div
+                key={group?.id ?? "all"}
+                custom={dir}
+                variants={{
+                  in: (d: number) => ({ opacity: 0, x: d * shift }),
+                  show: { opacity: 1, x: 0 },
+                  out: (d: number) => ({ opacity: 0, x: d * -shift }),
+                }}
+                initial="in"
+                animate="show"
+                exit="out"
+                transition={{ type: "spring", stiffness: 460, damping: 38, mass: 0.7 }}
+              >
+                <div className="mb-6 text-center max-[419px]:mb-4 [@media(max-height:500px)]:hidden">
+                  <h3 className="text-[24px] font-bold leading-tight tracking-[-0.025em] max-[419px]:text-[21px] sm:text-[28px]">
+                    {group ? (
+                      <>
+                        Choose a <span className="ds-grad-text">format</span>
+                      </>
+                    ) : (
+                      <>
+                        What do you want to <span className="ds-grad-text">make</span>?
+                      </>
+                    )}
+                  </h3>
+                  <p className="mt-1.5 text-[13px] text-muted-foreground max-[419px]:hidden">
+                    {group ? GROUP_LINE[group.id] : "On brand, every time."}
+                  </p>
+                </div>
+
+                {!group ? (
+                  <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-1.5">
+                    {STUDIO_GROUPS.map((g, i) => (
+                      <MethodCard
+                        key={g.id}
+                        index={i}
+                        label={g.label}
+                        line={GROUP_LINE[g.id]}
+                        illo={GROUP_ILLO[g.id]}
+                        onClick={() => enter(g.id)}
+                      />
+                    ))}
+                    <MethodCard
+                      index={STUDIO_GROUPS.length}
+                      label="Upload"
+                      line="Design with your own photo or video"
+                      illo="website"
+                      onClick={() => {
+                        setOpen(false);
+                        setUploadOpen(true);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:gap-1.5">
+                    {optionsFor(group.id).map((o, i) => {
+                      const lock = lockFor(o);
+                      return (
+                        <MethodCard
+                          key={o.kind === "ugc" ? "ugc" : o.type}
+                          index={i}
+                          label={o.label}
+                          line={o.tagline}
+                          illo={o.kind === "ugc" ? "video" : TYPE_ILLO[o.type]}
+                          badge={
+                            i === 0 && !lock ? (o.kind === "ugc" ? o.badge : "Best") : undefined
+                          }
+                          lock={lock ? <PlanLock plan={lock} /> : undefined}
+                          onClick={() => pick(o)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
-
-        <p className="mb-2.5 px-0.5 text-[15px] font-bold tracking-[-0.01em] [@media(max-height:500px)]:hidden">
-          {group ? "Choose a format" : "What do you want to make?"}
-        </p>
-
-        {!group ? (
-          <div className="grid grid-cols-1 gap-2.5 min-[320px]:grid-cols-2 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-1.5">
-            {STUDIO_GROUPS.map((g, i) => (
-              <MethodCard
-                key={g.id}
-                index={i}
-                label={g.label}
-                line={GROUP_LINE[g.id]}
-                illo={GROUP_ILLO[g.id]}
-                onClick={() => enter(g.id)}
-              />
-            ))}
-            <MethodCard
-              index={STUDIO_GROUPS.length}
-              label="Upload"
-              line="Your own photo or video"
-              illo="website"
-              onClick={() => {
-                setOpen(false);
-                setUploadOpen(true);
-              }}
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2">
-            {optionsFor(group.id).map((o, i) => {
-              const lock = lockFor(o);
-              return (
-                <MethodCard
-                  key={o.kind === "ugc" ? "ugc" : o.type}
-                  index={i}
-                  label={o.label}
-                  line={o.tagline}
-                  illo={o.kind === "ugc" ? "video" : TYPE_ILLO[o.type]}
-                  badge={i === 0 && !lock ? (o.kind === "ugc" ? o.badge : "Best") : undefined}
-                  lock={lock ? <PlanLock plan={lock} /> : undefined}
-                  onClick={() => pick(o)}
-                />
-              );
-            })}
-          </div>
-        )}
       </AppModalShell>
       <UploadCreationFlow open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </>

@@ -16,7 +16,8 @@ import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { CampaignDesigner } from "./CampaignDesigner";
 import { CampaignDetail } from "./CampaignDetail";
-import { PhaseRail, StatusPill, countdown, kindIcon } from "./kit";
+import { CampaignArt } from "./CampaignArt";
+import { PhaseRail, StatusPill, countdown } from "./kit";
 import { Gallery } from "./Gallery";
 import { Timeline } from "./Timeline";
 import type { CampaignsHandlers, CampaignsMode, CampaignsTab, CampaignsView } from "./types";
@@ -344,7 +345,6 @@ function CampaignCard({
   onOpen(): void;
 }) {
   const playbook = playbookById(c.type);
-  const Icon = kindIcon(playbook?.icon);
   const phase = currentPhase(c.plan.phases, today);
   const next = c.pieces.find(
     (p) => p.date >= today && p.state !== "out" && p.state !== "cancelled",
@@ -363,9 +363,7 @@ function CampaignCard({
         className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full bg-primary/10 blur-2xl transition-opacity duration-500 group-hover:opacity-100 @md:opacity-70"
       />
       <div className="relative flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/12 text-primary-ink ring-1 ring-primary/20">
-          <Icon className="size-5" />
-        </span>
+        <CampaignArt title={c.name} type={c.type} size="tile" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold tracking-tight">{c.name}</p>
           <p className="truncate text-[12px] text-muted-foreground">
@@ -434,7 +432,6 @@ function Suggestions({
   return (
     <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] @3xl/campaigns:mx-0 @3xl/campaigns:grid @3xl/campaigns:grid-cols-3 @3xl/campaigns:overflow-visible @3xl/campaigns:px-0 [&::-webkit-scrollbar]:hidden">
       {items.map((s, i) => {
-        const Icon = kindIcon(playbookById(s.type)?.icon);
         return (
           <motion.div
             key={s.id}
@@ -443,16 +440,14 @@ function Suggestions({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: duration.slow, ease: ease.emphasized, delay: i * 0.05 }}
           >
-            <div className="ds-tile flex h-full flex-col gap-3 p-4">
-              <div className="flex items-center gap-2">
-                <span className="grid size-8 place-items-center rounded-xl bg-primary/12 text-primary-ink">
-                  <Icon className="size-4" />
-                </span>
-                <span className="text-[11px] font-medium text-muted-foreground">
+            <div className="ds-tile ds-tile-hover group flex h-full flex-col gap-3 p-3">
+              <div className="relative">
+                <CampaignArt title={s.title} type={s.type} />
+                <span className="absolute left-2.5 top-2.5 rounded-full bg-[var(--ds-card-bg)]/90 px-2.5 py-1 text-[11px] font-semibold text-foreground/80 shadow-sm backdrop-blur">
                   {SOURCE_LABELS[s.source]}
                 </span>
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 px-1">
                 <p className="text-[14px] font-semibold leading-snug">{s.title}</p>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{s.why}</p>
               </div>
@@ -460,7 +455,7 @@ function Suggestions({
                 type="button"
                 data-testid="plan-suggestion"
                 onClick={() => handlers.go({ kind: "new", type: s.type, prefill: s.brief })}
-                className={cn(dsGhostBtn, "h-8 self-start px-3 text-[12.5px]")}
+                className={cn(dsGhostBtn, "ml-1 h-8 self-start px-3 text-[12.5px]")}
               >
                 <Lightbulb className="size-3.5" />
                 Plan this

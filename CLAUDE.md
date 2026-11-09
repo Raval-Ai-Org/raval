@@ -217,7 +217,12 @@ Brand Styles and the Brand Kit are gone — never add them back).
     Video look and Voice write `dna.look` via `tidyLook`. No new table.
   - "Learn my style" is the existing paid analysis with the price on the
     button; a direction is used only after "Use this". Style strength and the
-    voice sample are pure and free.
+    voice sample are pure and free. The first read of the brand's site is
+    the included one and starts by itself when an editor first opens Inspo
+    (no profile, no job yet); every repeat is a click with its price.
+  - Creator (UGC) videos pick from the Brand DNA catalogue first
+    (`ugcProductFromCatalogue`, `src/lib/ugc/from-catalogue.ts`): the
+    product's stored facts and its own photo assets, no second page read.
   - Brand DNA keeps one Inspo tile; `?t=look` / `?t=assets` / `/brand-kit`
     land in Inspo. `dna.assets` is not edited any more.
 - **One scan fills three brains.** A Brand DNA scan (`BrandDnaSurface`) then
@@ -301,8 +306,11 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
 
 - **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
   website → goal (asked while the scan runs) → Brand DNA → language → products
-  → channels → finish. "I don't have a website" swaps the scan for three
-  questions. New projects always start in onboarding. It ends with
+  → channels → finish. "I don't have a website" swaps the scan for the brand
+  kit (`ManualBrandStep`, pure `src/lib/onboarding/manual-brand.ts`): basics,
+  category, look (logo, colours, tone), inspiration (Inspo Love references) and
+  competitors, only the basics required; `manualDnaFields` is the one mapping
+  into Brand DNA and never fills a skipped field. New projects always start in onboarding. It ends with
   press-and-hold (`HoldToEnter`) and the visor cinematic (`VisorTransition`),
   then `StartHereModal` on Home. The finish is the big visor Mox and one
   small hold pill, no visible words (header hidden); it goes in by itself
@@ -952,6 +960,44 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   then it fails plainly. The logo and photos go into `data-slot` images,
   placed by code. Craft rules and layouts live in `principles.ts`, never in
   the prompt only. Priced `motion_graphics`.
+
+## Creator (UGC) video ads
+
+- **One Holo-style screen** (`components/app/ugc/CreatorComposer.tsx`,
+  presentational; data in `UgcStudio.tsx`): pick a creator on the left; the
+  product, script, emotion, place, platform and length on the right; Generate
+  floats bottom right. "Create" / "Your videos" pills on top. No step wizard;
+  never bring back product → brief → ideas → script → generate.
+- **The product comes from Brand DNA** (`listProducts` →
+  `ugcProductFromCatalogue`). The composer never reads a product page;
+  "Add product" opens Brain → Brand → Products.
+- **Creators** (`src/lib/ugc/creators.ts`, pure): written personas of
+  original, fictional people, never photos of real people (no Instagram, no
+  Arcads or other licensed actors). Ids are stored on
+  `brief.creator.characterId` and the brand look: add, never rename.
+  - Photos are generated once by `scripts/generate-creator-portraits.mjs`
+    into `public/creators/<id>.jpg`, which also rewrites
+    `creator-photos.ts`; `CreatorFace` shows the photo, else the drawn
+    `CreatorPortrait`. Creators with a photo are listed and suggested first.
+    The photo is the first reference image for a multi-reference model
+    (`stockCreatorAsset`, stored once per workspace).
+  - `suggestCreators` picks "For your brand" from industry, audience and
+    products (string work, no model call).
+  - The brand's own people are Inspo "Person" assets
+    (`brief.creator.personAssetId`), re-checked on the server; the ones read
+    from its website lead the list.
+  - "Create your own" (`POST /api/ugc/creators`, charged `image_standard`)
+    makes one photo of an original person from a description
+    (`creatorPhotoPrompt`) and saves it as a Person. `customCreatorProblem`
+    refuses lookalike or celebrity wording before anything is spent.
+- **Brand face:** `look.video.creator` (Inspo → Video look, or "Use always"
+  in the composer) is used when a brief names no creator
+  (`withBrandCreator`). It doesn't make the look `customized`.
+- **A typed script is free** (`scriptFromText`, `src/lib/ugc/script-text.ts`);
+  only "Write it for me" spends (`ugc_concepts`). An untouched written script
+  keeps its shots.
+- `/layout-lab?scene=ugc-create|ugc-empty` renders the composer with sample
+  data (`tests/integration/script-video-flow.spec.ts`).
 
 ## Studio: carousels, trends and content memory
 

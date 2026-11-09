@@ -10,6 +10,8 @@ import { ChannelsStep } from "./ChannelsStep";
 import { FinishStep } from "./FinishStep";
 import { GoalStep, emptyGoalDraft, type GoalDraft } from "./GoalStep";
 import { ManualBrandStep, emptyManualBrand, type ManualBrand } from "./ManualBrandStep";
+import type { InspoItem } from "./manual/use-manual-inspiration";
+import { MANUAL_PARTS, type ManualPart } from "@/lib/onboarding/manual-brand";
 import { ProductsStep } from "./ProductsStep";
 import { ScanStrip } from "./ScanStrip";
 import type { ProductDraft } from "./ProductCard";
@@ -116,6 +118,8 @@ export function OnboardingLab() {
     channels: ["instagram"],
   });
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
+  const [manualPart, setManualPart] = useState<ManualPart>("basics");
+  const [inspo, setInspo] = useState<InspoItem[]>([]);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [incoming, setIncoming] = useState<ProductCandidate[]>([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -123,6 +127,44 @@ export function OnboardingLab() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setStep(params.get("step") ?? "goals");
+    const part = params.get("part") as ManualPart | null;
+    if (part && MANUAL_PARTS.includes(part)) {
+      setManualPart(part);
+      setManual({
+        ...emptyManualBrand,
+        brandName: "Northwind Coffee",
+        oneLiner: "Small-batch coffee roasted in Leeds, delivered weekly",
+        industry: "Food & drink",
+        audience: "Busy professionals who care where their coffee comes from",
+        voice: ["friendly", "expert"],
+        colors: ["#1F3B2D", "#C8F169", "#F4F1EA"],
+        competitors: [{ name: "Bean Bros", url: "https://beanbros.example" }],
+      });
+      setInspo([
+        {
+          key: "i1",
+          label: "cold.png",
+          preview: swatch("#e8e2d6", "#2b2118", "COLD"),
+          link: null,
+          status: "done",
+        },
+        {
+          key: "i2",
+          label: "beans.png",
+          preview: swatch("#f1ece4", "#5b3a29", "BEANS"),
+          link: null,
+          status: "uploading",
+        },
+        {
+          key: "i3",
+          label: "instagram.com",
+          preview: null,
+          link: "https://instagram.com/p/x",
+          status: "error",
+          error: "We couldn't download this link.",
+        },
+      ]);
+    }
     setBeat((params.get("beat") as Beat | null) ?? null);
     if (params.get("empty") === "1") setProducts([]);
     // `?saving=1`: what the scan found is still being kept.
@@ -174,13 +216,42 @@ export function OnboardingLab() {
           </div>
         )}
         {step === "manual" && (
-          <div className="mx-auto max-w-xl">
+          <div className="mx-auto max-w-5xl">
             <ManualBrandStep
               value={manual}
+              part={manualPart}
+              inspirations={inspo}
+              reduce
               headingRef={headingRef}
               onChange={(p) => setManual((m) => ({ ...m, ...p }))}
-              onBack={record("back")}
-              onContinue={record("manual:continue")}
+              onPart={(part) => {
+                setManualPart(part);
+                setLast(`part:${part}`);
+              }}
+              onAddInspoFiles={(files) => {
+                setInspo((list) => [
+                  ...list,
+                  ...files.map((f, i) => ({
+                    key: `f${list.length + i}`,
+                    label: f.name,
+                    preview: URL.createObjectURL(f),
+                    link: null,
+                    status: "done" as const,
+                  })),
+                ]);
+                return null;
+              }}
+              onAddInspoLink={(url) => {
+                setInspo((list) => [
+                  ...list,
+                  { key: `l${list.length}`, label: url, preview: null, link: url, status: "done" },
+                ]);
+                return null;
+              }}
+              onRemoveInspo={(key) => setInspo((list) => list.filter((i) => i.key !== key))}
+              onRetryInspo={record("inspo:retry")}
+              onHaveWebsite={record("back")}
+              onDone={record("manual:continue")}
             />
           </div>
         )}

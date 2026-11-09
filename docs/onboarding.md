@@ -11,7 +11,7 @@ needs. The flow is pure and tested.
 | Step                                  | Component                                                     | Needs to continue                        |
 | ------------------------------------- | ------------------------------------------------------------- | ---------------------------------------- |
 | Website                               | `UrlStep`                                                     | a valid URL, or "I don't have a website" |
-| Your brand (no website)               | `ManualBrandStep`                                             | a name and a one-liner                   |
+| Your brand (no website)               | `ManualBrandStep` (five parts, see below)                     | a name and a one-liner                   |
 | Your goal                             | `GoalStep` + `ScanStrip` while the scan runs                  | a goal saved through `saveGoals`         |
 | Scan (only if the goal is done first) | `ScanStage`                                                   | the scan finishes                        |
 | Brand DNA                             | `BrandReveal`                                                 | — (saves Brand DNA)                      |
@@ -21,6 +21,39 @@ needs. The flow is pure and tested.
 
 Leaving Products marks the workspace onboarded. Channels and first posts are
 extras: a person who closes the tab there still has a set-up brand.
+
+## No website: the brand kit
+
+"I don't have a website" opens `ManualBrandStep`: five short parts, one at a
+time (Basics → Category → Look → Inspiration → Competitors), Mox asking each,
+with a live card of the brand filling in beside them (under them on a phone).
+Only the basics (name and one line) are needed; every other part has "Skip for
+now", and Brain / Inspo fill the rest later.
+
+- **Pure rules** in `src/lib/onboarding/manual-brand.ts` (tested): categories,
+  tones, ready-made palettes, colour helpers, `paletteFromPixels` (a logo's own
+  colours), `addCompetitor`, `kitScore`, and `manualDnaFields`, the only
+  mapping into Brand DNA. An empty answer stays empty (never a guess) and is
+  listed in `missing`; filled fields carry a "set by you" source.
+- **Logo:** redrawn in the browser (`manual/logo.ts`) as a PNG/WebP of at most
+  512 px and ~350 kB, stored on `dna.logoUrl` as an inline image, which the
+  logo overlay already reads. An empty palette is filled from the logo.
+- **Colours:** `dna.colors` with roles Primary / Secondary / Accent, so
+  `paletteFromDnaColors` maps them; tone becomes `dna.voice`.
+- **Inspiration:** each picture or link is an Inspo "Love" reference
+  (`brand_visual_sources`, purpose `style`) through
+  `POST /api/brand-visuals/upload` (`manual/use-manual-inspiration.ts`), so it
+  is on the Inspo board afterwards. Uploading is free; "Learn my style" stays a
+  click in Inspo.
+- **Competitors:** name and optional site on `dna.competitors`; finishing calls
+  the included `bootstrapCompetitors`, which tracks them (looking up a site
+  from a name). A plan without competitor tracking skips it quietly.
+- **Products:** the normal Products step; a services brand is offered "Add a
+  service" first.
+- The draft survives a refresh in this browser (`onboarding:manual:<id>`) and
+  is cleared when setup finishes or is skipped.
+- `/onboarding-lab?step=manual` (and `&part=look` etc. for a filled kit)
+  renders it; `tests/integration/onboarding-lab.spec.ts` walks it.
 
 ## Goals
 

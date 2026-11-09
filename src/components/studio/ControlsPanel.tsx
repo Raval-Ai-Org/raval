@@ -22,6 +22,7 @@ import { isAiVideo, settleVideoControls } from "@/lib/studio/video/settle";
 import { DEFAULT_STUDIO_VIDEO_MODEL, recommendedModel } from "@/lib/studio/video/kinds";
 import { lengthChoices } from "@/lib/studio/video/lengths";
 import { VideoKindPicker } from "./VideoKindPicker";
+import { showsVideoCanvas } from "./VideoCanvasSettings";
 
 const MODEL_NAMES: Partial<Record<string, string>> = {
   draft: "Economy",
@@ -172,7 +173,10 @@ export function ControlsPanel({
       ? "4:5"
       : recommendedRatio(c.platforms, mediaKind, format.ratios)
     : undefined;
+  // A video's shape and length sit on the canvas (VideoCanvasSettings).
+  const onCanvas = showsVideoCanvas(session);
   const showRatio =
+    !onCanvas &&
     session.type !== "story" &&
     format.ratios.length > 0 &&
     (format.media !== "optional-image" || c.includeImage || session.type === "carousel");
@@ -240,7 +244,7 @@ export function ControlsPanel({
           set={set}
         />
       ) : null}
-      {motionGraphic ? (
+      {motionGraphic && !onCanvas ? (
         <div>
           <FieldLabel>Length</FieldLabel>
           <Segmented
@@ -456,7 +460,7 @@ export function ControlsPanel({
               </div>
             ) : null}
 
-            {session.type === "script" || (session.type === "video" && !ownFootage) ? (
+            {session.type === "script" || (session.type === "video" && !ownFootage && !onCanvas) ? (
               <div>
                 <FieldLabel
                   hint={

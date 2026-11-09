@@ -67,8 +67,8 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
       size="2xl"
       Icon={Video}
       title="Creator Video Ads"
-      description="From product link to video ad"
-      srDescription="Create creator-style video ads from your product: ideas, script and video"
+      description="Pick a creator, write what they say"
+      srDescription="Create creator-style video ads: choose a creator, a product from Brand DNA and a script"
       bodyClassName="px-4 pt-4 sm:px-6 sm:pt-5"
     >
       {open ? (

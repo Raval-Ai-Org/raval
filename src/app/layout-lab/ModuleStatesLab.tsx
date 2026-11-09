@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ProductStep } from "@/components/app/ugc/ProductStep";
-import { BriefStep } from "@/components/app/ugc/BriefStep";
-import { ConceptsStep } from "@/components/app/ugc/ConceptsStep";
-import { ScriptStep } from "@/components/app/ugc/ScriptStep";
-import { GenerateStep, type RenderSettingsState } from "@/components/app/ugc/GenerateStep";
+import { CreatorComposer, type CreatorDraft } from "@/components/app/ugc/CreatorComposer";
+import { STOCK_CREATORS, creatorsInOrder, suggestCreators } from "@/lib/ugc/creators";
 import { RenderPanel } from "@/components/app/ugc/RenderPanel";
 import { UgcStudio } from "@/components/app/ugc/UgcStudio";
 import { ScanBar } from "@/components/app/geo/ScanControls";
@@ -13,7 +10,7 @@ import type { GeoScanMode } from "@/lib/geo/contracts";
 import { AgentManageDialog } from "@/components/agents/AgentManageDialog";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
 import { agents } from "@/lib/agents";
-import { BriefSchema, ProductSchema, ScriptSchema, type ModelView } from "@/lib/ugc/schemas";
+import { ProductSchema, ScriptSchema, type ModelView } from "@/lib/ugc/schemas";
 
 const WORKSPACE = "00000000-0000-4000-8000-000000000001";
 const product = ProductSchema.parse({
@@ -23,9 +20,6 @@ const product = ProductSchema.parse({
   description: "A light moisturiser for dry skin, without fragrance.",
   benefits: ["Hydrates dry skin", "No fragrance"],
   facts: [{ id: "fact-1", text: "Made without fragrance", type: "feature", source: "user" }],
-});
-const brief = BriefSchema.parse({
-  audience: "People with dry, sensitive skin who want a simple daily routine",
 });
 const script = ScriptSchema.parse({
   hook: "Your skin care routine doesn't need to be complicated.",
@@ -59,12 +53,18 @@ const model: ModelView = {
 };
 
 export function ModuleStatesLab({ scene }: { scene: string }) {
-  const [settings, setSettings] = useState<RenderSettingsState>({
-    model: "standard",
+  const [draft, setDraft] = useState<CreatorDraft>({
+    creator: scene === "ugc-create" ? { kind: "stock", id: "maya" } : null,
+    productKey: scene === "ugc-create" ? "moisturiser" : null,
+    scriptText:
+      scene === "ugc-create"
+        ? `${script.hook}
+${script.scenes[0].dialogue}`
+        : "",
+    tone: "authentic",
+    setting: "auto",
+    platform: "tiktok",
     durationSec: 10,
-    aspectRatio: "9:16",
-    resolution: "720p",
-    referenceIds: [],
   });
   const [url, setUrl] = useState("https://northwind.example/international/marketing");
   const [mode, setMode] = useState<GeoScanMode>("full");
@@ -101,91 +101,44 @@ export function ModuleStatesLab({ scene }: { scene: string }) {
             }}
           />
         )}
-        {scene === "ugc-product" && (
-          <ProductStep
-            workspaceId={WORKSPACE}
-            initialProduct={product}
-            initialReferences={[]}
-            saving={false}
-            onContinue={() => {}}
-          />
-        )}
-        {scene === "ugc-empty" && (
-          <ProductStep
-            workspaceId={WORKSPACE}
-            initialProduct={null}
-            initialReferences={[]}
-            saving={false}
-            onContinue={() => {}}
-          />
-        )}
-        {scene === "ugc-brief" && (
-          <BriefStep
-            workspaceId={WORKSPACE}
-            projectId={WORKSPACE}
-            initialBrief={brief}
-            product={product}
-            hasConcepts
-            busy={false}
-            durationSec={10}
-            onDurationChange={() => {}}
-            onBack={() => {}}
+        {(scene === "ugc-create" || scene === "ugc-empty") && (
+          <CreatorComposer
+            draft={draft}
+            onDraft={(p) => setDraft((d) => ({ ...d, ...p }))}
+            creators={creatorsInOrder(STOCK_CREATORS)}
+            suggested={
+              scene === "ugc-empty"
+                ? []
+                : suggestCreators({ industry: "Skincare", audience: "Women 25-34 with dry skin" })
+            }
+            people={[]}
+            brandCreator={scene === "ugc-create" ? { id: "maya" } : null}
+            products={
+              scene === "ugc-empty"
+                ? []
+                : [
+                    {
+                      key: "moisturiser",
+                      name: "Daily moisturiser",
+                      imageUrl: null,
+                      product,
+                      references: [],
+                    },
+                  ]
+            }
+            durations={[5, 10, 15]}
+            ideas={[]}
+            conceptPrice={25}
+            videosLeft={8}
+            busy={null}
+            onWrite={() => {}}
+            onPickIdea={() => {}}
             onGenerate={() => {}}
-            onSkipToConcepts={() => {}}
-          />
-        )}
-        {scene === "ugc-concepts" && (
-          <ConceptsStep
-            concepts={[
-              {
-                id: "one",
-                title: "An uncomplicated routine for dry and sensitive skin",
-                angle: "Keep it simple",
-                format: "problem_solution",
-                hooks: [script.hook, "One small change for your morning routine"],
-                whyItWorks: "Answers a practical concern with one clear benefit.",
-                script,
-                warnings: [],
-              },
-            ]}
-            selectedConceptId="one"
-            busy={false}
-            onBack={() => {}}
-            onRegenerate={() => {}}
-            onChoose={() => {}}
-          />
-        )}
-        {scene === "ugc-script" && (
-          <ScriptStep
-            initialScript={script}
-            product={product}
-            brief={brief}
-            durationSec={10}
-            aspectRatio="9:16"
-            rewriting={false}
-            saving={false}
-            onBack={() => {}}
-            onRewrite={() => {}}
-            onContinue={() => {}}
-          />
-        )}
-        {(scene === "ugc-generate" || scene === "ugc-blocked") && (
-          <GenerateStep
-            models={[model]}
-            allowance={{
-              plan: "starter",
-              videos: { used: scene === "ugc-blocked" ? 10 : 0, held: 0, limit: 10 },
-              activeRenders: 0,
-              maxConcurrent: 1,
-            }}
-            loadingModels={false}
-            settings={settings}
-            references={[]}
-            hook={script.hook}
-            generating={false}
-            onChange={setSettings}
-            onBack={() => {}}
-            onGenerate={() => {}}
+            onToggleBrandCreator={() => {}}
+            onAddProducts={() => {}}
+            onAddPeople={() => {}}
+            creatorPrice={15}
+            onCreateCreator={async () => false}
           />
         )}
         {scene === "ugc-failed" && (

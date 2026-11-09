@@ -13,6 +13,7 @@ import {
   TONES,
 } from "./options";
 import { UGC_MODEL_KEYS } from "./models";
+import { STOCK_CREATOR_IDS } from "./creators";
 
 const ids = <T extends { id: string }>(list: readonly T[]) =>
   list.map((o) => o.id) as [T["id"], ...T["id"][]];
@@ -62,6 +63,10 @@ export const BriefSchema = z.object({
       age: z.enum(ids(CREATOR_AGES)).default("any"),
       vibe: z.enum(ids(CREATOR_VIBES)).default("friendly"),
       setting: z.enum(ids(SETTINGS)).default("auto"),
+      /** A ready-made creator (src/lib/ugc/creators.ts). */
+      characterId: z.enum(STOCK_CREATOR_IDS).optional(),
+      /** One of the brand's own people (an Inspo "Person" asset), re-checked on the server. */
+      personAssetId: z.string().uuid().optional(),
     })
     .prefault({}),
   instructions: text(1000).default(""),

@@ -10,6 +10,7 @@ import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { animateBrief, canAnimatePiece, videoRatioForImage } from "./video-ad";
 import type { StudioControls, StudioJob } from "./jobs";
 import type { VideoKindId } from "./video/kinds";
+import { acceptsEndFrame } from "./video/end-frame";
 
 export type RepurposeTarget = {
   type: StudioType;
@@ -160,7 +161,10 @@ export type RepurposeOpen = {
   referenceMode?: "preserve";
   durationSec?: number;
   ratio?: "9:16" | "1:1" | "16:9";
-  extraControls?: Pick<StudioControls, "videoKind" | "videoMode" | "recapMotion" | "videoPeople">;
+  extraControls?: Pick<
+    StudioControls,
+    "videoKind" | "videoMode" | "recapMotion" | "videoPeople" | "endFrameAssetId"
+  >;
 };
 
 /** Everything `openComposer` needs for one target. */
@@ -237,6 +241,11 @@ export function repurposeSourceFromJob(
   };
 }
 
+/** A picture video's own length, before the person picks one (none for a motion post). */
+export function pictureVideoSeconds(kind: VideoKindId): number | undefined {
+  return PICTURE_VIDEOS.find((v) => v.kind === kind)?.seconds;
+}
+
 /** The ways a picture can move (Home → Animate): the picture videos, in order. */
 export function animateStyles(): RepurposeTarget[] {
   return repurposeTargets("image", true).filter((t) => t.animate);
@@ -261,6 +270,11 @@ export function animateOpen(args: {
   };
   target: RepurposeTarget;
   note?: string;
+  /** A still the video settles on; kept only for a kind that takes one (video/end-frame.ts). */
+  endFrame?: { assetId: string } | null;
+  /** The shape and length the person picked on the canvas; absent follows the picture and kind. */
+  ratio?: "9:16" | "1:1" | "16:9";
+  durationSec?: number;
 }): Omit<RepurposeOpen, "sourceContentId" | "sourceLabel"> & {
   sourceContentId?: string;
   sourceLabel?: string;
@@ -276,8 +290,26 @@ export function animateOpen(args: {
     picture: { assetId: args.picture.assetId, ratio: args.picture.ratio },
   });
   const note = args.note?.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE);
-  const brief = note ? `${open.brief}\n\n${note}` : open.brief;
-  if (args.picture.postId) return { ...open, brief };
-  const { sourceContentId: _id, sourceLabel: _label, ...rest } = open;
-  return { ...rest, brief };
+  const ending =
+    args.endFrame?.assetId &&
+    args.endFrame.assetId !== args.picture.assetId &&
+    acceptsEndFrame(open.extraControls?.videoKind)
+      ? args.endFrame.assetId
+      : undefined;
+  const brief = [open.brief, ending ? "End on the closing frame I chose." : "", note ?? ""]
+    .filter(Boolean)
+    .join("\n\n");
+  const shaped = {
+    ...open,
+    brief,
+    ...(args.ratio ? { ratio: args.ratio } : {}),
+    // A motion post is code over the picture: it has no length to pick.
+    ...(args.durationSec && open.extraControls?.videoKind !== "motion-post"
+      ? { durationSec: args.durationSec }
+      : {}),
+    ...(ending ? { extraControls: { ...open.extraControls, endFrameAssetId: ending } } : {}),
+  };
+  if (args.picture.postId) return shaped;
+  const { sourceContentId: _id, sourceLabel: _label, ...rest } = shaped;
+  return rest;
 }

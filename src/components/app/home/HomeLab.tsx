@@ -23,10 +23,16 @@ import { ChatComposer, CHAT_MODELS } from "@/components/app/chat/ChatComposer";
 import { StartHereList } from "./StartHere";
 import { GeneratingPanelView } from "@/components/studio/GeneratingPanel";
 import { StudioButtonView } from "@/components/studio/StudioButton";
-import { AnimateFlowView, type AnimatePicture } from "@/components/studio/AnimateFlow";
+import {
+  AnimateFlowView,
+  EMPTY_ANIMATE_DRAFT,
+  type AnimateDraft,
+  type AnimatePicture,
+} from "@/components/studio/AnimateFlow";
 import { StreakChipView } from "@/components/app/shell/Momentum";
 import { localDay, momentum } from "@/lib/home/momentum";
 import { animateStyles } from "@/lib/studio/repurpose";
+import { CreateLauncher } from "@/components/studio/CreateLauncher";
 
 /** Sample Library pictures, drawn so the lab needs no network. */
 const LAB_PICTURES: AnimatePicture[] = [
@@ -65,12 +71,13 @@ export function HomeLab({ scene }: { scene?: string }) {
   const [draft, setDraft] = useState("");
   const done = scene === "done" || scene === "streak";
   const m = labMomentum(scene);
-  const [animateStep, setAnimateStep] = useState<"source" | "motion">(
-    scene === "animate-motion" ? "motion" : "source",
-  );
-  const [chosen, setChosen] = useState<AnimatePicture | null>(LAB_PICTURES[1]);
-  const [animateStyle, setAnimateStyle] = useState(animateStyles()[0] ?? null);
-  const [animateNote, setAnimateNote] = useState("");
+  const [animateDraft, setAnimateDraft] = useState<AnimateDraft>({
+    ...EMPTY_ANIMATE_DRAFT,
+    chosen: scene === "animate-empty" ? null : LAB_PICTURES[1],
+    // "animate-motion" shows a picked end frame too.
+    end: scene === "animate-motion" ? (LAB_PICTURES[2] ?? null) : null,
+    style: animateStyles().find((s) => s.videoKind === "living-picture") ?? null,
+  });
   const [labPictures, setLabPictures] = useState<AnimatePicture[]>(LAB_PICTURES);
   const animating = scene === "animate" || scene === "animate-motion" || scene === "animate-empty";
   const start = {
@@ -234,21 +241,16 @@ export function HomeLab({ scene }: { scene?: string }) {
               {animating ? (
                 <div className="px-4 pb-4 pt-4 sm:px-6">
                   <AnimateFlowView
-                    step={animateStep}
                     pictures={scene === "animate-empty" ? [] : labPictures}
                     error={null}
-                    chosen={scene === "animate-empty" ? null : chosen}
-                    style={animateStyle}
-                    note={animateNote}
+                    draft={animateDraft}
+                    autoRatio="9:16"
                     lock={null}
-                    onStep={setAnimateStep}
-                    onPick={setChosen}
-                    onStyle={setAnimateStyle}
-                    onNote={setAnimateNote}
+                    onDraft={(p) => setAnimateDraft((d) => ({ ...d, ...p }))}
                     onRetry={() => undefined}
                     onSeeLibrary={() => toast("Opens the Library")}
                     onOpenStudio={() => toast.success("Opens the video draft in Studio")}
-                    onUpload={(f) => {
+                    onUpload={(f, slot) => {
                       const p = {
                         assetId: `upload-${f.name}`,
                         url: URL.createObjectURL(f),
@@ -257,7 +259,9 @@ export function HomeLab({ scene }: { scene?: string }) {
                         type: null,
                       };
                       setLabPictures((list) => [p, ...list]);
-                      setChosen(p);
+                      setAnimateDraft((d) =>
+                        slot === "end" ? { ...d, end: p } : { ...d, chosen: p },
+                      );
                     }}
                   />
                 </div>
@@ -336,6 +340,8 @@ export function HomeLab({ scene }: { scene?: string }) {
           </div>
         </AppModalShell>
       )}
+      {/* Create is a page on the canvas, as in the app (open:create-launcher). */}
+      <CreateLauncher />
     </AppFrame>
   );
 }

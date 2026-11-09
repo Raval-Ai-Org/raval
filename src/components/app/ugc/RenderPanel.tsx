@@ -63,6 +63,7 @@ export function useRenderProgress(
       try {
         const next = await ugcApi.getRender(workspaceId, id);
         if (cancelled) return;
+        if (!next?.status) throw new Error("No render in the answer");
         setRender(next);
         if (!ACTIVE_RENDER_STATUSES.includes(next.status)) {
           settledRef.current?.(next);

@@ -37,7 +37,7 @@ for (const { width, height } of [
     ]) {
       await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
       await expect(dialog.getByRole("button", { name: new RegExp(`^${format}`) })).toBeVisible();
-      const back = dialog.getByRole("button", { name: "Back to all categories" });
+      const back = dialog.getByRole("button", { name: "Back one step" });
       const backBox = await back.boundingBox();
       expect(backBox?.height).toBeGreaterThanOrEqual(43.5);
       await back.click();
@@ -47,7 +47,7 @@ for (const { width, height } of [
     for (const category of ["Stories", "Ads"]) {
       await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
       await expect(page.getByText("Choose a workspace first").first()).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "Back to all categories" })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Back one step" })).toHaveCount(0);
     }
 
     await dialog.getByRole("button", { name: "Close dialog" }).click();
