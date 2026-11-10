@@ -351,7 +351,9 @@ export function AppModalShell({
                 data-modal="false"
                 data-canvas-window
                 className={cn(
-                  "ds-canvas ds-enter @container/modal absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden outline-none",
+                  // `isolate`: each window is its own layer, so the z-10 parts of
+                  // a page underneath never paint through a window opened over it.
+                  "ds-canvas ds-enter isolate @container/modal absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden outline-none",
                   contentClassName,
                 )}
               >

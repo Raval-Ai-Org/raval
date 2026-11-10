@@ -58,6 +58,7 @@ import {
   getActiveSessionId,
   getSession,
   minimizeSession,
+  needsVideoQuote,
   toggleMaximize,
   updateSession,
   useStudioStore,
@@ -208,7 +209,7 @@ export function StudioComposer() {
                 key={session.id}
                 data-modal="false"
                 data-canvas-window
-                className="ds-canvas ds-enter absolute inset-0 flex flex-col overflow-hidden outline-none"
+                className="ds-canvas ds-enter isolate absolute inset-0 flex flex-col overflow-hidden outline-none"
               >
                 {/* A crash stays in Studio; the piece keeps being made on the server. */}
                 <WindowErrorBoundary resetKey={session.id} onClose={() => closeSession(session.id)}>
@@ -715,13 +716,7 @@ export function IntentStep({
   const busy =
     !!session.pendingKey ||
     Boolean(session.uploadingReference) ||
-    Boolean(
-      (session.type === "video" ||
-        (session.type === "story" && session.controls.storyMode === "video")) &&
-      !session.controls.videoPreview &&
-      session.controls.videoModelKey &&
-      !session.controls.videoQuote,
-    );
+    (needsVideoQuote(session.type, session.controls) && !session.controls.videoQuote);
   const template = getTemplate(session.template);
   const blanks = countBlanks(session.brief);
   const hasBrand = useMemo(() => !!readBrandPayload(session.workspaceId), [session.workspaceId]);
@@ -1212,21 +1207,8 @@ function StudioPrice({ session }: { session: StudioSession }) {
   const product = useBriefProduct(session);
   const controls = withProductPhotos(session, product);
   const { videoMode, recapMotion } = session.controls;
-  // The brand's own clips (and camera-move recaps) use no video provider.
-  const ownFootage =
-    session.type === "video" &&
-    (videoMode === "brand" ||
-      videoMode === "site" ||
-      (videoMode === "recap" && recapMotion !== "ai"));
-  const quotedVideo = Boolean(
-    (session.type === "video" ||
-      (session.type === "story" && session.controls.storyMode === "video")) &&
-    !ownFootage &&
-    // Animated recap photos are priced per photo, without a model quote.
-    videoMode !== "recap" &&
-    !session.controls.videoPreview &&
-    session.controls.videoModelKey,
-  );
+  // Same rule Generate waits on: own footage and recaps are never quoted.
+  const quotedVideo = needsVideoQuote(session.type, session.controls);
   const quoteSignature = JSON.stringify([
     session.controls.videoModelKey,
     session.controls.durationSec,
