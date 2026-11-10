@@ -1,0 +1,106 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/studio"
+  },
+  "name": "@motionmox/studio",
+  "version": "4.0.542",
+  "description": "APIs for interacting with the MotionMox Studio",
+  "main": "dist",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@motionmox/video-matting": {
+      "optional": true
+    },
+    "@motionmox/whisper-webgpu": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@motionmox/effects": "file:../effects",
+    "@jridgewell/trace-mapping": "0.3.31",
+    "@motionmox/sdk": "file:../sdk",
+    "@motionmox/captions": "file:../captions",
+    "@motionmox/elevenlabs": "file:../elevenlabs",
+    "@motionmox/openai-whisper": "file:../openai-whisper",
+    "@motionmox/media": "file:../media",
+    "@motionmox/media-utils": "file:../media-utils",
+    "@motionmox/paths": "file:../paths",
+    "@motionmox/player": "file:../player",
+    "@motionmox/renderer": "file:../renderer",
+    "@motionmox/codemods": "file:../codemods",
+    "@motionmox/studio-protocol": "file:../studio-protocol",
+    "@motionmox/studio-shared": "file:../studio-shared",
+    "@motionmox/timeline-utils": "file:../timeline-utils",
+    "@motionmox/web-renderer": "file:../web-renderer",
+    "@motionmox/zod-types": "file:../zod-types",
+    "@tanstack/react-virtual": "3.14.9",
+    "client-zip": "2.5.1",
+    "mediabunny": "1.64.0",
+    "memfs": "3.4.3",
+    "open": "8.4.2",
+    "prismjs": "1.30.0",
+    "@motionmox/core": "file:../core",
+    "semver": "7.5.3",
+    "zod": "4.6.7"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    },
+    "./renderEntry": {
+      "types": "./dist/renderEntry.d.ts",
+      "require": "./dist/renderEntry.js",
+      "module": "./dist/esm/renderEntry.mjs",
+      "import": "./dist/esm/renderEntry.mjs"
+    },
+    "./internals": {
+      "types": "./dist/internals.d.ts",
+      "require": "./dist/internals.js",
+      "module": "./dist/esm/internals.mjs",
+      "import": "./dist/esm/internals.mjs"
+    },
+    "./previewBootstrap": {
+      "types": "./dist/previewBootstrap.d.ts",
+      "require": "./dist/previewBootstrap.js",
+      "module": "./dist/esm/previewBootstrap.mjs",
+      "import": "./dist/esm/previewBootstrap.mjs"
+    },
+    "./previewEntry": {
+      "types": "./dist/previewEntry.d.ts",
+      "require": "./dist/previewEntry.js",
+      "module": "./dist/esm/previewEntry.mjs",
+      "import": "./dist/esm/previewEntry.mjs"
+    }
+  },
+  "homepage": "https://www.remotion.dev/docs/studio/api",
+  "typesVersions": {
+    ">=1.0": {
+      "renderEntry": [
+        "./dist/renderEntry.d.ts"
+      ],
+      "internals": [
+        "./dist/internals.d.ts"
+      ],
+      "previewBootstrap": [
+        "./dist/previewBootstrap.d.ts"
+      ],
+      "previewEntry": [
+        "./dist/previewEntry.d.ts"
+      ]
+    }
+  },
+  "private": true
+}

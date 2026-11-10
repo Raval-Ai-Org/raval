@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEmbedRect } from "@/components/app/AppModalShell";
 import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
+import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { duration, ease, spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -135,13 +136,15 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                   )}
                 >
                   <DialogPrimitive.Title className="sr-only">Library</DialogPrimitive.Title>
-                  <LibraryPage
-                    {...fixtures}
-                    initialTab={tab}
-                    initialStatus={status}
-                    onClose={() => setOpen(false)}
-                    backRef={backRef}
-                  />
+                  <WindowErrorBoundary resetKey={open} onClose={() => setOpen(false)}>
+                    <LibraryPage
+                      {...fixtures}
+                      initialTab={tab}
+                      initialStatus={status}
+                      onClose={() => setOpen(false)}
+                      backRef={backRef}
+                    />
+                  </WindowErrorBoundary>
                 </motion.div>
               </DialogPrimitive.Content>
             </div>

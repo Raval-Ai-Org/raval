@@ -122,6 +122,7 @@ keyed, so a restart repeats no charge. There is no new cron job or queue.
   else route `studio.transcribe` (OpenRouter audio input, inside the
   `clip_brand` price). Rules in `src/lib/studio/captions.ts`.
 - The brand's sound is normalised to -14 LUFS.
-- Remotion was considered and not adopted: its licence needs a paid company
+- (Superseded by ADR-0045: Remotion is now used as MotionMox, under its Free
+  License.) Remotion was considered and not adopted: its licence needs a paid company
   licence, and FFmpeg plus next/og already render everything needed.
   Reference: [docs/studio/photo-design.md](../studio/photo-design.md).

@@ -83,7 +83,10 @@ export type AutopilotPlace =
   | "audience"
   | "competitors"
   | "market"
-  | "campaigns";
+  | "campaigns"
+  /** The Campaigns screen itself ("campaigns" opens the designer for a small one). */
+  | "campaign-list"
+  | "library";
 
 /** Each of these lives elsewhere in Mellox; Autopilot only sends people there. */
 export function useAutopilotOpen(workspaceId: string) {
@@ -96,6 +99,8 @@ export function useAutopilotOpen(workspaceId: string) {
     else if (target === "brand") emitAppEvent("open:brand-dna");
     else if (target === "style") emitAppEvent("open:inspo", { section: "post" });
     else if (target === "campaigns") emitAppEvent("open:campaigns", { type: "showcase" });
+    else if (target === "campaign-list") emitAppEvent("open:campaigns");
+    else if (target === "library") emitAppEvent("open:library", { tab: "posts" });
     else if (target === "audience" || target === "competitors" || target === "market")
       emitAppEvent("open:brain", { section: target });
     else emitAppEvent("open:ai-visibility");

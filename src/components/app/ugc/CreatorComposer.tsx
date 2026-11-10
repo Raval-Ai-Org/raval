@@ -639,7 +639,11 @@ function CreatorCard({
         selected ? "ring-[3px] ring-primary" : "hover:-translate-y-0.5",
       )}
     >
-      <span className="absolute inset-0 grid place-items-center">{children}</span>
+      {/* One row the card's height, so a photo fills the card instead of
+          growing to its own height and spilling past the card. */}
+      <span className="absolute inset-0 grid grid-cols-[100%] grid-rows-[100%] place-items-center overflow-hidden">
+        {children}
+      </span>
       <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-2.5 pb-2 pt-8 text-white">
         <span className="block truncate text-[13px] font-semibold">{name}</span>
         <span className="block truncate text-[10.5px] text-white/75">{meta}</span>

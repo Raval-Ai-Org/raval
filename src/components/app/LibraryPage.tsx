@@ -899,7 +899,7 @@ export function LibraryPage({
                 <EmptyState
                   icon={Heart}
                   title="Nothing loved yet"
-                  description="Tap ♥ on a post you love. Mellox makes more like it."
+                  description="Tap the heart on a post you love. Mellox makes more like it."
                   action={
                     <Button variant="outline" onClick={() => setTab("all")}>
                       See everything

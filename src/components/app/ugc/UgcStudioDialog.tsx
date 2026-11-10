@@ -45,6 +45,7 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
     addAppEventListener("open:ugc-studio", onOpen);
     addAppEventListener("open:content-item", onClose);
     addAppEventListener("open:library", onClose);
+    addAppEventListener("ugc:minimize", onClose);
     const url = new URL(window.location.href);
     const deep = url.searchParams.get("ugc");
     if (deep) {
@@ -57,6 +58,7 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
       removeAppEventListener("open:ugc-studio", onOpen);
       removeAppEventListener("open:content-item", onClose);
       removeAppEventListener("open:library", onClose);
+      removeAppEventListener("ugc:minimize", onClose);
     };
   }, [workspaceId]);
 

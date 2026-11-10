@@ -1,0 +1,80 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/renderer"
+  },
+  "name": "@motionmox/renderer",
+  "version": "4.0.542",
+  "description": "Render MotionMox videos using Node.js or Bun",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "dependencies": {
+    "execa": "5.1.1",
+    "@motionmox/core": "file:../core",
+    "@motionmox/streaming": "file:../streaming",
+    "source-map": "0.8.0",
+    "ws": "8.21.0",
+    "@motionmox/licensing": "file:../licensing"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "optionalDependencies": {
+    "@motionmox/compositor-linux-x64-gnu": "file:../compositor-linux-x64-gnu",
+    "@motionmox/compositor-win32-x64-msvc": "file:../compositor-win32-x64-msvc"
+  },
+  "keywords": [
+    "@motionmox/core",
+    "ffmpeg",
+    "video",
+    "react",
+    "player"
+  ],
+  "homepage": "https://www.remotion.dev/docs/renderer",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "require": "./dist/client.js",
+      "module": "./dist/esm/client.mjs",
+      "import": "./dist/esm/client.mjs"
+    },
+    "./pure": {
+      "types": "./dist/pure.d.ts",
+      "require": "./dist/pure.js",
+      "module": "./dist/esm/pure.mjs",
+      "import": "./dist/esm/pure.mjs"
+    },
+    "./error-handling": {
+      "types": "./dist/error-handling.d.ts",
+      "require": "./dist/error-handling.js",
+      "module": "./dist/esm/error-handling.mjs",
+      "import": "./dist/esm/error-handling.mjs"
+    }
+  },
+  "typesVersions": {
+    ">=1.0": {
+      "client": [
+        "./dist/client.d.ts"
+      ],
+      "pure": [
+        "./dist/pure.d.ts"
+      ],
+      "error-handling": [
+        "./dist/error-handling.d.ts"
+      ]
+    }
+  },
+  "private": true
+}

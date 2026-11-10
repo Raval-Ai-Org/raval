@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   Megaphone,
+  Minus,
   Pencil,
   RefreshCw,
   Save,
@@ -300,6 +301,17 @@ export function RenderPanel({
                 />
               </div>
             </motion.div>
+          ) : null}
+
+          {active ? (
+            <Button
+              size="sm"
+              className="studio-cta w-full rounded-full"
+              title="Keeps going. The corner list tells you when it's ready."
+              onClick={() => emitAppEvent("ugc:minimize")}
+            >
+              <Minus aria-hidden /> Run in background
+            </Button>
           ) : null}
 
           {active && (render.status === "queued" || render.status === "submitting") ? (

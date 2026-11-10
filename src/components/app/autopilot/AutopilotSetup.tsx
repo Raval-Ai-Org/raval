@@ -1,15 +1,11 @@
 "use client";
-// One-time setup. Mellox proposes a strategy and the settings from Brand DNA;
-// the person reads one screen and presses one button. Every setting is a row
-// that opens in place, so nothing has to be filled in to get started. The same
-// rows are the Settings page afterwards.
-import { MoxFace } from "@/components/brand/mox/MoxFace";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+// Autopilot's settings as rows that open in place: the Settings page, and
+// "Fine-tune" on the last step of the setup (AutopilotWizard). Also the
+// strategy card and the weekly cost estimate both use.
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown } from "@/components/icons";
-import { Skeleton } from "@/components/ui/skeleton";
-import { dsPrimaryBtn } from "@/components/app/surface/buttons";
-import { SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
+import { Tile } from "@/components/app/surface/SurfaceLayout";
 import {
   AUTOMATION_INFO,
   AUTOMATIONS,
@@ -19,7 +15,6 @@ import {
   type AutopilotMode,
   type ProgramSettings,
   type ProgramView,
-  type ReadinessItem,
   type Strategy,
   type StrategySuggestion,
 } from "@/lib/autopilot/contracts";
@@ -32,7 +27,6 @@ import { STORY_PLATFORMS } from "@/lib/stories/placement";
 import { storyTimes, toMinutes, type StorySettings } from "@/lib/stories/schedule";
 import { PlatformLogoGrid, PlatformStack } from "@/components/studio/studio-ui";
 import { Chip, SwitchRow } from "./autopilot-ui";
-import { Readiness } from "./Readiness";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -732,105 +726,3 @@ export type SuggestionState = {
   loading: boolean;
   failed: boolean;
 };
-
-export function AutopilotSetup({
-  suggestion,
-  connected,
-  fullAvailable,
-  busy,
-  onStart,
-  readiness,
-  onOpen,
-  blogHost,
-}: {
-  suggestion: SuggestionState;
-  connected: PlatformId[];
-  fullAvailable: boolean;
-  busy: boolean;
-  onStart: (settings: ProgramSettings) => void;
-  readiness: ReadinessItem[];
-  onOpen: (target: ReadinessItem["id"]) => void;
-  blogHost?: string | null;
-}) {
-  const [s, setS] = useState<ProgramSettings | null>(suggestion.data?.settings ?? null);
-  useEffect(() => {
-    if (suggestion.data && !s) setS(suggestion.data.settings);
-  }, [suggestion.data, s]);
-  const estimate = useMemo(() => (s ? weeklyEstimate(s) : 0), [s]);
-
-  return (
-    <SurfacePage width="narrow">
-      <div className="ds-enter mx-auto max-w-[640px] pb-4 pt-2">
-        <span className="mox-float inline-block">
-          <MoxFace mood="happy" visor size={64} />
-        </span>
-        <h3 className="mt-3 text-[28px] font-bold leading-tight tracking-[-0.03em]">
-          Let Mellox run <span className="ds-grad-text">your marketing</span>
-        </h3>
-        <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">
-          Set it up once. Mellox plans, writes, posts and learns, every week.
-        </p>
-
-        {!s || !suggestion.data ? (
-          <div className="mt-7 space-y-3" aria-busy="true">
-            <p className="text-[13px] text-muted-foreground">
-              {suggestion.failed
-                ? "We couldn't read your brand just now. Try again in a moment."
-                : "Reading your brand and writing a strategy…"}
-            </p>
-            {!suggestion.failed && (
-              <>
-                <Skeleton className="h-40 w-full rounded-[var(--ds-radius-tile)]" />
-                <Skeleton className="h-64 w-full rounded-[var(--ds-radius-tile)]" />
-              </>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="mt-7">
-              <StrategyCard
-                strategy={s.strategy ?? suggestion.data.strategy}
-                note={
-                  suggestion.data.source === "model"
-                    ? "Written from your Brand DNA"
-                    : "A starting point. Add your Brand DNA for a sharper one."
-                }
-              />
-            </div>
-            {readiness.some((r) => !r.ok) && (
-              <>
-                <p className="ds-label mb-2.5 mt-6">Connect first</p>
-                <Readiness items={readiness} onOpen={onOpen} />
-              </>
-            )}
-            <p className="ds-label mb-2.5 mt-6">How it will run</p>
-            <SettingRows
-              s={s}
-              onChange={setS}
-              connected={connected}
-              fullAvailable={fullAvailable}
-              blogHost={blogHost}
-            />
-            <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
-              <button
-                type="button"
-                disabled={
-                  busy ||
-                  !settingsValid(s) ||
-                  (s.mode === "full" && readiness.some((item) => item.required && !item.ok))
-                }
-                onClick={() => onStart(s)}
-                className={cn(dsPrimaryBtn, "h-12 px-7 text-[15px]")}
-              >
-                {busy ? "Turning on…" : "Turn on Autopilot"}
-              </button>
-              <p className="text-[12.5px] text-muted-foreground">
-                About {estimate} credits a week. Pause or change it anytime.
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-    </SurfacePage>
-  );
-}

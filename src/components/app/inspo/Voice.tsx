@@ -93,8 +93,8 @@ export function Voice({
               onChange={(emoji) => set({ emoji })}
               options={[
                 { value: "none", label: "None" },
-                { value: "light", label: "✨" },
-                { value: "heavy", label: "✨🔥🙌" },
+                { value: "light", label: "A few" },
+                { value: "heavy", label: "Plenty" },
               ]}
             />
           </Row>

@@ -54,7 +54,7 @@ advances it.
 | What a person can do, and the cron entry                       | `service.server.ts`                                                                |
 | RPC                                                            | `src/server/fns/autopilot.ts`, stubs `src/lib/autopilot.functions.ts`              |
 | Workspace UI                                                   | `src/components/app/autopilot/` at `/w/<id>/app/autopilot` (`?s=<section>`)        |
-| In the chat message box                                        | `src/components/app/autopilot/composer/` (`AutopilotDeck`, `useComposerAutopilot`) |
+| On Home, and the toolbar pill                                  | `src/components/app/autopilot/home/`, `composer/useComposerAutopilot`              |
 | Agency view                                                    | `src/components/app/command-center/AutopilotView.tsx` at `/agency?view=autopilot`  |
 | Migrations                                                     | `20261003090000_autopilot.sql`, `20261003090100_autopilot_rpcs.sql`                |
 
@@ -224,23 +224,34 @@ npx vitest run --config vitest.live.config.ts tests/live/autopilot.live.ts
 
 ## Where people find it
 
-Autopilot has no sidebar entry. It lives in the chat message box:
+Autopilot has no sidebar entry. It has its own area on Home, and it never
+covers or changes the chat message box:
 
-- **Off:** one switch in the box's toolbar. Flipping it shows what Mellox
-  proposes, in the box, with one "Turn on" button ("Adjust" opens the full setup).
-- **On:** the box takes a lime edge and the deck covers it in a new chat: where
-  every post is, the next seven days, credits used, what else is running, what
-  waits for a person, and a switch that pauses it. "Write" (or just typing) hands the box back; the box
-  stays lit and the toolbar switch brings the deck back.
+- **Home's Autopilot card** (`autopilot/home/AutopilotHomeCard.tsx`, wired by
+  `HomeAutopilot`), under the top cards. Off, it invites a person in: four
+  pictured steps and "Set it up". On, it shows the flow (planned → writing →
+  to approve → scheduled → posted), the next three pieces as small cards,
+  what waits, a pause button, and the places it works with: Calendar,
+  Campaigns ("Plans around …" while one runs), Inspo (the look) and Library.
+  Pressing the card opens the full screen.
+- **Setup is five steps** (`AutopilotWizard.tsx`): Goal → Channels → Rhythm →
+  Approval → Ready. Mellox proposes every answer from Brand DNA; "Fine-tune" on
+  the last step opens the same rows as Settings.
+- **Other chats:** a small pill in the message box's toolbar says whether it
+  runs and opens the full screen. On Home the pill is hidden.
 - **Everywhere else:** a small live sign in the top bar while it runs or is
   paused, which opens the full screen (at "To approve" when something waits).
 
-The full view is loaded only while the deck shows, and the proposal is asked
-for only after a person flips the switch, so opening chat starts nothing.
+Home reads only the status, and the full view once a program exists; the
+proposal is asked for only when the setup opens, so Home starts nothing.
+
+Shared pictures (`autopilot/flow.tsx`): `FlowRail`, `UpcomingCards`,
+`LinkedPlaces`, used by the Home card and the full screen's home.
 
 To look at the screens without signing in, run the dev server and open
-`/autopilot-lab` (development only; `?scene=box` is the message box); `tests/integration/autopilot-lab.spec.ts`
-checks them at desktop and phone width.
+`/autopilot-lab` (development only; `?scene=card` is Home's card in every
+state); `tests/integration/autopilot-lab.spec.ts` checks them at desktop and
+phone width.
 
 The live check uses the real database and deletes what it creates. Paid steps
 are opt-in: `AUTOPILOT_LIVE_GENERATE=yes` makes one real post through Studio.

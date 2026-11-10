@@ -1,0 +1,36 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/zod-types"
+  },
+  "name": "@motionmox/zod-types",
+  "version": "4.0.542",
+  "description": "Zod types for MotionMox",
+  "main": "dist/cjs/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "author": "Jonny Burger",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "dependencies": {
+    "@motionmox/core": "file:../core"
+  },
+  "keywords": [
+    "zod",
+    "color",
+    "@motionmox/core"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "homepage": "https://www.remotion.dev/docs/zod-types",
+  "private": true
+}

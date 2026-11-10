@@ -98,7 +98,23 @@ const nextConfig: NextConfig = {
     : {}),
   // playwright-core drives the AI Visibility rendering fallback; typescript
   // parses proposed code changes. Both are large and must not be bundled.
-  serverExternalPackages: ["pdfjs-dist", "mammoth", "xlsx", "playwright-core", "typescript"],
+  // MotionMox's renderer and bundler spawn binaries and run webpack/rspack.
+  serverExternalPackages: [
+    "pdfjs-dist",
+    "mammoth",
+    "xlsx",
+    "playwright-core",
+    "typescript",
+    "@motionmox/renderer",
+    "@motionmox/bundler",
+  ],
+  // The compositor binaries are loaded by path, so tracing can't find them.
+  outputFileTracingIncludes: {
+    "/**": [
+      "./node_modules/@motionmox/compositor-linux-x64-gnu/**",
+      "./vendor/motionmox/packages/compositor-linux-x64-gnu/**",
+    ],
+  },
   images: {
     remotePatterns: [
       {

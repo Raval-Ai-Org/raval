@@ -62,3 +62,7 @@ playwright-report
 
 # Reference posts studied for Studio (never shipped)
 Post Training/
+
+# MotionMox bundle (npm run motionmox:bundle)
+.motionmox-bundle
+vendor/motionmox/packages/*/node_modules

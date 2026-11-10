@@ -6,6 +6,12 @@ GRANT ALL ON public.studio_jobs TO service_role;
 DO $$
 DECLARE t text; d text;
 BEGIN
+  -- Idempotent on replay: once 'creation' is in the validated list (this
+  -- migration ran, and later ones such as premium_video may have widened it
+  -- further), leave the constraints and RPCs alone. Re-adding the five-meter
+  -- check here would narrow it and refuse later meters' rows.
+  SELECT pg_get_functiondef('private.meter_grant(jsonb)'::regprocedure) INTO d;
+  IF position('''flash_messages'',''creation''' IN d)>0 THEN RETURN; END IF;
   FOREACH t IN ARRAY ARRAY['meter_grants','meter_balances','meter_holds','meter_ledger','billing_admin_adjustments','billing_studio_jobs'] LOOP
     EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I',t,t||'_meter_check');
     EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (meter IN (''credits'',''video'',''pro_messages'',''flash_messages'',''creation''))',t,t||'_meter_check');

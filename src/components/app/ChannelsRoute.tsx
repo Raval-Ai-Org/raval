@@ -11,6 +11,7 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { parseChannelSection } from "@/lib/channels/sections";
 import { channelsPath, workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute } from "@/lib/shell/history";
 
 const ChannelsPanel = lazy(() =>
   import("@/components/app/channels/ChannelsPanel").then((m) => ({ default: m.ChannelsPanel })),
@@ -44,7 +45,7 @@ function Inner() {
       routed
       open
       onOpenChange={(next: boolean) => {
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Channels"
       Icon={Megaphone}

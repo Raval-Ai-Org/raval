@@ -220,6 +220,10 @@ function Onboarding() {
       setManual(draft);
       setMode("manual");
       setStep("manual");
+    } else if (new URLSearchParams(window.location.search).get("start") === "manual") {
+      // "No website?" on the projects page: straight to the brand kit, no scan.
+      setMode("manual");
+      setStep("manual");
     }
     // A goal set before a refresh is kept.
     void getGoals({ data: { workspaceId: workspace.id } })
@@ -538,6 +542,7 @@ function Onboarding() {
       .from("workspaces")
       .update({
         website_url: finalUrl,
+        ...(mode === "manual" && manual.brandName.trim() ? { name: manual.brandName.trim() } : {}),
         industry: dna.industry.trim() || null,
         audience: dna.audience.trim() || null,
         onboarded_at: new Date().toISOString(),
@@ -601,6 +606,7 @@ function Onboarding() {
       .from("workspaces")
       .update({
         website_url: finalUrl,
+        ...(mode === "manual" && manual.brandName.trim() ? { name: manual.brandName.trim() } : {}),
         onboarded_at: new Date().toISOString(),
       })
       .eq("id", workspaceId);
@@ -617,7 +623,8 @@ function Onboarding() {
       /* storage unavailable */
     }
     setSaving(false);
-    navigate({ to: workspacePath(workspaceId) });
+    // Onboarding is done: Back must never lead into it again.
+    navigate({ to: workspacePath(workspaceId), replace: true });
   };
 
   // Going in plays the VR entry (VisorTransition); the app builds in behind
@@ -636,7 +643,7 @@ function Onboarding() {
     } catch {
       /* storage unavailable */
     }
-    navigate({ to: entering });
+    navigate({ to: entering, replace: true });
   };
 
   const centered = step === "website" || step === "scan";

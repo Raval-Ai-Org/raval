@@ -5,7 +5,8 @@
 // first: phone frames, icon tiles and animated progress instead of paragraphs.
 import { useEffect, useState } from "react";
 import type * as React from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import {
   Check,
   ChevronDown,
@@ -104,7 +105,7 @@ export function ChipGroup<T extends string>({
   className?: string;
   size?: "sm" | "md";
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div role="radiogroup" aria-label={label} className={cn("flex flex-wrap gap-1.5", className)}>
       {options.map((o) => {
@@ -163,7 +164,7 @@ export function ChoiceTile({
   disabled?: boolean;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <motion.button
       type="button"
@@ -254,7 +255,7 @@ export function PhoneFrame({
   className?: string;
   screenClassName?: string;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <motion.div
       layout={!reduce}
@@ -429,7 +430,7 @@ export function Disclosure({
   className?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const Icon = icon;
   return (
     <div className={cn("ds-tile overflow-hidden", className)}>
@@ -562,7 +563,7 @@ export const itemVariants = {
 
 /** Step body transition. */
 export function StepFrame({ stepKey, children }: { stepKey: string; children: React.ReactNode }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <motion.div
       key={stepKey}

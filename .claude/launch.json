@@ -4,19 +4,28 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 8080
     },
     {
       "name": "verify",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set \"NODE_OPTIONS=%NODE_OPTIONS% --max-old-space-size=4096\"&& set NEXT_DIST_DIR=.next-verify&& npx next dev --webpack -p 8081"],
+      "runtimeArgs": [
+        "/c",
+        "set \"NODE_OPTIONS=%NODE_OPTIONS% --max-old-space-size=4096\"&& set NEXT_DIST_DIR=.next-verify&& npx next dev --webpack -p 8081"
+      ],
       "port": 8081
     },
     {
       "name": "verify-alt",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set \"NODE_OPTIONS=%NODE_OPTIONS% --max-old-space-size=4096\"&& set NEXT_DIST_DIR=.next-alt&& npx next dev --webpack -p 8085"],
+      "runtimeArgs": [
+        "/c",
+        "set \"NODE_OPTIONS=%NODE_OPTIONS% --max-old-space-size=4096\"&& set NEXT_DIST_DIR=.next-alt&& npx next dev --webpack -p 8085"
+      ],
       "port": 8085,
       "autoPort": false
     },
@@ -46,6 +55,16 @@
         "set \"NODE_OPTIONS=%NODE_OPTIONS% --max-old-space-size=4096\"&& set NEXT_DIST_DIR=.next-e2e&& set GITHUB_API_BASE_OVERRIDE=http://127.0.0.1:8787&& npx next dev --webpack -p 8082"
       ],
       "port": 8082
+    },
+    {
+      "name": "verify-motionmox",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set \"NODE_OPTIONS=%NODE_OPTIONS% --max-old-space-size=6144\"&& set TMP=H:\\tmp&& set TEMP=H:\\tmp&& set NEXT_DIST_DIR=.next-motionmox&& set \"MOTIONMOX_BROWSER_EXECUTABLE=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\"&& node node_modules/next/dist/bin/next dev --webpack -p 8086"
+      ],
+      "port": 8086,
+      "autoPort": false
     }
   ]
 }

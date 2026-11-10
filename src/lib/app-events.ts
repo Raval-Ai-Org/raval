@@ -64,7 +64,8 @@ export type AppEventMap = {
   /**
    * Background work that isn't a Studio piece (a strategy, a campaign plan…)
    * shows in the corner list (GeneratingPanel) instead of a pop-up. Send the
-   * same id again with the new state; `href` is where a press on the row goes.
+   * same id again with the new state; `href` is where a press on the row goes,
+   * `ugcProjectId` opens that Creator video instead.
    */
   "work:update": {
     id: string;
@@ -73,7 +74,10 @@ export type AppEventMap = {
     step?: string;
     doneLabel?: string;
     href?: string;
+    ugcProjectId?: string;
   };
+  /** "Run in background" on a Creator video: its window steps aside, the render goes on. */
+  "ugc:minimize": undefined;
 
   // ── Chat ────────────────────────────────────────────────────────────
   /** Put text in the chat composer; `focus` defaults to true. */

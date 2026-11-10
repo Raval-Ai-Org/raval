@@ -139,6 +139,9 @@ export function CommandBar() {
       onClick={() => setOpen(false)}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command menu"
         className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl animate-scale-in"
         onClick={(e) => e.stopPropagation()}
         style={{

@@ -1,0 +1,49 @@
+{
+  "name": "@motionmox/codemods",
+  "version": "4.0.542",
+  "description": "Codemods for MotionMox projects",
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/codemods"
+  },
+  "type": "module",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "dependencies": {
+    "@babel/parser": "7.24.1",
+    "@babel/types": "7.24.0",
+    "@motionmox/studio-protocol": "file:../studio-protocol",
+    "@motionmox/studio-shared": "file:../studio-shared",
+    "ast-types": "0.16.1",
+    "recast": "0.23.21",
+    "@motionmox/core": "file:../core"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    },
+    "./resolve-composition-component-location": {
+      "types": "./dist/resolve-composition-component-location.d.ts",
+      "require": "./dist/resolve-composition-component-location.cjs",
+      "module": "./dist/esm/resolve-composition-component-location.mjs",
+      "import": "./dist/esm/resolve-composition-component-location.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "@motionmox/core",
+    "studio",
+    "codemod"
+  ],
+  "homepage": "https://www.remotion.dev/docs/codemods",
+  "private": true
+}

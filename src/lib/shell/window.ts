@@ -24,6 +24,12 @@ export function clearStaleBodyPointerEvents(
 export const SIDEBAR_ATTR = "data-app-sidebar";
 
 /**
+ * Sidebar controls that only change the sidebar itself (collapse, expand,
+ * "More"). Pressing one never closes a window: the canvas just resizes.
+ */
+export const SIDEBAR_KEEP_ATTR = "data-sidebar-keep";
+
+/**
  * For Radix `onInteractOutside`: close only when the press is on the sidebar.
  * Focus moving to the sidebar never closes a window: a menu there (the
  * account menu) hands focus back to its button as it closes, which would
@@ -36,7 +42,9 @@ export function closeOnlyFromSidebar(event: Event) {
     return;
   }
   const target = event.target as Element | null;
-  if (!target?.closest?.(`[${SIDEBAR_ATTR}]`)) event.preventDefault();
+  if (!target?.closest?.(`[${SIDEBAR_ATTR}]`) || target.closest(`[${SIDEBAR_KEEP_ATTR}]`)) {
+    event.preventDefault();
+  }
 }
 
 /** Whether a big window will sit in the canvas (desktop, inside the app). */

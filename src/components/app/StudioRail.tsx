@@ -5,7 +5,8 @@ import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
@@ -296,7 +297,7 @@ function ActiveJobRow({
   defaultOpen: boolean;
   format: (typeof STUDIO_FORMATS)[StudioType];
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [open, setOpen] = useState(defaultOpen);
   const [cancelling, setCancelling] = useState(false);
   const elapsed = useElapsed(Date.parse(job.created_at));
@@ -579,7 +580,7 @@ export function PipelineSection({
   /** Preview/testing: decisions and creation don't write. */
   fixture?: boolean;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   // The rows shown here were loaded for this workspace; work started from them
   // is created in it, whatever page is current when the click resolves.
   const rowWorkspaceId = useWorkspaceId();
@@ -1141,7 +1142,7 @@ export function ApprovalCard({
   /** Preview/testing: decide locally without writing. */
   fixture?: boolean;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [busy, setBusy] = useState(false);
   const [decided, setDecided] = useState<null | "approved" | "rejected" | "draft">(null);
   const legacy = group.type === "legacy";

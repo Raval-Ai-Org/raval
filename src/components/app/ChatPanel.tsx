@@ -68,6 +68,7 @@ import { useWorkspacePulse } from "./pulse/use-pulse";
 import { WaitingChip } from "./pulse/WaitingChip";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
 import { HomeBento } from "./home/HomeBento";
+import { HomeAutopilot } from "./autopilot/home/HomeAutopilot";
 import { useStartHere } from "./home/use-start-here";
 import { useOpenCreate } from "@/components/studio/use-open-create";
 import { IdeaSwipeDeck } from "@/components/studio/IdeaSwipeDeck";
@@ -1675,18 +1676,9 @@ export function ChatPanel({
       ? "Ask Mox anything…"
       : "Reply to Mox…";
 
-  // Autopilot lives in the message box: a switch when it's off, the whole box
-  // when it's on. Typing hands the box straight back.
-  const onAutopilotType = useCallback((char?: string) => {
-    if (char) setInput((v) => v + char);
-    requestAnimationFrame(() => composerRef.current?.focus());
-  }, []);
-  const autopilot = useComposerAutopilot({
-    workspaceId,
-    hero: empty,
-    compact: home,
-    onType: onAutopilotType,
-  });
+  // Autopilot has its own area on Home; elsewhere the box's toolbar keeps a
+  // small pill that opens it. The box itself never changes for Autopilot.
+  const autopilot = useComposerAutopilot({ workspaceId, hidden: home });
   // What waits for a person and what is running, read once for the box and
   // the ideas under it (src/lib/pulse/pulse.ts). Free; starts nothing.
   const pulse = useWorkspacePulse(workspaceId).data;
@@ -1750,6 +1742,7 @@ export function ChatPanel({
               onOpenWaiting={openWaiting}
               onSwipe={(type) => setSwipe({ type })}
               onWarmIdeas={(type) => prefetchIdeas(workspaceId, type)}
+              autopilot={<HomeAutopilot workspaceId={workspaceId} campaigns={pulse?.campaigns} />}
             />
           ) : empty ? (
             <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
@@ -1951,8 +1944,6 @@ export function ChatPanel({
                 {pulse ? <WaitingChip pulse={pulse} onOpen={openWaiting} /> : null}
               </>
             }
-            cover={autopilot.cover}
-            autopilot={autopilot.signal}
             // The "/" menu: a person's own pick, so it may open a place or ask.
             onCommand={(command) => {
               if (command.run.type === "prefill") return setInput(command.run.text);

@@ -111,30 +111,36 @@ export async function sampleFrames(dataUrl: string, times: readonly number[]): P
     const out: Buffer[] = [];
     for (const [i, time] of times.entries()) {
       const file = join(dir, `f${i}.jpg`);
-      await run(
-        ffmpeg(),
-        [
-          "-hide_banner",
-          "-loglevel",
-          "error",
-          "-nostdin",
-          "-y",
-          "-ss",
-          Math.max(0, time).toFixed(2),
-          ...SAFE_INPUT,
-          "-i",
-          input,
-          "-frames:v",
-          "1",
-          "-vf",
-          "scale=512:-2",
-          "-q:v",
-          "4",
-          file,
-        ],
-        options,
-      );
-      out.push(await readFile(file));
+      const grab = (at: number) =>
+        run(
+          ffmpeg(),
+          [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-ss",
+            Math.max(0, at).toFixed(2),
+            ...SAFE_INPUT,
+            "-i",
+            input,
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=512:-2",
+            "-q:v",
+            "4",
+            file,
+          ],
+          options,
+        );
+      await grab(time);
+      // A seek into the last few frames can come back empty; step back a little.
+      const frame =
+        (await readFile(file).catch(() => null)) ??
+        (await grab(time - 0.5).then(() => readFile(file)));
+      out.push(frame as Buffer);
     }
     return out;
   });

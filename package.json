@@ -31,7 +31,9 @@
     "test:hreflang": "node scripts/validate-hreflang.mjs",
     "eval": "npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml -c evals/campaign-generation.promptfooconfig.yaml -c evals/security.promptfooconfig.yaml",
     "eval:watch": "npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml -c evals/campaign-generation.promptfooconfig.yaml -c evals/security.promptfooconfig.yaml --watch",
-    "storage:migrate": "node scripts/storage/migrate-to-r2.mjs"
+    "storage:migrate": "node scripts/storage/migrate-to-r2.mjs",
+    "motionmox:bundle": "node scripts/motionmox/bundle.mjs",
+    "prebuild": "node scripts/motionmox/bundle.mjs --soft"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
@@ -42,6 +44,10 @@
     "@mdx-js/react": "^3.1.1",
     "@mendable/firecrawl-js": "^4.40.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
+    "@motionmox/core": "file:vendor/motionmox/packages/core",
+    "@motionmox/player": "file:vendor/motionmox/packages/player",
+    "@motionmox/renderer": "file:vendor/motionmox/packages/renderer",
+    "@motionmox/transitions": "file:vendor/motionmox/packages/transitions",
     "@next/mdx": "^16.4.0",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -106,6 +112,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.32.0",
+    "@motionmox/bundler": "file:vendor/motionmox/packages/bundler",
     "@playwright/test": "1.56.0",
     "@types/node": "^22.16.5",
     "@types/pg": "^8.23.1",

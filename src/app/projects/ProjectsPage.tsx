@@ -174,7 +174,7 @@ function ProjectsPage() {
    * A new brand always starts in onboarding (goal, products, first posts). A
    * create that returned an existing workspace (same brand domain) opens it instead.
    */
-  const afterCreate = (result: CreateWorkspaceOutcome) => {
+  const afterCreate = (result: CreateWorkspaceOutcome, opts?: { manual?: boolean }) => {
     if (!result.created) {
       toast.message(`You already have ${result.domain || result.name}`, {
         description: "Opening the existing workspace instead of creating a duplicate.",
@@ -183,7 +183,7 @@ function ProjectsPage() {
       navigate({ to: existing ? openHref(existing) : workspacePath(result.id) });
       return;
     }
-    navigate({ to: onboardingPath(result.id) });
+    navigate({ to: onboardingPath(result.id, opts?.manual ? { start: "manual" } : undefined) });
   };
 
   const signOut = async () => {
@@ -1040,7 +1040,7 @@ export function PasteLinkBar({
 }: {
   existing: Workspace[];
   initialUrl?: string | null;
-  onCreated: (result: CreateWorkspaceOutcome) => void;
+  onCreated: (result: CreateWorkspaceOutcome, opts?: { manual?: boolean }) => void;
   onOpenAdvanced: () => void;
   onManage?: () => void;
 }) {
@@ -1093,6 +1093,22 @@ export function PasteLinkBar({
     }
   };
 
+  // No website: create the brand without one and go straight to the brand kit,
+  // so nothing is scanned. The kit's brand name replaces this placeholder.
+  const startManual = async () => {
+    if (saving) return;
+    if (brands.full) {
+      openBrandUpgrade();
+      return;
+    }
+    try {
+      const result = await create({ name: "New brand", websiteUrl: null });
+      onCreated(result, { manual: true });
+    } catch (error) {
+      handleCreateError(error, brands.refuse, "Couldn't create project");
+    }
+  };
+
   const onPasteShortcut = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -1133,6 +1149,21 @@ export function PasteLinkBar({
           placeholder="Paste your website link"
           className="!mt-0 h-11 min-w-0 flex-1 bg-transparent px-1 text-[15px] tracking-tight text-foreground outline-none placeholder:text-muted-foreground/70"
         />
+
+        {!url.trim() && (
+          <button
+            type="button"
+            onClick={() => void startManual()}
+            disabled={saving}
+            data-testid="no-website"
+            title="Set up your brand by hand, no scan"
+            className="!mt-0 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 text-[13px] font-medium text-foreground/80 transition hover:border-border hover:bg-secondary hover:text-foreground disabled:opacity-60"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+            <span className="sm:hidden">No site?</span>
+            <span className="hidden sm:inline">No website?</span>
+          </button>
+        )}
 
         <button
           type="submit"

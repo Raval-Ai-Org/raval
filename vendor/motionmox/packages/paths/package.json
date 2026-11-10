@@ -1,0 +1,35 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/paths"
+  },
+  "name": "@motionmox/paths",
+  "version": "4.0.542",
+  "description": "Utilities for working with SVG paths",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "keywords": [
+    "svg",
+    "path",
+    "utilities"
+  ],
+  "dependencies": {
+    "@motionmox/core": "file:../core"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "homepage": "https://www.remotion.dev/paths",
+  "private": true
+}

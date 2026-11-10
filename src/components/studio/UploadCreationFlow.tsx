@@ -411,7 +411,9 @@ export function UploadCreationFlow({ open, onClose }: { open: boolean; onClose: 
     <>
       <AppModalShell
         open={open}
-        onOpenChange={(value) => !value && !busy && onClose()}
+        // Writing captions never traps the window (a sidebar press must leave);
+        // only a save in flight holds it for its second, so nothing is lost.
+        onOpenChange={(value) => !value && busy !== "save" && onClose()}
         size="lg"
         Icon={Upload}
         title={kind ? `Upload ${kind === "text" ? "a post" : `a ${kind}`}` : "Upload your content"}

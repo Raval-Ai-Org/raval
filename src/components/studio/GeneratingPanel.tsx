@@ -11,7 +11,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Check, ChevronRight, Sparkles, X } from "@/components/icons";
-import { addAppEventListener, removeAppEventListener, type AppEvent } from "@/lib/app-events";
+import {
+  addAppEventListener,
+  emitAppEvent,
+  removeAppEventListener,
+  type AppEvent,
+} from "@/lib/app-events";
 import { useNavigate } from "@/lib/navigation";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
@@ -54,7 +59,7 @@ export function GeneratingPanelView({
       exit={reduce ? { opacity: 0 } : { opacity: 0, x: 24 }}
       transition={{ type: "spring", stiffness: 380, damping: 32 }}
       className={cn(
-        "w-[300px] rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-glass-bg)] p-2 shadow-[var(--ds-pop-shadow)] backdrop-blur-xl",
+        "w-[300px] max-w-full rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-glass-bg)] p-2 shadow-[var(--ds-pop-shadow)] backdrop-blur-xl",
         className,
       )}
     >
@@ -83,7 +88,8 @@ export function GeneratingPanelView({
           <X className="size-3.5" />
         </button>
       </div>
-      <ul className="flex flex-col gap-1">
+      {/* A long list scrolls inside the card instead of running off screen. */}
+      <ul className="flex max-h-[min(55vh,420px)] flex-col gap-1 overflow-y-auto overscroll-contain">
         <AnimatePresence initial={false}>
           {rows.map((r) => {
             const label = (r.type && STUDIO_FORMATS[r.type]?.label) || "Piece";
@@ -177,11 +183,13 @@ export function GeneratingPanel({ className }: { className?: string }) {
   const [closed, setClosed] = useState(false);
   const navigate = useNavigate();
   // Other background work, newest first (see the `work:update` event).
-  const [tasks, setTasks] = useState<(GeneratingRow & { href?: string })[]>([]);
+  const [tasks, setTasks] = useState<(GeneratingRow & { href?: string; ugcProjectId?: string })[]>(
+    [],
+  );
   useEffect(() => {
     const on = (e: AppEvent<"work:update">) => {
-      const { id, title, state, step, doneLabel, href } = e.detail;
-      const row = { id: `task:${id}`, title, state, step, doneLabel, href };
+      const { id, title, state, step, doneLabel, href, ugcProjectId } = e.detail;
+      const row = { id: `task:${id}`, title, state, step, doneLabel, href, ugcProjectId };
       setTasks((list) => [row, ...list.filter((r) => r.id !== row.id)].slice(0, 4));
       setClosed(false);
     };
@@ -245,6 +253,8 @@ export function GeneratingPanel({ className }: { className?: string }) {
             if (id.startsWith("session:")) return focusSession(id.slice("session:".length));
             const task = tasks.find((t) => t.id === id);
             if (!task) return void openJob(id, workspaceId);
+            if (task.ugcProjectId)
+              return emitAppEvent("open:ugc-studio", { projectId: task.ugcProjectId });
             if (task.href) navigate({ to: task.href });
           }}
           onClose={() => {

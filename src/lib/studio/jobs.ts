@@ -10,6 +10,7 @@ import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import type { AdOnImage } from "./ad-formats";
 import { AD_OBJECTIVE_IDS } from "./ad-objectives";
 import { VIDEO_KIND_IDS, type VideoKindId } from "./video/kinds";
+import { MOTIONMOX_ELEMENT_IDS } from "./motionmox/elements";
 import type { VideoPlanOutput } from "./video/storyboard";
 
 export const PlatformIdSchema = z.enum([
@@ -133,6 +134,11 @@ export const ControlsSchema = z.object({
   sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
   /** Brand mode: captions of what is said (absent means on). */
   clipCaptions: z.boolean().optional(),
+  /**
+   * Brand and recap modes: what MotionMox animates into the video
+   * (src/lib/studio/motionmox/elements.ts). Absent: read from the brief.
+   */
+  motionElements: z.array(z.enum(MOTIONMOX_ELEMENT_IDS)).max(9).optional(),
   /** Recap mode: camera moves over the exact photos, or AI motion per photo. */
   recapMotion: z.enum(["camera", "ai"]).optional(),
   /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */

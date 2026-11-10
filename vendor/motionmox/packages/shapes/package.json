@@ -1,0 +1,40 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/shapes"
+  },
+  "name": "@motionmox/shapes",
+  "version": "4.0.542",
+  "description": "Generate SVG shapes",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "author": "Alex Fernandez, Jonny Burger <jonny@remotion.dev>",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "keywords": [
+    "svg",
+    "path",
+    "utilities"
+  ],
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "dependencies": {
+    "@motionmox/paths": "file:../paths",
+    "@motionmox/core": "file:../core"
+  },
+  "homepage": "https://www.remotion.dev/docs/shapes",
+  "private": true
+}

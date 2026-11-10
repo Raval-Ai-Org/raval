@@ -4,6 +4,7 @@ import { OpeningPill } from "@/components/ui/page-loader";
 import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useBodyPointerGuard } from "@/lib/shell/window";
+import { canStepBack, installShellHistory, previousUrl } from "@/lib/shell/history";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
 import { Link, useRouterState, useNavigate, usePrefetch } from "@/lib/navigation";
 
@@ -101,6 +102,7 @@ const AppTour = lazy(() =>
 import { useStudioEntry } from "@/hooks/use-studio";
 import { StudioActivityWatcher, StudioButton } from "@/components/studio/StudioButton";
 import { GeneratingPanel } from "@/components/studio/GeneratingPanel";
+import { UgcRenderWatcher } from "@/components/app/ugc/UgcRenderWatcher";
 import { setStudioRailOpen, useStudioRail } from "@/lib/studio/rail-state";
 import { useStudioStore } from "@/lib/studio/session-store";
 import { useIsCompact } from "@/hooks/use-mobile";
@@ -196,6 +198,8 @@ function AppShell() {
   const activeId = windowNav ?? routeNavId;
   // Never let a closed window leave the whole app unclickable.
   useBodyPointerGuard();
+  // Back is one step out (see shell/history.ts).
+  useEffect(() => installShellHistory(), []);
   const isCompact = useIsCompact();
   const studioRail = useStudioRail();
   const [navOpen, setNavOpen] = useState(false);
@@ -370,10 +374,15 @@ function AppShell() {
   // section here.
   const openBrain = useCallback(
     (section?: BrainSection | null, tab?: string | null) => {
-      navigate({ to: brainPath(workspaceId, section, tab) });
+      const to = brainPath(workspaceId, section, tab);
+      // Inside Brain (or hopping from another section) the entry is replaced,
+      // so Back leaves Brain in one press.
+      const fromSection = routeNavId !== "home" && routeNavId !== "chat";
+      if (previousUrl() === to) window.history.back();
+      else navigate({ to, replace: fromSection && canStepBack() });
       closeNavOnPhone();
     },
-    [navigate, workspaceId, closeNavOnPhone],
+    [navigate, workspaceId, closeNavOnPhone, routeNavId],
   );
   useEffect(() => {
     const onBrain = (event: CustomEvent<{ section?: BrainSection; tab?: string } | null>) =>
@@ -506,7 +515,11 @@ function AppShell() {
     if (lock && item.feature) return openFeatureUpgrade(item.feature);
     const t = item.target;
     // Whatever window is open steps aside, and the highlight moves at once.
-    if (item.id !== activeId) {
+    // A place (Home, Chat…) always clears the canvas, even when the window
+    // open on it claims that same row (Animate on Home, a Creator video):
+    // pressing Home must show Home. Pressing the row of the window that is
+    // open (Library while in Library) leaves it be.
+    if (t.kind === "route" || t.kind === "brain" || item.id !== activeId) {
       emitAppEvent("shell:leave");
       setWindowNav(null);
     }
@@ -518,8 +531,10 @@ function AppShell() {
       routeNavId &&
       routeNavId !== "home" &&
       routeNavId !== "chat"
-    )
-      navigate({ to: homeHref });
+    ) {
+      if (previousUrl() === homeHref) window.history.back();
+      else navigate({ to: homeHref, replace: canStepBack() });
+    }
     if (t.kind === "analytics") return setAnalyticsOpen(true);
     if (t.kind === "event") return emitAppEvent(t.event);
     const to =
@@ -534,7 +549,16 @@ function AppShell() {
               : t.place === "communities"
                 ? communitiesPath(workspaceId)
                 : workspacePath(workspaceId, "experiments");
-    navigate({ to });
+    // Back is one step out: returning to the place just before steps back,
+    // and hopping between sections replaces the entry instead of stacking.
+    const fromSection = routeNavId !== "home" && routeNavId !== "chat";
+    // Already there (Home pressed on Home): the windows above stepped aside,
+    // nothing to load again.
+    const alreadyHere = window.location.pathname + window.location.search === to;
+    if (alreadyHere) {
+      /* nothing to navigate */
+    } else if (previousUrl() === to) window.history.back();
+    else navigate({ to, replace: fromSection && canStepBack() });
     if (t.place === "chat") emitAppEvent("chat:focus");
   };
 
@@ -561,6 +585,7 @@ function AppShell() {
         <button
           type="button"
           onClick={() => setNavOpen(false)}
+          data-sidebar-keep
           aria-label="Collapse sidebar"
           title="Collapse sidebar"
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
@@ -636,6 +661,7 @@ function AppShell() {
                   <button
                     type="button"
                     onClick={() => setNavOpen(true)}
+                    data-sidebar-keep
                     aria-label="Open sidebar"
                     className="absolute inset-0 grid place-items-center rounded-full bg-[var(--ds-card-bg)] text-foreground opacity-0 shadow-[var(--ds-card-shadow)] transition-all duration-200 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
@@ -661,6 +687,7 @@ function AppShell() {
                   <button
                     type="button"
                     onClick={() => setNavOpen(true)}
+                    data-sidebar-keep
                     aria-label="More"
                     className="mt-1 grid h-10 w-10 place-items-center rounded-full text-foreground/60 transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
                   >
@@ -1110,12 +1137,17 @@ function WorkspaceSurface({
           variant="centered"
           chatView={chatView}
         />
+        {/* Creator videos keep being followed after their window closes. */}
+        <UgcRenderWatcher />
         {/* Holo's "Generating…" card, while the Studio panel is shut. */}
         {!studioOpen && (
           // Generate closes Studio, so this list must show on a phone too.
           <GeneratingPanel
             className={
-              isCompact ? "fixed inset-x-3 bottom-24 z-40 w-auto" : "absolute right-4 top-4 z-20"
+              isCompact
+                ? "fixed inset-x-3 bottom-24 z-40 w-auto"
+                : // Under the top bar (Scale, Studio, Share), never over it.
+                  "absolute right-4 top-16 z-20 max-w-[calc(100%-2rem)]"
             }
           />
         )}

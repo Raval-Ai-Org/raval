@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X } from "@/components/ui/gemini-icons";
 import { cn } from "@/lib/utils";
 import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
+import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
 
 type Size = "sm" | "md" | "lg" | "xl" | "2xl";
 
@@ -394,7 +395,12 @@ export function AppModalShell({
                     bodyClassName,
                   )}
                 >
-                  {children}
+                  <WindowErrorBoundary
+                    resetKey={open}
+                    onClose={disableClose ? undefined : () => onOpenChange(false)}
+                  >
+                    {children}
+                  </WindowErrorBoundary>
                 </div>
               </motion.div>
             </DialogPrimitive.Content>
@@ -430,7 +436,17 @@ export function useEmbedRect(on: boolean) {
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // The column also changes width without a window resize: the sidebar
+    // collapsing or opening. Follow it, so the window fills the canvas
+    // instead of leaving a gap where the sidebar was.
+    const main = document.querySelector<HTMLElement>("[data-workspace-column]");
+    const observer =
+      main && typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (main) observer?.observe(main);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
   }, [on]);
   return rect;
 }

@@ -2,7 +2,7 @@
 
 // Development-only: the Autopilot screens with sample data, so layout and copy
 // can be checked without a workspace or a sign-in. Mounted at /autopilot-lab.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type {
   ActionView,
@@ -10,9 +10,10 @@ import type {
   ProgramSettings,
   Strategy,
 } from "@/lib/autopilot/contracts";
-import { ChatComposer, type ChatComposerHandle } from "@/components/app/chat/ChatComposer";
+import type { PulseCampaign } from "@/lib/pulse/pulse";
+import { ChatComposer } from "@/components/app/chat/ChatComposer";
 import { AutopilotScreen, type AutopilotHandlers, type Section } from "./AutopilotScreen";
-import { AutopilotBeacon, AutopilotDeck, AutopilotToggle } from "./composer/AutopilotDeck";
+import { AutopilotHomeCard, type HomeAutopilotHandlers } from "./home/AutopilotHomeCard";
 
 const HOUR = 3_600_000;
 const at = (hours: number) => new Date(Date.now() + hours * HOUR).toISOString();
@@ -336,7 +337,7 @@ const SCENES = [
   "activity",
   "settings",
   "paused",
-  "box",
+  "card",
 ] as const;
 type Scene = (typeof SCENES)[number];
 
@@ -358,37 +359,50 @@ const pausedView: AutopilotView = {
   program: { ...running.program!, status: "paused", pauseReason: "user" },
 };
 
-/**
- * Autopilot in the chat message box: off (a switch), being set up, on (it
- * covers the box) and paused. `?box=on|paused|setup` starts at that step.
- */
-function BoxScene({ log }: { log: (name: string) => (...args: unknown[]) => void }) {
-  const [stage, setStage] = useState<"off" | "setup" | "on" | "paused">("off");
-  const [typing, setTyping] = useState(false);
+/** Home's Autopilot card in every state, above a plain message box. */
+function CardScene({ log }: { log: (name: string) => (...args: unknown[]) => void }) {
+  const [paused, setPaused] = useState(false);
   const [value, setValue] = useState("");
-  const composer = useRef<ChatComposerHandle>(null);
-  useEffect(() => {
-    const wanted = new URLSearchParams(window.location.search).get("box");
-    if (wanted === "on" || wanted === "paused" || wanted === "setup") setStage(wanted);
-  }, []);
-  const covered = stage !== "off" && !typing;
-  const write = () => {
-    setTyping(true);
-    if (stage === "setup") setStage("off");
-    requestAnimationFrame(() => composer.current?.focus());
+  const handlers: HomeAutopilotHandlers = {
+    open: log("open"),
+    upgrade: log("upgrade"),
+    pause: (next) => {
+      log("pause")(next);
+      setPaused(next);
+    },
+    place: log("place"),
+    retry: log("retry"),
   };
-
+  const planning: AutopilotView = {
+    ...running,
+    upcoming: [],
+    approvals: [],
+    proposed: [],
+    finished: [],
+  };
   return (
-    <div className="mx-chat mx-auto flex max-w-3xl flex-col gap-6 px-3 pb-10 pt-10 md:px-6">
-      <div className="flex h-8 items-center justify-end" data-testid="box-topbar">
-        {(stage === "on" || stage === "paused") && (
-          <AutopilotBeacon state={stage} waiting={stage === "on" ? 1 : 0} onClick={log("beacon")} />
-        )}
+    <div className="mx-chat mx-auto flex max-w-[1040px] flex-col gap-5 px-4 pb-10 pt-8 md:px-8">
+      <div data-testid="card-off">
+        <AutopilotHomeCard state={{ kind: "off", canManage: true }} handlers={handlers} />
       </div>
+      <div data-testid="card-live">
+        <AutopilotHomeCard
+          state={{ kind: "live", view: paused ? pausedView : running }}
+          campaigns={CAMPAIGNS}
+          handlers={handlers}
+        />
+      </div>
+      <div data-testid="card-planning">
+        <AutopilotHomeCard state={{ kind: "live", view: planning }} handlers={handlers} />
+      </div>
+      <div data-testid="card-locked">
+        <AutopilotHomeCard state={{ kind: "locked", plan: "growth" }} handlers={handlers} />
+      </div>
+      <AutopilotHomeCard state={{ kind: "loading" }} handlers={handlers} />
+      {/* The message box stays a message box: Autopilot never covers it. */}
       <div data-testid="box">
         <ChatComposer
-          ref={composer}
-          hero
+          slim
           value={value}
           onChange={setValue}
           onSend={log("send")}
@@ -401,50 +415,15 @@ function BoxScene({ log }: { log: (name: string) => (...args: unknown[]) => void
           modelId="mellox-flash"
           onModelChange={() => {}}
           placeholder="Ask Mox anything…"
-          autopilot={covered ? stage : stage === "on" ? "on" : null}
-          toolbarSlot={
-            <AutopilotToggle
-              state={stage === "setup" ? "off" : stage}
-              waiting={stage === "on" ? 1 : 0}
-              onClick={() => {
-                if (stage === "off") setStage("setup");
-                if (stage === "paused") setStage("on");
-                setTyping(false);
-              }}
-            />
-          }
-          cover={
-            covered ? (
-              <AutopilotDeck
-                view={stage === "on" ? running : stage === "paused" ? pausedView : notStarted}
-                suggestion={{
-                  data: { strategy, settings, source: "model", hasBrand: true },
-                  loading: false,
-                  failed: false,
-                }}
-                handlers={{
-                  start: (...args) => {
-                    log("start")(...args);
-                    setStage("on");
-                  },
-                  pause: (paused) => {
-                    log("pause")(paused);
-                    setStage(paused ? "paused" : "on");
-                  },
-                  write,
-                  open: log("open"),
-                  fix: log("fix"),
-                  retry: log("retry"),
-                  busy: false,
-                }}
-              />
-            ) : null
-          }
         />
       </div>
     </div>
   );
 }
+
+const CAMPAIGNS: PulseCampaign[] = [
+  { id: "c1", name: "Winter blend launch", phase: "Build-up", keyDate: at(24 * 9), waiting: 0 },
+];
 
 export function AutopilotLab() {
   const [scene, setScene] = useState<Scene>("setup");
@@ -502,9 +481,9 @@ export function AutopilotLab() {
           {last}
         </span>
       </div>
-      {scene === "box" && <BoxScene log={log} />}
+      {scene === "card" && <CardScene log={log} />}
       <div
-        hidden={scene === "box"}
+        hidden={scene === "card"}
         className="ds-window mx-auto my-4 h-[calc(100dvh-90px)] w-[min(1100px,calc(100vw-16px))] overflow-hidden"
         data-testid="autopilot-lab-frame"
       >
@@ -513,6 +492,7 @@ export function AutopilotLab() {
           view={view}
           handlers={handlers}
           initialSection={section}
+          campaigns={CAMPAIGNS}
           suggestion={{
             data: { strategy, settings, source: "model", hasBrand: true },
             loading: false,

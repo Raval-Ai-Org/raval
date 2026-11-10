@@ -28,7 +28,7 @@ export function TasteStrip({
   const avoided = summary.chips.filter((c) => c.tone === "avoided");
   const hint =
     summary.loves === 0
-      ? "Tap ♥ on posts you love. Mellox makes more like them."
+      ? "Tap the heart on posts you love. Mellox makes more like them."
       : liked.length || avoided.length
         ? null
         : summary.loves < 2

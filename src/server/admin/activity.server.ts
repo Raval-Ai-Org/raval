@@ -40,6 +40,7 @@ type JobRow = {
   title: string | null;
   type: string;
   updated_at: string;
+  error: { message?: unknown } | null;
 };
 type AnnouncementRow = {
   id: string;
@@ -89,7 +90,7 @@ async function loadSources(now: Date) {
       .limit(SOURCE_LIMIT),
     adminDb
       .from("studio_jobs")
-      .select("id,created_by,title,type,updated_at")
+      .select("id,created_by,title,type,updated_at,error")
       .eq("status", "failed")
       .gte("updated_at", since)
       .order("updated_at", { ascending: false })
@@ -264,7 +265,14 @@ export async function getOverviewActivity(
       id: `job:${job.id}`,
       kind: "job_failed",
       title: `${job.title?.trim() || job.type.replaceAll("_", " ")} failed`,
-      detail: `${person(job.created_by)} may need assistance`,
+      detail: [
+        `${person(job.created_by)} may need assistance`,
+        typeof job.error?.message === "string" && job.error.message.trim()
+          ? shortText(job.error.message, 90)
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       occurredAt: job.updated_at,
       href: "/admin/jobs",
       amountUsd: null,

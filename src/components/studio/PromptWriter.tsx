@@ -7,7 +7,8 @@ import { creditsFor } from "@/lib/billing/catalog";
 // wrote), reveals it into the box, and remembers what it gave so the next
 // click brings something new.
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { toast } from "@/lib/toast";
 import { RefreshCw, Sparkles, Wand2 } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -60,7 +61,7 @@ export type PromptWriterState = {
 };
 
 export function usePromptWriter(session: StudioSession): PromptWriterState {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [busy, setBusy] = useState(false);
   const [statusIndex, setStatusIndex] = useState(0);
   const [result, setResult] = useState<WrittenPrompt | null>(null);
@@ -198,7 +199,7 @@ export function WriteForMeButton({
   writer: PromptWriterState;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const Icon = writer.label === "Try another" ? RefreshCw : Wand2;
   return (
     <motion.button
@@ -229,7 +230,7 @@ export function WriteForMeButton({
 
 /** Covers the description box while writing. */
 export function WritingOverlay({ writer }: { writer: PromptWriterState }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <AnimatePresence>
       {writer.busy ? (

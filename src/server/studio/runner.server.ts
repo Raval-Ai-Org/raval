@@ -106,7 +106,8 @@ import {
 import { isPhotoDesignType } from "@/lib/studio/photo-design/mode";
 import { photoDesignCopy } from "@/lib/studio/photo-design/plan";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
-import { isClipEditEnabled } from "@/lib/feature-flags";
+import { isClipEditEnabled, isMotionMoxEnabled } from "@/lib/feature-flags";
+import { elementsFromBrief } from "@/lib/studio/motionmox/elements";
 import {
   CLIP_EDIT_FAILED,
   CLIP_EDIT_PREFIX,
@@ -330,12 +331,26 @@ type ProviderTask = {
   qaRedos?: number;
   /** Video only: status reads or saves in a row that failed for a passing reason. */
   checkErrors?: number;
+  /** Video only: when the current run of passing errors began. */
+  checkErrorsSince?: number;
+  /** Video only: the last passing error, kept for staff (never shown as the piece's message). */
+  lastCheckError?: string;
+  /** Image only: times a render whose result never arrived was started again. */
+  lostRestarts?: number;
 };
 
 /** A video the provider ended with an outage-type failure is made again this many times. */
 const VIDEO_RESUBMITS = 2;
-/** Passing errors (a slow download, a dropped connection) tolerated in a row while collecting a video. */
+/**
+ * Passing errors (a slow download, a dropped connection, a busy encoder)
+ * tolerated while collecting a video. Both must be used up before a finished,
+ * paid video is given up: polls come every few seconds, so a count alone was
+ * spent in under a minute and a short hiccup lost the video.
+ */
 const VIDEO_CHECK_ERRORS = 10;
+const VIDEO_CHECK_ERROR_WINDOW_MS = 10 * 60_000;
+/** A lost image render is started again this many times, at Mellox's cost. */
+const IMAGE_LOST_RESTARTS = 1;
 
 type JobRow = StudioJob & {
   provider_tasks: ProviderTask[];
@@ -1649,6 +1664,12 @@ async function startMedia(args: {
       ...(refineNote ? { revision: refineNote } : {}),
       emphasisSeed: seed,
       ...(videoMode === "brand" ? { captions: input.controls.clipCaptions !== false } : {}),
+      // MotionMox animates what the person picked, else what their brief asks for.
+      ...((videoMode === "brand" || videoMode === "recap") && isMotionMoxEnabled(job.workspace_id)
+        ? {
+            motionElements: input.controls.motionElements ?? elementsFromBrief(input.intent.brief),
+          }
+        : {}),
       ...(videoMode === "motion"
         ? {
             graphic: {
@@ -3469,9 +3490,23 @@ async function startStudioVideo(opts: {
  * One more passing error while collecting a video. True while the task should
  * stay pending for the next poll; false once too many came in a row.
  */
-function keepCollecting(task: ProviderTask): boolean {
+function keepCollecting(task: ProviderTask, error?: unknown, now = Date.now()): boolean {
   task.checkErrors = (task.checkErrors ?? 0) + 1;
-  return task.checkErrors < VIDEO_CHECK_ERRORS;
+  task.checkErrorsSince ??= now;
+  if (error !== undefined) {
+    const message = error instanceof Error ? error.message : String(error);
+    task.lastCheckError = message.slice(0, 300);
+  }
+  return (
+    task.checkErrors < VIDEO_CHECK_ERRORS ||
+    now - task.checkErrorsSince < VIDEO_CHECK_ERROR_WINDOW_MS
+  );
+}
+
+/** A clean read or a fresh render starts the count of passing errors again. */
+function resetCheckErrors(task: ProviderTask): void {
+  task.checkErrors = 0;
+  task.checkErrorsSince = undefined;
 }
 
 /**
@@ -3590,12 +3625,26 @@ async function finishStoryboardVideo(
   });
   let reference: Buffer | null = null;
   if (video.firstFramePath && isWorkspaceStoragePath(video.firstFramePath, row.workspace_id)) {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const stored = await downloadAssetObject(
-      supabaseAdmin as unknown as SupabaseClient,
-      video.firstFramePath,
-    );
-    if (stored.data) reference = Buffer.from(await stored.data.arrayBuffer());
+    // The reference only sharpens the check and gives the ending; a read that
+    // fails leaves it out instead of stopping the video.
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const stored = await downloadAssetObject(
+        supabaseAdmin as unknown as SupabaseClient,
+        video.firstFramePath,
+      );
+      if (stored.data) {
+        const bytes = Buffer.from(await stored.data.arrayBuffer());
+        // The checker and the ending read it as a JPEG.
+        reference = await sharp(bytes, { failOn: "none" })
+          .rotate()
+          .jpeg({ quality: 90 })
+          .toBuffer();
+      }
+    } catch (error) {
+      console.warn("[studio] video reference unreadable", row.id, classify(error).message);
+      reference = null;
+    }
   }
   const result = await checkStudioVideo({
     dataUrl,
@@ -3643,7 +3692,7 @@ async function finishStoryboardVideo(
         Object.assign(task, restarted);
       }
       task.qaRedos = redone + 1;
-      task.checkErrors = 0;
+      resetCheckErrors(task);
       task.startedAt = Date.now();
       return { state: "redo" };
     }
@@ -3651,51 +3700,91 @@ async function finishStoryboardVideo(
   const kind = videoKind(plan.kind);
   // The made voice and music go under the whole video, the clips' own sound ducked beneath.
   let hasAudio = video.audio && result.probe.hasAudio;
+  // The video above has passed its checks. The finishing touches below (sound,
+  // words, ending) each fail open: one that can't be added is left out with a
+  // note, never the reason a checked, paid video is thrown away.
+  const finishing = async (
+    step: string,
+    work: (current: string) => Promise<string>,
+  ): Promise<boolean> => {
+    const before = dataUrl!;
+    try {
+      const next = await work(before);
+      videoBuffer(next);
+      dataUrl = next;
+      return true;
+    } catch (error) {
+      console.warn(`[studio] video ${step} left out`, row.id, classify(error).message);
+      dataUrl = before;
+      return false;
+    }
+  };
   if (soundtrackAvailable && sound) {
     const original = dataUrl;
-    const mixed = await mixSoundtrack(dataUrl, sound, {
-      seconds: result.probe.duration,
-      // The clips' own sound stays only when they speak the voiceover themselves.
-      keepClipAudio: !sound.musicUrl || (plan.voice && !video.soundtrack?.voice),
-    });
+    await finishing("soundtrack", (current) =>
+      mixSoundtrack(current, sound, {
+        seconds: result.probe.duration,
+        // The clips' own sound stays only when they speak the voiceover themselves.
+        keepClipAudio: !sound.musicUrl || (plan.voice && !video.soundtrack?.voice),
+      }),
+    );
     // A silent clip with a voice or music laid under it now has sound to keep.
-    if (mixed !== original) hasAudio = true;
+    if (dataUrl !== original) hasAudio = true;
     else if (!hasAudio)
       warnings.push("The soundtrack could not be added, so this video is silent.");
-    dataUrl = mixed;
   }
   // The storyboard's words, spelled exactly, before the ending (never on the post or the card).
   const cues = textCues(plan.storyboard, clips, plan.kind, {
     duration: result.probe.duration,
     fromPicture: !!video.firstFramePath,
   });
-  if (cues.length)
-    dataUrl = await overlayWords(dataUrl, cues, {
-      duration: result.probe.duration,
-      width: result.probe.width,
-      height: result.probe.height,
-      style: video.wordStyle ?? {},
-    });
-  const still =
-    kind.ending === "back-to-source"
-      ? reference
-      : kind.ending === "end-card" && plan.storyboard.endCard?.headline && video.endCardStyle
-        ? await renderEndCard({
-            ...video.endCardStyle,
-            headline: plan.storyboard.endCard.headline,
-            detail: plan.storyboard.endCard.detail,
-            ratio: task.ratio,
-          })
-        : null;
-  if (still)
-    dataUrl = (
-      await endOnStill(dataUrl, still, {
+  if (
+    cues.length &&
+    !(await finishing("words", (current) =>
+      overlayWords(current, cues, {
         duration: result.probe.duration,
         width: result.probe.width,
         height: result.probe.height,
-        audio: hasAudio,
-      })
-    ).dataUrl;
+        style: video.wordStyle ?? {},
+      }),
+    ))
+  )
+    warnings.push(
+      "The on-screen words could not be added to this video. Add them in your editor before publishing if you need them.",
+    );
+  const still = await (async () => {
+    try {
+      return kind.ending === "back-to-source"
+        ? reference
+        : kind.ending === "end-card" && plan.storyboard.endCard?.headline && video.endCardStyle
+          ? await renderEndCard({
+              ...video.endCardStyle,
+              headline: plan.storyboard.endCard.headline,
+              detail: plan.storyboard.endCard.detail,
+              ratio: task.ratio,
+            })
+          : null;
+    } catch (error) {
+      console.warn("[studio] video end card left out", row.id, classify(error).message);
+      return null;
+    }
+  })();
+  if (
+    still &&
+    !(await finishing(
+      "ending",
+      async (current) =>
+        (
+          await endOnStill(current, still, {
+            duration: result.probe.duration,
+            width: result.probe.width,
+            height: result.probe.height,
+            audio: hasAudio,
+          })
+        ).dataUrl,
+    ))
+  )
+    warnings.push("The closing frame could not be added, so this video ends on its last shot.");
   // Make sure what is saved is still a real video file.
   videoBuffer(dataUrl);
   if (sound)
@@ -3949,7 +4038,51 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
     try {
       // A recap still waiting for its animated photos has not started yet.
       const waitingToStart = !!task.clipEdit && !task.clipEdit.startedAt;
-      if (!waitingToStart && studioProviderTaskIsTimedOut(task, now)) {
+      const timedOut = !waitingToStart && studioProviderTaskIsTimedOut(task, now);
+      // A picture whose result never arrived (its background render was cut
+      // off by a restart, or its result was lost on the way back) is made
+      // again once at Mellox's cost, unless the result is in after all.
+      if (
+        timedOut &&
+        task.kind === "image" &&
+        isImageTask(task.taskId) &&
+        (task.lostRestarts ?? 0) < IMAGE_LOST_RESTARTS &&
+        (await checkImageTask(task.taskId)).state === "pending"
+      ) {
+        const restarted = await (async () => {
+          await requireActiveJob(c, row);
+          return startImageTask({
+            costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
+            prompt: task.prompt,
+            size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
+            model: task.model,
+            referenceAssets: await retryReferenceUrls(c, row, task),
+            background: task.photoDesign?.background,
+          });
+        })().catch((error: unknown) => {
+          // A job someone stopped stays stopped; anything else falls back to the plain timeout.
+          if (error instanceof StudioJobError && error.status === 409) throw error;
+          console.warn("[studio] lost image restart failed", row.id, classify(error).message);
+          return null;
+        });
+        if (restarted) {
+          console.warn("[studio] image render lost; started again", row.id, task.taskId);
+          Object.assign(task, {
+            taskId: restarted.taskId,
+            lostRestarts: (task.lostRestarts ?? 0) + 1,
+            startedAt: Date.now(),
+          });
+          continue;
+        }
+      }
+      if (
+        timedOut &&
+        !(
+          task.kind === "image" &&
+          isImageTask(task.taskId) &&
+          (await checkImageTask(task.taskId)).state !== "pending"
+        )
+      ) {
         task.state = "failed";
         task.failure = {
           category: "timeout",
@@ -4026,7 +4159,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       const check = await checkMediaTask(task);
       if (check.state === "pending") {
-        if (task.checkErrors) task.checkErrors = 0;
+        if (task.checkErrors || task.checkErrorsSince) resetCheckErrors(task);
         continue;
       }
       if (check.state === "failed") {
@@ -4074,6 +4207,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
               ...restarted,
               resubmits: (task.resubmits ?? 0) + 1,
               checkErrors: 0,
+              checkErrorsSince: undefined,
               startedAt: Date.now(),
             });
             continue;
@@ -4097,8 +4231,14 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       const storyboarded =
         task.kind === "video" && !!task.video?.clipPrompts && !!row.output?.videoPlan;
       if (storyboarded) {
+        let finishError: unknown;
         const finished = await finishStoryboardVideo(row, task, check).catch((error: unknown) => {
-          console.warn("[studio] video finishing failed", classify(error).message);
+          finishError = error;
+          console.warn(
+            "[studio] video finishing failed",
+            row.id,
+            error instanceof Error ? error.message : classify(error).message,
+          );
           return { state: "error" as const };
         });
         if (finished.state === "redo" || finished.state === "wait") {
@@ -4106,7 +4246,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           continue;
         }
         // A passing error (a slow download, a busy encoder) is tried again on the next poll.
-        if (finished.state === "error" && keepCollecting(task)) continue;
+        if (finished.state === "error" && keepCollecting(task, finishError)) continue;
         if (finished.state === "failed" || finished.state === "error") {
           task.state = "failed";
           task.failure = {
@@ -4374,7 +4514,8 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       });
       // A finished video that couldn't be stored yet is still at the
       // provider: the next poll tries again (the save is idempotent).
-      if (!persisted.ok && task.kind === "video" && keepCollecting(task)) continue;
+      if (!persisted.ok && task.kind === "video" && keepCollecting(task, persisted.message))
+        continue;
       if (task.kind === "video") {
         recordUsage({
           provider: task.provider === "kie" ? "kie" : "openrouter",
@@ -4420,7 +4561,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         failure.retryable &&
         failure.category !== "safety" &&
         failure.category !== "budget" &&
-        keepCollecting(task)
+        keepCollecting(task, err)
       ) {
         console.warn("[studio] video check will be retried", failure.message);
         continue;

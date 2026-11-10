@@ -1,0 +1,32 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/captions"
+  },
+  "name": "@motionmox/captions",
+  "version": "4.0.542",
+  "description": "Primitives for dealing with captions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "dependencies": {},
+  "peerDependencies": {},
+  "keywords": [
+    "@motionmox/core"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "homepage": "https://remotion.dev/docs/captions/api",
+  "private": true
+}

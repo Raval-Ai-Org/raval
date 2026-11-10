@@ -43,6 +43,7 @@ import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
 import { useEmbedRect } from "@/components/app/AppModalShell";
 import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
+import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
@@ -273,12 +274,21 @@ export function StudioComposer() {
                         : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
                   )}
                 >
-                  <ComposerBody
-                    session={session}
-                    isMobile={isMobile}
-                    embedded={inCanvas}
-                    onMinimize={() => toDock(session.id)}
-                  />
+                  {/* A crash stays in Studio; the piece keeps being made on the server. */}
+                  <WindowErrorBoundary
+                    resetKey={session.id}
+                    onClose={() => {
+                      setExitTo("dock");
+                      closeSession(session.id);
+                    }}
+                  >
+                    <ComposerBody
+                      session={session}
+                      isMobile={isMobile}
+                      embedded={inCanvas}
+                      onMinimize={() => toDock(session.id)}
+                    />
+                  </WindowErrorBoundary>
                 </motion.div>
               </DialogPrimitive.Content>
             </div>
@@ -508,6 +518,7 @@ export function ComposerBody({
               <GenerationProgress
                 session={session}
                 cancelling={cancelling}
+                onBackground={minimize}
                 onCancel={async () => {
                   setCancelling(true);
                   await cancelSession(session.id);

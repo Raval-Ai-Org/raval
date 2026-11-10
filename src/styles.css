@@ -7016,3 +7016,160 @@ pre {
 :root[data-chat-motion="reduced"] .panel-handle-nudge {
   animation: none;
 }
+
+/* =========================================================
+   Autopilot on Home and its screen (Holo style). The card
+   carries a soft wash that follows the state; the flow line
+   fills with the Mox gradient (a progress bar); the stage a
+   piece is being written in breathes; the one that waits for
+   a person glows. Placeholders shimmer while Mox writes.
+   ========================================================= */
+@keyframes ap-flow-run {
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes ap-node-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 7px hsl(var(--primary) / 0);
+  }
+}
+@keyframes ap-node-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(48 100% 60% / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 8px hsl(48 100% 60% / 0);
+  }
+}
+@keyframes ap-orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ap-wash-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-3%, 2%, 0) scale(1.06);
+  }
+}
+
+@layer components {
+  .ap-home {
+    isolation: isolate;
+  }
+  .ap-home__wash {
+    position: absolute;
+    inset: -30% -10% auto auto;
+    z-index: -1;
+    width: 70%;
+    height: 160%;
+    pointer-events: none;
+    background:
+      radial-gradient(45% 40% at 70% 35%, hsl(150 90% 55% / 0.13), transparent 70%),
+      radial-gradient(40% 35% at 95% 70%, hsl(185 90% 55% / 0.12), transparent 70%);
+    animation: ap-wash-drift 14s ease-in-out infinite;
+  }
+  .ap-home[data-state="paused"] .ap-home__wash {
+    background: radial-gradient(45% 40% at 75% 40%, hsl(42 100% 60% / 0.14), transparent 70%);
+  }
+  .ap-home[data-state="off"] .ap-home__wash {
+    background:
+      radial-gradient(40% 40% at 80% 30%, hsl(75 95% 60% / 0.12), transparent 70%),
+      radial-gradient(35% 35% at 60% 80%, hsl(195 95% 60% / 0.1), transparent 70%);
+  }
+
+  /* Running: a slow ring turns around the orb. */
+  .ap-home[data-state="on"] .ap-orb__ring {
+    border-color: transparent;
+    background:
+      conic-gradient(from 0deg, transparent 0 55%, hsl(150 90% 50% / 0.85), transparent 85%)
+      border-box;
+    -webkit-mask:
+      linear-gradient(#000 0 0) padding-box exclude,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) padding-box exclude,
+      linear-gradient(#000 0 0);
+    border: 2px solid transparent;
+    animation: ap-orb-spin 3.2s linear infinite;
+  }
+
+  .ap-flow-fill {
+    background: var(--mox-gradient);
+    background-size: 200% 100%;
+    animation: ap-flow-run 3s linear infinite;
+  }
+  .ap-flow-node--lit {
+    background: hsl(var(--primary) / 0.22);
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.45);
+  }
+  .ap-flow-node[data-live] {
+    animation: ap-node-breathe 1.8s ease-in-out infinite;
+  }
+  .ap-flow-node[data-waits] {
+    animation: ap-node-glow 1.8s ease-in-out infinite;
+  }
+
+  .ap-shimmer-tile {
+    background-image: linear-gradient(
+      100deg,
+      transparent 30%,
+      hsl(var(--foreground) / 0.06) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: ap-shimmer 1.6s linear infinite;
+  }
+  .ap-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+    animation: ap-breathe 1.2s ease-in-out infinite;
+  }
+
+  .ap-step-bubble {
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .group\/ap:hover .ap-step-bubble {
+    transform: translateY(-2px);
+  }
+  .group\/ap:hover .ap-step-bubble:nth-child(2n) {
+    transform: translateY(-4px);
+  }
+
+  /* A chosen card in the setup: an ink ring (Holo), never a lime one. */
+  .ap-choice[data-on] {
+    box-shadow:
+      0 0 0 2px hsl(var(--foreground)),
+      var(--ds-card-shadow-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ap-home__wash,
+  .ap-home .ap-orb__ring,
+  .ap-flow-node,
+  .ap-shimmer-tile,
+  .ap-live-dot {
+    animation: none !important;
+  }
+}
+:root[data-chat-motion="reduced"] .ap-home__wash,
+:root[data-chat-motion="reduced"] .ap-home .ap-orb__ring,
+:root[data-chat-motion="reduced"] .ap-flow-node {
+  animation: none !important;
+}
+/* The flow line is a progress bar, so it keeps moving (slower). */
+:root[data-chat-motion="reduced"] .ap-flow-fill {
+  animation-duration: 7s;
+}

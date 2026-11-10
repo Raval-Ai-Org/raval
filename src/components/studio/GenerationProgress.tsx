@@ -8,6 +8,7 @@ import {
   Check,
   Compass,
   ListTree,
+  Minus,
   Palette,
   PenLine,
   Save,
@@ -85,10 +86,13 @@ export function GenerationProgress({
   session,
   onCancel,
   cancelling,
+  onBackground,
 }: {
   session: StudioSession;
   onCancel: () => void;
   cancelling?: boolean;
+  /** Leave this screen; the piece keeps being made and the corner list follows it. */
+  onBackground?: () => void;
 }) {
   const format = STUDIO_FORMATS[session.type];
   const reduce = useReducedMotion();
@@ -285,6 +289,17 @@ export function GenerationProgress({
               transition={{ duration: duration.base }}
               className="flex flex-wrap items-center gap-2"
             >
+              {onBackground ? (
+                <Button
+                  size="sm"
+                  className="studio-cta rounded-full"
+                  onClick={onBackground}
+                  title="Keeps going. The corner list tells you when it's ready."
+                >
+                  <Minus />
+                  Run in background
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 size="sm"

@@ -21,6 +21,7 @@ import { getVisualTaste } from "@/lib/brand-visuals.functions";
 import { tidyLook } from "@/lib/inspo/look";
 import { listProducts } from "@/lib/products.functions";
 import { creatorBrief, toCreatorScript, type ScriptVideoSource } from "@/lib/studio/script-video";
+import { trackUgcRender } from "@/lib/ugc/background-renders";
 import { ugcApi, UgcApiError } from "@/lib/ugc/client";
 import {
   STOCK_CREATORS,
@@ -84,7 +85,21 @@ export function UgcStudio({
     ugcApi
       .models(workspaceId)
       .then((c) => {
-        setCatalog(c);
+        // A partial answer never crashes the composer: no models is an
+        // empty list, no allowance reads as nothing left.
+        if (!c || !Array.isArray(c.models)) throw new Error("No video models in the answer");
+        const videos = c.allowance?.videos;
+        setCatalog({
+          ...c,
+          allowance: {
+            ...c.allowance,
+            videos: {
+              limit: Number(videos?.limit) || 0,
+              used: Number(videos?.used) || 0,
+              held: Number(videos?.held) || 0,
+            },
+          },
+        } as Catalog);
         setCatalogError(null);
       })
       .catch((e) => setCatalogError(errorMessage(e, "Couldn't load video models.")));
@@ -188,19 +203,31 @@ function VideoProject({
   // A project this screen just created is already in hand; never reload it over a started render.
   const createdHere = useRef<string | null>(null);
 
+  const follow = useCallback(
+    (p: ProjectView, render: RenderView) =>
+      trackUgcRender({
+        renderId: render.id,
+        workspaceId,
+        projectId: p.id,
+        title: p.title || "Creator video",
+      }),
+    [workspaceId],
+  );
+
   const load = useCallback(async () => {
     if (!projectId || projectId === createdHere.current) return;
     setLoadError(null);
     try {
       const p = await ugcApi.getProject(workspaceId, projectId);
       setProject(p);
-      setActiveRender(
-        p.renders.find((r) => ACTIVE_RENDER_STATUSES.includes(r.status)) ?? p.renders[0] ?? null,
-      );
+      const running = p.renders.find((r) => ACTIVE_RENDER_STATUSES.includes(r.status));
+      // Still being made: the shell keeps following it if this window closes.
+      if (running) follow(p, running);
+      setActiveRender(running ?? p.renders[0] ?? null);
     } catch (e) {
       setLoadError(errorMessage(e, "Couldn't open this video."));
     }
-  }, [workspaceId, projectId]);
+  }, [workspaceId, projectId, follow]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -210,16 +237,14 @@ function VideoProject({
       setProject((p) =>
         p ? { ...p, renders: p.renders.map((r) => (r.id === render.id ? render : r)) } : p,
       );
+      // "Ready" is said once, by UgcRenderWatcher, open window or not.
       refreshAllowance();
-      if (render.status === "succeeded") {
-        emitAppEvent("assets:changed");
-        toast.success("Your video ad is ready");
-      }
     },
     [refreshAllowance],
   );
 
   const started = (p: ProjectView, render: RenderView) => {
+    follow(p, render);
     setProject({ ...p, renders: [render, ...p.renders.filter((r) => r.id !== render.id)] });
     setActiveRender(render);
     refreshAllowance();

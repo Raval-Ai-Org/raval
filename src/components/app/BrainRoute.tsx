@@ -12,6 +12,7 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { isBrainSection, type BrainSection } from "@/lib/brain/brain";
 import { brainPath, inspoPath, workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute } from "@/lib/shell/history";
 
 function Inner() {
   const router = useRouter();
@@ -31,7 +32,7 @@ function Inner() {
       routed
       open
       onOpenChange={(next: boolean) => {
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Brain"
       Icon={BrainIcon}

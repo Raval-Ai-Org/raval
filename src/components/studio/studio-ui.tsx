@@ -4,7 +4,8 @@
 // design tokens: neutral surfaces, one lime accent, no per-type rainbow.
 import type * as React from "react";
 import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Clapperboard } from "lucide-react";
 import {
   Check,
@@ -327,7 +328,7 @@ export function PlatformLogoGrid<T extends PlatformAppIconId>({
   note?: (id: T) => string | null | undefined;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div role={multi ? "group" : "radiogroup"} className={cn("flex flex-wrap gap-2.5", className)}>
       {platforms.map((id, i) => {
@@ -438,7 +439,9 @@ export function RatioPicker({
     <div
       role="radiogroup"
       aria-label="Size"
-      className="flex flex-wrap gap-1 rounded-[18px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1 sm:inline-flex sm:rounded-full"
+      // Never wider than its column. One row reads as a pill; when it has to
+      // wrap it becomes a rounded box instead of a stretched blob.
+      className="flex max-w-full flex-wrap gap-1 rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1 sm:inline-flex"
     >
       {ratios.map((r) => {
         const meta = RATIOS[r];
@@ -575,7 +578,7 @@ export function DrawCheck({
   delay?: number;
   strokeWidth?: number;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden className={cn("size-4", className)}>
       <motion.path
@@ -603,7 +606,7 @@ const BURST_TONES = [
 
 /** A small, once-only burst of brand colour for a real moment of completion. */
 export function Burst({ count = 14, radius = 36 }: { count?: number; radius?: number }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   if (reduce) return null;
   return (
     <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 z-20">

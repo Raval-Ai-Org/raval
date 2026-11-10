@@ -13,6 +13,11 @@ import {
 import { OptionCards, SwitchRow } from "./studio-ui";
 import type { StudioControls } from "@/lib/studio/jobs";
 import { MAX_CLIPS, VIDEO_MODES } from "@/lib/studio/clip-edit";
+import {
+  MOTIONMOX_CHIPS,
+  MOTIONMOX_ELEMENTS,
+  type MotionMoxElementId,
+} from "@/lib/studio/motionmox/elements";
 import { siteCaptures, type SiteCapture } from "@/lib/studio/site-reel";
 import { getVisualTaste } from "@/lib/brand-visuals.functions";
 import { emitAppEvent } from "@/lib/app-events";
@@ -24,6 +29,62 @@ const MODE_ICON: Record<Exclude<VideoMode, "motion">, LucideIcon> = {
   recap: ImageIcon,
   site: Globe,
 };
+
+/**
+ * What MotionMox animates into the video. Nothing picked means Mellox reads it
+ * from the description ("add our logo and a price tag"); the words themselves
+ * always come from the brief and the approved copy, never made up.
+ */
+function MotionElementChips({
+  mode,
+  controls: c,
+  set,
+  disabled,
+}: {
+  mode: "brand" | "recap";
+  controls: StudioControls;
+  set: (patch: Partial<StudioControls>) => void;
+  disabled?: boolean;
+}) {
+  const chips = MOTIONMOX_CHIPS.filter((id) => mode === "brand" || id !== "captions");
+  const picked = c.motionElements ?? [];
+  const toggle = (id: MotionMoxElementId) => {
+    const next = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];
+    set({ motionElements: next.length ? next : undefined });
+  };
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-foreground">Add to the video</p>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Add to the video">
+        {chips.map((id) => {
+          const on = picked.includes(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={on}
+              disabled={disabled}
+              onClick={() => toggle(id)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                on
+                  ? "border-primary-border bg-primary text-primary-foreground"
+                  : "border-border bg-surface-2 text-muted-foreground hover:border-border-strong hover:text-foreground",
+              )}
+            >
+              {MOTIONMOX_ELEMENTS[id].label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        {picked.length
+          ? "Animated in with your colours. Prices and button words come from your description."
+          : "Or just say it in the description, like “add our logo and end with 'Shop now'”."}
+      </p>
+    </div>
+  );
+}
 
 /**
  * How the video is made: new footage, the brand's own clips, a recap of its
@@ -100,6 +161,7 @@ export function SourceClips({
             disabled={disabled}
             onCheckedChange={(on) => set({ clipCaptions: on })}
           />
+          <MotionElementChips mode="brand" controls={c} set={set} disabled={disabled} />
         </div>
       )}
 
@@ -121,6 +183,7 @@ export function SourceClips({
             disabled={disabled}
             onCheckedChange={(on) => set({ recapMotion: on ? "ai" : "camera" })}
           />
+          <MotionElementChips mode="recap" controls={c} set={set} disabled={disabled} />
         </div>
       )}
 

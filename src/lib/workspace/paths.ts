@@ -127,9 +127,13 @@ export function conversationPath(workspaceId: string, conversationId: string): s
   return workspacePath(workspaceId, `chat/${encodeURIComponent(conversationId)}`);
 }
 
-export function onboardingPath(workspaceId: string): string {
+/**
+ * `start: "manual"` opens onboarding on the brand kit (no website, no scan),
+ * for a brand created from "No website?" on the projects page.
+ */
+export function onboardingPath(workspaceId: string, opts?: { start?: "manual" }): string {
   if (!isWorkspaceId(workspaceId)) throw new Error("onboardingPath: invalid workspace id");
-  return `/w/${workspaceId}/onboarding`;
+  return `/w/${workspaceId}/onboarding${opts?.start === "manual" ? "?start=manual" : ""}`;
 }
 
 /** The workspace id in a canonical path, or null. */

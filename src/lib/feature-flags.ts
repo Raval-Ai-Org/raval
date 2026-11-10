@@ -382,6 +382,22 @@ export function isClipEditEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * MotionMox (Mellox's fork of Remotion, vendor/motionmox) draws "Brand my
+ * clips" and photo recaps, with the elements a person asks for animated in.
+ * On unless set to "false"; `FEATURE_FLAG_MOTIONMOX_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off: the FFmpeg path, as before.
+ */
+export function isMotionMoxEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_MOTIONMOX_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_MOTIONMOX_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * New AI videos planned as a storyboard of whole clips, chained, and checked
  * before anyone sees them (src/lib/studio/video/). On unless set to "false";
  * `FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED_WS_<id>` overrides it for one

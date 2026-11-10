@@ -91,11 +91,10 @@ const rise = (i: number) => ({ ["--i" as string]: i }) as CSSProperties;
 /** Presentational: ChatPanel wires it, `/home-lab` renders it with sample data. */
 export function HomeBento({
   start,
-  pulse,
-  onOpenWaiting,
   create,
   onSwipe,
   onWarmIdeas,
+  autopilot,
 }: {
   /** Opens the idea deck (any format, or blog topics). */
   onSwipe?: (type?: StudioType) => void;
@@ -104,8 +103,9 @@ export function HomeBento({
   start: StartHereView;
   /** Kept for callers; Home has no greeting any more (Holo). */
   name?: string | null;
-  pulse: WorkspacePulse | null | undefined;
-  onOpenWaiting: () => void;
+  /** Kept for callers; what waits is shown in the Autopilot area and the box. */
+  pulse?: WorkspacePulse | null | undefined;
+  onOpenWaiting?: () => void;
   /** `useOpenCreate()`: starts a format, or says which plan it needs. */
   create: {
     open: (choice: CreateChoice) => boolean;
@@ -113,9 +113,9 @@ export function HomeBento({
   };
   /** Kept for callers; the cards replace the "Try" ideas. */
   starters?: ReactNode;
+  /** Home's Autopilot area (HomeAutopilot), under the top cards. */
+  autopilot?: ReactNode;
 }) {
-  const waiting = pulse?.waiting ?? 0;
-  const autopilotOn = pulse?.autopilot.status === "running";
   // Confetti only when Start here finishes while you watch, never on load.
   const wasComplete = useRef(start.complete);
   useEffect(() => {
@@ -129,9 +129,9 @@ export function HomeBento({
           the canvas is narrow, and three squeezed columns broke words apart. */}
       <div className="@container">
         {/* Bento */}
-        <div className="grid grid-cols-1 gap-[14px] @xl:grid-cols-2 @3xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-[14px] @xl:grid-cols-2">
           {!start.complete ? (
-            <div className="ds-rise @xl:row-span-2 @3xl:row-span-1" style={rise(1)}>
+            <div className="ds-rise" style={rise(1)}>
               <StartHereCard start={start} />
             </div>
           ) : (
@@ -183,51 +183,14 @@ export function HomeBento({
               />
             </span>
           </TiltCard>
-
-          <TiltCard
-            label={waiting ? "Open posts waiting" : "Open Autopilot"}
-            onClick={() => (waiting ? onOpenWaiting() : emitAppEvent("open:autopilot"))}
-            style={rise(3)}
-            className="relative min-h-[184px] overflow-hidden p-5 @xl:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(195_95%_55%/0.13),transparent_62%)] @xl:col-span-2 @3xl:col-span-1"
-          >
-            {waiting ? (
-              <>
-                <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-[var(--mox-yellow)] px-2.5 text-[11px] font-bold text-[var(--mox-ink)]">
-                  <span className="size-1.5 animate-pulse rounded-full bg-[var(--mox-ink)]" />
-                  {waiting} waiting
-                </span>
-                <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">
-                  Posts need a yes
-                </h3>
-                <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
-                  Check them before they go out.
-                </p>
-              </>
-            ) : (
-              <>
-                <span
-                  className={cn(
-                    "inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold",
-                    autopilotOn
-                      ? "bg-[var(--mox-green)] text-white"
-                      : "bg-[var(--ds-well-bg)] text-foreground/70",
-                  )}
-                >
-                  {autopilotOn ? "On" : "Off"}
-                </span>
-                <h3 className="mt-2.5 text-[18px] font-bold tracking-[-0.015em]">Autopilot</h3>
-                <p className="mt-1 max-w-[52%] text-[12.5px] leading-snug text-muted-foreground">
-                  {autopilotOn ? "Posting every week for you." : "Posts every week by itself."}
-                </p>
-              </>
-            )}
-            <Illustration
-              kind="rocket"
-              className="absolute -bottom-3 -right-2 h-[160px] w-[195px] transition-transform duration-500 group-hover:-translate-y-2"
-            />
-            <CardArrow className="absolute bottom-5 left-5" />
-          </TiltCard>
         </div>
+
+        {/* Autopilot's own area (Holo): what it is doing, or the way to set it up. */}
+        {autopilot ? (
+          <div className="ds-rise mt-[14px]" style={rise(3)}>
+            {autopilot}
+          </div>
+        ) : null}
 
         {/* Most popular */}
         <div className="ds-rise mb-3 mt-8 flex items-center justify-between" style={rise(4)}>

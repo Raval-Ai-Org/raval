@@ -136,7 +136,7 @@ Studied, not vendored. Only ideas were taken, rewritten as Mellox code.
 | auto-editor          | Unlicense                                        | Idea only: cut dead air by measured loudness                                               |
 | PySceneDetect        | BSD-3-Clause                                     | Idea only: start on scene changes (FFmpeg `scdet`)                                         |
 | whisper.cpp          | MIT                                              | Optional local engine for captions (not bundled)                                           |
-| Remotion             | Remotion licence (companies need a paid licence) | Not used; FFmpeg and next/og cover it                                                      |
+| Remotion             | Remotion licence (free up to 3 people)           | Used as MotionMox, Mellox's modified fork (ADR-0045, docs/studio/motionmox.md)             |
 | Motion Canvas        | MIT                                              | Not used: an editor-driven tool, not a server renderer                                     |
 | ComfyUI              | GPL-3.0                                          | Not used: a GPU node server and a copyleft licence                                         |
 | rembg                | MIT                                              | Not used: needs Python, ONNX and ~170 MB models per worker                                 |

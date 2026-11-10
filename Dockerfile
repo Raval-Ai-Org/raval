@@ -2,6 +2,8 @@ FROM node:22-bookworm-slim AS dependencies
 
 WORKDIR /app
 COPY package.json package-lock.json ./
+# MotionMox (Mellox's Remotion fork) is installed from file: links (ADR-0045).
+COPY vendor/motionmox ./vendor/motionmox
 RUN npm ci
 
 FROM node:22-bookworm-slim AS builder
@@ -64,6 +66,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/vendor ./vendor
+# MotionMox: the compositions' bundle (built by prebuild) and its renderer.
+COPY --from=builder --chown=nextjs:nodejs /app/.motionmox-bundle ./.motionmox-bundle
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@motionmox ./node_modules/@motionmox
+ENV MOTIONMOX_BROWSER_EXECUTABLE=/usr/bin/chromium
 
 USER nextjs
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

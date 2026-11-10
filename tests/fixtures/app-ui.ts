@@ -135,6 +135,8 @@ export async function prepareAppUi(page: Page, theme: "light" | "dark") {
     ({ storageKey, sess, ws, theme }) => {
       localStorage.setItem(storageKey, JSON.stringify(sess));
       localStorage.setItem("mellox:theme", theme);
+      // Past the one-time Mellox 2.0 reset to light (layout.tsx), so the theme sticks.
+      localStorage.setItem("mellox:theme-v2", "1");
       localStorage.setItem(`mellox:first-prompt-fired:${ws}`, "1");
       localStorage.setItem(`mellox:tour-seen:${ws}`, "1");
       localStorage.setItem("profile:persona", "founder");

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import {
   Copy,
   Heart,
@@ -62,7 +63,7 @@ const BURST = [0, 60, 120, 180, 240, 300];
 
 /** One Library tile: a pin with hearts, download, share and a ••• menu. */
 export function LibraryTile(props: LibraryTileProps) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [burst, setBurst] = useState(0);
   const loved = props.reaction === "love";
   const less = props.reaction === "less";

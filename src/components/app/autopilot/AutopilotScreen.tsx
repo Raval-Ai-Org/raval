@@ -34,9 +34,10 @@ import {
 } from "@/lib/autopilot/contracts";
 import { AUTO_ACT_SCORE } from "@/lib/autopilot/opportunities";
 import type { PlatformId } from "@/lib/social-platforms";
+import type { PulseCampaign } from "@/lib/pulse/pulse";
 import { Home, ProposedPlan } from "./AutopilotHome";
+import { AutopilotWizard } from "./AutopilotWizard";
 import {
-  AutopilotSetup,
   SettingRows,
   settingsFromProgram,
   settingsValid,
@@ -65,7 +66,9 @@ export type OpenTarget =
   | "audience"
   | "competitors"
   | "market"
-  | "campaigns";
+  | "campaigns"
+  | "campaign-list"
+  | "library";
 
 export type AutopilotHandlers = {
   start: (settings: ProgramSettings) => void;
@@ -103,15 +106,18 @@ export function AutopilotScreen({
   handlers,
   suggestion,
   initialSection = "home",
+  campaigns,
 }: {
   view: AutopilotView;
   handlers: AutopilotHandlers;
   suggestion: SuggestionState;
   initialSection?: Section;
+  /** Running campaigns, from the free workspace pulse. */
+  campaigns?: PulseCampaign[];
 }) {
   const [section, setSection] = useState<Section>(initialSection);
 
-  // Before it is switched on there is one thing to do, so there is one screen.
+  // Before it is switched on there is one thing to do: the step-by-step setup.
   if (!view.program) {
     if (!view.canManage) {
       return (
@@ -126,7 +132,7 @@ export function AutopilotScreen({
     }
     return (
       <div className="h-full overflow-y-auto scrollbar-thin">
-        <AutopilotSetup
+        <AutopilotWizard
           suggestion={suggestion}
           connected={view.connectedPlatforms}
           fullAvailable={view.fullAvailable}
@@ -152,7 +158,9 @@ export function AutopilotScreen({
   return (
     <MotionConfig reducedMotion="user">
       <SurfaceLayout items={items} value={section} onChange={setSection} label="Autopilot">
-        {section === "home" && <Home view={view} handlers={handlers} onSection={setSection} />}
+        {section === "home" && (
+          <Home view={view} handlers={handlers} onSection={setSection} campaigns={campaigns} />
+        )}
         {section === "approvals" && <Approvals view={view} handlers={handlers} />}
         {section === "ideas" && <Ideas view={view} handlers={handlers} />}
         {section === "activity" && <Activity view={view} handlers={handlers} />}

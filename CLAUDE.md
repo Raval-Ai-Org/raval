@@ -62,8 +62,8 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   (`useShellWindow(id, open, close)`), so nothing is left open over the new
   place; `useBodyPointerGuard` clears a `pointer-events: none` Radix left on
   <body>. Long background work that isn't a Studio piece (strategy, campaign
-  plan) sends `work:update` to the corner list instead of a toast. On Home the
-  Autopilot deck is the short one (`compact`).
+  plan) sends `work:update` to the corner list instead of a toast. Home has its own
+  Autopilot card (`HomeAutopilot`); the message box is never covered.
   Home's message box is `ChatComposer slim`: a one-line pill with its tools
   beside it, growing once a person writes; it sits under the cards, never on them.
   Home is `HomeBento` above the message box (`/home-lab`); its cards only open
@@ -760,13 +760,16 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
   (`tests/integration/autopilot-lab.spec.ts`). Home lays out by container
   width (`@container`), and uses the CSS `ds-enter` fade, not staggered
   JavaScript animation, so nothing is ever left half-drawn.
-- **It lives in the chat message box, not the sidebar** (`autopilot/composer/`:
-  presentational `AutopilotDeck`, wired by `useComposerAutopilot`). Off, it is
-  one switch in the box's toolbar; on, the deck covers the box in a new chat
-  and the top bar shows `AutopilotBeacon`. Typing always hands the box back.
-  The full view loads only while the deck shows and the proposal is asked for
-  only after a person flips the switch. Never add a sidebar entry back; link to
-  the full screen with `autopilotPath(id, section)`.
+- **It has its own area on Home, never the message box** (`autopilot/home/`:
+  presentational `AutopilotHomeCard`, wired by `HomeAutopilot`, under the top
+  cards). Off, it invites a person into the five-step setup
+  (`AutopilotWizard`: Goal → Channels → Rhythm → Approval → Ready, every answer
+  proposed); on, it shows the flow, the next pieces, what waits and the places
+  it works with (Calendar, Campaigns, Inspo, Library; `autopilot/flow.tsx`).
+  Never cover or restyle the message box for Autopilot again: other chats get
+  only a toolbar pill that opens it (`useComposerAutopilot`, hidden on Home),
+  and the top bar shows `AutopilotBeacon`. Never add a sidebar entry back;
+  link to the full screen with `autopilotPath(id, section)`.
 - **More than posts.** A program's `automations` (`AUTOMATIONS` in
   `contracts.ts`) are the extra jobs, each a switch under Settings → Also:
   - `geo_scan`, `repurpose` and `weekly_report` (`WEEKLY_AUTOMATIONS`) become
@@ -1155,6 +1158,30 @@ with `_WS_<id>`), on unless `false`.
     (`src/lib/studio/captions.ts`), words heard in silence are dropped, and a
     failure leaves captions out, never the video;
   - the brand's own sound is brought to -14 LUFS.
+
+## MotionMox (animated elements on people's own clips and photos)
+
+Full reference: [docs/studio/motionmox.md](docs/studio/motionmox.md), decision
+record [ADR-0045](docs/adr/0045-motionmox.md). Flag
+`FEATURE_FLAG_MOTIONMOX_ENABLED` (with `_WS_<id>`), on unless `false`.
+
+- **MotionMox is Mellox's modified fork of Remotion** (`vendor/motionmox`,
+  packages `@motionmox/*`; the full fork is cloned outside the repo). It is
+  renamed and patched only by `scripts/motionmox/rename.mjs`, built with
+  `build.mjs`, copied in with `sync.mjs`. Never hand-edit `vendor/motionmox`.
+- **The licence stays:** Remotion's `LICENSE.md`, copyright and `NOTICE` are
+  never removed. Free License while Mellox has 3 or fewer people; past that a
+  Company License. Never sell or offer MotionMox to customers as a tool.
+- **Code shapes, MotionMox draws.** `planMotionMox` (`src/lib/studio/motionmox/`)
+  decides the elements; `groundSpec` drops words that aren't in the approved
+  copy, the brand's name or the person's quoted words. The model never writes
+  a composition or a spec; a price or button nobody wrote is left out with a note.
+- Element ids (`elements.ts`) are stored on jobs (`controls.motionElements`):
+  add, never rename.
+- Renders are offline (loopback only), one at a time, from a bundle built once
+  (`npm run motionmox:bundle`). If MotionMox fails, the FFmpeg path makes the
+  same video (`renderer` in the asset's metadata). No new cron job, no new price.
+- Live check: `tests/live/motionmox.live.ts` (behind `MOTIONMOX_LIVE_AI=yes`).
 
 ## Library and taste (hearts teach Mellox)
 

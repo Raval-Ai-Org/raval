@@ -157,7 +157,9 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       ),
     enabled: data.isOwner,
   });
-  const paused = (brands.data?.brands ?? []).filter((brand) => brand.frozen_at);
+  const requests = Array.isArray(team.data?.requests) ? team.data.requests : [];
+  const allBrands = Array.isArray(brands.data?.brands) ? brands.data.brands : [];
+  const paused = allBrands.filter((brand) => brand.frozen_at);
   const cardSubscriber =
     data.isOwner &&
     !data.manual &&
@@ -392,10 +394,10 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         </div>
       </section>
 
-      {data.isOwner && (team.data?.requests.length ?? 0) > 0 && (
+      {data.isOwner && requests.length > 0 && (
         <section className="space-y-2">
           <h3 className="ds-label">Requests from your team</h3>
-          {team.data!.requests.map((request) => (
+          {requests.map((request) => (
             <div
               key={request.id}
               className="ds-tile flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px]"
@@ -436,7 +438,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
             Your plan includes {formatNumber(data.limits.brands)}{" "}
             {data.limits.brands === 1 ? "brand" : "brands"}. Paused brands keep their data.
           </p>
-          {brands.data!.brands.map((brand) => (
+          {allBrands.map((brand) => (
             <div
               key={brand.id}
               className="ds-tile flex items-center justify-between gap-3 px-4 py-3 text-[13px]"

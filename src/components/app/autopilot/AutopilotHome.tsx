@@ -1,19 +1,17 @@
 "use client";
 
-// Autopilot's home page: what needs a person, the week day by day, the last
-// seven days in numbers, and every job Autopilot runs with where it stands.
+// Autopilot's home page, Holo style: one hero with the flow, what needs a
+// person, the next pieces as cards, the places it works with (Calendar,
+// Campaigns, Inspo, Library), the week, the numbers and every job it runs.
 // Drawn from the view object only, like the rest of the surface.
 import type { ComponentType, ReactNode } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
-  CalendarClock,
   Check,
   ChevronRight,
-  Clock,
   Lightbulb,
-  Eye,
   ListChecks,
   Pause,
   Pencil,
@@ -23,16 +21,19 @@ import {
 } from "@/components/icons";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { GroupLabel, SurfacePage, Tile } from "@/components/app/surface/SurfaceLayout";
-import { nextSteps, stepLine, stepWhen, type NextStep } from "@/lib/autopilot/agenda";
+import { nextSteps, stepLine } from "@/lib/autopilot/agenda";
+import type { PulseCampaign } from "@/lib/pulse/pulse";
+import { AutopilotOrb } from "./composer/AutopilotDeck";
+import { comingUp, FlowRail, LinkedPlaces, UpcomingCards, UpcomingPlaceholder } from "./flow";
 import { BRAIN_READINESS, type ActionView, type AutopilotView } from "@/lib/autopilot/contracts";
 import { STATUS_LABEL, statusTone } from "@/lib/autopilot/state";
 import { pauseReasonText } from "@/lib/autopilot/status";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { StrategyCard } from "./AutopilotSetup";
 import type { AutopilotHandlers, Section } from "./AutopilotScreen";
-import { Dot, pieceLabel, whenLabel } from "./autopilot-ui";
+import { pieceLabel, whenLabel } from "./autopilot-ui";
 import { jobsFor, type Go } from "./jobs";
-import { Pipeline, Timeline, TONE_DOT, weekDays } from "./visuals";
+import { TONE_DOT, weekDays } from "./visuals";
 
 function More({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
@@ -155,56 +156,6 @@ function NeedsYou({ items, go }: { items: Ask[]; go: (target: Go) => void }) {
           );
         })}
       </ul>
-    </Tile>
-  );
-}
-
-/* ───────────────────────── what happens next ───────────────────────── */
-
-const STEP_ICON: Record<NextStep["kind"], ComponentType<{ className?: string }>> = {
-  write: Pencil,
-  post: Clock,
-  plan: CalendarClock,
-  check: Eye,
-  wait: ListChecks,
-};
-
-/** The next things Autopilot does by itself, each with its time. */
-function NextUp({ steps }: { steps: NextStep[] }) {
-  return (
-    <Tile className="overflow-hidden p-0 sm:p-0">
-      <ol className="divide-y divide-border/50" aria-label="What happens next">
-        {steps.map((step) => {
-          const Icon = STEP_ICON[step.kind];
-          const live = step.verb === "Writing now";
-          return (
-            <li key={step.id} className="flex items-center gap-3 px-4 py-2.5 sm:px-5">
-              <Icon
-                className={cn(
-                  "h-[18px] w-[18px] shrink-0",
-                  live ? "text-primary-ink" : "text-muted-foreground",
-                )}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-medium">{step.title || step.verb}</p>
-                {step.action && (
-                  <p className="truncate text-[12px] text-muted-foreground">
-                    {step.verb} · {pieceLabel(step.action)}
-                  </p>
-                )}
-              </div>
-              <span
-                className={cn(
-                  "shrink-0 text-[12.5px] font-medium tabular-nums",
-                  live ? "text-primary-ink" : "text-muted-foreground",
-                )}
-              >
-                {live ? "Now" : stepWhen(step.at)}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
     </Tile>
   );
 }
@@ -517,56 +468,72 @@ export function Home({
   view,
   handlers,
   onSection,
+  campaigns = [],
 }: {
   view: AutopilotView;
   handlers: AutopilotHandlers;
   onSection: (s: Section) => void;
+  /** Running campaigns (free workspace pulse): Autopilot plans around them. */
+  campaigns?: PulseCampaign[];
 }) {
   const program = view.program!;
   const paused = program.status === "paused";
-  const steps = nextSteps(view, { limit: 5 });
-  const next = steps[0];
+  const next = nextSteps(view, { limit: 1 })[0];
   const planning =
     !paused && !view.upcoming.length && !view.proposed.length && !view.approvals.length;
   const go = (target: Go) =>
     "section" in target ? onSection(target.section) : handlers.open(target.open);
   const needs = asks(view);
+  const following = campaigns[0]?.name;
 
   return (
     <SurfacePage width="wide">
       <div className="ds-enter @container">
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 pb-1">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2.5 text-[24px] font-semibold leading-tight tracking-tight">
-              <Dot tone={paused ? "attention" : "active"} pulse={!paused} />
-              {paused ? "Autopilot is paused" : "Autopilot is on"}
-            </p>
-            <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-              {paused
-                ? `${pauseReasonText(program.pauseReason)}.`
-                : next
-                  ? `Next: ${stepLine(next)}`
-                  : planning
-                    ? "Writing your first plan…"
-                    : "Nothing scheduled right now."}
-              <span className="text-muted-foreground/70">
-                {" "}
-                · Week {program.week} of {program.totalWeeks}
-              </span>
-            </p>
+        {/* Hero: what it is doing, in one line and one picture. */}
+        <div
+          className="ap-home ds-card relative overflow-hidden p-4 sm:p-6"
+          data-state={paused ? "paused" : "on"}
+        >
+          <span aria-hidden className="ap-home__wash" />
+          <div className="relative flex flex-wrap items-center gap-x-4 gap-y-3">
+            <AutopilotOrb state={paused ? "paused" : "on"} size={56} />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-[24px] font-bold leading-tight tracking-[-0.025em]">
+                {paused ? "Autopilot is paused" : "Autopilot is on"}
+                <span className="rounded-full bg-[var(--ds-well-bg)] px-2.5 py-0.5 text-[11px] font-bold tabular-nums text-foreground/65">
+                  Week {program.week} of {program.totalWeeks}
+                </span>
+              </p>
+              <p className="mt-1 text-[13.5px] text-muted-foreground">
+                {paused
+                  ? `${pauseReasonText(program.pauseReason)}.`
+                  : next
+                    ? `Next: ${stepLine(next)}`
+                    : planning
+                      ? "Writing your first plan…"
+                      : "Nothing scheduled right now."}
+                {following && !paused ? ` · Plans around ${following}` : ""}
+              </p>
+            </div>
+            {view.canEdit && (
+              <button
+                type="button"
+                disabled={handlers.busy}
+                onClick={() => handlers.pause(!paused)}
+                className={cn(
+                  paused ? cn(dsPrimaryBtn, "studio-cta") : dsGhostBtn,
+                  "h-10 px-5 text-[13.5px]",
+                )}
+              >
+                {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                {paused ? "Resume" : "Pause"}
+              </button>
+            )}
           </div>
-          {view.canEdit && (
-            <button
-              type="button"
-              disabled={handlers.busy}
-              onClick={() => handlers.pause(!paused)}
-              className={cn(paused ? dsPrimaryBtn : dsGhostBtn, "h-10 px-5 text-[13.5px]")}
-            >
-              {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-              {paused ? "Resume" : "Pause"}
-            </button>
-          )}
-        </header>
+          <div className="relative mt-6">
+            <FlowRail view={view} onApprove={() => onSection("approvals")} />
+          </div>
+        </div>
 
         {/* Anything that waits for a person comes first, with the button that moves it. */}
         {needs.length > 0 && (
@@ -580,23 +547,35 @@ export function Home({
           </div>
         )}
 
-        <div className="mt-6 grid gap-x-6 @3xl:grid-cols-[minmax(0,1fr)_288px]">
+        <GroupLabel action={<More onClick={() => handlers.open("calendar")}>Open calendar</More>}>
+          Coming up
+        </GroupLabel>
+        {planning ? (
+          <UpcomingPlaceholder />
+        ) : comingUp(view, 6).length ? (
+          <UpcomingCards
+            view={view}
+            limit={6}
+            onOpen={(a) =>
+              a.status === "needs_approval" || a.status === "proposed"
+                ? onSection("approvals")
+                : handlers.open("calendar")
+            }
+          />
+        ) : (
+          <p className="text-[13px] text-muted-foreground">Nothing planned right now.</p>
+        )}
+
+        <GroupLabel>Works with</GroupLabel>
+        <LinkedPlaces
+          view={view}
+          campaigns={campaigns}
+          onOpen={(place) => handlers.open(place === "campaigns" ? "campaign-list" : place)}
+        />
+
+        <div className="mt-2 grid gap-x-6 @3xl:grid-cols-[minmax(0,1fr)_288px]">
           <div className="min-w-0">
-            <GroupLabel>Where your posts are</GroupLabel>
-            <Pipeline view={view} onApprove={() => onSection("approvals")} />
-
-            {steps.length > 0 && (
-              <>
-                <GroupLabel>What happens next</GroupLabel>
-                <NextUp steps={steps} />
-              </>
-            )}
-
-            <GroupLabel
-              action={<More onClick={() => handlers.open("calendar")}>Open calendar</More>}
-            >
-              Next 7 days
-            </GroupLabel>
+            <GroupLabel>Next 7 days</GroupLabel>
             <Agenda view={view} go={go} />
 
             {view.learnings.length > 0 && (
@@ -628,17 +607,6 @@ export function Home({
             <JobBoard view={view} go={go} />
           </div>
         </div>
-
-        {view.events.length > 0 && (
-          <>
-            <GroupLabel action={<More onClick={() => onSection("activity")}>See all</More>}>
-              Latest
-            </GroupLabel>
-            <Tile>
-              <Timeline events={view.events.slice(0, 4)} />
-            </Tile>
-          </>
-        )}
 
         {program.strategy && (
           <>

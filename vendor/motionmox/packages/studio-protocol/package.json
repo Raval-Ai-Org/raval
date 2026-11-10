@@ -1,0 +1,39 @@
+{
+  "name": "@motionmox/studio-protocol",
+  "version": "4.0.542",
+  "description": "Create Element payloads and request installation into MotionMox Studio",
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/studio-protocol"
+  },
+  "type": "module",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "keywords": [
+    "@motionmox/core",
+    "studio",
+    "protocol",
+    "elements",
+    "drag-and-drop"
+  ],
+  "homepage": "https://www.remotion.dev/docs/studio-protocol",
+  "private": true
+}

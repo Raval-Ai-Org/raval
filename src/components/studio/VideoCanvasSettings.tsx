@@ -6,6 +6,7 @@
 // made. Own footage (brand, recap, website) has no length to pick.
 
 import { X } from "@/components/icons";
+import { cn } from "@/lib/utils";
 import { recommendedRatio } from "@/lib/studio/aspect";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
 import type { StudioControls } from "@/lib/studio/jobs";
@@ -76,7 +77,11 @@ export function VideoCanvasSettings({
   return (
     <fieldset
       disabled={disabled}
-      className="ds-enter grid grid-cols-1 gap-4 disabled:opacity-60 sm:grid-cols-2"
+      className={cn(
+        "ds-enter grid grid-cols-1 gap-4 disabled:opacity-60",
+        // Five sizes don't fit half a column: sizes get their own row then.
+        format.ratios.length <= 3 && "sm:grid-cols-2",
+      )}
       data-testid="video-canvas-settings"
     >
       <legend className="sr-only">Video shape and length</legend>

@@ -11,6 +11,7 @@ import { MessageCircle } from "@/components/icons";
 import { PageLoader } from "@/components/ui/page-loader";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute } from "@/lib/shell/history";
 
 const CommunityPanel = lazy(() =>
   import("@/components/app/brain/community/CommunityPanel").then((m) => ({
@@ -26,7 +27,7 @@ function Inner() {
       routed
       open
       onOpenChange={(next: boolean) => {
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Reddit agent"
       Icon={MessageCircle}
