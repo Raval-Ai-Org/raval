@@ -1,0 +1,26 @@
+import React from 'react';
+import { type InteractivitySchema } from '@motionmox/core';
+export declare const audioSchema: InteractivitySchema;
+export declare const Audio: React.ComponentType<{
+    src: string;
+    trimBefore?: number;
+    trimAfter?: number;
+    volume?: import("@motionmox/core").VolumeProp;
+    loopVolumeCurveBehavior?: import("@motionmox/core").LoopVolumeCurveBehavior;
+    playbackRate?: number;
+    preservePitch?: boolean;
+    muted?: boolean;
+    style?: React.CSSProperties;
+    logLevel?: import("@motionmox/core").LogLevel;
+    loop?: boolean;
+    audioStreamIndex?: number;
+    _remotionInternalNativeLoopPassed?: boolean;
+    fallbackHtml5AudioProps?: import("./props").FallbackHtml5AudioProps;
+    disallowFallbackToHtml5Audio?: boolean;
+    toneFrequency?: number;
+    delayRenderRetries?: number;
+    delayRenderTimeoutInMilliseconds?: number;
+    onError?: import("../on-error").MediaOnError;
+    credentials?: RequestCredentials;
+    requestInit?: import("..").MediaRequestInit;
+} & import("@motionmox/core").InteractiveBaseProps & Pick<import("@motionmox/core").InteractivePremountProps, "postmountFor" | "premountFor">>;

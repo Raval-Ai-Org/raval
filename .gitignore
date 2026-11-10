@@ -19,6 +19,9 @@ node_modules
 .next-route-check
 out
 dist
+# MotionMox is vendored prebuilt (ADR-0045): its dist folders must be committed,
+# or a clean checkout (Railway) can't resolve @motionmox/*.
+!vendor/motionmox/packages/*/dist
 *.local
 *.tsbuildinfo
 next-env.d.ts
