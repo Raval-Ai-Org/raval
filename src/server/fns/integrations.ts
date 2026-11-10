@@ -156,3 +156,25 @@ export const exportCalendarToSheets = createServerFn({ method: "POST" })
     const role = await requireWorkspaceRole(context, data.workspaceId, "editor");
     return (await business()).exportCalendarToSheets({ ...data, userId: context.userId, role });
   });
+
+// ── Analytics: numbers from connected business apps ───────────────────────
+const reports = () => import("@/server/integrations/reports.server");
+
+/** Stored Google Ads / HubSpot numbers. Free; starts nothing. */
+export const getAppReports = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    await requireWorkspaceRole(context, data.workspaceId, "viewer");
+    return (await reports()).getAppReports(data.workspaceId);
+  });
+
+/** Read them again now (a person's Refresh). Provider reads only, nothing paid. */
+export const refreshAppReports = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("integration-read")])
+  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .handler(async ({ data, context }) => {
+    requireEnabled(data.workspaceId);
+    await requireWorkspaceRole(context, data.workspaceId, "editor");
+    return (await reports()).refreshWorkspaceReports(data.workspaceId);
+  });

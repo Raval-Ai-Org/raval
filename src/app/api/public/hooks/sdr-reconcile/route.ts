@@ -5,7 +5,8 @@
 //   * SDR rows against each workspace's own SDR (when the SDR is configured);
 //   * SocialAPI.ai rows via GET /posts/{id}, plus engagement metrics refresh;
 //   * Post for Me account feeds (Analytics → Social), a few accounts per run;
-//   * connected apps (Composio): each account re-read every 6 hours.
+//   * connected apps (Composio): each account re-read every 6 hours, their
+//     social posts read for Analytics, and Google Ads / HubSpot numbers.
 // Auth + heartbeat come from defineCronRoute.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { reconcileStalePublications } from "@/lib/sdr.reconcile";
@@ -67,6 +68,14 @@ export const POST = defineCronRoute({
         // HubSpot counts for leads goals, twice a day per account.
         const { refreshLeadCounts } = await import("@/server/integrations/business.server");
         result.leads = await refreshLeadCounts({ max: 10 });
+        // What Composio-connected social accounts posted (Analytics → Social),
+        // and the Google Ads / HubSpot numbers Analytics shows.
+        const [{ syncDueComposioFeeds }, { refreshAppReports }] = await Promise.all([
+          import("@/server/social/composio/feed.server"),
+          import("@/server/integrations/reports.server"),
+        ]);
+        result.appFeeds = await syncDueComposioFeeds();
+        result.appReports = await refreshAppReports({ max: 6 });
       } catch (e) {
         failures.push(`apps: ${e instanceof Error ? e.message : String(e)}`);
       }

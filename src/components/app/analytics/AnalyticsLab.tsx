@@ -593,8 +593,70 @@ const STATES = [
 
 type StateId = (typeof STATES)[number]["id"];
 
+/** Ads & leads: Google Ads and HubSpot, connected with sample numbers (or not, in "Not connected"). */
+function appReports(connected: boolean) {
+  const measuredAt = new Date(Date.now() - 40 * 60_000).toISOString();
+  return {
+    enabled: true,
+    googleads: {
+      connected,
+      accountId: connected ? "00000000-0000-4000-8000-0000000000a1" : null,
+      report: connected
+        ? {
+            kind: "googleads" as const,
+            measuredAt,
+            from: "2026-10-12",
+            to: "2026-11-10",
+            customerId: "1234567890",
+            currency: "USD",
+            totals: { impressions: 48210, clicks: 1932, cost: 1284.5, conversions: 86 },
+            campaigns: [
+              {
+                id: "1",
+                name: "Search - Brand",
+                status: "ENABLED",
+                impressions: 21040,
+                clicks: 1180,
+                cost: 612.3,
+                conversions: 54,
+              },
+              {
+                id: "2",
+                name: "Mellox - Autumn launch - 2026-10-20",
+                status: "ENABLED",
+                impressions: 18900,
+                clicks: 560,
+                cost: 488.2,
+                conversions: 24,
+              },
+              {
+                id: "3",
+                name: "Search - Competitor terms",
+                status: "PAUSED",
+                impressions: 8270,
+                clicks: 192,
+                cost: 184,
+                conversions: 8,
+              },
+            ],
+            campaignCount: 3,
+          }
+        : null,
+    },
+    hubspot: {
+      connected,
+      accountId: connected ? "00000000-0000-4000-8000-0000000000b2" : null,
+      report: connected ? { kind: "hubspot" as const, measuredAt, last: 142, previous: 118 } : null,
+    },
+  };
+}
+
 function answer(path: string, body: unknown, connection: GoogleConnectionView): unknown {
   if (path === "workspaces/getWorkspaceDetails") return WORKSPACE;
+  if (path === "integrations/getAppReports" || path === "integrations/refreshAppReports")
+    return appReports(!!connection.connection);
+  if (path === "integrations/getIntegrations")
+    return { enabled: true, configured: true, testing: true, accounts: [] };
   if (path === "google-analytics/getGoogleConnection") return connection;
   if (path === "google-analytics/syncAnalyticsNow") return { started: true };
   if (path === "google-analytics/listGa4Properties")

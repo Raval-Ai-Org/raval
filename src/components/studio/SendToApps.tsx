@@ -149,8 +149,10 @@ export function SendToApps({
           data: { workspaceId, contentItemId, dailyBudget: daily },
         });
         setAdsOpen(false);
-        toast.success("Paused campaign made in Google Ads", {
-          description: "Add keywords, then turn it on there. Nothing spends until you do.",
+        toast.success("Campaign ready in Google Ads", {
+          description: r.keywords.length
+            ? `${r.keywords.length} keywords from your site added. It's paused: check it, then turn it on there.`
+            : "It's paused. Add keywords, then turn it on there. Nothing spends until you do.",
         });
         return { label: "Open in Google Ads", url: r.campaignUrl };
       },
@@ -250,8 +252,9 @@ export function SendToApps({
             </button>
           </div>
           <p className="text-[12px] text-muted-foreground">
-            In your ad account's currency. It's made paused: add keywords and turn it on in Google
-            Ads. Nothing spends before that.
+            In your ad account's currency. Mellox adds the ad, a budget and keywords Google suggests
+            for your site. It's made paused: you turn it on in Google Ads, and nothing spends before
+            that. Its clicks and spend then show in Analytics.
           </p>
         </div>
       ) : null}

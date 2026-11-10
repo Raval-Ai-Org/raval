@@ -23,6 +23,7 @@ type Db = SupabaseClient<Database>;
 
 type AccountRow = {
   id: string;
+  provider: string;
   platform: string;
   username: string | null;
   display_name: string | null;
@@ -40,9 +41,10 @@ export async function getSocialReport(
   const [accountsRes, postsRes, firstRes] = await Promise.all([
     sb
       .from("social_accounts")
-      .select("id, platform, username, display_name, status, feed_synced_at")
+      .select("id, provider, platform, username, display_name, status, feed_synced_at")
       .eq("workspace_id", workspaceId)
-      .eq("provider", "postforme")
+      // Post for Me accounts and the ones connected through Composio.
+      .in("provider", ["postforme", "composio"])
       .neq("status", "disconnected"),
     sb
       .from("social_account_posts")
@@ -84,13 +86,15 @@ export async function getSocialReport(
   };
   const provider = getDistributionProviderForWorkspace(workspaceId);
 
+  const viaApps = accounts.some((a) => a.provider === "composio");
   if (!rows.length && !lastSyncedAt) {
-    if (provider !== "postforme") return emptySocialReport({ ...status, state: "unavailable" });
+    if (provider !== "postforme" && !viaApps)
+      return emptySocialReport({ ...status, state: "unavailable" });
     if (!active.length) return emptySocialReport({ ...status, state: "no_accounts" });
-    readNeverReadAccounts(workspaceId, active);
+    readNeverReadAccounts(workspaceId, active, provider === "postforme");
     return emptySocialReport({ ...status, state: "syncing" });
   }
-  if (provider === "postforme") readNeverReadAccounts(workspaceId, active);
+  readNeverReadAccounts(workspaceId, active, provider === "postforme");
 
   const label = new Map(
     accounts.map((a) => [a.id, a.username ? `@${a.username}` : (a.display_name ?? null)]),
@@ -104,9 +108,16 @@ export async function getSocialReport(
 }
 
 /** Accounts connected since the last sweep get read right away, once. */
-function readNeverReadAccounts(workspaceId: string, active: AccountRow[]) {
-  if (!active.some((a) => !a.feed_synced_at)) return;
+function readNeverReadAccounts(workspaceId: string, active: AccountRow[], postForMe: boolean) {
+  const unread = active.filter((a) => !a.feed_synced_at);
+  if (!unread.length) return;
   try {
+    if (unread.some((a) => a.provider === "composio"))
+      after(async () => {
+        const { syncComposioWorkspaceFeeds } = await import("@/server/social/composio/feed.server");
+        await syncComposioWorkspaceFeeds(workspaceId, { onlyNeverRead: true });
+      });
+    if (!postForMe || !unread.some((a) => a.provider === "postforme")) return;
     after(async () => {
       const [{ syncWorkspaceFeeds }, { getPostForMeDeps }] = await Promise.all([
         import("@/lib/postforme/feeds"),

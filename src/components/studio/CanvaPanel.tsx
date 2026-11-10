@@ -32,9 +32,9 @@ export function CanvaPanel(props: CanvaPanelProps) {
   const { variant = "button", mode, busy, opened, hasDesign, usingCanva, error } = props;
   const slides = opened && opened.slides.length > 1 ? opened.slides : null;
   const about = !mode
-    ? "Opens in Canva with text and elements you can change."
+    ? "Carousels open with their words ready to change. A single picture opens whole, and Canva's Magic Layers can split it."
     : mode === "flat_image"
-      ? "Canva opened this as one picture, so the text inside it can't be changed there."
+      ? "This opened as one picture. To change its words in Canva, select it, then Edit → Magic Layers or Grab Text."
       : props.slideCount > 1 && mode === "magic_layers"
         ? "Each slide is its own Canva design, with text and elements you can change."
         : "Text and elements can be changed in Canva.";

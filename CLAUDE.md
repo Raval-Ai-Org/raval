@@ -1444,6 +1444,27 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   - The weekly report adds the measured lead count and the week's community
     threads (`growthFacts` in `autopilot/ports.server.ts`); a missing part is
     left out. Shopify, Klaviyo and Drive are `later`.
+- **Every connected app is put to work.** `src/lib/integrations/uses.ts` lists
+  what each app does and the place it happens; the connector's opened view
+  shows it as "Use it now" once connected (`connectors/AppUses.tsx`). Add an
+  app's uses there when its workflow ships.
+  - Composio social accounts (Instagram, Facebook, YouTube, Pinterest) fill
+    `social_account_posts` like Post for Me's feed (`src/lib/social/composio/feed.ts`,
+    pure; `src/server/social/composio/feed.server.ts`), from the existing
+    sdr-reconcile sweep, Analytics' Refresh and once after connecting.
+    LinkedIn isn't read: its API doesn't list a member's posts.
+  - Google Ads (GAQL, last 30 days per campaign) and HubSpot (new contacts,
+    30 days vs the 30 before) are kept on `integration_accounts.metadata.report`
+    (pure `src/lib/integrations/reports.ts`, `reports.server.ts`) and shown in
+    Analytics → Ads & leads. No new table, no cron job.
+  - A Studio ad sent to Google Ads also gets phrase keywords Google itself
+    suggests for the landing page (`readKeywordIdeas`); the campaign stays paused.
+  - `completeConnect` waits for Composio to leave `INITIATED` before deciding,
+    so a good sign-in is never stored as an error.
+  - Canva's Magic Layers is a preview API Canva never serves to public apps
+    (Composio): on Composio a carousel goes straight to the editable rebuild,
+    and a single picture opens whole with Canva's own Magic Layers as the way to
+    split it. Don't promise editable text for a single picture.
 - **Agents are names for work that exists** (`src/lib/agents/roster.ts`, pure):
   each has a place, needs, Autopilot automations, control-plane workers and
   chat reads. `getAgents` (`src/server/fns/agents.ts`) works out the state from
