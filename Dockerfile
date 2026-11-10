@@ -4,7 +4,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 # MotionMox (Mellox's Remotion fork) is installed from file: links (ADR-0045).
 COPY vendor/motionmox ./vendor/motionmox
-RUN npm ci
+COPY scripts/motionmox/materialize.mjs ./scripts/motionmox/materialize.mjs
+# npm links file: packages; Next only treats them as serverExternalPackages
+# when their real path is inside node_modules, so copy the links in.
+RUN npm ci && node scripts/motionmox/materialize.mjs
 
 FROM node:22-bookworm-slim AS builder
 
