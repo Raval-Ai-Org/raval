@@ -108,7 +108,7 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                 data-mellox-app
                 data-modal="false"
                 data-canvas-window
-                className="ds-canvas ds-enter absolute inset-0 flex flex-col overflow-hidden outline-none"
+                className="ds-canvas ds-enter isolate absolute inset-0 flex flex-col overflow-hidden outline-none"
               >
                 {page}
               </div>

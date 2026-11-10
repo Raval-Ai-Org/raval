@@ -765,6 +765,19 @@ function requestSignature(
   });
 }
 
+/**
+ * Whether Generate must wait for a provider price quote. Own clips, site
+ * reels, camera-move recaps and animated recaps (priced per photo) are never
+ * quoted, so they must never wait for one.
+ */
+export function needsVideoQuote(type: StudioSession["type"], c: StudioSession["controls"]) {
+  const video = type === "video" || (type === "story" && c.storyMode === "video");
+  if (!video || c.videoPreview || !c.videoModelKey) return false;
+  if (type === "video" && (c.videoMode === "brand" || c.videoMode === "site")) return false;
+  if (c.videoMode === "recap") return false;
+  return true;
+}
+
 export async function generate(
   id: string,
   opts: { kind?: "generate" | "regenerate" | "refine"; refine?: StudioRefine } = {},
@@ -775,12 +788,7 @@ export async function generate(
     toast.error("Wait for your reference photo to finish uploading.");
     return;
   }
-  if (
-    (s.type === "video" || (s.type === "story" && s.controls.storyMode === "video")) &&
-    !s.controls.videoPreview &&
-    s.controls.videoModelKey &&
-    !s.controls.videoQuote
-  ) {
+  if (needsVideoQuote(s.type, s.controls) && !s.controls.videoQuote) {
     toast.error(
       "Wait for the video price before generating. If it cannot be quoted, choose another option.",
     );

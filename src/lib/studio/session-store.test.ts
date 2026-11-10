@@ -116,3 +116,15 @@ it("submits and persists the reviewed script snapshot when making a video", asyn
     expect.stringContaining("The reviewed words"),
   );
 });
+
+it("never waits on a price quote for footage that is never quoted", async () => {
+  const { needsVideoQuote } = await import("./session-store");
+  const base = { platforms: ["instagram"], videoModelKey: "standard" } as never as Parameters<
+    typeof needsVideoQuote
+  >[1];
+  expect(needsVideoQuote("video", base)).toBe(true);
+  for (const videoMode of ["brand", "site", "recap"] as const)
+    expect(needsVideoQuote("video", { ...base, videoMode })).toBe(false);
+  expect(needsVideoQuote("video", { ...base, videoPreview: true } as never)).toBe(false);
+  expect(needsVideoQuote("image", base)).toBe(false);
+});

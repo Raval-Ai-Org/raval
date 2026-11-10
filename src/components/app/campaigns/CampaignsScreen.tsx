@@ -48,7 +48,7 @@ export function CampaignsScreen({
 }) {
   return (
     <MotionConfig reducedMotion="user">
-      <div className="@container/campaigns relative flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+      <div className="@container/campaigns relative flex h-full min-h-0 flex-col overflow-hidden text-foreground">
         <AnimatePresence mode="wait" initial={false}>
           {mode.kind === "new" ? (
             <motion.div
@@ -115,11 +115,8 @@ function Home({
   return (
     <div className="mx-auto w-full max-w-[1120px] px-4 pb-16 @3xl/campaigns:px-8">
       {/* Hero */}
+      {/* On the canvas: its wash is the only glow, so nothing is clipped at the top. */}
       <div className="relative pb-5 pt-6 @3xl/campaigns:pt-8">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-24 left-1/2 h-56 w-[70%] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-        />
         <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0 max-w-xl">
             <h1 className="ds-page-title text-[26px] font-semibold leading-tight tracking-tight @3xl/campaigns:text-[32px]">
