@@ -128,6 +128,24 @@ function dayStamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * The last Library read per workspace, kept for this tab. Opening the Library
+ * again shows it at once and refreshes behind it, instead of a blank
+ * "Loading…" every time. Signed links last an hour; older copies are dropped.
+ */
+type LibrarySnapshot = {
+  at: number;
+  assets: Media[];
+  groups: Group[];
+  thumbs: Record<string, string>;
+};
+const SNAPSHOT_TTL_MS = 45 * 60_000;
+const librarySnapshots = new Map<string, LibrarySnapshot>();
+function freshSnapshot(workspaceId: string | null): LibrarySnapshot | null {
+  const snap = workspaceId ? librarySnapshots.get(workspaceId) : undefined;
+  return snap && Date.now() - snap.at < SNAPSHOT_TTL_MS ? snap : null;
+}
+
 /** The workspace this library belongs to (from the route). */
 function useWorkspaceId(): string | null {
   return useOptionalWorkspaceId();
@@ -204,10 +222,13 @@ export function LibraryPage({
   const workspaceId = useWorkspaceId();
   const fixtures = !!fixtureGroups || !!fixtureAssets;
   const [tab, setTab] = useState<LibraryTab>(initialTab);
-  const [assets, setAssets] = useState<Media[]>(fixtureAssets ?? []);
-  const [groups, setGroups] = useState<Group[]>(fixtureGroups ?? []);
-  const [thumbs, setThumbs] = useState<Record<string, string>>(fixtureThumbs ?? {});
-  const [loading, setLoading] = useState(!fixtures);
+  const snapshot = fixtures ? null : freshSnapshot(workspaceId);
+  const [assets, setAssets] = useState<Media[]>(fixtureAssets ?? snapshot?.assets ?? []);
+  const [groups, setGroups] = useState<Group[]>(fixtureGroups ?? snapshot?.groups ?? []);
+  const [thumbs, setThumbs] = useState<Record<string, string>>(
+    fixtureThumbs ?? snapshot?.thumbs ?? {},
+  );
+  const [loading, setLoading] = useState(!fixtures && !snapshot);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [format, setFormat] = useState<StudioType | "all">("all");
@@ -278,7 +299,8 @@ export function LibraryPage({
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // With a recent copy on screen, refresh quietly behind it.
+    if (!freshSnapshot(workspaceId)) setLoading(true);
     setError(null);
     try {
       const [assetRes, posts] = await Promise.all([
@@ -300,28 +322,30 @@ export function LibraryPage({
       if (!assetRes.ok) throw new Error(payload.error || "Could not load your library");
       if (posts.error) throw new Error(posts.error.message);
       if (version !== loadVersion.current) return;
-      setAssets(
-        (payload.assets ?? []).map((asset) => ({
-          ...normalizeLibraryAsset({
-            id: asset.id,
-            title: asset.name,
-            media_url: asset.url,
-            kind: asset.type,
-            status: asset.status,
-            created_at: asset.createdAt,
-            updated_at: asset.updatedAt,
-            workspace_id: asset.workspaceId,
-            channel: asset.platform,
-            mime_type: asset.mimeType,
-            metadata: asset.metadata,
-            source: "generated",
-          }),
-          thumbnailUrl: asset.thumbnailUrl ?? asset.url,
-          postId: asset.postId ?? null,
-        })),
-      );
+      const nextAssets: Media[] = (payload.assets ?? []).map((asset) => ({
+        ...normalizeLibraryAsset({
+          id: asset.id,
+          title: asset.name,
+          media_url: asset.url,
+          kind: asset.type,
+          status: asset.status,
+          created_at: asset.createdAt,
+          updated_at: asset.updatedAt,
+          workspace_id: asset.workspaceId,
+          channel: asset.platform,
+          mime_type: asset.mimeType,
+          metadata: asset.metadata,
+          source: "generated",
+        }),
+        thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+        postId: asset.postId ?? null,
+      }));
+      setAssets(nextAssets);
       const rows = (posts.data ?? []) as ContentRow[];
-      setGroups(groupRows(rows));
+      const nextGroups = groupRows(rows);
+      setGroups(nextGroups);
+      // Posts and media show as soon as they are read; thumbnails follow.
+      setLoading(false);
       const paths = [
         ...new Set(
           rows
@@ -332,6 +356,12 @@ export function LibraryPage({
       const signed = paths.length ? await getSignedAssetUrls(workspaceId, paths) : {};
       if (version !== loadVersion.current) return;
       setThumbs(signed);
+      librarySnapshots.set(workspaceId, {
+        at: Date.now(),
+        assets: nextAssets,
+        groups: nextGroups,
+        thumbs: signed,
+      });
     } catch (cause) {
       if (version !== loadVersion.current) return;
       console.error("Library query failed", cause);
@@ -342,9 +372,11 @@ export function LibraryPage({
 
   useEffect(() => {
     if (!fixtures) {
-      setAssets([]);
-      setGroups([]);
-      setThumbs({});
+      // Another workspace's copy is never shown here.
+      const snap = freshSnapshot(workspaceId);
+      setAssets(snap?.assets ?? []);
+      setGroups(snap?.groups ?? []);
+      setThumbs(snap?.thumbs ?? {});
       setSelected(null);
     }
     void load();

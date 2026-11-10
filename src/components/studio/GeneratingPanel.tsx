@@ -6,7 +6,10 @@
 // each row names the piece and the step it is on, and any row opens it.
 // Only work seen running in this tab is listed, so a page load never shows
 // old pieces. The card goes when closed and comes back with the next piece.
-// Presentational half: GeneratingPanelView.
+// While a screen is open on the canvas the card folds into a small pill in
+// the corner (`compact`), so the work stays in view without covering the
+// screen; a press unfolds the list.
+// Presentational halves: GeneratingPanelView and GeneratingPill.
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -172,8 +175,86 @@ export function GeneratingPanelView({
   );
 }
 
-/** The wired card, mounted once on the workspace canvas. */
-export function GeneratingPanel({ className }: { className?: string }) {
+/** The folded card: one pill that says how much is being made. */
+export function GeneratingPill({
+  rows,
+  onOpen,
+  className,
+}: {
+  rows: GeneratingRow[];
+  onOpen: () => void;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  const working = rows.filter((r) => r.state === "working").length;
+  const failed = rows.filter((r) => r.state === "failed").length;
+  const ready = rows.length - working - failed;
+  const first = rows.find((r) => r.state === "working");
+  return (
+    <motion.button
+      type="button"
+      onClick={onOpen}
+      aria-label={
+        working
+          ? `Making ${working} ${working === 1 ? "piece" : "pieces"}. Show the list`
+          : "Finished. Show the list"
+      }
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+      className={cn(
+        "group relative inline-flex h-11 max-w-[280px] items-center gap-2.5 overflow-hidden rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-glass-bg)] pl-3.5 pr-4 text-left text-[12.5px] font-semibold shadow-[var(--ds-pop-shadow)] backdrop-blur-xl transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        className,
+      )}
+    >
+      {working ? (
+        <span aria-hidden className="relative flex size-2 shrink-0">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--mox-green)] opacity-60" />
+          <span className="relative inline-flex size-2 rounded-full bg-[var(--mox-green)]" />
+        </span>
+      ) : failed && !ready ? (
+        <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+      ) : (
+        <Check className="size-3.5 shrink-0 text-[var(--mox-green)]" strokeWidth={3} />
+      )}
+      <span className="min-w-0">
+        <span className="block truncate">
+          {working
+            ? `Making ${working} ${working === 1 ? "piece" : "pieces"}`
+            : ready
+              ? `${ready} ready`
+              : "Didn't finish"}
+        </span>
+        {first?.step ? (
+          <span className="block truncate text-[11px] font-medium text-muted-foreground">
+            {first.step}…
+          </span>
+        ) : null}
+      </span>
+      <ChevronRight className="size-3.5 shrink-0 -rotate-90 text-muted-foreground transition-transform group-hover:-translate-y-0.5" />
+      {working ? (
+        <span aria-hidden className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden">
+          <motion.span
+            className="absolute inset-y-0 w-1/3 rounded-full [background:var(--mox-gradient)]"
+            animate={reduce ? undefined : { x: ["-100%", "320%"] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </span>
+      ) : null}
+    </motion.button>
+  );
+}
+
+/** The wired card, mounted once on the workspace column. */
+export function GeneratingPanel({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** A screen is open on the canvas: fold into the corner pill. */
+  compact?: boolean;
+}) {
   const workspaceId = useOptionalWorkspaceId();
   const jobs = useStudioStore((s) => s.jobs);
   const sessions = useStudioStore((s) => s.sessions);
@@ -181,6 +262,11 @@ export function GeneratingPanel({ className }: { className?: string }) {
   const seen = useRef<string[]>([]);
   const [, bump] = useState(0);
   const [closed, setClosed] = useState(false);
+  // Folded, the list opens on a press and folds again once a row is opened.
+  const [unfolded, setUnfolded] = useState(false);
+  useEffect(() => {
+    if (!compact) setUnfolded(false);
+  }, [compact]);
   const navigate = useNavigate();
   // Other background work, newest first (see the `work:update` event).
   const [tasks, setTasks] = useState<(GeneratingRow & { href?: string; ugcProjectId?: string })[]>(
@@ -244,12 +330,20 @@ export function GeneratingPanel({ className }: { className?: string }) {
 
   return (
     <AnimatePresence>
-      {!closed && all.length > 0 ? (
+      {!closed && all.length > 0 && compact && !unfolded ? (
+        <GeneratingPill
+          key="generating-pill"
+          rows={all}
+          className={className}
+          onOpen={() => setUnfolded(true)}
+        />
+      ) : !closed && all.length > 0 ? (
         <GeneratingPanelView
           key="generating"
           rows={all}
           className={className}
           onOpen={(id) => {
+            setUnfolded(false);
             if (id.startsWith("session:")) return focusSession(id.slice("session:".length));
             const task = tasks.find((t) => t.id === id);
             if (!task) return void openJob(id, workspaceId);
@@ -258,6 +352,9 @@ export function GeneratingPanel({ className }: { className?: string }) {
             if (task.href) navigate({ to: task.href });
           }}
           onClose={() => {
+            // Folded into the corner, the cross only folds it again while
+            // something is still being made.
+            if (compact && all.some((r) => r.state === "working")) return setUnfolded(false);
             setClosed(true);
             setTasks((list) => list.filter((t) => t.state === "working"));
             seen.current = seen.current.filter((id) => {

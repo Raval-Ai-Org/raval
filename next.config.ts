@@ -88,14 +88,29 @@ const nextConfig: NextConfig = {
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   poweredByHeader: false,
   // Optional verification on small disks; normal development/deployment caching is unchanged.
-  ...(process.env.MELLOX_BUILD_WITHOUT_CACHE === "true"
-    ? {
-        webpack(config: Parameters<NonNullable<NextConfig["webpack"]>>[0]) {
-          config.cache = false;
-          return config;
-        },
-      }
-    : {}),
+  webpack(config: Parameters<NonNullable<NextConfig["webpack"]>>[0], { isServer }) {
+    // Optional verification on small disks; normal caching is unchanged.
+    if (process.env.MELLOX_BUILD_WITHOUT_CACHE === "true") config.cache = false;
+    // In a local checkout @motionmox/* are symlinks into vendor/, so webpack
+    // resolves them to vendor paths and `serverExternalPackages` no longer
+    // matches: it then tries to bundle MotionMox's own webpack and esbuild,
+    // which breaks the dev server for every page. Keep them external by name.
+    if (isServer) {
+      const external = /^@motionmox\/(bundler|renderer)(\/.*)?$/;
+      config.externals = [
+        ...(Array.isArray(config.externals)
+          ? config.externals
+          : config.externals
+            ? [config.externals]
+            : []),
+        ({ request }: { request?: string }, callback: (err?: Error, result?: string) => void) =>
+          request && external.test(request)
+            ? callback(undefined, `commonjs ${request}`)
+            : callback(),
+      ];
+    }
+    return config;
+  },
   // playwright-core drives the AI Visibility rendering fallback; typescript
   // parses proposed code changes. Both are large and must not be bundled.
   // MotionMox's renderer and bundler spawn binaries and run webpack/rspack.

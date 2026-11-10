@@ -3,7 +3,7 @@
 import { OpeningPill } from "@/components/ui/page-loader";
 import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
-import { useBodyPointerGuard } from "@/lib/shell/window";
+import { useBodyPointerGuard, useCanvasBusy } from "@/lib/shell/window";
 import { canStepBack, installShellHistory, previousUrl } from "@/lib/shell/history";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
 import { Link, useRouterState, useNavigate, usePrefetch } from "@/lib/navigation";
@@ -202,6 +202,8 @@ function AppShell() {
   useEffect(() => installShellHistory(), []);
   const isCompact = useIsCompact();
   const studioRail = useStudioRail();
+  // A screen is open on the canvas (Create, Library, a piece being made…).
+  const canvasBusy = useCanvasBusy();
   const [navOpen, setNavOpen] = useState(false);
   // Compact widths use an overlay drawer; desktop keeps an inline sidebar.
   const [vw, setVw] = useState<number>(1024);
@@ -640,72 +642,81 @@ function AppShell() {
       <h1 className="sr-only">Mellox AI Workspace</h1>
 
       {/* Collapsed: the icon rail, in the open sidebar's order. */}
-      {!navOpen && (
-        <aside
-          data-app-sidebar
-          aria-label="Sidebar rail"
-          className="hidden h-full w-[60px] flex-none flex-col items-center py-3 lg:flex"
-        >
-          <TooltipProvider delayDuration={200}>
-            <div className="group relative mb-4 h-9 w-9">
-              <Link
-                to={homeHref}
-                aria-label="Mellox — workspace home"
-                title="Workspace home"
-                className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <Logo height={26} markOnly />
-              </Link>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setNavOpen(true)}
-                    data-sidebar-keep
-                    aria-label="Open sidebar"
-                    className="absolute inset-0 grid place-items-center rounded-full bg-[var(--ds-card-bg)] text-foreground opacity-0 shadow-[var(--ds-card-shadow)] transition-all duration-200 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <PanelRightOpen className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  Open sidebar
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex flex-1 flex-col items-center">
-              <SidebarNav
-                collapsed
-                activeId={activeId}
-                lockFor={lockFor}
-                showFlag={(flag) => flag === "experiments" && Boolean(proofEngine?.enabled)}
-                onPick={pickNav}
-                onWarm={warmNav}
-              />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setNavOpen(true)}
-                    data-sidebar-keep
-                    aria-label="More"
-                    className="mt-1 grid h-10 w-10 place-items-center rounded-full text-foreground/60 transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
-                  >
-                    <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  More
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex flex-col items-center gap-2 pt-3">
-              <MoxGauge compact />
-              <AccountMenuCompact onOpenSettings={() => emitAppEvent("open:settings")} />
-            </div>
-          </TooltipProvider>
-        </aside>
-      )}
+      {/* The rail grows as the sidebar shrinks (same timing), so the canvas
+          slides in one smooth move instead of jumping by the rail's width. */}
+      <AnimatePresence initial={false}>
+        {!navOpen && (
+          <motion.aside
+            key="app-rail"
+            data-app-sidebar
+            aria-label="Sidebar rail"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 60, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden h-full w-[60px] flex-none flex-col items-center overflow-hidden py-3 lg:flex"
+          >
+            <TooltipProvider delayDuration={200}>
+              <div className="group relative mb-4 h-9 w-9">
+                <Link
+                  to={homeHref}
+                  aria-label="Mellox — workspace home"
+                  title="Workspace home"
+                  className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Logo height={26} markOnly />
+                </Link>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setNavOpen(true)}
+                      data-sidebar-keep
+                      aria-label="Open sidebar"
+                      className="absolute inset-0 grid place-items-center rounded-full bg-[var(--ds-card-bg)] text-foreground opacity-0 shadow-[var(--ds-card-shadow)] transition-all duration-200 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <PanelRightOpen className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    Open sidebar
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-1 flex-col items-center">
+                <SidebarNav
+                  collapsed
+                  activeId={activeId}
+                  lockFor={lockFor}
+                  showFlag={(flag) => flag === "experiments" && Boolean(proofEngine?.enabled)}
+                  onPick={pickNav}
+                  onWarm={warmNav}
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setNavOpen(true)}
+                      data-sidebar-keep
+                      aria-label="More"
+                      className="mt-1 grid h-10 w-10 place-items-center rounded-full text-foreground/60 transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+                    >
+                      <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    More
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-col items-center gap-2 pt-3">
+                <MoxGauge compact />
+                <AccountMenuCompact onOpenSettings={() => emitAppEvent("open:settings")} />
+              </div>
+            </TooltipProvider>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence initial={false} mode="sync">
         {navOpen && (
@@ -750,8 +761,32 @@ function AppShell() {
           the very top (Holo): the top bar sits on it, not on a white strip. */}
       <div
         data-workspace-column
-        className="flex min-w-0 flex-1 flex-col lg:ds-canvas lg:overflow-hidden lg:rounded-tl-[var(--ds-canvas-radius)]"
+        className="relative flex min-w-0 flex-1 flex-col lg:ds-canvas lg:overflow-hidden lg:rounded-tl-[var(--ds-canvas-radius)]"
       >
+        {/* Where canvas screens are drawn (Create, Studio, Library, Brain…):
+            inside this column, so they are part of the page. They resize with
+            the sidebar by CSS alone and can never cover it. */}
+        <div
+          data-canvas-host
+          className="pointer-events-none absolute inset-0 z-30 hidden lg:block [&>*]:pointer-events-auto"
+        />
+        {/* The to-do list of what is being made. It stays in view on every
+            screen: the full card on Home and Chat, a small pill in the corner
+            while a screen is open (a press opens the list). The Studio panel
+            shows the same work, so the card rests while that is open. */}
+        {(!studioRail.open || canvasBusy) && (
+          <GeneratingPanel
+            compact={canvasBusy && !isCompact}
+            className={
+              isCompact
+                ? "fixed inset-x-3 bottom-24 z-40 w-auto"
+                : canvasBusy
+                  ? "absolute bottom-4 left-4 z-40 max-w-[calc(100%-2rem)]"
+                  : // Under the top bar (Scale, Studio, Share), never over it.
+                    "absolute right-4 top-16 z-40 max-w-[calc(100%-2rem)]"
+            }
+          />
+        )}
         <AnnouncementsOutlet />
 
         <header
@@ -1139,18 +1174,6 @@ function WorkspaceSurface({
         />
         {/* Creator videos keep being followed after their window closes. */}
         <UgcRenderWatcher />
-        {/* Holo's "Generating…" card, while the Studio panel is shut. */}
-        {!studioOpen && (
-          // Generate closes Studio, so this list must show on a phone too.
-          <GeneratingPanel
-            className={
-              isCompact
-                ? "fixed inset-x-3 bottom-24 z-40 w-auto"
-                : // Under the top bar (Scale, Studio, Share), never over it.
-                  "absolute right-4 top-16 z-20 max-w-[calc(100%-2rem)]"
-            }
-          />
-        )}
       </section>
 
       {/* Chat (Holo): past conversations on the right. On a phone they stay

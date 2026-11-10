@@ -18,7 +18,7 @@ import {
   Video,
   X,
 } from "@/components/icons";
-import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
+import { dsGhostBtn, dsIconBtn } from "@/components/app/surface/buttons";
 import { addDaysYmd } from "@/lib/autopilot/time";
 import {
   CAMPAIGN_GOAL_KINDS,
@@ -41,12 +41,16 @@ import { buildCampaignSkeleton, takenBy, type TakenSlot } from "@/lib/campaigns/
 import { isStoryPlatform } from "@/lib/stories/placement";
 import { duration, ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { BackPill, GradProgress, StepPills } from "@/components/app/surface/MoxParts";
+import { MoxFace, type MoxMood } from "@/components/brand/mox/MoxFace";
 import { Gallery } from "./Gallery";
 import { PlatformLogoGrid } from "@/components/studio/studio-ui";
 import { ChannelMark, FormatChip, kindIcon, shortDate } from "./kit";
 import type { CampaignsHandlers, CampaignsMode, CampaignsView } from "./types";
 
 const STEPS = ["Kind", "Basics", "What you have", "Channels", "Plan"] as const;
+/** Mox's face per step, as in Autopilot's setup. */
+const MOODS: MoxMood[] = ["happy", "thinking", "excited", "thinking", "excited"];
 const CHANNELS: PlatformId[] = [
   "instagram",
   "facebook",
@@ -230,7 +234,7 @@ export function CampaignDesigner({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Top bar */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border/50 px-3 py-2.5 @3xl/campaigns:px-6">
+      <div className="flex shrink-0 items-center gap-3 px-3 pt-3 @3xl/campaigns:px-6">
         <button
           type="button"
           aria-label="Back to campaigns"
@@ -254,49 +258,29 @@ export function CampaignDesigner({
             Step {step + 1} of {STEPS.length} · {STEPS[step]}
           </p>
         </div>
-        {/* Step dots */}
-        <ol className="hidden items-center gap-1 @2xl/campaigns:flex" aria-label="Steps">
-          {STEPS.map((s, i) => {
-            const reachable = blocked.slice(0, i).every((b) => !b);
-            return (
-              <li key={s}>
-                <button
-                  type="button"
-                  disabled={!reachable}
-                  onClick={() => go(i)}
-                  className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-medium transition-colors disabled:opacity-40",
-                    i === step
-                      ? "bg-foreground text-background"
-                      : i < step
-                        ? "text-foreground/80 hover:bg-[var(--ds-well-bg)]"
-                        : "text-muted-foreground hover:bg-[var(--ds-well-bg)]",
-                  )}
-                >
-                  {i < step ? (
-                    <Check className="size-3" />
-                  ) : (
-                    <span className="tabular-nums">{i + 1}</span>
-                  )}
-                  {s}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-
-      {/* Progress line */}
-      <div className="h-0.5 shrink-0 bg-[var(--ds-well-bg)]">
-        <motion.div
-          className="h-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]"
-          animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-          transition={{ duration: duration.slow, ease: ease.emphasized }}
-        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Autopilot's steps: pills you can go back on, and the Mox progress bar. */}
+        <div className="flex flex-col items-center gap-2.5 px-4 pt-5">
+          <StepPills
+            steps={STEPS.map((s) => ({ id: s, label: s }))}
+            current={STEPS[step]}
+            onPick={(id) => go(STEPS.indexOf(id as (typeof STEPS)[number]))}
+            className="max-w-full overflow-x-auto"
+          />
+          <GradProgress
+            value={(step + 1) / STEPS.length}
+            className="w-full max-w-[320px]"
+            label="Campaign progress"
+          />
+        </div>
         <div className="mx-auto w-full max-w-[920px] px-4 py-6 @3xl/campaigns:px-8">
+          <div className="mb-1 flex justify-center">
+            <span className="mox-float">
+              <MoxFace mood={MOODS[step]} size={44} track />
+            </span>
+          </div>
           <AnimatePresence mode="wait" initial={false} custom={dir}>
             <motion.div
               key={step}
@@ -343,8 +327,9 @@ export function CampaignDesigner({
       </div>
 
       {/* Bottom bar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border/50 bg-background/80 px-4 py-3 backdrop-blur @3xl/campaigns:px-6">
-        <p className="min-w-0 text-[12px] text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2 @3xl/campaigns:px-6">
+        {step > 0 ? <BackPill onClick={() => go(step - 1)} /> : <span />}
+        <p className="order-last min-w-0 basis-full text-center text-[12px] text-muted-foreground empty:hidden @2xl/campaigns:order-none @2xl/campaigns:basis-auto">
           {blocked[step] ??
             (last
               ? view.home.canPlan
@@ -352,16 +337,7 @@ export function CampaignDesigner({
                 : "Campaign plans are on Growth and up."
               : "")}
         </p>
-        <div className="ml-auto flex items-center gap-2">
-          {step > 0 && (
-            <button
-              type="button"
-              onClick={() => go(step - 1)}
-              className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
-            >
-              Back
-            </button>
-          )}
+        <div className="ml-auto flex items-center gap-2 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/85 p-1.5 shadow-[0_18px_40px_-20px_rgb(0_0_0/0.35)] backdrop-blur-xl empty:hidden">
           {last ? (
             <>
               <button
@@ -369,7 +345,7 @@ export function CampaignDesigner({
                 data-testid="save-draft"
                 disabled={!!busy}
                 onClick={() => void save(false)}
-                className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+                className={cn(dsGhostBtn, "h-10 rounded-full px-4 text-[13px]")}
               >
                 {busy === "save" ? <Spinner className="size-4 animate-spin" /> : null}
                 Save draft
@@ -379,7 +355,7 @@ export function CampaignDesigner({
                 data-testid="write-plan"
                 disabled={!!busy}
                 onClick={() => void save(true)}
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                className="studio-cta inline-flex h-10 items-center gap-1.5 rounded-full px-5 text-[13.5px] font-bold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy === "plan" ? (
                   <Spinner className="size-4 animate-spin" />
@@ -402,7 +378,7 @@ export function CampaignDesigner({
                 data-testid="next-step"
                 disabled={!!blocked[step]}
                 onClick={() => go(step + 1)}
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                className="studio-cta inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[13.5px] font-bold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Next
                 <ArrowRight className="size-4" />
@@ -424,12 +400,23 @@ function StepIntro({
   body?: string;
   children: React.ReactNode;
 }) {
+  // The headline's last word carries the Mox gradient (Autopilot's headings).
+  const cut = title.lastIndexOf(" ");
+  const lead = cut > 0 ? title.slice(0, cut) : "";
+  const tail = cut > 0 ? title.slice(cut + 1) : title;
   return (
     <div>
-      <h2 className="text-[22px] font-semibold leading-tight tracking-tight">{title}</h2>
-      {body && (
-        <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
-      )}
+      <div className="text-center">
+        <h2 className="text-[24px] font-bold leading-tight tracking-[-0.025em] sm:text-[28px]">
+          {lead ? `${lead} ` : ""}
+          <span className="ds-grad-text">{tail}</span>
+        </h2>
+        {body && (
+          <p className="mx-auto mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">
+            {body}
+          </p>
+        )}
+      </div>
       <div className="mt-6">{children}</div>
     </div>
   );
@@ -1142,7 +1129,9 @@ function PreviewChip({
         </span>
         <span className="mt-0.5 flex items-center gap-1">
           <FormatChip format={piece.format} className="h-5 px-1.5 text-[10px]" />
-          {link === "caption" && <span className="text-[10px] font-medium text-primary-ink">link</span>}
+          {link === "caption" && (
+            <span className="text-[10px] font-medium text-primary-ink">link</span>
+          )}
           {link === "bio" && <span className="text-[10px] text-muted-foreground">link in bio</span>}
         </span>
       </span>

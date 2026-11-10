@@ -12,6 +12,7 @@ import { emitAppEvent } from "@/lib/app-events";
 import type { PlanId } from "@/lib/billing/catalog";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import type { StudioType } from "@/lib/studio/formats";
+import type { StudioControls } from "@/lib/studio/jobs";
 import { chooseType, openComposer } from "@/lib/studio/session-store";
 
 export type CreateChoice = StudioType | "ugc";
@@ -28,7 +29,14 @@ export function useOpenCreate() {
   );
   /** Returns false when nothing opened (locked, or no workspace). */
   const open = useCallback(
-    (choice: CreateChoice, opts?: { brief?: string }): boolean => {
+    (
+      choice: CreateChoice,
+      opts?: {
+        brief?: string;
+        /** Where the composer starts: a video kind or mode (Motion graphics…). */
+        controls?: Pick<StudioControls, "videoKind" | "videoMode">;
+      },
+    ): boolean => {
       if (lockFor(choice)) {
         openFeatureUpgrade("ugc");
         return false;
@@ -40,7 +48,7 @@ export function useOpenCreate() {
       rememberStudioType(choice);
       const id = openComposer({ type: choice, brief: opts?.brief });
       if (!id) return false; // openComposer already explained why
-      chooseType(id, choice);
+      chooseType(id, choice, opts?.controls ? { controls: opts.controls } : {});
       return true;
     },
     [lockFor],

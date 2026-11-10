@@ -1,9 +1,10 @@
 "use client";
 
-// Home → Animate (Holo's "Turn images into videos"): one page on the canvas.
-// Choose the first frame (and, for the picture-led styles, an optional end
-// frame) from the Library or this device, say what should move, pick how it
-// moves, then the shape and length right there on the canvas. "Open in
+// Home → Animate (Holo's "Turn images into videos"): a page on the canvas in
+// Autopilot's three steps. Picture: the first frame (and, for the
+// picture-led styles, an optional end frame) from the Library or this device.
+// Motion: what should move and how. Shape: the aspect ratio and length, with
+// a summary of the video. "Open in
 // Studio" opens the video draft with the picture kept exact (`animateOpen`,
 // src/lib/studio/repurpose.ts); nothing is made or charged until the person
 // presses Generate there, with the price on it.
@@ -44,6 +45,23 @@ import { lengthChoices, snapLength } from "@/lib/studio/video/lengths";
 import { cn } from "@/lib/utils";
 import { MAX_PHOTO_BYTES, PHOTO_TYPES, uploadStudioMedia } from "./media-upload";
 import { useOpenCreate } from "./use-open-create";
+import { AnimatePresence, motion } from "framer-motion";
+import { BackPill, GradProgress, StepPills } from "@/components/app/surface/MoxParts";
+import { MoxFace, type MoxMood } from "@/components/brand/mox/MoxFace";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
+
+type AnimateStep = "picture" | "motion" | "shape";
+const STEPS: { id: AnimateStep; label: string }[] = [
+  { id: "picture", label: "Picture" },
+  { id: "motion", label: "Motion" },
+  { id: "shape", label: "Shape" },
+];
+const SAY: Record<AnimateStep, { mood: MoxMood; line: string; bold: string }> = {
+  picture: { mood: "happy", line: "Which picture should", bold: "come to life?" },
+  motion: { mood: "excited", line: "How should it", bold: "move?" },
+  shape: { mood: "thinking", line: "Last thing:", bold: "shape and length." },
+};
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 export type AnimatePicture = {
   assetId: string;
@@ -294,6 +312,16 @@ export function AnimateFlowView({
   const file = useRef<HTMLInputElement>(null);
   const [slot, setSlot] = useState<AnimateSlot>("start");
   const [over, setOver] = useState(false);
+  const [step, setStep] = useState<AnimateStep>("picture");
+  const [dir, setDir] = useState(1);
+  const reduce = useReducedMotionSafe();
+  const at = STEPS.findIndex((x) => x.id === step);
+  const goTo = (next: AnimateStep) => {
+    setDir(STEPS.findIndex((x) => x.id === next) >= at ? 1 : -1);
+    setStep(next);
+  };
+  const stepOk =
+    step === "picture" ? !!draft.chosen && !uploading : step === "motion" ? !!draft.style : true;
   const endAllowed = acceptsEndFrame(draft.style?.videoKind);
   const lengths = animateLengths(draft.style);
   const seconds = animateSeconds(draft);
@@ -365,272 +393,383 @@ export function AnimateFlowView({
         </div>
       ) : null}
 
-      <div className="studio-stagger space-y-6 pb-4">
-        {/* Frames: Holo's "Choose first and last frames". */}
-        <section aria-labelledby="animate-frames" className="ds-card p-4 sm:p-5">
-          <div className="mb-4 flex items-baseline justify-between gap-3">
-            <h2 id="animate-frames" className={LABEL}>
-              Choose your frames
-            </h2>
-            <span className="truncate text-[11.5px] text-muted-foreground">
-              {endAllowed
-                ? filling === "end"
-                  ? "Now pick the end frame below"
-                  : "Tap a frame, then pick a picture"
-                : "This style ends on its own"}
-            </span>
-          </div>
-          <div className="flex items-center justify-center gap-3 sm:gap-5">
-            <FrameTile
-              label="First frame"
-              picture={uploading === "start" ? null : draft.chosen}
-              active={filling === "start"}
-              onSelect={() => (draft.chosen || !onUpload ? setSlot("start") : pickFile("start"))}
-              onMeasured={onMeasured}
-              ratio={ratio}
-            />
-            <span
-              aria-hidden
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground"
-            >
-              <ArrowRight className="size-4" />
-            </span>
-            <FrameTile
-              label="End frame"
-              optional
-              picture={endAllowed && uploading !== "end" ? draft.end : null}
-              active={filling === "end"}
-              disabledNote={endAllowed ? undefined : "Ends on its own"}
-              onSelect={() => setSlot("end")}
-              onClear={() => onDraft({ end: null })}
-              ratio={ratio}
-            />
-          </div>
-          {uploading ? (
-            <p className="mt-3 flex items-center justify-center gap-2 text-[12px] font-semibold text-muted-foreground">
-              <span className="size-2 animate-pulse rounded-full [background:var(--mox-gradient)]" />
-              Uploading…
-            </p>
-          ) : null}
-
-          <div className="mt-5 flex items-center justify-between gap-2">
-            <p className="text-[12px] font-semibold text-muted-foreground">From your library</p>
-            {pictures?.length ? (
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => scroll(-1)}
-                  aria-label="Earlier pictures"
-                  className="grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
-                >
-                  <ChevronLeft className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scroll(1)}
-                  aria-label="More pictures"
-                  className="grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
-                >
-                  <ChevronRight className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onSeeLibrary}
-                  className="ml-1 rounded-full px-2.5 py-1 text-[12px] font-semibold text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
-                >
-                  See all
-                </button>
-              </div>
-            ) : null}
-          </div>
-          {error ? (
-            <ErrorState title="Couldn't load your pictures" description={error} onRetry={onRetry} />
-          ) : pictures === null ? (
-            <div className="mt-2 flex gap-2.5 overflow-hidden p-1.5">
-              {Array.from({ length: 6 }, (_, i) => (
-                <Skeleton key={i} className="h-[92px] w-[74px] shrink-0 rounded-xl" />
-              ))}
-            </div>
-          ) : pictures.length === 0 && !onUpload ? (
-            <EmptyState
-              icon={Sparkles}
-              title="No pictures in your Library yet"
-              description="Make a post first, then bring it to life here."
-              action={
-                <button
-                  type="button"
-                  onClick={() => emitAppEvent("open:create-launcher")}
-                  className="studio-cta inline-flex h-9 items-center rounded-full px-4 text-[13px] font-bold"
-                >
-                  Make a post
-                </button>
-              }
-            />
-          ) : (
-            // Padding inside the scroller so a picked tile's ring is never cut off.
-            <div
-              ref={strip}
-              role="listbox"
-              aria-label={`Your pictures, for the ${filling === "end" ? "end" : "first"} frame`}
-              className="-mx-1.5 mt-1 flex snap-x scroll-px-1.5 gap-2.5 overflow-x-auto scroll-smooth p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {onUpload ? (
-                <button
-                  type="button"
-                  onClick={() => pickFile(filling)}
-                  className="ds-rise grid h-[92px] w-[74px] shrink-0 snap-start place-items-center rounded-xl border-2 border-dashed border-[var(--ds-card-border)] text-muted-foreground transition hover:-translate-y-0.5 hover:border-[var(--mox-green)] hover:text-foreground"
-                >
-                  <span className="flex flex-col items-center gap-1 text-[11px] font-semibold">
-                    <Upload className="size-4" />
-                    Upload
-                  </span>
-                </button>
-              ) : null}
-              {pictures.map((p, i) => {
-                const isStart = draft.chosen?.assetId === p.assetId;
-                const isEnd = endAllowed && draft.end?.assetId === p.assetId;
-                return (
-                  <button
-                    key={p.assetId}
-                    type="button"
-                    role="option"
-                    aria-selected={filling === "end" ? isEnd : isStart}
-                    aria-label={p.title ?? `Picture ${i + 1}`}
-                    onClick={() => pick(p)}
-                    style={rise(i + 1)}
-                    className={cn(
-                      "ds-rise relative h-[92px] w-[74px] shrink-0 snap-start overflow-hidden rounded-xl bg-[var(--ds-well-bg)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--mox-green)]",
-                      isStart || isEnd
-                        ? "shadow-[0_0_0_2px_var(--ds-card-bg),0_0_0_4px_var(--mox-green)]"
-                        : "shadow-[0_0_0_1px_var(--ds-card-border)]",
-                    )}
-                  >
-                    <img src={p.url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                    {isStart || isEnd ? (
-                      <span className="absolute bottom-1 left-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-white backdrop-blur">
-                        {isStart ? "First" : "End"}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-              {pictures.length === 0 ? (
-                <p className="self-center px-2 text-[12px] text-muted-foreground">
-                  No pictures yet. Upload one, or make a post first.
-                </p>
-              ) : null}
-            </div>
-          )}
-        </section>
-
-        <section aria-labelledby="animate-idea-label">
-          <label id="animate-idea-label" htmlFor="animate-note" className={LABEL}>
-            Explain your idea
-          </label>
-          <textarea
-            id="animate-note"
-            value={draft.note}
-            onChange={(e) => onDraft({ note: e.target.value })}
-            rows={3}
-            maxLength={600}
-            placeholder="e.g. A slow splash around the can, gentle ripples in the pool, a warm lens flare from the sun."
-            className="ds-card mt-2 w-full resize-none p-3.5 text-[13.5px] leading-relaxed transition-shadow placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          />
-        </section>
-
-        <section aria-labelledby="animate-style-label">
-          <p id="animate-style-label" className={cn(LABEL, "mb-2")}>
-            How it moves
-          </p>
-          <div
-            role="radiogroup"
-            aria-labelledby="animate-style-label"
-            className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:grid-cols-3"
-          >
-            {STYLES.map((s, i) => {
-              const on = draft.style?.videoKind === s.videoKind;
-              return (
-                <button
-                  key={s.videoKind}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => onDraft({ style: s, seconds: null })}
-                  style={rise(i)}
-                  className={cn(
-                    "ds-card ds-card-hover ds-rise p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                    on &&
-                      "!border-[var(--mox-green)] bg-[color-mix(in_srgb,var(--mox-lime)_14%,var(--ds-card-bg))] shadow-[0_0_0_1px_var(--mox-green)]",
-                  )}
-                >
-                  <span className="block text-[13px] font-bold tracking-[-0.01em]">{s.label}</span>
-                  <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
-                    {s.hint}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Holo: the shape and length sit on the canvas, not in a menu. */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <p className={cn(LABEL, "mb-2")}>
-              Aspect ratio
-              {draft.ratio === null ? (
-                <span className="font-medium text-muted-foreground"> · follows the picture</span>
-              ) : null}
-            </p>
-            <CanvasSegment
-              label="Aspect ratio"
-              value={ratio}
-              onChange={(r) => onDraft({ ratio: r })}
-              options={RATIOS.map((r) => ({
-                value: r,
-                label: (
-                  <>
-                    <RatioGlyph ratio={r} />
-                    {r}
-                  </>
-                ),
-              }))}
-            />
-          </div>
-          <div>
-            <p className={cn(LABEL, "mb-2")}>Video length</p>
-            {lengths.length ? (
-              <CanvasSegment
-                label="Video length"
-                value={seconds}
-                onChange={(v) => onDraft({ seconds: v })}
-                options={lengths.map((v) => ({ value: v, label: `${v}s` }))}
-              />
-            ) : (
-              <p className="flex min-h-11 items-center rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] px-4 text-[12.5px] text-muted-foreground">
-                Set by your picture, no AI clips
-              </p>
-            )}
-          </div>
-        </section>
+      <div className="flex flex-col items-center gap-2.5">
+        <StepPills
+          steps={STEPS}
+          current={step}
+          onPick={(id) => goTo(id as AnimateStep)}
+          className="max-w-full overflow-x-auto"
+        />
+        <GradProgress
+          value={(at + 1) / STEPS.length}
+          className="w-full max-w-[240px]"
+          label="Animate progress"
+        />
+      </div>
+      <div className="mb-5 mt-6 flex items-center gap-3">
+        <span className="mox-float shrink-0">
+          <MoxFace mood={SAY[step].mood} size={48} track />
+        </span>
+        <h3 className="text-[22px] font-bold leading-tight tracking-[-0.025em] sm:text-[26px]">
+          {SAY[step].line} <span className="ds-grad-text">{SAY[step].bold}</span>
+        </h3>
       </div>
 
+      <AnimatePresence mode="wait" initial={false} custom={dir}>
+        <motion.div
+          key={step}
+          initial={reduce ? { opacity: 0 } : { opacity: 0, x: 24 * dir }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, x: -24 * dir }}
+          transition={{ duration: 0.28, ease: EASE }}
+          className="space-y-6 pb-4"
+        >
+          {step === "picture" && (
+            /* Frames: Holo's "Choose first and last frames". */
+            <section aria-labelledby="animate-frames" className="ds-card p-4 sm:p-5">
+              <div className="mb-4 flex items-baseline justify-between gap-3">
+                <h2 id="animate-frames" className={LABEL}>
+                  Choose your frames
+                </h2>
+                <span className="truncate text-[11.5px] text-muted-foreground">
+                  {endAllowed
+                    ? filling === "end"
+                      ? "Now pick the end frame below"
+                      : "Tap a frame, then pick a picture"
+                    : "This style ends on its own"}
+                </span>
+              </div>
+              <div className="flex items-center justify-center gap-3 sm:gap-5">
+                <FrameTile
+                  label="First frame"
+                  picture={uploading === "start" ? null : draft.chosen}
+                  active={filling === "start"}
+                  onSelect={() =>
+                    draft.chosen || !onUpload ? setSlot("start") : pickFile("start")
+                  }
+                  onMeasured={onMeasured}
+                  ratio={ratio}
+                />
+                <span
+                  aria-hidden
+                  className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground"
+                >
+                  <ArrowRight className="size-4" />
+                </span>
+                <FrameTile
+                  label="End frame"
+                  optional
+                  picture={endAllowed && uploading !== "end" ? draft.end : null}
+                  active={filling === "end"}
+                  disabledNote={endAllowed ? undefined : "Ends on its own"}
+                  onSelect={() => setSlot("end")}
+                  onClear={() => onDraft({ end: null })}
+                  ratio={ratio}
+                />
+              </div>
+              {uploading ? (
+                <p className="mt-3 flex items-center justify-center gap-2 text-[12px] font-semibold text-muted-foreground">
+                  <span className="size-2 animate-pulse rounded-full [background:var(--mox-gradient)]" />
+                  Uploading…
+                </p>
+              ) : null}
+
+              <div className="mt-5 flex items-center justify-between gap-2">
+                <p className="text-[12px] font-semibold text-muted-foreground">From your library</p>
+                {pictures?.length ? (
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => scroll(-1)}
+                      aria-label="Earlier pictures"
+                      className="grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scroll(1)}
+                      aria-label="More pictures"
+                      className="grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+                    >
+                      <ChevronRight className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSeeLibrary}
+                      className="ml-1 rounded-full px-2.5 py-1 text-[12px] font-semibold text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+                    >
+                      See all
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              {error ? (
+                <ErrorState
+                  title="Couldn't load your pictures"
+                  description={error}
+                  onRetry={onRetry}
+                />
+              ) : pictures === null ? (
+                <div className="mt-2 flex gap-2.5 overflow-hidden p-1.5">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <Skeleton key={i} className="h-[92px] w-[74px] shrink-0 rounded-xl" />
+                  ))}
+                </div>
+              ) : pictures.length === 0 && !onUpload ? (
+                <EmptyState
+                  icon={Sparkles}
+                  title="No pictures in your Library yet"
+                  description="Make a post first, then bring it to life here."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => emitAppEvent("open:create-launcher")}
+                      className="studio-cta inline-flex h-9 items-center rounded-full px-4 text-[13px] font-bold"
+                    >
+                      Make a post
+                    </button>
+                  }
+                />
+              ) : (
+                // Padding inside the scroller so a picked tile's ring is never cut off.
+                <div
+                  ref={strip}
+                  role="listbox"
+                  aria-label={`Your pictures, for the ${filling === "end" ? "end" : "first"} frame`}
+                  className="-mx-1.5 mt-1 flex snap-x scroll-px-1.5 gap-2.5 overflow-x-auto scroll-smooth p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
+                  {onUpload ? (
+                    <button
+                      type="button"
+                      onClick={() => pickFile(filling)}
+                      className="ds-rise grid h-[92px] w-[74px] shrink-0 snap-start place-items-center rounded-xl border-2 border-dashed border-[var(--ds-card-border)] text-muted-foreground transition hover:-translate-y-0.5 hover:border-[var(--mox-green)] hover:text-foreground"
+                    >
+                      <span className="flex flex-col items-center gap-1 text-[11px] font-semibold">
+                        <Upload className="size-4" />
+                        Upload
+                      </span>
+                    </button>
+                  ) : null}
+                  {pictures.map((p, i) => {
+                    const isStart = draft.chosen?.assetId === p.assetId;
+                    const isEnd = endAllowed && draft.end?.assetId === p.assetId;
+                    return (
+                      <button
+                        key={p.assetId}
+                        type="button"
+                        role="option"
+                        aria-selected={filling === "end" ? isEnd : isStart}
+                        aria-label={p.title ?? `Picture ${i + 1}`}
+                        onClick={() => pick(p)}
+                        style={rise(i + 1)}
+                        className={cn(
+                          "ds-rise relative h-[92px] w-[74px] shrink-0 snap-start overflow-hidden rounded-xl bg-[var(--ds-well-bg)] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_var(--mox-green)]",
+                          isStart || isEnd
+                            ? "shadow-[0_0_0_2px_var(--ds-card-bg),0_0_0_4px_var(--mox-green)]"
+                            : "shadow-[0_0_0_1px_var(--ds-card-border)]",
+                        )}
+                      >
+                        <img
+                          src={p.url}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                        {isStart || isEnd ? (
+                          <span className="absolute bottom-1 left-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-white backdrop-blur">
+                            {isStart ? "First" : "End"}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {pictures.length === 0 ? (
+                    <p className="self-center px-2 text-[12px] text-muted-foreground">
+                      No pictures yet. Upload one, or make a post first.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          )}
+
+          {step === "motion" && (
+            <>
+              <section aria-labelledby="animate-idea-label">
+                <label id="animate-idea-label" htmlFor="animate-note" className={LABEL}>
+                  Explain your idea
+                </label>
+                <textarea
+                  id="animate-note"
+                  value={draft.note}
+                  onChange={(e) => onDraft({ note: e.target.value })}
+                  rows={3}
+                  maxLength={600}
+                  placeholder="e.g. A slow splash around the can, gentle ripples in the pool, a warm lens flare from the sun."
+                  className="ds-card mt-2 w-full resize-none p-3.5 text-[13.5px] leading-relaxed transition-shadow placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                />
+              </section>
+
+              <section aria-labelledby="animate-style-label">
+                <p id="animate-style-label" className={cn(LABEL, "mb-2")}>
+                  How it moves
+                </p>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="animate-style-label"
+                  className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:grid-cols-3"
+                >
+                  {STYLES.map((s, i) => {
+                    const on = draft.style?.videoKind === s.videoKind;
+                    return (
+                      <button
+                        key={s.videoKind}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => onDraft({ style: s, seconds: null })}
+                        style={rise(i)}
+                        className={cn(
+                          "ds-card ds-card-hover ds-rise p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          on &&
+                            "!border-[var(--mox-green)] bg-[color-mix(in_srgb,var(--mox-lime)_14%,var(--ds-card-bg))] shadow-[0_0_0_1px_var(--mox-green)]",
+                        )}
+                      >
+                        <span className="block text-[13px] font-bold tracking-[-0.01em]">
+                          {s.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">
+                          {s.hint}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            </>
+          )}
+
+          {step === "shape" && (
+            <>
+              {/* What will be made, at a glance: the picture, its motion, its shape. */}
+              <section aria-label="Your video" className="ds-card flex items-center gap-4 p-3.5">
+                {draft.chosen ? (
+                  <span className="relative h-[92px] w-[74px] shrink-0 overflow-hidden rounded-xl bg-[var(--ds-well-bg)] shadow-[var(--ds-card-shadow)]">
+                    <img
+                      src={draft.chosen.url}
+                      alt=""
+                      className="animate-frame-in h-full w-full object-cover"
+                    />
+                    <span aria-hidden className="ds-sheen absolute inset-0" />
+                  </span>
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <p className="ds-label">Your video</p>
+                  <p className="mt-1 truncate text-[15px] font-bold tracking-[-0.01em]">
+                    {draft.style?.label ?? "Pick a motion"}
+                  </p>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
+                    {draft.note.trim() || draft.style?.hint || "Mox moves it in your look."}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-[var(--ds-well-bg)] px-2.5 py-0.5 text-[11.5px] font-semibold">
+                      {ratio}
+                    </span>
+                    {seconds ? (
+                      <span className="rounded-full bg-[var(--ds-well-bg)] px-2.5 py-0.5 text-[11.5px] font-semibold">
+                        {seconds}s
+                      </span>
+                    ) : null}
+                    {draft.end && endAllowed ? (
+                      <span className="rounded-full bg-[var(--ds-well-bg)] px-2.5 py-0.5 text-[11.5px] font-semibold">
+                        Ends on your frame
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+              {/* Holo: the shape and length sit on the canvas, not in a menu. */}
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className={cn(LABEL, "mb-2")}>
+                    Aspect ratio
+                    {draft.ratio === null ? (
+                      <span className="font-medium text-muted-foreground">
+                        {" "}
+                        · follows the picture
+                      </span>
+                    ) : null}
+                  </p>
+                  <CanvasSegment
+                    label="Aspect ratio"
+                    value={ratio}
+                    onChange={(r) => onDraft({ ratio: r })}
+                    options={RATIOS.map((r) => ({
+                      value: r,
+                      label: (
+                        <>
+                          <RatioGlyph ratio={r} />
+                          {r}
+                        </>
+                      ),
+                    }))}
+                  />
+                </div>
+                <div>
+                  <p className={cn(LABEL, "mb-2")}>Video length</p>
+                  {lengths.length ? (
+                    <CanvasSegment
+                      label="Video length"
+                      value={seconds}
+                      onChange={(v) => onDraft({ seconds: v })}
+                      options={lengths.map((v) => ({ value: v, label: `${v}s` }))}
+                    />
+                  ) : (
+                    <p className="flex min-h-11 items-center rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] px-4 text-[12.5px] text-muted-foreground">
+                      Set by your picture, no AI clips
+                    </p>
+                  )}
+                </div>
+              </section>
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
       {/* Holo's pill, bottom right, floating over the canvas as it scrolls. */}
-      <div className="pointer-events-none sticky bottom-0 z-[5] -mx-1 mt-auto flex justify-end bg-gradient-to-t from-[var(--ds-canvas-bg,transparent)] via-[color-mix(in_srgb,var(--ds-canvas-bg,white)_70%,transparent)] to-transparent px-1 pb-1 pt-6">
+      <div className="pointer-events-none sticky bottom-0 z-[5] -mx-1 mt-auto flex items-end justify-end bg-gradient-to-t from-[var(--ds-canvas-bg,transparent)] via-[color-mix(in_srgb,var(--ds-canvas-bg,white)_70%,transparent)] to-transparent px-1 pb-1 pt-6">
+        <span className="pointer-events-auto mr-auto self-end">
+          {at > 0 ? <BackPill onClick={() => goTo(STEPS[at - 1].id)} /> : null}
+        </span>
         <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/85 p-1.5 pl-4 shadow-[0_18px_40px_-20px_rgb(0_0_0/0.35)] backdrop-blur-xl">
           <p className="hidden text-[11.5px] text-muted-foreground sm:block">
-            Nothing is made yet · price in Studio
+            {step === "shape"
+              ? "Nothing is made yet · price in Studio"
+              : `Step ${at + 1} of ${STEPS.length}`}
           </p>
-          <button
-            type="button"
-            disabled={!draft.chosen || !draft.style || !!uploading}
-            onClick={onOpenStudio}
-            className="studio-cta inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[13.5px] font-bold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {lock ? <PlanLock plan={lock} /> : null}
-            Open in Studio
-            <ArrowRight className="size-4" />
-          </button>
+          {step !== "shape" ? (
+            <button
+              type="button"
+              disabled={!stepOk}
+              onClick={() => goTo(STEPS[at + 1].id)}
+              className="studio-cta inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[13.5px] font-bold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+              <ArrowRight className="size-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!draft.chosen || !draft.style || !!uploading}
+              onClick={onOpenStudio}
+              className="studio-cta inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[13.5px] font-bold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {lock ? <PlanLock plan={lock} /> : null}
+              Open in Studio
+              <ArrowRight className="size-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -662,6 +801,8 @@ export function AnimateFlow() {
   });
   const [measured, setMeasured] = useState<string | undefined>(undefined);
   const [uploading, setUploading] = useState<AnimateSlot | false>(false);
+  /** Each open starts again at the first step. */
+  const [run, setRun] = useState(0);
   const patch = useCallback((p: Partial<AnimateDraft>) => {
     if ("chosen" in p) setMeasured(undefined);
     setDraft((d) => ({ ...d, ...p }));
@@ -729,6 +870,7 @@ export function AnimateFlow() {
     const onOpen = () => {
       setDraft({ ...EMPTY_ANIMATE_DRAFT, style: STYLES[0] ?? null });
       setMeasured(undefined);
+      setRun((n) => n + 1);
       setOpen(true);
       void load();
     };
@@ -759,13 +901,14 @@ export function AnimateFlow() {
       navId="home"
       open={open}
       onOpenChange={setOpen}
-      size="lg"
+      size="xl"
       Icon={Sparkles}
       title="Animate"
       srDescription="Choose the first frame and an optional end frame, say what moves, then the shape and length."
       bodyClassName="px-4 pb-4 pt-3 sm:px-6 sm:pb-5"
     >
       <AnimateFlowView
+        key={run}
         pictures={pictures}
         error={error}
         draft={draft}
