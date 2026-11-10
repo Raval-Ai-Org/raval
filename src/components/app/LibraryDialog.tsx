@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useEmbedRect } from "@/components/app/AppModalShell";
-import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
+import { closeOnlyFromSidebar, useCanvasHost, useShellWindow } from "@/lib/shell/window";
 import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
 import { addAppEventListener, removeAppEventListener } from "@/lib/app-events";
 import { duration, ease, spring } from "@/lib/motion";
@@ -32,8 +31,10 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
   const [status, setStatus] = useState<StageFilter | undefined>(undefined);
   const isMobile = useIsMobile();
   const backRef = useRef<(() => boolean) | null>(null);
-  const embed = useEmbedRect(open && !isMobile);
-  const inCanvas = Boolean(embed) || (open && !isMobile && canEmbedWindow());
+  // On a desktop the Library is a screen inside the canvas, not a pop-up.
+  const host = useCanvasHost(open && !isMobile);
+  const inCanvas = Boolean(host);
+  const waiting = open && !isMobile && host === undefined;
   useShellWindow("library", open, () => setOpen(false));
 
   useEffect(() => {
@@ -59,12 +60,65 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
     return () => removeAppEventListener("open:library", on);
   }, []);
 
+  const contentProps = {
+    // Focus the window, not its first button (no ring on open).
+    onOpenAutoFocus: (e: Event) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
+    },
+    onPointerDownOutside: (e: Event) => {
+      if (inCanvas) closeOnlyFromSidebar(e);
+    },
+    onInteractOutside: (e: Event) => {
+      if (inCanvas) closeOnlyFromSidebar(e);
+    },
+    onEscapeKeyDown: (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
+        e.preventDefault();
+        t.blur();
+        return;
+      }
+      if (backRef.current?.()) e.preventDefault();
+    },
+  };
+  const page = (
+    <>
+      <DialogPrimitive.Title className="sr-only">Library</DialogPrimitive.Title>
+      <WindowErrorBoundary resetKey={open} onClose={() => setOpen(false)}>
+        <LibraryPage
+          {...fixtures}
+          initialTab={tab}
+          initialStatus={status}
+          onClose={() => setOpen(false)}
+          backRef={backRef}
+        />
+      </WindowErrorBoundary>
+    </>
+  );
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen} modal={!inCanvas}>
-      <AnimatePresence>
-        {open ? (
-          <DialogPrimitive.Portal forceMount>
-            {!inCanvas && (
+      {host ? (
+        open ? (
+          <DialogPrimitive.Portal forceMount container={host}>
+            <DialogPrimitive.Content asChild aria-describedby={undefined} {...contentProps}>
+              <div
+                tabIndex={-1}
+                data-mellox-app
+                data-modal="false"
+                data-canvas-window
+                className="ds-canvas ds-enter absolute inset-0 flex flex-col overflow-hidden outline-none"
+              >
+                {page}
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        ) : null
+      ) : (
+        <AnimatePresence>
+          {open && !waiting ? (
+            <DialogPrimitive.Portal forceMount>
               <DialogPrimitive.Overlay asChild>
                 <motion.div
                   className="fixed inset-0 z-50 bg-background/60 backdrop-blur-[3px]"
@@ -74,83 +128,41 @@ export function LibraryDialog(fixtures: Fixtures = {}) {
                   transition={{ duration: duration.base }}
                 />
               </DialogPrimitive.Overlay>
-            )}
-            <div
-              className={cn(
-                "pointer-events-none fixed inset-0 z-50 grid place-items-center",
-                !isMobile && !embed && "p-3",
-              )}
-            >
-              <DialogPrimitive.Content
-                asChild
-                aria-describedby={undefined}
-                // Focus the window, not its first button (no ring on open).
-                onOpenAutoFocus={(e) => {
-                  e.preventDefault();
-                  (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
-                }}
-                onPointerDownOutside={(e) => inCanvas && closeOnlyFromSidebar(e)}
-                onInteractOutside={(e) => inCanvas && closeOnlyFromSidebar(e)}
-                onEscapeKeyDown={(e) => {
-                  const t = e.target as HTMLElement | null;
-                  if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
-                    e.preventDefault();
-                    t.blur();
-                    return;
-                  }
-                  if (backRef.current?.()) e.preventDefault();
-                }}
+              <div
+                className={cn(
+                  "pointer-events-none fixed inset-0 z-50 grid place-items-center",
+                  !isMobile && "p-3",
+                )}
               >
-                <motion.div
-                  tabIndex={-1}
-                  data-mellox-app
-                  data-modal={inCanvas ? "false" : "true"}
-                  initial={embed ? { opacity: 0, x: 28 } : { opacity: 0, y: 14, scale: 0.985 }}
-                  animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-                  style={
-                    embed
-                      ? {
-                          position: "fixed",
-                          left: embed.left,
-                          top: embed.top,
-                          width: embed.width,
-                          height: embed.height,
-                        }
-                      : undefined
-                  }
-                  exit={{
-                    opacity: 0,
-                    y: 16,
-                    scale: 0.98,
-                    transition: { duration: duration.base, ease: ease.accelerate },
-                  }}
-                  transition={spring.surface}
-                  className={cn(
-                    "ds-glow pointer-events-auto relative flex flex-col overflow-hidden outline-none",
-                    !embed && "bg-background",
-                    isMobile
-                      ? "h-dvh w-screen"
-                      : embed
-                        ? "ds-canvas rounded-tl-[var(--ds-canvas-radius)]"
+                <DialogPrimitive.Content asChild aria-describedby={undefined} {...contentProps}>
+                  <motion.div
+                    tabIndex={-1}
+                    data-mellox-app
+                    data-modal="true"
+                    initial={{ opacity: 0, y: 14, scale: 0.985 }}
+                    animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                    exit={{
+                      opacity: 0,
+                      y: 16,
+                      scale: 0.98,
+                      transition: { duration: duration.base, ease: ease.accelerate },
+                    }}
+                    transition={spring.surface}
+                    className={cn(
+                      "ds-glow pointer-events-auto relative flex flex-col overflow-hidden bg-background outline-none",
+                      isMobile
+                        ? "h-dvh w-screen"
                         : "ds-window h-[min(92dvh,960px)] w-[min(calc(100vw-24px),1240px)]",
-                  )}
-                >
-                  <DialogPrimitive.Title className="sr-only">Library</DialogPrimitive.Title>
-                  <WindowErrorBoundary resetKey={open} onClose={() => setOpen(false)}>
-                    <LibraryPage
-                      {...fixtures}
-                      initialTab={tab}
-                      initialStatus={status}
-                      onClose={() => setOpen(false)}
-                      backRef={backRef}
-                    />
-                  </WindowErrorBoundary>
-                </motion.div>
-              </DialogPrimitive.Content>
-            </div>
-          </DialogPrimitive.Portal>
-        ) : null}
-      </AnimatePresence>
+                    )}
+                  >
+                    {page}
+                  </motion.div>
+                </DialogPrimitive.Content>
+              </div>
+            </DialogPrimitive.Portal>
+          ) : null}
+        </AnimatePresence>
+      )}
     </DialogPrimitive.Root>
   );
 }

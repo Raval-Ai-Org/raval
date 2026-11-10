@@ -1,10 +1,10 @@
-// Full windows in the canvas (Mellox 2.0, Holo): on a desktop a big window
-// sits beside the sidebar instead of over it, so the sidebar must keep
-// working while one is open. These windows are non-modal there; a press on
-// the sidebar closes the window (and the row opens its place), any other
-// press outside leaves it open. Browser-only helpers, no React.
+// Screens on the canvas (Mellox 2.0, Holo): on a desktop a big screen is
+// drawn inside the workspace column (the canvas host), never as a pop-up over
+// the page, so the sidebar keeps working while one is open. A press on the
+// sidebar closes the screen (and the row opens its place), any other press
+// outside leaves it open. Browser-only helpers.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 
 export const OPEN_MODAL_SELECTOR = [
@@ -47,10 +47,52 @@ export function closeOnlyFromSidebar(event: Event) {
   }
 }
 
-/** Whether a big window will sit in the canvas (desktop, inside the app). */
-export function canEmbedWindow() {
-  if (typeof window === "undefined" || window.innerWidth < 1024) return false;
-  return Boolean(document.querySelector("[data-workspace-column]"));
+/**
+ * The element canvas screens are drawn into (AppShell). It lies over the
+ * workspace column, so a screen inside it is part of the page: it is sized by
+ * CSS, follows the sidebar as it opens or collapses, and can never sit over
+ * the sidebar or lock the rest of the app.
+ */
+export const CANVAS_HOST_ATTR = "data-canvas-host";
+
+/**
+ * Where a big screen is drawn while `on`: the canvas host on a desktop inside
+ * the app, `null` elsewhere (phones, labs, pages without the shell), and
+ * `undefined` for the one render before that is known, during which the
+ * caller draws nothing.
+ */
+export function useCanvasHost(on: boolean): HTMLElement | null | undefined {
+  const [host, setHost] = useState<HTMLElement | null | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (!on) {
+      setHost(undefined);
+      return;
+    }
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const find = () =>
+      setHost(
+        desktop.matches ? document.querySelector<HTMLElement>(`[${CANVAS_HOST_ATTR}]`) : null,
+      );
+    find();
+    desktop.addEventListener("change", find);
+    return () => desktop.removeEventListener("change", find);
+  }, [on]);
+  return on ? host : undefined;
+}
+
+/** Whether a screen is open on the canvas right now (anything in the host). */
+export function useCanvasBusy(): boolean {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const host = document.querySelector<HTMLElement>(`[${CANVAS_HOST_ATTR}]`);
+    if (!host) return;
+    const check = () => setBusy(host.childElementCount > 0);
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(host, { childList: true });
+    return () => observer.disconnect();
+  }, []);
+  return busy;
 }
 
 /**

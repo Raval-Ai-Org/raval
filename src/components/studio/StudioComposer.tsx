@@ -41,8 +41,7 @@ import { useBriefProduct, withProductPhotos } from "./ProductAndFormat";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
-import { useEmbedRect } from "@/components/app/AppModalShell";
-import { canEmbedWindow, closeOnlyFromSidebar, useShellWindow } from "@/lib/shell/window";
+import { closeOnlyFromSidebar, useCanvasHost, useShellWindow } from "@/lib/shell/window";
 import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
 import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { StudioIdea } from "@/lib/studio/ideas";
@@ -147,11 +146,13 @@ export function StudioComposer() {
     minimizeSession(id);
   };
 
-  const fullScreen = !!session && (isMobile || session.window === "maximized");
-  // Desktop (Holo): the composer fills the canvas, the sidebar stays in view.
-  const embed = useEmbedRect(!!session && !fullScreen);
-  // In the canvas the composer is non-modal: the sidebar stays usable.
-  const inCanvas = Boolean(embed) || (!!session && !fullScreen && canEmbedWindow());
+  // Desktop (Holo): the composer is a page drawn inside the canvas, never a
+  // pop-up over it: the sidebar stays in view and usable, and it leaves at
+  // once when a person goes somewhere else.
+  const host = useCanvasHost(!!session && !isMobile);
+  const inCanvas = Boolean(host);
+  const waiting = !!session && !isMobile && host === undefined;
+  const fullScreen = !!session && !inCanvas && (isMobile || session.window === "maximized");
   // A sidebar press leaves Studio: work in progress (or a typed brief) goes to
   // the corner list / dock, an empty page simply closes.
   useShellWindow("create", !!session, () => {
@@ -164,6 +165,26 @@ export function StudioComposer() {
     setExitTo(keeps ? "dock" : "close");
     closeSession(s.id);
   });
+
+  const contentProps = {
+    onPointerDownOutside: (e: Event) => (inCanvas ? closeOnlyFromSidebar(e) : e.preventDefault()),
+    onInteractOutside: (e: Event) => {
+      if (inCanvas) closeOnlyFromSidebar(e);
+    },
+    onEscapeKeyDown: (e: KeyboardEvent) => {
+      // Escape inside a field shouldn't close the whole composer.
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
+        e.preventDefault();
+        return;
+      }
+      // From full screen, Escape first returns to the window.
+      if (session && fullScreen && !isMobile) {
+        e.preventDefault();
+        toggleMaximize(session.id);
+      }
+    },
+  };
 
   return (
     <DialogPrimitive.Root
@@ -179,10 +200,33 @@ export function StudioComposer() {
         closeSession(session.id);
       }}
     >
-      <AnimatePresence custom={exitTo}>
-        {session ? (
-          <DialogPrimitive.Portal forceMount>
-            {!inCanvas && (
+      {host ? (
+        session ? (
+          <DialogPrimitive.Portal forceMount container={host}>
+            <DialogPrimitive.Content asChild aria-describedby={undefined} {...contentProps}>
+              <div
+                key={session.id}
+                data-modal="false"
+                data-canvas-window
+                className="ds-canvas ds-enter absolute inset-0 flex flex-col overflow-hidden outline-none"
+              >
+                {/* A crash stays in Studio; the piece keeps being made on the server. */}
+                <WindowErrorBoundary resetKey={session.id} onClose={() => closeSession(session.id)}>
+                  <ComposerBody
+                    session={session}
+                    isMobile={isMobile}
+                    embedded
+                    onMinimize={() => minimizeSession(session.id)}
+                  />
+                </WindowErrorBoundary>
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        ) : null
+      ) : (
+        <AnimatePresence custom={exitTo}>
+          {session && !waiting ? (
+            <DialogPrimitive.Portal forceMount>
               <DialogPrimitive.Overlay asChild>
                 <motion.div
                   className={cn(
@@ -195,106 +239,69 @@ export function StudioComposer() {
                   transition={{ duration: duration.base }}
                 />
               </DialogPrimitive.Overlay>
-            )}
-            <div
-              className={cn(
-                "pointer-events-none fixed inset-0 z-50 grid place-items-center transition-[padding] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
-                fullScreen ? "p-0" : "p-4",
-              )}
-            >
-              <DialogPrimitive.Content
-                asChild
-                aria-describedby={undefined}
-                onPointerDownOutside={(e) =>
-                  inCanvas ? closeOnlyFromSidebar(e) : e.preventDefault()
-                }
-                onInteractOutside={(e) => inCanvas && closeOnlyFromSidebar(e)}
-                onEscapeKeyDown={(e) => {
-                  // Escape inside a field shouldn't close the whole composer.
-                  const t = e.target as HTMLElement | null;
-                  if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
-                    e.preventDefault();
-                    return;
-                  }
-                  // From full screen, Escape first returns to the window.
-                  if (!isMobile && session.window === "maximized") {
-                    e.preventDefault();
-                    toggleMaximize(session.id);
-                  }
-                }}
+              <div
+                className={cn(
+                  "pointer-events-none fixed inset-0 z-50 grid place-items-center transition-[padding] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
+                  fullScreen ? "p-0" : "p-4",
+                )}
               >
-                <motion.div
-                  key={session.id}
-                  custom={exitTo}
-                  data-modal={inCanvas ? "false" : "true"}
-                  variants={{
-                    // On the canvas it is a page, so it fades in like one (no window zoom).
-                    initial: embed
-                      ? { opacity: 0, y: 8, scale: 1 }
-                      : { opacity: 0, y: 18, scale: 0.97 },
-                    open: { opacity: 1, y: 0, scale: 1 },
-                    exit: (to: "dock" | "close") =>
-                      to === "dock"
-                        ? {
-                            opacity: 0,
-                            scale: 0.3,
-                            x: isMobile ? 0 : "36vw",
-                            y: "42vh",
-                            transition: { duration: duration.slow + 0.06, ease: ease.accelerate },
-                          }
-                        : {
-                            opacity: 0,
-                            y: 16,
-                            scale: 0.975,
-                            transition: { duration: duration.base, ease: ease.accelerate },
-                          },
-                  }}
-                  initial="initial"
-                  animate="open"
-                  exit="exit"
-                  transition={spring.surface}
-                  style={
-                    embed
-                      ? {
-                          position: "fixed",
-                          left: embed.left,
-                          top: embed.top,
-                          width: embed.width,
-                          height: embed.height,
-                        }
-                      : undefined
-                  }
-                  className={cn(
-                    "ds-canvas pointer-events-auto relative flex flex-col overflow-hidden outline-none",
-                    "transition-[width,height,border-radius,box-shadow] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
-                    fullScreen
-                      ? "h-dvh w-screen rounded-none"
-                      : embed
-                        ? "rounded-none rounded-tl-[var(--ds-canvas-radius)]"
-                        : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
-                  )}
-                >
-                  {/* A crash stays in Studio; the piece keeps being made on the server. */}
-                  <WindowErrorBoundary
-                    resetKey={session.id}
-                    onClose={() => {
-                      setExitTo("dock");
-                      closeSession(session.id);
+                <DialogPrimitive.Content asChild aria-describedby={undefined} {...contentProps}>
+                  <motion.div
+                    key={session.id}
+                    custom={exitTo}
+                    data-modal="true"
+                    variants={{
+                      initial: { opacity: 0, y: 18, scale: 0.97 },
+                      open: { opacity: 1, y: 0, scale: 1 },
+                      exit: (to: "dock" | "close") =>
+                        to === "dock"
+                          ? {
+                              opacity: 0,
+                              scale: 0.3,
+                              x: isMobile ? 0 : "36vw",
+                              y: "42vh",
+                              transition: { duration: duration.slow + 0.06, ease: ease.accelerate },
+                            }
+                          : {
+                              opacity: 0,
+                              y: 16,
+                              scale: 0.975,
+                              transition: { duration: duration.base, ease: ease.accelerate },
+                            },
                     }}
+                    initial="initial"
+                    animate="open"
+                    exit="exit"
+                    transition={spring.surface}
+                    className={cn(
+                      "ds-canvas pointer-events-auto relative flex flex-col overflow-hidden outline-none",
+                      "transition-[width,height,border-radius,box-shadow] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
+                      fullScreen
+                        ? "h-dvh w-screen rounded-none"
+                        : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
+                    )}
                   >
-                    <ComposerBody
-                      session={session}
-                      isMobile={isMobile}
-                      embedded={inCanvas}
-                      onMinimize={() => toDock(session.id)}
-                    />
-                  </WindowErrorBoundary>
-                </motion.div>
-              </DialogPrimitive.Content>
-            </div>
-          </DialogPrimitive.Portal>
-        ) : null}
-      </AnimatePresence>
+                    {/* A crash stays in Studio; the piece keeps being made on the server. */}
+                    <WindowErrorBoundary
+                      resetKey={session.id}
+                      onClose={() => {
+                        setExitTo("dock");
+                        closeSession(session.id);
+                      }}
+                    >
+                      <ComposerBody
+                        session={session}
+                        isMobile={isMobile}
+                        onMinimize={() => toDock(session.id)}
+                      />
+                    </WindowErrorBoundary>
+                  </motion.div>
+                </DialogPrimitive.Content>
+              </div>
+            </DialogPrimitive.Portal>
+          ) : null}
+        </AnimatePresence>
+      )}
     </DialogPrimitive.Root>
   );
 }
@@ -331,7 +338,7 @@ export function ComposerBody({
   // layout reflows so container-query changes don't visibly jump.
   const [resizing, setResizing] = useState(false);
   const resize = () => {
-    if (isMobile) return;
+    if (isMobile || embedded) return;
     setResizing(true);
     toggleMaximize(session.id);
     window.setTimeout(() => setResizing(false), 360);

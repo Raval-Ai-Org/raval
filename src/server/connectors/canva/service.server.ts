@@ -605,7 +605,11 @@ async function createOrOpenCanvaEdit(args: {
       return null;
     }
   };
-  const convert = canvaMagicLayersEnabled();
+  // Magic Layers is a Canva preview API, which Canva only serves to private
+  // integrations — never to a public app such as Composio's Canva sign-in.
+  // There, a carousel Mellox drew goes straight to the editable rebuild
+  // instead of waiting on a conversion that is always refused.
+  const convert = canvaMagicLayersEnabled() && typeof token === "string";
   if (!convert) {
     design = (await rebuild()) ?? undefined;
     if (design) mode = "design_import";

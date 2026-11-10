@@ -1735,15 +1735,18 @@ export function ChatPanel({
           )}
         >
           {home ? (
-            <HomeBento
-              start={startHere}
-              create={openCreate}
-              pulse={pulse}
-              onOpenWaiting={openWaiting}
-              onSwipe={(type) => setSwipe({ type })}
-              onWarmIdeas={(type) => prefetchIdeas(workspaceId, type)}
-              autopilot={<HomeAutopilot workspaceId={workspaceId} campaigns={pulse?.campaigns} />}
-            />
+            // Coming back to Home fades the cards in (CSS only, never left half-drawn).
+            <div className="ds-enter">
+              <HomeBento
+                start={startHere}
+                create={openCreate}
+                pulse={pulse}
+                onOpenWaiting={openWaiting}
+                onSwipe={(type) => setSwipe({ type })}
+                onWarmIdeas={(type) => prefetchIdeas(workspaceId, type)}
+                autopilot={<HomeAutopilot workspaceId={workspaceId} campaigns={pulse?.campaigns} />}
+              />
+            </div>
           ) : empty ? (
             <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
           ) : (

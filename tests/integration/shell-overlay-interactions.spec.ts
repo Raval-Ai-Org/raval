@@ -192,12 +192,12 @@ test("mocked background generation does not block navigation and completes off-s
   await openAppUi(page);
   await page
     .getByRole("navigation", { name: "Workspace" })
-    .getByRole("button", { name: "Create", exact: true })
+    .getByRole("button", { name: /^Create( New)?$/ })
     .click();
   const create = page.getByRole("dialog", { name: "Create" });
   await expect(create).toBeVisible();
-  await create.getByRole("button", { name: "Picture" }).click();
-  await create.getByRole("button", { name: "Image post" }).click();
+  await create.getByRole("button", { name: "Social posts" }).click();
+  await page.getByRole("button", { name: /^Image post/ }).click();
 
   const brief = page.getByRole("textbox", { name: "Describe your image" });
   await expect(brief).toBeVisible();

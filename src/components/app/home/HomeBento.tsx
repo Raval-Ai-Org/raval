@@ -17,16 +17,45 @@ import { cn } from "@/lib/utils";
 import { Illustration, type IlloKind } from "./illustrations";
 import { StartHereCard, type StartHereView } from "./StartHere";
 
-/** Holo's "Most popular" row: Animate first, then the formats people reach for. */
+/**
+ * Holo's "Most popular" row: what people bring (a picture, their clips) and
+ * the formats they reach for. Each opens an existing place; nothing is made
+ * until Generate.
+ */
 const POPULAR: {
+  id: string;
   choice: CreateChoice | "animate";
   label: string;
   line: string;
   illo: IlloKind;
+  isNew?: boolean;
+  /** Where the composer starts (the person's own clips). */
+  videoMode?: "brand";
 }[] = [
-  { choice: "animate", label: "Animate", line: "Turn pictures into videos", illo: "animate" },
-  { choice: "carousel", label: "Carousel", line: "Swipe-through story", illo: "carousel" },
-  { choice: "ad", label: "Ad", line: "Built to sell", illo: "ad" },
+  {
+    id: "animate",
+    choice: "animate",
+    label: "Animate",
+    line: "Turn pictures into videos",
+    illo: "animate",
+    isNew: true,
+  },
+  {
+    id: "clips",
+    choice: "video",
+    label: "Your clips",
+    line: "Footage in, video out",
+    illo: "versions",
+    isNew: true,
+    videoMode: "brand",
+  },
+  {
+    id: "carousel",
+    choice: "carousel",
+    label: "Carousel",
+    line: "Swipe-through story",
+    illo: "carousel",
+  },
 ];
 
 const BIG: { choice: CreateChoice; label: string; line: string; illo: IlloKind }[] = [
@@ -108,7 +137,7 @@ export function HomeBento({
   onOpenWaiting?: () => void;
   /** `useOpenCreate()`: starts a format, or says which plan it needs. */
   create: {
-    open: (choice: CreateChoice) => boolean;
+    open: (choice: CreateChoice, opts?: { controls?: { videoMode?: "brand" } }) => boolean;
     lockFor: (choice: CreateChoice) => PlanId | null;
   };
   /** Kept for callers; the cards replace the "Try" ideas. */
@@ -206,10 +235,15 @@ export function HomeBento({
         <div className="grid grid-cols-2 gap-2.5 @3xl:grid-cols-4">
           {POPULAR.map((p, i) => (
             <TiltCard
-              key={p.choice}
+              key={p.id}
               label={p.label}
               onClick={() =>
-                p.choice === "animate" ? emitAppEvent("open:animate") : create.open(p.choice)
+                p.choice === "animate"
+                  ? emitAppEvent("open:animate")
+                  : create.open(
+                      p.choice,
+                      p.videoMode ? { controls: { videoMode: p.videoMode } } : undefined,
+                    )
               }
               style={rise(5 + i)}
               className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
@@ -220,7 +254,7 @@ export function HomeBento({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="truncate text-[13px] font-semibold">{p.label}</span>
-                  {p.choice === "animate" && (
+                  {p.isNew && (
                     <span className="ds-grad-pill shrink-0 rounded-full px-1.5 py-px text-[9.5px] font-bold">
                       New
                     </span>

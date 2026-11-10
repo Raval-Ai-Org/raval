@@ -30,3 +30,7 @@ export const sendAdToGoogleAds = serverFn<typeof Handlers.sendAdToGoogleAds>(
 export const exportCalendarToSheets = serverFn<typeof Handlers.exportCalendarToSheets>(
   "integrations/exportCalendarToSheets",
 );
+export const getAppReports = serverFn<typeof Handlers.getAppReports>("integrations/getAppReports");
+export const refreshAppReports = serverFn<typeof Handlers.refreshAppReports>(
+  "integrations/refreshAppReports",
+);

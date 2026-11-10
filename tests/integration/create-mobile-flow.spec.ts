@@ -30,10 +30,14 @@ for (const { width, height } of [
       }),
     ).toBe(true);
 
+    // Every group is a different starting point with its own formats.
     for (const [category, format] of [
-      ["Video", "Creator video ad"],
-      ["Picture", "Image post"],
-      ["Text", "Social post"],
+      ["Social posts", "Image post"],
+      ["AI video", "Video from an idea"],
+      ["From your photos", "Animate a photo"],
+      ["From your clips", "Edit my clips"],
+      ["Ads", "Creator video ad"],
+      ["Writing", "Blog article"],
     ]) {
       await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
       await expect(dialog.getByRole("button", { name: new RegExp(`^${format}`) })).toBeVisible();
@@ -44,11 +48,10 @@ for (const { width, height } of [
       await expect(dialog.getByRole("button", { name: new RegExp(`^${category}`) })).toBeVisible();
     }
 
-    for (const category of ["Stories", "Ads"]) {
-      await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
-      await expect(page.getByText("Choose a workspace first").first()).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "Back one step" })).toHaveCount(0);
-    }
+    // Picking a format opens it (the lab has no workspace, so it says so).
+    await dialog.getByRole("button", { name: /^Social posts/ }).click();
+    await dialog.getByRole("button", { name: /^Story/ }).click();
+    await expect(page.getByText("Choose a workspace first").first()).toBeVisible();
 
     await dialog.getByRole("button", { name: "Close dialog" }).click();
     await expect(dialog).toHaveCount(0);
