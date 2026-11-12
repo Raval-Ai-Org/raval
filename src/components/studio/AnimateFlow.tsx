@@ -27,7 +27,12 @@ import {
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authedFetch } from "@/lib/authed-fetch";
-import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import {
+  addAppEventListener,
+  emitAppEvent,
+  removeAppEventListener,
+  type AppEvent,
+} from "@/lib/app-events";
 import { toast } from "@/lib/toast";
 import type { PlanId } from "@/lib/billing/catalog";
 import { isStudioType, type StudioType } from "@/lib/studio/formats";
@@ -793,6 +798,7 @@ export function AnimateFlow() {
   const create = useOpenCreate();
   const lock = create.lockFor("video");
   const [open, setOpen] = useState(false);
+  const [fromCreate, setFromCreate] = useState(false);
   const [pictures, setPictures] = useState<AnimatePicture[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<AnimateDraft>({
@@ -867,7 +873,8 @@ export function AnimateFlow() {
   }, [workspaceId]);
 
   useEffect(() => {
-    const onOpen = () => {
+    const onOpen = (event: AppEvent<"open:animate">) => {
+      setFromCreate(!!event.detail?.fromCreate);
       setDraft({ ...EMPTY_ANIMATE_DRAFT, style: STYLES[0] ?? null });
       setMeasured(undefined);
       setRun((n) => n + 1);
@@ -903,7 +910,16 @@ export function AnimateFlow() {
       onOpenChange={setOpen}
       size="xl"
       Icon={Sparkles}
-      title="Animate"
+      title="Post to video ad"
+      // Opened from Create: Back is one step out, to the list it came from.
+      onBack={
+        fromCreate
+          ? () => {
+              setOpen(false);
+              emitAppEvent("open:create-launcher", { back: "animate" });
+            }
+          : undefined
+      }
       srDescription="Choose the first frame and an optional end frame, say what moves, then the shape and length."
       bodyClassName="px-4 pb-4 pt-3 sm:px-6 sm:pb-5"
     >

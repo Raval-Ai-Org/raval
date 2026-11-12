@@ -2,20 +2,29 @@
 
 // The one entry point for making something (Holo's "Choose creation method").
 // On desktop it is a page on the canvas, not a pop-up: a centred two-column
-// grid of method cards. Pick a category, then a format when there is more
-// than one; the grid slides to the next step in place and Back is one step
-// out. Standard formats open the Studio composer (also on the canvas); the
-// creator video ad opens its own studio.
+// grid of method cards. Pick a starting point, then a format when there is
+// more than one; the grid slides to the next step in place and Back is one
+// step out. A search box finds any format by its everyday name ("ugc",
+// "slideshow", "reel"). Every format card says what the person brings, and
+// the screen it opens asks for exactly that (`src/lib/studio/start.ts`).
 import { PlanLock } from "@/components/app/billing/billing-ui";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Illustration, type IlloKind } from "@/components/app/home/illustrations";
-import { ArrowRight, Sparkles } from "@/components/icons";
+import { ArrowRight, Search, Sparkles, X } from "@/components/icons";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
-import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import {
+  addAppEventListener,
+  emitAppEvent,
+  removeAppEventListener,
+  type AppEvent,
+} from "@/lib/app-events";
+import { rememberCreateSpot, takeCreateSpot } from "@/lib/studio/create-return";
+import { getStudioState } from "@/lib/studio/session-store";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import type { StudioControls } from "@/lib/studio/jobs";
+import { needsLine, startIdFor } from "@/lib/studio/start";
 import { UGC_ENTRY } from "@/lib/studio/ugc-entry";
 import { useOpenCreate } from "./use-open-create";
 import { UploadCreationFlow } from "./UploadCreationFlow";
@@ -28,10 +37,12 @@ const CREATE_STEPS = [
   { id: "brief", label: "Brief" },
 ];
 
+export type StartControls = Pick<StudioControls, "videoKind" | "videoMode" | "recapMotion">;
+
 /**
  * What a person can make, sorted the way people think about it (not by our
  * internal formats). Each option opens an existing place: a Studio composer
- * (sometimes started on a video kind or mode), the creator video studio, or
+ * (started on the video kind or mode it names), the creator video studio, or
  * Animate. Nothing is made or charged until Generate.
  */
 type Option = {
@@ -40,8 +51,12 @@ type Option = {
   line: string;
   illo: IlloKind;
   badge?: string;
+  /** What the person brings ("You add: 2 to 6 photos"). */
+  needs: string;
+  /** Extra words the search box matches ("ugc", "reel", "slideshow"). */
+  keywords?: string;
 } & (
-  | { kind: "studio"; type: StudioType; controls?: Pick<StudioControls, "videoKind" | "videoMode"> }
+  | { kind: "studio"; type: StudioType; controls?: Partial<StartControls> }
   | { kind: "ugc" }
   | { kind: "animate" }
   | { kind: "upload" }
@@ -53,25 +68,13 @@ type Category = {
   /** One short line on the card and under the heading. */
   line: string;
   illo: IlloKind;
+  /** A creator's face instead of the illustration. */
+  photo?: string;
   badge?: string;
+  /** Spans both columns on the first screen. */
+  wide?: boolean;
   options: Option[];
 };
-
-const studio = (
-  type: StudioType,
-  extra: Partial<Omit<Option, "kind">> & {
-    controls?: Pick<StudioControls, "videoKind" | "videoMode">;
-  } = {},
-): Option => ({
-  id: extra.id ?? type,
-  kind: "studio",
-  type,
-  label: extra.label ?? STUDIO_FORMATS[type].label,
-  line: extra.line ?? STUDIO_FORMATS[type].tagline,
-  illo: extra.illo ?? TYPE_ILLO[type],
-  badge: extra.badge,
-  controls: extra.controls,
-});
 
 const TYPE_ILLO: Record<StudioType, IlloKind> = {
   video: "video",
@@ -84,82 +87,167 @@ const TYPE_ILLO: Record<StudioType, IlloKind> = {
   ad: "ad",
 };
 
+const studio = (
+  type: StudioType,
+  extra: Partial<Pick<Option, "id" | "label" | "line" | "illo" | "badge" | "keywords">> & {
+    controls?: Partial<StartControls>;
+  } = {},
+): Option => {
+  const start = startIdFor(type, extra.controls ?? {});
+  return {
+    id: extra.id ?? type,
+    kind: "studio",
+    type,
+    label: extra.label ?? STUDIO_FORMATS[type].label,
+    line: extra.line ?? STUDIO_FORMATS[type].tagline,
+    illo: extra.illo ?? TYPE_ILLO[type],
+    badge: extra.badge,
+    keywords: extra.keywords,
+    needs: start ? needsLine(start) : "Just describe it",
+    controls: extra.controls,
+  };
+};
+
+const UGC_OPTION: Option = {
+  id: "ugc",
+  kind: "ugc",
+  label: "AI creator video",
+  line: "A creator talks about your product, like a real UGC Reel",
+  illo: "video",
+  badge: UGC_ENTRY.badge,
+  needs: "You pick: creator, product",
+  keywords: "ugc creator influencer testimonial review talking person actor reel tiktok ad",
+};
+
 /*
- * Six groups, in the order people reach for them: posts first, then video
- * made from an idea, then what a person brings (photos, clips), then ads and
- * writing. Every group is a different starting point, so no format appears
- * twice and no group is a single card.
+ * Six cards, kept simple. The tools Mellox is for come first: the AI creator
+ * (UGC) video and the product video open straight away, a post becomes a
+ * video ad, then social posts and ads. Everything else waits in "More ways
+ * to make". The creator video also sits under Ads, because people look for
+ * it there too.
  */
 export const CREATE_CATEGORIES: Category[] = [
   {
-    id: "posts",
-    label: "Social posts",
-    line: "Pictures, carousels and Stories",
-    illo: "post",
-    options: [
-      studio("image", { label: "Image post", line: "One designed picture, captions included" }),
-      studio("carousel", { label: "Carousel", line: "Swipeable slides that tell one story" }),
-      studio("story", { label: "Story", line: "Full-screen frames for Instagram and Facebook" }),
-      studio("social", { label: "Text post", line: "Just the words, written for each platform" }),
-    ],
-  },
-  {
-    id: "video",
-    label: "AI video",
-    line: "Describe it, Mox makes the video",
+    id: "creator",
+    label: "AI creator video",
+    line: "A creator talks up your product (UGC)",
     illo: "video",
+    photo: "/creators/amara.jpg",
+    badge: "Most used",
+    wide: true,
+    options: [UGC_OPTION],
+  },
+  {
+    id: "product",
+    label: "Product video",
+    line: "Your product, animated",
+    illo: "poster",
     options: [
-      studio("video", { label: "Video from an idea", line: "A short clip made from your brief" }),
       studio("video", {
-        id: "product-demo",
-        label: "Product demo",
-        line: "Your product, shown in use",
-        controls: { videoKind: "product-demo" },
-      }),
-      studio("video", {
-        id: "motion-graphics",
-        label: "Motion graphics",
-        line: "Animated words and shapes in your look",
+        id: "product-motion",
+        label: "Product video",
+        line: "Your product turning, pouring, opening, no people",
         illo: "poster",
-        controls: { videoMode: "motion" },
-      }),
-      studio("video", {
-        id: "motion-post",
-        label: "Looping post",
-        line: "Your post with smooth motion, made to loop",
-        illo: "swipe",
-        controls: { videoKind: "motion-post" },
-      }),
-      studio("video", {
-        id: "site",
-        label: "Website tour",
-        line: "Your site scrolling in a phone or laptop",
-        illo: "website",
-        controls: { videoMode: "site" },
+        keywords: "product animation animate packshot spin showcase demo",
+        controls: { videoKind: "product-motion" },
       }),
     ],
   },
   {
-    id: "photos",
-    label: "From your photos",
-    line: "Bring pictures, Mox does the rest",
+    id: "post-video",
+    label: "Post to video ad",
+    line: "A post or photo, set in motion",
     illo: "animate",
     badge: "New",
     options: [
       {
         id: "animate",
         kind: "animate",
-        label: "Animate a photo",
-        line: "Pick a photo and a motion, it comes to life",
+        label: "Post to video ad",
+        line: "Pick a post or photo, then how it moves",
         illo: "animate",
-        badge: "New",
+        needs: "You add: a post or photo",
+        keywords: "animate photo image to video bring to life move motion reel loop",
       },
+    ],
+  },
+  {
+    id: "posts",
+    label: "Social posts",
+    line: "Image, carousel, Story, text",
+    illo: "post",
+    options: [
+      studio("image", {
+        label: "Image post",
+        line: "One designed picture, captions included",
+        keywords: "photo picture instagram feed single",
+      }),
+      studio("carousel", {
+        label: "Carousel",
+        line: "Swipeable slides that tell one story",
+        keywords: "slides swipe linkedin document",
+      }),
+      studio("story", {
+        label: "Story",
+        line: "Full-screen frames for Instagram and Facebook",
+        keywords: "stories vertical frames",
+      }),
+      studio("social", {
+        label: "Text post",
+        line: "Just the words, written for each platform",
+        keywords: "caption words tweet thread linkedin",
+      }),
+    ],
+  },
+  {
+    id: "ads",
+    label: "Ads",
+    line: "Creator, product and image ads",
+    illo: "ad",
+    options: [
+      {
+        ...UGC_OPTION,
+        id: "ugc",
+        label: "Creator video ad",
+        line: "A creator sells it in their own words",
+      },
+      studio("video", {
+        id: "ad-product-video",
+        label: "Product video ad",
+        line: "Your product in motion, ending on your offer",
+        illo: "poster",
+        keywords: "product video ad commercial offer",
+        controls: { videoKind: "offer-teaser" },
+      }),
+      studio("ad", {
+        label: "Image ad",
+        line: "Pick the goal: sell, leads, clicks or win back",
+        keywords: "meta facebook google banner sales leads traffic retarget",
+      }),
+    ],
+  },
+  {
+    id: "more",
+    label: "More to make",
+    line: "Clips, photos, website, writing",
+    illo: "versions",
+    wide: true,
+    options: [
+      studio("video", {
+        id: "clips",
+        label: "Edit my clips",
+        line: "The best parts cut together, with captions",
+        illo: "video",
+        keywords: "footage edit cut captions subtitles titles logo reel",
+        controls: { videoMode: "brand" },
+      }),
       studio("video", {
         id: "recap",
         label: "Photo slideshow",
         line: "Your photos edited into one short video",
         illo: "story",
-        controls: { videoMode: "recap" },
+        keywords: "recap slideshow montage photos to video",
+        controls: { videoMode: "recap", recapMotion: "camera" },
       }),
       {
         id: "upload",
@@ -167,61 +255,63 @@ export const CREATE_CATEGORIES: Category[] = [
         label: "Design with my photo",
         line: "Upload a photo, Mox designs the post around it",
         illo: "website",
+        needs: "You add: 1 photo",
+        keywords: "upload my picture own photo post design",
       },
-    ],
-  },
-  {
-    id: "clips",
-    label: "From your clips",
-    line: "Upload footage, get a finished video",
-    illo: "versions",
-    badge: "New",
-    options: [
       studio("video", {
-        id: "clips",
-        label: "Edit my clips",
-        line: "The best parts cut together, with captions",
-        illo: "video",
-        controls: { videoMode: "brand" },
+        id: "site",
+        label: "Website tour",
+        line: "Your site scrolling in a phone or laptop",
+        illo: "website",
+        keywords: "website scroll screen recording demo",
+        controls: { videoMode: "site" },
       }),
       studio("video", {
-        id: "clips-titles",
-        label: "Add titles to my clips",
-        line: "Moving headline, logo and button on your footage",
-        illo: "versions",
-        badge: "New",
-        controls: { videoMode: "brand" },
+        label: "AI video from an idea",
+        line: "A short clip made from your words",
+        keywords: "reel tiktok short clip generate text to video",
       }),
-    ],
-  },
-  {
-    id: "ads",
-    label: "Ads",
-    line: "Made to sell, ready to test",
-    illo: "ad",
-    options: [
-      studio("ad", { label: "Image ad", line: "Ad copy and a finished visual" }),
-      {
-        id: "ugc",
-        kind: "ugc",
-        label: "Creator video ad",
-        line: UGC_ENTRY.description,
-        illo: "video",
-        badge: UGC_ENTRY.badge,
-      },
-    ],
-  },
-  {
-    id: "writing",
-    label: "Writing",
-    line: "Blog articles and video scripts",
-    illo: "article",
-    options: [
-      studio("article", { label: "Blog article", line: "A full article, ready to publish" }),
-      studio("script", { label: "Video script", line: "Shots and words to film yourself" }),
+      studio("video", {
+        id: "motion-graphics",
+        label: "Motion graphics",
+        line: "Animated words and shapes in your look",
+        illo: "poster",
+        keywords: "animation kinetic text typography sale",
+        controls: { videoKind: "motion-graphics", videoMode: "motion" },
+      }),
+      studio("article", {
+        label: "Blog article",
+        line: "A full article, ready to publish",
+        keywords: "blog seo post article writing",
+      }),
+      studio("script", {
+        label: "Video script",
+        line: "Shots and words to film yourself",
+        keywords: "script screenplay film writing",
+      }),
     ],
   },
 ];
+
+/** Every option once, for the search box. */
+const ALL_OPTIONS: Option[] = (() => {
+  const seen = new Set<string>();
+  return CREATE_CATEGORIES.flatMap((c) => c.options).filter((o) => {
+    if (seen.has(o.id)) return false;
+    seen.add(o.id);
+    return true;
+  });
+})();
+
+/** Options whose words contain every typed word. */
+export function searchCreateOptions(query: string): Option[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return ALL_OPTIONS.filter((o) => {
+    const hay = `${o.label} ${o.line} ${o.keywords ?? ""}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
 
 const rise = (i: number) => ({ ["--i" as string]: i }) as CSSProperties;
 
@@ -229,7 +319,9 @@ const rise = (i: number) => ({ ["--i" as string]: i }) as CSSProperties;
 function MethodCard({
   label,
   line,
+  needs,
   illo,
+  photo,
   badge,
   lock,
   index,
@@ -238,12 +330,15 @@ function MethodCard({
 }: {
   label: string;
   line: string;
+  /** What the person brings, as a small tag under the line. */
+  needs?: string;
   illo: IlloKind;
+  photo?: string;
   badge?: string;
   lock?: React.ReactNode;
   index: number;
   /** The last of an odd number spans both columns, so no card sits alone. */
-  wide?: boolean;
+  wide?: boolean | "roomy";
   onClick: () => void;
 }) {
   return (
@@ -251,17 +346,24 @@ function MethodCard({
       type="button"
       onClick={onClick}
       style={rise(index)}
-      className={`${wide ? "col-span-2 " : ""}ds-card ds-card-hover ds-rise group relative flex min-h-[84px] min-w-0 items-center gap-3.5 p-2.5 pr-4 text-left active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-[419px]:min-h-0 max-[419px]:flex-col max-[419px]:items-start max-[419px]:gap-1.5 max-[419px]:pr-2.5 [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:p-1.5`}
+      className={`${wide === "roomy" ? "min-[420px]:[@media(min-height:501px)]:col-span-2 " : wide ? "col-span-2 " : ""}ds-card ds-card-hover ds-rise group relative flex min-h-[84px] min-w-0 items-center gap-3.5 p-2.5 pr-4 text-left active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-[419px]:min-h-0 max-[419px]:flex-col max-[419px]:items-start max-[419px]:gap-1.5 max-[419px]:pr-2.5 [@media(max-height:500px)]:min-h-0 [@media(max-height:500px)]:p-1.5`}
     >
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">
+        {label}. {line}
+        {needs ? `. ${needs}` : ""}
+      </span>
       <span
         aria-hidden
         className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-[18px] bg-[var(--ds-well-bg)] transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-105 max-[419px]:size-12 max-[419px]:rounded-[14px] [@media(max-height:500px)]:size-10"
       >
-        <Illustration
-          kind={illo}
-          className="size-16 max-[419px]:size-12 [@media(max-height:500px)]:size-10"
-        />
+        {photo ? (
+          <img src={photo} alt="" className="size-full object-cover object-top" />
+        ) : (
+          <Illustration
+            kind={illo}
+            className="size-16 max-[419px]:size-12 [@media(max-height:500px)]:size-10"
+          />
+        )}
       </span>
       <span
         aria-hidden
@@ -274,6 +376,11 @@ function MethodCard({
         <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-muted-foreground max-[419px]:text-[11px] [@media(max-height:500px)]:line-clamp-1">
           {line}
         </span>
+        {needs ? (
+          <span className="mt-1.5 inline-flex max-w-full rounded-full bg-[var(--ds-well-bg)] px-2 py-0.5 text-[10.5px] font-semibold text-foreground/75 [@media(max-height:500px)]:hidden">
+            <span className="truncate">{needs}</span>
+          </span>
+        ) : null}
       </span>
       {badge ? (
         // Holo's sticker: a tilted pill in the card's corner (inside it: the
@@ -296,12 +403,18 @@ function MethodCard({
 export function CreateLauncher() {
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const reduce = useReducedMotionSafe();
 
   useEffect(() => {
-    const onOpen = () => {
-      setGroupId(null);
+    const onOpen = (event: AppEvent<"open:create-launcher">) => {
+      // Back from a place opened here returns to the list it was picked from.
+      const back = event.detail?.back;
+      const spot = back ? takeCreateSpot(back) : undefined;
+      setGroupId(spot ?? null);
+      setQuery("");
       setOpen(true);
     };
     addAppEventListener("open:create-launcher", onOpen);
@@ -315,10 +428,13 @@ export function CreateLauncher() {
       ? null
       : create.lockFor(option.kind === "ugc" ? "ugc" : option.type);
 
+  // The list a pick came from (null: the first screen), for Back.
+  const from = query.trim() ? null : groupId;
   const pick = (option: Option) => {
     if (option.kind === "animate") {
+      rememberCreateSpot("animate", from);
       setOpen(false);
-      emitAppEvent("open:animate");
+      emitAppEvent("open:animate", { fromCreate: true });
       return;
     }
     if (option.kind === "upload") {
@@ -326,10 +442,12 @@ export function CreateLauncher() {
       setUploadOpen(true);
       return;
     }
+    if (option.kind === "ugc") rememberCreateSpot("ugc", from);
     const opened =
       option.kind === "ugc"
-        ? create.open("ugc")
+        ? create.open("ugc", { fromCreate: true })
         : create.open(option.type, option.controls ? { controls: option.controls } : undefined);
+    if (opened && option.kind === "studio") rememberCreateSpot(getStudioState().activeId, from);
     // A locked pick closes too: the upgrade screen takes its place.
     if (opened || lockFor(option)) setOpen(false);
   };
@@ -343,10 +461,34 @@ export function CreateLauncher() {
     setGroupId(id);
   };
 
-  const group = CREATE_CATEGORIES.find((g) => g.id === groupId) ?? null;
+  const searching = query.trim().length > 0;
+  const found = searching ? searchCreateOptions(query) : [];
+  const group = searching ? null : (CREATE_CATEGORIES.find((g) => g.id === groupId) ?? null);
   // Forward slides in from the right, Back from the left.
   const dir = group ? 1 : -1;
   const shift = reduce ? 0 : 36;
+
+  const optionGrid = (options: Option[]) => (
+    <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:gap-1.5">
+      {options.map((o, i) => {
+        const lock = lockFor(o);
+        return (
+          <MethodCard
+            key={o.id}
+            index={i}
+            wide={options.length % 2 === 1 && i === options.length - 1}
+            label={o.label}
+            line={o.line}
+            needs={o.needs}
+            illo={o.illo}
+            badge={lock ? undefined : o.badge}
+            lock={lock ? <PlanLock plan={lock} /> : undefined}
+            onClick={() => pick(o)}
+          />
+        );
+      })}
+    </div>
+  );
 
   return (
     <>
@@ -360,7 +502,7 @@ export function CreateLauncher() {
         allowMaximize={false}
         Icon={Sparkles}
         title={group ? group.label : "Create"}
-        onBack={group ? () => setGroupId(null) : undefined}
+        onBack={group ? () => setGroupId(null) : searching ? () => setQuery("") : undefined}
         srDescription="Choose what to make, then pick a format if there are multiple options."
         bodyClassName="overflow-x-hidden px-4 pb-6 pt-1 sm:px-8 [@media(max-height:500px)]:p-2"
       >
@@ -370,12 +512,15 @@ export function CreateLauncher() {
             <div className="mb-6 flex flex-col items-center gap-2.5 max-[419px]:hidden [@media(max-height:500px)]:hidden">
               <StepPills
                 steps={CREATE_STEPS}
-                current={group ? "format" : "kind"}
-                onPick={() => setGroupId(null)}
+                current={group || searching ? "format" : "kind"}
+                onPick={() => {
+                  setGroupId(null);
+                  setQuery("");
+                }}
                 className="max-w-full overflow-x-auto"
               />
               <GradProgress
-                value={group ? 2 / 3 : 1 / 3}
+                value={group || searching ? 2 / 3 : 1 / 3}
                 className="w-full max-w-[240px]"
                 label="Create progress"
               />
@@ -410,43 +555,71 @@ export function CreateLauncher() {
                     )}
                   </h3>
                   <p className="mt-1.5 text-[13px] text-muted-foreground max-[419px]:hidden">
-                    {group ? group.line : "Pick a kind. Mox keeps it on brand."}
+                    {group
+                      ? `${group.line}. Each one says what you add.`
+                      : "Pick a starting point, or search for a format."}
                   </p>
                 </div>
 
                 {!group ? (
+                  <label className="mb-4 flex h-11 items-center max-[419px]:hidden [@media(max-height:500px)]:hidden gap-2 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-4 shadow-[var(--ds-card-shadow)] focus-within:border-primary-border [@media(max-height:500px)]:mb-2 [@media(max-height:500px)]:h-9">
+                    <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="sr-only">Search formats</span>
+                    <input
+                      ref={searchRef}
+                      type="search"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search: UGC, carousel, slideshow, blog…"
+                      className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+                    />
+                    {searching ? (
+                      <button
+                        type="button"
+                        aria-label="Clear search"
+                        onClick={() => {
+                          setQuery("");
+                          searchRef.current?.focus();
+                        }}
+                        className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : null}
+                  </label>
+                ) : null}
+
+                {searching ? (
+                  found.length ? (
+                    optionGrid(found)
+                  ) : (
+                    <p className="py-10 text-center text-[13px] text-muted-foreground">
+                      Nothing called that yet. Try “video”, “post” or “ad”.
+                    </p>
+                  )
+                ) : !group ? (
                   <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-1.5">
-                    {CREATE_CATEGORIES.map((g, i) => (
-                      <MethodCard
-                        key={g.id}
-                        index={i}
-                        label={g.label}
-                        line={g.line}
-                        illo={g.illo}
-                        badge={g.badge}
-                        onClick={() => enter(g.id)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:gap-1.5">
-                    {group.options.map((o, i) => {
-                      const lock = lockFor(o);
+                    {CREATE_CATEGORIES.map((g, i) => {
+                      const only = g.options.length === 1 ? g.options[0] : null;
+                      const lock = only ? lockFor(only) : null;
                       return (
                         <MethodCard
-                          key={o.id}
+                          key={g.id}
                           index={i}
-                          wide={group.options.length % 2 === 1 && i === group.options.length - 1}
-                          label={o.label}
-                          line={o.line}
-                          illo={o.illo}
-                          badge={lock ? undefined : (o.badge ?? (i === 0 ? "Popular" : undefined))}
+                          label={g.label}
+                          line={g.line}
+                          illo={g.illo}
+                          photo={g.photo}
+                          wide={g.wide ? "roomy" : undefined}
+                          badge={lock ? undefined : g.badge}
                           lock={lock ? <PlanLock plan={lock} /> : undefined}
-                          onClick={() => pick(o)}
+                          onClick={() => enter(g.id)}
                         />
                       );
                     })}
                   </div>
+                ) : (
+                  optionGrid(group.options)
                 )}
               </motion.div>
             </AnimatePresence>

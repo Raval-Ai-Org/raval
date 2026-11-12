@@ -73,6 +73,8 @@ export type ConceptContext = {
   styleText?: string;
   /** What the team told Mellox to remember (memoryBlockFor). "" when none. */
   memoryText?: string;
+  /** Strategy, running campaigns, goal and audience (creatorPlanText). "" when none. */
+  planText?: string;
   recent?: RecentCreatorWork;
   /** Seeds the variant picks (the project id plus a counter); random when absent. */
   seed?: string;
@@ -312,6 +314,7 @@ ${recentHooks.length ? `\nOPENINGS THIS BRAND ALREADY USED (never open the same 
 ${brandContext ? wrapUntrusted("brand dna", brandContext, { maxChars: 4000, route: "ugc.concepts" }) : "No Brand DNA saved."}
 ${ctx.styleText ? `\nBRAND STYLE (write the dialogue, hooks and post caption in this style; facts still come only from the product facts)\n${wrapUntrusted("brand style", ctx.styleText, { maxChars: 3000, route: "ugc.concepts" })}\n` : ""}
 ${ctx.memoryText ? `\n${ctx.memoryText}\nFacts still come only from the product facts.\n` : ""}
+${ctx.planText ? `\nTHE BRAND'S PLAN (aim the idea at this strategy, campaign, goal and audience; facts still come only from the product facts, and never name a competitor)\n${wrapUntrusted("brand plan", ctx.planText, { maxChars: 4000, route: "ugc.concepts" })}\n` : ""}
 ${extra}`;
 }
 

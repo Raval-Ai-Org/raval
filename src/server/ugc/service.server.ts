@@ -326,19 +326,38 @@ async function workspaceBrand(db: UserSupabaseClient, workspaceId: string) {
   return brandSnapshot(stored?.dna);
 }
 
+/**
+ * The plan a Creator video follows, the same blocks every Studio piece gets
+ * (`loadStudioContext`): the confirmed strategy, running campaigns, the goal
+ * and the audience groups, all by the verified workspace id. Each part fails
+ * open to "" so a missing brain never stops a script.
+ */
+async function creatorPlanText(workspaceId: string): Promise<string> {
+  const safe = (p: Promise<string>) => p.catch(() => "");
+  const parts = await Promise.all([
+    safe(import("@/server/strategy/context.server").then((m) => m.strategyBlockFor(workspaceId))),
+    safe(import("@/server/campaigns/context.server").then((m) => m.campaignBlockFor(workspaceId))),
+    safe(import("@/server/goals/context.server").then((m) => m.goalBlockFor(workspaceId))),
+    safe(import("@/server/audience/context.server").then((m) => m.audienceBlockFor(workspaceId))),
+  ]);
+  return parts.filter((t) => t.trim()).join("\n\n");
+}
+
 export async function projectContext(db: UserSupabaseClient, workspaceId: string, id: string) {
   const row = await loadProjectRow(db, workspaceId, id);
   const brief = BriefSchema.parse(row.brief ?? {});
-  const [{ data: ws }, brand, style, memoryText] = await Promise.all([
+  const [{ data: ws }, brand, style, memoryText, planText] = await Promise.all([
     db.from("workspaces").select("industry, audience").eq("id", workspaceId).maybeSingle(),
     workspaceBrand(db, workspaceId),
     projectLook(workspaceId),
     // What the team told Mellox to remember (ADR-0033). "" when off or unset.
     import("@/server/memory/context.server").then((m) => m.memoryBlockFor(workspaceId, "text")),
+    creatorPlanText(workspaceId),
   ]);
   return {
     row,
     memoryText,
+    planText,
     product: ProductSchema.parse(row.product ?? {}),
     brief,
     style,

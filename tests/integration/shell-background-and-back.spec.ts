@@ -20,8 +20,8 @@ test("Home and Chat close a window that is open on Home", async ({ page }) => {
   await openAppUi(page);
   const sidebar = (name: string) => page.getByRole("button", { name, exact: true }).first();
 
-  const ugc = page.getByRole("dialog", { name: "Creator Video Ads" });
-  const animate = page.getByRole("dialog").filter({ hasText: /animate/i });
+  const ugc = page.getByRole("dialog", { name: "AI creator video" });
+  const animate = page.getByRole("dialog").filter({ hasText: /post to video ad/i });
 
   // Creator video ads opens over Home and claims no sidebar row of its own.
   await openBy(page, "open:ugc-studio", ugc);

@@ -146,12 +146,21 @@ export type AppEventMap = {
   "open:ai-visibility": undefined;
   /** UGC Video Ads studio, optionally on one ad project. */
   "open:ugc-studio":
-    | { projectId?: string; source?: import("@/lib/studio/script-video").ScriptVideoSource }
+    | {
+        projectId?: string;
+        source?: import("@/lib/studio/script-video").ScriptVideoSource;
+        /** Opened from Create: its Back returns there. */
+        fromCreate?: boolean;
+      }
     | undefined;
-  /** The "Create" launcher: pick a category (Video/Picture/Text/Ads), then a format. */
-  "open:create-launcher": undefined;
+  /**
+   * The "Create" launcher: pick a starting point, then a format. `back` is the
+   * place a Back press came from (a Studio session id, "animate", "ugc"), so
+   * Create reopens on the list that place was picked from.
+   */
+  "open:create-launcher": { back?: string } | undefined;
   /** Home → Animate: pick a Library picture and a way to move it. */
-  "open:animate": undefined;
+  "open:animate": { fromCreate?: boolean } | undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;
   /** Opens Brain → Competitors. */
