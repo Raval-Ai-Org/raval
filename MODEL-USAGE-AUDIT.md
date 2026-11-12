@@ -11,7 +11,7 @@
 | Image generation and editing               | OpenRouter Images API (`/api/v1/images`)                                | [src/lib/openrouter-image.server.ts](src/lib/openrouter-image.server.ts), routing [src/lib/model-router.server.ts](src/lib/model-router.server.ts) |
 | Video (UGC, Studio, `/api/generate-video`) | **KIE** (`VIDEO_PROVIDER=kie`), OpenRouter `/api/v1/videos` as fallback | [src/server/ugc/providers/](src/server/ugc/providers/)                                                                                             |
 
-The Anthropic API is not used anywhere: no code reads `ANTHROPIC_API_KEY` or calls `api.anthropic.com`. Claude runs as `anthropic/claude-opus-5.5` through OpenRouter.
+The Anthropic API is not used anywhere: no code reads `ANTHROPIC_API_KEY` or calls `api.anthropic.com`. Claude runs through OpenRouter (Sonnet and Haiku 5.5; Opus 5.5 stays selectable as the premium rollback, `OPUS` in `task-models.ts`).
 
 ### Tiers
 
@@ -19,7 +19,7 @@ Each tier is the cheapest model that does its kind of work well (cost reviews 20
 
 | Tier                                 | Model                               | Used for                                                                           | Fallback                     | Degraded (past spend ceiling) | Price in / out | Index |
 | ------------------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------- | ----------------------------- | -------------- | ----- |
-| PREMIUM                              | `anthropic/claude-opus-5.5`         | GEO Engineer and fixes, experiment code, articles, storyboards, escalations        | `google/gemini-3.8-flash`    | `anthropic/claude-haiku-5.5`  | $4 / $20       | 59.1  |
+| PREMIUM                              | `google/gemini-4-carbon`            | GEO Engineer and fixes, experiment code, articles, storyboards, motion, escalations | `google/gemini-3.8-flash`    | `anthropic/claude-haiku-5.5`  | $2 / $10       | 60.0  |
 | ANALYST                              | `openai/gpt-6.1-sol`                | Brand DNA, strategy, audience groups, campaign plans                               | `google/gemini-3.8-flash`    | `anthropic/claude-haiku-5.5`  | $2 / $10       | 54.6  |
 | CONVERSATION                         | `anthropic/claude-sonnet-5.5`       | Mellox Pro chat, Coach, Creator scripts                                            | `google/gemini-3.8-flash`    | `anthropic/claude-haiku-5.5`  | $2 / $10       | 54.5  |
 | WRITER (= SUMMARY, CAREFUL, ECONOMY) | `anthropic/claude-haiku-5.5`        | Every text writer people see, Flash chat, plans, briefings, safety, image text     | `openai/gpt-6-luna`          | (stays; effort steps down)    | $0.10 / $0.50  | 36.5  |
@@ -146,9 +146,9 @@ Prompt length and wording never pick Sunburst (`wantsPremiumImage`, `src/lib/mod
 
 | Key                  | Purpose                                                            | KIE (active)                                                     | OpenRouter (fallback / next week) |
 | -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | --------------------------------- |
-| `standard` (default) | Talking-creator UGC with lip-synced dialogue                       | `veo-3-1` `veo3_fast`                                            | `google/veo-3.1-fast`             |
+| `standard` (default) | Talking-creator UGC with lip-synced dialogue                       | `grok-imagine-video-1-5-preview` (prompt fitted to 4,096 chars)  | `google/veo-3.1-lite`             |
 | `draft`              | Cheap hook/concept drafts                                          | `veo-3-1` `veo3_lite`                                            | `google/veo-3.1-lite`             |
-| `premium`            | Hero ads, highest realism                                          | `google/gemini-omni-flash-1-1` (first + last frame)              | `google/veo-3.1-fast`             |
+| `premium`            | Hero ads, highest realism                                          | `google/gemini-omni-flash-1-2` (first + last frame)              | `google/veo-3.1-fast`             |
 | `long`               | Long takes up to 15 s, with sound, up to 9 product photos          | `wan/3-0-video` (720p)                                           | `bytedance/seedance-2.0-fast`     |
 | `cinematic`          | Controlled camera, multi-shot                                      | `minimax-h3/reference-to-video` (`text-to-video` without photos) | `minimax/hailuo-3`                |
 | `animation`          | Studio only: 2D, soft-3D and stylised clips from a styled keyframe | `wan/3-0-video` (image to video)                                 | `bytedance/seedance-2.0-fast`     |
@@ -162,6 +162,6 @@ Every key runs on KIE by default (`VIDEO_PROVIDER_<KEY>` overrides one); OpenRou
 
 | Route                   | Model                                                                   | Notes                                                                                      |
 | ----------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `studio.motion.compose` | PREMIUM (`anthropic/claude-opus-5.5`, medium, 16k)                      | One HTML/SVG + CSS motion design; code checks and draws it. `motion_graphics`, 90 credits. |
+| `studio.motion.compose` | PREMIUM (`google/gemini-4-carbon`, medium, 16k, 300 s)                  | One HTML/SVG + CSS motion design; code checks and draws it. `motion_graphics`, 90 credits. |
 | `studio.video.voice`    | KIE `elevenlabs/text-to-speech-turbo-2-5` (`KIE_VOICE_MODEL`)           | Voiceover from the storyboard's exact words. Metered, not a text route.                    |
 | `studio.video.music`    | KIE `ai-music-api/generate` V6 (`KIE_MUSIC_MODEL`, `KIE_MUSIC_VERSION`) | Instrumental bed only. Metered, not a text route.                                          |

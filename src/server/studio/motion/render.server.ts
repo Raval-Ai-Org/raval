@@ -7,6 +7,9 @@
 // time per process, so a small server never runs two browsers at once.
 import "server-only";
 import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import sharp from "sharp";
 import type { Browser, Page } from "playwright-core";
 import {
@@ -208,6 +211,10 @@ export function renderMotion(
     const frames = Math.round(seconds * MOTION_FPS);
     const sampleEvery = Math.max(1, Math.floor(frames / 6));
     const samples: Buffer[] = [];
+    // An MP4 can't be written to a pipe (the muxer seeks back for its index,
+    // and +faststart moves it to the front), so it goes to a temporary file.
+    const dir = await mkdtemp(join(tmpdir(), "mellox-motion-"));
+    const output = join(dir, "motion.mp4");
     const encoder = spawn(
       ffmpeg(),
       [
@@ -240,13 +247,11 @@ export function renderMotion(
         "+faststart",
         "-f",
         "mp4",
-        "pipe:1",
+        output,
       ],
       { windowsHide: true },
     );
-    const out: Buffer[] = [];
     let errors = "";
-    encoder.stdout.on("data", (chunk: Buffer) => out.push(chunk));
     encoder.stderr.on("data", (chunk: Buffer) => {
       errors = (errors + chunk.toString()).slice(-2000);
     });
@@ -256,6 +261,9 @@ export function renderMotion(
         code === 0 ? resolve() : reject(new Error(`ffmpeg exited ${code}: ${errors.trim()}`)),
       );
     });
+    // A failed encoder is reported by the write or the await below, never as
+    // an unhandled rejection.
+    done.catch(() => {});
     const write = (frame: Buffer) =>
       new Promise<void>((resolve, reject) =>
         encoder.stdin.write(frame, (error) => (error ? reject(error) : resolve())),
@@ -269,10 +277,12 @@ export function renderMotion(
       }
       encoder.stdin.end();
       await done;
+      return { video: await readFile(output), samples: samples.slice(-7) };
     } catch (error) {
       encoder.kill("SIGKILL");
       throw error;
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
     }
-    return { video: Buffer.concat(out), samples: samples.slice(-7) };
   });
 }

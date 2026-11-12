@@ -24,6 +24,7 @@ import {
 import {
   ANALYST,
   BUDGET,
+  CONVERSATION,
   ECONOMY,
   LABELLER,
   LUNA,
@@ -216,7 +217,7 @@ describe("prompt caching and token ceilings", () => {
       { role: "system" as const, content: "brand" },
       { role: "user" as const, content: "q" },
     ];
-    const marked = withPromptCache(three, PREMIUM);
+    const marked = withPromptCache(three, CONVERSATION);
     expect(JSON.stringify(marked[1])).toContain("cache_control");
     expect(JSON.stringify(marked[0])).not.toContain("cache_control");
     expect(withPromptCache(three, WORKHORSE)).toBe(three);

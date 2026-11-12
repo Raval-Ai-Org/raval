@@ -17,7 +17,7 @@ import {
   llmToolLoop,
   type LlmToolLoopOpts,
 } from "./ai-gateway.tool-loop.server";
-import { PREMIUM, WORKHORSE } from "@/server/ai/task-models";
+import { OPUS, PREMIUM, WORKHORSE } from "@/server/ai/task-models";
 
 type Reply = {
   finish_reason: string;
@@ -190,7 +190,12 @@ describe("llmToolLoop", () => {
   });
 
   it("marks the system prompt and the rolling last message for Anthropic caching", async () => {
-    const s = scripted([toolTurn(call("t1", "read_file", {})), toolTurn(call("t2", "submit", {}))]);
+    // Claude only through the rollback override now that PREMIUM is Gemini.
+    vi.stubEnv("AI_MODEL_GEO_AGENT_INVESTIGATE", OPUS);
+    const s = scripted([
+      { ...toolTurn(call("t1", "read_file", {})), model: OPUS },
+      { ...toolTurn(call("t2", "submit", {})), model: OPUS },
+    ]);
     restore = s.restore;
     await llmToolLoop(base());
     const count = (b: any) => JSON.stringify(b).split('"cache_control"').length - 1;
@@ -199,6 +204,7 @@ describe("llmToolLoop", () => {
     const last = s.bodies[1].messages.at(-1);
     expect(last.role).toBe("tool");
     expect(last.content[0].cache_control).toEqual({ type: "ephemeral" });
+    vi.unstubAllEnvs();
   });
 
   it("does not submit when the terminal tool's handler rejects the input", async () => {

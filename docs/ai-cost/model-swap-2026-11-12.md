@@ -113,3 +113,72 @@ Sources: OpenRouter `/api/v1/models`, `/api/v1/images/models/*/endpoints`,
 [modelgrep](https://modelgrep.com/leaderboard); [BudgetPixel arena](https://budgetpixel.com/arena/leaderboard);
 [Arena text-to-image](https://arena.ai/leaderboard/image/text-to-image);
 [EQ-Bench creative writing (llm-stats)](https://llm-stats.com/benchmarks/creative-writing-v3).
+
+## 6. Second round: premium text and video (approved 2026-11-12)
+
+Measured side by side before switching. Each switch is one line to undo.
+
+### Premium text: Opus 5.5 → Gemini 4 Carbon (done)
+
+`PREMIUM` in `task-models.ts` is now `google/gemini-4-carbon` ($2/$10 per 1M,
+Artificial Analysis index 60.0 vs Opus 59.1). Opus stays selectable as `OPUS`.
+
+| Live check (2026-11-12)                 | Opus 5.5                 | Carbon                      |
+| --------------------------------------- | ------------------------ | --------------------------- |
+| Storyboards, 3 briefs (all pass checks) | $0.076–0.087 each, ~39 s | $0.014–0.019 each, 31–154 s |
+| GEO agent tool loop                     | (works)                  | submitted, 3 turns, $0.0027 |
+| Motion graphic, 8 s                     | ok on the 2nd try, $0.42 | ok on the 1st try, $0.09    |
+
+Carbon thinks longer, so the premium routes got their own time limits
+(`timeoutMs` on the plan, 240–300 s; it only ever lengthens a caller's limit).
+
+The motion run found two bugs that broke motion graphics for **every** model
+(no motion graphic has ever been made in production): a scene note over 200
+characters threw the design away (now cut, `document.ts`), and the MP4 was
+written to a pipe, which FFmpeg's MP4 muxer can't do (now a temporary file,
+`render.server.ts`).
+
+Rollback: `AI_MODEL_<ROUTE>=anthropic/claude-opus-5.5,google/gemini-3.8-flash`
+for any premium route (e.g. `AI_MODEL_STUDIO_VIDEO_STORYBOARD`).
+
+### Premium video: Gemini Omni Flash 1.1 → 1.2 on KIE (done)
+
+Measured: 72 credits for 8 s at 720p (9 credits/s, $0.045/s); KIE lists 1080p
+at 10/s. 1.1 was 10.5/s. Ranks above 1.1 on Artificial Analysis. 1.2 takes an
+integer duration and up to 6 reference pictures.
+
+### Standard video: Veo 3.1 Fast → Grok Imagine 1.5 on KIE (done, approved after the test below)
+
+`standard` is now `grok-imagine-video-1-5-preview` (family `grok-video`, its own
+prompt direction; the old `grok` family stays the photo animator for
+Variation). It takes text, one reference picture, or exact first and last
+frames; 4–8 s clips as before; 480p and 720p. Prompts are cut to its 4,096
+characters by `fitVideoPrompt` (`src/lib/ugc/prompt-fit.ts`), which drops
+creative notes, then brand voice, then camera notes before it cuts anything,
+so the beat sheet, dialogue, product facts and "do not include" stay
+(production prompts ran 3,300–4,700 characters). The OpenRouter fallback is
+Veo 3.1 Lite ($0.05/s), the cheapest that speaks.
+
+Checked through the app's own code (`tests/live/standard-video.live.ts`): a
+typed car-confessional script, 8 s, 36 credits ($0.18), the line spoken word
+for word, the can's label readable. One short beep at the very end.
+
+Rollback: in `src/lib/ugc/models.ts`, `standard` back to `family: "veo"`,
+`kie: KIE_VEO_FAST, openrouter: OR_VEO_FAST`.
+
+### Draft and Variation video (measured, not switched)
+
+The same 8 s creator ad (9:16, spoken line, sip) on each model. All five said
+the line word for word and had sound.
+
+| Model                       | Where      | 8 s cost | Per second | Notes                               |
+| --------------------------- | ---------- | -------: | ---------: | ----------------------------------- |
+| Veo 3.1 Fast (Standard now) | KIE        |    $0.30 |    $0.0375 | did the sip                         |
+| Grok Imagine 1.5 preview    | KIE        |    $0.18 |    $0.0225 | did the sip; text or one picture    |
+| HeyGen Video 1, 768p        | OpenRouter |    $0.14 |     $0.018 | did **not** sip; references $0.10/s |
+| Gemini Omni 1.2 (Premium)   | KIE        |    $0.36 |     $0.045 | did the sip                         |
+
+Grok Imagine 1.5 at 720p costs **more** than today's Draft (Veo Lite, 30
+credits per 8 s = $0.15) and Variation (Grok image-to-video, 24 credits per
+video), so neither was switched; KIE's "from 2.4 credits/s" is its 480p price.
+Files: `H:\mellox-cost-scratch\video-compare\`.

@@ -114,7 +114,7 @@ describe("task model registry", () => {
 
   it("keeps every fallback at or under its primary's price", () => {
     const price: Record<string, number> = {
-      [PREMIUM]: 24,
+      [PREMIUM]: 12,
       [ANALYST]: 12,
       [CONVERSATION]: 12,
       [WORKHORSE]: 4.95,

@@ -7,6 +7,7 @@
 import "server-only";
 import { createKieTask, getKieTask, KieGatewayError, pickVideoUrl } from "@/lib/kie-gateway.server";
 import { providerSpec, type UgcModel } from "@/lib/ugc/models";
+import { fitVideoPrompt } from "@/lib/ugc/prompt-fit";
 import { checkVideoResult } from "@/lib/ugc/quality";
 import { log } from "@/server/observability/logger";
 import { kieUsdPerCredit } from "../models.server";
@@ -70,10 +71,11 @@ export function buildKieInput(req: VideoRenderRequest): Record<string, unknown> 
       };
     }
     case "gemini":
-      // Gemini Omni 1.1 Flash: duration is a string enum. With a first frame
+      // Gemini Omni Flash: 1.1 takes the duration as a string enum, 1.2 as an
+      // integer (3-15). With a first frame
       // (a post's picture, or the frame the clip before ended on) the clip
       // opens on it exactly and may settle on a last frame; references can't
-      // be combined with it. Otherwise up to 7 quota units, 1 per image.
+      // be combined with it. Otherwise up to 6 reference images.
       return {
         prompt: req.prompt.slice(0, 20_000),
         ...(req.firstFrame && images.length
@@ -82,11 +84,32 @@ export function buildKieInput(req: VideoRenderRequest): Record<string, unknown> 
               ...(req.lastFrameUrl ? { last_frame_url: req.lastFrameUrl } : {}),
             }
           : images.length
-            ? { image_urls: images.slice(0, 7) }
+            ? { image_urls: images.slice(0, 6) }
             : {}),
-        duration: String(req.durationSec),
+        duration: providerSpec(model, "kie")?.model.endsWith("-1-1")
+          ? String(req.durationSec)
+          : req.durationSec,
         aspect_ratio: req.aspectRatio,
         resolution: req.resolution,
+      };
+    case "grok-video":
+      // Grok Imagine Video 1.5: 4,096-character prompts, one reference
+      // picture, or an exact first (and last) frame. Sound is always made.
+      return {
+        prompt: fitVideoPrompt(req.prompt, 4_096),
+        ...(req.firstFrame && images.length
+          ? {
+              first_frame_url: images[0],
+              ...(req.lastFrameUrl ? { last_frame_url: req.lastFrameUrl } : {}),
+            }
+          : images.length
+            ? { image_urls: images.slice(0, 1) }
+            : {}),
+        aspect_ratio: req.aspectRatio,
+        resolution: req.resolution,
+        duration: req.durationSec,
+        enable_audio: true,
+        nsfw_checker: true,
       };
     case "wan":
       // Wan 3.0: one model id for text, a first frame or up to 10 references

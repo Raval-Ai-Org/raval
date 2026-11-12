@@ -24,11 +24,18 @@ import { routingOverrideFor } from "@/server/platform/routing-overrides.server";
 
 // Each tier is the cheapest model that does its kind of work well (cost
 // reviews 2026-11-03 and 2026-11-12; prices from OpenRouter /api/v1/models,
-// quality from the Artificial Analysis Intelligence Index v5). Opus stays where
-// the work is rare and high-stakes: code in customer repos, published
-// articles, video storyboards.
-export const PREMIUM = "anthropic/claude-opus-5.5";
-/** Analysis and structured reading (Brand DNA, strategy); reads images. Half Opus's price. */
+// quality from the Artificial Analysis Intelligence Index v5).
+/**
+ * Rare, high-stakes work: code in customer repos, published articles, video
+ * storyboards, motion graphics, escalations. Gemini 4 Carbon scores above
+ * Opus 5.5 (index 60.0 vs 59.1) at half its price ($2/$10 vs $4/$20), and in
+ * the 2026-11-12 side-by-side its storyboards passed every check at about a
+ * fifth of Opus's cost. Opus stays one override away (`OPUS`).
+ */
+export const PREMIUM = "google/gemini-4-carbon";
+/** The previous premium model: kept selectable as the rollback (`AI_MODEL_<ROUTE>`). */
+export const OPUS = "anthropic/claude-opus-5.5";
+/** Analysis and structured reading (Brand DNA, strategy); reads images. */
 export const ANALYST = "openai/gpt-6.1-sol";
 /** Conversation with tools (Mellox Pro chat, Coach, Creator scripts). */
 export const CONVERSATION = "anthropic/claude-sonnet-5.5";
@@ -116,6 +123,12 @@ export type TaskPlan = {
   /** Output ceiling; must cover reasoning + the answer. */
   maxTokens?: number;
   temperature?: number;
+  /**
+   * How long one call may take when the caller sets no limit. Long designed
+   * output (code, motion graphics, storyboards) on a reasoning model can run
+   * past the gateway's 60 s default.
+   */
+  timeoutMs?: number;
   /** A documented rule the caller applies through `escalatedPlan`. */
   escalate?: { when: string; models: string[]; effort?: Effort };
   /** Used once the workspace is past its spend ceiling. */
@@ -184,7 +197,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   }),
 
   // Studio. Articles go live on customer sites and must pass the GEO gate.
-  "studio.article": tier(PREMIUM, "medium"),
+  "studio.article": tier(PREMIUM, "medium", { timeoutMs: 240_000 }),
   "studio.article.standard": tier(WRITER, "medium", { maxTokens: 9000 }),
   // The high-volume Studio writers think briefly (Mellox Lean): reasoning is
   // billed as output, and the structured schema, shapeOutput and grounding
@@ -215,10 +228,10 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.video.brief": tier(WRITER, "low"),
   // A new AI video's storyboard (buildVideoStoryboardPrompt): one text call,
   // and where a video's story and consistency are won, so the premium tier.
-  "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000 }),
+  "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000, timeoutMs: 240_000 }),
   // A motion graphic's whole HTML/SVG + CSS document (src/lib/studio/motion/);
   // code checks it and draws it, so one careful call is the whole design.
-  "studio.motion.compose": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
+  "studio.motion.compose": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 300_000 }),
   // Scores a finished video's sampled frames; code decides (src/lib/studio/video/checks.ts).
   "studio.video.qa": tier(WORKHORSE, "low", { maxTokens: 1_200 }),
   "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
@@ -282,8 +295,8 @@ const REGISTRY: Record<string, TaskPlan> = {
   // GEO. Probes mirror real answer engines: each model in GEO_PROBE_MODELS is
   // asked separately (see geoProbeModels), never as a fallback chain.
   "geo.probe": { models: ["perplexity/sonar"] },
-  "geo.fix.propose": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
-  "geo.fix.batch": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
+  "geo.fix.propose": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 240_000 }),
+  "geo.fix.batch": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 240_000 }),
   "geo.cms.fix": tier(WRITER, "medium", {
     escalate: toTier("validation or grounding rejected the first output", PREMIUM, "medium"),
   }),
@@ -299,7 +312,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   // Proof Engine.
   "experiments.hypotheses": tier(SUMMARY, "low"),
   "experiments.values": tier(WRITER, "medium"),
-  "experiments.integration": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
+  "experiments.integration": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 240_000 }),
 
   // Backlink Growth.
   "links-topical-fit": tier(LABELLER, "low"),
@@ -513,7 +526,7 @@ export function geoProbeModels(): string[] {
 
 /** Every model the registry uses, which is all an admin override may choose from. */
 export function knownModels(): Set<string> {
-  const out = new Set<string>([PREMIUM, WORKHORSE, ECONOMY, ...Object.keys(FALLBACKS)]);
+  const out = new Set<string>([PREMIUM, OPUS, WORKHORSE, ECONOMY, ...Object.keys(FALLBACKS)]);
   for (const list of Object.values(FALLBACKS)) for (const model of list) out.add(model);
   for (const plan of Object.values(REGISTRY)) {
     for (const model of plan.models) out.add(model);

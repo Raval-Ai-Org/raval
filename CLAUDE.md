@@ -125,13 +125,15 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 
 - **No Anthropic API.** Text, vision, tool use and images all go through
   OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
-  `anthropic/claude-opus-5.5` (and Sonnet / Haiku 5.5) via OpenRouter.
+  Sonnet / Haiku 5.5 via OpenRouter; `anthropic/claude-opus-5.5` is kept only
+  as the premium rollback (`OPUS`).
 - **The model comes from the route label.** `src/server/ai/task-models.ts`
   maps every metering `route` to a plan (models + fallbacks, reasoning effort,
   token ceiling, escalation, degraded plan). Tiers, each the cheapest model
   that does its kind of work well (cost reviews 2026-11-03 and 2026-11-12,
   [docs/ai-cost/model-swap-2026-11-12.md](docs/ai-cost/model-swap-2026-11-12.md)):
-  - PREMIUM Opus 5.5: only rare, high-stakes work (GEO Engineer and fixes,
+  - PREMIUM Gemini 4 Carbon (was Opus 5.5; half the price, scores higher):
+    only rare, high-stakes work (GEO Engineer and fixes,
     experiment code, published articles, video storyboards, escalations);
   - ANALYST GPT-6.1 Sol: Brand DNA, strategy, audience groups, campaign plans;
   - CONVERSATION Sonnet 5.5: Mellox Pro chat, Coach and Creator scripts;
@@ -169,8 +171,12 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
   Studio-only `animation`) in `src/lib/ugc/models.ts`; old keys are
   read-only aliases. Dropping KIE is the checklist in ADR-0026.
   - Every key runs on KIE ([ADR-0043](docs/adr/0043-video-categories-and-motion.md)):
-    Premium is Gemini Omni Flash, Long and `animation` are Wan 3.0. A
-    fallback never costs more than its primary. A composed video may name a
+    Standard is Grok Imagine 1.5 (prompts fitted to 4,096 characters by
+    `fitVideoPrompt`), Draft is Veo 3.1 Lite, Premium is Gemini Omni Flash 1.2,
+    Long and `animation` are Wan 3.0. A
+    fallback never costs more than its primary, except Standard and Premium,
+    where no cheaper OpenRouter model speaks the lines (Veo Lite / Fast, only
+    during a KIE refusal). A composed video may name a
     model per clip (`clips[].model`).
   - `VIDEO_MAX_USD_PER_JOB` (default $5) refuses a quote over the cap before
     anything is held.
@@ -518,7 +524,7 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
   - `service.server.ts`;
   - RPC `src/server/fns/geo-agent.ts`, UI `geo/agent/AgentPanel.tsx`.
     Models: routes `geo.agent.investigate` / `implement` / `review` in
-    `task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`). Rules:
+    `task-models.ts` (PREMIUM, Gemini 4 Carbon; override `AI_MODEL_GEO_AGENT_*`). Rules:
   - **Ownership first:** no proposal, batch or run unless
     `src/lib/connectors/ownership.ts` verified the repository builds that host
     (`assertSourceOwnsHost`).
@@ -981,8 +987,8 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   music ducked under the voice at -14 LUFS. It fails open, never fails a
   video. Off with `VIDEO_SOUNDTRACK_ENABLED=false`.
 - **Motion graphics: the model designs, code checks and draws**
-  (`src/lib/studio/motion/`, `src/server/studio/motion/`). Opus (route
-  `studio.motion.compose`) writes one HTML/SVG + CSS document; `staticIssues`
+  (`src/lib/studio/motion/`, `src/server/studio/motion/`). The PREMIUM model
+  (route `studio.motion.compose`) writes one HTML/SVG + CSS document; `staticIssues`
   refuses scripts, outside addresses and words the brand never said;
   Chromium draws it offline and `drawnIssues` checks the words, safe area,
   size, contrast and end hold; FFmpeg encodes it. One retry with the reasons,

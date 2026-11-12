@@ -19,6 +19,7 @@ type TokenPrice = { inPerM: number; outPerM: number };
 // usage.cost is always preferred over these. Open-weight models list the
 // dearest full-precision host, so an estimate never under-counts.
 const TOKEN_PRICES: Record<string, TokenPrice> = {
+  "google/gemini-4-carbon": { inPerM: 2, outPerM: 10 },
   "anthropic/claude-opus-5.5": { inPerM: 4, outPerM: 20 },
   "anthropic/claude-sonnet-5.5": { inPerM: 2, outPerM: 10 },
   "anthropic/claude-haiku-5.5": { inPerM: 0.1, outPerM: 0.5 },

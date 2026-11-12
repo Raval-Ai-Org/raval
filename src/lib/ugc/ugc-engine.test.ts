@@ -84,14 +84,23 @@ describe("model registry", () => {
   });
 
   it("Veo reference renders on KIE are 8 seconds only", () => {
+    const draft = UGC_MODELS.draft;
+    expect(durationsFor(draft, false)).toEqual([4, 6, 8]);
+    expect(durationsFor(draft, true)).toEqual([8]);
+    expect(specFor(draft, "openrouter")!.images).toEqual({ mode: "first_frame", max: 1 });
+  });
+
+  it("Standard is Grok Imagine 1.5 on KIE: one reference picture, any of its lengths", () => {
     const standard = UGC_MODELS.standard;
-    expect(durationsFor(standard, false)).toEqual([4, 6, 8]);
-    expect(durationsFor(standard, true)).toEqual([8]);
-    expect(specFor(standard, "openrouter")!.images).toEqual({ mode: "first_frame", max: 1 });
+    expect(standard.providerModel).toBe("grok-imagine-video-1-5-preview");
+    expect(durationsFor(standard, true)).toEqual([4, 6, 8]);
+    expect(standard.images).toEqual({ mode: "references", max: 1 });
+    // Measured 2026-11-12: 36 credits for 8 s at 720p.
+    expect(renderCredits(standard.pricing, "720p", 8)).toBe(36);
   });
 
   it("rejects combinations the model can't render", () => {
-    const veo = UGC_MODELS.standard;
+    const veo = UGC_MODELS.draft;
     const problems = checkRenderSettings(veo, {
       model: veo.key,
       durationSec: 6,
@@ -107,7 +116,7 @@ describe("model registry", () => {
   });
 
   it("coerces settings to the nearest valid combination", () => {
-    const veo = UGC_MODELS.standard;
+    const veo = UGC_MODELS.draft;
     expect(
       coerceRenderSettings(veo, {
         model: "long",
@@ -126,13 +135,13 @@ describe("model registry", () => {
   });
 
   it("prices per video and per second, in credits (KIE) or USD (OpenRouter)", () => {
-    expect(renderCredits(UGC_MODELS.standard.pricing, "720p", 4)).toBe(60);
+    expect(renderCredits(UGC_MODELS.draft.pricing, "720p", 4)).toBe(30);
     expect(renderCredits(UGC_MODELS.long.pricing, "720p", 10)).toBe(160);
-    expect(renderCredits(UGC_MODELS.premium.pricing, "1080p", 8)).toBe(84);
-    expect(renderCredits(UGC_MODELS.standard.pricing, "480p", 8)).toBeNull();
-    const orStandard = specFor(UGC_MODELS.standard, "openrouter")!;
-    expect(renderCredits(orStandard.pricing, "720p", 8)).toBeNull();
-    expect(renderPrice(orStandard.pricing, "720p", 8)).toBe(0.8);
+    expect(renderCredits(UGC_MODELS.premium.pricing, "1080p", 8)).toBe(80);
+    expect(renderCredits(UGC_MODELS.draft.pricing, "480p", 8)).toBeNull();
+    const orDraft = specFor(UGC_MODELS.draft, "openrouter")!;
+    expect(renderCredits(orDraft.pricing, "720p", 8)).toBeNull();
+    expect(renderPrice(orDraft.pricing, "720p", 8)).toBe(0.4);
   });
 
   it("every platform preset maps to at least one enabled model", () => {

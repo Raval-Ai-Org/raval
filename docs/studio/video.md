@@ -130,11 +130,14 @@ to life (`living-picture`, 16 s), Motion post (`videoMode: "recap"`,
 
 Decision record [ADR-0043](../adr/0043-video-categories-and-motion.md).
 
-- Every video key runs on KIE (`src/lib/ugc/models.ts`): Standard and Draft on
-  Veo 3.1 Fast / Lite, Premium on Gemini Omni Flash (first and last frame),
-  Long on Wan 3.0 720p, Cinematic on MiniMax H3, and `animation` (Studio
-  only) on Wan 3.0 image-to-video. OpenRouter is the fallback, never dearer
-  than the primary.
+- Every video key runs on KIE (`src/lib/ugc/models.ts`): Standard on Grok
+  Imagine 1.5 (cost review 2026-11-12), Draft on Veo 3.1 Lite, Premium on
+  Gemini Omni Flash 1.2 (first and last frame), Long on Wan 3.0 720p,
+  Cinematic on MiniMax H3, and `animation` (Studio only) on Wan 3.0
+  image-to-video. OpenRouter is the fallback, used only when KIE refuses for
+  good. Standard and Premium have no OpenRouter model as cheap as their KIE
+  one that still speaks the lines, so their fallbacks (Veo 3.1 Lite / Fast)
+  cost more during a KIE outage; every other fallback costs the same or less.
 - A composed video can use a different model per clip (`clips[].model` in
   `VideoRenderRequest`). Premium uses Omni for every clip: it is cheaper on
   KIE than any model that makes its 10 s follow-on clips.

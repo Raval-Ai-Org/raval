@@ -47,6 +47,13 @@ export function grokPromptAdapter(input: PromptInput): string {
   );
 }
 
+export function grokVideoPromptAdapter(input: PromptInput): string {
+  return withDirection(
+    buildVideoPrompt(input),
+    "Prioritize real phone footage of a believable person: natural eye lines, accurate quoted dialogue with clean lip sync, natural room sound, and the product's shape, label and colours exactly as in the reference picture. Keep identity and product details the same for the whole take.",
+  );
+}
+
 export function wanPromptAdapter(input: PromptInput): string {
   return withDirection(
     buildVideoPrompt(input),
@@ -78,6 +85,8 @@ export function buildModelPrompt(input: PromptInput): string {
       return klingPromptAdapter(input);
     case "grok":
       return grokPromptAdapter(input);
+    case "grok-video":
+      return grokVideoPromptAdapter(input);
     case "wan":
       return wanPromptAdapter(input);
     case "seedance":

@@ -70,8 +70,9 @@ describe("video output duration", () => {
   });
 
   it("charges for every generated clip, including padding required by photo modes", () => {
-    const short = estimateRender(UGC_MODELS.standard, "720p", 8, 1);
-    const longer = estimateRender(UGC_MODELS.standard, "720p", 10, 1);
+    // Draft is Veo: a render with a reference picture is 8 s only.
+    const short = estimateRender(UGC_MODELS.draft, "720p", 8, 1);
+    const longer = estimateRender(UGC_MODELS.draft, "720p", 10, 1);
     expect(longer.usd).toBe(short.usd * 2);
     expect(longer.units).toBe(short.units * 2);
     expect(estimateRender(UGC_MODELS.long, "720p", 60).usd).toBeCloseTo(

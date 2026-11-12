@@ -51,7 +51,7 @@ export function StartHereList({
               "group flex h-12 w-full items-center gap-2.5 rounded-2xl border px-1.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               // Holo: a finished step is a soft green row with a tick, not crossed out.
               s.done
-                ? "border-[color-mix(in_srgb,var(--mox-green)_35%,transparent)] bg-[color-mix(in_srgb,var(--mox-lime)_16%,transparent)]"
+                ? "border-[color-mix(in_srgb,var(--mox-green)_35%,transparent)] bg-[color-mix(in_srgb,var(--mox-lime)_16%,transparent)] dark:border-[color-mix(in_srgb,var(--mox-green)_24%,transparent)] dark:bg-[color-mix(in_srgb,var(--mox-green)_8%,transparent)]"
                 : "border-transparent hover:bg-[var(--ds-well-bg)]",
             )}
           >

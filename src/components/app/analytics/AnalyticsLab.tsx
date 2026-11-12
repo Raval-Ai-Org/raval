@@ -745,7 +745,7 @@ export function AnalyticsLab() {
   }, [connection]);
 
   return (
-    <div data-ready={ready} className="min-h-screen bg-background">
+    <div data-mellox-app data-ready={ready} className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 flex flex-wrap items-center gap-3 border-b border-border bg-background/90 px-4 py-2.5 backdrop-blur-xl">
         <span className="text-[12px] font-semibold">Analytics lab</span>
         <div className="flex flex-wrap gap-1">

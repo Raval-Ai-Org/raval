@@ -708,7 +708,8 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
     try {
       json = await sendCompletion(body, {
         route,
-        timeoutMs: opts.timeoutMs ?? CHAT_TIMEOUT_MS,
+        // A route's own limit (long designed output) can only lengthen the caller's.
+        timeoutMs: Math.max(opts.timeoutMs ?? CHAT_TIMEOUT_MS, plan.timeoutMs ?? 0),
         retries: opts.retries,
         retryOnTimeout: opts.retryOnTimeout,
       });
@@ -1093,7 +1094,7 @@ export async function llmText(opts: LlmTextOpts): Promise<LlmTextResult> {
         }
       : undefined,
     noCache: !opts.cache,
-    timeoutMs: opts.timeoutMs ?? 60_000,
+    timeoutMs: opts.timeoutMs,
     retries: opts.retries,
     // A single long generation that timed out may already be billed; 429, 5xx
     // and 529 are still retried.

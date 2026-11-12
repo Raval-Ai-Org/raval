@@ -422,12 +422,12 @@ describe("Kie provider mapping", () => {
     expect(
       buildKieInput({
         ...base,
-        model: UGC_MODELS.standard,
+        model: UGC_MODELS.draft,
         imageUrls: ["a", "b", "c", "d"],
       }),
     ).toEqual({
       prompt: "p",
-      model: "veo3_fast",
+      model: "veo3_lite",
       generation_type: "REFERENCE_2_VIDEO",
       image_urls: ["a", "b", "c"],
       aspect_ratio: "9:16",
@@ -437,11 +437,39 @@ describe("Kie provider mapping", () => {
     });
   });
 
+  it("builds Grok Imagine 1.5 input: one reference picture, or exact first and last frames", () => {
+    expect(buildKieInput({ ...base, model: UGC_MODELS.standard, imageUrls: ["a", "b"] })).toEqual({
+      prompt: "p",
+      image_urls: ["a"],
+      aspect_ratio: "9:16",
+      resolution: "720p",
+      duration: 8,
+      enable_audio: true,
+      nsfw_checker: true,
+    });
+    const framed = buildKieInput({
+      ...base,
+      model: UGC_MODELS.standard,
+      imageUrls: ["post"],
+      firstFrame: true,
+      lastFrameUrl: "end",
+    });
+    expect(framed).toMatchObject({ first_frame_url: "post", last_frame_url: "end" });
+    expect(framed).not.toHaveProperty("image_urls");
+    const long = buildKieInput({
+      ...base,
+      model: UGC_MODELS.standard,
+      prompt: "x".repeat(6000),
+      imageUrls: [],
+    });
+    expect(String(long.prompt).length).toBeLessThanOrEqual(4096);
+  });
+
   it("opens Veo on the exact picture, and settles on the last one, when asked", () => {
     expect(
       buildKieInput({
         ...base,
-        model: UGC_MODELS.standard,
+        model: UGC_MODELS.draft,
         imageUrls: ["post", "style"],
         firstFrame: true,
         lastFrameUrl: "post-again",
@@ -457,19 +485,19 @@ describe("Kie provider mapping", () => {
     expect(kieGenerationType(UGC_MODELS.standard, 1)).toBe("REFERENCE_2_VIDEO");
   });
 
-  it("builds Gemini Omni input: references only, string duration, 7 images max", () => {
+  it("builds Gemini Omni 1.2 input: references only, integer duration, 6 images max", () => {
     const refs = Array.from({ length: 9 }, (_, i) => `i${i}`);
     const input = buildKieInput({ ...base, model: UGC_MODELS.premium, imageUrls: refs });
     expect(input).toEqual({
       prompt: "p",
-      image_urls: refs.slice(0, 7),
-      duration: "8",
+      image_urls: refs.slice(0, 6),
+      duration: 8,
       aspect_ratio: "9:16",
       resolution: "720p",
     });
     // A first frame can't be combined with references, so it is never sent.
     expect(input).not.toHaveProperty("first_frame_url");
-    expect(kieModelId(UGC_MODELS.premium, 2)).toBe("google/gemini-omni-flash-1-1");
+    expect(kieModelId(UGC_MODELS.premium, 2)).toBe("google/gemini-omni-flash-1-2");
   });
 
   it("builds MiniMax H3 input and picks text- or reference-to-video", () => {
@@ -524,7 +552,7 @@ describe("Kie provider mapping", () => {
       firstFrame: true,
       lastFrameUrl: "end",
     });
-    expect(omni).toMatchObject({ first_frame_url: "post", last_frame_url: "end", duration: "8" });
+    expect(omni).toMatchObject({ first_frame_url: "post", last_frame_url: "end", duration: 8 });
     expect(omni).not.toHaveProperty("image_urls");
     // Without a first frame, product photos stay references.
     expect(

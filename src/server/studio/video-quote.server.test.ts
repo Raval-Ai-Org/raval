@@ -61,7 +61,8 @@ it("changes the quote when routed provider prices change", () => {
     videoResolution: "720P" as const,
   };
   const before = quoteStudioVideo(controls);
-  vi.stubEnv("UGC_PRICE_STANDARD_720P_CREDITS", "300");
+  // Standard is priced per second now; 30/s stays under the per-job cap.
+  vi.stubEnv("UGC_PRICE_STANDARD_720P_CREDITS", "30");
   const after = quoteStudioVideo(controls);
   expect(after.hash).not.toBe(before.hash);
   expect(after.units).toBeGreaterThan(before.units);
