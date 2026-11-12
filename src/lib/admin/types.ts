@@ -710,7 +710,9 @@ export type AdminCreditGrantResult = { replayed: boolean };
 
 /* ───────────────────────────── AI controls ───────────────────────────── */
 
-type AdminEffort = "low" | "medium" | "high";
+/** "none" (reasoning off) comes from the registry or env only; an override picks the others. */
+type AdminEffort = "none" | "low" | "medium" | "high";
+type AdminOverrideEffort = Exclude<AdminEffort, "none">;
 
 export type AdminAiRoute = {
   route: string;
@@ -720,7 +722,7 @@ export type AdminAiRoute = {
   effort: AdminEffort | null;
   defaultModels: string[];
   defaultEffort: AdminEffort | null;
-  override: { models: string[] | null; effort: AdminEffort | null } | null;
+  override: { models: string[] | null; effort: AdminOverrideEffort | null } | null;
 };
 
 export type AdminSpendCap = {

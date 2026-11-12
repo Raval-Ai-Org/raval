@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
   createJob: vi.fn(),
@@ -351,10 +351,27 @@ describe("Studio async billing", () => {
       });
     beforeEach(() => {
       vi.stubEnv("VIDEO_PROVIDER_STANDARD", "kie");
+      // These cases price the render itself; the storyboard step before a
+      // long video has its own case below.
+      vi.stubEnv("FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED", "false");
       mocked.createJob.mockImplementation(async ({ onCreated }) => {
         await onCreated({ id: "job-1", status: "running" });
         return { id: "job-1", status: "running" };
       });
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("storyboards a long video first, for the storyboard's credits, keeping the free video", async () => {
+      vi.stubEnv("FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED", "true");
+      withVideos(200);
+      expect((await POST(videoRequest())).status).toBe(200);
+      expect(mocked.hold).toHaveBeenCalledOnce();
+      expect(mocked.hold).toHaveBeenCalledWith(
+        expect.objectContaining({ meter: "credits", action: "video_storyboard" }),
+      );
     });
 
     it("uses one free video while one is left", async () => {

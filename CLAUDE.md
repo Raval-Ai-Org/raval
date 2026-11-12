@@ -129,19 +129,21 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 - **The model comes from the route label.** `src/server/ai/task-models.ts`
   maps every metering `route` to a plan (models + fallbacks, reasoning effort,
   token ceiling, escalation, degraded plan). Tiers, each the cheapest model
-  that does its kind of work well (cost review 2026-11-03):
+  that does its kind of work well (cost reviews 2026-11-03 and 2026-11-12,
+  [docs/ai-cost/model-swap-2026-11-12.md](docs/ai-cost/model-swap-2026-11-12.md)):
   - PREMIUM Opus 5.5: only rare, high-stakes work (GEO Engineer and fixes,
     experiment code, published articles, video storyboards, escalations);
   - ANALYST GPT-6.1 Sol: Brand DNA, strategy, audience groups, campaign plans;
-  - CONVERSATION Sonnet 5.5: Mellox Pro chat and Coach;
-  - SUMMARY GPT-6.1 Terra: briefings and small structured jobs, and
-    WORKHORSE's fallback (a fallback never costs more than its primary);
-  - WORKHORSE Gemini 3.8 Flash: everything people see from Studio, chat,
-    pictures and audio, Market Brain;
-  - BUDGET DeepSeek V4.1 Flash and LABELLER GLM-5.3 Flash: text-only
-    internal work and labelling;
-  - CAREFUL Haiku 5.5 (safety checks, caption edits), LUNA GPT-6 Luna,
-    ECONOMY Gemini 3.1 Flash-Lite (files, audience scores).
+  - CONVERSATION Sonnet 5.5: Mellox Pro chat, Coach and Creator scripts;
+  - WRITER Haiku 5.5 (also SUMMARY, CAREFUL, ECONOMY): every text writer
+    people see (Studio copy, Flash chat, plans, briefings), safety checks,
+    caption edits, image text and audience scores; GPT-6 Luna is its spare;
+  - WORKHORSE Gemini 3.8 Flash: only what needs eyes or ears (image and
+    video QA, photo reads, transcription) and second safety reads;
+  - BUDGET DeepSeek V4.1 Flash 1017 and LABELLER GLM-5.3 Flash: text-only
+    internal work and labelling. Effort `none` (ideas, prompt help) turns
+    reasoning off only where every model in the list accepts it
+    (`canTurnReasoningOff`); Gemini and GLM refuse it.
     A new `route:` label needs an entry (a test enforces it). Override per
     route with `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`; that is also
     the instant rollback for a route.
@@ -898,6 +900,10 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
     them, because tracking is what costs money on every later sweep.
   - **Updates are deduped by fingerprint** (unique index), and the recency
     window is derived from `updates_checked_at`, never a fixed sweep.
+  - **A failed profile is never retried by itself** (`profileDue`): it keeps
+    its reason on screen and "Research again" retries. A plan with no sweeps
+    gets the first profile only, not the news sweep
+    ([docs/ai-cost/tavily-volume-2026-11-12.md](docs/ai-cost/tavily-volume-2026-11-12.md)).
   - Background work is leased (`claim_competitor_jobs`) and advanced by the
     **existing** `competitor-watch` cron hook — do not add a cron job.
 

@@ -26,10 +26,11 @@ import {
   BUDGET,
   ECONOMY,
   LABELLER,
+  LUNA,
   planFor,
   PREMIUM,
-  SUMMARY,
   WORKHORSE,
+  WRITER,
 } from "@/server/ai/task-models";
 
 const FULL_PRECISION = ["fp8", "fp16", "bf16", "fp32", "unknown"];
@@ -73,8 +74,8 @@ const msgs = [
 
 describe("chatCompletion request body", () => {
   it.each([
-    { route: "chat", primary: WORKHORSE, fallback: SUMMARY, openWeight: false },
-    { route: "competitors.updates", primary: LABELLER, fallback: ECONOMY, openWeight: true },
+    { route: "chat", primary: WRITER, fallback: LUNA, openWeight: false },
+    { route: "competitors.updates", primary: LABELLER, fallback: LUNA, openWeight: true },
   ])(
     "sends and meters the fallback for $route",
     async ({ route, primary, fallback, openWeight }) => {
@@ -144,7 +145,7 @@ describe("chatCompletion request body", () => {
       },
     });
     // studio.ideas runs on an open-weight model: full-precision hosts only.
-    expect(s.bodies[0].models).toEqual([BUDGET, WORKHORSE]);
+    expect(s.bodies[0].models).toEqual([BUDGET, WRITER]);
     expect(s.bodies[0].provider).toEqual({
       data_collection: "deny",
       require_parameters: true,
@@ -166,6 +167,18 @@ describe("chatCompletion request body", () => {
     restore = s.restore;
     await chatCompletion({ route: "studio.ideas", messages: msgs, noCache: true });
     expect(s.bodies[0].temperature).toBe(0.9);
+  });
+
+  it("turns reasoning off only when every model in the list accepts it", async () => {
+    const s = scripted([{ content: "a" }, { content: "b" }]);
+    restore = s.restore;
+    await chatCompletion({ route: "studio.ideas", messages: msgs, noCache: true });
+    expect(s.bodies[0].models).toEqual([BUDGET, WRITER]);
+    expect(s.bodies[0].reasoning).toEqual({ effort: "none", exclude: true });
+    // Gemini answers 400 "Reasoning is mandatory": a list with it thinks briefly instead.
+    vi.stubEnv("AI_MODEL_STUDIO_IDEAS", `${BUDGET},${WORKHORSE}`);
+    await chatCompletion({ route: "studio.ideas", messages: msgs, noCache: true });
+    expect(s.bodies[1].reasoning).toEqual({ effort: "low", exclude: true });
   });
 
   it("uses the degraded plan past the spend ceiling", async () => {

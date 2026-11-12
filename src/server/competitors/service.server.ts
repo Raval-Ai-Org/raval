@@ -86,15 +86,79 @@ export function nextCheckAt(args: {
 }
 
 /**
+ * Whether this pass should build the profile: a new competitor, a person's
+ * "Research again" (which sets `pending`), or a build a crashed worker left
+ * behind. A failed profile is never retried by itself: a site that blocks
+ * readers fails the same way every time, and each try is about eight web
+ * searches and extracts. It keeps its reason on screen until a person asks.
+ */
+export function profileDue(row: Pick<CompetitorRow, "profile" | "profile_status">): boolean {
+  if (row.profile_status === "pending") return true;
+  if (row.profile_status === "failed") return false;
+  return !row.profile;
+}
+
+/** Look for what changed since the last sweep and store it. Returns how many were new. */
+async function sweepForUpdates(row: CompetitorRow): Promise<number> {
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from("competitor_updates")
+      .select("fingerprint")
+      .eq("competitor_id", row.id)
+      .order("detected_at", { ascending: false })
+      .limit(200);
+    const { updates } = await detectCompetitorUpdates({
+      name: row.name,
+      domain: row.domain,
+      lastCheckedAt: row.updates_checked_at,
+      knownFingerprints: (existing ?? []).map((entry) => entry.fingerprint),
+    });
+    if (!updates.length) return 0;
+    // ignoreDuplicates: the unique index on (competitor_id, fingerprint)
+    // is the real guard, so a race between the cron and a manual refresh
+    // is a no-op rather than an error.
+    const { error } = await supabaseAdmin.from("competitor_updates").upsert(
+      updates.map((update) => ({
+        workspace_id: row.workspace_id,
+        competitor_id: row.id,
+        kind: update.kind,
+        title: update.title,
+        summary: update.summary || null,
+        significance: update.significance,
+        source_url: update.sourceUrl,
+        source_title: update.sourceTitle,
+        published_at: update.publishedAt,
+        fingerprint: update.fingerprint,
+      })),
+      { onConflict: "competitor_id,fingerprint", ignoreDuplicates: true },
+    );
+    if (error) {
+      console.error("[competitors] failed to store updates", error.message);
+      return 0;
+    }
+    return updates.length;
+  } catch (error) {
+    console.error("[competitors] update sweep failed", error);
+    return 0;
+  }
+}
+
+/**
  * Advance one claimed competitor: profile it if it has never been profiled,
  * then look for what changed. Profiling is the more valuable half, so it goes
  * first and a failure there still lets the updates sweep run next time.
  */
 async function advanceCompetitor(
   row: CompetitorRow,
-  /** The plan's spacing between sweeps; the next check is never sooner. */
-  minIntervalMs = 0,
+  opts: {
+    /** The plan's spacing between sweeps; the next check is never sooner. */
+    minIntervalMs?: number;
+    /** False when the plan sells no sweeps: only a due profile is built. */
+    sweep?: boolean;
+  } = {},
 ): Promise<"done" | "lost_lease" | "failed"> {
+  const minIntervalMs = opts.minIntervalMs ?? 0;
+  const sweep = opts.sweep ?? true;
   const worker = row.locked_by ?? WORKER;
   const url = row.url || `https://${row.domain}`;
 
@@ -113,7 +177,7 @@ async function advanceCompetitor(
 
   return runWithScope({ workspaceId: row.workspace_id, route: "competitors.advance" }, async () => {
     let profiled = false;
-    if (!row.profile || row.profile_status === "pending" || row.profile_status === "failed") {
+    if (profileDue(row)) {
       if (!(await patchLeased(row.id, worker, { profile_status: "running" }))) return "lost_lease";
       try {
         const profile = await buildCompetitorProfile({
@@ -146,45 +210,8 @@ async function advanceCompetitor(
       }
     }
 
-    let found = 0;
-    try {
-      const { data: existing } = await supabaseAdmin
-        .from("competitor_updates")
-        .select("fingerprint")
-        .eq("competitor_id", row.id)
-        .order("detected_at", { ascending: false })
-        .limit(200);
-      const { updates } = await detectCompetitorUpdates({
-        name: row.name,
-        domain: row.domain,
-        lastCheckedAt: row.updates_checked_at,
-        knownFingerprints: (existing ?? []).map((entry) => entry.fingerprint),
-      });
-      if (updates.length) {
-        // ignoreDuplicates: the unique index on (competitor_id, fingerprint)
-        // is the real guard, so a race between the cron and a manual refresh
-        // is a no-op rather than an error.
-        const { error } = await supabaseAdmin.from("competitor_updates").upsert(
-          updates.map((update) => ({
-            workspace_id: row.workspace_id,
-            competitor_id: row.id,
-            kind: update.kind,
-            title: update.title,
-            summary: update.summary || null,
-            significance: update.significance,
-            source_url: update.sourceUrl,
-            source_title: update.sourceTitle,
-            published_at: update.publishedAt,
-            fingerprint: update.fingerprint,
-          })),
-          { onConflict: "competitor_id,fingerprint", ignoreDuplicates: true },
-        );
-        if (error) console.error("[competitors] failed to store updates", error.message);
-        else found = updates.length;
-      }
-    } catch (error) {
-      console.error("[competitors] update sweep failed", error);
-    }
+    // A plan with no sweeps gets the first profile only, never the news search.
+    const found = sweep ? await sweepForUpdates(row) : 0;
     if (found > 0) {
       // A competitor moved: let Autopilot judge whether it is worth a response (no-op when off).
       const { requestOpportunityScan } = await import("@/server/autopilot/service.server");
@@ -195,7 +222,9 @@ async function advanceCompetitor(
       ? Math.min(3, Math.floor(lookbackDays(row.updates_checked_at) / 2))
       : 0;
     const released = await patchLeased(row.id, worker, {
-      updates_checked_at: new Date().toISOString(),
+      // Only a real sweep moves the window, so the first one after an upgrade
+      // still looks back over everything it missed.
+      ...(sweep ? { updates_checked_at: new Date().toISOString() } : {}),
       lease_until: null,
       locked_by: null,
       attempt_count: 0,
@@ -260,7 +289,7 @@ export async function runDueCompetitorJobs(
     // person just added still gets its first profile while the account is open.
     const account = await loadBackgroundAccount(row.workspace_id);
     const gate = competitorSweepGate(account);
-    const firstProfile = !row.profile && !!account && !account.frozen && !account.paused;
+    const firstProfile = profileDue(row) && !!account && !account.frozen && !account.paused;
     if (!gate.run && !firstProfile) {
       await patchLeased(row.id, WORKER, {
         lease_until: null,
@@ -272,7 +301,9 @@ export async function runDueCompetitorJobs(
     }
     const result = await advanceCompetitor(
       { ...row, locked_by: WORKER },
-      gate.run ? gate.intervalMs : SKIP_RETRY_MS,
+      gate.run
+        ? { minIntervalMs: gate.intervalMs, sweep: true }
+        : { minIntervalMs: SKIP_RETRY_MS, sweep: false },
     );
     tally[result] += 1;
   }

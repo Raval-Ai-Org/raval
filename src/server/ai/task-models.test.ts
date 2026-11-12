@@ -5,8 +5,11 @@ import {
   DEFAULT_GEO_PROBE_MODELS,
   ANALYST,
   BUDGET,
+  canTurnReasoningOff,
   CONVERSATION,
   ECONOMY,
+  LUNA,
+  WRITER,
   effectivePlan,
   escalatedPlan,
   geoProbeModels,
@@ -94,15 +97,54 @@ describe("task model registry", () => {
     expect(planFor("studio.article").models[0]).toBe(PREMIUM);
     expect(planFor("studio.video.storyboard").models[0]).toBe(PREMIUM);
     expect(planFor("geo.agent.implement").models[0]).toBe(PREMIUM);
-    expect(planFor("studio.ideas").models).toEqual([BUDGET, WORKHORSE]);
-    expect(planFor("chat").models).toEqual([WORKHORSE, SUMMARY]);
-    expect(planFor("competitors.updates").models).toEqual([LABELLER, ECONOMY]);
-    expect(planFor("ai-generate.caption").models[0]).toBe(WORKHORSE);
+    expect(planFor("studio.ideas")).toMatchObject({ models: [BUDGET, WRITER], effort: "none" });
+    expect(planFor("chat").models).toEqual([WRITER, LUNA]);
+    expect(planFor("competitors.updates").models).toEqual([LABELLER, LUNA]);
+    expect(planFor("ai-generate.caption").models[0]).toBe(WRITER);
     expect(planFor("studio.upload-captions")).toMatchObject({
-      models: [WORKHORSE, SUMMARY],
+      models: [WRITER, LUNA],
       effort: "medium",
     });
     expect(planFor("schedule.weekly").effort).toBe("medium");
+    // Pictures, frames and sound stay on the model that sees and hears them.
+    for (const route of ["studio.transcribe", "studio.video.qa", "studio.image.review"]) {
+      expect(planFor(route).models[0], route).toBe(WORKHORSE);
+    }
+  });
+
+  it("keeps every fallback at or under its primary's price", () => {
+    const price: Record<string, number> = {
+      [PREMIUM]: 24,
+      [ANALYST]: 12,
+      [CONVERSATION]: 12,
+      [WORKHORSE]: 4.95,
+      [BUDGET]: 0.75,
+      [WRITER]: 0.6,
+      [LUNA]: 0.6,
+      [LABELLER]: 0.118,
+    };
+    for (const route of registeredRoutes()) {
+      const [primary, ...fallbacks] = planFor(route).models;
+      if (!(primary in price)) continue;
+      // GLM-5.3 Flash has nothing cheaper that labels as well; Luna is its spare.
+      if (primary === LABELLER) continue;
+      for (const model of fallbacks) {
+        expect(price[model], `${route}: ${model}`).toBeLessThanOrEqual(price[primary]);
+      }
+    }
+  });
+
+  it("turns reasoning off only on models that accept it", () => {
+    for (const route of registeredRoutes()) {
+      const plan = planFor(route);
+      if (plan.effort !== "none") continue;
+      expect(plan.models.every(canTurnReasoningOff), route).toBe(true);
+    }
+    expect(canTurnReasoningOff(BUDGET)).toBe(true);
+    expect(canTurnReasoningOff(WRITER)).toBe(true);
+    expect(canTurnReasoningOff(WORKHORSE)).toBe(false);
+    expect(canTurnReasoningOff(LABELLER)).toBe(false);
+    expect(canTurnReasoningOff(PREMIUM)).toBe(false);
   });
 
   it("lets an admin override choose any tier model, and knows which are open-weight", () => {
@@ -147,14 +189,21 @@ describe("task model registry", () => {
   });
 
   it("steps each tier down one past the spend ceiling", () => {
-    expect(effectivePlan(planFor("brand-extract"), true).models[0]).toBe(WORKHORSE);
-    expect(effectivePlan(planFor("chat"), true).models[0]).toBe(ECONOMY);
-    expect(effectivePlan(planFor("chat"), true).models).toEqual([ECONOMY, "openai/gpt-6-luna"]);
+    expect(effectivePlan(planFor("brand-extract"), true).models[0]).toBe(WRITER);
+    // The writer is already the cheapest that writes well: only its effort drops.
+    expect(effectivePlan(planFor("chat"), true).models).toEqual([WRITER, LUNA]);
+    expect(effectivePlan(planFor("studio.script"), true).effort).toBe("medium");
+    expect(effectivePlan(planFor("audience.score"), true).models[0]).toBe(ECONOMY);
     expect(effectivePlan(planFor("competitors.updates"), true).models[0]).toBe(LABELLER);
+    expect(effectivePlan(planFor("studio.transcribe"), true).models[0]).toBe(WORKHORSE);
+    expect(effectivePlan(planFor("studio.ideas"), true)).toMatchObject({
+      models: [BUDGET, WRITER],
+      effort: "none",
+    });
     expect(effectivePlan(planFor("geo.agent.investigate"), true).effort).toBe("medium");
     expect(effectivePlan(planFor("chat"), false)).toEqual(planFor("chat"));
     // Escalation never survives the ceiling.
-    expect(effectivePlan(escalatedPlan("ai-generate", true), true).models[0]).toBe(WORKHORSE);
+    expect(effectivePlan(escalatedPlan("ai-generate", true), true).models[0]).toBe(WRITER);
   });
 
   it("asks each answer engine separately by default", () => {

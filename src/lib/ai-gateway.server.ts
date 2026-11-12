@@ -25,6 +25,7 @@ import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.ser
 import { recordUsage } from "@/server/ai/metering";
 import { estimateTextCost, round6 } from "@/server/ai/pricing";
 import {
+  canTurnReasoningOff,
   effectivePlan,
   escalatedPlan,
   isOpenWeightModel,
@@ -78,7 +79,12 @@ const ANSWER_BUDGETS: Record<TokenTask, { default: number; max: number }> = {
   extraction: { default: 2_400, max: 8_192 },
 };
 /** Reasoning tokens count against max_tokens; this much is added per effort. */
-const REASONING_HEADROOM: Record<Effort, number> = { low: 2_048, medium: 6_144, high: 12_288 };
+const REASONING_HEADROOM: Record<Effort, number> = {
+  none: 0,
+  low: 2_048,
+  medium: 6_144,
+  high: 12_288,
+};
 /** The tiers' smallest completion limit (Gemini 3.x: 65,536). */
 const MAX_OUTPUT_TOKENS = 64_000;
 /** Answer cap while degraded past a spend ceiling (reasoning headroom still added). */
@@ -525,8 +531,14 @@ export function buildRequestBody(args: BodyArgs): Record<string, unknown> {
     },
   };
   if (args.plan.effort) {
+    // "none" only when every model in the list accepts it; one that insists
+    // on reasoning would answer 400, so the list thinks briefly instead.
+    const effort =
+      args.plan.effort === "none" && !args.plan.models.every(canTurnReasoningOff)
+        ? "low"
+        : args.plan.effort;
     body.reasoning = {
-      effort: args.plan.effort,
+      effort,
       ...(args.excludeReasoning ? { exclude: true } : {}),
     };
   }
