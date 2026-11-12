@@ -18,6 +18,7 @@ import {
   type UgcResolution,
 } from "@/lib/ugc/models";
 import { ACTIVE_RENDER_STATUSES, type RenderStatus } from "@/lib/ugc/schemas";
+import type { HookCue } from "@/lib/ugc/hook-text";
 import { log as defaultLog } from "@/server/observability/logger";
 import type { VideoProvider } from "./providers/types";
 import type { RenderPatch, RenderRow, UgcRenderStore } from "./store";
@@ -38,7 +39,46 @@ export type EngineDeps = {
   callbackUrl?: () => string | undefined;
   onTerminal?: (row: RenderRow) => Promise<void>;
   log?: Pick<typeof defaultLog, "info" | "warn" | "error">;
+  /**
+   * Draws the render's hook text (`settings.hookText.cues`) on the finished
+   * video and returns it as a data URL. Absent, or failing: the clean video is
+   * kept, never the render.
+   */
+  drawHookText?: (
+    video: { videoUrl: string; dataUrl?: string; provider: string },
+    cues: HookCue[],
+    row: RenderRow,
+  ) => Promise<string | null>;
 };
+
+/** The hook text cues a render stored at start, or none. */
+export function storedHookCues(settings: Record<string, unknown>): HookCue[] {
+  const hookText = settings.hookText as { cues?: unknown } | undefined;
+  if (!Array.isArray(hookText?.cues)) return [];
+  return hookText.cues.filter(
+    (c): c is HookCue =>
+      !!c &&
+      typeof (c as HookCue).text === "string" &&
+      typeof (c as HookCue).start === "number" &&
+      typeof (c as HookCue).end === "number",
+  );
+}
+
+/** What a format render stored for its clips: beat boundaries, and whether clips chain. */
+function clipShape(row: RenderRow): {
+  cutAt?: number[];
+  chain?: { workspaceId: string; key: string };
+} {
+  const cutAt = Array.isArray(row.settings.cutAt)
+    ? (row.settings.cutAt as unknown[]).filter((n): n is number => typeof n === "number")
+    : [];
+  return {
+    ...(cutAt.length ? { cutAt } : {}),
+    ...(row.settings.join === "chain"
+      ? { chain: { workspaceId: row.workspace_id, key: `ugc:${row.id}` } }
+      : {}),
+  };
+}
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -139,6 +179,8 @@ export function createRenderEngine(deps: EngineDeps) {
       // The brand's style references come after the person's own photos.
       styleReferenceCount: images.length - imageUrls.length,
       callbackUrl: deps.callbackUrl?.(),
+      // A format's long video joins its clips on beat boundaries, or chains one take.
+      ...clipShape(current),
     });
     const t = now();
     if (result.ok) {
@@ -266,6 +308,23 @@ export function createRenderEngine(deps: EngineDeps) {
         renderId: row.id,
         message: error instanceof Error ? error.message : String(error),
       });
+    }
+    // Hook text is drawn by code on the finished video; a failure keeps the clean one.
+    const cues = storedHookCues(row.settings);
+    if (cues.length && deps.drawHookText) {
+      try {
+        const drawn = await deps.drawHookText(
+          { videoUrl, dataUrl, provider: row.provider },
+          cues,
+          row,
+        );
+        if (drawn) dataUrl = drawn;
+      } catch (error) {
+        log.warn("ugc.hook_text.failed", {
+          renderId: row.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     const stored = await store.persistVideo({
       row,

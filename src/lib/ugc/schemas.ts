@@ -14,11 +14,20 @@ import {
 } from "./options";
 import { UGC_MODEL_KEYS } from "./models";
 import { STOCK_CREATOR_IDS } from "./creators";
+import { UGC_FORMAT_IDS } from "./formats/formats";
+import { HOOK_TEXT_PRESET_IDS } from "./hook-text";
 
 const ids = <T extends { id: string }>(list: readonly T[]) =>
   list.map((o) => o.id) as [T["id"], ...T["id"][]];
 
 const text = (max: number) => z.string().trim().max(max);
+
+/** A brief's format: "auto", a library format (formats/formats.ts) or an old id. */
+export const BRIEF_FORMAT_IDS = ["auto", ...UGC_FORMAT_IDS, ...ids(FORMATS)] as [
+  string,
+  ...string[],
+];
+const CONCEPT_FORMAT_IDS = [...UGC_FORMAT_IDS, ...ids(FORMATS)] as [string, ...string[]];
 
 export const ProductFactSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,32}$/i),
@@ -52,7 +61,8 @@ export const BriefSchema = z.object({
   durationSec: z.number().int().min(4).max(60, "Videos can be up to 60 seconds long.").optional(),
   objective: z.enum(ids(OBJECTIVES)).default("sales"),
   platform: z.enum(ids(PLATFORMS)).default("tiktok"),
-  format: z.enum(ids(FORMATS)).default("problem_solution"),
+  /** "auto" lets Mellox pick from the formats that suit the brand. */
+  format: z.enum(BRIEF_FORMAT_IDS).default("auto"),
   tone: z.enum(ids(TONES)).default("authentic"),
   language: z.enum(ids(LANGUAGES)).default("en"),
   audience: text(400).default(""),
@@ -67,12 +77,21 @@ export const BriefSchema = z.object({
       characterId: z.enum(STOCK_CREATOR_IDS).optional(),
       /** One of the brand's own people (an Inspo "Person" asset), re-checked on the server. */
       personAssetId: z.string().uuid().optional(),
+      /** A two-person format's other role (a ready-made creator); absent: picked by code. */
+      partnerId: z.enum(STOCK_CREATOR_IDS).optional(),
+    })
+    .prefault({}),
+  /** Hook text drawn on the finished video by code (src/lib/ugc/hook-text.ts). */
+  hookText: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Absent: the format's own preset. */
+      preset: z.enum(HOOK_TEXT_PRESET_IDS).optional(),
     })
     .prefault({}),
   instructions: text(1000).default(""),
   /** Imported scripts skip concept generation, including when reopened. */
   scriptSource: z.literal("studio").optional(),
-  /** Brand Kit Style: a style id, "none", or absent for the workspace default. */
 });
 export type Brief = z.infer<typeof BriefSchema>;
 
@@ -87,6 +106,12 @@ export const SceneSchema = z.object({
   productPlacement: text(300).default(""),
   /** Suggested caption to add in editing — never rendered into the video. */
   caption: text(120).default(""),
+  /** Who speaks: a format role (A / B) or nobody. Absent on older scripts. */
+  speaker: z.enum(["A", "B", "none"]).optional(),
+  /** How the beat starts: the opening shot, a hard cut, a split screen, or the same take. */
+  cut: z.enum(["open", "hard", "split", "continuous"]).optional(),
+  /** The beat's job in the story. */
+  role: z.enum(["hook", "setup", "turn", "payoff", "button"]).optional(),
 });
 export type Scene = z.infer<typeof SceneSchema>;
 
@@ -98,6 +123,20 @@ export const ScriptSchema = z.object({
   postCaption: text(10000).default(""),
   hashtags: z.array(text(40)).max(10).default([]),
   factIds: z.array(z.string().max(32)).max(40).default([]),
+  /** The library format this script was written for. */
+  format: z.enum(UGC_FORMAT_IDS).optional(),
+  /** The place, twist and opening pattern it used (formats/variant.ts). */
+  variant: z
+    .object({
+      place: z.string().max(40),
+      twist: z.string().max(40),
+      hook: z.number().int().min(0).max(20),
+    })
+    .optional(),
+  /** Hook text drawn on the video by code; a split preset writes "left / right". */
+  onScreen: text(80).default(""),
+  /** For a "reply" hook: the comment the video answers. */
+  replyTo: text(120).default(""),
 });
 export type Script = z.infer<typeof ScriptSchema>;
 
@@ -105,7 +144,7 @@ export const ConceptSchema = z.object({
   id: z.string().min(1).max(32),
   title: text(120).min(1),
   angle: text(400).default(""),
-  format: z.enum(ids(FORMATS)),
+  format: z.enum(CONCEPT_FORMAT_IDS),
   hooks: z.array(text(200).min(1)).min(1).max(5),
   whyItWorks: text(400).default(""),
   script: ScriptSchema,

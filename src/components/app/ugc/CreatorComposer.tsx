@@ -8,6 +8,7 @@
 import { useMemo, useState } from "react";
 import {
   Check,
+  ChevronLeft,
   ImagePlus,
   Plus,
   ShoppingBag,
@@ -28,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   customCreatorProblem,
@@ -46,11 +48,16 @@ import {
   type SettingId,
   type ToneId,
 } from "@/lib/ugc/options";
+import { leadRole } from "@/lib/ugc/formats/cast";
+import { ugcFormat } from "@/lib/ugc/formats/formats";
+import { HOOK_TEXT_MAX_WORDS, HOOK_TEXT_PRESETS, type HookTextPresetId } from "@/lib/ugc/hook-text";
 import { dialogueWordBudget } from "@/lib/ugc/prompt";
 import type { Product, ReferenceImageView } from "@/lib/ugc/schemas";
 import { typedWordCount } from "@/lib/ugc/script-text";
 import { cn } from "@/lib/utils";
 import { CreatorFace } from "./CreatorPortrait";
+import { FormatPicker } from "./FormatPicker";
+import { HookTextSample } from "./HookTextSample";
 
 export type CreatorChoice = { kind: "stock"; id: string } | { kind: "person"; assetId: string };
 
@@ -62,7 +69,23 @@ export type CreatorDraft = {
   setting: SettingId;
   platform: PlatformId;
   durationSec: number;
+  /** "auto", a format id (src/lib/ugc/formats/), or null while the format grid shows. */
+  format: string | null;
+  /** A two-person format's second creator (a ready-made one); null: Mox picks. */
+  partnerId: string | null;
+  /** Hook text drawn on the video by code. */
+  hookOn: boolean;
+  /** null: the format's own preset. */
+  hookPreset: HookTextPresetId | null;
+  /** The words of the hook text (at most HOOK_TEXT_MAX_WORDS). */
+  hookLine: string;
 };
+
+/** "THE HOST" → "Host". */
+function roleName(title: string | undefined): string {
+  const t = (title ?? "").replace(/^the\s+/i, "").toLowerCase();
+  return t ? t[0].toUpperCase() + t.slice(1) : "";
+}
 
 export type BrandPerson = {
   assetId: string;
@@ -125,6 +148,7 @@ export function CreatorComposer({
   onAddPeople,
   creatorPrice,
   onCreateCreator,
+  formatSuggested = [],
 }: {
   draft: CreatorDraft;
   onDraft: (patch: Partial<CreatorDraft>) => void;
@@ -149,7 +173,17 @@ export function CreatorComposer({
   creatorPrice: number;
   /** Makes the photo; resolves true once the new person is picked. */
   onCreateCreator: (input: NewCreator) => Promise<boolean>;
+  /** Format ids that suit this brand, best first. */
+  formatSuggested?: readonly string[];
 }) {
+  const format = ugcFormat(draft.format);
+  const twoPeople = format?.roles.length === 2;
+  const lead = format && twoPeople ? leadRole(format) : "A";
+  const leadTitle = roleName(format?.roles.find((r) => r.key === lead)?.title) || "Creator";
+  const partnerTitle =
+    roleName(format?.roles.find((r) => r.key !== lead)?.title) || "Second person";
+  const [slot, setSlot] = useState<"lead" | "partner">("lead");
+  const pickingPartner = twoPeople && slot === "partner";
   const forBrand = suggested.length > 0 || people.length > 0;
   const [filter, setFilter] = useState<Filter>(forBrand ? "suggested" : "all");
   const [query, setQuery] = useState("");
@@ -160,13 +194,14 @@ export function CreatorComposer({
     [creators, filter, query, suggested],
   );
   const shownPeople = useMemo(() => {
-    if (filter === "woman" || filter === "man") return [];
+    // The second person in a two-person format is always a ready-made creator.
+    if (filter === "woman" || filter === "man" || pickingPartner) return [];
     const q = query.trim().toLowerCase();
     // The brand's own people lead, the ones found on its website first.
     return people
       .filter((p) => !q || p.name.toLowerCase().includes(q))
       .sort((a, b) => Number(!!b.fromSite) - Number(!!a.fromSite));
-  }, [people, filter, query]);
+  }, [people, filter, query, pickingPartner]);
 
   const choice = draft.creator;
   const chosenStock =
@@ -174,6 +209,9 @@ export function CreatorComposer({
   const chosenPerson =
     choice?.kind === "person" ? people.find((p) => p.assetId === choice.assetId) : undefined;
   const isBrandCreator = sameChoice(draft.creator, brandCreator);
+  const partner = draft.partnerId ? creators.find((c) => c.id === draft.partnerId) : undefined;
+  const hookWords = draft.hookLine.trim().split(/\s+/).filter(Boolean).length;
+  const hookPreset = draft.hookPreset ?? format?.hookText.preset ?? "classic";
   const product = products?.find((p) => p.key === draft.productKey) ?? null;
 
   const words = typedWordCount(draft.scriptText);
@@ -194,8 +232,37 @@ export function CreatorComposer({
     { id: "people", label: `Your people${people.length ? ` · ${people.length}` : ""}` },
   ];
 
+  // Step one: what kind of Reel it is.
+  if (draft.format === null) {
+    return (
+      <div className="pb-6">
+        <FormatPicker
+          value={null}
+          suggested={formatSuggested}
+          onPick={(id) => onDraft({ format: id })}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="relative pb-24">
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="button"
+          onClick={() => onDraft({ format: null })}
+          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[var(--ds-well-bg)] pl-2.5 pr-3.5 text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          aria-label="Change the format"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden />
+          <span className="text-muted-foreground">Format:</span>
+          <span>{format?.label ?? "Auto"}</span>
+          <span className="text-muted-foreground">· Change</span>
+        </button>
+        <span className="text-xs text-muted-foreground">
+          {format ? format.hint : "Mox writes three ideas in formats that suit your brand."}
+        </span>
+      </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* ── Left: choose the creator ─────────────────────────────── */}
         <section aria-labelledby="creator-heading" className="min-w-0 space-y-3">
@@ -207,6 +274,37 @@ export function CreatorComposer({
               {creators.length + people.length} available
             </span>
           </div>
+          {twoPeople ? (
+            <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Who you are picking">
+              {[
+                {
+                  id: "lead" as const,
+                  title: leadTitle,
+                  name: chosenStock?.name ?? chosenPerson?.name ?? "Pick one",
+                },
+                { id: "partner" as const, title: partnerTitle, name: partner?.name ?? "Mox picks" },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={slot === s.id}
+                  onClick={() => setSlot(s.id)}
+                  className={cn(
+                    "flex min-w-0 flex-col items-start rounded-2xl px-3.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                    slot === s.id
+                      ? "bg-foreground text-background"
+                      : "bg-[var(--ds-well-bg)] text-foreground",
+                  )}
+                >
+                  <span className="text-[10.5px] uppercase tracking-wide opacity-70">
+                    {s.title}
+                  </span>
+                  <span className="max-w-full truncate text-sm font-semibold">{s.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -321,10 +419,18 @@ export function CreatorComposer({
                     <CreatorCard
                       name={c.name}
                       meta={`${c.age.replace("-", "–")} · ${labelOf(CREATOR_VIBES, c.vibe)}`}
-                      selected={draft.creator?.kind === "stock" && draft.creator.id === c.id}
-                      brand={brandCreator?.id === c.id}
+                      selected={
+                        pickingPartner
+                          ? draft.partnerId === c.id
+                          : draft.creator?.kind === "stock" && draft.creator.id === c.id
+                      }
+                      brand={!pickingPartner && brandCreator?.id === c.id}
                       suggested={filter !== "suggested" && suggested.includes(c.id)}
-                      onSelect={() => onDraft({ creator: { kind: "stock", id: c.id } })}
+                      onSelect={() =>
+                        pickingPartner
+                          ? onDraft({ partnerId: draft.partnerId === c.id ? null : c.id })
+                          : onDraft({ creator: { kind: "stock", id: c.id } })
+                      }
                     >
                       <CreatorFace creator={c} />
                     </CreatorCard>
@@ -351,7 +457,7 @@ export function CreatorComposer({
                 ))}
               </div>
             ) : products.length ? (
-              <ul className="flex gap-2 overflow-x-auto pb-1" aria-label="Your products">
+              <ul className="-m-1 flex gap-2 overflow-x-auto p-1" aria-label="Your products">
                 {products.map((p) => {
                   const on = p.key === draft.productKey;
                   return (
@@ -479,12 +585,97 @@ export function CreatorComposer({
               options={TONES}
               onChange={(tone) => onDraft({ tone: tone as ToneId })}
             />
-            <Picker
-              label="Place"
-              value={draft.setting}
-              options={SETTINGS}
-              onChange={(setting) => onDraft({ setting: setting as SettingId })}
-            />
+            {format ? (
+              <div className="min-w-0 space-y-1.5">
+                <span className="text-sm font-medium">Place</span>
+                <p
+                  className="flex h-10 items-center truncate rounded-full bg-[var(--ds-well-bg)] px-3.5 text-xs text-muted-foreground"
+                  title={format.places.map((p) => p.label).join(", ")}
+                >
+                  New each time
+                </p>
+              </div>
+            ) : (
+              <Picker
+                label="Place"
+                value={draft.setting}
+                options={SETTINGS}
+                onChange={(setting) => onDraft({ setting: setting as SettingId })}
+              />
+            )}
+          </div>
+
+          {/* Hook text: Instagram-style words drawn on the video by code. */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="creator-hook" className="text-sm font-medium">
+                Hook text
+              </label>
+              <Switch
+                checked={draft.hookOn}
+                onCheckedChange={(on) => onDraft({ hookOn: on })}
+                aria-label="Show hook text on the video"
+              />
+            </div>
+            {draft.hookOn ? (
+              <>
+                <Input
+                  id="creator-hook"
+                  value={draft.hookLine}
+                  onChange={(e) => onDraft({ hookLine: e.target.value.slice(0, 80) })}
+                  placeholder={format?.hookText.example ?? "The first words people read"}
+                  className="h-10 rounded-full"
+                />
+                {hookWords > HOOK_TEXT_MAX_WORDS ? (
+                  <p className="text-xs text-warning">
+                    Keep it to {HOOK_TEXT_MAX_WORDS} words or fewer, so it reads in a second.
+                  </p>
+                ) : !draft.hookLine.trim() ? (
+                  <p className="text-xs text-muted-foreground">
+                    Leave it empty and Mox writes it with the script.
+                  </p>
+                ) : null}
+                <ul
+                  className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2 p-0.5"
+                  aria-label="Hook text style"
+                >
+                  {HOOK_TEXT_PRESETS.map((p) => {
+                    const on = hookPreset === p.id;
+                    return (
+                      <li key={p.id} className="min-w-0">
+                        <button
+                          type="button"
+                          aria-pressed={on}
+                          title={p.hint}
+                          onClick={() => onDraft({ hookPreset: p.id })}
+                          className={cn(
+                            "flex w-full flex-col items-center gap-1 rounded-xl p-1 text-[10px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                            on ? "ring-2 ring-primary" : "ring-1 ring-[var(--ds-tile-border)]",
+                          )}
+                        >
+                          <span className="flex h-[52px] w-full items-center justify-center overflow-hidden rounded-lg bg-gradient-to-b from-[#3d4652] to-[#7d8796] px-1">
+                            <HookTextSample
+                              preset={p.id}
+                              text={
+                                p.id === "split-label"
+                                  ? "me / you"
+                                  : p.id === "pov"
+                                    ? "pov: you"
+                                    : "the hook"
+                              }
+                              size="xs"
+                            />
+                          </span>
+                          <span className="max-w-full text-center font-medium leading-tight">
+                            {p.label}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : null}
           </div>
 
           <div className="space-y-2">

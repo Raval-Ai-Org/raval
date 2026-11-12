@@ -285,7 +285,9 @@ const REGISTRY: Record<string, TaskPlan> = {
 
   // UGC video ads.
   "ugc.product.extract": tier(BUDGET, "low"),
-  "ugc.concepts": tier(WORKHORSE, "medium"),
+  // Story, comedy timing and natural speech are the product here (ADR-0046):
+  // Sonnet writes Creator video scripts. AI_MODEL_UGC_CONCEPTS rolls it back.
+  "ugc.concepts": tier(CONVERSATION, "medium", { maxTokens: 10_000 }),
   "ugc.notes": tier(BUDGET, "low"),
 
   // Safety review: the economy read clears ordinary media; anything it would

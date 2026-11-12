@@ -11,21 +11,47 @@ export function outputDurations(native: readonly number[]): number[] {
 
 export type VideoSegment = { start: number; seconds: number; renderSeconds: number };
 
-/** Balanced clips, with any unavoidable provider padding trimmed during assembly. */
-export function planVideoSegments(seconds: number, native: readonly number[]): VideoSegment[] {
+/**
+ * Balanced clips, with any unavoidable provider padding trimmed during assembly.
+ * `cutAt` (beat boundaries, in seconds) moves each join onto the nearest
+ * boundary that still fits the model, so a hard cut hides it and no line is
+ * split between two clips.
+ */
+export function planVideoSegments(
+  seconds: number,
+  native: readonly number[],
+  cutAt: readonly number[] = [],
+): VideoSegment[] {
   if (!Number.isInteger(seconds) || seconds < 4 || seconds > MAX_VIDEO_DURATION || !native.length)
     throw new Error("Choose a video length between 4 and 60 seconds.");
   if (native.includes(seconds)) return [{ start: 0, seconds, renderSeconds: seconds }];
   const allowed = [...native].sort((a, b) => a - b);
-  const count = Math.ceil(seconds / allowed[allowed.length - 1]);
+  const min = allowed[0];
+  const max = allowed[allowed.length - 1];
+  const count = Math.ceil(seconds / max);
+  const cuts = [...new Set(cutAt.map((c) => Math.round(c)))]
+    .filter((c) => c > 0 && c < seconds)
+    .sort((a, b) => a - b);
   const segments: VideoSegment[] = [];
   let start = 0;
   for (let i = 0; i < count; i++) {
-    const length = Math.ceil((seconds - start) / (count - i));
+    const left = count - i;
+    let length = Math.ceil((seconds - start) / left);
+    if (left > 1 && cuts.length) {
+      // The nearest beat boundary that keeps this clip and the rest renderable.
+      const fits = cuts.filter((c) => {
+        const own = c - start;
+        const rest = seconds - c;
+        return own >= min && own <= max && rest >= min * (left - 1) && rest <= max * (left - 1);
+      });
+      const target = start + length;
+      const best = fits.sort((a, b) => Math.abs(a - target) - Math.abs(b - target))[0];
+      if (best !== undefined && Math.abs(best - target) <= 3) length = best - start;
+    }
     segments.push({
       start,
       seconds: length,
-      renderSeconds: allowed.find((d) => d >= length)!,
+      renderSeconds: allowed.find((d) => d >= length) ?? max,
     });
     start += length;
   }
@@ -43,20 +69,28 @@ export function segmentVideoPrompt(prompt: string, segment: VideoSegment, total:
   const scoped = prompt
     .split("\n")
     .flatMap((line) => {
-      if (segment.start > 0 && line.startsWith("The hook must land")) return [];
+      if (
+        segment.start > 0 &&
+        (line.startsWith("The hook must land") || line.startsWith("The first 1.5 seconds"))
+      )
+        return [];
       const beat = /^\[([\d.]+)[–-]([\d.]+)s\](.*)$/.exec(line);
       if (!beat) return [line];
       const from = Number(beat[1]);
       const to = Number(beat[2]);
       if (from >= end || to <= segment.start) return [];
       // Split spoken words proportionally when a beat crosses a clip boundary.
-      const content = beat[3].replace(/The creator says: "([^"]*)"/, (_, dialogue: string) => {
-        const words = dialogue.split(/\s+/);
-        const span = Math.max(0.1, to - from);
-        const a = Math.round(((Math.max(from, segment.start) - from) / span) * words.length);
-        const b = Math.round(((Math.min(to, end) - from) / span) * words.length);
-        return `The creator says: "${words.slice(a, b).join(" ")}"`;
-      });
+      // Any speaker ("The creator says", "THE HOST says", "Voiceover:").
+      const content = beat[3].replace(
+        /((?:[\w' ]+ says)|Voiceover): "([^"]*)"/,
+        (_, who: string, dialogue: string) => {
+          const words = dialogue.split(/\s+/);
+          const span = Math.max(0.1, to - from);
+          const a = Math.round(((Math.max(from, segment.start) - from) / span) * words.length);
+          const b = Math.round(((Math.min(to, end) - from) / span) * words.length);
+          return `${who}: "${words.slice(a, b).join(" ")}"`;
+        },
+      );
       return [
         `[${Math.max(0, from - segment.start)}–${Math.min(segment.seconds, to - segment.start)}s]${content}`,
       ];

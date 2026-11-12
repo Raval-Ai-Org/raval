@@ -56,6 +56,11 @@ export type VideoRenderRequest = {
   chain?: { workspaceId: string; key: string; leadImages?: number };
   /** Composition only: join clips with a short dissolve instead of a straight cut. */
   dissolve?: boolean;
+  /**
+   * Composition only (UGC formats): beat boundaries in seconds. A split
+   * length joins its clips on these, where a hard cut hides the join.
+   */
+  cutAt?: number[];
 };
 
 export type ProviderFailure = {

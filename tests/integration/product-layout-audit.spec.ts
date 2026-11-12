@@ -151,12 +151,17 @@ async function layoutProblems(page: Page, rootSelector?: string) {
   }, rootSelector);
 }
 
-const moduleScenes: Scene[] = ["ugc-create", "ugc-empty", "ugc-failed", "geo-scan", "agent"].map(
-  (scene) => ({
-    path: `/layout-lab?scene=${scene}`,
-    root: scene === "agent" ? '[role="dialog"]' : '[data-testid="module-states"]',
-  }),
-);
+const moduleScenes: Scene[] = [
+  "ugc-formats",
+  "ugc-create",
+  "ugc-empty",
+  "ugc-failed",
+  "geo-scan",
+  "agent",
+].map((scene) => ({
+  path: `/layout-lab?scene=${scene}`,
+  root: scene === "agent" ? '[role="dialog"]' : '[data-testid="module-states"]',
+}));
 
 for (const group of ["product", "public", "modules"] as const) {
   for (const width of [320, 667, 1440]) {

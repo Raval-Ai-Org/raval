@@ -999,8 +999,26 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
 - **A typed script is free** (`scriptFromText`, `src/lib/ugc/script-text.ts`);
   only "Write it for me" spends (`ugc_concepts`). An untouched written script
   keeps its shots.
-- `/layout-lab?scene=ugc-create|ugc-empty` renders the composer with sample
-  data (`tests/integration/script-video-flow.spec.ts`).
+- **Formats are data** ([ADR-0046](docs/adr/0046-creator-video-formats.md),
+  [docs/studio/ugc-formats.md](docs/studio/ugc-formats.md),
+  `src/lib/ugc/formats/`): 30 kinds of Reel (interviews, skits, talking,
+  reviews, lifestyle), each with beats, cast, camera, sound, places, twists
+  and a gold example prompt. Ids are stored: add, never rename; old brief
+  formats are aliases. The composer opens on the format grid
+  (`FormatPicker`, Auto first), the one step before the single screen.
+  - `buildFormatVideoPrompt` writes every prompt as real phone footage, "not
+    an advertisement", with a timed shot list; split screens only where the
+    format uses one. `pickVariant` rotates place, twist and hook per brand.
+  - Scripts are written by Sonnet 5.5 (`ugc.concepts`) to `craftRules`;
+    `formatScriptIssues` decides what's wrong, the model only writes words.
+  - Two-person formats: the pick is the lead (`leadRole`), the second is the
+    person's pick or `pickPartner`.
+  - **Hook text is drawn by code** (`src/lib/ugc/hook-text.ts`, nine
+    Instagram-style presets, ids stored), on the finished video by
+    `overlayHookText` before it is stored; it fails open. Never ask a video
+    model to draw words.
+- `/layout-lab?scene=ugc-formats|ugc-create|ugc-empty` renders the composer
+  with sample data (`tests/integration/script-video-flow.spec.ts`).
 
 ## Studio: carousels, trends and content memory
 

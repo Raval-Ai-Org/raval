@@ -65,13 +65,20 @@ ${script.scenes[0].dialogue}`
     setting: "auto",
     platform: "tiktok",
     durationSec: 10,
+    // ugc-formats: the format grid; ugc-create: a two-person format.
+    format: scene === "ugc-formats" ? null : scene === "ugc-create" ? "subway-interview" : "auto",
+    partnerId: null,
+    hookOn: true,
+    hookPreset: null,
+    hookLine: scene === "ugc-create" ? "she ended him in 9 seconds" : "",
   });
   const [url, setUrl] = useState("https://northwind.example/international/marketing");
   const [mode, setMode] = useState<GeoScanMode>("full");
   const [probes, setProbes] = useState(true);
   const [agentOpen, setAgentOpen] = useState(true);
   return (
-    <WorkspaceProvider workspaceId={WORKSPACE}>
+    // The Creator composer scenes are presentational and need no workspace.
+    <LabWorkspace bare={scene === "ugc-create" || scene === "ugc-empty" || scene === "ugc-formats"}>
       <div data-testid="module-states" className="mx-auto w-full max-w-[1100px] space-y-5 p-4">
         {scene === "ugc-script-video" && (
           <UgcStudio
@@ -101,7 +108,7 @@ ${script.scenes[0].dialogue}`
             }}
           />
         )}
-        {(scene === "ugc-create" || scene === "ugc-empty") && (
+        {(scene === "ugc-create" || scene === "ugc-empty" || scene === "ugc-formats") && (
           <CreatorComposer
             draft={draft}
             onDraft={(p) => setDraft((d) => ({ ...d, ...p }))}
@@ -139,6 +146,11 @@ ${script.scenes[0].dialogue}`
             onAddPeople={() => {}}
             creatorPrice={15}
             onCreateCreator={async () => false}
+            formatSuggested={
+              scene === "ugc-empty"
+                ? []
+                : ["honest-review", "grwm", "mirror-routine", "subway-interview", "storytime"]
+            }
           />
         )}
         {scene === "ugc-failed" && (
@@ -193,6 +205,14 @@ ${script.scenes[0].dialogue}`
           <AgentManageDialog agent={agents.scout} open={agentOpen} onOpenChange={setAgentOpen} />
         )}
       </div>
-    </WorkspaceProvider>
+    </LabWorkspace>
+  );
+}
+
+function LabWorkspace({ bare, children }: { bare: boolean; children: React.ReactNode }) {
+  return bare ? (
+    <>{children}</>
+  ) : (
+    <WorkspaceProvider workspaceId={WORKSPACE}>{children}</WorkspaceProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { buildFormatVideoPrompt, formatForRender } from "./formats/prompt";
 import { buildVideoPrompt, type PromptInput } from "./prompt";
 
 function withDirection(base: string, direction: string): string {
@@ -53,7 +54,19 @@ export function wanPromptAdapter(input: PromptInput): string {
   );
 }
 
+/**
+ * A library format is a real phone video with real cuts, on every model: the
+ * timed shot list is the edit. Families that drift toward a "cinematic" or
+ * stylised look are steered back to phone footage.
+ */
+const FORMAT_DIRECTION =
+  "Treat the timed shot list as the edit of a real phone video: make every HARD CUT and SPLIT SCREEN exactly at its time, keep each person's face, hair and clothes identical in every shot, speak the quoted lines exactly with clean lip sync, and keep the true look of phone footage. Never cinematic grading, never advert polish, never a stylised or animated look.";
+
 export function buildModelPrompt(input: PromptInput): string {
+  const format = formatForRender(input.brief, input.script);
+  // A first-frame animator can't act a scene; it keeps the classic prompt.
+  if (format && input.model.family !== "grok")
+    return withDirection(buildFormatVideoPrompt(input, format), FORMAT_DIRECTION);
   switch (input.model.family) {
     case "veo":
       return veoPromptAdapter(input);

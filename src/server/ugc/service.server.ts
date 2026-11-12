@@ -24,6 +24,13 @@ import { styleBlockFor, ugcStyleNotes } from "@/lib/brand-look/prompt";
 import { loadBrandLook } from "@/server/brand-look/resolve.server";
 import { routeVideo } from "@/lib/ugc/router";
 import { stockCreator } from "@/lib/ugc/creators";
+import {
+  creatorFormatSettings,
+  formatForRender,
+  pickPartner,
+  type FormatVariant,
+} from "@/lib/ugc/formats";
+import { log } from "@/server/observability/logger";
 import { stockCreatorAsset } from "./creator-photo.server";
 import {
   ACTIVE_RENDER_STATUSES,
@@ -105,6 +112,26 @@ export const renderEngine = createRenderEngine({
   provider: routedVideoProvider,
   callbackUrl: kieCallbackUrl,
   onTerminal: settleUgcBilling,
+  // Reels-style hook text (src/lib/ugc/hook-text.ts), drawn by code on the finished video.
+  drawHookText: async (video, cues, row) => {
+    let dataUrl = video.dataUrl;
+    if (!dataUrl) {
+      const { safeFetch } = await import("@/server/safe-fetch");
+      const response = await safeFetch(video.videoUrl, {
+        timeoutMs: 30_000,
+        maxBytes: 120 * 1024 * 1024,
+        onOverflow: "error",
+      });
+      if (!response.ok) return null;
+      dataUrl = `data:video/mp4;base64,${Buffer.from(response.bytes).toString("base64")}`;
+    }
+    const { overlayHookText } = await import("@/server/studio/video/finish.server");
+    const accent = (row.settings.hookText as { accent?: unknown } | undefined)?.accent;
+    return overlayHookText(dataUrl, cues, {
+      font: "Montserrat",
+      ...(typeof accent === "string" ? { accent } : {}),
+    });
+  },
 });
 
 /** Advance one render right after the response is sent (Vercel/Node after()). */
@@ -323,6 +350,47 @@ export async function projectContext(db: UserSupabaseClient, workspaceId: string
     script: row.script ? (ScriptSchema.safeParse(row.script).data ?? null) : null,
     workspace: (ws ?? {}) as { industry?: string | null; audience?: string | null },
   };
+}
+
+/**
+ * What this brand's Creator videos used lately (with the caller's own client):
+ * openings not to repeat, and per format the variants to rotate past. Never
+ * throws; a failed read just means nothing to avoid.
+ */
+export async function recentCreatorWork(
+  db: UserSupabaseClient,
+  workspaceId: string,
+): Promise<{ hooks: string[]; variants: Record<string, FormatVariant[]> }> {
+  const out = { hooks: [] as string[], variants: {} as Record<string, FormatVariant[]> };
+  try {
+    const { data } = await db
+      .from("ugc_projects")
+      .select("script, concepts")
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false })
+      .limit(15);
+    for (const row of (data ?? []) as Array<{ script: unknown; concepts: unknown }>) {
+      const scripts = [
+        row.script,
+        ...(Array.isArray(row.concepts)
+          ? row.concepts.map((c) => (c as { script?: unknown })?.script)
+          : []),
+      ];
+      for (const raw of scripts) {
+        const parsed = ScriptSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const s = parsed.data;
+        if (s.hook && !out.hooks.includes(s.hook)) out.hooks.push(s.hook);
+        if (s.format && s.variant) (out.variants[s.format] ??= []).push(s.variant);
+      }
+    }
+  } catch (error) {
+    log.warn("ugc.recent_work.unavailable", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+  out.hooks = out.hooks.slice(0, 20);
+  return out;
 }
 
 /**
@@ -636,6 +704,14 @@ export async function startRender(
     : brief.creator.characterId
       ? await stockCreatorAsset(input.workspaceId, brief.creator.characterId)
       : null;
+  // A library format (ADR-0046). Its second person is the one picked, else a
+  // ready-made creator code picks to contrast with the lead, seeded by the project.
+  const format = formatForRender(brief, ctx.script);
+  const partnerId =
+    format?.roles.length === 2
+      ? (brief.creator.partnerId ?? pickPartner(brief.creator.characterId, input.projectId).id)
+      : undefined;
+  const partner = partnerId ? await stockCreatorAsset(input.workspaceId, partnerId) : null;
   const requestedModel = isUgcModelKey(input.model) ? input.model : "auto";
   const entitlements = await getEntitlements({
     workspaceId: input.workspaceId,
@@ -665,7 +741,7 @@ export async function startRender(
       script: ctx.script,
       platform: brief.platform,
       durationSec: input.durationSec,
-      referenceCount: productRefs.length + (person ? 1 : 0),
+      referenceCount: productRefs.length + (person ? 1 : 0) + (partner ? 1 : 0),
       brand: ctx.brand,
       requestedModel,
     },
@@ -678,8 +754,11 @@ export async function startRender(
   // The person photo goes first, only to a model that takes several references;
   // a first-frame model opens on the product and the creator is described instead.
   const withPerson = !!person && model.images?.mode === "references" && model.images.max >= 2;
+  // The second person's photo comes right after the first, on a model with room for both.
+  const withPartner = withPerson && !!partner && partner !== person && model.images!.max >= 3;
+  const people = [person, ...(withPartner ? [partner] : [])].filter((id): id is string => !!id);
   const refs = withPerson
-    ? [person, ...productRefs.filter((id) => id !== person)]
+    ? [...people, ...productRefs.filter((id) => !people.includes(id))]
     : productRefs.filter((id) => id !== person);
   const imageCount = usableImageCount(model, refs.length);
   const settings = {
@@ -740,6 +819,17 @@ export async function startRender(
     brandVoice,
     styleNotes: ctx.styleNotes || undefined,
     creatorImage: withPerson,
+    partnerImage: withPartner,
+    partnerId,
+    seed: input.projectId,
+  });
+  const formatSettings = creatorFormatSettings({
+    brief,
+    script: ctx.script,
+    format,
+    durationSec: settings.durationSec,
+    seed: input.projectId,
+    accent: ctx.style?.look.visual.palette.accent ?? ctx.style?.look.visual.palette.primary,
   });
 
   let inserted;
@@ -772,6 +862,7 @@ export async function startRender(
         estCredits: estimate.credits,
         videoUnits: estimate.units,
         routing: { reason: route.reason, signals: route.signals, strategy: route.strategy },
+        ...formatSettings,
       },
       prompt,
       reservation_id: reservation.id,

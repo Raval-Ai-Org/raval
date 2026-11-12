@@ -30,7 +30,10 @@ import {
   suggestCreators,
   type BrandCreatorRef,
 } from "@/lib/ugc/creators";
+import { ugcFormat } from "@/lib/ugc/formats/formats";
+import { suggestFormats } from "@/lib/ugc/formats/suggest";
 import { ugcProductFromCatalogue } from "@/lib/ugc/from-catalogue";
+import { HOOK_TEXT_MAX_WORDS } from "@/lib/ugc/hook-text";
 import { LANGUAGES, platformPreset } from "@/lib/ugc/options";
 import { allowedDurations, coerceSettings } from "@/lib/ugc/render-settings";
 import {
@@ -421,6 +424,20 @@ function ComposerContainer({
     [dna.industry, dna.audience, dna.audienceTags, catalogue.data],
   );
 
+  const formatSuggested = useMemo(
+    () =>
+      suggestFormats(
+        {
+          industry: dna.industry,
+          audience: dna.audience,
+          product: (catalogue.data ?? []).flatMap((p) => [p.name, p.category]),
+          objective: project?.brief.objective,
+        },
+        6,
+      ),
+    [dna.industry, dna.audience, catalogue.data, project?.brief.objective],
+  );
+
   const model =
     catalog?.models.find((m) => m.key === catalog.defaultModel) ?? catalog?.models[0] ?? null;
 
@@ -431,16 +448,24 @@ function ComposerContainer({
   );
   const [draft, setDraft] = useState<CreatorDraft>(() => {
     const brief = project?.brief ?? (source ? creatorBrief(source) : BriefSchema.parse({}));
+    const format = ugcFormat(baseScript.current?.format ?? brief.format);
     return {
       creator: choiceFrom(brief) ?? choiceFromRef(brandCreator),
       productKey: project ? `project:${project.id}` : null,
-      scriptText: scriptToText(baseScript.current),
+      scriptText: scriptToText(baseScript.current, format),
       tone: brief.tone,
       setting: brief.creator.setting,
       platform: brief.platform,
       durationSec: brief.durationSec ?? platformPreset(brief.platform).durationSec,
+      // A new video starts on the format grid; a saved one or a Studio script doesn't.
+      format: format?.id ?? (project || source ? "auto" : null),
+      partnerId: brief.creator.partnerId ?? null,
+      hookOn: brief.hookText.enabled,
+      hookPreset: brief.hookText.preset ?? null,
+      hookLine: baseScript.current?.onScreen ?? "",
     };
   });
+  const draftFormat = ugcFormat(draft.format);
   const patch = (p: Partial<CreatorDraft>) => setDraft((d) => ({ ...d, ...p }));
 
   // The brand's creator arrives with Brand DNA; use it until a person picks one.
@@ -491,6 +516,7 @@ function ComposerContainer({
       durationSec: draft.durationSec,
       language: current ? base.language : (contentLanguage ?? base.language),
       audience: base.audience || product?.product.audienceHints[0] || "",
+      format: draftFormat?.id ?? "auto",
       creator: {
         ...base.creator,
         setting: draft.setting,
@@ -499,7 +525,12 @@ function ComposerContainer({
         vibe: stock?.vibe ?? base.creator.vibe,
         characterId: stock?.id,
         personAssetId,
+        partnerId:
+          draftFormat?.roles.length === 2 && draft.partnerId && draft.partnerId !== stock?.id
+            ? draft.partnerId
+            : undefined,
       },
+      hookText: { enabled: draft.hookOn, preset: draft.hookPreset ?? undefined },
     });
   };
 
@@ -537,8 +568,23 @@ function ComposerContainer({
   /** The script as typed; an untouched stored or written script keeps its shots. */
   const currentScript = (): Script | null => {
     const base = baseScript.current;
-    if (base && scriptToText(base).trim() === draft.scriptText.trim()) return base;
-    return scriptFromText(draft.scriptText, draft.durationSec, { cta: base?.cta });
+    const typedHook = draft.hookLine.trim();
+    const script =
+      base && scriptToText(base, ugcFormat(base.format)).trim() === draft.scriptText.trim()
+        ? base
+        : scriptFromText(draft.scriptText, draft.durationSec, {
+            cta: base?.cta,
+            // On Auto, an edited idea keeps the format it was written in.
+            format: draftFormat ?? ugcFormat(base?.format),
+          });
+    if (!script) return null;
+    // The hook text: what the person typed, else the written one, else the first line's words.
+    const firstLine = script.scenes.find((s) => s.dialogue.trim())?.dialogue ?? "";
+    const onScreen =
+      typedHook ||
+      script.onScreen ||
+      firstLine.split(/\s+/).filter(Boolean).slice(0, HOOK_TEXT_MAX_WORDS).join(" ");
+    return { ...script, onScreen: onScreen.slice(0, 80) };
   };
 
   const run = async (kind: "write" | "generate", fallback: string, fn: () => Promise<void>) => {
@@ -565,7 +611,10 @@ function ComposerContainer({
       const first = next.concepts[0];
       if (!first) return;
       baseScript.current = first.script;
-      patch({ scriptText: scriptToText(first.script) });
+      patch({
+        scriptText: scriptToText(first.script, ugcFormat(first.script.format)),
+        hookLine: first.script.onScreen,
+      });
       if (warnings.length) toast.message("Check the flagged lines before you generate.");
     });
 
@@ -573,7 +622,10 @@ function ComposerContainer({
     const concept = current?.concepts.find((c) => c.id === id);
     if (!concept) return;
     baseScript.current = concept.script;
-    patch({ scriptText: scriptToText(concept.script) });
+    patch({
+      scriptText: scriptToText(concept.script, ugcFormat(concept.script.format)),
+      hookLine: concept.script.onScreen,
+    });
   };
 
   const generate = () =>
@@ -670,6 +722,7 @@ function ComposerContainer({
       onAddPeople={() => emitAppEvent("open:inspo", { section: "media" })}
       creatorPrice={creditsFor("image_standard")}
       onCreateCreator={createCreator}
+      formatSuggested={formatSuggested}
     />
   );
 }

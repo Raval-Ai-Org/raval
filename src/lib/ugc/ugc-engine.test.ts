@@ -161,25 +161,41 @@ describe("automatic video router", () => {
       enabled,
     );
 
-  it("uses the standard model for talking-creator UGC", () => {
-    expect(route({}).model).toBe("standard");
+  const plain = { ...brief, format: "auto" as const };
+
+  it("uses the standard model for talking-creator UGC with no format", () => {
+    expect(route({ brief: plain }).model).toBe("standard");
+  });
+
+  it("uses a format's own model (the long one carries in-clip cuts)", () => {
+    expect(route({}).model).toBe("long"); // problem_solution → hot-take
+    expect(route({ brief: { ...brief, format: "subway-interview" } }).model).toBe("long");
   });
 
   it("uses premium for realism, cinematic for controlled motion, variation for quick iterations", () => {
-    const realistic = { ...script, hook: "A photoreal, high-end hero ad" };
-    expect(route({ script: realistic }).model).toBe("premium");
-    const cinematic = {
+    const ask = (instructions: string) => ({ ...plain, instructions });
+    expect(route({ brief: ask("A photoreal, high-end hero ad") }).model).toBe("premium");
+    expect(
+      route({
+        brief: ask("complex camera movement through an action sequence"),
+        durationSec: 10,
+        requestedModel: "auto",
+      }).model,
+    ).toBe("cinematic");
+    expect(route({ brief: plain, tier: "variations" }).model).toBe("variation");
+  });
+
+  it("reads only the person's own words, and whole words only", () => {
+    // A line in the script never steers the model.
+    const cinematicLine = {
       ...script,
-      scenes: script.scenes.map((scene) => ({
-        ...scene,
-        dialogue: "",
-        action: "complex camera movement through an action sequence",
-      })),
+      scenes: script.scenes.map((s) => ({ ...s, action: "cinematic action sequence" })),
     };
-    expect(route({ script: cinematic, durationSec: 10, requestedModel: "auto" }).model).toBe(
-      "cinematic",
+    expect(route({ brief: plain, script: cinematicLine }).model).toBe("standard");
+    // "reaction" is not "action", "quickly" is not "quick".
+    expect(route({ brief: { ...plain, instructions: "film her reaction quickly" } }).model).toBe(
+      "standard",
     );
-    expect(route({ tier: "variations" }).model).toBe("variation");
   });
 
   it("uses the long model for more than 3 photos or more than 8 seconds", () => {

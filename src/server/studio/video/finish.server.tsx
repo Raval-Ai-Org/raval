@@ -13,6 +13,7 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import type { VideoProbe } from "@/lib/studio/video/checks";
 import { cueFades, type TextCue } from "@/lib/studio/video/overlay";
+import type { HookCue } from "@/lib/ugc/hook-text";
 import { loadFonts } from "@/server/studio/carousel-render.server";
 
 const run = promisify(execFile);
@@ -328,6 +329,313 @@ async function renderCue(
   return Buffer.from(await image.arrayBuffer());
 }
 
+/* ── Creator video hook text (src/lib/ugc/hook-text.ts) ───────────────── */
+
+const OUTLINE = (px: number) =>
+  [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ]
+    .map(([x, y]) => `${x * px}px ${y * px}px 0 #000`)
+    .join(", ");
+
+/** Lines of at most `max` characters, broken between words. */
+function wrapLines(text: string, max: number): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (line && `${line} ${word}`.length > max) {
+      out.push(line);
+      line = word;
+    } else line = line ? `${line} ${word}` : word;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+/** One hook cue as a transparent picture the size of the video, in its Reels-style preset. */
+export async function renderHookCue(
+  cue: HookCue,
+  size: { width: number; height: number },
+  style: WordStyle,
+): Promise<Buffer> {
+  const { width, height } = size;
+  const fonts = await loadFonts([style.font ?? "Montserrat"]);
+  const family = fonts[0]?.name ?? "sans-serif";
+  const unit = Math.min(width, height);
+  const accent = style.accent && HEX.test(style.accent) ? style.accent : "#ffe14d";
+  const big = cue.preset === "stacked";
+  const fontSize = Math.round(
+    unit * (big ? 0.11 : cue.preset === "pov" ? 0.068 : cue.text.length > 36 ? 0.07 : 0.08),
+  );
+  const lines = wrapLines(cue.text, big ? 12 : cue.preset === "headline" ? 24 : 18);
+  const lower = cue.preset === "headline";
+  const side = cue.side;
+  const pad = Math.round(width * 0.07);
+
+  const lineBox = (text: string, i: number) => {
+    const base = {
+      display: "flex",
+      fontFamily: family,
+      fontSize,
+      fontWeight: 700,
+      lineHeight: 1.12,
+      textAlign: "center" as const,
+    };
+    switch (cue.preset) {
+      case "bubble":
+        return (
+          <div
+            key={i}
+            style={{
+              ...base,
+              color: "#111111",
+              background: "#ffffff",
+              padding: `${Math.round(fontSize * 0.18)}px ${Math.round(fontSize * 0.42)}px`,
+              borderRadius: Math.round(fontSize * 0.32),
+              marginTop: i ? -Math.round(fontSize * 0.08) : 0,
+            }}
+          >
+            {text}
+          </div>
+        );
+      case "highlight":
+        return (
+          <div
+            key={i}
+            style={{
+              ...base,
+              color: "#111111",
+              background: "#ffe14d",
+              padding: `${Math.round(fontSize * 0.06)}px ${Math.round(fontSize * 0.28)}px`,
+              borderRadius: Math.round(fontSize * 0.12),
+              marginTop: Math.round(fontSize * 0.08),
+            }}
+          >
+            {text}
+          </div>
+        );
+      case "stacked": {
+        // The longest word carries the brand's accent.
+        const words = text.split(" ");
+        const key = cue.text.split(" ").reduce((a, b) => (b.length > a.length ? b : a), "");
+        return (
+          <div
+            key={i}
+            style={{
+              ...base,
+              color: "#ffffff",
+              textShadow: OUTLINE(Math.max(3, Math.round(fontSize * 0.07))),
+              gap: Math.round(fontSize * 0.22),
+            }}
+          >
+            {words.map((w, j) => (
+              <span key={j} style={{ color: w === key ? accent : "#ffffff" }}>
+                {w}
+              </span>
+            ))}
+          </div>
+        );
+      }
+      case "pov":
+        return (
+          <div
+            key={i}
+            style={{
+              ...base,
+              color: "#ffffff",
+              fontWeight: 700,
+              textShadow: "0 2px 10px rgba(0,0,0,0.65)",
+            }}
+          >
+            {text}
+          </div>
+        );
+      default:
+        return (
+          <div
+            key={i}
+            style={{
+              ...base,
+              color: "#ffffff",
+              // The Reels "classic": a heavy black outline plus a hard drop.
+              WebkitTextStroke: `${Math.max(2, Math.round(fontSize * 0.09))}px #000000`,
+              textShadow: `0 ${Math.max(2, Math.round(fontSize * 0.06))}px 0 #000000`,
+            }}
+          >
+            {text}
+          </div>
+        );
+    }
+  };
+
+  let body;
+  if (cue.preset === "reply") {
+    body = (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          background: "#ffffff",
+          borderRadius: Math.round(fontSize * 0.45),
+          padding: `${Math.round(fontSize * 0.45)}px ${Math.round(fontSize * 0.6)}px`,
+          maxWidth: width - pad * 2,
+          boxShadow: "0 6px 24px rgba(0,0,0,0.25)",
+        }}
+      >
+        {cue.label ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: Math.round(fontSize * 0.3),
+              fontFamily: family,
+              fontSize: Math.round(fontSize * 0.55),
+              color: "#6b6b6b",
+              marginBottom: Math.round(fontSize * 0.2),
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                width: Math.round(fontSize * 0.75),
+                height: Math.round(fontSize * 0.75),
+                borderRadius: 999,
+                background: "#d9d9d9",
+              }}
+            />
+            {cue.label}
+          </div>
+        ) : null}
+        <div
+          style={{
+            display: "flex",
+            fontFamily: family,
+            fontSize: Math.round(fontSize * 0.8),
+            fontWeight: 700,
+            color: "#111111",
+            lineHeight: 1.2,
+          }}
+        >
+          {cue.text}
+        </div>
+      </div>
+    );
+  } else if (cue.preset === "headline") {
+    body = (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          width: width - pad * 2,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            fontFamily: family,
+            fontSize: Math.round(fontSize * 0.55),
+            fontWeight: 700,
+            color: "#ffffff",
+            background: "#d7263d",
+            padding: `${Math.round(fontSize * 0.12)}px ${Math.round(fontSize * 0.35)}px`,
+            letterSpacing: 2,
+          }}
+        >
+          BREAKING
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontFamily: family,
+            fontSize: Math.round(fontSize * 0.75),
+            fontWeight: 700,
+            color: "#111111",
+            background: "#ffffff",
+            padding: `${Math.round(fontSize * 0.2)}px ${Math.round(fontSize * 0.35)}px`,
+            textTransform: "uppercase",
+          }}
+        >
+          {cue.text}
+        </div>
+      </div>
+    );
+  } else {
+    body = (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {lines.map(lineBox)}
+      </div>
+    );
+  }
+
+  // Where it sits: the upper third, clear of the app's top bar; a news bar low;
+  // a split label at the top of its own half.
+  const box = {
+    left: side === "right" ? width / 2 : 0,
+    top: 0,
+    w: side ? width / 2 : width,
+    h: height,
+  };
+  const image = new ImageResponse(
+    <div style={{ width, height, display: "flex", position: "relative" }}>
+      <div
+        style={{
+          position: "absolute",
+          left: box.left,
+          top: box.top,
+          width: box.w,
+          height: box.h,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: lower ? "flex-end" : "flex-start",
+          paddingTop: lower ? 0 : Math.round(box.h * (side ? 0.14 : 0.17)),
+          paddingBottom: lower ? Math.round(height * 0.28) : 0,
+          paddingLeft: side ? Math.round(pad / 2) : pad,
+          paddingRight: side ? Math.round(pad / 2) : pad,
+        }}
+      >
+        {body}
+      </div>
+    </div>,
+    { width, height, ...(fonts.length ? { fonts } : {}) },
+  );
+  return Buffer.from(await image.arrayBuffer());
+}
+
+/**
+ * A Creator video's hook text drawn on the finished video, exactly as
+ * written, each cue fading in and out on its own timing. Same FFmpeg pass as
+ * `overlayWords`; no cues: the video is unchanged.
+ */
+export async function overlayHookText(
+  dataUrl: string,
+  cues: readonly HookCue[],
+  style: WordStyle = {},
+): Promise<string> {
+  if (!cues.length) return dataUrl;
+  const probe = await probeVideo(dataUrl);
+  if (!probe.width || !probe.height || probe.duration < 1) return dataUrl;
+  const timed: TextCue[] = cues.map((c) => ({
+    text: c.text,
+    start: c.start,
+    end: Math.min(c.end, probe.duration - 0.1),
+    role: "hook",
+  }));
+  return overlayPictures(
+    dataUrl,
+    timed,
+    await Promise.all(cues.map((c) => renderHookCue(c, probe, style))),
+    probe.duration,
+  );
+}
+
 /**
  * The storyboard's words drawn on the finished video, exactly as written,
  * each fading in and out on its own cue. No cues: the video is unchanged.
@@ -338,17 +646,29 @@ export async function overlayWords(
   opts: { duration: number; width: number; height: number; style: WordStyle },
 ): Promise<string> {
   if (!cues.length || !opts.width || !opts.height) return dataUrl;
+  const drawn: Buffer[] = [];
+  for (const cue of cues) drawn.push(await renderCue(cue, opts, opts.style));
+  return overlayPictures(dataUrl, cues, drawn, opts.duration);
+}
+
+/** Lay one transparent picture per cue over the video, each fading on its cue's timing. */
+async function overlayPictures(
+  dataUrl: string,
+  cues: readonly TextCue[],
+  drawn: readonly Buffer[],
+  duration: number,
+): Promise<string> {
   return withTemp(async (dir) => {
     const input = join(dir, "in.mp4");
     const output = join(dir, "out.mp4");
     await writeFile(input, videoBuffer(dataUrl));
     const pictures: string[] = [];
-    for (const [i, cue] of cues.entries()) {
+    for (const [i, png] of drawn.entries()) {
       const file = join(dir, `cue${i}.png`);
-      await writeFile(file, await renderCue(cue, opts, opts.style));
+      await writeFile(file, png);
       pictures.push(file);
     }
-    const length = opts.duration.toFixed(2);
+    const length = duration.toFixed(2);
     const filters: string[] = [`[0:v]fps=30,format=yuv420p,setsar=1[b0]`];
     cues.forEach((cue, i) => {
       const fade = cueFades(cue);

@@ -77,7 +77,7 @@ const CAMERA_BY_TONE: Record<ToneId, string> = {
   minimal: "steady smartphone framing, slow deliberate movement",
 };
 
-function aspectPhrase(ratio: UgcAspectRatio): string {
+export function aspectPhrase(ratio: UgcAspectRatio): string {
   switch (ratio) {
     case "9:16":
       return "vertical 9:16";
@@ -141,7 +141,52 @@ export type PromptInput = {
   styleNotes?: string;
   /** The first image sent is the creator (one of the brand's people), the rest the product. */
   creatorImage?: boolean;
+  /** A two-person format: the second image sent is the other person. */
+  partnerImage?: boolean;
+  /** The second person of a two-person format, when it is a ready-made creator. */
+  partnerId?: string;
+  /** Seeds the code's own picks (the second person), so a render is reproducible. */
+  seed?: string;
 };
+
+/**
+ * How the product must look, shared by both prompt builders. `personRefs` is
+ * how many of the images sent first are people, not the product.
+ */
+export function productDirection(input: PromptInput, personRefs: number): string {
+  const { product, model } = input;
+  const productName = productDisplayName(product);
+  const imageMode = input.imageCount > 0 ? model.images?.mode : undefined;
+  const productLine = [
+    `PRODUCT: ${productName}${product.category ? ` (${product.category})` : ""}.`,
+  ];
+  const productImages = input.imageCount - personRefs;
+  if (imageMode === "references" && productImages > 0) {
+    productLine.push(
+      `It must look exactly like the product in the ${personRefs ? "other reference image(s)" : "reference image(s)"}: same shape, colours, materials, label and packaging design. Do not redesign, recolour or add parts.`,
+    );
+  } else if (imageMode === "first_frame" && !personRefs) {
+    productLine.push(
+      "The video opens on the provided product image; keep the product identical to that image for the whole video.",
+    );
+  } else if (product.description) {
+    productLine.push(`What it is: ${truncate(product.description, 240)}`);
+  }
+  productLine.push(
+    "Show the product clearly, in focus and well lit, held naturally in hand or in use. It is the only branded product in the video.",
+    "Hands look natural, and the product keeps the same size, shape and label in every shot: it never morphs, melts, duplicates or changes colour.",
+  );
+  return productLine.join(" ");
+}
+
+/** The product facts a script relied on (all of them when it names none), at most six. */
+export function scriptFacts(product: Product, script: Script): string[] {
+  const factIds = new Set(script.factIds);
+  return product.facts
+    .filter((f) => factIds.size === 0 || factIds.has(f.id))
+    .slice(0, 6)
+    .map((f) => f.text);
+}
 
 export function buildVideoPrompt(input: PromptInput): string {
   const { product, brief, model, durationSec, aspectRatio } = input;
@@ -150,12 +195,7 @@ export function buildVideoPrompt(input: PromptInput): string {
   const scenes = fitScenes(input.script.scenes, durationSec);
   const productName = productDisplayName(product);
   const imageMode = input.imageCount > 0 ? model.images?.mode : undefined;
-
-  const factIds = new Set(input.script.factIds);
-  const facts = product.facts
-    .filter((f) => factIds.size === 0 || factIds.has(f.id))
-    .slice(0, 6)
-    .map((f) => f.text);
+  const facts = scriptFacts(product, input.script);
 
   const lines: string[] = [];
   lines.push(
@@ -176,26 +216,7 @@ export function buildVideoPrompt(input: PromptInput): string {
   }
   lines.push("");
 
-  const productLine = [
-    `PRODUCT: ${productName}${product.category ? ` (${product.category})` : ""}.`,
-  ];
-  const productImages = creatorImage ? input.imageCount - 1 : input.imageCount;
-  if (imageMode === "references" && productImages > 0) {
-    productLine.push(
-      `It must look exactly like the product in the ${creatorImage ? "other reference image(s)" : "reference image(s)"}: same shape, colours, materials, label and packaging design. Do not redesign, recolour or add parts.`,
-    );
-  } else if (imageMode === "first_frame" && !creatorImage) {
-    productLine.push(
-      "The video opens on the provided product image; keep the product identical to that image for the whole video.",
-    );
-  } else if (product.description) {
-    productLine.push(`What it is: ${truncate(product.description, 240)}`);
-  }
-  productLine.push(
-    "Show the product clearly, in focus and well lit, held naturally in hand or in use. It is the only branded product in the video.",
-    "Hands look natural, and the product keeps the same size, shape and label in every shot: it never morphs, melts, duplicates or changes colour.",
-  );
-  lines.push(productLine.join(" "));
+  lines.push(productDirection(input, creatorImage ? 1 : 0));
   if (facts.length)
     lines.push(`TRUE PRODUCT FACTS (only these may be claimed): ${facts.join("; ")}.`);
   if (input.brandVoice) lines.push(`BRAND VOICE: ${truncate(input.brandVoice, 200)}.`);
@@ -246,16 +267,16 @@ export function buildVideoPrompt(input: PromptInput): string {
   return lines.join("\n");
 }
 
-function fmt(n: number) {
+export function fmt(n: number) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function sentence(text: string) {
+export function sentence(text: string) {
   const t = text.trim();
   return /[.!?]$/.test(t) ? t : `${t}.`;
 }
 
-function truncate(text: string, max: number) {
+export function truncate(text: string, max: number) {
   const t = text.trim().replace(/\s+/g, " ");
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
 }

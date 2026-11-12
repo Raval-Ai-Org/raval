@@ -90,6 +90,7 @@ function planClips(request: VideoRenderRequest): Clip[] {
     return planVideoSegments(
       request.durationSec,
       durationsFor(request.model, request.imageUrls.length > 0),
+      request.cutAt,
     );
   let start = 0;
   return request.clips.map((clip) => {

@@ -9,6 +9,7 @@ import { assertUgcEnabled, idAfter } from "@/server/ugc/route-helpers";
 import {
   getProjectView,
   projectContext,
+  recentCreatorWork,
   saveConcepts,
   updateProject,
 } from "@/server/ugc/service.server";
@@ -36,6 +37,9 @@ export const POST = defineRoute({
       durationSec: body.durationSec ?? ctx.brief.durationSec ?? 10,
       styleText: ctx.styleText || undefined,
       memoryText: ctx.memoryText || undefined,
+      // Openings and variants this brand already used, so new ideas never repeat them.
+      recent: await recentCreatorWork(supabase, workspaceId),
+      seed: `${id}:${crypto.randomUUID()}`,
     };
     const metered = await runMetered(
       {

@@ -17,6 +17,7 @@ import {
   TONES,
   labelOf,
 } from "@/lib/ugc/options";
+import { ugcFormat } from "@/lib/ugc/formats/formats";
 import type { Brief, Product } from "@/lib/ugc/schemas";
 import { pickSparks } from "@/lib/studio/prompt-writer";
 import { sections } from "@/lib/studio/prompts";
@@ -85,7 +86,7 @@ export async function writeCreativeNotes(args: {
       body: [
         `Objective: ${labelOf(OBJECTIVES, brief.objective)}`,
         `Platform: ${labelOf(PLATFORMS, brief.platform)}`,
-        `Video style: ${labelOf(FORMATS, brief.format)}`,
+        `Video style: ${ugcFormat(brief.format)?.label ?? labelOf(FORMATS, brief.format)}`,
         `Tone: ${labelOf(TONES, brief.tone)}`,
         brief.audience && `Audience: ${brief.audience}`,
         brief.cta && `Call to action: ${brief.cta}`,
