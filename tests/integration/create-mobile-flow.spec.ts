@@ -30,14 +30,15 @@ for (const { width, height } of [
       }),
     ).toBe(true);
 
+    // The creator (UGC) video and the product video are on the first screen.
+    await expect(dialog.getByRole("button", { name: /^AI creator video/ })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /^Product video/ })).toBeVisible();
+
     // Every group is a different starting point with its own formats.
     for (const [category, format] of [
       ["Social posts", "Image post"],
-      ["AI video", "Video from an idea"],
-      ["From your photos", "Animate a photo"],
-      ["From your clips", "Edit my clips"],
       ["Ads", "Creator video ad"],
-      ["Writing", "Blog article"],
+      ["More to make", "Edit my clips"],
     ]) {
       await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
       await expect(dialog.getByRole("button", { name: new RegExp(`^${format}`) })).toBeVisible();

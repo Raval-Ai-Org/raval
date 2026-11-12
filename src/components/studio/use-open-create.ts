@@ -34,7 +34,9 @@ export function useOpenCreate() {
       opts?: {
         brief?: string;
         /** Where the composer starts: a video kind or mode (Motion graphics…). */
-        controls?: Pick<StudioControls, "videoKind" | "videoMode">;
+        controls?: Partial<Pick<StudioControls, "videoKind" | "videoMode" | "recapMotion">>;
+        /** Opened from Create: the creator studio's Back returns there. */
+        fromCreate?: boolean;
       },
     ): boolean => {
       if (lockFor(choice)) {
@@ -42,7 +44,7 @@ export function useOpenCreate() {
         return false;
       }
       if (choice === "ugc") {
-        emitAppEvent("open:ugc-studio");
+        emitAppEvent("open:ugc-studio", opts?.fromCreate ? { fromCreate: true } : undefined);
         return true;
       }
       rememberStudioType(choice);

@@ -65,6 +65,9 @@ import {
   type StudioSession,
 } from "@/lib/studio/session-store";
 import { ControlsPanel, PlatformControls } from "./ControlsPanel";
+import { AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
+import { SourceClips } from "./SourceClips";
+import { canvasPickers, missingFor, startFor } from "@/lib/studio/start";
 import {
   AttachButtons,
   DropHint,
@@ -388,7 +391,7 @@ export function ComposerBody({
             if (session.step === "review") return closeSession(session.id);
             // A typed brief is kept in the dock; an empty one is simply closed.
             closeSession(session.id);
-            emitAppEvent("open:create-launcher");
+            emitAppEvent("open:create-launcher", { back: session.id });
           }}
           aria-label={
             working || session.pendingKey
@@ -711,8 +714,12 @@ export function IntentStep({
   panelHost?: HTMLElement | null;
 }) {
   const format = STUDIO_FORMATS[session.type];
+  // Each way of starting asks for its own thing (clips, photos, a page...).
+  const start = startFor(session.type, session.controls);
+  const missing = missingFor(session.type, session.controls);
+  const canvas = canvasPickers(session.type, session.controls);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const ready = session.brief.trim().length >= 3;
+  const ready = session.brief.trim().length >= 3 && !missing;
   const busy =
     !!session.pendingKey ||
     Boolean(session.uploadingReference) ||
@@ -828,8 +835,24 @@ export function IntentStep({
                   htmlFor="studio-brief"
                   className="block text-center text-[24px] font-bold tracking-[-0.03em] text-foreground"
                 >
-                  Describe your <span className="ds-grad-text">{format.noun}</span>
+                  {start ? start.lead : "Describe your"}{" "}
+                  <span className="ds-grad-text">{start ? start.word : format.noun}</span>
                 </label>
+                {start?.steps ? (
+                  <ol
+                    className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground"
+                    data-testid="studio-start-steps"
+                  >
+                    {start.steps.map((step, i) => (
+                      <li key={step} className="inline-flex items-center gap-1.5">
+                        <span className="grid size-5 place-items-center rounded-full bg-[var(--ds-well-bg)] text-[11px] font-bold text-foreground">
+                          {i + 1}
+                        </span>
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
 
                 <div
                   {...media.dropProps}
@@ -915,7 +938,7 @@ export function IntentStep({
                         submit();
                       }
                     }}
-                    placeholder={format.placeholder}
+                    placeholder={start?.placeholder ?? format.placeholder}
                     rows={isMobile ? 4 : 5}
                     maxLength={4000}
                     readOnly={writer.busy}
@@ -964,6 +987,44 @@ export function IntentStep({
             )}
 
             {!session.sourceScript ? <PhotoUse media={media} /> : null}
+
+            {/* What this start needs, on the page, not in the side panel. */}
+            {canvas.source ? (
+              <SourceClips
+                key={session.workspaceId}
+                workspaceId={session.workspaceId}
+                controls={session.controls}
+                set={(patch) =>
+                  updateSession(session.id, { controls: { ...session.controls, ...patch } })
+                }
+                disabled={busy}
+                fixedMode
+              />
+            ) : null}
+            {canvas.product ? (
+              <ProductPicker
+                workspaceId={session.workspaceId}
+                type={session.type}
+                value={session.controls.productId}
+                onChange={(productId) =>
+                  updateSession(session.id, {
+                    controls: {
+                      ...session.controls,
+                      productId,
+                      noProduct: productId ? undefined : true,
+                    },
+                  })
+                }
+              />
+            ) : null}
+            {canvas.adObjective ? (
+              <AdObjectivePicker
+                value={session.controls.adObjective}
+                onChange={(adObjective) =>
+                  updateSession(session.id, { controls: { ...session.controls, adObjective } })
+                }
+              />
+            ) : null}
 
             <PlatformControls session={session} disabled={busy} />
 
@@ -1110,6 +1171,15 @@ export function IntentStep({
       {/* Holo: the price and one gradient pill float in the corner. */}
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-3 px-4 pb-4 @3xl/composer:px-6 @3xl/composer:pb-5">
         <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/85 p-1.5 pl-3 shadow-[0_18px_40px_-20px_rgb(0_0_0/0.35)] backdrop-blur-xl">
+          {missing ? (
+            <span
+              role="status"
+              className="text-xs font-semibold text-foreground"
+              data-testid="studio-missing"
+            >
+              {missing}
+            </span>
+          ) : null}
           <StudioPrice session={session} />
           <Button
             onClick={submit}

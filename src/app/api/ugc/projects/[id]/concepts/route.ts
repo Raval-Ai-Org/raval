@@ -37,6 +37,7 @@ export const POST = defineRoute({
       durationSec: body.durationSec ?? ctx.brief.durationSec ?? 10,
       styleText: ctx.styleText || undefined,
       memoryText: ctx.memoryText || undefined,
+      planText: ctx.planText || undefined,
       // Openings and variants this brand already used, so new ideas never repeat them.
       recent: await recentCreatorWork(supabase, workspaceId),
       seed: `${id}:${crypto.randomUUID()}`,

@@ -5,7 +5,12 @@ import { openFeatureUpgrade, useFeatureLocked } from "@/components/app/FeatureGa
 import { AppModalShell } from "@/components/app/AppModalShell";
 import { Video } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { addAppEventListener, removeAppEventListener, type AppEvent } from "@/lib/app-events";
+import {
+  addAppEventListener,
+  emitAppEvent,
+  removeAppEventListener,
+  type AppEvent,
+} from "@/lib/app-events";
 import type { ScriptVideoSource } from "@/lib/studio/script-video";
 import { getStudioState, minimizeSession } from "@/lib/studio/session-store";
 
@@ -19,6 +24,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null }) {
   const [open, setOpen] = useState(false);
+  const [fromCreate, setFromCreate] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [session, setSession] = useState(0);
   const [source, setSource] = useState<ScriptVideoSource | null>(null);
@@ -34,6 +40,7 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
         openFeatureUpgrade("ugc");
         return;
       }
+      setFromCreate(!!event.detail?.fromCreate);
       setProjectId(event.detail?.projectId ?? null);
       setSource(event.detail?.source ?? null);
       const activeId = getStudioState().activeId;
@@ -68,8 +75,17 @@ export function UgcStudioDialog({ workspaceId }: { workspaceId: string | null })
       onOpenChange={setOpen}
       size="2xl"
       Icon={Video}
-      title="Creator Video Ads"
+      title="AI creator video"
       description="Pick a creator, write what they say"
+      // Opened from Create: Back is one step out, to the list it came from.
+      onBack={
+        fromCreate
+          ? () => {
+              setOpen(false);
+              emitAppEvent("open:create-launcher", { back: "ugc" });
+            }
+          : undefined
+      }
       srDescription="Create creator-style video ads: choose a creator, a product from Brand DNA and a script"
       bodyClassName="px-4 pt-4 sm:px-6 sm:pt-5"
     >

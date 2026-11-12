@@ -12,6 +12,7 @@ import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
 import { SourceClips } from "./SourceClips";
+import { canvasPickers } from "@/lib/studio/start";
 import { AdFormatPicker, AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { shortClipPlan } from "@/lib/studio/short-clip";
@@ -189,6 +190,8 @@ export function ControlsPanel({
       c.videoMode === "site" ||
       c.videoMode === "motion");
   const motionGraphic = session.type === "video" && c.videoMode === "motion";
+  // What this start shows on the page itself is left out here.
+  const canvas = canvasPickers(session.type, c);
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
   const motionPost = c.videoMode === "recap" && c.videoKind === "motion-post";
   const aiVideo = isAiVideo(session.type, c);
@@ -227,7 +230,7 @@ export function ControlsPanel({
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
-      {session.type === "video" && (
+      {session.type === "video" && !canvas.source && (
         <SourceClips
           key={session.workspaceId}
           workspaceId={session.workspaceId}
@@ -282,19 +285,21 @@ export function ControlsPanel({
         </label>
       ) : null}
 
-      {session.type === "ad" && (
+      {session.type === "ad" && !canvas.adObjective && (
         <AdObjectivePicker value={c.adObjective} onChange={(adObjective) => set({ adObjective })} />
       )}
 
-      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
-        <ProductPicker
-          workspaceId={session.workspaceId}
-          type={session.type}
-          value={c.productId}
-          // "No product" also stops a product the brief names being picked.
-          onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
-        />
-      )}
+      {!canvas.product &&
+        (["image", "video", "carousel", "story", "ad"].includes(session.type) ||
+          c.includeImage) && (
+          <ProductPicker
+            workspaceId={session.workspaceId}
+            type={session.type}
+            value={c.productId}
+            // "No product" also stops a product the brief names being picked.
+            onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
+          />
+        )}
       {session.type === "ad" && (
         <AdFormatPicker
           value={c.adFormat}
