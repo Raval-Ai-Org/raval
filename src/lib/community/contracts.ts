@@ -105,8 +105,12 @@ export type CommunityHome = {
   redditApi: boolean;
 };
 
-/** How often a workspace is looked at again. */
-export const REFRESH_HOURS = 24;
+/**
+ * How often a workspace is looked at again by itself: weekly, on Growth and up,
+ * while a person uses the workspace (communityGate, src/lib/background/gate.ts).
+ * "Look now" is always a click.
+ */
+export const REFRESH_HOURS = 168;
 /** A refresh a person asks for is skipped if one ran this recently. */
 export const MANUAL_REFRESH_MIN_HOURS = 6;
 /** Threads kept in the view. */

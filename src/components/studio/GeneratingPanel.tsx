@@ -303,7 +303,18 @@ export function GeneratingPanel({
     if (!j || j.status === "cancelled") return [];
     const state = isActiveJob(j) ? "working" : j.status === "succeeded" ? "done" : "failed";
     const step = STUDIO_FORMATS[j.type]?.stages.find((s) => s.id === j.stage)?.label;
-    return [{ id, type: j.type, state, title: j.title || undefined, step } as GeneratingRow];
+    // A long video stops at its storyboard: the row says so, and opens it.
+    const board = j.output?.storyboard?.status === "preview";
+    return [
+      {
+        id,
+        type: j.type,
+        state,
+        title: j.title || undefined,
+        step: board && state === "working" ? "Planning the storyboard" : step,
+        ...(board ? { doneLabel: "Storyboard ready" } : {}),
+      } as GeneratingRow,
+    ];
   });
   // A piece whose start request hasn't answered yet has no job to follow;
   // list it too, so pressing Generate always shows something here.

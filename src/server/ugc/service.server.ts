@@ -68,16 +68,21 @@ import {
 import { routedVideoProvider } from "./providers/routed.server";
 import type { RenderRow } from "./store";
 import { RENDER_COLS, supabaseUgcStore } from "./store.supabase.server";
+import { signRenderRef } from "./webhook.server";
 
 const WORKER = `ugc-${process.pid}-${randomUUID().slice(0, 8)}`;
 const RESERVATION_TTL_SECONDS = 2 * 60 * 60;
 
 /** Kie callbacks only reach a public HTTPS app with a signing key configured. */
-export function kieCallbackUrl(): string | undefined {
-  if (!process.env.KIE_WEBHOOK_HMAC_KEY?.trim()) return undefined;
+export function kieCallbackUrl(renderId?: string): string | undefined {
+  const key = process.env.KIE_WEBHOOK_HMAC_KEY?.trim();
+  if (!key) return undefined;
   const app = getAppUrl();
   if (!/^https:\/\//i.test(app) || /localhost|127\.0\.0\.1/i.test(app)) return undefined;
-  return `${app}/api/public/hooks/kie`;
+  const url = `${app}/api/public/hooks/kie`;
+  // Naming the render lets a task whose create call timed out be found by its
+  // callback instead of being paid for twice (engine `adopt`).
+  return renderId ? `${url}?render=${renderId}&ref=${signRenderRef(renderId, key)}` : url;
 }
 
 export const renderEngine = createRenderEngine({
@@ -110,7 +115,7 @@ export const renderEngine = createRenderEngine({
   },
   store: supabaseUgcStore,
   provider: routedVideoProvider,
-  callbackUrl: kieCallbackUrl,
+  callbackUrl: (row) => kieCallbackUrl(row.id),
   onTerminal: settleUgcBilling,
   // Reels-style hook text (src/lib/ugc/hook-text.ts), drawn by code on the finished video.
   drawHookText: async (video, cues, row) => {
@@ -1063,4 +1068,172 @@ export async function getAllowance(workspaceId: string): Promise<AllowanceView> 
 
 export function modelCatalog() {
   return { models: enabledModels(), defaultModel: defaultModelKey() };
+}
+
+/* ── Storyboard before a Creator video (src/lib/studio/video/board.ts) ── */
+
+const STORYBOARD_SOURCE = "ugc-storyboard";
+
+export type CreatorStoryboardView = {
+  key: string;
+  /** Drawn frames by slot (`board:0`…), signed for an hour. */
+  frames: Record<string, string>;
+  /** True when these frames were drawn before and nothing was charged. */
+  reused: boolean;
+};
+
+function creatorFramePrompt(args: {
+  scene: import("@/lib/studio/video/board").BoardScene;
+  creatorLook: string;
+  productName: string;
+  setting: string;
+}): string {
+  return [
+    `A single frame of real phone footage for a short creator video, scene ${args.scene.number}: ${args.scene.action}`,
+    args.scene.camera ? `Camera: ${args.scene.camera}.` : "",
+    args.creatorLook ? `The creator: ${args.creatorLook}. The same person in every frame.` : "",
+    args.productName
+      ? `The product, ${args.productName}, exactly as in the product reference.`
+      : "",
+    args.setting && args.setting !== "auto" ? `Place: ${args.setting}.` : "",
+    "Natural light, handheld vertical phone video, real and unpolished, not an advertisement. No words, captions, logos, subtitles or interface.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Frames already drawn for exactly this script (no charge to show them again). */
+async function storedCreatorFrames(
+  workspaceId: string,
+  projectId: string,
+  key: string,
+): Promise<Record<string, string>> {
+  const db = supabaseAdmin as unknown as SupabaseClient;
+  const { data } = await db
+    .from("assets")
+    .select("storage_path, metadata")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "ready")
+    .is("deleted_at", null)
+    .eq("metadata->>source", STORYBOARD_SOURCE)
+    .eq("metadata->>project_id", projectId)
+    .eq("metadata->>board_key", key);
+  const rows = ((data ?? []) as Array<{ storage_path: string | null; metadata: Json }>).filter(
+    (row) => isWorkspaceStoragePath(row.storage_path, workspaceId),
+  );
+  const signed = await signPaths(rows.map((row) => row.storage_path as string));
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const slot = (row.metadata as Record<string, unknown> | null)?.slot;
+    const url = signed.get(row.storage_path as string);
+    if (typeof slot === "string" && url) out[slot] = url;
+  }
+  return out;
+}
+
+/**
+ * The storyboard of a Creator video before it is made: the saved script's
+ * scenes (code, free) and one low-quality frame per picked scene with the
+ * creator's photo and the product's photo as references. Drawn once per
+ * script: the same script shows its stored frames again for nothing.
+ * `charge` runs only when new frames are drawn.
+ */
+export async function creatorStoryboard(
+  db: UserSupabaseClient,
+  input: { workspaceId: string; projectId: string; aspectRatio: string },
+  charge: (draw: () => Promise<Record<string, string>>) => Promise<Record<string, string>>,
+): Promise<CreatorStoryboardView> {
+  const { boardFromCreatorScript, creatorBoardKey } = await import("@/lib/studio/video/board");
+  const ctx = await projectContext(db, input.workspaceId, input.projectId);
+  if (!ctx.script) throw new HttpError(400, "Write what the creator says first.");
+  const board = boardFromCreatorScript(ctx.script);
+  const key = `${creatorBoardKey(board)}-${input.aspectRatio.replace(":", "x")}`;
+  const stored = await storedCreatorFrames(input.workspaceId, input.projectId, key);
+  const wanted = board.scenes.filter((scene) => scene.frameSlot);
+  if (wanted.every((scene) => stored[scene.frameSlot!]))
+    return { key, frames: stored, reused: true };
+
+  const brief = await withBrandCreator(input.workspaceId, ctx.brief);
+  const stock = brief.creator.characterId ? stockCreator(brief.creator.characterId) : null;
+  const person = brief.creator.personAssetId
+    ? ((await ownedImageAssetIds(input.workspaceId, [brief.creator.personAssetId]))[0] ?? null)
+    : brief.creator.characterId
+      ? await stockCreatorAsset(input.workspaceId, brief.creator.characterId)
+      : null;
+  const productRefs = await ownedImageAssetIds(
+    input.workspaceId,
+    (ctx.row.reference_asset_ids ?? []).slice(0, 1),
+  );
+  const paths = await assetPaths(input.workspaceId, [...(person ? [person] : []), ...productRefs]);
+  const signed = await signPaths([...paths.values()].map((p) => p.path));
+  const references = [...paths.values()]
+    .map((p) => signed.get(p.path))
+    .filter((url): url is string => !!url);
+  const size: "1792x1024" | "1024x1024" | "1024x1792" =
+    input.aspectRatio === "16:9"
+      ? "1792x1024"
+      : input.aspectRatio === "1:1"
+        ? "1024x1024"
+        : "1024x1792";
+
+  const frames = await charge(async () => {
+    const { generateImage } = await import("@/lib/openrouter-image.server");
+    const { persistAsset } = await import("@/server/assets/persist.server");
+    const drawn: Record<string, string> = { ...stored };
+    await Promise.all(
+      wanted
+        .filter((scene) => !stored[scene.frameSlot!])
+        .map(async (scene) => {
+          try {
+            const image = await generateImage({
+              prompt: creatorFramePrompt({
+                scene,
+                creatorLook: stock?.look ?? "",
+                productName: ctx.product.name,
+                setting: brief.creator.setting,
+              }),
+              size,
+              quality: "low",
+              meterRoute: "studio.image.storyboard",
+              routing: references.length
+                ? { referenceAssets: references, editing: true }
+                : undefined,
+            });
+            const saved = await persistAsset({
+              workspaceId: input.workspaceId,
+              idempotencyKey: `${STORYBOARD_SOURCE}:${input.projectId}:${key}:${scene.frameSlot}`,
+              dataUrl: `data:image/png;base64,${image.b64}`,
+              assetType: "image",
+              filename: `storyboard-${input.projectId.slice(0, 8)}-${scene.number}`,
+              metadata: {
+                source: STORYBOARD_SOURCE,
+                project_id: input.projectId,
+                board_key: key,
+                slot: scene.frameSlot,
+              },
+            });
+            if (saved.ok && saved.asset.storage_path) {
+              const url =
+                saved.asset.public_url ??
+                (await signStoragePath(
+                  supabaseAdmin as unknown as SupabaseClient,
+                  saved.asset.storage_path,
+                  3600,
+                ));
+              if (url) drawn[scene.frameSlot!] = url;
+            }
+          } catch (error) {
+            // One frame that couldn't be drawn leaves its card plain; the plan still shows.
+            log.warn("ugc.storyboard.frame_failed", {
+              projectId: input.projectId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+    );
+    if (Object.keys(drawn).length === Object.keys(stored).length)
+      throw new HttpError(502, "The storyboard frames couldn't be drawn. Try again.");
+    return drawn;
+  });
+  return { key, frames, reused: false };
 }

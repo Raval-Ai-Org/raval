@@ -580,6 +580,55 @@ export type AdminUsage = {
   topWorkspaces: Array<AdminUsageRow & { workspaceId: string; name: string | null }>;
 };
 
+/** What one piece costs, from metered rows (estimates from providers' reported cost). */
+export type AdminCostPerOutput = {
+  generatedAt: string;
+  since: string;
+  days: number;
+  totals: {
+    costUsd: number;
+    /** Spend that carries a workflow (Studio job, UGC render); the rest is unattributed. */
+    attributedCostUsd: number;
+    errorCostUsd: number;
+    savedUsd: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    reasoningTokens: number;
+  };
+  byVariant: Array<{
+    kind: string;
+    variant: string;
+    workflows: number;
+    succeeded: number;
+    failed: number;
+    accepted: number;
+    revisions: number;
+    costUsd: number;
+    failedCostUsd: number;
+    errorCallCostUsd: number;
+    costPerWorkflowUsd: number | null;
+    costPerSucceededUsd: number | null;
+    /** All spend (failures included) divided by accepted pieces. */
+    costPerAcceptedUsd: number | null;
+  }>;
+  byStage: Array<{
+    workflow: string;
+    stage: string;
+    usageKind: string;
+    calls: number;
+    costUsd: number;
+  }>;
+  promptCache: Array<{
+    route: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteTokens: number;
+    reasoningTokens: number;
+    cachedShare: number | null;
+    costUsd: number;
+  }>;
+};
+
 export type AdminSwitch = {
   key: "ai_text" | "ai_image" | "ai_video" | "ai_search";
   label: string;

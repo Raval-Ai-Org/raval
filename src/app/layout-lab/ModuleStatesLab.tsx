@@ -11,6 +11,56 @@ import { AgentManageDialog } from "@/components/agents/AgentManageDialog";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
 import { agents } from "@/lib/agents";
 import { ProductSchema, ScriptSchema, type ModelView } from "@/lib/ugc/schemas";
+import { StoryboardView } from "@/components/studio/storyboard/StoryboardView";
+import { boardFromCreatorScript } from "@/lib/studio/video/board";
+
+// ugc-storyboard: a 20 s Creator video's plan, shown before it is made.
+const longScript = ScriptSchema.parse({
+  hook: "I stopped using five products and my skin finally calmed down.",
+  onScreen: "5 products → 1",
+  scenes: [
+    {
+      id: "s1",
+      start: 0,
+      end: 4,
+      shot: "Selfie, arm's length",
+      action: "Holds up a crowded shelf of bottles, then pushes them aside",
+      dialogue: "I stopped using five products.",
+      caption: "",
+    },
+    {
+      id: "s2",
+      start: 4,
+      end: 9,
+      shot: "Close-up of the bottle",
+      action: "Turns the Northwind bottle to the camera",
+      dialogue: "This one is made without fragrance, so nothing stings.",
+      caption: "No fragrance",
+    },
+    {
+      id: "s3",
+      start: 9,
+      end: 15,
+      shot: "Mirror, medium shot",
+      action: "Applies a small amount to her cheek in the bathroom mirror",
+      dialogue: "One pump, morning and night. That's it.",
+      caption: "",
+    },
+    {
+      id: "s4",
+      start: 15,
+      end: 20,
+      shot: "Selfie, close",
+      action: "Smiles at the camera, bottle beside her face",
+      dialogue: "See the moisturiser, link below.",
+      caption: "Link below",
+    },
+  ],
+  cta: "See the moisturiser",
+  postCaption: "One product instead of five.",
+  factIds: ["fact-1"],
+});
+const longBoard = boardFromCreatorScript(longScript);
 
 const WORKSPACE = "00000000-0000-4000-8000-000000000001";
 const product = ProductSchema.parse({
@@ -78,8 +128,42 @@ ${script.scenes[0].dialogue}`
   const [agentOpen, setAgentOpen] = useState(true);
   return (
     // The Creator composer scenes are presentational and need no workspace.
-    <LabWorkspace bare={scene === "ugc-create" || scene === "ugc-empty" || scene === "ugc-formats"}>
+    <LabWorkspace
+      bare={
+        scene === "ugc-storyboard" ||
+        scene === "ugc-create" ||
+        scene === "ugc-empty" ||
+        scene === "ugc-formats"
+      }
+    >
       <div data-testid="module-states" className="mx-auto w-full max-w-[1100px] space-y-5 p-4">
+        {scene === "ugc-storyboard" && (
+          <StoryboardView
+            board={longBoard}
+            frames={Object.fromEntries(
+              longBoard.scenes
+                .filter((sc) => sc.frameSlot)
+                .map((sc, i) => [
+                  sc.frameSlot!,
+                  i === 3
+                    ? { status: "pending" as const }
+                    : {
+                        status: "ready" as const,
+                        url: ["/creators/maya.jpg", "/creators/elena.jpg", "/creators/amara.jpg"][
+                          i % 3
+                        ],
+                      },
+                ]),
+            )}
+            ratio="9 / 16"
+            meta={["Maya", "Northwind moisturiser", "Talking to camera"]}
+            createLabel="Create video · 20s"
+            onCreate={() => {}}
+            onChange={() => {}}
+            changeLabel="Change the script"
+            note="Uses 1 of your 4 videos left, only when you press Create."
+          />
+        )}
         {scene === "ugc-script-video" && (
           <UgcStudio
             workspaceId={WORKSPACE}
@@ -134,12 +218,10 @@ ${script.scenes[0].dialogue}`
                   ]
             }
             durations={[5, 10, 15]}
-            ideas={[]}
             conceptPrice={25}
             videosLeft={8}
             busy={null}
             onWrite={() => {}}
-            onPickIdea={() => {}}
             onGenerate={() => {}}
             onToggleBrandCreator={() => {}}
             onAddProducts={() => {}}

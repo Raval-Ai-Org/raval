@@ -84,6 +84,13 @@ The model's own tool-call turn is never replayed, so there is no reasoning to
 carry between rounds and the loop behaves the same on every tier. The last
 round has no tools, so a reply always ends in words.
 
+### Amendment (2026-11, Mellox Lean)
+
+The background reader no longer runs by itself after chat turns: every few
+turns of every conversation cost a model call, and chat's own `remember` /
+`update_memory` / `forget` tools already save in the reply. The reader runs
+only from Brand DNA's "Sync from chat" button. Its rules above are unchanged.
+
 ## Consequences
 
 - `BrandDna.userInsights` is no longer read or written. Existing ones and the

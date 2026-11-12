@@ -29,9 +29,9 @@ record, so a new kind of Reel is a new record, not new code.
 
 ## How a video is made
 
-1. **Pick.** The composer opens on the format grid. Auto lets Mox try three
-   formats that suit the brand; a chosen format gets three ideas in three
-   variants.
+1. **Pick.** The composer opens on the format grid. Auto lets Mox pick a format
+   that suits the brand; a chosen format gets a fresh variant. Mox writes one
+   script, which the person edits or asks to rewrite (no pick of ideas).
 2. **Write.** "Write it for me" sends the format's beats, cast, camera and
    edit rule, the variant, the craft rules and the gold example to the
    writer (route `ugc.concepts`, Sonnet 5.5). Every scene carries its role

@@ -566,6 +566,27 @@ export type OpenRouterUsage = {
   completion_tokens_details?: { reasoning_tokens?: number };
 };
 
+/**
+ * The token counts a usage row keeps, from OpenRouter's `usage` block:
+ * prompt-cache reads and writes and reasoning tokens are recorded so the
+ * prompt cache's real effect (and reasoning spend) is a measured figure.
+ */
+export function usageTokens(usage: OpenRouterUsage | undefined): {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+} {
+  return {
+    inputTokens: usage?.prompt_tokens,
+    outputTokens: usage?.completion_tokens,
+    cachedInputTokens: usage?.prompt_tokens_details?.cached_tokens,
+    cacheWriteTokens: usage?.prompt_tokens_details?.cache_write_tokens,
+    reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
+  };
+}
+
 /** USD for one completion: OpenRouter's own `usage.cost` when present, else our estimate. */
 export function completionCost(model: string, usage: OpenRouterUsage | undefined): number {
   if (typeof usage?.cost === "number" && Number.isFinite(usage.cost)) return round6(usage.cost);
@@ -697,8 +718,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
         provider: "openrouter",
         model,
         route,
-        inputTokens: json?.usage?.prompt_tokens,
-        outputTokens: json?.usage?.completion_tokens,
+        ...usageTokens(json?.usage),
         estCostUsd: completionCost(model, json?.usage),
         status: "error",
         latencyMs: Date.now() - started,
@@ -717,8 +737,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       provider: "openrouter",
       model,
       route,
-      inputTokens: usage?.prompt_tokens,
-      outputTokens: usage?.completion_tokens,
+      ...usageTokens(usage),
       estCostUsd: costUsd,
       truncated,
       latencyMs: Date.now() - started,
@@ -918,7 +937,7 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
       route,
       workspaceId: scope.workspaceId ?? null,
       userId: scope.userId ?? null,
-      inputTokens: usage?.prompt_tokens,
+      ...usageTokens(usage),
       outputTokens: usage?.completion_tokens ?? Math.ceil(outputChars / 4),
       estCostUsd: completionCost(answered, usage),
       truncated: finishReason === "length",
@@ -1134,7 +1153,11 @@ async function schemaPrompt<T>(opts: LlmJsonOpts<T>, schema: Record<string, unkn
     if (!isCutOff(error)) throw error;
     truncated = true;
     try {
-      text = (await call(Math.min((opts.maxTokens ?? 8_000) * 2, 32_000))).text;
+      // Retry above whatever ceiling the first call really had: the route's
+      // plan floor (e.g. 16k for a motion graphic) when it beats the caller's
+      // own, or the retry would pay again for the same cut-off.
+      const first = Math.max(opts.maxTokens ?? 8_000, planFor(opts.route).maxTokens ?? 0);
+      text = (await call(Math.min(first * 2, 32_000))).text;
     } catch (retryError) {
       if (!isCutOff(retryError)) throw retryError;
     }

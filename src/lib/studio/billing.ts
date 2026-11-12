@@ -114,11 +114,11 @@ export function studioChargeFor(args: {
     return args.regenerate ? "post_regenerate" : "post_set";
   switch (args.type) {
     case "video":
-      return args.videoPreview ? "image_post" : "studio_video";
+      return args.videoPreview ? "video_storyboard" : "studio_video";
     case "story":
       return args.storyMode === "video"
         ? args.videoPreview
-          ? "image_post"
+          ? "video_storyboard"
           : "studio_video"
         : "story";
     case "image":

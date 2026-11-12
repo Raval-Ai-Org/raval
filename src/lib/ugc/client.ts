@@ -172,6 +172,18 @@ export const ugcApi = {
       body: JSON.stringify({ workspaceId, mode: "rewrite", instruction, durationSec }),
     });
   },
+  /** The storyboard before the video: drawn once per script, free to show again. */
+  storyboard(workspaceId: string, id: string, aspectRatio: string, idempotencyKey: string) {
+    return call<{ key: string; frames: Record<string, string>; reused: boolean }>(
+      `/api/ugc/projects/${id}/storyboard`,
+      {
+        method: "POST",
+        workspaceId,
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ workspaceId, aspectRatio }),
+      },
+    );
+  },
   uploadReference(workspaceId: string, file: File) {
     const form = new FormData();
     form.append("file", file);

@@ -49,7 +49,7 @@ describe("Studio charges follow the work requested", () => {
     ).toBe("240 credits");
     expect(
       studioPriceLabel({ type: "video", controls: { platforms: [], videoPreview: true } }),
-    ).toBe("30 credits");
+    ).toBe("10 credits");
   });
   it("charges only for copy when the requested optional image fails", () => {
     const job = {

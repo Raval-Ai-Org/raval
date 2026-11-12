@@ -111,8 +111,6 @@ export type ComposerProduct = {
   references: ReferenceImageView[];
 };
 
-export type ComposerIdea = { id: string; title: string };
-
 const PLATFORM_ICON: Record<PlatformId, "tiktok" | "instagram" | "youtube" | "facebook"> = {
   tiktok: "tiktok",
   reels: "instagram",
@@ -136,13 +134,12 @@ export function CreatorComposer({
   brandCreator,
   products,
   durations,
-  ideas,
   conceptPrice,
   videosLeft,
   busy,
   onWrite,
-  onPickIdea,
   onGenerate,
+  generateLabel = "Generate video",
   onToggleBrandCreator,
   onAddProducts,
   onAddPeople,
@@ -159,13 +156,13 @@ export function CreatorComposer({
   /** null while loading. */
   products: readonly ComposerProduct[] | null;
   durations: readonly number[];
-  ideas: readonly ComposerIdea[];
   conceptPrice: number;
   videosLeft: number | null;
   busy: null | "write" | "generate";
   onWrite: () => void;
-  onPickIdea: (id: string) => void;
   onGenerate: () => void;
+  /** "Plan the storyboard" for a long video, which is shown before it is made. */
+  generateLabel?: string;
   onToggleBrandCreator: () => void;
   onAddProducts: () => void;
   onAddPeople: () => void;
@@ -260,7 +257,9 @@ export function CreatorComposer({
           <span className="text-muted-foreground">· Change</span>
         </button>
         <span className="text-xs text-muted-foreground">
-          {format ? format.hint : "Mox writes three ideas in formats that suit your brand."}
+          {format
+            ? format.hint
+            : "Mox writes one script in a format that suits your brand. Edit any line."}
         </span>
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -555,20 +554,9 @@ export function CreatorComposer({
                   title={product ? undefined : "Pick a product first"}
                 >
                   {busy === "write" ? null : <Sparkles aria-hidden />}
-                  {draft.scriptText.trim() ? "Write new ideas" : "Write it for me"}
+                  {draft.scriptText.trim() ? "Write a new script" : "Write it for me"}
                   <span className="text-muted-foreground tabular-nums">· {conceptPrice} cr</span>
                 </Button>
-                {ideas.map((idea) => (
-                  <button
-                    key={idea.id}
-                    type="button"
-                    onClick={() => onPickIdea(idea.id)}
-                    className="h-8 max-w-[200px] truncate rounded-full bg-[var(--ds-well-bg)] px-3 text-xs text-muted-foreground hover:text-foreground"
-                    title={idea.title}
-                  >
-                    {idea.title}
-                  </button>
-                ))}
               </div>
             </div>
             {words > budget ? (
@@ -794,7 +782,7 @@ export function CreatorComposer({
             onClick={onGenerate}
           >
             {busy === "generate" ? null : <Video aria-hidden />}
-            Generate video
+            {generateLabel}
           </Button>
         </div>
       </div>

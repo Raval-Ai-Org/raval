@@ -60,7 +60,7 @@ are they likely to react before it goes out, and what really happened after.
 
 ```
 FEATURE_FLAG_AUDIENCE_ENABLED=              # on unless "false"; _WS_<id> per workspace
-FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED=   # the score that follows a generation
+FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED=   # off unless "true": the score that follows a generation
 AI_MODEL_AUDIENCE_SCORE= AI_MODEL_AUDIENCE_REACT= AI_MODEL_AUDIENCE_SYNTHESIZE=
 AI_MODEL_AUDIENCE_VARIANTS= AI_MODEL_AUDIENCE_TWINS=
 ```

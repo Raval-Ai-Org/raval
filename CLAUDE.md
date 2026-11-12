@@ -151,8 +151,15 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
   only (Opus rejects forced tools), and meters the model that actually
   answered from `usage.cost`. The tool loop replays `reasoning_details`
   unchanged and is append-only.
-- **Images:** GPT Image 2.5 Flare (default) / Sunburst (premium), routed by
-  `src/lib/model-router.server.ts`, env `IMAGE_MODEL_*`.
+- **Images:** GPT Image 2.5 Flare makes every picture; Sunburst only for
+  `requiredQuality: "maximum"` or "high" with strict brand precision (the
+  product cutout), never because a prompt is long or uses a word
+  (`wantsPremiumImage`, `src/lib/model-router.server.ts`, env `IMAGE_MODEL_*`).
+  Must-follow notes (revision, fix list, "no words", visual rules) go first
+  through `fitImagePrompt` so the 10k cut never drops them. Only a hard defect
+  (`hardImageDefects`) earns an automatic re-render. Every carousel paints one
+  shared background unless a creation-point "Individual artwork" is chosen.
+  Image spend is metered as `studio.image.*` labels.
 - **Video (still KIE):** `VIDEO_PROVIDER=kie` with automatic fallback to
   OpenRouter (`VIDEO_PROVIDER_FALLBACK`) only on out-of-credits, auth or
   model-unavailable — never on an unknown outcome. Catalog keys
@@ -270,6 +277,9 @@ generators get no memory block. Chat tools off: chat is one plain reply.
 - **Chat saves by itself and says so.** `remember` / `update_memory` / `forget`
   run in the reply, and the reply carries a "Memory updated" note with Undo and
   Manage. Never bring back an approval step or a pop-up for saving.
+- **No background reader** (Mellox Lean, 2026-11): chat no longer sends every
+  few turns to `memory-extract`. The reader (`src/lib/memory-sync.ts`) runs
+  only from Brand DNA's "Sync from chat", a person's click.
 - **Chat reads by itself; a change is always a button**
   (`src/server/chat/tools.server.ts`). Reads are the allow-list
   `CHAT_READ_TOOLS` (every one `write: false`; a test enforces it). Anything in
@@ -856,7 +866,10 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
   `webSearchMany` in `src/server/research/web-search.server.ts`. It is a
   quality ladder — Tavily, then Firecrawl, then the legacy DuckDuckGo scrape —
   and it never throws: no sources is a fact, not an error. Never add another
-  search path.
+  search path. When Tavily says it is out of credits (432/433), refuses the
+  key or rate-limits, the gateway pauses it for every server
+  (`tavilyPausedReason`, 30 / 5 min) and the ladder skips it; the shared
+  trends refresh waits a day after a failed or thin read.
 - **Tavily lives in one file.** `src/lib/tavily-gateway.server.ts` is the only
   place that reads `TAVILY_API_KEY` or talks to `api.tavily.com`; the key goes
   in a header, never a URL or a log. Any user-supplied domain or URL passes
@@ -937,6 +950,13 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   reviewed script's words reach their clip exactly.
 - **Story kinds chain** (each clip opens on the last frame of the one
   before); mood clips run in parallel and dissolve.
+- **Long and premium videos are storyboarded first** (`needsStoryboard`,
+  `src/lib/studio/video/board.ts`): 16 s+ or Premium/Cinematic/Long in
+  Studio, Creator videos of 15 s+ with 4+ scenes. The person reads every
+  scene with three drawn key frames (`StoryboardView`, priced
+  `video_storyboard`) and only "Create video"
+  spends on the render, made from exactly that plan. Short clips skip it;
+  Autopilot and campaign steps are not forced.
 - **Bad videos are never delivered.** Every storyboarded video is checked
   (`checks.ts`, `qa.server.ts`, route `studio.video.qa`); one redo at
   Mellox's cost, then the job fails and nothing is charged. Never turn a
@@ -997,7 +1017,8 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   in the composer) is used when a brief names no creator
   (`withBrandCreator`). It doesn't make the look `customized`.
 - **A typed script is free** (`scriptFromText`, `src/lib/ugc/script-text.ts`);
-  only "Write it for me" spends (`ugc_concepts`). An untouched written script
+  only "Write it for me" spends (`ugc_concepts`), and it writes **one**
+  script (never a pick of ideas); a person edits it or asks for a new one. An untouched written script
   keeps its shots.
 - **Formats are data** ([ADR-0046](docs/adr/0046-creator-video-formats.md),
   [docs/studio/ugc-formats.md](docs/studio/ugc-formats.md),
@@ -1596,6 +1617,45 @@ UI `src/components/admin/console/`, API `src/app/api/admin/**` (except the older
   against `src/lib/admin/types.ts`; `?s=<section>&role=<role>` shows any role. Use it
   for visual checks (no sign-in needed); add sample data there when you add a screen.
 - DB checks: `tests/db/admin-foundation.test.ts`, `tests/db/admin-entitlement-overrides.test.ts`.
+
+## Mellox Lean (cost)
+
+- **Background work spends only as the plan sells it** (`src/lib/background/gate.ts`,
+  pure; account facts `src/server/background/account.server.ts`):
+  - Market Brain runs weekly;
+  - competitor sweeps are spaced by `competitorSweepsPerWeek`;
+  - community refresh is weekly, on Growth and up.
+  - Frozen, paused, not-in-plan and 14-day-inactive workspaces get nothing and
+    are checked again in a week. A cron job's own calls never count as activity.
+  - A scan tracks at most `limits.competitors` (6 at most); the rest stay
+    suggestions.
+  - Opportunity scans need a running Autopilot program.
+  - Scheduled jobs are charged through `runMetered`.
+- **Nothing paid on load:**
+  - no silent Brand DNA scan;
+  - no idea prefetch on hover or idle; the Studio rail only shows ideas
+    already made (`cachedOnly`, a free cache read) and asks the model on a
+    "Show ideas" click, never again after a save;
+  - clarify only for a bare request (`shouldAskClarify`);
+  - the agents tick makes no model call unless asked (`explain: true`).
+- **Cost per piece is measured, not guessed** ([docs/ai-cost/cost-optimization-2026-11.md](docs/ai-cost/cost-optimization-2026-11.md)):
+  provider calls inside a Studio job or UGC render are metered against it
+  (`withWorkflow`, `src/server/request-context.ts`; `setStage` sets the stage),
+  with prompt-cache and reasoning tokens (`usageTokens`). A new long-running
+  workflow wraps its work in `withWorkflow`. Report: `admin_cost_per_output`
+  (`GET /api/admin/usage/cost`), failures counted into each accepted piece.
+- **A video create with an unknown outcome is never resubmitted blindly.**
+  The KIE callback URL names the render (signed, `signRenderRef`); the engine
+  waits `UNKNOWN_SUBMIT_GRACE_MS` for the callback to `adopt` the task before
+  paying for another. Definite refusals keep the quick retry.
+- **Local AI sidecar** ([docs/local-ai.md](docs/local-ai.md), `services/local-ai/`,
+  client `src/server/local-ai/client.server.ts`, flag
+  `FEATURE_FLAG_LOCAL_AI_ENABLED` + `LOCAL_AI_URL`):
+  - open-source models at $0, metered as provider `local`;
+  - every call fails open to the paid path;
+  - product cut-outs try BiRefNet-lite before the image model, and
+    `judgeCutout` still decides;
+  - licences in `services/local-ai/LICENSES.md`; never rembg's default model.
 
 ## Verifying work
 

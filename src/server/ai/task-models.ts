@@ -138,14 +138,9 @@ const REGISTRY: Record<string, TaskPlan> = {
 
   // Chat: "mellox-flash" is `chat`, "mellox-pro" is `chat.pro`.
   chat: tier(WORKHORSE, "low", { maxTokens: 6_000 }),
-  "chat.pro": tier(CONVERSATION, "low", {
-    maxTokens: 8_000,
-    escalate: {
-      when: "chat-intent classifies the turn as strategy/analysis",
-      models: withFallbacks(PREMIUM),
-      effort: "medium",
-    },
-  }),
+  // No escalation: every Pro turn is Sonnet (Mellox Lean). The old rule sent
+  // turns a heuristic called "strategy" to Opus.
+  "chat.pro": tier(CONVERSATION, "low", { maxTokens: 8_000 }),
   "chat.research": tier(WORKHORSE, "medium"),
   "chat.history-summary": tier(LUNA, "low"),
   // tool_choice is always "auto" (Opus rejects forced tools; see the gateway).
@@ -167,13 +162,16 @@ const REGISTRY: Record<string, TaskPlan> = {
   // Studio. Articles go live on customer sites and must pass the GEO gate.
   "studio.article": tier(PREMIUM, "medium"),
   "studio.article.standard": tier(WORKHORSE, "medium", { maxTokens: 9000 }),
-  "studio.social": tier(WORKHORSE, "medium"),
-  "studio.carousel": tier(WORKHORSE, "medium"),
-  "studio.story": tier(WORKHORSE, "medium"),
+  // The high-volume Studio writers think briefly (Mellox Lean): reasoning is
+  // billed as output, and the structured schema, shapeOutput and grounding
+  // checks catch a bad answer. Scripts and articles keep medium.
+  "studio.social": tier(WORKHORSE, "low"),
+  "studio.carousel": tier(WORKHORSE, "low"),
+  "studio.story": tier(WORKHORSE, "low"),
   "studio.script": tier(WORKHORSE, "medium"),
-  "studio.ad": tier(WORKHORSE, "medium"),
+  "studio.ad": tier(WORKHORSE, "low"),
   "studio.upload-captions": tier(WORKHORSE, "medium"),
-  "studio.captions": tier(WORKHORSE, "medium"),
+  "studio.captions": tier(WORKHORSE, "low"),
   "studio.caption.edit": tier(CAREFUL, "low", { maxTokens: 1800 }),
   "studio.naturalize": tier(WORKHORSE, "low"),
   // Reads the brand's own photos (faces, calm areas, colours) before a design.
@@ -187,8 +185,8 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.research": tier(WORKHORSE, "medium"),
   "studio.trends": tier(WORKHORSE, "low"),
   // The visual brief a picture or video is made from (buildVisualBriefPrompt).
-  "studio.image.brief": tier(WORKHORSE, "medium"),
-  "studio.video.brief": tier(WORKHORSE, "medium"),
+  "studio.image.brief": tier(WORKHORSE, "low"),
+  "studio.video.brief": tier(WORKHORSE, "low"),
   // A new AI video's storyboard (buildVideoStoryboardPrompt): one text call,
   // and where a video's story and consistency are won, so the premium tier.
   "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000 }),
@@ -318,6 +316,7 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "audience.run",
   "ugc/renders:create",
   "ugc/projects:concepts",
+  "ugc/projects:storyboard",
   "ugc/creators:create",
   "market/trends",
   "generate-image",
@@ -325,6 +324,22 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "video",
   "studio.video.voice",
   "studio.video.music",
+  // Image and video spend labels (ImageMeterRoute, studio.video.clip): metered
+  // per picture or clip, never a text model call.
+  "studio.image.render",
+  "studio.image.rerender",
+  "studio.image.version",
+  "studio.image.backdrop",
+  "studio.image.slide",
+  "studio.image.edit",
+  "studio.image.cutout",
+  "studio.image.design",
+  "studio.image.storyboard",
+  "studio.video.clip",
+  // The local open-source sidecar (src/server/local-ai): $0, never a model plan.
+  "studio.image.ocr",
+  "studio.image.aesthetic",
+  "guardrails.local-safety",
   // Prefixes of labels built at runtime.
   "cron.*",
   "agent.*",

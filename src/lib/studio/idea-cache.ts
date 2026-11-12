@@ -4,8 +4,8 @@
 // 10–50 seconds; opening "Swipe ideas" used to start it and show a blank
 // shimmer until it answered.
 //
-// - Home warms this cache when the browser is idle, and again when a pointer
-//   rests on an ideas card; identical loads share one request.
+// - Ideas load when a person opens the deck (never on idle or hover: each
+//   load is a model call); identical loads share one request.
 // - The last batch is also kept in this browser (per workspace and format),
 //   so after a reload the deck opens on it at once while a fresh batch loads
 //   in the background (stale-while-revalidate).
@@ -120,32 +120,4 @@ export function loadIdeas(
   );
   entries.set(key, { at: e?.at ?? 0, ideas: e?.ideas, promise });
   return promise;
-}
-
-/** Warm the cache; never throws, never shows anything. */
-export function prefetchIdeas(workspaceId: string, type?: StudioType) {
-  if (typeof window === "undefined") return;
-  const e = entryFor(keyFor(workspaceId, type));
-  if (e?.promise || (e?.ideas?.length && Date.now() - e.at < FRESH_MS)) return;
-  void loadIdeas(workspaceId, type).catch(() => {});
-}
-
-/** Warm the cache once the browser has nothing else to do. Returns a cancel. */
-export function prefetchIdeasWhenIdle(workspaceId: string, type?: StudioType): () => void {
-  if (typeof window === "undefined") return () => {};
-  const run = () => prefetchIdeas(workspaceId, type);
-  const w = window as Window & {
-    requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
-    cancelIdleCallback?: (id: number) => void;
-  };
-  let idle: number | undefined;
-  // Let the page draw and its own data load first.
-  const t = window.setTimeout(() => {
-    if (w.requestIdleCallback) idle = w.requestIdleCallback(run, { timeout: 4000 });
-    else run();
-  }, 2500);
-  return () => {
-    window.clearTimeout(t);
-    if (idle !== undefined) w.cancelIdleCallback?.(idle);
-  };
 }

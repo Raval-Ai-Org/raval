@@ -137,14 +137,28 @@ it("retains legacy review, logo placement, saving and requested approval with ad
   expect(result.output?.warnings).toContain("Visual review: Headline could be clearer.");
   expect(mocks.start).not.toHaveBeenCalled();
 });
-it("retains the original bounded repair prompt and the exact reference packet without a taste profile", async () => {
+it("keeps a taste note as a note instead of paying for a second render", async () => {
+  const { row, client } = fixture(0);
+  const result = await advanceStudioJob(client, row);
+  expect(mocks.start).not.toHaveBeenCalled();
+  expect(result.output?.warnings).toContain("Visual review: Headline could be clearer.");
+});
+it("re-renders a hard defect once, fix first, with the exact reference packet", async () => {
   const { row, client, references } = fixture(0);
+  mocks.review.mockImplementation(async () => {
+    mocks.events.push("review");
+    return { status: "warn", issues: ['The headline is misspelled: "Sumer".'] };
+  });
   await advanceStudioJob(client, row);
   expect(mocks.start).toHaveBeenCalledTimes(1);
   expect(mocks.start.mock.calls[0][0].referenceAssets).toBe(references);
-  expect(mocks.start.mock.calls[0][0].prompt).toContain(
-    "Original artwork prompt\nThe previous render was rejected",
+  expect(mocks.start.mock.calls[0][0].meterRoute).toBe("studio.image.rerender");
+  const repair: string = mocks.start.mock.calls[0][0].prompt;
+  // The fix comes before the artwork prompt so the image model's limit can't cut it.
+  expect(repair.indexOf("The previous render was rejected")).toBeLessThan(
+    repair.indexOf("Original artwork prompt"),
   );
+  expect(repair).toContain('- The headline is misspelled: "Sumer".');
   expect(mocks.logo).not.toHaveBeenCalled();
   expect(mocks.save).not.toHaveBeenCalled();
   expect(row.provider_tasks[0].reviewAttempts).toBe(1);
@@ -158,6 +172,7 @@ it("retains existing model fallback and references when the original image provi
     size: "1024x1024",
     model: "next-model",
     referenceAssets: references,
+    meterRoute: "studio.image.rerender",
   });
   expect(mocks.review).not.toHaveBeenCalled();
   expect(mocks.save).not.toHaveBeenCalled();

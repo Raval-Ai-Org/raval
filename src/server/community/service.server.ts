@@ -45,6 +45,8 @@ import {
 import { communitySignals } from "@/lib/community/signals";
 import { mergeThreads } from "@/lib/community/threads";
 import { loadCommunityBrand } from "./context.server";
+import { communityGate } from "@/lib/background/gate";
+import { loadBackgroundAccount } from "@/server/background/account.server";
 
 const WORKER = `community-${process.pid}-${randomUUID().slice(0, 8)}`;
 const LEASE_SECONDS = 150;
@@ -520,6 +522,14 @@ export async function runDueCommunityJobs(
     const [row] = await claim(1);
     if (!row) break;
     tally.claimed += 1;
+    // The cron sweep refreshes only Growth and up, weekly, while a person uses
+    // the workspace; everyone else looks on a click ("Look now").
+    const gate = communityGate(await loadBackgroundAccount(row.workspace_id));
+    if (!gate.run) {
+      await patchLeased(row.id, WORKER, release({}, "idle", gate.retryMs / HOUR));
+      tally.skipped += 1;
+      continue;
+    }
     tally[await advance({ ...row, locked_by: WORKER })] += 1;
   }
   return tally;

@@ -24,6 +24,12 @@ import { creatorBrief, toCreatorScript, type ScriptVideoSource } from "@/lib/stu
 import { trackUgcRender } from "@/lib/ugc/background-renders";
 import { ugcApi, UgcApiError } from "@/lib/ugc/client";
 import {
+  boardFromCreatorScript,
+  creatorNeedsStoryboard,
+  type Board,
+} from "@/lib/studio/video/board";
+import { StoryboardView, type BoardFrame } from "@/components/studio/storyboard/StoryboardView";
+import {
   STOCK_CREATORS,
   creatorsInOrder,
   stockCreator,
@@ -618,15 +624,47 @@ function ComposerContainer({
       if (warnings.length) toast.message("Check the flagged lines before you generate.");
     });
 
-  const pickIdea = (id: string) => {
-    const concept = current?.concepts.find((c) => c.id === id);
-    if (!concept) return;
-    baseScript.current = concept.script;
-    patch({
-      scriptText: scriptToText(concept.script, ugcFormat(concept.script.format)),
-      hookLine: concept.script.onScreen,
+  // A long Creator video is planned first: the person reads every scene with
+  // its drawn frame, and only Create starts the render (board.ts).
+  // Built from what is typed now, so it follows the script as it is edited.
+  const wantsBoard = creatorNeedsStoryboard(currentScript(), draft.durationSec);
+  const [plan, setPlan] = useState<{
+    project: ProjectView;
+    board: Board;
+    frames: Record<string, BoardFrame>;
+  } | null>(null);
+
+  const planBoard = () =>
+    run("generate", "Couldn't plan the storyboard.", async () => {
+      const script = currentScript();
+      if (!script) throw new UgcApiError(400, "Write what the creator says first.");
+      const p = await saveProject(script);
+      const board = boardFromCreatorScript(script);
+      const pending: Record<string, BoardFrame> = {};
+      for (const scene of board.scenes)
+        if (scene.frameSlot) pending[scene.frameSlot] = { status: "pending" };
+      setPlan({ project: p, board, frames: pending });
+      try {
+        const { frames } = await ugcApi.storyboard(
+          workspaceId,
+          p.id,
+          platformPreset(draft.platform).aspectRatio,
+          crypto.randomUUID(),
+        );
+        const drawn: Record<string, BoardFrame> = {};
+        for (const slot of Object.keys(pending))
+          drawn[slot] = frames[slot]
+            ? { status: "ready", url: frames[slot] }
+            : { status: "failed" };
+        setPlan((cur) => (cur && cur.project.id === p.id ? { ...cur, frames: drawn } : cur));
+      } catch (e) {
+        // The plan is still readable without pictures; say why they're missing.
+        const failed: Record<string, BoardFrame> = {};
+        for (const slot of Object.keys(pending)) failed[slot] = { status: "failed" };
+        setPlan((cur) => (cur && cur.project.id === p.id ? { ...cur, frames: failed } : cur));
+        toast.error(errorMessage(e, "The frames couldn't be drawn. You can still read the plan."));
+      }
     });
-  };
 
   const generate = () =>
     run("generate", "Couldn't start the video.", async () => {
@@ -655,6 +693,7 @@ function ComposerContainer({
         resolution: settings.resolution,
         referenceAssetIds: refIds,
       });
+      setPlan(null);
       onStarted(p, render);
     });
 
@@ -697,6 +736,29 @@ function ComposerContainer({
       )
     : null;
 
+  if (plan) {
+    return (
+      <div className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-6">
+        <StoryboardView
+          board={plan.board}
+          frames={plan.frames}
+          ratio={platformPreset(draft.platform).aspectRatio.replace(":", " / ")}
+          meta={[creatorName(), product?.name ?? "", draftFormat?.label ?? ""].filter(Boolean)}
+          createLabel={`Create video · ${draft.durationSec}s`}
+          onCreate={() => void generate()}
+          onChange={() => setPlan(null)}
+          changeLabel="Change the script"
+          busy={busy === "generate"}
+          note={
+            videosLeft === null
+              ? undefined
+              : `Uses 1 of your ${videosLeft} video${videosLeft === 1 ? "" : "s"} left, only when you press Create.`
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <CreatorComposer
       draft={draft}
@@ -710,13 +772,12 @@ function ComposerContainer({
       brandCreator={brandCreator}
       products={products}
       durations={durations}
-      ideas={(current?.concepts ?? []).map((c) => ({ id: c.id, title: c.title }))}
       conceptPrice={creditsFor("ugc_concepts")}
       videosLeft={videosLeft}
       busy={busy}
       onWrite={() => void write()}
-      onPickIdea={pickIdea}
-      onGenerate={() => void generate()}
+      onGenerate={() => void (wantsBoard ? planBoard() : generate())}
+      generateLabel={wantsBoard ? "Plan the storyboard" : "Generate video"}
       onToggleBrandCreator={toggleBrandCreator}
       onAddProducts={() => emitAppEvent("open:brain", { section: "brand", tab: "products" })}
       onAddPeople={() => emitAppEvent("open:inspo", { section: "media" })}

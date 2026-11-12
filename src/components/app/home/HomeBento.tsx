@@ -70,7 +70,6 @@ function TiltCard({
   className,
   style,
   onClick,
-  onWarm,
   label,
 }: {
   children: ReactNode;
@@ -78,7 +77,6 @@ function TiltCard({
   style?: CSSProperties;
   onClick: () => void;
   /** Pointer or focus arrived: load what the click will need. */
-  onWarm?: () => void;
   label: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -101,8 +99,6 @@ function TiltCard({
       aria-label={label}
       onClick={onClick}
       onPointerMove={move}
-      onPointerEnter={onWarm}
-      onFocus={onWarm}
       onPointerLeave={leave}
       style={style}
       className={cn(
@@ -122,13 +118,10 @@ export function HomeBento({
   start,
   create,
   onSwipe,
-  onWarmIdeas,
   autopilot,
 }: {
   /** Opens the idea deck (any format, or blog topics). */
   onSwipe?: (type?: StudioType) => void;
-  /** A pointer reached an ideas card: fetch that deck's ideas ahead. */
-  onWarmIdeas?: (type?: StudioType) => void;
   start: StartHereView;
   /** Kept for callers; Home has no greeting any more (Holo). */
   name?: string | null;
@@ -183,7 +176,6 @@ export function HomeBento({
           <TiltCard
             label="Swipe ideas"
             onClick={() => (onSwipe ? onSwipe() : create.open("social"))}
-            onWarm={() => onWarmIdeas?.()}
             style={rise(2)}
             className="relative min-h-[184px] overflow-hidden p-5 @xl:min-h-[220px] [background-image:radial-gradient(120%_90%_at_100%_100%,hsl(150_90%_55%/0.13),transparent_62%)]"
           >
@@ -268,7 +260,6 @@ export function HomeBento({
           <TiltCard
             label="Blog ideas"
             onClick={() => (onSwipe ? onSwipe("article") : create.open("article"))}
-            onWarm={() => onWarmIdeas?.("article")}
             style={rise(5 + POPULAR.length)}
             className="h-16 min-w-0 !flex-row !items-center gap-2.5 px-2.5"
           >

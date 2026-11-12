@@ -152,6 +152,11 @@ const httpTransport: TavilyTransport = async (path, body, timeoutMs) => {
     if (res.status === 429) {
       throw new TavilyGatewayError(429, "Web research is rate limited right now.", "rate_limited");
     }
+    // Tavily answers 432 when the plan's credits are used up and 433 when the
+    // pay-as-you-go limit is reached. Neither clears by retrying.
+    if (res.status === 432 || res.status === 433) {
+      throw new TavilyGatewayError(402, "Web research is out of credits.", "out_of_credits");
+    }
     throw new TavilyGatewayError(
       502,
       `Web research failed (${res.status}): ${detail}`,
@@ -160,6 +165,57 @@ const httpTransport: TavilyTransport = async (path, body, timeoutMs) => {
   }
   return res.json();
 };
+
+/**
+ * The pause after Tavily says no for a reason a retry can't fix (credits used
+ * up, key refused) or asks us to slow down. Kept in the shared cache so every
+ * server stops together. While it is set nothing is sent: background sweeps
+ * fall to the next rung of the search ladder instead of failing hundreds of
+ * calls a day.
+ */
+const CIRCUIT_KEY = "tavily:circuit";
+const CIRCUIT_SECONDS: Record<string, number> = {
+  out_of_credits: 30 * 60,
+  auth: 30 * 60,
+  rate_limited: 5 * 60,
+};
+
+/** Why Tavily is paused right now, or null when it can be called. Never throws. */
+export async function tavilyPausedReason(): Promise<string | null> {
+  try {
+    const hit = await cache.get<{ code: string }>(CIRCUIT_KEY);
+    return hit?.code ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Tests: lift a pause left by an earlier case. */
+export async function resetTavilyPause(): Promise<void> {
+  await cache.del(CIRCUIT_KEY).catch(() => {});
+}
+
+async function openCircuitFor(error: unknown): Promise<void> {
+  const code = error instanceof UpstreamError ? error.code : undefined;
+  const seconds = code ? CIRCUIT_SECONDS[code] : undefined;
+  if (!code || !seconds) return;
+  try {
+    const already = await cache.get<{ code: string }>(CIRCUIT_KEY);
+    await cache.set(CIRCUIT_KEY, { code, at: new Date().toISOString() }, seconds);
+    if (!already) {
+      console.warn(`[tavily] paused for ${seconds / 60} min: ${code}`);
+    }
+  } catch {
+    /* the pause is an optimisation; a cache outage must not fail the caller */
+  }
+}
+
+async function assertNotPaused(): Promise<void> {
+  const reason = await tavilyPausedReason();
+  if (reason) {
+    throw new TavilyGatewayError(503, `Web research is paused (${reason}).`, "paused");
+  }
+}
 
 function transport(): TavilyTransport {
   return transportOverride ?? httpTransport;
@@ -320,7 +376,8 @@ export async function tavilySearch(
   }
 
   // The budget check sits after the cache: a cached answer costs nothing, so
-  // being over a ceiling should not stop it being served.
+  // being over a ceiling should not stop it being served. The same for a pause.
+  await assertNotPaused();
   await enforceBudget("search");
 
   const started = Date.now();
@@ -355,6 +412,7 @@ export async function tavilySearch(
       // Tavily bills answered requests only; a failed call is not spend.
       costUsd: 0,
     });
+    await openCircuitFor(error);
     throw wrapUnknown(error, "search");
   }
 }
@@ -407,6 +465,7 @@ export async function tavilyExtract(
     }
   }
 
+  await assertNotPaused();
   await enforceBudget("search");
   const started = Date.now();
   try {
@@ -448,6 +507,7 @@ export async function tavilyExtract(
       // Tavily bills answered requests only; a failed call is not spend.
       costUsd: 0,
     });
+    await openCircuitFor(error);
     throw wrapUnknown(error, "extract");
   }
 }

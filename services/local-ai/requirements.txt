@@ -1,0 +1,20 @@
+# Mellox local AI sidecar. Licences in LICENSES.md; every model here allows
+# commercial use. Pinned so a rebuild is the same sidecar.
+--extra-index-url https://download.pytorch.org/whl/cpu
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+numpy==1.26.4
+pillow==11.0.0
+onnxruntime==1.20.1
+# Cut-outs: rembg with the MIT BiRefNet-lite model only (never its default
+# BRIA RMBG model, which is non-commercial).
+rembg==2.0.60
+# OCR (Apache-2.0)
+rapidocr-onnxruntime==1.4.4
+# Image safety (Falconsai/nsfw_image_detection, Apache-2.0) and the aesthetic
+# predictor's CLIP backbone (OpenAI CLIP, MIT), loaded with transformers.
+transformers==4.46.3
+torch==2.5.1+cpu
+# Voiceover (Kokoro-82M, Apache-2.0)
+kokoro-onnx==0.4.7
+soundfile==0.12.1

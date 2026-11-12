@@ -77,6 +77,9 @@ import { SendToApps } from "./SendToApps";
 import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { VersionStrip } from "./VersionStrip";
+import { StoryboardView, type BoardFrame } from "./storyboard/StoryboardView";
+import { boardFromStoryboard } from "@/lib/studio/video/board";
+import { videoKind } from "@/lib/studio/video/kinds";
 
 export type ReviewRow = {
   id: string;
@@ -741,6 +744,50 @@ export function ReviewPanel({
           ? { assetId: media.assetId, contentId: rows[0]?.id }
           : null;
   const mediaReady = media?.status === "ready" && !!media.url;
+  // A long or premium video waits here as its storyboard (board.ts): every
+  // scene read and drawn, made only when the person presses Create.
+  const storyboardPreview =
+    draft.storyboard?.status === "preview" && !!draft.videoPlan?.storyboard
+      ? draft.videoPlan
+      : null;
+  const board = useMemo(
+    () =>
+      storyboardPreview
+        ? boardFromStoryboard(storyboardPreview.storyboard, storyboardPreview.clipSeconds)
+        : null,
+    [storyboardPreview],
+  );
+  const boardFrames = useMemo(() => {
+    const out: Record<string, BoardFrame> = {};
+    for (const m of draft.media ?? [])
+      out[m.slot] = {
+        status: m.status === "ready" ? "ready" : m.status === "failed" ? "failed" : "pending",
+        url: m.url,
+      };
+    return out;
+  }, [draft.media]);
+  const makeVideo = () => {
+    updateSession(session.id, { controls: { ...session.controls, videoPreview: false } });
+    void generate(session.id, {
+      kind: "refine",
+      refine: {
+        instruction:
+          "Make the video from this approved storyboard. Keep every scene, word and the look exactly as planned.",
+        target: "media",
+      },
+    });
+  };
+  const videoPriceLabel = studioPriceLabel({
+    type: session.type,
+    controls: { ...session.controls, videoPreview: false },
+  });
+  const focusEditChat = () => {
+    const box = document.querySelector<HTMLTextAreaElement>(
+      'section[aria-label="Edit with chat"] textarea',
+    );
+    box?.scrollIntoView({ behavior: "smooth", block: "center" });
+    box?.focus();
+  };
   const firstScheduled = rows.find((r) => r.scheduled_at)?.scheduled_at;
   const words = draft.article?.markdown.split(/\s+/).filter(Boolean).length ?? 0;
   const tookSeconds =
@@ -1012,29 +1059,11 @@ export function ReviewPanel({
             Create another {format.noun}
           </Button>
         </motion.div>
-      ) : draft.storyboard?.status === "preview" ? (
+      ) : board ? null : draft.storyboard?.status === "preview" ? (
         <motion.div key="make-video" {...fadeSwap} className="flex w-full gap-2">
-          <Button
-            className="w-full"
-            disabled={revising || !mediaReady}
-            onClick={() => {
-              updateSession(session.id, { controls: { ...session.controls, videoPreview: false } });
-              void generate(session.id, {
-                kind: "refine",
-                refine: {
-                  instruction:
-                    "Use this approved first frame to make the video. Keep the concept, product identity and brand direction.",
-                  target: "media",
-                },
-              });
-            }}
-          >
+          <Button className="w-full" disabled={revising || !mediaReady} onClick={makeVideo}>
             <Sparkles />
-            Make video ·{" "}
-            {studioPriceLabel({
-              type: session.type,
-              controls: { ...session.controls, videoPreview: false },
-            })}
+            Make video · {videoPriceLabel}
           </Button>
         </motion.div>
       ) : session.type === "script" && draft.script ? (
@@ -1332,6 +1361,22 @@ export function ReviewPanel({
 
         {/* Stage */}
         <div className="relative flex flex-1 flex-col px-4 pb-28 pt-4 @3xl/composer:px-10 @3xl/composer:pt-6">
+          {board ? (
+            <StoryboardView
+              board={board}
+              frames={boardFrames}
+              ratio={ratio.replace(":", " / ")}
+              meta={[
+                storyboardPreview?.kind ? (videoKind(storyboardPreview.kind)?.label ?? "") : "",
+                storyboardPreview?.voice ? "Voiceover" : "",
+              ]}
+              createLabel={`Create video · ${videoPriceLabel}`}
+              onCreate={makeVideo}
+              onChange={focusEditChat}
+              busy={revising}
+              disabled={revising}
+            />
+          ) : null}
           <AnimatePresence>
             {justApproved && !reduce ? (
               <motion.span
@@ -1357,6 +1402,7 @@ export function ReviewPanel({
             className={cn(
               "relative flex w-full justify-center transition-[opacity,filter] duration-[--motion-duration-slow]",
               revising && "pointer-events-none opacity-45 blur-[1.5px] saturate-50",
+              board && "hidden",
             )}
           >
             {pictureOnly ? (

@@ -159,6 +159,9 @@ function Onboarding() {
   const firstStep = useRef(true);
 
   const urlKey = (id: string) => `onboarding:website:${id}`;
+  // A finished scan survives a refresh (this browser only), so a reload never
+  // pays for the same site twice.
+  const scanKey = (id: string) => `onboarding:scan:${id}`;
   // The no-website brand kit survives a refresh (this browser only).
   const manualKey = (id: string) => `onboarding:manual:${id}`;
   const inspiration = useManualInspiration(workspaceId);
@@ -403,6 +406,11 @@ function Onboarding() {
       if (resultFor.current !== url) setEdits({});
       resultFor.current = url;
       setResult(outcome.result);
+      try {
+        localStorage.setItem(scanKey(workspaceId), JSON.stringify({ url, result: outcome.result }));
+      } catch {
+        /* storage unavailable or full: a refresh scans again */
+      }
       setProgress({ stage: "done", message: "Brand DNA is ready to review", pct: 100 });
       setPhase(SCAN_PHASES.length - 1);
       setScanStatus("ok");
@@ -412,10 +420,11 @@ function Onboarding() {
       }
     } catch (error) {
       if (controller.signal.aborted) return;
-      if (attempt < 2) {
+      // One automatic retry; after that "Try again" is a person's click.
+      if (attempt < 1) {
         setProgress({
           stage: "retry",
-          message: `The connection took longer than expected. Retrying scan (${attempt + 2}/3)…`,
+          message: "The connection took longer than expected. Trying once more…",
           pct: Math.max(latestPct, 8),
         });
         await new Promise((resolve) => window.setTimeout(resolve, 900 * (attempt + 1)));
@@ -432,10 +441,28 @@ function Onboarding() {
     }
   };
 
-  // Recovery after a refresh: the persisted URL is scanned once.
+  // Recovery after a refresh: the scan this browser kept is restored; only a
+  // scan that never finished is run again, once.
   useEffect(() => {
     if (mode !== "site" || !workspaceId || !websiteUrl || scanStatus !== "idle") return;
     if (step === "website") return;
+    try {
+      const kept = JSON.parse(localStorage.getItem(scanKey(workspaceId)) || "null") as {
+        url?: string;
+        result?: BrandExtractResult;
+      } | null;
+      if (kept?.result && kept.url === normalizeUrl(websiteUrl)) {
+        scanFor.current = kept.url;
+        resultFor.current = kept.url;
+        setResult(kept.result);
+        setProgress({ stage: "done", message: "Brand DNA is ready to review", pct: 100 });
+        setPhase(SCAN_PHASES.length - 1);
+        setScanStatus("ok");
+        return;
+      }
+    } catch {
+      /* nothing kept: scan */
+    }
     void runScan(websiteUrl);
     // The guarded status check makes refresh recovery run once for the persisted URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -565,6 +592,7 @@ function Onboarding() {
     if (!ok) return;
     try {
       localStorage.removeItem(urlKey(workspaceId));
+      localStorage.removeItem(scanKey(workspaceId));
       localStorage.removeItem(manualKey(workspaceId));
     } catch {
       /* storage unavailable */

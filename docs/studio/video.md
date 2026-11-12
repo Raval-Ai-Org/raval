@@ -33,6 +33,41 @@ Decision record: [ADR-0041](../adr/0041-studio-video-kinds.md).
 5. **Ending** (`finish.server.tsx`). `back-to-source` dissolves to the exact
    post; `end-card` adds a card drawn with next/og.
 
+## Storyboard first (long and premium videos)
+
+A person reads the whole video before it is made, so a long or premium
+render is never spent on a plan they wouldn't have chosen.
+
+- **When:** `needsStoryboard` (`src/lib/studio/video/board.ts`, pure): an AI
+  video or video Story of 16 s or more, or on Premium, Cinematic or Long.
+  Short clips (an 8 s product demo, Animate, recaps, "From my website",
+  motion graphics) skip it. The switch in Options ("Storyboard first") is on
+  and locked for those videos, optional for the rest.
+- **Studio:** `createBilledStudioJob` forces `controls.videoPreview` for a
+  person's new job (never an Autopilot or campaign step, a revision or a
+  refine). The job writes the captions and storyboard as usual, then draws one
+  low-quality key frame for the opening, the middle and the end (3,
+  `framePicks`; slot `main` and `board:<n>`, metered
+  `studio.image.storyboard`, never linked to the post, no vision review).
+  Every other scene shows the key frame it follows from (`keyFrameFor`).
+  Charged `video_storyboard` (10 credits).
+- **Review** shows `StoryboardView` (`src/components/studio/storyboard/`):
+  a stage with the chosen scene big and "Play through" (each scene for its
+  real length), the script beside it (time, camera, action, the exact words
+  said and shown, sound), a film strip of every scene, what stays the same in
+  every scene, and one "Create video" pill with the price. Create is a media-only refine that
+  reuses the approved `videoPlan`, so the video is made from exactly that
+  plan. "Change the plan" opens the edit chat.
+- **Creator (UGC) videos** only when long and many-scene (`creatorNeedsStoryboard`:
+  15 s and 4 scenes or more); a short talking-head script goes straight to Generate:
+  Generate becomes "Plan the storyboard". The saved script becomes the board
+  (`boardFromCreatorScript`, free) and `POST /api/ugc/projects/:id/storyboard`
+  draws a frame per scene with the creator's and product's photos as
+  references (`creatorStoryboard`). Frames are assets keyed by the script
+  (`creatorBoardKey` + ratio): the same script shows them again for nothing.
+  Create starts the ordinary render.
+- Labs: `/studio-lab?scene=storyboard`, `/layout-lab?scene=ugc-storyboard`.
+
 ## Kinds
 
 | Kind               | Made by                         | Joins          | Ends on                               |

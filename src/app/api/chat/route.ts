@@ -14,7 +14,6 @@ import { accountForWorkspace } from "@/server/billing/accounts.server";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
 import { runWithScope } from "@/server/request-context";
 import { HttpError } from "@/server/http-error";
-import { isStrategyTurn } from "@/lib/chat-intent";
 import { chatSystem, chatContextBlock } from "@/lib/ai/prompts";
 import { summarizeHistory } from "@/lib/ai/history-summary.server";
 import { sanitizeModelInput, wrapUntrusted } from "@/server/guardrails/untrusted";
@@ -275,8 +274,11 @@ export const POST = defineRoute({
             chatCompletionStream({
               stream: true,
               route,
-              // Strategy/analysis turns on the premium model think harder (chat.pro).
-              escalate: route === "chat.pro" && isStrategyTurn(lastUser),
+              // No automatic Opus (Mellox Lean): a guess that a turn is
+              // "strategy" sent a large share of Pro replies to the premium
+              // model. Sonnet answers every Pro turn; a deeper answer is a
+              // person's explicit choice (Coach's deep strategy).
+              escalate: false,
               task: "chat",
               // The identity prompt and brand context are the stable, cacheable prefix.
               cacheBreakpoint: 1,

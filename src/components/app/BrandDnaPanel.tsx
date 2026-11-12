@@ -343,12 +343,8 @@ export function BrandDnaSurface({
     void refreshHome();
   };
 
-  useEffect(() => {
-    const empty = !dna.brandName && !dna.logoUrl && dna.colors.length === 0;
-    const url = websiteUrl ?? dna.websiteUrl;
-    if (empty && url && status === "idle") runFetch(url, { silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [websiteUrl, workspaceId]);
+  // No scan on mount: an empty Brand DNA shows its Scan button. Opening the
+  // panel used to start a paid scan silently whenever the fields were empty.
 
   const onDownloadDesignMd = () => {
     downloadDesignMd(buildDesignMd(dna));

@@ -1,8 +1,11 @@
-// model-router.server.ts — picks the OpenRouter image model for a request:
-// GPT Image 2.5 Flare for everyday social images and quick edits, Sunburst for
-// premium, cinematic, text-heavy or brand-critical images and precise edits.
-// Scoring keeps benchmark results and failure history, and each tier falls
-// back to the other.
+// model-router.server.ts — picks the OpenRouter image model for a request.
+// GPT Image 2.5 Flare makes every picture and edit. Sunburst (about twice the
+// price) is used only when a caller asks for "maximum" quality, or "high"
+// quality with strict brand precision: today only the product cutout, where
+// the real product's edges must survive (Mellox Lean). Prompt length and
+// wording never upgrade a request: Studio prompts are long by design, and
+// scoring them sent every wallet-paid picture to Sunburst. Scoring keeps
+// benchmark results and failure history, and each tier falls back to the other.
 import "server-only";
 export type ImageRoutingInput = {
   prompt: string;
@@ -90,39 +93,24 @@ export function getImageModelConfigStatus(): ImageModelConfigStatus {
   };
 }
 
-/** Prompt signals that the image must be premium (cinematic, text-heavy, brand-critical). */
-const PREMIUM_SIGNALS = [
-  "campaign",
-  "product launch",
-  "multiple subjects",
-  "detailed",
-  "cinematic",
-  "editorial",
-  "premium",
-  "complex composition",
-  "text-heavy",
-  "headline",
-  "infographic",
-  "typography",
-];
-
-function complexity(prompt: string): number {
-  const text = prompt.toLowerCase();
-  let score = Math.min(4, Math.floor(prompt.length / 900));
-  for (const signal of PREMIUM_SIGNALS) {
-    if (text.includes(signal)) score += 1;
-  }
-  return score;
-}
-
+/** Flare only, even as a fallback (creation-point jobs). */
 export function routeStandardImageModel(input: ImageRoutingInput): ImageModelPlan {
   const models = catalog();
   return routeImageModel({ ...input, availableModels: [models.defaultText, models.defaultEdit] });
 }
 
+/** Whether a request may use the premium model. Exported for tests. */
+export function wantsPremiumImage(
+  input: Pick<ImageRoutingInput, "requiredQuality" | "brandPrecision">,
+): boolean {
+  return (
+    input.requiredQuality === "maximum" ||
+    (input.requiredQuality === "high" && input.brandPrecision === "strict")
+  );
+}
+
 export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
   const models = catalog();
-  const score = complexity(input.prompt);
   const reference = Boolean(
     input.hasReference ||
     input.referenceAssets?.length ||
@@ -130,17 +118,14 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
     input.taskType === "reference" ||
     input.taskType === "editing",
   );
-  const maximum =
-    input.requiredQuality === "maximum" ||
-    (input.requiredQuality === "high" && input.brandPrecision === "strict") ||
-    score >= 4;
+  const maximum = wantsPremiumImage(input);
   const fast =
     input.latency === "fast" || input.iteration === "variation" || input.taskType === "variation";
   let model: string;
   let reason: string;
   let route: ImageModelPlan["route"];
 
-  if (reference && (maximum || input.brandPrecision === "strict")) {
+  if (reference && maximum) {
     model = models.premiumEdit;
     route = "sunburst-edit";
     reason = "precise or high-complexity reference edit";
@@ -165,7 +150,7 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
   const candidates = [
     model,
     ...(reference ? models.fallbackEdit : models.fallbackText),
-    input.brandPrecision === "strict" ? models.premiumText : models.fastText,
+    maximum ? models.premiumText : models.fastText,
   ].filter((candidate, index, all) => candidate && all.indexOf(candidate) === index);
   const available = input.availableModels?.length ? new Set(input.availableModels) : null;
   const usable = candidates.filter((candidate) => !available || available.has(candidate));

@@ -18,6 +18,7 @@ import { studioApi, readBrandPayload, StudioApiError } from "./client";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { getTemplate, templateFits } from "./templates";
 import { editTarget, planEdit, type EditAim, type EditTurn } from "./edit-chat";
+import { needsStoryboard, withStoryboard } from "./video/board";
 import {
   isActiveJob,
   newIdempotencyKey,
@@ -788,7 +789,12 @@ export async function generate(
     toast.error("Wait for your reference photo to finish uploading.");
     return;
   }
-  if (needsVideoQuote(s.type, s.controls) && !s.controls.videoQuote) {
+  // A new long or premium video is made as its storyboard first, priced as
+  // one: it waits for no video quote (Create on the storyboard does).
+  const storyboardFirst =
+    (opts.kind ?? "generate") === "generate" &&
+    needsStoryboard({ type: s.type, controls: s.controls });
+  if (!storyboardFirst && needsVideoQuote(s.type, s.controls) && !s.controls.videoQuote) {
     toast.error(
       "Wait for the video price before generating. If it cannot be quoted, choose another option.",
     );
@@ -845,7 +851,8 @@ async function submit(
         ...(s.sourceContentId ? { sourceContentId: s.sourceContentId } : {}),
         ...(s.sourceScript ? { sourceScript: s.sourceScript } : {}),
       },
-      controls: s.controls,
+      // A new long or premium video is made as its storyboard first (board.ts).
+      controls: kind === "generate" ? withStoryboard(s.type, s.controls) : s.controls,
       brand: readBrandPayload(s.workspaceId),
       parentJobId,
       refine,

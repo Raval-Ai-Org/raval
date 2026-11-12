@@ -261,13 +261,14 @@ export function isAudienceEnabled(workspaceId?: string): boolean {
 }
 
 /**
- * The quick score that follows a generation by itself. Separate so the one
- * unrequested model call can be switched off without losing the feature.
+ * The quick score that follows a generation by itself. Off unless set to
+ * "true" (Mellox Lean): it was one unrequested model call per generation.
+ * The score is still one click away (`predictContent`).
  */
 export function isAudienceAutoScoreEnabled(workspaceId?: string): boolean {
   if (!isAudienceEnabled(workspaceId)) return false;
-  return !isFalsy(
-    (process.env.FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED ?? "").trim().toLowerCase(),
+  return (
+    (process.env.FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED ?? "").trim().toLowerCase() === "true"
   );
 }
 
@@ -495,4 +496,22 @@ export function isCommunityEnabled(workspaceId?: string): boolean {
  */
 export function isRedditApiEnabled(): boolean {
   return isTruthy((process.env.FEATURE_FLAG_REDDIT_API_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * The local open-source AI sidecar (services/local-ai, docs/local-ai.md):
+ * product cut-outs, OCR, image safety, aesthetic score and voiceover on the
+ * same machine at $0. Used only when LOCAL_AI_URL is set; every call fails
+ * open to the paid path. On unless FEATURE_FLAG_LOCAL_AI_ENABLED=false;
+ * _WS_<id> overrides per workspace.
+ */
+export function isLocalAiEnabled(workspaceId?: string): boolean {
+  if (!(process.env.LOCAL_AI_URL ?? "").trim()) return false;
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_LOCAL_AI_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_LOCAL_AI_ENABLED ?? "").trim().toLowerCase());
 }

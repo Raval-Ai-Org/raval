@@ -600,6 +600,17 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.008,
     routes: ["content.regenerate"],
   },
+  // The storyboard a long or premium video is reviewed on before any video
+  // credit is spent (src/lib/studio/video/board.ts): the plan, one text call,
+  // and up to six low-quality frames. The video itself is charged on Create.
+  video_storyboard: {
+    credits: 10,
+    label: "Video storyboard",
+    unit: "plan + frames",
+    feature: "studio",
+    expectedCostUsd: 0.045,
+    routes: [],
+  },
   image_post: {
     credits: 30,
     label: "Image post",
@@ -928,11 +939,11 @@ export const CREDIT_ACTIONS = {
   },
   // UGC (renders use Video Credits)
   ugc_concepts: {
-    credits: 25,
-    label: "UGC concept pack",
-    unit: "per product",
+    credits: 10,
+    label: "Creator video script",
+    unit: "per script",
     feature: "ugc",
-    expectedCostUsd: 0.051,
+    expectedCostUsd: 0.018,
     routes: ["ugc.product.extract", "ugc.concepts", "ugc.notes"],
   },
   // Chat beyond the plan allowance

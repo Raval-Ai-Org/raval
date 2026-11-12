@@ -185,7 +185,13 @@ describe("chatCompletion request body", () => {
     restore = s.restore;
     await chatCompletion({ route: "ugc.notes", messages: msgs, noCache: true });
     expect(s.bodies[0].models).toEqual(["vendor/custom"]);
-    await chatCompletion({ route: "chat.pro", messages: msgs, noCache: true, escalate: true });
+    await chatCompletion({
+      route: "ai-generate.blog",
+      messages: msgs,
+      noCache: true,
+      escalate: true,
+    });
+    expect(s.bodies[1].models[0]).toBe(PREMIUM);
     expect(s.bodies[1].reasoning.effort).toBe("medium");
   });
 });
@@ -272,6 +278,21 @@ describe("llmText / llmJson", () => {
     expect(out).toEqual({ a: 1 });
     expect(s.bodies[1].max_tokens).toBe(18_000);
     expect(s.bodies[0].response_format.type).toBe("json_schema");
+  });
+
+  it("retries a cut-off answer above the route plan's own ceiling", async () => {
+    const s = scripted([{ content: '{"a":', finish: "length" }, { content: '{"a":1}' }]);
+    restore = s.restore;
+    // studio.motion.compose's plan floor is 16k; the retry must ask for more.
+    await llmJson({
+      route: "studio.motion.compose",
+      system: "s",
+      user: "u",
+      outputSchema: { type: "object" },
+      fallback: { a: 0 },
+    });
+    expect(s.bodies[1].max_tokens).toBeGreaterThan(s.bodies[0].max_tokens);
+    expect(s.bodies[1].max_tokens).toBe(32_000);
   });
 });
 

@@ -22,6 +22,8 @@ import type { Database } from "@/integrations/supabase/types";
 import { runWithScope } from "@/server/request-context";
 import { hostOf } from "@/lib/research/sources";
 import { buildCompetitorProfile } from "./profile.server";
+import { competitorSweepGate, laterOf, SKIP_RETRY_MS } from "@/lib/background/gate";
+import { loadBackgroundAccount } from "@/server/background/account.server";
 import { detectCompetitorUpdates, lookbackDays } from "./updates.server";
 import type { CompetitorProfile } from "@/lib/competitors/contracts";
 
@@ -88,7 +90,11 @@ export function nextCheckAt(args: {
  * then look for what changed. Profiling is the more valuable half, so it goes
  * first and a failure there still lets the updates sweep run next time.
  */
-async function advanceCompetitor(row: CompetitorRow): Promise<"done" | "lost_lease" | "failed"> {
+async function advanceCompetitor(
+  row: CompetitorRow,
+  /** The plan's spacing between sweeps; the next check is never sooner. */
+  minIntervalMs = 0,
+): Promise<"done" | "lost_lease" | "failed"> {
   const worker = row.locked_by ?? WORKER;
   const url = row.url || `https://${row.domain}`;
 
@@ -193,7 +199,10 @@ async function advanceCompetitor(row: CompetitorRow): Promise<"done" | "lost_lea
       lease_until: null,
       locked_by: null,
       attempt_count: 0,
-      next_check_at: nextCheckAt({ foundSomething: found > 0 || profiled, quietSweeps }),
+      next_check_at: laterOf(
+        nextCheckAt({ foundSomething: found > 0 || profiled, quietSweeps }),
+        minIntervalMs,
+      ),
     });
     return released ? "done" : "lost_lease";
   });
@@ -241,12 +250,30 @@ export async function runDueCompetitorJobs(
 ): Promise<{ claimed: number; done: number; failed: number; lost_lease: number }> {
   const deadline = Date.now() + (opts.budgetMs ?? 45_000);
   const max = opts.max ?? 3;
-  const tally = { claimed: 0, done: 0, failed: 0, lost_lease: 0 };
+  const tally = { claimed: 0, done: 0, failed: 0, lost_lease: 0, skipped: 0 };
   while (tally.claimed < max && Date.now() < deadline - 15_000) {
     const [row] = await claim(1);
     if (!row) break;
     tally.claimed += 1;
-    const result = await advanceCompetitor({ ...row, locked_by: WORKER });
+    // The cron sweep spends only as often as the plan sells it, and nothing
+    // for frozen, paused or abandoned workspaces (gate.ts). A competitor a
+    // person just added still gets its first profile while the account is open.
+    const account = await loadBackgroundAccount(row.workspace_id);
+    const gate = competitorSweepGate(account);
+    const firstProfile = !row.profile && !!account && !account.frozen && !account.paused;
+    if (!gate.run && !firstProfile) {
+      await patchLeased(row.id, WORKER, {
+        lease_until: null,
+        locked_by: null,
+        next_check_at: new Date(Date.now() + gate.retryMs).toISOString(),
+      });
+      tally.skipped += 1;
+      continue;
+    }
+    const result = await advanceCompetitor(
+      { ...row, locked_by: WORKER },
+      gate.run ? gate.intervalMs : SKIP_RETRY_MS,
+    );
     tally[result] += 1;
   }
   return tally;

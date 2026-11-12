@@ -1,5 +1,5 @@
 // The Creator video writer: turns product facts + Brand DNA + the brief into
-// three video ideas, each a real kind of Reel (a library format, ADR-0046)
+// one video script, a real kind of Reel (a library format, ADR-0046)
 // with its hook, story beats, cuts, who says what, the hook text drawn on the
 // video and the post caption; and rewrites a script on request.
 //
@@ -86,7 +86,7 @@ export type Completer = typeof llmText;
 type Slot = { format: UgcFormat; variant: FormatVariant };
 
 /**
- * The formats and variants for three ideas. A chosen format gets three
+ * The formats and variants for the ideas (one by default). A chosen format gets
  * different variants of itself; Auto gets three suggested formats from
  * different groups.
  */
@@ -487,13 +487,15 @@ export async function generateConcepts(
   ctx: ConceptContext,
   completer: Completer = llmText,
 ): Promise<Concept[]> {
-  const slots = planSlots(ctx);
+  // One script (Mellox Lean): a person edits or rewrites it instead of paying
+  // for a pick of three. planSlots still rotates format, place and twist.
+  const slots = planSlots(ctx, 1);
   const schema = conceptsSchema(slots.map((s) => s.format.id));
   const raw = await complete(
     completer,
     ctx,
     slots,
-    `Write ${slots.length} ideas, in this order, each in its own format, place and twist:
+    `Write ${slots.length === 1 ? "one idea" : `${slots.length} ideas, in this order, each`} in its own format, place and twist:
 
 ${slotsText(slots, ctx.durationSec)}
 

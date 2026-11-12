@@ -18,6 +18,14 @@ export type RequestScope = {
   route?: string;
   /** Agent run this work belongs to, when executed by the agent runtime. */
   runId?: string;
+  /**
+   * The product workflow this work belongs to (a Studio job, a UGC render…),
+   * so every provider call can be added up per piece made. See withWorkflow.
+   */
+  workflowKind?: WorkflowKind;
+  workflowId?: string;
+  /** Stage inside the workflow (e.g. "writing", "image", "poll"). */
+  workflowStage?: string;
   /** Owner wallet used by the current paid action. */
   billingAccountId?: string;
   /** Preallocated charge id, shared by provider usage rows and the capture. */
@@ -41,6 +49,34 @@ export function runWithRequest<T>(request: Request, fn: () => T): T {
 export function runWithScope<T>(scope: RequestScope, fn: () => T): T {
   const parent = storage.getStore();
   return storage.run({ ...parent, requestId: newRequestId(), ...scope }, fn);
+}
+
+/** Workflows whose provider spend is added up per row (`ai_usage_events.workflow_*`). */
+export type WorkflowKind = "studio_job" | "ugc_render" | "brand_scan" | "market_brain";
+
+/**
+ * Run `fn` as part of one workflow: every usage row recorded inside carries
+ * the workflow's kind, id and stage. Keeps the caller's request id, user and
+ * billing scope; a nested call only changes what it names (a stage inside a
+ * job keeps the job). `workspaceId` is set only when the caller passes one it
+ * read from the workflow's own row.
+ */
+export function withWorkflow<T>(
+  workflow: { kind: WorkflowKind; id: string; stage?: string; workspaceId?: string },
+  fn: () => T,
+): T {
+  const parent = storage.getStore();
+  return storage.run(
+    {
+      ...parent,
+      requestId: parent?.requestId ?? newRequestId(),
+      workflowKind: workflow.kind,
+      workflowId: workflow.id,
+      workflowStage: workflow.stage ?? parent?.workflowStage,
+      ...(workflow.workspaceId ? { workspaceId: workflow.workspaceId } : {}),
+    },
+    fn,
+  );
 }
 
 /** Merge values into the current scope (no-op outside a scope). */

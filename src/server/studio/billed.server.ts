@@ -44,7 +44,13 @@ import { MOTION_MAX_SECONDS, MOTION_MIN_SECONDS } from "@/lib/studio/motion/docu
 const MOTION_DEFAULT_SECONDS = 12;
 import { shortClipPlan } from "@/lib/studio/short-clip";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
-import { isClipEditEnabled, isPhotoDesignEnabled, isProductHeroEnabled } from "@/lib/feature-flags";
+import {
+  isClipEditEnabled,
+  isPhotoDesignEnabled,
+  isProductHeroEnabled,
+  isVideoStoryboardEnabled,
+} from "@/lib/feature-flags";
+import { needsStoryboard } from "@/lib/studio/video/board";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { pickFeaturedProduct, productPhotoControls } from "@/lib/products/feature";
 import { settleVideoControls } from "@/lib/studio/video/settle";
@@ -200,6 +206,21 @@ export async function createBilledStudioJob(args: {
         product: Boolean(input.controls.productId),
       },
     });
+  // A person's new long or premium AI video is storyboarded first
+  // (src/lib/studio/video/board.ts): the plan and a frame per scene for the
+  // storyboard's small price, and the video only when they press Create (a
+  // media-only revision of this job, which renders exactly its plan). A
+  // worker keeps what its plan asked; an edit of a storyboard is not forced.
+  if (
+    args.autoProduct !== "any" &&
+    !input.parentJobId &&
+    !input.refine &&
+    isVideoStoryboardEnabled(workspaceId) &&
+    needsStoryboard(input)
+  ) {
+    input.controls.videoPreview = true;
+    delete input.controls.videoQuote;
+  }
   // Reject foreign/deleted references before reserving credits or starting work.
   if (!studioTextOnlyRevision(input)) {
     await resolveStudioReferences(

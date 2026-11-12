@@ -64,6 +64,7 @@ import {
   useStudioStore,
   type StudioSession,
 } from "@/lib/studio/session-store";
+import { needsStoryboard, withStoryboard } from "@/lib/studio/video/board";
 import { ControlsPanel, PlatformControls } from "./ControlsPanel";
 import { AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
 import { SourceClips } from "./SourceClips";
@@ -1192,9 +1193,11 @@ export function IntentStep({
               ? "Uploading photo…"
               : busy
                 ? "Starting…"
-                : session.lastGood
-                  ? "Generate again"
-                  : "Generate"}
+                : needsStoryboard({ type: session.type, controls: session.controls })
+                  ? "Plan the storyboard"
+                  : session.lastGood
+                    ? "Generate again"
+                    : "Generate"}
           </Button>
         </div>
       </footer>
@@ -1312,6 +1315,26 @@ function StudioPrice({ session }: { session: StudioSession }) {
     // The quote is invalidated only by settings that change the provider price.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, quotedVideo, quoteSignature, session.controls.videoQuote?.hash]);
+  // A long or premium video is made as its storyboard first: Generate costs
+  // the storyboard; the video's own price shows on the storyboard's Create.
+  if (needsStoryboard({ type: session.type, controls: session.controls }))
+    return session.controls.paymentSource === "creation" ? (
+      <span
+        data-slot="cost-chip"
+        className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground"
+      >
+        Storyboard ·{" "}
+        {studioPriceLabel({
+          type: session.type,
+          controls: withStoryboard(session.type, session.controls),
+        })}
+      </span>
+    ) : (
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">Storyboard</span>
+        <CostChip announce action="video_storyboard" />
+      </span>
+    );
   if (quotedVideo)
     return (
       <span data-slot="cost-chip" className="ml-auto text-xs text-muted-foreground">

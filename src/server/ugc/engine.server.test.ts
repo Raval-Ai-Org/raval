@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { KieGatewayError } from "@/lib/kie-gateway.server";
 import { UGC_MODELS } from "@/lib/ugc/models";
-import { createRenderEngine, MAX_SUBMIT_ATTEMPTS } from "./engine.server";
+import {
+  createRenderEngine,
+  MAX_SUBMIT_ATTEMPTS,
+  SUBMIT_UNKNOWN,
+  UNKNOWN_SUBMIT_GRACE_MS,
+} from "./engine.server";
+import { signRenderRef, verifiedRenderRef } from "./webhook.server";
 import { buildKieInput, kieFailure, kieGenerationType, kieModelId } from "./providers/kie.server";
 import type {
   ProviderCheck,
@@ -542,5 +548,113 @@ describe("Kie provider mapping", () => {
       retryable: false,
     });
     expect(kieFailure(new KieGatewayError(503, "x", "configuration")).retryable).toBe(false);
+  });
+});
+
+describe("a create call with an unknown outcome is never paid for twice blindly", () => {
+  const timeout: SubmitResult = {
+    ok: false,
+    code: "provider_timeout",
+    message: "timed out",
+    retryable: true,
+  };
+
+  it("names the render in the callback URL it hands the provider", async () => {
+    const seen: string[] = [];
+    engine = createRenderEngine({
+      store,
+      provider,
+      now: () => clock,
+      log: { info() {}, warn() {}, error() {} },
+      callbackUrl: (row) => {
+        seen.push(row.id);
+        return `https://app.example/api/public/hooks/kie?render=${row.id}`;
+      },
+    });
+    const row = await start();
+    await tick(row.id, 0);
+    expect(seen).toEqual([row.id]);
+    expect(provider.submits[0].callbackUrl).toContain(row.id);
+  });
+
+  it("waits for the callback before submitting again", async () => {
+    const row = await start();
+    provider.submitResults = [timeout];
+    await tick(row.id, 0);
+    let current = (await store.getRender(row.id))!;
+    expect(current).toMatchObject({ status: "submitting", error_code: SUBMIT_UNKNOWN });
+    // The usual 30 s backoff would have submitted again by now.
+    await tick(row.id, 5 * 60_000);
+    expect(provider.submits).toHaveLength(1);
+    // No callback within the grace period: one more submission.
+    await tick(row.id, UNKNOWN_SUBMIT_GRACE_MS);
+    expect(provider.submits).toHaveLength(2);
+    current = (await store.getRender(row.id))!;
+    expect(current.status).toBe("processing");
+  });
+
+  it("adopts the task its callback names, and finishes without a second submission", async () => {
+    const row = await start();
+    provider.submitResults = [timeout];
+    await tick(row.id, 0);
+    const adopted = await engine.adopt(row.id, "orphan-task", "kie");
+    expect(adopted).toMatchObject({ status: "processing", provider_task_id: "orphan-task" });
+    provider.checks = [success];
+    await tick(row.id, 1_000);
+    await tick(row.id, 1_000);
+    const current = (await store.getRender(row.id))!;
+    expect(current.status).toBe("succeeded");
+    expect(provider.submits).toHaveLength(1);
+  });
+
+  it("adopts nothing for a render that wasn't waiting on an unknown create", async () => {
+    const row = await start();
+    expect(await engine.adopt(row.id, "t", "kie")).toBeNull(); // still queued
+    await tick(row.id, 0); // submitted fine
+    expect(await engine.adopt(row.id, "other", "kie")).toBeNull();
+    expect((await store.getRender(row.id))?.provider_task_id).toBe("task-1");
+  });
+
+  it("keeps the quick retry for a definite refusal (rate limit)", async () => {
+    const row = await start();
+    provider.submitResults = [
+      {
+        ok: false,
+        code: "provider_rate_limit",
+        message: "slow down",
+        retryable: true,
+        definite: true,
+      },
+    ];
+    await tick(row.id, 0);
+    await tick(row.id, 60_000);
+    expect(provider.submits).toHaveLength(2);
+  });
+
+  it("without a callback there is nothing to wait for: quick retry as before", async () => {
+    engine = createRenderEngine({
+      store,
+      provider,
+      now: () => clock,
+      log: { info() {}, warn() {}, error() {} },
+    });
+    const row = await start();
+    provider.submitResults = [timeout];
+    await tick(row.id, 0);
+    await tick(row.id, 60_000);
+    expect(provider.submits).toHaveLength(2);
+  });
+
+  it("only trusts a render reference it signed", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const ref = signRenderRef(id, "key");
+    const url = (r: string) => new URL(`https://app.example/h?render=${id}&ref=${r}`);
+    expect(verifiedRenderRef(url(ref), "key")).toBe(id);
+    expect(verifiedRenderRef(url(ref), "other-key")).toBeNull();
+    expect(verifiedRenderRef(url("forged"), "key")).toBeNull();
+    expect(verifiedRenderRef(url(ref), undefined)).toBeNull();
+    expect(
+      verifiedRenderRef(new URL(`https://app.example/h?render=x&ref=${ref}`), "key"),
+    ).toBeNull();
   });
 });

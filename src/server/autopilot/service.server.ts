@@ -248,10 +248,21 @@ function nudgeOverdue(workspaceId: string, actions: ActionRow[], now: Date): voi
   });
 }
 
-/** Ask for an opportunity scan (Market Brain or a competitor sweep found something). */
+/**
+ * Ask for an opportunity scan (Market Brain or a competitor sweep found
+ * something). Only a workspace with a running Autopilot program uses
+ * opportunities, so nobody else pays for a scan.
+ */
 export async function requestOpportunityScan(workspaceId: string): Promise<void> {
   if (!isAutopilotEnabled(workspaceId)) return;
   try {
+    const { data: running, error } = await admin
+      .from("autopilot_programs")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "running")
+      .limit(1);
+    if (error || !running?.length) return;
     await enqueueScan(store, workspaceId, new Date());
   } catch (error) {
     console.error(`[autopilot] could not queue a scan for ${workspaceId}`, error);

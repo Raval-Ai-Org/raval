@@ -9,12 +9,14 @@
 // persist.server.ts).
 import { humanizeOutput } from "@/lib/studio/humanize";
 import { naturalizeVariants } from "@/lib/studio/naturalize.server";
+import { fitImagePrompt } from "@/lib/studio/image-prompt-fit";
+import { hardImageDefects } from "@/lib/studio/image-defects";
 import "server-only";
 import { studioJobWriter } from "./job-writer.server";
 import { after } from "next/server";
 import sharp from "sharp";
 import { isAudienceAutoScoreEnabled } from "@/lib/feature-flags";
-import { getRequestScope } from "@/server/request-context";
+import { getRequestScope, setRequestScope, withWorkflow } from "@/server/request-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runStructuredPrompt, AiOutputError, AiGatewayError } from "@/lib/ai";
 import { BudgetExceededError, enforceBudget } from "@/server/ai/budget";
@@ -62,6 +64,7 @@ import {
   storyboardSummary,
   type VideoStoryboard,
 } from "@/lib/studio/video/storyboard";
+import { boardFramePrompt, boardFromStoryboard, isBoardSlot } from "@/lib/studio/video/board";
 import {
   canDeliverWithVisualWarning,
   NOT_DELIVERED_MESSAGE,
@@ -441,6 +444,8 @@ async function requireActiveJob(client: Db, job: JobRow) {
 }
 
 async function setStage(client: Db, id: string, stage: StageId) {
+  // Provider calls from here on are metered against this stage of the job.
+  if (getRequestScope().workflowId === id) setRequestScope({ workflowStage: stage });
   await patchJob(client, id, { stage, stage_at: new Date().toISOString() });
 }
 
@@ -1158,16 +1163,19 @@ function imagePrompt(args: {
     noText: args.noText,
     onImageText: args.onImageText,
   }).prompt;
-  return [
-    built,
-    args.ratio === "4:5"
-      ? "Portrait 4:5 composition: keep the subject centered with generous top and bottom margins."
-      : "",
-    args.extra ?? "",
-    args.ctx.visualTaste?.rules ?? args.ctx.visualFeedbackRules ?? "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  // The revision note, "no words", the source-photo rule and the brand's
+  // visual rules go first: the built prompt alone is near the image model's
+  // limit, and anything after it used to be cut off.
+  return fitImagePrompt({
+    must: [
+      args.extra,
+      args.ctx.visualTaste?.rules ?? args.ctx.visualFeedbackRules,
+      args.ratio === "4:5"
+        ? "Portrait 4:5 composition: keep the subject centered with generous top and bottom margins."
+        : null,
+    ],
+    body: built,
+  });
 }
 
 /**
@@ -1713,6 +1721,40 @@ ${ctx.brandText}`,
   }
 
   if (job.type === "video" || (job.type === "story" && input.controls.storyMode === "video")) {
+    if (input.controls.videoPreview && output.videoPlan?.storyboard) {
+      // The storyboard a person reviews before any video credit is spent
+      // (src/lib/studio/video/board.ts): one cheap still per picked scene, in
+      // the video's own look. "Create video" then renders exactly this plan.
+      const refs = withReferences([], approvedReferences);
+      const sb = output.videoPlan.storyboard;
+      const board = boardFromStoryboard(sb, output.videoPlan.clipSeconds);
+      const brandRules = ctx.visualTaste?.rules ?? ctx.visualFeedbackRules;
+      const style = ctx.style ? imageStyleInput(ctx.style)?.block : "";
+      const frames = board.scenes.filter((scene) => scene.frameSlot);
+      return Promise.all(
+        frames.map(async (scene) => {
+          const prompt = boardFramePrompt(sb, scene, { brandRules, style });
+          const started = await startImageTask({
+            costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
+            prompt,
+            size: IMAGE_SIZE_BY_RATIO[ratio] as ImageSize,
+            referenceAssets: refs.urls,
+            meterRoute: "studio.image.storyboard",
+            // A storyboard frame shows the moment, not the finish: drawn cheaply.
+            quality: "low",
+          });
+          return {
+            slot: scene.frameSlot!,
+            kind: "image" as const,
+            ratio,
+            prompt,
+            startedAt: Date.now(),
+            state: "pending" as const,
+            ...started,
+          };
+        }),
+      );
+    }
     if (input.controls.videoPreview) {
       const refs = withReferences([], approvedReferences);
       const board = output.videoPlan?.storyboard;
@@ -1731,6 +1773,7 @@ ${ctx.brandText}`,
         prompt,
         size: IMAGE_SIZE_BY_RATIO[ratio] as ImageSize,
         referenceAssets: refs.urls,
+        meterRoute: "studio.image.render",
       });
       return [
         {
@@ -1874,6 +1917,7 @@ ${ctx.brandText}`,
       prompt,
       size: IMAGE_SIZE_BY_RATIO[BACKDROP_RATIO] as ImageSize,
       referenceAssets: approvedReferences,
+      meterRoute: "studio.image.backdrop",
     });
     return [
       {
@@ -1916,6 +1960,7 @@ ${ctx.brandText}`,
           prompt,
           size: size as ImageSize,
           referenceAssets: seriesReferences,
+          meterRoute: "studio.image.slide",
         });
         return {
           slot: `slide:${index}`,
@@ -1954,6 +1999,7 @@ ${ctx.brandText}`,
           prompt: renderPrompt,
           size: size as ImageSize,
           referenceAssets: seriesReferences,
+          meterRoute: "studio.image.slide",
         });
         return {
           slot: `frame:${index}`,
@@ -2033,15 +2079,14 @@ ${ctx.brandText}`,
       Array.from({ length: count }, async (_, index) => {
         const prompt =
           count > 1
-            ? `${prepared.prompt}
-
-${variationNote(index, count)}`
+            ? fitImagePrompt({ must: [variationNote(index, count)], body: prepared.prompt })
             : prepared.prompt;
         const started = await startImageTask({
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt,
           size: size as ImageSize,
           referenceAssets: prepared.references,
+          meterRoute: count > 1 ? "studio.image.version" : "studio.image.render",
         });
         return {
           slot: count > 1 ? optionSlot(index) : "main",
@@ -2100,13 +2145,16 @@ ${variationNote(index, count)}`
     return Promise.all(
       Array.from({ length: count }, async (_, index) => {
         const prompt =
-          count > 1 ? `${prepared.prompt}\n\n${variationNote(index, count)}` : prepared.prompt;
+          count > 1
+            ? fitImagePrompt({ must: [variationNote(index, count)], body: prepared.prompt })
+            : prepared.prompt;
         const started = await startImageTask({
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt,
           size: size as ImageSize,
           referenceAssets: prepared.references,
           background: prepared.background,
+          meterRoute: count > 1 ? "studio.image.version" : "studio.image.design",
         });
         return {
           slot: count > 1 ? optionSlot(index) : "main",
@@ -2182,12 +2230,16 @@ ${variationNote(index, count)}`
     const count = variationCount(input.controls);
     return Promise.all(
       Array.from({ length: count }, async (_, index) => {
-        const versionPrompt = `${prompt}\n\n${variationNote(index, count)}`;
+        const versionPrompt = fitImagePrompt({
+          must: [variationNote(index, count)],
+          body: prompt,
+        });
         const started = await startImageTask({
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt: versionPrompt,
           size: size as ImageSize,
           referenceAssets,
+          meterRoute: "studio.image.version",
         });
         return {
           slot: optionSlot(index),
@@ -2209,6 +2261,7 @@ ${variationNote(index, count)}`
     prompt,
     size: size as ImageSize,
     referenceAssets,
+    meterRoute: input.refine ? "studio.image.edit" : "studio.image.render",
   });
   return [
     {
@@ -2481,7 +2534,15 @@ async function withLiveResearch(ctx: StudioContext, input: CreateJobInput): Prom
   }
 }
 
-async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent: JobRow | null) {
+/** Every provider call made while a job runs is metered against that job (cost per piece). */
+function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent: JobRow | null) {
+  return withWorkflow(
+    { kind: "studio_job", id: job.id, stage: job.stage, workspaceId: job.workspace_id },
+    () => runJob(client, job, input, parent),
+  );
+}
+
+async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: JobRow | null) {
   await requireActiveJob(client, job);
   const type = job.type;
   const format = STUDIO_FORMATS[type];
@@ -2924,14 +2985,18 @@ async function executeJob(client: Db, job: JobRow, input: CreateJobInput, parent
     };
   }
 
-  if (type === "carousel" && input.controls.paymentSource === "creation" && output.carousel) {
-    // The standard quote buys one shared background. Full artwork is an
-    // explicit option whose quote scales with slide count.
+  if (type === "carousel" && output.carousel && !isSeamless(output.carousel.design)) {
+    // Every carousel's price buys one shared background with the slides drawn
+    // over it by code (exact words, no per-slide picture). Full artwork, one
+    // picture per slide, is an explicit creation-point option whose quote
+    // scales with slide count; wallet credits are priced for one background.
+    const fullArtwork =
+      input.controls.paymentSource === "creation" && input.controls.artworkMode === "full";
     output.carousel = {
       ...output.carousel,
       design: {
         ...output.carousel.design,
-        flow: input.controls.artworkMode === "full" ? undefined : "composed",
+        flow: fullArtwork ? undefined : "composed",
       },
     };
   }
@@ -3978,7 +4043,14 @@ async function retryReferenceUrls(client: Db, row: JobRow, task: ProviderTask) {
   ].slice(0, 4);
 }
 
-export async function advanceStudioJob(client: unknown, row: JobRow): Promise<JobRow> {
+export function advanceStudioJob(client: unknown, row: JobRow): Promise<JobRow> {
+  return withWorkflow(
+    { kind: "studio_job", id: row.id, stage: "poll", workspaceId: row.workspace_id },
+    () => advanceJob(client, row),
+  );
+}
+
+async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
   const c = db(client);
   if (studioJobIsStale(row)) {
     const { data, error } = await studioJobWriter(c)
@@ -4058,6 +4130,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
             model: task.model,
             referenceAssets: await retryReferenceUrls(c, row, task),
             background: task.photoDesign?.background,
+            meterRoute: "studio.image.rerender",
           });
         })().catch((error: unknown) => {
           // A job someone stopped stays stopped; anything else falls back to the plain timeout.
@@ -4178,6 +4251,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
             model: next,
             referenceAssets: await retryReferenceUrls(c, row, task),
             background: task.photoDesign?.background,
+            meterRoute: "studio.image.rerender",
           });
           Object.assign(task, {
             taskId: restarted.taskId,
@@ -4343,6 +4417,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
             size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
             referenceAssets: await retryReferenceUrls(c, row, task),
             background: task.photoDesign.background,
+            meterRoute: "studio.image.rerender",
           });
           task.photoDesign.attempts += 1;
           Object.assign(task, {
@@ -4387,8 +4462,10 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       if (row.output?.visualTaste && finalImage && task.kind === "image" && task.logo)
         finalImage = await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner);
+      // A storyboard frame is a preview, never published: no vision review.
+      const boardFrame = isBoardSlot(task.slot) || row.output?.storyboard?.status === "preview";
       const imageReview =
-        task.kind === "image" && finalImage
+        task.kind === "image" && finalImage && !boardFrame
           ? await reviewGeneratedImage(
               finalImage,
               (task.productHero
@@ -4435,20 +4512,31 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
           (issue) =>
             !task.compose || !/typograph|font|spelling|text|letter|logo|headline/i.test(issue),
         ) ?? [];
-      if (imageReview?.status === "warn" && artIssues.length && (task.reviewAttempts ?? 0) < 1) {
+      // Only a defect a person can't live with is made again, at Mellox's
+      // cost: wrong or misspelled words, a wrong or missing product, a covered
+      // face, broken anatomy. Taste notes (composition, colour, mood) stay as
+      // review notes on the piece instead of a second paid render.
+      const hardIssues = hardImageDefects(artIssues);
+      if (imageReview?.status === "warn" && hardIssues.length && (task.reviewAttempts ?? 0) < 1) {
         await requireActiveJob(c, row);
-        const repairPrompt = [
-          task.prompt,
-          "The previous render was rejected by visual quality review. Correct these specific visible defects and create a fresh, polished composition:",
-          ...artIssues.map((issue) => `- ${issue}`),
-          "Preserve the supplied brand identity and exact verified copy. Do not recreate the defect.",
-        ].join("\n");
+        // The fix goes first so the image model's prompt limit can't cut it off.
+        const repairPrompt = fitImagePrompt({
+          must: [
+            [
+              "The previous render was rejected by visual quality review. Correct these specific visible defects and create a fresh, polished composition:",
+              ...hardIssues.map((issue) => `- ${issue}`),
+              "Preserve the supplied brand identity and exact verified copy. Do not recreate the defect.",
+            ].join("\n"),
+          ],
+          body: task.prompt,
+        });
         const restarted = await startImageTask({
           costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt: repairPrompt,
           size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
           referenceAssets: await retryReferenceUrls(c, row, task),
           background: task.photoDesign?.background,
+          meterRoute: "studio.image.rerender",
         });
         Object.assign(task, {
           taskId: restarted.taskId,
@@ -4462,7 +4550,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       }
       if (imageReview?.status === "warn")
         warnings.push(...imageReview.issues.map((issue) => `Visual review: ${issue}`));
-      if (task.kind === "image" && !imageReview)
+      if (task.kind === "image" && !imageReview && !boardFrame)
         warnings.push("Visual review was unavailable. Check this artwork before publishing.");
       const savedImage =
         !row.output?.visualTaste && finalImage && task.kind === "image" && task.logo
@@ -4474,7 +4562,9 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
         ...(savedImage ? { dataUrl: savedImage } : { sourceUrl: check.url }),
         // A version waits for a person to choose it before it becomes the post's picture.
         contentItemIds:
-          isOptionSlot(task.slot) || isMotionSlot(task.slot) ? [] : row.content_item_ids,
+          isOptionSlot(task.slot) || isMotionSlot(task.slot) || isBoardSlot(task.slot)
+            ? []
+            : row.content_item_ids,
         assetType: task.kind,
         filename: `mellox-${row.type}-${task.ratio.replace(":", "x")}-${row.id.slice(0, 8)}`,
         platform: null,
@@ -4536,7 +4626,7 @@ export async function advanceStudioJob(client: unknown, row: JobRow): Promise<Jo
       if (row.output?.storyboard) {
         if (task.kind === "video")
           row.output.storyboard = { ...row.output.storyboard, status: "ready" };
-        else if (row.output.storyboard.status === "preview")
+        else if (row.output.storyboard.status === "preview" && task.slot === "main")
           row.output.storyboard = {
             ...row.output.storyboard,
             assetId: persisted.asset.id,

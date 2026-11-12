@@ -24,6 +24,7 @@ import {
   buildRequestBody,
   completionCost,
   sendCompletion,
+  usageTokens,
   type ContentPart,
   type OpenRouterUsage,
 } from "./ai-gateway.server";
@@ -316,8 +317,7 @@ export async function llmToolLoop(opts: LlmToolLoopOpts): Promise<LlmToolLoopRes
       provider: "openrouter",
       model: answered,
       route: opts.route,
-      inputTokens: u.prompt_tokens,
-      outputTokens: u.completion_tokens,
+      ...usageTokens(u),
       estCostUsd: turnCost,
       truncated: stopReason === "length",
       latencyMs: Date.now() - started,

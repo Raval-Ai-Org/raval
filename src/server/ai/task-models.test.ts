@@ -5,6 +5,7 @@ import {
   DEFAULT_GEO_PROBE_MODELS,
   ANALYST,
   BUDGET,
+  CONVERSATION,
   ECONOMY,
   effectivePlan,
   escalatedPlan,
@@ -134,10 +135,9 @@ describe("task model registry", () => {
 
   it("escalates only when the rule's condition holds", () => {
     expect(escalatedPlan("chat.pro", false).effort).toBe("low");
-    expect(escalatedPlan("chat.pro", true)).toMatchObject({
-      models: [PREMIUM, WORKHORSE],
-      effort: "medium",
-    });
+    // Pro chat never moves to Opus by itself (Mellox Lean).
+    expect(escalatedPlan("chat.pro", true)).toEqual(planFor("chat.pro"));
+    expect(planFor("chat.pro").models[0]).toBe(CONVERSATION);
     expect(escalatedPlan("coach.briefing", true).effort).toBe("high");
     expect(escalatedPlan("ai-generate.blog", true).models[0]).toBe(PREMIUM);
     expect(escalatedPlan("geo.cms.fix", true).models[0]).toBe(PREMIUM);

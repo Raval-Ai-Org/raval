@@ -208,7 +208,27 @@ export type GenerateImageOpts = {
   /** Skip the budget check (a restart of an already-budgeted task). */
   budgeted?: boolean;
   background?: "opaque" | "transparent";
+  /**
+   * The image's own metering label (`studio.image.render`, `.rerender`,
+   * `.version`, …), so spend per kind of picture can be read from
+   * ai_usage_events. Defaults to the request scope's route.
+   */
+  meterRoute?: ImageMeterRoute;
+  /** Overrides the quality the routing would pick (e.g. "low" for a no-words backdrop). */
+  quality?: ImageQuality;
 };
+
+/** Metering labels for images (listed in NON_MODEL_ROUTES: no text model plan). */
+export type ImageMeterRoute =
+  | "studio.image.render"
+  | "studio.image.rerender"
+  | "studio.image.version"
+  | "studio.image.backdrop"
+  | "studio.image.slide"
+  | "studio.image.edit"
+  | "studio.image.cutout"
+  | "studio.image.design"
+  | "studio.image.storyboard";
 
 export type GenerateImageResult = GeneratedImage & {
   route: string;
@@ -245,9 +265,11 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     hasReference: references.length > 0,
   });
   const quality: ImageQuality =
-    opts.routing?.requiredQuality === "maximum" || opts.routing?.requiredQuality === "high"
+    opts.quality ??
+    (opts.routing?.requiredQuality === "maximum" || opts.routing?.requiredQuality === "high"
       ? "high"
-      : "medium";
+      : "medium");
+  const route = opts.meterRoute;
   // Billed per image: the workspace's monthly image quota and spend ceiling apply.
   if (!opts.budgeted) await enforceBudget("image");
 
@@ -272,6 +294,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         provider: "openrouter",
         model,
         kind: "image",
+        route,
         cached: true,
         savedUsd: hit.costUsd,
       });
@@ -295,6 +318,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               provider: "openrouter",
               model,
               kind: "image",
+              route,
               units: 1,
               estCostUsd: image.costUsd,
               latencyMs: Date.now() - started,
@@ -309,6 +333,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               provider: "openrouter",
               model,
               kind: "image",
+              route,
               status: "error",
               latencyMs: Date.now() - started,
             });
@@ -421,6 +446,8 @@ export async function startImageTask(opts: {
   referenceAssets?: string[];
   model?: string;
   background?: "opaque" | "transparent";
+  meterRoute?: ImageMeterRoute;
+  quality?: ImageQuality;
 }): Promise<StartedImageTask> {
   const references = usableReferences(opts.referenceAssets);
   const plan = (opts.costTier === "standard" ? routeStandardImageModel : routeImageModel)({
@@ -450,6 +477,8 @@ export async function startImageTask(opts: {
           maxAttempts: 1,
           budgeted: true,
           background: opts.background,
+          meterRoute: opts.meterRoute,
+          quality: opts.quality,
         });
         parked = {
           state: "success",

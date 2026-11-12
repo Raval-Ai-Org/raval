@@ -1512,8 +1512,10 @@ const clampStyle = (lines: number): React.CSSProperties => ({
 });
 
 function SuggestionsSection() {
-  const { items, loading, error, refresh, dismiss } = useStudioSuggestions();
+  const { items, loading, error, asked, ask, refresh, dismiss } = useStudioSuggestions();
   const visible = items;
+  // Nothing made yet and nobody asked: offer ideas instead of paying for them.
+  const offer = !asked && visible.length === 0;
 
   return (
     <section data-no-rhythm>
@@ -1522,23 +1524,39 @@ function SuggestionsSection() {
           <Sparkles className="h-2.5 w-2.5 text-primary-ink" strokeWidth={2.5} />
           Suggestions for you
         </h3>
+        {offer ? null : (
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+            aria-label="Refresh suggestions"
+            title="Fresh suggestions"
+            className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3", loading && "animate-spin")} />
+          </button>
+        )}
+      </div>
+      {offer ? (
         <button
           type="button"
-          onClick={() => void refresh()}
+          onClick={() => void ask()}
           disabled={loading}
-          aria-label="Refresh suggestions"
-          title="Fresh suggestions"
-          className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border bg-surface-3 px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:opacity-60"
         >
-          <RefreshCw className={cn("size-3", loading && "animate-spin")} />
+          <Sparkles className="size-3.5 shrink-0 text-primary-ink" strokeWidth={2.25} />
+          <span className="flex-1">
+            <span className="block font-medium text-foreground">Show ideas</span>
+            Ideas from your brand and market, made when you ask.
+          </span>
         </button>
-      </div>
+      ) : null}
       {error && visible.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-xs text-muted-foreground">
           Suggestions are unavailable right now. Try refreshing.
         </p>
       ) : null}
-      {!loading && !error && visible.length === 0 ? (
+      {asked && !loading && !error && visible.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-xs text-muted-foreground">
           Add your Brand DNA or new market research to get relevant ideas.
         </p>

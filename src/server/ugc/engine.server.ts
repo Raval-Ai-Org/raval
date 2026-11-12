@@ -20,6 +20,7 @@ import {
 import { ACTIVE_RENDER_STATUSES, type RenderStatus } from "@/lib/ugc/schemas";
 import type { HookCue } from "@/lib/ugc/hook-text";
 import { log as defaultLog } from "@/server/observability/logger";
+import { withWorkflow } from "@/server/request-context";
 import type { VideoProvider } from "./providers/types";
 import type { RenderPatch, RenderRow, UgcRenderStore } from "./store";
 
@@ -36,7 +37,12 @@ export type EngineDeps = {
   store: UgcRenderStore;
   provider: VideoProvider;
   now?: () => number;
-  callbackUrl?: () => string | undefined;
+  /**
+   * The provider's completion callback for this render. When it names the
+   * render (signed), a task whose create call timed out can still be found
+   * by its callback (`adopt`) instead of paying for a second render.
+   */
+  callbackUrl?: (row: RenderRow) => string | undefined;
   onTerminal?: (row: RenderRow) => Promise<void>;
   log?: Pick<typeof defaultLog, "info" | "warn" | "error">;
   /**
@@ -81,6 +87,15 @@ function clipShape(row: RenderRow): {
 }
 
 const iso = (ms: number) => new Date(ms).toISOString();
+
+/**
+ * A create call that timed out or lost its connection may have been accepted
+ * (and billed) by the provider. While its callback can still name the render,
+ * wait this long for it before submitting again: a render takes minutes, and
+ * a second submission is a second paid video.
+ */
+export const UNKNOWN_SUBMIT_GRACE_MS = 8 * 60_000;
+export const SUBMIT_UNKNOWN = "submit_unknown";
 
 export function pollDelayMs(submittedAt: string | null, now: number): number {
   const elapsed = submittedAt ? now - Date.parse(submittedAt) : 0;
@@ -166,6 +181,7 @@ export function createRenderEngine(deps: EngineDeps) {
       current.provider_meta = frozen.provider_meta;
     }
     const images = visual ? [...new Set([...imageUrls, ...visual.urls])] : imageUrls;
+    const callbackUrl = deps.callbackUrl?.(current);
     const result = await provider.submit({
       model,
       prompt: [current.prompt, visual?.rules].filter(Boolean).join("\n\n"),
@@ -178,7 +194,7 @@ export function createRenderEngine(deps: EngineDeps) {
       ...(visual?.urls.length ? { requireReferences: true, requiredReferenceCount: 1 } : {}),
       // The brand's style references come after the person's own photos.
       styleReferenceCount: images.length - imageUrls.length,
-      callbackUrl: deps.callbackUrl?.(),
+      callbackUrl,
       // A format's long video joins its clips on beat boundaries, or chains one take.
       ...clipShape(current),
     });
@@ -208,15 +224,35 @@ export function createRenderEngine(deps: EngineDeps) {
     }
     if (!result.retryable) return fail(current, result.code, result.message);
     const attempts = current.submit_attempts + 1;
-    if (attempts >= MAX_SUBMIT_ATTEMPTS) {
+    // Unknown outcome with a callback that names this render: the provider may
+    // be making it already. Wait for its callback (adopt) before paying again.
+    const unknown = !result.definite && Boolean(callbackUrl);
+    if (attempts >= MAX_SUBMIT_ATTEMPTS && !unknown) {
       return fail(current, result.code, `${result.message} Your allowance was returned.`);
+    }
+    if (unknown) {
+      log.warn("ugc.render.submit_unknown", { renderId: current.id, code: result.code });
+      if (attempts >= MAX_SUBMIT_ATTEMPTS) {
+        // Last chance: wait for the callback, then fail (and refund) rather than submit again.
+        return (
+          (await store.transition(current.id, ["submitting"], {
+            submit_attempts: MAX_SUBMIT_ATTEMPTS,
+            error_code: SUBMIT_UNKNOWN,
+            error_message: result.message,
+            next_attempt_at: iso(t + UNKNOWN_SUBMIT_GRACE_MS),
+            lease_until: null,
+          })) ?? current
+        );
+      }
     }
     return (
       (await store.transition(current.id, ["submitting"], {
         submit_attempts: attempts,
-        error_code: result.code,
+        error_code: unknown ? SUBMIT_UNKNOWN : result.code,
         error_message: result.message,
-        next_attempt_at: iso(t + 30_000 * 2 ** (attempts - 1)),
+        next_attempt_at: iso(
+          t + (unknown ? UNKNOWN_SUBMIT_GRACE_MS : 30_000 * 2 ** (attempts - 1)),
+        ),
         lease_until: null,
       })) ?? current
     );
@@ -387,7 +423,49 @@ export function createRenderEngine(deps: EngineDeps) {
   }
 
   /** Advance one leased render by one step. */
-  async function advance(row: RenderRow): Promise<RenderRow> {
+  /**
+   * A verified provider callback for a task no render knows, naming a render
+   * whose create call had an unknown outcome: that task is this render's. It
+   * is attached and checked like any other (the engine re-reads the task from
+   * the provider), so nothing is paid twice. Anything else is ignored.
+   */
+  async function adopt(
+    renderId: string,
+    taskId: string,
+    providerId = "kie",
+  ): Promise<RenderRow | null> {
+    const row = await store.getRender(renderId);
+    if (!row || row.status !== "submitting" || row.provider_task_id) return null;
+    if (row.error_code !== SUBMIT_UNKNOWN) return null;
+    if (!isKnownUgcModelKey(row.model_key)) return null;
+    const model = resolveUgcModel(row.model_key, "kie");
+    const t = now();
+    const adopted = await store.transition(row.id, ["submitting"], {
+      status: "processing",
+      provider: providerId,
+      provider_model: model.providerModel,
+      provider_task_id: taskId,
+      provider_state: "waiting",
+      provider_meta: { ...row.provider_meta, adopted: true },
+      submitted_at: row.submitted_at ?? iso(t),
+      error_code: null,
+      error_message: null,
+      next_attempt_at: iso(t),
+      lease_until: null,
+    });
+    if (adopted) log.info("ugc.render.adopted", { renderId: row.id, taskId });
+    return adopted;
+  }
+
+  /** Every provider call while a render advances is metered against that render. */
+  function advance(row: RenderRow): Promise<RenderRow> {
+    return withWorkflow(
+      { kind: "ugc_render", id: row.id, stage: row.status, workspaceId: row.workspace_id },
+      () => advanceRow(row),
+    );
+  }
+
+  async function advanceRow(row: RenderRow): Promise<RenderRow> {
     try {
       switch (row.status) {
         case "queued":
@@ -462,7 +540,7 @@ export function createRenderEngine(deps: EngineDeps) {
     return { ok: true, row: cancelled };
   }
 
-  return { advance, runDue, cancel, fail };
+  return { advance, adopt, runDue, cancel, fail };
 }
 
 export type RenderEngine = ReturnType<typeof createRenderEngine>;

@@ -16,11 +16,17 @@ export type UsageKind = "text" | "image" | "video" | "search" | "moderation";
 export type UsageStatus = "ok" | "error" | "blocked" | "degraded";
 
 export type UsageEvent = {
-  provider: "openrouter" | "kie" | "firecrawl" | "tavily";
+  provider: "openrouter" | "kie" | "firecrawl" | "tavily" | "local";
   model: string;
   kind?: UsageKind;
   inputTokens?: number;
   outputTokens?: number;
+  /** Prompt tokens served from the provider's prompt cache (billed at a discount). */
+  cachedInputTokens?: number;
+  /** Prompt tokens written to the provider's prompt cache (Anthropic bills a premium). */
+  cacheWriteTokens?: number;
+  /** Reasoning tokens (already included in outputTokens on OpenRouter). */
+  reasoningTokens?: number;
   units?: number;
   cached?: boolean;
   truncated?: boolean;
@@ -65,6 +71,9 @@ export function toUsageRow(event: UsageEvent): UsageRecord {
     kind: event.kind ?? "text",
     input_tokens: Math.max(0, Math.round(event.inputTokens ?? 0)),
     output_tokens: Math.max(0, Math.round(event.outputTokens ?? 0)),
+    cached_input_tokens: Math.max(0, Math.round(event.cachedInputTokens ?? 0)),
+    cache_write_tokens: Math.max(0, Math.round(event.cacheWriteTokens ?? 0)),
+    reasoning_tokens: Math.max(0, Math.round(event.reasoningTokens ?? 0)),
     units: Math.max(0, Math.round(event.units ?? 0)),
     cached: event.cached ?? false,
     truncated: event.truncated ?? false,
@@ -73,6 +82,9 @@ export function toUsageRow(event: UsageEvent): UsageRecord {
     latency_ms: event.latencyMs != null ? Math.round(event.latencyMs) : null,
     status: event.status ?? "ok",
     run_id: scope.runId ?? null,
+    workflow_kind: scope.workflowKind ?? null,
+    workflow_id: scope.workflowId ?? null,
+    workflow_stage: scope.workflowStage ?? null,
     request_id: scope.requestId ?? null,
     billing_account_id: scope.billingAccountId ?? null,
     charge_id: scope.billingChargeId ?? null,

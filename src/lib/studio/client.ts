@@ -130,6 +130,8 @@ export const studioApi = {
       dismissed?: string[];
       refresh?: boolean;
       limit?: number;
+      /** Only ideas already made (free); never starts a model call. */
+      cachedOnly?: boolean;
     },
     signal?: AbortSignal,
   ) {

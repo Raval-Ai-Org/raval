@@ -5,7 +5,7 @@
 // repeated callbacks find the render already advanced.
 import { after } from "next/server";
 import { readWebhookBody } from "@/server/request-body";
-import { verifyKieCallback } from "@/server/ugc/webhook.server";
+import { verifiedRenderRef, verifyKieCallback } from "@/server/ugc/webhook.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,7 +24,20 @@ export async function POST(request: Request) {
   }
 
   const { supabaseUgcStore } = await import("@/server/ugc/store.supabase.server");
-  const row = await supabaseUgcStore.findByProviderTask("kie", verdict.taskId);
+  let row = await supabaseUgcStore.findByProviderTask("kie", verdict.taskId);
+  if (!row) {
+    // A task no render knows, from a URL that names a render (signed by us):
+    // its create call timed out, so the render waits for exactly this. The
+    // engine re-reads the task from Kie, so adopting it trusts nothing more.
+    const renderId = verifiedRenderRef(
+      new URL(request.url),
+      process.env.KIE_WEBHOOK_HMAC_KEY?.trim(),
+    );
+    if (renderId) {
+      const { renderEngine } = await import("@/server/ugc/service.server");
+      row = await renderEngine.adopt(renderId, verdict.taskId, "kie");
+    }
+  }
   // Not a UGC render (e.g. a Studio task): acknowledge so Kie stops retrying.
   if (!row) return Response.json({ ok: true, ignored: true });
 

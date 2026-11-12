@@ -37,6 +37,20 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build && node scripts/verify-clarity-build.mjs
 
+# whisper.cpp (MIT) for clip captions on this machine instead of the paid
+# studio.transcribe route (src/server/studio/clip-edit/transcribe.server.ts).
+FROM debian:bookworm-slim AS whisper
+ARG WHISPER_CPP_VERSION=v1.7.2
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch ${WHISPER_CPP_VERSION} https://github.com/ggml-org/whisper.cpp /src \
+  && cmake -S /src -B /src/build -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release \
+  && cmake --build /src/build --target whisper-cli -j \
+  && mkdir -p /opt/whisper \
+  && cp /src/build/bin/whisper-cli /opt/whisper/whisper-cli \
+  && curl -fsSL -o /opt/whisper/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+
 FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
@@ -73,6 +87,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/vendor ./vendor
 COPY --from=builder --chown=nextjs:nodejs /app/.motionmox-bundle ./.motionmox-bundle
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@motionmox ./node_modules/@motionmox
 ENV MOTIONMOX_BROWSER_EXECUTABLE=/usr/bin/chromium
+COPY --from=whisper /opt/whisper /opt/whisper
+ENV WHISPER_CPP_PATH=/opt/whisper/whisper-cli
+ENV WHISPER_MODEL_PATH=/opt/whisper/ggml-base.bin
 
 USER nextjs
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

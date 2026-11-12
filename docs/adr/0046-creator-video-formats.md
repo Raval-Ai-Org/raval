@@ -40,8 +40,8 @@ Creator videos came out as storyless ads. The code made them that way:
   doesn't use one.
 - **Every video is a new variant.** `pickVariant` (seeded, skips the brand's
   last two per format, read by `recentCreatorWork`) chooses the place, twist
-  and hook pattern. A chosen format gets three ideas in three variants; Auto
-  gets three suggested formats from different groups (`suggestFormats`, string
+  and hook pattern. A chosen format gets one script in a fresh variant; Auto
+  gets the best suggested format (one script since Mellox Lean, 2026-11) (`suggestFormats`, string
   work, no model call).
 - **The writer is Sonnet 5.5** (`ugc.concepts` → CONVERSATION tier,
   `AI_MODEL_UGC_CONCEPTS` is the rollback). The prompt is a viral writer's

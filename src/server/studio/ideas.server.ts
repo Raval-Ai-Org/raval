@@ -24,7 +24,9 @@ import { loadStudioContext } from "./context.server";
 
 // Shared cache (Redis when configured): every app instance reuses one model
 // pass instead of each process paying for its own.
-const CACHE_TTL_SECONDS = 30 * 60;
+// Six hours: the brand, its products and the trends snapshot change slowly,
+// and "More ideas" (refresh) always asks the model again.
+const CACHE_TTL_SECONDS = 6 * 60 * 60;
 type CachedIdeas = { ideas: StudioIdea[]; generated: "model" | "fallback" };
 const inFlight = new Map<string, Promise<CachedIdeas>>();
 
@@ -62,6 +64,8 @@ export async function generateStudioIdeas(args: {
   dismissed?: string[];
   refresh?: boolean;
   limit?: number;
+  /** Answer from the shared cache only; a miss is an empty list, never a model call. */
+  cachedOnly?: boolean;
 }): Promise<{ ideas: StudioIdea[]; generated: "model" | "fallback"; cached: boolean }> {
   const limit = args.limit ?? 5;
   const ctx = await loadStudioContext(args.client as SupabaseClient, args.workspaceId, args.brand);
@@ -88,7 +92,7 @@ export async function generateStudioIdeas(args: {
     ctx.socialTrends?.collectedAt ?? "no-trends",
   ].join(":");
   const cacheKey = `studio:ideas:${key}`;
-  const hit = args.refresh ? null : await cache.get<CachedIdeas>(cacheKey);
+  const hit = args.refresh && !args.cachedOnly ? null : await cache.get<CachedIdeas>(cacheKey);
   if (hit) {
     return {
       ideas: dedupeIdeas(hit.ideas, avoid).slice(0, limit),
@@ -97,6 +101,7 @@ export async function generateStudioIdeas(args: {
     };
   }
 
+  if (args.cachedOnly) return { ideas: [], generated: "fallback", cached: false };
   let work = inFlight.get(cacheKey);
   const joined = Boolean(work);
   if (!work) {

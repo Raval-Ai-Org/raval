@@ -16,6 +16,7 @@ import { canvasPickers } from "@/lib/studio/start";
 import { AdFormatPicker, AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { shortClipPlan } from "@/lib/studio/short-clip";
+import { needsStoryboard } from "@/lib/studio/video/board";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { Crown } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
@@ -533,11 +534,24 @@ export function ControlsPanel({
                   />
                 </label>
                 <label className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2">
-                  <span className="text-xs font-medium text-foreground">Preview a frame first</span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-foreground">
+                      Storyboard first
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {needsStoryboard({ type: session.type, controls: c })
+                        ? "Always for 16 s+ and Premium videos"
+                        : "See every scene before the video is made"}
+                    </span>
+                  </span>
                   <Switch
-                    checked={c.videoPreview ?? false}
+                    checked={
+                      (c.videoPreview ?? false) ||
+                      needsStoryboard({ type: session.type, controls: c })
+                    }
+                    disabled={needsStoryboard({ type: session.type, controls: c })}
                     onCheckedChange={(videoPreview) => set({ videoPreview })}
-                    aria-label="Preview a frame first"
+                    aria-label="Storyboard first"
                   />
                 </label>
               </div>
