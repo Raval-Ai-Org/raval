@@ -40,7 +40,8 @@ RUN npm run build && node scripts/verify-clarity-build.mjs
 # whisper.cpp (MIT) for clip captions on this machine instead of the paid
 # studio.transcribe route (src/server/studio/clip-edit/transcribe.server.ts).
 FROM debian:bookworm-slim AS whisper
-ARG WHISPER_CPP_VERSION=v1.7.2
+# v1.8.x names the CLI target `whisper-cli` (v1.7.2 still called it `main`).
+ARG WHISPER_CPP_VERSION=v1.8.2
 RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
