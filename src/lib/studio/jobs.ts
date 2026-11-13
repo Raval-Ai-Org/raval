@@ -11,6 +11,7 @@ import type { AdOnImage } from "./ad-formats";
 import { AD_OBJECTIVE_IDS } from "./ad-objectives";
 import { VIDEO_KIND_IDS, type VideoKindId } from "./video/kinds";
 import { MOTIONMOX_ELEMENT_IDS } from "./motionmox/elements";
+import { CATEGORY_IDS } from "./categories";
 import type { VideoPlanOutput } from "./video/storyboard";
 
 export const PlatformIdSchema = z.enum([
@@ -184,6 +185,11 @@ export const IntentSchema = z.object({
   autopilotProgramId: z.string().uuid().optional(),
   /** A StudioTemplate id; the prompt follows its structure. */
   template: z.string().max(40).optional(),
+  /**
+   * The kind of post (categories.ts: meme, sale, tips…). Every writer, the
+   * carousel structure and the picture follow it. Absent: the template's.
+   */
+  category: z.enum(CATEGORY_IDS).optional(),
   /**
    * Decided by a plan before the piece is made (Autopilot): what it is for
    * (viral.ts) and how it opens (memory.ts). Studio follows them instead of
@@ -486,6 +492,13 @@ export type StudioJobOutput = {
   heroLook?: HeroLook;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
+  /** Meme and other multi-line layouts: the exact lines, in order (categories.ts). */
+  onImageLines?: string[];
+  /** Meme: the layout the picture is made on (categories.ts MEME_LAYOUTS id). */
+  memeLayout?: string;
+  /** Meme on a real template: its id and how it was made (memes/types.ts). */
+  memeFormat?: string;
+  memeMode?: "classic" | "remix" | "original";
   altText?: string;
   /** Ad: the shared visual direction. */
   visualConcept?: string;

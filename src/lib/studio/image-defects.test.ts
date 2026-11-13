@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { hardImageDefects } from "./image-defects";
+import {
+  creativeRedo,
+  creativeScore,
+  hardImageDefects,
+  keepFirstRender,
+  reviewKindOf,
+} from "./image-defects";
 
 describe("hardImageDefects", () => {
   it("keeps the defects a person can't publish", () => {
@@ -24,5 +30,57 @@ describe("hardImageDefects", () => {
         "Could use more negative space at the top.",
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("creative rubric", () => {
+  it("weights each kind on what it must do", () => {
+    const scores = { brief: 8, legibility: 8, craft: 8, joke: 3 };
+    expect(creativeScore(scores, "meme")).toBeLessThan(6.5);
+    expect(
+      creativeScore({ brief: 8, hierarchy: 8, legibility: 8, brand: 8, craft: 8 }, "designed"),
+    ).toBe(8);
+    expect(creativeScore(undefined, "designed")).toBeNull();
+  });
+
+  it("redoes a weak picture once, only with fixes", () => {
+    const weak = {
+      issues: [],
+      scores: { brief: 4, hierarchy: 4, legibility: 5, brand: 5, craft: 4 },
+    };
+    expect(creativeRedo(weak, "designed", 0).redo).toBe(false);
+    const withFixes = { ...weak, fixes: ["Make the product twice as large and centred"] };
+    expect(creativeRedo(withFixes, "designed", 0)).toMatchObject({ redo: true, reason: "score" });
+    expect(creativeRedo(withFixes, "designed", 1).redo).toBe(false);
+  });
+
+  it("always redoes a hard defect, never a good picture", () => {
+    expect(creativeRedo({ issues: ["The headline is misspelled."] }, "sales", 0).reason).toBe(
+      "hard",
+    );
+    const good = {
+      issues: [],
+      scores: { brief: 8, hierarchy: 8, legibility: 9, brand: 8, craft: 8, offer: 8 },
+      fixes: ["tiny"],
+    };
+    expect(creativeRedo(good, "sales", 0).redo).toBe(false);
+  });
+
+  it("keeps the first picture only when it was clearly better", () => {
+    expect(keepFirstRender({ score: 6, hard: false }, { score: 7.5, hard: false })).toBe(false);
+    expect(keepFirstRender({ score: 6, hard: false }, { score: 5, hard: false })).toBe(true);
+    expect(keepFirstRender({ score: 6, hard: false }, { score: 9, hard: true })).toBe(true);
+    expect(keepFirstRender({ score: 6, hard: true }, { score: 2, hard: false })).toBe(false);
+  });
+
+  it("knows a meme, a sale and a native photo", () => {
+    expect(reviewKindOf({ category: { id: "meme", group: "fun", register: "native" } })).toBe(
+      "meme",
+    );
+    expect(reviewKindOf({ type: "ad" })).toBe("sales");
+    expect(reviewKindOf({ category: { id: "ugc", group: "trust", register: "native" } })).toBe(
+      "native",
+    );
+    expect(reviewKindOf({})).toBe("designed");
   });
 });

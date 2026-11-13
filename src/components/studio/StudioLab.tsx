@@ -609,6 +609,15 @@ const SCENES: Scene[] = [
     },
   },
   {
+    id: "brief-meme",
+    label: "Brief · Meme picked",
+    make: () =>
+      session("image", "intent", {
+        brief: "A meme about waiting for the kettle on a Monday, our cold brew is the fix",
+        category: "meme",
+      }),
+  },
+  {
     id: "review-creation",
     label: "Review · Included caption edits",
     make: () => {

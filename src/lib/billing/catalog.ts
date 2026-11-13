@@ -617,7 +617,7 @@ export const CREDIT_ACTIONS = {
     unit: "copy + image",
     feature: "studio",
     expectedCostUsd: 0.066,
-    routes: ["studio.captions", "studio.image.brief"],
+    routes: ["studio.captions", "studio.image.brief", "studio.meme.concept"],
   },
   // Designing with the brand's own photos: reading the photos, one design
   // layer (a second if the first can't hold them) and the visual check.

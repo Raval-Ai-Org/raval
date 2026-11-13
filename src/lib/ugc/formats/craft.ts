@@ -4,6 +4,7 @@
 // refuses a script that breaks the ones code can see. Add a rule here, never
 // in one prompt only.
 
+import { AWARENESS, awarenessFor } from "@/lib/studio/knowledge/frameworks";
 import type { UgcFormat } from "./types";
 
 /** Openers that make a video read as an ad in the first second. */
@@ -44,6 +45,21 @@ const OBJECTIVE_ENDINGS: Record<string, string> = {
 };
 
 /** The rules the script writer follows for this format. */
+/** What the viewer already knows, from the video's objective (knowledge/frameworks.ts). */
+const UGC_JOB: Record<string, { goal?: string; adObjective?: string }> = {
+  sales: { adObjective: "sales" },
+  conversion: { adObjective: "leads" },
+  awareness: { goal: "awareness" },
+  engagement: { goal: "engagement" },
+  app_install: { adObjective: "app" },
+  lead_gen: { adObjective: "leads" },
+};
+
+export function ugcAwarenessLine(objective: string): string {
+  const stage = AWARENESS[awarenessFor(UGC_JOB[objective] ?? { goal: "awareness" })];
+  return `The viewer is ${stage.label.toLowerCase()}: ${stage.say}`;
+}
+
 export function craftRules(format: UgcFormat, objective: string): string[] {
   const cuts =
     format.edit === "hard-cuts" || format.edit === "split-open"
@@ -69,6 +85,8 @@ export function craftRules(format: UgcFormat, objective: string): string[] {
       ? `In actions and shots, call people by their role (${format.roles.map((r) => r.title.toLowerCase()).join(", ")}), never "A", "B", he or she: the person who plays each role is picked later.`
       : "In actions and shots, describe only the hands and the product.",
     OBJECTIVE_ENDINGS[objective] ?? OBJECTIVE_ENDINGS.awareness,
+    ugcAwarenessLine(objective),
+    "Build the setup and the turn on the customer's own pains, objections and buying triggers from the brand details (customerPainPoints, customerObjections, customerBuyingTriggers), in their words; never invent a pain, a result or a testimonial they didn't give.",
     "The hook text on screen is a different, shorter line than the spoken hook (8 words or fewer, lower-case is fine): it teases the payoff without giving it away.",
     "The post caption is one or two short lines in the creator's own voice (a reaction, a question or a tease), then 3 to 5 hashtags. No hashtag soup, no 'link in bio' unless the objective is sales.",
   ];

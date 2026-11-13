@@ -16,6 +16,7 @@ import type { PlatformId } from "@/lib/social-platforms";
 import { recommendedRatio } from "./aspect";
 import { studioApi, readBrandPayload, StudioApiError } from "./client";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
+import { categoryById, type CategoryId } from "./categories";
 import { getTemplate, templateFits } from "./templates";
 import { editTarget, planEdit, type EditAim, type EditTurn } from "./edit-chat";
 import { needsStoryboard, withStoryboard } from "./video/board";
@@ -44,6 +45,8 @@ export type StudioSession = {
   ideaSource?: string;
   /** StudioTemplate id — structure the generator follows. */
   template?: string;
+  /** The kind of post (categories.ts) — how it is written and how it looks. */
+  category?: CategoryId;
   /** Repurposing: the content item this piece is made from. */
   sourceContentId?: string;
   /** What the composer shows for it ("Made from your carousel …"); display only. */
@@ -315,6 +318,8 @@ export function openComposer(
     ideaId?: string;
     ideaSource?: string;
     template?: string;
+    /** The kind of post to start on (categories.ts), e.g. from a Home card. */
+    category?: CategoryId;
     platforms?: PlatformId[];
     sourceContentId?: string;
     sourceLabel?: string;
@@ -367,6 +372,7 @@ export function openComposer(
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
         template: opts.template,
+        category: opts.category ?? reusable.category,
         sourceContentId: opts.sourceContentId,
         sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
         sourceScript: opts.sourceScript,
@@ -389,6 +395,7 @@ export function openComposer(
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
         template: opts.template,
+        category: opts.category,
         sourceContentId: opts.sourceContentId,
         sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
         sourceScript: opts.sourceScript,
@@ -543,6 +550,8 @@ async function openJobNow(jobId: string, ws: string | null): Promise<string | nu
             : "intent",
       brief: job.input?.intent?.brief ?? "",
       goal: job.input?.intent?.goal,
+      category: job.input?.intent?.category,
+      template: job.input?.intent?.template,
       sourceContentId: job.input?.intent?.sourceContentId,
       sourceScript: job.input?.intent?.sourceScript,
       controls: job.input?.controls ?? defaultControls(job.type),
@@ -581,6 +590,7 @@ export function updateSession(
       | "ideaId"
       | "ideaSource"
       | "template"
+      | "category"
       | "controls"
       | "type"
       | "error"
@@ -853,6 +863,10 @@ async function submit(
         ideaId: s.ideaId,
         ideaSource: s.ideaSource,
         template: s.template,
+        // A category that doesn't suit this format (picked before a format change) is left out.
+        ...(s.category && categoryById(s.category)?.formats.includes(s.type)
+          ? { category: s.category }
+          : {}),
         ...(s.sourceContentId ? { sourceContentId: s.sourceContentId } : {}),
         ...(s.sourceScript ? { sourceScript: s.sourceScript } : {}),
       },

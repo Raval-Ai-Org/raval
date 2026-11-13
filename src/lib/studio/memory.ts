@@ -155,6 +155,17 @@ export function memorySection(recent: Recent): string {
         .join("\n")}`,
     );
   }
+  const jokes = distinct(
+    recent.map((r) => r.joke),
+    20,
+  );
+  if (jokes.length) {
+    parts.push(
+      `Jokes, memes and on-picture lines already posted. Never tell any of these again: not the same situation, setup, punchline, pun or wordplay, even reworded:\n${jokes
+        .map((j) => `- ${j}`)
+        .join("\n")}`,
+    );
+  }
   if (tired.length) {
     parts.push(`Angles used a lot lately, so avoid leaning on them again: ${tired.join(", ")}.`);
   }

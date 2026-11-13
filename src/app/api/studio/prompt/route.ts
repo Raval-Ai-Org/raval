@@ -21,6 +21,8 @@ const Body = z.object({
   goal: IntentSchema.shape.goal,
   controls: ControlsSchema.partial().optional(),
   avoid: z.array(z.string().max(160)).max(30).optional(),
+  category: IntentSchema.shape.category,
+  recentCategories: z.array(z.string().max(24)).max(6).optional(),
 });
 
 /** "Write it for me": a detailed, timely description for a Studio format. */
@@ -52,6 +54,8 @@ export const POST = defineRoute({
           goal: body.goal,
           controls: body.controls,
           avoid: body.avoid,
+          category: body.category,
+          recentCategories: body.recentCategories,
         }),
     );
     return Response.json(

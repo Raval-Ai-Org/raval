@@ -817,11 +817,35 @@ export function archetypeMenu(
   lean?: { liked: string[]; avoided: string[] } | null,
   /** Layouts the brand's last pieces used (recentLayouts): left out so the next one differs. */
   recent: readonly string[] = [],
+  /**
+   * A shortlist instead of all layouts, to keep the prompt short: the
+   * industry's proven layouts and the team's loved ones first, then a stable
+   * rotation of the rest (same seed, same menu).
+   */
+  shortlist?: { prefer?: readonly string[]; limit?: number; seed?: string },
 ): string {
   const avoided = new Set([...(lean?.avoided ?? []), ...recent]);
   const liked = new Set(lean?.liked ?? []);
-  const menu = ARCHETYPES.filter((a) => !avoided.has(a.id));
-  return (menu.length ? menu : ARCHETYPES)
+  const open = ARCHETYPES.filter((a) => !avoided.has(a.id));
+  let menu = open.length ? open : [...ARCHETYPES];
+  if (shortlist?.limit && menu.length > shortlist.limit) {
+    const prefer = new Set(shortlist.prefer ?? []);
+    const seed = shortlist.seed ?? "";
+    const spin = (id: string) => {
+      let h = 2166136261;
+      for (const ch of `${seed}:${id}`) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+      return h >>> 0;
+    };
+    menu = [...menu]
+      .sort(
+        (a, b) =>
+          Number(prefer.has(b.id)) * 2 +
+            Number(liked.has(b.id)) -
+            (Number(prefer.has(a.id)) * 2 + Number(liked.has(a.id))) || spin(a.id) - spin(b.id),
+      )
+      .slice(0, shortlist.limit);
+  }
+  return menu
     .map(
       (a) =>
         `- ${a.id}: ${a.name}, ${a.summary}. Best for ${a.formats.join(", ")}.${a.physicalOnly ? " Only for a physical product." : ""}${a.screenOnly ? " Only for something used on a screen." : ""}${a.onlyFor ? ` Only for ${a.onlyFor}.` : ""}${a.person === "required" ? " Needs a person." : ""}${liked.has(a.id) ? " The team loved this layout: prefer it when it fits." : ""}`,

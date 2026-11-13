@@ -3,6 +3,7 @@
 // what's scheduled, market and competitor signals, and upcoming moments.
 // Workspace data is cached briefly. Brand DNA is read from the database for the
 // job's own workspace; a request-supplied copy is only used when none is stored.
+import { CONTEXT_CAPS, capBlock } from "@/lib/studio/caps";
 import "server-only";
 import { readHeroLook } from "@/lib/studio/product-hero/variety";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -80,7 +81,8 @@ async function loadWorkspaceSnapshot(
           .select("id, title, body, kind, channel, meta, created_at, status")
           .eq("workspace_id", workspaceId)
           .order("created_at", { ascending: false })
-          .limit(40),
+          // Enough history that a joke or meme is never told twice (novelty.ts).
+          .limit(60),
         { data: [], error: null } as never,
         "recent content",
       ),
@@ -199,6 +201,10 @@ async function loadWorkspaceSnapshot(
         structure: str(record(meta.carousel).structure),
         adFormat: str(meta.ad_format),
         artDirection: str(meta.art_direction),
+        category: str(meta.category),
+        memeLayout: str(meta.meme_layout),
+        memeFormat: str(meta.meme_format),
+        joke: str(meta.joke)?.slice(0, 200),
         videoKind: str(meta.video_kind),
         videoHook: str(meta.video_hook),
         heroLook: readHeroLook(meta.hero_look),
@@ -326,14 +332,16 @@ export async function loadStudioContext(
         .join("\n")}`
     : "";
   const { name, rivals: _rivals, ...rest } = snapshot;
+  // Each brain block is capped (caps.ts) so a large catalogue or strategy
+  // never crowds out the brief or multiplies every prompt's cost.
   const brandBlocks = [
     brandText + insightsBlock,
-    catalog,
-    audience,
-    snapshot.rivals,
-    strategy,
-    goal,
-    campaigns,
+    capBlock(catalog, CONTEXT_CAPS.catalog),
+    capBlock(audience, CONTEXT_CAPS.audience),
+    capBlock(snapshot.rivals, CONTEXT_CAPS.rivals),
+    capBlock(strategy, CONTEXT_CAPS.strategy),
+    capBlock(goal, CONTEXT_CAPS.goal),
+    capBlock(campaigns, CONTEXT_CAPS.campaigns),
   ];
   // Memory goes first: several generators only read the start of this text.
   const join = (blocks: string[]) => blocks.filter(Boolean).join("\n\n").trim();

@@ -515,3 +515,19 @@ export function isLocalAiEnabled(workspaceId?: string): boolean {
   }
   return !isFalsy((process.env.FEATURE_FLAG_LOCAL_AI_ENABLED ?? "").trim().toLowerCase());
 }
+
+/**
+ * Meme templates (ADR-0047): a meme may be made on a real template picture
+ * (classic, words drawn by code) or a brand-themed remix of one. On unless set
+ * to "false"; `FEATURE_FLAG_MEME_TEMPLATES_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off means every meme is an original scene, as before.
+ */
+export function isMemeTemplatesEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_MEME_TEMPLATES_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_MEME_TEMPLATES_ENABLED ?? "").trim().toLowerCase());
+}

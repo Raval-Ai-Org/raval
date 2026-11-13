@@ -85,6 +85,8 @@ import { usePromptWriter, WriteForMeButton, WritingOverlay, WrittenNote } from "
 import { ScriptPreview } from "./previews/ScriptPreview";
 import { BeatPills, TemplateGallery } from "./TemplateGallery";
 import { ChipButton, TypeGlyph } from "./studio-ui";
+import { CategoryPicker } from "./CategoryPicker";
+import { categoryById } from "@/lib/studio/categories";
 import { TypePicker } from "./TypePicker";
 
 const STEPS = [
@@ -772,8 +774,21 @@ export function IntentStep({
     onDrawerChange?.(true);
   };
   const goalLabel = GOALS.find((g) => g.id === session.goal)?.label;
+  const pickedCategory = categoryById(session.category);
+  const categoryLabel = pickedCategory?.formats.includes(session.type)
+    ? pickedCategory.label
+    : undefined;
   const options = (
     <>
+      {!session.sourceScript ? (
+        <CategoryPicker
+          type={session.type}
+          value={session.category}
+          disabled={busy}
+          onChange={(category) => updateSession(session.id, { category })}
+        />
+      ) : null}
+
       {!session.sourceScript ? (
         <div>
           <p className="mb-2 text-xs font-medium text-foreground">Goal</p>
@@ -1036,7 +1051,10 @@ export function IntentStep({
                 <PanelChip
                   icon={<SlidersHorizontal />}
                   label="Options"
-                  hint={goalLabel ?? "Product, goal, size"}
+                  hint={
+                    [categoryLabel, goalLabel].filter(Boolean).join(" · ") ||
+                    "Kind of post, goal, product"
+                  }
                   onClick={() => openPanel("options")}
                 />
                 {!session.sourceScript ? (
@@ -1062,7 +1080,7 @@ export function IntentStep({
               {!drawerOpen ? (
                 <PanelHandle
                   key="studio-panel-handle"
-                  marked={!!session.goal || !!session.controls.productId}
+                  marked={!!categoryLabel || !!session.goal || !!session.controls.productId}
                   onOpen={() => openPanel("options")}
                 />
               ) : null}

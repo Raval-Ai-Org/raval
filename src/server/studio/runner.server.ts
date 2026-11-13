@@ -10,7 +10,24 @@
 import { humanizeOutput } from "@/lib/studio/humanize";
 import { naturalizeVariants } from "@/lib/studio/naturalize.server";
 import { fitImagePrompt } from "@/lib/studio/image-prompt-fit";
-import { hardImageDefects } from "@/lib/studio/image-defects";
+import { memeLayout, resolveCategory, type Category } from "@/lib/studio/categories";
+import { memeMode as readMemeMode, memeTemplate } from "@/lib/studio/memes/select";
+import {
+  classicMemePicture,
+  fallbackMemeLayout,
+  finishMemeRemix,
+  memeConceptIssue,
+  memeRemixPrompt,
+  memeRemixSize,
+  memeTemplateDataUrl,
+  type MemeTask,
+} from "@/server/studio/memes/meme.server";
+import {
+  creativeRedo,
+  hardImageDefects,
+  keepFirstRender,
+  reviewKindOf,
+} from "@/lib/studio/image-defects";
 import "server-only";
 import { studioJobWriter } from "./job-writer.server";
 import { after } from "next/server";
@@ -111,6 +128,7 @@ import { isPhotoDesignType } from "@/lib/studio/photo-design/mode";
 import { photoDesignCopy } from "@/lib/studio/photo-design/plan";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { isClipEditEnabled, isMotionMoxEnabled } from "@/lib/feature-flags";
+import { isMemeTemplatesEnabled } from "@/lib/feature-flags";
 import { elementsFromBrief } from "@/lib/studio/motionmox/elements";
 import {
   CLIP_EDIT_FAILED,
@@ -177,7 +195,9 @@ import type {
 import { invalidateStudioContext, loadStudioContext } from "./context.server";
 import { productContextFor } from "@/server/products/context.server";
 import {
+  findRepeatedJoke,
   findRepeatedOpening,
+  outputJoke,
   findSimilarRecent,
   hasResearchCitation,
   withResearchSources,
@@ -211,7 +231,7 @@ import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import { studioOutputQualityIssue } from "@/lib/studio/quality";
 import { checkMemoryConformance } from "@/lib/memory/conformance";
 import { loadMemories } from "@/server/memory/context.server";
-import { reviewGeneratedImage } from "./image-review.server";
+import { reviewGeneratedImage, type ImageReview } from "./image-review.server";
 import {
   loadGenerationVisualSnapshot,
   loadVisualFeedbackRules,
@@ -277,11 +297,15 @@ type ProviderTask = {
   logo?: { url: string; corner: LogoCorner };
   referenceWarning?: string;
   reviewAttempts?: number;
+  /** A taste redo keeps the first picture (unlinked) so the better-scoring one wins. */
+  firstRender?: { storagePath: string; score: number | null; hard: boolean; review: ImageReview };
   compose?: boolean;
   /** A design layer the person's real photos are laid into once it is finished. */
   photoDesign?: PhotoDesignTask;
   /** A product hero poster made from the product's own cut-out (ADR-0040). */
   productHero?: ProductHeroTask;
+  /** A meme remix: the template's scene in the brand's world; code draws its words (ADR-0047). */
+  meme?: MemeTask;
   /** The brand's own clips or photos put together as a video (FFmpeg, after the response). */
   clipEdit?: ClipEditTask;
   /** A finished animated photo's stored file, for the recap that waits for it. */
@@ -1145,6 +1169,12 @@ function imagePrompt(args: {
   avoidArtDirections?: ArchetypeId[];
   noText?: boolean;
   onImageText?: string | null;
+  /** The visual brief's scene: drawn as written, never treated as the post's copy. */
+  scene?: string | null;
+  /** The kind of post (categories.ts): native or designed look, meme layout. */
+  category?: Category | null;
+  memeLayout?: string | null;
+  onImageLines?: string[] | null;
 }): string {
   // The shared builder knows three canvases; 4:5 composes like square with a
   // taller safe area.
@@ -1153,6 +1183,10 @@ function imagePrompt(args: {
   const built = buildImagePromptDetailed({
     postBody: args.body,
     postTitle: args.title,
+    scene: args.scene,
+    category: args.category,
+    memeLayout: args.memeLayout,
+    onImageLines: args.onImageLines,
     brand: args.brand,
     workspaceName: args.ctx.brandName,
     platform: args.platform,
@@ -2105,6 +2139,42 @@ ${ctx.brandText}`,
       }),
     );
   }
+  // A meme remix (ADR-0047): the template's scene redrawn in the brand's world
+  // with no words; its words are drawn by code once it is back.
+  const remixTemplate =
+    job.type === "image" && output.memeMode === "remix" && !isVariationsRequest(input)
+      ? memeTemplate(output.memeFormat)
+      : null;
+  const remixReference = remixTemplate ? await memeTemplateDataUrl(remixTemplate) : null;
+  if (remixTemplate && remixReference && isMemeTemplatesEnabled(job.workspace_id)) {
+    const remixPrompt = memeRemixPrompt({
+      template: remixTemplate,
+      concept: output.concept ?? "",
+      brandName: ctx.brandName,
+      palette: look?.colors.length
+        ? look.colors
+        : (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+    });
+    const started = await startImageTask({
+      costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
+      prompt: remixPrompt,
+      size: memeRemixSize(remixTemplate) as ImageSize,
+      referenceAssets: [remixReference],
+      meterRoute: input.refine ? "studio.image.edit" : "studio.image.render",
+    });
+    return [
+      {
+        slot: "main",
+        kind: "image",
+        ratio,
+        prompt: remixPrompt,
+        meme: { templateId: remixTemplate.id, lines: output.onImageLines ?? [] },
+        startedAt: Date.now(),
+        state: "pending",
+        ...started,
+      },
+    ];
+  }
   // Designing with the person's own photos: the model draws the design and
   // leaves windows; the real photos are laid in when it is finished.
   if (
@@ -2202,7 +2272,16 @@ ${ctx.brandText}`,
         novelty: noveltyNote,
       })
     : imagePrompt({
-        body,
+        // An image post's brief wrote a scene: it is drawn as the scene, and
+        // the post's own words are the message (they used to be swapped).
+        body:
+          job.type === "image" && concept
+            ? (output.variants?.[0]?.body ?? input.intent.brief)
+            : body,
+        scene: job.type === "image" ? concept : null,
+        category: resolveCategory(input.intent),
+        memeLayout: job.type === "image" ? output.memeLayout : null,
+        onImageLines: job.type === "image" ? output.onImageLines : null,
         title: output.title ?? input.intent.brief.slice(0, 80),
         brand: styled,
         ctx,
@@ -2679,6 +2758,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           recent: ctx.recent.filter((r) => r.type === "carousel").map((r) => r.structure),
           preferred: input.refine ? parent?.output?.carousel?.structure : undefined,
           lean: ctx.taste?.lean.structure,
+          category: resolveCategory(input.intent)?.id,
         })
       : undefined;
 
@@ -2781,6 +2861,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       source,
       adFormat,
       adObjective,
+      memeTemplates: isMemeTemplatesEnabled(job.workspace_id),
       refine: input.refine,
       current: parent?.output,
       video: videoPlan
@@ -2858,6 +2939,12 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       // Same opening as an earlier piece: worth one more try, never a failure.
       const repeatedOpening =
         input.refine || attempt === 1 ? null : findRepeatedOpening(candidate, ctx.recent);
+      // The same joke, punchline or meme as an earlier post: one more try with the reason.
+      const repeatedJoke =
+        input.refine || attempt === 1 ? null : findRepeatedJoke(candidate, ctx.recent);
+      // A template meme whose words don't fit its boxes: one more try with the reason
+      // (a second miss is made as an original scene, below).
+      const memeIssue = attempt === 1 ? null : memeConceptIssue(candidate);
       // A video's storyboard is checked on every take, edits included: it is
       // what the paid render is made from.
       const storyboardIssue =
@@ -2891,7 +2978,14 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           candidate.article?.markdown ?? "",
           ctx.liveResearch.sources.map((s) => s.url),
         );
-      if (!similar && !uncitedResearch && !qualityIssue && !repeatedOpening) {
+      if (
+        !similar &&
+        !uncitedResearch &&
+        !qualityIssue &&
+        !repeatedOpening &&
+        !repeatedJoke &&
+        !memeIssue
+      ) {
         output = candidate;
         break;
       }
@@ -2903,6 +2997,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         !similar &&
         !qualityIssue &&
         !repeatedOpening &&
+        !repeatedJoke &&
         candidate.article
       ) {
         output = {
@@ -2923,7 +3018,11 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           ? "It did not cite the research it was given."
           : similar
             ? `It was too close to “${similar.title}”.`
-            : `It opened the same way as “${repeatedOpening!.opening}”.`;
+            : memeIssue
+              ? memeIssue
+              : repeatedJoke
+                ? `It told the same joke as an earlier post (“${repeatedJoke.joke}”). Write a brand-new joke: a different situation, setup and punchline, and a different meme layout.`
+                : `It opened the same way as “${repeatedOpening!.opening}”.`;
       if (attempt === 1 && qualityIssue)
         throw new StudioJobError(502, `${qualityIssue} Try again with a clearer brief.`);
       if (attempt === 1 && uncitedResearch)
@@ -3114,6 +3213,12 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         // is staged on another layout (src/lib/products/feature.ts).
         ...(product ? { product_id: controls.productId } : {}),
         ...(output.artDirection ? { art_direction: output.artDirection } : {}),
+        // The kind of post and the joke it told, so no later post repeats it (novelty.ts).
+        ...(resolveCategory(input.intent) ? { category: resolveCategory(input.intent)!.id } : {}),
+        ...(output.memeLayout ? { meme_layout: output.memeLayout } : {}),
+        ...(output.memeFormat ? { meme_format: output.memeFormat } : {}),
+        ...(output.memeMode ? { meme_mode: output.memeMode } : {}),
+        ...(outputJoke(output) ? { joke: outputJoke(output) } : {}),
         ...(output.heroLook ? { hero_look: output.heroLook } : {}),
         // What the video was made as, so the next one opens and plays differently.
         ...(output.videoPlan
@@ -3181,6 +3286,73 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
     await patchJob(client, job.id, { output, asset_ids: job.asset_ids, title });
   }
 
+  // A classic meme (ADR-0047) is the real template with its words drawn by
+  // code: no image model and no image cost. A template meme that can't be
+  // drawn (words that don't fit, a script the font lacks) or with the flag off
+  // becomes an original scene with the same words.
+  if (type === "image" && output.memeFormat && !addPlatforms && !canKeepSourcePhoto) {
+    const template = memeTemplate(output.memeFormat);
+    const usable =
+      !!template && isMemeTemplatesEnabled(job.workspace_id) && !memeConceptIssue(output);
+    const classic =
+      usable && output.memeMode === "classic" && !variations
+        ? await classicMemePicture(output)
+        : null;
+    if (classic) {
+      await requireActiveJob(client, job);
+      await setStage(client, job.id, "render");
+      const ratio = mediaRatio(type, input, platforms);
+      const meta = await sharp(classic).metadata();
+      const canvas = sourcePhotoCanvas({ width: meta.width ?? 0, height: meta.height ?? 0 }, ratio);
+      const bytes = canvas ? await fitWhole(classic, canvas.width, canvas.height) : classic;
+      const saved = await persistAsset({
+        workspaceId: job.workspace_id,
+        idempotencyKey: `studio-meme:${job.id}:${output.memeFormat}`,
+        bytes,
+        mimeType: canvas ? "image/png" : "image/jpeg",
+        contentItemIds: job.content_item_ids,
+        assetType: "image",
+        filename: `mellox-meme-${job.id.slice(0, 8)}`,
+        metadata: {
+          source: "studio_meme",
+          meme_format: output.memeFormat,
+          meme_mode: "classic",
+          job_id: job.id,
+        },
+      });
+      if (saved.ok && saved.asset.storage_path) {
+        const media = {
+          slot: "main",
+          kind: "image" as const,
+          ratio,
+          status: "ready" as const,
+          assetId: saved.asset.id,
+          storagePath: saved.asset.storage_path,
+        };
+        output = {
+          ...output,
+          media: [...(output.media ?? []).filter((m) => m.slot !== "main"), media],
+        };
+        job.asset_ids = [...new Set([...(job.asset_ids ?? []), saved.asset.id])];
+        await patchJob(client, job.id, { output, asset_ids: job.asset_ids, title });
+      }
+    } else if (!usable || output.memeMode === "classic") {
+      const lines = (output.onImageLines ?? []).filter((l) => l.trim());
+      output = {
+        ...output,
+        memeMode: "original",
+        memeLayout: fallbackMemeLayout(lines.length),
+        onImageLines: lines.slice(0, 3),
+        concept:
+          `${output.concept ?? ""}\nAn original phone-photo scene in the spirit of the "${template?.name ?? "classic"}" meme: the same situation and reaction, with fictional people.`.trim(),
+      };
+    }
+  }
+  const memeDrawn =
+    type === "image" &&
+    output.memeMode === "classic" &&
+    output.media?.some((m) => m.slot === "main" && m.status === "ready");
+
   // A connected carousel is drawn by code over one generated background:
   // pictures generated slide by slide can never meet at the slide edges.
   // Text the slide fonts can't draw is made the ordinary way instead.
@@ -3207,7 +3379,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
     type === "carousel" &&
     (isSeamless(output.carousel?.design) || output.carousel?.design.flow === "composed");
 
-  if (needsMedia(type, input) && !addPlatforms && !canKeepSourcePhoto) {
+  if (needsMedia(type, input) && !addPlatforms && !canKeepSourcePhoto && !memeDrawn) {
     await requireActiveJob(client, job);
     await setStage(client, job.id, "render");
     let referenceUrl: string | null = null;
@@ -3505,6 +3677,28 @@ async function shapeOutput(args: {
             ? { artDirection: archetypeById(parsed.artDirection)!.id }
             : {}),
           onImageText: String(parsed.onImageText ?? "").trim(),
+          // A meme on a real template (ADR-0047): its id, how it is made and its words.
+          ...(memeTemplate(parsed.memeFormat) &&
+          ["classic", "remix"].includes(readMemeMode(parsed.memeMode) ?? "") &&
+          Array.isArray(parsed.onImageLines)
+            ? {
+                memeFormat: memeTemplate(parsed.memeFormat)!.id,
+                memeMode: readMemeMode(parsed.memeMode)!,
+                onImageLines: (parsed.onImageLines as unknown[])
+                  .map((line) => String(line ?? "").trim())
+                  .slice(0, 8),
+              }
+            : // A meme's exact lines and layout (categories.ts), only when the layout is real.
+              memeLayout(parsed.memeLayout) && Array.isArray(parsed.onImageLines)
+              ? {
+                  memeLayout: memeLayout(parsed.memeLayout)!.id,
+                  memeMode: "original",
+                  onImageLines: (parsed.onImageLines as unknown[])
+                    .map((line) => String(line ?? "").trim())
+                    .filter(Boolean)
+                    .slice(0, memeLayout(parsed.memeLayout)!.lines.length),
+                }
+              : {}),
           altText: String(parsed.altText ?? ""),
         } as object),
         ...(planned ? { videoPlan: planned.videoPlan } : {}),
@@ -4085,6 +4279,12 @@ async function retryReferenceUrls(client: Db, row: JobRow, task: ProviderTask) {
   if (task.photoDesign) return photoDesignReferences(task.photoDesign, row.workspace_id);
   // A product poster is always remade from the product itself.
   if (task.productHero) return productHeroReferences(task.productHero, row.workspace_id);
+  // A meme remix is always redrawn from its template.
+  if (task.meme) {
+    const template = memeTemplate(task.meme.templateId);
+    const url = template ? await memeTemplateDataUrl(template) : null;
+    return url ? [url] : [];
+  }
   const ids = row.input?.controls?.referenceAssetIds;
   if (!ids?.length && !row.output?.visualTaste) return task.referenceAssets;
   const supplied = await resolveStudioReferences(client, row.workspace_id, ids);
@@ -4456,8 +4656,25 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           );
         }
       }
-      let finalImage =
-        check.dataUrl && task.kind === "image"
+      // A meme remix: the words go on the picture as drawn, then it is shown
+      // whole on the post's canvas (cropping would cut its boxes).
+      const remixed =
+        task.meme && check.dataUrl ? await finishMemeRemix(check.dataUrl, task.meme) : null;
+      if (task.meme && !remixed)
+        warnings.push(
+          "The meme's words couldn't be added to the picture. Check it before posting.",
+        );
+      let finalImage = remixed
+        ? await (async () => {
+            const meta = await sharp(remixed).metadata();
+            const canvas = sourcePhotoCanvas(
+              { width: meta.width ?? 0, height: meta.height ?? 0 },
+              task.ratio,
+            );
+            const bytes = canvas ? await fitWhole(remixed, canvas.width, canvas.height) : remixed;
+            return `data:image/${canvas ? "png" : "jpeg"};base64,${bytes.toString("base64")}`;
+          })()
+        : check.dataUrl && task.kind === "image"
           ? await fitPortraitImage(check.dataUrl, task.ratio, {
               coverOnly: !!task.photoDesign || task.slot === BACKDROP_SLOT,
             })
@@ -4528,7 +4745,13 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         finalImage = await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner);
       // A storyboard frame is a preview, never published: no vision review.
       const boardFrame = isBoardSlot(task.slot) || row.output?.storyboard?.status === "preview";
-      const imageReview =
+      // What the picture must do decides how it is judged (meme, sale, design).
+      const reviewKind = reviewKindOf({
+        category: resolveCategory(row.input?.intent ?? {}),
+        type: row.type,
+        goal: row.input?.intent?.goal,
+      });
+      let imageReview: ImageReview | null =
         task.kind === "image" && finalImage && !boardFrame
           ? await reviewGeneratedImage(
               finalImage,
@@ -4569,6 +4792,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
                       ),
                     }
                   : undefined,
+              reviewKind,
             )
           : null;
       const artIssues =
@@ -4576,20 +4800,65 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           (issue) =>
             !task.compose || !/typograph|font|spelling|text|letter|logo|headline/i.test(issue),
         ) ?? [];
-      // Only a defect a person can't live with is made again, at Mellox's
-      // cost: wrong or misspelled words, a wrong or missing product, a covered
-      // face, broken anatomy. Taste notes (composition, colour, mood) stay as
-      // review notes on the piece instead of a second paid render.
-      const hardIssues = hardImageDefects(artIssues);
-      if (imageReview?.status === "warn" && hardIssues.length && (task.reviewAttempts ?? 0) < 1) {
+      // At most one more picture, at Mellox's cost: for a defect a person
+      // can't live with (wrong words, wrong product, covered face, broken
+      // anatomy), or for a picture clearly below the creative bar for its
+      // kind with specific fixes (creativeRedo). Other notes stay notes.
+      const decision = creativeRedo(
+        imageReview ? { ...imageReview, issues: artIssues } : null,
+        reviewKind,
+        task.reviewAttempts ?? 0,
+      );
+      const hardNow = hardImageDefects(artIssues).length > 0;
+      // The redo came back: keep the first picture if it was clearly better.
+      if (task.firstRender && finalImage && imageReview) {
+        const keepFirst = keepFirstRender(task.firstRender, {
+          score: decision.score,
+          hard: hardNow,
+        });
+        if (keepFirst) {
+          const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+          // Our own unlinked asset, saved by this job a moment ago.
+          const stored = await downloadAssetObject(
+            supabaseAdmin as unknown as SupabaseClient,
+            task.firstRender.storagePath,
+          ).catch(() => null);
+          if (stored?.data) {
+            finalImage = `data:image/png;base64,${Buffer.from(await stored.data.arrayBuffer()).toString("base64")}`;
+            imageReview = task.firstRender.review;
+          }
+        }
+        task.firstRender = undefined;
+      }
+      if (decision.redo && finalImage) {
         await requireActiveJob(c, row);
+        // A taste redo keeps the first picture, so the better of the two wins.
+        if (decision.reason === "score" && imageReview) {
+          const first = await persistAsset({
+            workspaceId: row.workspace_id,
+            idempotencyKey: `studio-review-first:${row.id}:${task.slot}:${task.taskId}`,
+            dataUrl: finalImage,
+            contentItemIds: [],
+            assetType: "image",
+            metadata: { source: "studio_review_first", job_id: row.id, image_review: imageReview },
+          });
+          if (first.ok && first.asset.storage_path)
+            task.firstRender = {
+              storagePath: first.asset.storage_path,
+              score: decision.score,
+              hard: false,
+              review: imageReview,
+            };
+        }
         // The fix goes first so the image model's prompt limit can't cut it off.
         const repairPrompt = fitImagePrompt({
           must: [
             [
-              "The previous render was rejected by visual quality review. Correct these specific visible defects and create a fresh, polished composition:",
-              ...hardIssues.map((issue) => `- ${issue}`),
-              "Preserve the supplied brand identity and exact verified copy. Do not recreate the defect.",
+              decision.reason === "hard"
+                ? "The previous render was rejected by visual quality review. Correct these specific visible defects and create a fresh, polished composition:"
+                : "The previous render was below the creative bar. Make a fresh, stronger composition that applies these specific changes:",
+              ...decision.fixes.map((issue) => `- ${issue}`),
+              "Preserve the supplied brand identity and exact verified copy. Do not recreate the problem.",
             ].join("\n"),
           ],
           body: task.prompt,

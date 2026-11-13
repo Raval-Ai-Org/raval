@@ -666,7 +666,8 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
   const strategy = StrategySchema.safeParse(program.strategy);
   const shape = shapeWeek(slots, {
     goal: program.goal,
-    pillars: strategy.success ? strategy.data.pillars.map((p) => p.title) : [],
+    pillars: strategy.success ? strategy.data.pillars : [],
+    messages: strategy.success ? strategy.data.messages : undefined,
     cycle,
   });
   let planned = 0;

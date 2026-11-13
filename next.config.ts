@@ -82,6 +82,10 @@ const nextConfig: NextConfig = {
     // list; this loads only the modules each file uses.
     optimizePackageImports: ["framer-motion"],
     ...(isDev ? { webpackMemoryOptimizations: true } : {}),
+    // Optional verification on small disks: skip Turbopack's build cache (~1 GB).
+    ...(process.env.MELLOX_BUILD_WITHOUT_CACHE === "true"
+      ? { turbopackFileSystemCacheForBuild: false }
+      : {}),
   },
   // A second dev server (e.g. a verification run next to your own) can build
   // into its own directory instead of fighting over .next.

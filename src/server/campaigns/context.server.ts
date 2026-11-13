@@ -74,6 +74,7 @@ type Running = {
   key_date: string | null;
   ends_on: string;
   plan: unknown;
+  brief?: unknown;
 };
 
 /** A campaign that's on, as Studio's ideas and prompts see it. */
@@ -84,6 +85,11 @@ export type RunningCampaign = {
   purpose: string;
   keyDate: string | null;
   endsOn: string;
+  /** The person's own words: what to remember, the real offer, the thread, the tag. */
+  keyMessage?: string;
+  offer?: string;
+  bigIdea?: string;
+  hashtag?: string;
 };
 
 /** The running campaigns, read once per Studio context. Empty when none or off. */
@@ -94,7 +100,7 @@ export async function runningCampaignsFor(
   if (!isCampaignsEnabled(workspaceId)) return [];
   const { data, error } = await db
     .from("workspace_campaigns")
-    .select("name, type, key_date, ends_on, plan")
+    .select("name, type, key_date, ends_on, plan, brief")
     .eq("workspace_id", workspaceId)
     .eq("status", "running")
     .order("starts_on", { ascending: true })
@@ -104,7 +110,17 @@ export async function runningCampaignsFor(
   return (data as Running[]).map((row) => {
     const plan = CampaignPlanSchema.safeParse(row.plan);
     const phase = plan.success ? currentPhase(plan.data.phases, ymd) : null;
+    const brief = (row.brief && typeof row.brief === "object" ? row.brief : {}) as Record<
+      string,
+      unknown
+    >;
+    const said = (v: unknown, max: number) =>
+      typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
     return {
+      keyMessage: said(brief.keyMessage, 240),
+      offer: said(brief.offer, 240),
+      bigIdea: plan.success ? said(plan.data.bigIdea, 300) : undefined,
+      hashtag: said(brief.hashtag, 40),
       name: row.name,
       label: playbookById(row.type)?.label ?? "Campaign",
       phase: phase?.label ?? null,
@@ -127,13 +143,17 @@ export function campaignBlockText(campaigns: readonly RunningCampaign[]): string
       c.phase ? `now in "${c.phase}": ${c.purpose}` : "",
       c.keyDate ? `key date ${c.keyDate}` : "",
       `runs until ${c.endsOn}`,
+      c.keyMessage ? `key message: ${c.keyMessage}` : "",
+      c.bigIdea ? `thread: ${c.bigIdea}` : "",
+      c.offer ? `offer (exact terms): ${c.offer}` : "",
+      c.hashtag ? `tag ${c.hashtag}` : "",
     ]
       .filter(Boolean)
       .join(" · "),
   );
   return [
     "## Campaigns running now",
-    "Mellox is running these planned campaigns. Their own posts are already on the calendar. Other posts may support a campaign but never repeat its pieces, announce its news early or contradict it.",
+    "Mellox is running these planned campaigns. Their own posts are already on the calendar. Other posts may support a campaign (same key message, the offer only in its exact terms) but never repeat its pieces, announce its news early or contradict it.",
     ...lines,
   ].join("\n");
 }

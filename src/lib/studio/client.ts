@@ -7,6 +7,7 @@ import { messageForStatus, userSafeMessage } from "@/lib/user-errors";
 import type { StudioType } from "./formats";
 import type { StudioIdea } from "./ideas";
 import type { CreateJobInput, GoalId, StudioControls, StudioJob } from "./jobs";
+import type { CategoryId } from "./categories";
 
 export class StudioApiError extends Error {
   constructor(
@@ -159,6 +160,8 @@ export const studioApi = {
     goal?: GoalId;
     controls?: Partial<StudioControls>;
     avoid?: string[];
+    category?: CategoryId;
+    recentCategories?: string[];
   }) {
     return call<WrittenPrompt>("/api/studio/prompt", {
       method: "POST",
@@ -176,6 +179,8 @@ export type WrittenPrompt = {
   basedOn: string;
   signal: string | null;
   goal?: GoalId;
+  category?: CategoryId;
+  categoryPicked?: boolean;
 };
 
 /** Brand DNA fields worth sending to the server (drops heavy/provenance data). */

@@ -328,6 +328,9 @@ const TEMPLATE_KIND: Record<string, VideoKindId> = {
   "video-unboxing": "product-showcase",
   "video-demo": "product-demo",
   "video-broll-hook": "broll-hook",
+  // One line on screen over phone-native footage: the meme and trend Reels (categories.ts).
+  "video-meme-reel": "broll-hook",
+  "video-trend-remix": "brand-story",
 };
 
 export function kindForTemplate(template: string | undefined): VideoKindId | null {

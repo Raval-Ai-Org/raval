@@ -11,11 +11,18 @@
 //   • Stable "style seed" per post keeps every aspect ratio visually consistent
 //     so square / landscape / portrait feel like one campaign.
 
+import { industryOf } from "@/lib/studio/knowledge/industries";
 import { emitAppEvent } from "@/lib/app-events";
 import type { PlatformId } from "@/lib/social-platforms";
 import { PLATFORMS } from "@/lib/social-platforms";
 import { deriveCreativeBrief, validateCreativeBrief } from "./creative-brief";
 import { deriveCreativeStrategy, strategyPromptLines } from "./creative-strategy";
+import {
+  NOT_GENERIC_RULES,
+  categoryPictureLines,
+  memeLayout as memeLayoutById,
+  type Category,
+} from "./studio/categories";
 import { hexToRgb, normalizeHex, pickTextOn, relLuminance } from "@/lib/color";
 import {
   CRAFT_RULES,
@@ -384,6 +391,10 @@ export function deriveMoodFromVoice(
     moods.push("art-directed, editorial magazine cover energy, confident negative space");
   if (has("finance", "fintech", "trust", "secure", "reliable"))
     moods.push("confident, structured, restrained palette, precise geometry");
+  // The category's own look (knowledge/industries.ts) beats a generic default:
+  // a restaurant and a SaaS brand never get the same picture.
+  const category = industryOf(industry, null);
+  if (category) return [moods[0], category.look].filter(Boolean).join("; ");
   if (moods.length === 0) moods.push("modern editorial, premium, confident, feed-native");
   return moods.slice(0, 2).join("; ");
 }
@@ -543,6 +554,16 @@ export function buildImagePromptDetailed(args: {
   noText?: boolean;
   /** The exact short line the brief chose for the picture, set verbatim. */
   onImageText?: string | null;
+  /**
+   * The scene the visual brief wrote for this picture (Studio). It is drawn as
+   * written and leads the prompt; the post's copy stays the message.
+   */
+  scene?: string | null;
+  /** The kind of post (studio/categories.ts): a native or a designed look. */
+  category?: Category | null;
+  /** Meme: the layout id and its exact lines, in order. */
+  memeLayout?: string | null;
+  onImageLines?: string[] | null;
 }): PromptInspection {
   const { postBody, postTitle, brand, workspaceName, platform, size, seedKey, autoSize, style } =
     args;
@@ -654,28 +675,44 @@ export function buildImagePromptDetailed(args: {
   const allowPeople = !/\bno (people|faces|humans|models|person)\b/i.test(dontRules ?? "");
   const allowText = !args.noText && maxWords !== 0;
   const keepStyleLayout = !!style?.composition || style?.references?.strength === "exact";
+  // A native category (a meme, a POV, a customer-style photo) is made like a
+  // real person's post: no campaign layout, no studio polish.
+  const category = args.category ?? null;
+  const native = category?.register === "native";
+  const scene = (args.scene ?? "").trim().slice(0, 1600);
+  const meme = category?.id === "meme" ? memeLayoutById(args.memeLayout) : null;
   const deliverable = detectDeliverable({
     text: `${postTitle ?? ""}\n${body}`,
     objective: creativeStrategy.objective,
     physicalProduct: physical,
   });
-  const archetype = keepStyleLayout
-    ? null
-    : (archetypeById(args.artDirection) ??
-      pickArchetype({
-        format: creativeStrategy.format,
-        objective: creativeStrategy.objective,
-        brandText: brandSignals,
-        physicalProduct: physical,
-        allowPeople,
-        allowText,
-        seed: `${brandName}::${args.variationKey ?? seedKey}`,
-        prefer: deliverable.prefer,
-        exclude: args.avoidArtDirections,
-      }));
+  const archetype =
+    keepStyleLayout || native
+      ? null
+      : (archetypeById(args.artDirection) ??
+        pickArchetype({
+          format: creativeStrategy.format,
+          objective: creativeStrategy.objective,
+          brandText: brandSignals,
+          physicalProduct: physical,
+          allowPeople,
+          allowText,
+          seed: `${brandName}::${args.variationKey ?? seedKey}`,
+          prefer: deliverable.prefer,
+          exclude: args.avoidArtDirections,
+        }));
   const exactText = (args.onImageText ?? "").replace(/\s+/g, " ").trim();
-  const verbatim =
-    allowText && exactText && exactText.split(" ").length <= Math.max(maxWords, 1)
+  // A meme's lines are labelled by its layout (Top, Bottom, POV line…).
+  const memeLines =
+    meme && allowText
+      ? (args.onImageLines ?? [])
+          .map((text, i) => ({ label: meme.lines[i] ?? `Line ${i + 1}`, text }))
+          .filter((l) => l.text.trim())
+          .slice(0, meme.lines.length)
+      : [];
+  const verbatim = memeLines.length
+    ? verbatimTextBlock({ lines: memeLines })
+    : allowText && exactText && exactText.split(" ").length <= Math.max(maxWords, 1)
       ? verbatimTextBlock({ lines: [{ label: "Headline", text: exactText }] })
       : [];
   const artDirectionLines = archetype
@@ -685,10 +722,17 @@ export function buildImagePromptDetailed(args: {
         allowText,
         deferToStyle: !!(style && (style.block || style.references?.count)),
       })
-    : [
-        "CRAFT — what the world's best social creatives share:",
-        ...CRAFT_RULES.map((rule) => `• ${rule}`),
-      ];
+    : native
+      ? [
+          `MADE LIKE A REAL POST — ${category?.label ?? "native"}:`,
+          ...(meme ? [`• Meme layout "${meme.name}": ${meme.layout}`] : []),
+          ...categoryPictureLines(category).map((rule) => `• ${rule}`),
+          ...NOT_GENERIC_RULES.map((rule) => `• ${rule}`),
+        ]
+      : [
+          "CRAFT — what the world's best social creatives share:",
+          ...CRAFT_RULES.map((rule) => `• ${rule}`),
+        ];
 
   // Instagram-aware crop-safe zones. Instagram re-crops the same asset
   // across surfaces: feed shows 1:1 (or 4:5 portrait), Explore/Profile grid
@@ -745,8 +789,17 @@ export function buildImagePromptDetailed(args: {
   );
 
   const prompt = [
-    `Design ONE premium, on-brand social image for ${brandName}${industry ? ` (${industry})` : ""}.`,
+    native
+      ? `Make ONE Instagram post picture for ${brandName}${industry ? ` (${industry})` : ""} that looks posted by a real person, not made as an ad.`
+      : `Design ONE premium, on-brand social image for ${brandName}${industry ? ` (${industry})` : ""}.`,
     "",
+    ...(scene
+      ? [
+          "SCENE — draw exactly this; it was written for this post and wins over any general guidance below:",
+          scene,
+          "",
+        ]
+      : []),
     ...(style && (style.block || style.references?.count) ? [...styleLead(style), ""] : []),
     brandDnaHasAny
       ? "BRAND DNA — the image must feel unmistakably from this brand. Treat these as authoritative source-of-truth:"
@@ -766,23 +819,36 @@ export function buildImagePromptDetailed(args: {
     keywords && `• Brand keywords: ${keywords}`,
     doRules && `• Brand do's: ${doRules}`,
     "",
-    "POST MESSAGE — the visual must REINFORCE this message, not describe it literally:",
+    scene
+      ? "POST MESSAGE — what the caption says (context only; the SCENE above is what to draw):"
+      : "POST MESSAGE — the visual must REINFORCE this message, not describe it literally:",
     hook && `• Hook: "${hook}"`,
-    `• Draft copy: ${snippet}`,
+    scene ? "" : `• Draft copy: ${snippet}`,
     "",
-    ...strategyPromptLines(creativeStrategy),
+    // With a written scene the strategy is already decided; its generic lines only add noise.
+    ...(scene ? [] : strategyPromptLines(creativeStrategy)),
     style && (style.block || style.references?.count)
       ? "• Keep the idea, but render it in the brand style above: its medium, layout and colours win over any format named here."
       : "",
     "",
-    ...deliverablePromptLines(deliverable),
+    ...(native ? [] : deliverablePromptLines(deliverable)),
     "",
+    ...(category && !native
+      ? [
+          `CATEGORY — ${category.label}:`,
+          ...categoryPictureLines(category).map((rule) => `• ${rule}`),
+          ...NOT_GENERIC_RULES.map((rule) => `• ${rule}`),
+          "",
+        ]
+      : []),
     ...artDirectionLines,
     "",
     `VISUAL SYSTEM (style anchor: ${styleSeed}) — LOCK these across every size and every regeneration of this post:`,
-    brandColors.length > 0
-      ? `• EXACT brand palette (use ONLY these hex values, do NOT invent new colors): ${brandColors.join(", ")}.${style?.colors.length ? " Each colour's job is set in the brand style above." : ` Canvas defaults — bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`}`
-      : `• Palette (seeded fallback — no brand colors provided): ${vis.palette.promptDescription} Use bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`,
+    native && brandColors.length > 0
+      ? `• Brand colours (${brandColors.join(", ")}) show up as real things in the photo; the photo otherwise keeps its natural colours.`
+      : brandColors.length > 0
+        ? `• EXACT brand palette (use ONLY these hex values, do NOT invent new colors): ${brandColors.join(", ")}.${style?.colors.length ? " Each colour's job is set in the brand style above." : ` Canvas defaults — bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`}`
+        : `• Palette (seeded fallback — no brand colors provided): ${vis.palette.promptDescription} Use bg ${vis.palette.bg}, surface ${vis.palette.surface}, text ${vis.palette.fg}, accent ${vis.palette.accent}.`,
     brandFonts.length > 0
       ? `• EXACT brand fonts (or the closest visual equivalent): ${brandFonts.map((f) => `"${f}"`).join(", ")}. Match weight, tracking, and rhythm.`
       : archetype && allowText
@@ -791,21 +857,33 @@ export function buildImagePromptDetailed(args: {
     `• Composition: ${styleComposition(style) ?? (archetype ? `the "${archetype.name}" layout set out in ART DIRECTION above` : vis.composition)}`,
     style?.mood
       ? `• Visual mood: ${style.mood}.`
-      : `• Visual mood (derived from brand voice): ${moodLine}.`,
+      : native
+        ? "• Visual mood: everyday and real, the way the brand's customers post, never polished like an ad."
+        : `• Visual mood (derived from brand voice): ${moodLine}.`,
     "• Feel: match the brand's stated style and the audience's context. Make the message immediately understandable at feed size.",
-    "• Rendering quality: clean edges, readable contrast, intentional lighting and composition. No fuzzy artifacts, distorted product details, or decorative clutter.",
+    native
+      ? "• Rendering quality: a sharp, believable phone photo; real skin, real clutter, natural light. No distorted hands, faces or product details."
+      : "• Rendering quality: clean edges, readable contrast, intentional lighting and composition. No fuzzy artifacts, distorted product details, or decorative clutter.",
     hasLogo
       ? `• LOGO OVERLAY: the real brand logo will be composited onto this image after generation in the ${corner} corner at ~12% width. LEAVE THAT CORNER CLEAN — no busy pattern, no text, no faces, no high-contrast detail in that ~18% square region. Do NOT draw any logo, wordmark, monogram, or letter mark yourself.`
       : `• No brand logo provided — do NOT invent a logo, wordmark, or monogram. Compose without any brand mark; keep the corner clean.`,
-    `• Consistency rule: any other image tagged with style anchor "${styleSeed}" must look like it came from the same art-directed set — same palette, same type system, same compositional grammar. Only reframe for the target aspect ratio.`,
+    native
+      ? "• Brand colours appear naturally in the scene (clothes, the product, a wall, a cup), never as a designed frame or colour wash."
+      : `• Consistency rule: any other image tagged with style anchor "${styleSeed}" must look like it came from the same art-directed set — same palette, same type system, same compositional grammar. Only reframe for the target aspect ratio.`,
     style?.block
       ? STYLE_NEVER
       : "• Absolutely NOT: stock-photo, clip-art, AI-generic collage, cliché 3D blobs, generic gradient mesh, purple-pink SaaS gradient, off-palette colors, low-resolution textures.",
     "",
     "TEXT ON IMAGE:",
     ...(verbatim.length ? verbatim : [textRule(maxWords)]),
-    "• Type must sit in the brand palette. Kerning tight, hierarchy clear. Legible at thumbnail size.",
-    ...(allowText ? TYPE_SYSTEM.map((rule) => `• ${rule}`) : []),
+    ...(native
+      ? [
+          "• Set the words the way Instagram posts set them (see MADE LIKE A REAL POST above), not in the brand's display type. Large, plain, perfectly spelled, legible at thumbnail size.",
+        ]
+      : [
+          "• Type must sit in the brand palette. Kerning tight, hierarchy clear. Legible at thumbnail size.",
+          ...(allowText ? TYPE_SYSTEM.map((rule) => `• ${rule}`) : []),
+        ]),
     "",
     "GUARDRAILS:",
     "• No watermarks. No logos of other companies. No third-party brand marks.",
@@ -813,7 +891,9 @@ export function buildImagePromptDetailed(args: {
     "• No unsafe, medical, financial-advice, or regulated-claim imagery.",
     dontRules && `• Brand don'ts: ${dontRules}`,
     "",
-    cropSafeRule,
+    // Studio makes each size on its own, so a scene-led picture isn't squeezed
+    // into the centre for crops it will never get.
+    scene ? "" : cropSafeRule,
     "QA CHECKLIST — reject or refine the concept if any rule fails:",
     ...validateCreativeBrief(creativeBrief).map((rule) => `• ${rule}`),
     aspectLine,

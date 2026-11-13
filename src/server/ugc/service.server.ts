@@ -197,6 +197,13 @@ const BRAND_FIELDS = [
   "websiteUrl",
 ] as const;
 
+const CUSTOMER_FIELDS = [
+  ["painPoints", "customerPainPoints"],
+  ["objections", "customerObjections"],
+  ["buyingTriggers", "customerBuyingTriggers"],
+  ["jobsToBeDone", "customerJobsToBeDone"],
+] as const;
+
 /** Keep only the Brand DNA fields the ad engine uses, size-capped. */
 export function brandSnapshot(brand: Record<string, unknown> | undefined): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -205,6 +212,15 @@ export function brandSnapshot(brand: Record<string, unknown> | undefined): Recor
     const v = brand[key];
     if (typeof v === "string" && v.trim()) out[key] = v.trim().slice(0, 1200);
     else if (Array.isArray(v)) out[key] = v.filter((x) => typeof x === "string").slice(0, 10);
+  }
+  // The customer's own words (Brand DNA's customer block): what hurts, what
+  // holds them back and what makes them buy are what a creator video is built on.
+  const customer = brand.customer;
+  if (customer && typeof customer === "object" && !Array.isArray(customer)) {
+    for (const [field, key] of CUSTOMER_FIELDS) {
+      const v = (customer as Record<string, unknown>)[field];
+      if (typeof v === "string" && v.trim()) out[key] = v.trim().slice(0, 600);
+    }
   }
   return out;
 }

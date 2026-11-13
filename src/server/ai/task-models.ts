@@ -226,6 +226,10 @@ const REGISTRY: Record<string, TaskPlan> = {
   // The visual brief a picture or video is made from (buildVisualBriefPrompt).
   "studio.image.brief": tier(WRITER, "low"),
   "studio.video.brief": tier(WRITER, "low"),
+  // A meme's concept (buildMemeConceptPrompt): three ideas, a critique and the
+  // pick, on a real template or an original scene. Humour needs the stronger
+  // writer; it replaces the image brief for memes, it never adds a call.
+  "studio.meme.concept": tier(CONVERSATION, "low", { maxTokens: 2_500 }),
   // A new AI video's storyboard (buildVideoStoryboardPrompt): one text call,
   // and where a video's story and consistency are won, so the premium tier.
   "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000, timeoutMs: 240_000 }),
@@ -234,7 +238,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.motion.compose": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 300_000 }),
   // Scores a finished video's sampled frames; code decides (src/lib/studio/video/checks.ts).
   "studio.video.qa": tier(WORKHORSE, "low", { maxTokens: 1_200 }),
-  "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
+  "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "campaign-generation": tier(ANALYST, "low"),
   // Campaigns (ADR-0039): the words for a laid-out campaign, and the brief

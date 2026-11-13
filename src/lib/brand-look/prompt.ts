@@ -1,6 +1,7 @@
 // Brand look → prompt text. Pure, deterministic (stable order, so response caches
 // hit), and capped. Brand DNA facts stay in serializeBrandContext; these blocks
 // only describe *how* content reads and looks.
+import { languageNote } from "./languages";
 import type { BrandLook } from "./resolve";
 import type { StyleFormat } from "./spec";
 
@@ -89,7 +90,7 @@ export function writingStyleBlock(resolved: BrandLook, format?: StyleFormat | st
   if (w.signaturePhrases?.length)
     push("Signature phrases (use naturally)", w.signaturePhrases.slice(0, 6).join(" | "));
   if (w.bannedWords?.length) push("Never use", w.bannedWords.slice(0, 30).join(", "));
-  push("Language", w.language);
+  push("Language", languageNote(w.language));
   const key = format === "carousel" ? "social" : format;
   if (key && w.perFormat && key in w.perFormat) {
     push(`For this ${format}`, w.perFormat[key as keyof typeof w.perFormat]);

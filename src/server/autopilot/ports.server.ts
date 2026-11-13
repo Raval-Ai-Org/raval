@@ -286,7 +286,7 @@ function planUser(
       }
       const shape = input.shape.get(s.index);
       const aim = shareAim(shape?.aim);
-      return `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${aim ? ` · for: ${aim.label.toLowerCase()}` : ""}${opening(shape?.hook) ? ` · opening: ${opening(shape?.hook)!.label.toLowerCase()}` : ""}${shape?.pillar ? ` · theme: ${shape.pillar}` : ""}${s.moment ? ` · key date: ${s.moment}` : ""}`;
+      return `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${aim ? ` · for: ${aim.label.toLowerCase()}` : ""}${opening(shape?.hook) ? ` · opening: ${opening(shape?.hook)!.label.toLowerCase()}` : ""}${shape?.pillar ? ` · theme: ${shape.pillar}` : ""}${shape?.stage ? ` · stage: ${shape.stage}` : ""}${s.moment ? ` · key date: ${s.moment}` : ""}`;
     })
     .join("\n");
   const aims = [...new Set([...input.shape.values()].map((v) => v.aim))]
@@ -414,6 +414,16 @@ async function context(workspaceId: string) {
  * Autopilot's and campaigns' posts that have numbers, for what it learns
  * between weeks. Campaign planning reads it too.
  */
+/** Saves, sends and comments only where the network reported them (never 0 for missing). */
+function interactions(metrics: Record<string, unknown>) {
+  const out: { saves?: number; shares?: number; comments?: number } = {};
+  for (const key of ["saves", "shares", "comments"] as const) {
+    const n = Number(metrics[key]);
+    if (metrics[key] != null && Number.isFinite(n) && n >= 0) out[key] = n;
+  }
+  return out;
+}
+
 export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
   const { data } = await db
     .from("autopilot_actions")
@@ -428,6 +438,9 @@ export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece
     platform: typeof row.platform === "string" ? row.platform : null,
     contentType: typeof row.content_type === "string" ? row.content_type : null,
     views: Number(record(record(row.result).metrics).views) || 0,
+    ...interactions(record(record(row.result).metrics)),
+    aim: typeof record(row.result).aim === "string" ? (record(row.result).aim as string) : null,
+    hook: typeof record(row.result).hook === "string" ? (record(row.result).hook as string) : null,
   }));
 }
 
@@ -652,6 +665,8 @@ export const realPorts: AutopilotPorts = {
             brief: action.brief,
             aim: action.result.aim,
             pillar: action.result.pillar,
+            stage: action.result.stage,
+            stageMessage: action.result.stageMessage,
             use: readBrainUse(action.result.brains),
           }),
           goal: action.goal ? STUDIO_GOAL[action.goal] : undefined,

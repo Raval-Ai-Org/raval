@@ -138,6 +138,18 @@ export * from "./social";
 export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
 // Studio motion graphics (ADR-0043), lucide until a bespoke glyph exists.
 export { Shapes } from "lucide-react";
+// Studio post categories (categories.ts), lucide until bespoke glyphs exist.
+export {
+  Columns2,
+  Flame,
+  Laugh,
+  ListOrdered,
+  Package,
+  Quote,
+  Scale,
+  Smartphone,
+  Vote,
+} from "lucide-react";
 // Onboarding's brand categories (no-website setup), lucide until bespoke glyphs exist.
 export {
   Baby,

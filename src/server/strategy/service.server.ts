@@ -181,7 +181,7 @@ export async function saveStrategy(
 async function followInAutopilot(workspaceId: string, strategy: MarketingStrategy): Promise<void> {
   try {
     const { syncProgramStrategy } = await import("@/server/autopilot/service.server");
-    await syncProgramStrategy(workspaceId, toAutopilotStrategy(strategy));
+    await syncProgramStrategy(workspaceId, toAutopilotStrategy(strategy), strategy.goal.type);
   } catch (error) {
     // The strategy is saved; Autopilot picks it up from the workspace next week.
     console.error("[strategy] could not update Autopilot's copy", error);

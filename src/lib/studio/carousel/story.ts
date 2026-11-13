@@ -9,6 +9,7 @@
 import { applyLean } from "@/lib/taste/bias";
 import type { Lean } from "@/lib/taste/contracts";
 import type { CarouselSlide } from "../jobs";
+import { categoryById } from "../categories";
 
 export type SlideRole = "cover" | "context" | "point" | "proof" | "recap" | "cta";
 
@@ -266,11 +267,15 @@ export function pickCarouselStructure(args: {
   brief?: string | null;
   /** The brand's taste for carousel stories (ADR-0038). */
   lean?: Lean | null;
+  /** The category the person picked (categories.ts): its structure comes next after a template's. */
+  category?: string | null;
 }): CarouselStructure {
   const kept = getCarouselStructure(args.preferred);
   if (kept) return kept;
   const fromTemplate = getCarouselStructure(TEMPLATE_STRUCTURE[args.template ?? ""]);
   if (fromTemplate) return fromTemplate;
+  const fromCategory = getCarouselStructure(categoryById(args.category)?.carouselStructure);
+  if (fromCategory) return fromCategory;
   // "A four-step checklist" must come out as a checklist, not as three mistakes.
   const asked = getCarouselStructure(structureFromBrief(args.brief));
   if (asked) return asked;

@@ -101,6 +101,7 @@ export const LANGUAGES = [
   { id: "nl", label: "Dutch" },
   { id: "hi", label: "Hindi" },
   { id: "ur", label: "Urdu" },
+  { id: "ur-Latn", label: "Roman Urdu" },
   { id: "ar", label: "Arabic" },
   { id: "tr", label: "Turkish" },
   { id: "id", label: "Indonesian" },

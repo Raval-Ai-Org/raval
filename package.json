@@ -33,7 +33,8 @@
     "eval:watch": "npx --yes promptfoo@latest eval -c evals/competitor-intel.promptfooconfig.yaml -c evals/campaign-generation.promptfooconfig.yaml -c evals/security.promptfooconfig.yaml --watch",
     "storage:migrate": "node scripts/storage/migrate-to-r2.mjs",
     "motionmox:bundle": "node scripts/motionmox/bundle.mjs",
-    "prebuild": "node scripts/motionmox/bundle.mjs --soft"
+    "prebuild": "node scripts/motionmox/local-build.mjs copy && node scripts/motionmox/bundle.mjs --soft",
+    "postbuild": "node scripts/motionmox/local-build.mjs restore"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",

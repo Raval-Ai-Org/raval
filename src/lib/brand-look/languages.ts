@@ -38,6 +38,7 @@ export const CONTENT_LANGUAGES: ContentLanguage[] = [
   { code: "he", country: "IL", label: "Hebrew", native: "עברית" },
   { code: "fa", country: "IR", label: "Persian", native: "فارسی" },
   { code: "ur", country: "PK", label: "Urdu", native: "اردو" },
+  { code: "ur-Latn", country: "PK", label: "Roman Urdu", native: "Roman Urdu" },
   { code: "hi", country: "IN", label: "Hindi", native: "हिन्दी" },
   { code: "bn", country: "BD", label: "Bengali", native: "বাংলা" },
   { code: "pa", country: "IN", label: "Punjabi", native: "ਪੰਜਾਬੀ" },
@@ -86,4 +87,20 @@ export function withLanguage<T extends { writing?: Record<string, unknown> }>(
 ): T {
   const base = (look ?? {}) as T;
   return { ...base, writing: { ...(base.writing ?? {}), language } } as T;
+}
+
+/**
+ * How to write a language that is more than its name (a script choice, a
+ * mix): the line generators read after "Language:". Pure.
+ */
+const LANGUAGE_NOTES: Record<string, string> = {
+  "Roman Urdu":
+    'Roman Urdu: Urdu written in Latin letters the way people in Pakistan text and post ("Aaj ka offer dekha?", "Yeh try karo"), everyday English words kept in English as people say them, never Urdu script, spelling kept consistent within a piece.',
+  Urdu: "Urdu in Urdu script (Nastaliq), natural spoken Urdu; brand and product names stay as the brand writes them.",
+};
+
+export function languageNote(label: string | null | undefined): string | null {
+  const clean = (label ?? "").trim();
+  if (!clean) return null;
+  return LANGUAGE_NOTES[clean] ?? clean;
 }

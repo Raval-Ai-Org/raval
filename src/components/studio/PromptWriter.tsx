@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { readBrandPayload, studioApi, type WrittenPrompt } from "@/lib/studio/client";
 import { getTemplate } from "@/lib/studio/templates";
+import { categoryById } from "@/lib/studio/categories";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 
 const HISTORY_LIMIT = 30;
@@ -29,6 +30,29 @@ function readHistory(workspaceId: string): string[] {
     return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
   } catch {
     return [];
+  }
+}
+
+const categoriesKey = (workspaceId: string) => `studio:written-categories:${workspaceId}`;
+
+/** The categories this browser was given lately, newest first (an automatic pick rotates). */
+function readCategories(workspaceId: string): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(categoriesKey(workspaceId)) ?? "[]");
+    return Array.isArray(raw)
+      ? raw.filter((x): x is string => typeof x === "string").slice(0, 6)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberCategory(workspaceId: string, id: string) {
+  try {
+    const next = [id, ...readCategories(workspaceId).filter((x) => x !== id)].slice(0, 6);
+    localStorage.setItem(categoriesKey(workspaceId), JSON.stringify(next));
+  } catch {
+    /* ignore */
   }
 }
 
@@ -104,6 +128,7 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
     if (busy) return;
     const previous = {
       brief: session.brief,
+      category: session.category,
       goal: session.goal,
       ideaId: session.ideaId,
       ideaSource: session.ideaSource,
@@ -118,6 +143,8 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
         template: session.template,
         goal: session.goal,
         controls: session.controls,
+        category: session.category,
+        recentCategories: readCategories(session.workspaceId),
         avoid: [
           ...(result ? [result.title, result.signal ?? ""] : []),
           ...readHistory(session.workspaceId),
@@ -127,6 +154,7 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
       });
       if (!alive.current) return;
       remember(session.workspaceId, [written.title, written.signal]);
+      if (written.category) rememberCategory(session.workspaceId, written.category);
 
       // Reveal the prompt into the box, a few characters at a time.
       const full = written.prompt;
@@ -142,14 +170,17 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
       }
       updateSession(session.id, {
         brief: full,
+        // The category it was written as is selected, so the post is made as that kind.
+        ...(written.category ? { category: written.category } : {}),
         goal: session.goal ?? written.goal,
         ideaId: undefined,
         ideaSource: undefined,
         error: null,
       });
       setResult(written);
+      const kind = categoryById(written.category)?.label;
       toast.success("Your prompt is ready", {
-        description: written.title,
+        description: kind ? `${kind} · ${written.title}` : written.title,
         action: {
           label: "Undo",
           onClick: () => {

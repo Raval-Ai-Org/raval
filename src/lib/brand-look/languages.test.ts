@@ -28,3 +28,16 @@ describe("content languages", () => {
     });
   });
 });
+
+import { languageNote } from "./languages";
+import { writingStyleBlock } from "./prompt";
+import { resolveLook } from "./resolve";
+describe("Roman Urdu", () => {
+  it("is a content language and tells the writer which script to use", () => {
+    expect(CONTENT_LANGUAGES.some((l) => l.label === "Roman Urdu")).toBe(true);
+    expect(languageNote("Roman Urdu")).toMatch(/Latin letters/);
+    expect(languageNote("Spanish")).toBe("Spanish");
+    const look = resolveLook({ look: { writing: { language: "Roman Urdu" } } } as never);
+    expect(writingStyleBlock(look)).toMatch(/Latin letters/);
+  });
+});
