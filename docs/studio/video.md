@@ -83,7 +83,7 @@ render is never spent on a plan they wouldn't have chosen.
 | `product-motion`   | AI, no people                   | chain          | the picture / hero frame              |
 | `product-demo`     | AI, hands only                  | chain          | product at rest                       |
 | `broll-hook`       | AI + code words                 | cut (dissolve) | hero frame, hook line held throughout |
-| `motion-graphics`  | code (Opus design, Chromium)    | —              | the last frame, held                  |
+| `motion-graphics`  | code (PREMIUM design, Chromium) | —              | the last frame, held                  |
 
 Ids are stored on jobs: add, never rename. A person talking to the camera is
 a Creator (UGC) video.
@@ -160,7 +160,7 @@ to -14 LUFS. Every step fails open: the video keeps its own sound.
 
 `src/lib/studio/motion/` (pure) and `src/server/studio/motion/`:
 
-- Opus (route `studio.motion.compose`) writes one HTML/SVG + CSS document with
+- The PREMIUM model, Gemini 4 Carbon (route `studio.motion.compose`), writes one HTML/SVG + CSS document with
   CSS `@keyframes` only, on a layout from `MOTION_LAYOUTS` and the craft rules
   in `principles.ts` (add rules there, never in the prompt).
 - `staticIssues` refuses scripts, handlers, outside addresses, invented

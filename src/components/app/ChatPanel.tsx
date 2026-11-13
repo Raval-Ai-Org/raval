@@ -17,7 +17,8 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
-import { campaignsPath, workspacePath } from "@/lib/workspace/paths";
+import { campaignsPath, communitiesPath, workspacePath } from "@/lib/workspace/paths";
+import { useBrainOverview } from "./brain/use-brain";
 import { waitingPlace } from "@/lib/pulse/pulse";
 import { ArrowDown } from "@/components/icons";
 import { toast } from "@/lib/toast";
@@ -1644,6 +1645,8 @@ export function ChatPanel({
   const pulse = useWorkspacePulse(workspaceId).data;
   // Home's cards (free reads; a card only opens a place).
   const startHere = useStartHere(workspaceId);
+  // Same cached read Start here already makes: real lines on Home's brain tiles.
+  const brainOverview = useBrainOverview(workspaceId).data ?? null;
   const openCreate = useOpenCreate();
   // Home's idea cards (Holo's Idea swipe): the deck itself, any format or
   // blog topics. Picking one opens the composer with it; nothing is made yet.
@@ -1700,6 +1703,12 @@ export function ChatPanel({
                 pulse={pulse}
                 onOpenWaiting={openWaiting}
                 onSwipe={(type) => setSwipe({ type })}
+                brain={brainOverview}
+                onAsk={(text) => {
+                  setInput(text);
+                  composerRef.current?.focus();
+                }}
+                onCommunities={() => navigate({ to: communitiesPath(workspaceId) })}
                 autopilot={<HomeAutopilot workspaceId={workspaceId} campaigns={pulse?.campaigns} />}
               />
             </div>

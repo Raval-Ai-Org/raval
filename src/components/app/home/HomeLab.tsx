@@ -33,6 +33,73 @@ import { StreakChipView } from "@/components/app/shell/Momentum";
 import { localDay, momentum } from "@/lib/home/momentum";
 import { animateStyles } from "@/lib/studio/repurpose";
 import { CreateLauncher } from "@/components/studio/CreateLauncher";
+import type { BrainCard, BrainOverview } from "@/lib/brain/brain";
+
+const labCard = (headline: string, facts: string[], health: number): BrainCard => ({
+  ready: true,
+  health,
+  headline,
+  updatedAt: null,
+  enabled: true,
+  facts,
+});
+
+/** Sample Brain overview: real-looking lines on Home's brain tiles. */
+function labBrain(done: boolean): BrainOverview {
+  const hour = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+  return {
+    brains: {
+      brand: labCard(
+        "Warm, plain-spoken coffee for busy mornings",
+        ["3 products", "Look set"],
+        done ? 90 : 62,
+      ),
+      audience: labCard("Remote workers who brew at home", ["4 groups"], done ? 80 : 0),
+      competitors: labCard("Bluebird posted a new cold brew", ["5 tracked"], 70),
+      market: labCard("Oat milk prices are falling", ["12 sources"], 55),
+    },
+    strategy: done
+      ? {
+          status: "confirmed",
+          stale: false,
+          updatedAt: hour(48),
+          pillars: [
+            { title: "Behind the roast", share: 40 },
+            { title: "Morning rituals", share: 35 },
+            { title: "Offers", share: 25 },
+          ],
+          headline: "Own the slow morning",
+        }
+      : { status: "draft", stale: false, updatedAt: null, pillars: [], headline: "" },
+    updates: [
+      {
+        id: "u1",
+        brain: "competitors",
+        title: "Bluebird started a 2-for-1 on cold brew",
+        at: hour(3),
+      },
+      {
+        id: "u2",
+        brain: "market",
+        title: "Specialty coffee searches up before winter",
+        at: hour(20),
+      },
+      {
+        id: "u3",
+        brain: "audience",
+        title: "New group: students who study in cafés",
+        at: hour(70),
+      },
+    ],
+    needs: done
+      ? []
+      : [
+          { id: "audience", brain: "audience", label: "Build audience groups", cta: "Build" },
+          { id: "strategy", brain: "strategy", label: "Confirm your strategy", cta: "Open" },
+        ],
+    generatedAt: new Date().toISOString(),
+  };
+}
 
 /** Sample Library pictures, drawn so the lab needs no network. */
 const LAB_PICTURES: AnimatePicture[] = [
@@ -91,6 +158,12 @@ export function HomeLab({ scene }: { scene?: string }) {
   };
   const pulse: WorkspacePulse = {
     ...EMPTY_PULSE,
+    products: ["Cold brew", "House blend"],
+    campaigns:
+      scene === "waiting"
+        ? [{ id: "c1", name: "Winter warmers", phase: "Tease", keyDate: null, waiting: 2 }]
+        : [],
+    goal: done ? { focus: "sales", label: "Sell more" } : null,
     waiting: scene === "waiting" ? 3 : 0,
     autopilot: { status: scene === "waiting" ? "running" : null, waiting: 0 },
   };
@@ -150,7 +223,7 @@ export function HomeLab({ scene }: { scene?: string }) {
   }
   const create = {
     open: () => true,
-    lockFor: (c: string) => (c === "video" ? ("starter" as const) : null),
+    lockFor: (c: string) => (c === "video" || c === "ugc" ? ("starter" as const) : null),
   };
 
   return (
@@ -272,6 +345,9 @@ export function HomeLab({ scene }: { scene?: string }) {
                   pulse={pulse}
                   onOpenWaiting={() => undefined}
                   create={create}
+                  brain={labBrain(done)}
+                  onAsk={(t) => setDraft(t)}
+                  onCommunities={() => toast("Opens Communities")}
                   starters={
                     <div className="flex flex-wrap gap-2">
                       {["Plan my week", "Write a launch post", "What are rivals posting?"].map(

@@ -41,7 +41,7 @@ import type { MotionMoxElementId } from "@/lib/studio/motionmox/elements";
 import { planMotionMox, wantsDesignedOpening } from "@/lib/studio/motionmox/plan";
 import { groundSpec, type MotionMoxSegment } from "@/lib/studio/motionmox/spec";
 import { OVERLAY_SECONDS } from "@/lib/studio/clip-edit";
-import { judgeFaces, judgeLayer } from "@/lib/studio/photo-design/checks";
+import { judgeFaces, judgeLayer, lenientWindows } from "@/lib/studio/photo-design/checks";
 import {
   findRegions,
   layerOverlay,
@@ -260,6 +260,7 @@ async function openingOverlay(
   });
   const reference = await asDataUrl(hero);
   let feedback: string | undefined;
+  let last: { design: Uint8Array; mask: Float32Array } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const prompt = [
       designLayerPrompt({
@@ -308,8 +309,25 @@ async function openingOverlay(
         .toBuffer();
     console.warn("[clip-edit] opening design rejected", faces.reason);
     feedback = `${faces.reason} ${faces.feedback}`;
+    last = { design, mask };
   }
-  return null;
+  // Last chance: keep the second layer if enough footage still shows, with
+  // every face area cleared of the design. Else no opening design at all.
+  if (!last) return null;
+  const { regions } = findRegions(last.mask, canvas.width, canvas.height);
+  if (!lenientWindows(plan, regions, canvas)) return null;
+  for (const box of plan.avoid) {
+    const x0 = Math.max(0, Math.floor((box.x - box.w * 0.15) * canvas.width));
+    const x1 = Math.min(canvas.width, Math.ceil((box.x + box.w * 1.15) * canvas.width));
+    const y0 = Math.max(0, Math.floor((box.y - box.h * 0.15) * canvas.height));
+    const y1 = Math.min(canvas.height, Math.ceil((box.y + box.h * 1.15) * canvas.height));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) last.mask[y * canvas.width + x] = 1;
+  }
+  return sharp(Buffer.from(layerOverlay(last.design, last.mask, plan.key)), {
+    raw: { width: canvas.width, height: canvas.height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
 }
 
 /** The end card: a designed still built around real frames or photos. Null if it can't be made. */
@@ -346,7 +364,14 @@ async function endCard(
         task.ratio,
         references,
       );
-      const composed = await composePhotoDesign({ layer, photos, readings, plan });
+      // The second layer is the last: use what it left rather than drop the card.
+      const composed = await composePhotoDesign({
+        layer,
+        photos,
+        readings,
+        plan,
+        lenient: attempt === 1,
+      });
       if (composed.ok)
         return sharp(composed.png)
           .resize(canvas.width * 2, canvas.height * 2, { fit: "cover" })
@@ -448,16 +473,21 @@ async function siteReel(args: ClipEditArgs, dir: string): Promise<string> {
   const device = siteDevice(meta.width);
   const { screen } = siteFrame(canvas, device);
   // The page at the screen's width, cut to the screens the reel can reach.
-  const scaled = Math.round((meta.height * screen.w) / meta.width);
-  const pageHeight = Math.min(scaled, screen.h * MAX_SITE_SCREENS);
+  const scaled = Math.max(1, Math.round((meta.height * screen.w) / meta.width));
+  // A capture shorter than the screen is extended with its own last row, so
+  // the screen is always full.
+  const pageHeight = Math.max(screen.h, Math.min(scaled, screen.h * MAX_SITE_SCREENS));
   const page = join(dir, "site-page.png");
   await sharp(source, { limitInputPixels: 120_000_000 })
-    .resize(screen.w, scaled)
+    .resize(screen.w, scaled, { fit: "fill" })
+    .extend({ bottom: Math.max(0, pageHeight - scaled), extendWith: "copy" })
     .extract({ left: 0, top: 0, width: screen.w, height: pageHeight })
     .png()
     .toFile(page);
-  const stops = siteStops(pageHeight, screen.h);
-  if (!stops.length) throw new Error("The page is too short to scroll.");
+  // Too short to scroll: the reel holds on the page, then moves the little
+  // it can (or not at all), instead of failing.
+  const found = siteStops(pageHeight, screen.h);
+  const stops = found.length ? found : [0, Math.max(0, pageHeight - screen.h)];
   const { segments, total } = siteTimeline(stops);
   const frame = join(dir, "site-frame.png");
   await writeFile(frame, await siteFramePng({ canvas, device, colours: task.brand.colours ?? [] }));
@@ -757,8 +787,23 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
     // MotionMox animating the headline itself needs no designed opening.
     let overlayPath: string | null = null;
     const makeOpening = async () => {
-      const overlay = await openingOverlay(task, stills[0], readings[0], canvas, wantCaptions);
-      if (!overlay) throw new Error("The opening design kept covering the footage.");
+      const overlay = await openingOverlay(
+        task,
+        stills[0],
+        readings[0],
+        canvas,
+        wantCaptions,
+      ).catch((error: unknown) => {
+        console.warn("[clip-edit] opening design failed", error);
+        return null;
+      });
+      if (!overlay) {
+        // The video is still made, just without the designed opening.
+        warnings.push(
+          "The opening design was left out: it kept covering the footage. Ask for a change to try again.",
+        );
+        return;
+      }
       overlayPath = join(dir, "overlay.png");
       await writeFile(overlayPath, overlay);
     };

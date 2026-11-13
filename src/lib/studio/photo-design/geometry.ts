@@ -217,12 +217,16 @@ export function fitPhoto(
     photo.height - cropHeight / 2,
     Math.max(cropHeight / 2, focus.y * photo.height),
   );
+  // Rounded sizes first, then the corner clamped so the crop never reaches
+  // past the photo's edge (an odd size rounding up would otherwise do that).
+  const w = Math.max(1, Math.min(photo.width, Math.round(cropWidth)));
+  const h = Math.max(1, Math.min(photo.height, Math.round(cropHeight)));
   return {
     crop: {
-      left: Math.max(0, Math.round(centreX - cropWidth / 2)),
-      top: Math.max(0, Math.round(centreY - cropHeight / 2)),
-      width: Math.max(1, Math.min(photo.width, Math.round(cropWidth))),
-      height: Math.max(1, Math.min(photo.height, Math.round(cropHeight))),
+      left: Math.min(photo.width - w, Math.max(0, Math.round(centreX - cropWidth / 2))),
+      top: Math.min(photo.height - h, Math.max(0, Math.round(centreY - cropHeight / 2))),
+      width: w,
+      height: h,
     },
     drawWidth,
     drawHeight,

@@ -44,7 +44,11 @@ import {
   cancelSession,
   chooseVersion,
   discardSession,
+  focusSession,
   generate,
+  getActiveSessionId,
+  getSession,
+  minimizeSession,
   openComposer,
   patchJobOutput,
   refreshSessionJob,
@@ -766,15 +770,30 @@ export function ReviewPanel({
       };
     return out;
   }, [draft.media]);
+  // Holo: Create hands the video to the corner list and closes Studio, like
+  // Generate does. Opening it from the list shows the video being made, not
+  // the storyboard again; a refusal brings the storyboard back to say why.
   const makeVideo = () => {
-    updateSession(session.id, { controls: { ...session.controls, videoPreview: false } });
-    void generate(session.id, {
+    const id = session.id;
+    updateSession(id, { controls: { ...session.controls, videoPreview: false } });
+    const started = generate(id, {
       kind: "refine",
       refine: {
         instruction:
           "Make the video from this approved storyboard. Keep every scene, word and the look exactly as planned.",
         target: "media",
       },
+      progress: true,
+    });
+    if (getSession(id)?.pendingKey) minimizeSession(id);
+    void started.then(() => {
+      const s = getSession(id);
+      if (!s || (!s.error && !s.billing)) return;
+      const active = getActiveSessionId();
+      if (!active || active === id) return focusSession(id);
+      toast.error(s.billing ? "That video needs more credits." : (s.error ?? "It didn't start."), {
+        action: { label: "Open", onClick: () => focusSession(id) },
+      });
     });
   };
   const videoPriceLabel = studioPriceLabel({
@@ -797,6 +816,13 @@ export function ReviewPanel({
 
   /* ── Status: one unmistakable statement of where this piece stands ── */
   const hero = (() => {
+    if (board)
+      return {
+        tone: "ok" as Tone,
+        icon: <Sparkles className="size-4" />,
+        title: "Your storyboard is ready",
+        sub: `${board.scenes.length} scenes · nothing is made or charged until you press Create video`,
+      };
     if (session.type === "script")
       return {
         tone: "ok" as Tone,
@@ -1653,7 +1679,7 @@ export function ReviewPanel({
                 </div>
               </motion.div>
             </AnimatePresence>
-            <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            <div className={cn("mt-4 flex flex-wrap items-center gap-1.5", board && "hidden")}>
               <span className="inline-flex h-6 items-center rounded-full bg-surface-2 px-2.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                 Version {job.attempt}
               </span>
@@ -1679,7 +1705,7 @@ export function ReviewPanel({
             <div className="mt-5 hidden @5xl/composer:flex">{actions}</div>
           </div>
 
-          {job.status === "succeeded" && job.content_item_ids?.[0] ? (
+          {!board && job.status === "succeeded" && job.content_item_ids?.[0] ? (
             <InspectorSection title="Make more from this">
               <MakeMoreFrom
                 session={session}
@@ -1691,7 +1717,8 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {job.status === "succeeded" &&
+          {!board &&
+          job.status === "succeeded" &&
           job.content_item_ids?.[0] &&
           connectedApps.has("mailchimp") &&
           session.type !== "story" &&
@@ -1705,7 +1732,8 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {job.status === "succeeded" &&
+          {!board &&
+          job.status === "succeeded" &&
           job.content_item_ids?.[0] &&
           (connectedApps.has("googledrive") ||
             connectedApps.has("gmail") ||
@@ -1723,7 +1751,7 @@ export function ReviewPanel({
           ) : null}
 
           {/* Other formats make a Story through "Make more from this". */}
-          {session.type === "story" || (session.type === "video" && rows.length) ? (
+          {board ? null : session.type === "story" || (session.type === "video" && rows.length) ? (
             <InspectorSection title={session.type === "story" ? "About Stories" : "Stories"}>
               <StoryNotes
                 workspaceId={session.workspaceId}
@@ -1746,7 +1774,7 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {hasDelivery && session.type !== "article" ? (
+          {board ? null : hasDelivery && session.type !== "article" ? (
             <InspectorSection title="Delivery">
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {groupStatus === "published"
@@ -1794,7 +1822,7 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {morePlatforms.length > 0 && !locked ? (
+          {!board && morePlatforms.length > 0 && !locked ? (
             <InspectorSection title="More platforms">
               <p className="text-sm leading-relaxed text-muted-foreground">
                 Adapt this post for more channels while keeping the existing versions.
@@ -1835,22 +1863,24 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          <InspectorSection
-            title="Checks"
-            aside={
-              <span className={cn("text-xs", failing ? "text-danger" : "text-muted-foreground")}>
-                {failing ? `${failing} to fix` : "All clear"}
-              </span>
-            }
-          >
-            <ul className="-my-1.5">
-              {checks.map((c, i) => (
-                <CheckRow key={c.key} check={c} index={i} />
-              ))}
-            </ul>
-          </InspectorSection>
+          {!board ? (
+            <InspectorSection
+              title="Checks"
+              aside={
+                <span className={cn("text-xs", failing ? "text-danger" : "text-muted-foreground")}>
+                  {failing ? `${failing} to fix` : "All clear"}
+                </span>
+              }
+            >
+              <ul className="-my-1.5">
+                {checks.map((c, i) => (
+                  <CheckRow key={c.key} check={c} index={i} />
+                ))}
+              </ul>
+            </InspectorSection>
+          ) : null}
 
-          {showAudience ? (
+          {showAudience && !board ? (
             <InspectorSection title="Audience">
               <AudienceInspector
                 workspaceId={session.workspaceId}

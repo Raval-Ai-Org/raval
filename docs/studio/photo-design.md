@@ -34,7 +34,7 @@ Decision record: [ADR-0036](../adr/0036-own-photos-and-clips.md).
 | Design-layer prompt: brand look, memory, type system, craft rules, verbatim copy      | `src/lib/studio/photo-design/prompt.ts`           |
 | Layer rendered as an ordinary Studio image task (metered, routed, retried)            | `startMedia` in `runner.server.ts`                |
 | Windows found, photos placed, design laid over, checks run                            | `compose.server.ts`, `geometry.ts`, `checks.ts`   |
-| One more layer with the failure written in, or a plain failure                        | `finishPhotoDesign`                               |
+| One more layer with the failure written in, then the lenient pass, then a code layout | `finishPhotoDesign`                               |
 | Real logo by code, visual review, saved with `source_preserved: true`                 | `advanceStudioJob`                                |
 
 A picture edit starts from the previous layer (`design_layer_path`), so only
@@ -105,7 +105,9 @@ again. "Bring photos to life" first waits for one animated clip per photo
   picture about a picked product is a product hero poster instead (ADR-0040):
   the product is cut out and staged, never pasted in a window.
 - The model never draws a logo or a person; only the real logo, placed by code.
-- No template fallback: a design that can't hold the photos fails plainly.
+- Never fails over the layout: after the retry, the lenient pass uses the windows the
+  layer left (faces kept clear), else `composeFittedPhotos` lays the photos out by code
+  at the post size. Either way the piece carries a warning.
 - Photo and clip ids are always checked against the workspace
   (`resolveStudioReferences`, `resolveStudioClips`); no URL from the browser.
 

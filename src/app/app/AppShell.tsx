@@ -761,14 +761,17 @@ function AppShell() {
           the very top (Holo): the top bar sits on it, not on a white strip. */}
       <div
         data-workspace-column
-        className="relative flex min-w-0 flex-1 flex-col lg:ds-canvas lg:overflow-hidden lg:rounded-tl-[var(--ds-canvas-radius)]"
+        className="relative isolate flex min-w-0 flex-1 flex-col lg:ds-canvas lg:overflow-hidden lg:rounded-tl-[var(--ds-canvas-radius)]"
       >
         {/* Where canvas screens are drawn (Create, Studio, Library, Brain…):
             inside this column, so they are part of the page. They resize with
-            the sidebar by CSS alone and can never cover it. */}
+            the sidebar by CSS alone and can never cover it. The host and every
+            window in it carry the canvas's own rounded corner: a square window
+            that relies only on the column's clip is sometimes composited with
+            a black corner in Chromium while it animates in. */}
         <div
           data-canvas-host
-          className="pointer-events-none absolute inset-0 z-30 hidden lg:block [&>*]:pointer-events-auto"
+          className="pointer-events-none absolute inset-0 z-30 hidden overflow-hidden rounded-tl-[var(--ds-canvas-radius)] lg:block [&>*]:pointer-events-auto [&>*]:rounded-tl-[var(--ds-canvas-radius)]"
         />
         {/* The to-do list of what is being made. It stays in view on every
             screen: the full card on Home and Chat, a small pill in the corner

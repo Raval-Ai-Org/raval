@@ -781,7 +781,12 @@ export function needsVideoQuote(type: StudioSession["type"], c: StudioSession["c
 
 export async function generate(
   id: string,
-  opts: { kind?: "generate" | "regenerate" | "refine"; refine?: StudioRefine } = {},
+  opts: {
+    kind?: "generate" | "regenerate" | "refine";
+    refine?: StudioRefine;
+    /** Show the progress screen while it is made (a video from its storyboard), not review. */
+    progress?: boolean;
+  } = {},
 ) {
   const s = getSession(id);
   if (!s) return;
@@ -814,7 +819,7 @@ export async function generate(
   patchSession(id, {
     pendingKey: key,
     pendingKind: kind,
-    step: kind === "generate" ? "generating" : s.step === "intent" ? "generating" : s.step,
+    step: kind === "generate" || opts.progress || s.step === "intent" ? "generating" : s.step,
     error: null,
     billing: null,
     retryKey: null,

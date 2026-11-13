@@ -6851,6 +6851,128 @@ pre {
 :root[data-chat-motion="reduced"] .ds-rise {
   animation: none;
 }
+
+/* ═══ Home's moving pictures (HomeExplore) ═══════════════════════════════
+ *   home-beam    a light that travels a flow track, on a loop
+ *   home-node    a flow stop that lights as the beam passes (--d delay)
+ *   home-dash    a line that flows toward Mox (SVG stroke)
+ *   home-blink   a soft on/off, staggered with --d
+ *   home-breathe a bar that rises and settles
+ *   home-hook    a caption that slides in, holds and leaves
+ *   home-play    a video's progress bar filling
+ * Decoration only: never a number. All off for reduced motion. */
+.home-beam {
+  animation: home-beam 4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes home-beam {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(520%);
+  }
+}
+.home-node {
+  animation: home-node 4s var(--ds-ease) infinite;
+  animation-delay: var(--d, 0s);
+}
+@keyframes home-node {
+  0%,
+  30%,
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 0 hsl(140 80% 50% / 0);
+  }
+  10% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 7px hsl(140 80% 50% / 0.16);
+  }
+}
+.home-dash {
+  stroke-dasharray: 4 7;
+  animation: home-dash 1.6s linear infinite;
+}
+@keyframes home-dash {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+.home-blink {
+  animation: home-blink 2.8s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+@keyframes home-blink {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.home-breathe {
+  transform-origin: bottom;
+  animation: home-breathe 2.6s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+@keyframes home-breathe {
+  0%,
+  100% {
+    transform: scaleY(0.82);
+  }
+  50% {
+    transform: scaleY(1.05);
+  }
+}
+.home-hook {
+  animation: home-hook 4.5s var(--ds-ease) infinite;
+}
+@keyframes home-hook {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  16%,
+  78% {
+    opacity: 1;
+    transform: none;
+  }
+  90%,
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.home-play {
+  transform-origin: left;
+  animation: home-play 4.5s linear infinite;
+}
+@keyframes home-play {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-beam,
+  .home-node,
+  .home-dash,
+  .home-blink,
+  .home-breathe,
+  .home-hook,
+  .home-play {
+    animation: none;
+  }
+  .home-beam {
+    display: none;
+  }
+}
+:root[data-chat-motion="reduced"] :is(.home-beam, .home-node, .home-dash, .home-blink, .home-breathe, .home-hook, .home-play) {
+  animation: none;
+}
 /* A progress bar is a "working" cue, so it keeps flowing (slower). */
 :root[data-chat-motion="reduced"] .ds-grad-bar {
   animation: ds-grad-flow 7s linear infinite !important;

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { STUDIO_FORMATS, type StageId, type StudioType } from "@/lib/studio/formats";
+import { isActiveJob } from "@/lib/studio/jobs";
 import type { StudioSession } from "@/lib/studio/session-store";
 import { getTemplate } from "@/lib/studio/templates";
 import { PreviewSkeleton } from "./previews/PreviewSkeleton";
@@ -96,7 +97,9 @@ export function GenerationProgress({
 }) {
   const format = STUDIO_FORMATS[session.type];
   const reduce = useReducedMotion();
-  const job = session.job;
+  // Only a running job counts: a video made from its storyboard starts with
+  // the finished storyboard job still on the session.
+  const job = session.job && isActiveJob(session.job) ? session.job : null;
   const stages = format.stages;
   const stageIndex = Math.max(
     0,
@@ -118,6 +121,13 @@ export function GenerationProgress({
   const slow = elapsed > typical * 2;
   const starting = !job;
   const CaptionIcon = stage ? STAGE_ICON[stage.id] : Sparkles;
+  // A video from its storyboard: the key frames the person approved come alive.
+  const reel =
+    session.type === "video" && session.lastGood?.output.storyboard
+      ? (session.lastGood.output.media ?? [])
+          .filter((m) => m.kind === "image" && m.status === "ready" && m.url)
+          .map((m) => m.url!)
+      : [];
 
   return (
     <div
@@ -320,11 +330,23 @@ export function GenerationProgress({
         {/* Holo: the piece takes shape right on the canvas, no frame around it. */}
         <div className="relative flex h-[380px] items-center justify-center overflow-hidden @3xl/composer:h-full @3xl/composer:min-h-[420px]">
           <div className="relative flex max-h-full w-full origin-center scale-[0.7] items-center justify-center overflow-visible px-6 pb-6 pt-12 @3xl/composer:scale-100">
-            <PreviewSkeleton
-              session={session}
-              stageIndex={starting ? 0 : stageIndex}
-              template={template}
-            />
+            {reel.length ? (
+              <StoryboardReel
+                frames={reel}
+                ratio={(
+                  session.lastGood?.output.media?.find((m) => m.ratio)?.ratio ??
+                  session.controls.ratio ??
+                  "9:16"
+                ).replace(":", " / ")}
+                reduce={!!reduce}
+              />
+            ) : (
+              <PreviewSkeleton
+                session={session}
+                stageIndex={starting ? 0 : stageIndex}
+                template={template}
+              />
+            )}
           </div>
           <motion.p
             key={stage?.id ?? "start"}
@@ -345,6 +367,97 @@ export function GenerationProgress({
             {stageIndex + 1} of {stages.length}
           </motion.p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The approved key frames brought to life while the video is made: each one
+ * drifts in turn under a soft Mox scan, with the strip of scenes below. It is
+ * decoration only; it claims no progress the job hasn't reported.
+ */
+function StoryboardReel({
+  frames,
+  ratio,
+  reduce,
+}: {
+  frames: string[];
+  ratio: string;
+  reduce: boolean;
+}) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (reduce || frames.length < 2) return;
+    const t = window.setInterval(() => setIndex((i) => (i + 1) % frames.length), 2600);
+    return () => window.clearInterval(t);
+  }, [frames.length, reduce]);
+  const at = index % frames.length;
+
+  return (
+    <div className="flex w-full flex-col items-center gap-5">
+      <div className="relative">
+        <span
+          aria-hidden
+          className="studio-progress-fill absolute -inset-6 rounded-[40px] opacity-30 blur-3xl"
+        />
+        <div
+          className="relative h-[min(52dvh,440px)] overflow-hidden rounded-[26px] bg-surface-2 shadow-[0_34px_80px_-34px_rgb(0_0_0/0.55)] ring-1 ring-white/40"
+          style={{ aspectRatio: ratio }}
+        >
+          <motion.img
+            key={at}
+            src={frames[at]}
+            alt=""
+            className="absolute inset-0 size-full object-cover"
+            initial={reduce ? false : { opacity: 0, scale: 1.12 }}
+            animate={reduce ? undefined : { opacity: 1, scale: 1.02 }}
+            transition={{ duration: 2.6, ease: "easeOut" }}
+          />
+          {!reduce ? (
+            <>
+              <motion.span
+                aria-hidden
+                className="absolute inset-x-0 h-24 bg-gradient-to-b from-transparent via-white/35 to-transparent mix-blend-overlay"
+                initial={{ top: "-25%" }}
+                animate={{ top: ["-25%", "110%"] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+              />
+              {[0, 1, 2, 3, 4].map((i) => (
+                <motion.span
+                  key={i}
+                  aria-hidden
+                  className="absolute size-1.5 rounded-full bg-white shadow-[0_0_10px_2px_rgb(255_255_255/0.7)]"
+                  style={{ left: `${14 + i * 18}%`, top: `${22 + ((i * 37) % 60)}%` }}
+                  animate={{ opacity: [0, 1, 0], scale: [0.4, 1.2, 0.4], y: [0, -14, -24] }}
+                  transition={{ duration: 2.2, delay: i * 0.45, repeat: Infinity, ease: "easeOut" }}
+                />
+              ))}
+            </>
+          ) : null}
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur">
+            <span className="relative flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-white opacity-70" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-white" />
+            </span>
+            Scene {at + 1} of {frames.length}
+          </span>
+        </div>
+      </div>
+      <div className="flex max-w-full gap-1.5 overflow-hidden px-2">
+        {frames.map((url, i) => (
+          <span
+            key={url}
+            className={cn(
+              "relative h-12 w-9 shrink-0 overflow-hidden rounded-lg ring-1 transition-all duration-500",
+              i === at
+                ? "scale-110 ring-2 ring-[hsl(var(--primary))] shadow-2"
+                : "opacity-55 ring-border",
+            )}
+          >
+            <img src={url} alt="" className="size-full object-cover" />
+          </span>
+        ))}
       </div>
     </div>
   );

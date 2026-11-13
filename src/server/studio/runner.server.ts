@@ -15,6 +15,7 @@ import "server-only";
 import { studioJobWriter } from "./job-writer.server";
 import { after } from "next/server";
 import sharp from "sharp";
+import { fitWhole } from "./fit-image.server";
 import { isAudienceAutoScoreEnabled } from "@/lib/feature-flags";
 import { getRequestScope, setRequestScope, withWorkflow } from "@/server/request-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -144,6 +145,7 @@ import {
   IMAGE_SIZE_BY_RATIO,
   RATIOS,
   recommendedRatio,
+  sourcePhotoCanvas,
   type AspectRatio,
 } from "@/lib/studio/aspect";
 import {
@@ -2295,9 +2297,37 @@ async function keepSourcePhoto(args: {
   // the photo is posted as it is, with only the real logo if asked for.
   const addLogo = sourcePhotoWantsLogo(input.intent.brief) && !!args.logoUrl;
 
+  // A photo far off the feed's shape (a tall phone photo for a 4:5 post) is
+  // shown whole on the post's canvas over a blurred copy of itself, so the
+  // network accepts it and nothing of the photo is cut or redrawn.
+  let canvas: { width: number; height: number } | null = null;
+  let original: Buffer | null = null;
+  const openOriginal = async () => {
+    if (original) return original;
+    const downloaded = await downloadAssetObject(client, reference.storagePath);
+    if (downloaded.error || !downloaded.data)
+      throw new StudioJobError(503, "Your original photo could not be opened. Try again.");
+    original = Buffer.from(await downloaded.data.arrayBuffer());
+    return original;
+  };
+  try {
+    const meta = await sharp(await openOriginal(), { failOn: "none" }).metadata();
+    const turned = (meta.orientation ?? 1) >= 5;
+    canvas = sourcePhotoCanvas(
+      {
+        width: (turned ? meta.height : meta.width) ?? 0,
+        height: (turned ? meta.width : meta.height) ?? 0,
+      },
+      ratio,
+    );
+  } catch (error) {
+    // Fails open: the photo is then linked exactly as uploaded.
+    console.warn("[studio] source photo could not be measured", error);
+  }
+
   // No requested visual mutation: link the upload itself. Its bytes, crop and
   // details remain exactly the ones the customer supplied.
-  if (!addLogo) {
+  if (!addLogo && !canvas) {
     await linkAssetToContent(job.workspace_id, job.content_item_ids, {
       id: reference.id,
       path: reference.storagePath,
@@ -2313,15 +2343,17 @@ async function keepSourcePhoto(args: {
     };
   }
 
-  const downloaded = await downloadAssetObject(client, reference.storagePath);
-  if (downloaded.error || !downloaded.data)
-    throw new StudioJobError(503, "Your original photo could not be opened. Try again.");
-  const original = Buffer.from(await downloaded.data.arrayBuffer());
-  const dataUrl = await overlayBrandLogo(
-    `data:${reference.mimeType};base64,${original.toString("base64")}`,
-    args.logoUrl!,
-    logoCorner(ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024"),
-  );
+  const source = await openOriginal();
+  const fitted = canvas
+    ? `data:image/png;base64,${(await fitWhole(source, canvas.width, canvas.height)).toString("base64")}`
+    : `data:${reference.mimeType};base64,${source.toString("base64")}`;
+  const dataUrl = addLogo
+    ? await overlayBrandLogo(
+        fitted,
+        args.logoUrl!,
+        logoCorner(ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024"),
+      )
+    : fitted;
   const saved = await persistAsset({
     workspaceId: job.workspace_id,
     idempotencyKey: `source-photo:${job.id}:${reference.id}`,
@@ -2333,7 +2365,8 @@ async function keepSourcePhoto(args: {
       source: "studio_source_photo",
       source_asset_id: reference.id,
       source_preserved: true,
-      logo_overlay: true,
+      logo_overlay: addLogo,
+      ...(canvas ? { fitted_to_ratio: ratio } : {}),
       job_id: job.id,
     },
   });
@@ -3872,24 +3905,52 @@ type MediaCheck =
   | { state: "failed"; message: string; code?: string; retryable?: boolean }
   | { state: "success"; url?: string; dataUrl?: string; costUsd: number | null };
 
-/** Models return 3:4 for requested 4:5; crop only the finished model image. */
-async function fitPortraitImage(dataUrl: string, ratio: AspectRatio): Promise<string> {
-  if (ratio !== "4:5") return dataUrl;
-  const match = /^data:image\/(?:png|jpe?g|webp);base64,(.+)$/i.exec(dataUrl);
-  if (!match) return dataUrl;
-  const input = Buffer.from(match[1], "base64");
-  const dimensions = await sharp(input).metadata();
-  if (
-    !dimensions.width ||
-    !dimensions.height ||
-    Math.abs(dimensions.width / dimensions.height - 0.8) < 0.005
-  )
+/**
+ * Models don't always return the shape asked for (3:4 for 4:5, a square for
+ * 9:16): bring every finished model image to exactly the requested ratio.
+ * A near miss is cover-cut; a picture far off the shape is shown whole over a
+ * blurred copy of itself so no words at its edges are cut. A design layer
+ * (key-coloured windows) and the carousel backdrop are always cover-cut, since
+ * a blurred key colour would read as a window. Fails open.
+ */
+async function fitPortraitImage(
+  dataUrl: string,
+  ratio: AspectRatio,
+  opts: { coverOnly?: boolean } = {},
+): Promise<string> {
+  try {
+    const match = /^data:image\/(?:png|jpe?g|webp);base64,(.+)$/i.exec(dataUrl);
+    if (!match) return dataUrl;
+    const input = Buffer.from(match[1], "base64");
+    const dimensions = await sharp(input).metadata();
+    if (!dimensions.width || !dimensions.height) return dataUrl;
+    const target = RATIOS[ratio] ? RATIOS[ratio].w / RATIOS[ratio].h : null;
+    if (!target) return dataUrl;
+    const actual = dimensions.width / dimensions.height;
+    const mismatch = Math.max(actual / target, target / actual);
+    if (mismatch < 1.01) return dataUrl;
+    const named = IMAGE_SIZE_BY_RATIO[ratio]?.split("x").map(Number);
+    const long = Math.max(1024, Math.min(1792, Math.max(dimensions.width, dimensions.height)));
+    const [width, height] =
+      named && named.length === 2
+        ? named
+        : target >= 1
+          ? [long, Math.round(long / target)]
+          : [Math.round(long * target), long];
+    let bytes: Buffer;
+    if (opts.coverOnly || mismatch <= 1.2) {
+      bytes = await sharp(input)
+        .resize(width, height, { fit: "cover", position: "centre" })
+        .png()
+        .toBuffer();
+    } else {
+      bytes = await fitWhole(input, width, height);
+    }
+    return `data:image/png;base64,${bytes.toString("base64")}`;
+  } catch (error) {
+    console.warn("[studio] image could not be fitted to its ratio", error);
     return dataUrl;
-  const bytes = await sharp(input)
-    .resize(1024, 1280, { fit: "cover", position: "centre" })
-    .png()
-    .toBuffer();
-  return `data:image/png;base64,${bytes.toString("base64")}`;
+  }
 }
 
 /** One status read of a render; the finished file comes back as a URL or its bytes. */
@@ -4397,7 +4458,9 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       }
       let finalImage =
         check.dataUrl && task.kind === "image"
-          ? await fitPortraitImage(check.dataUrl, task.ratio)
+          ? await fitPortraitImage(check.dataUrl, task.ratio, {
+              coverOnly: !!task.photoDesign || task.slot === BACKDROP_SLOT,
+            })
           : check.dataUrl;
       if (task.photoDesign && finalImage) {
         const designed = await finishPhotoDesign({
@@ -4437,6 +4500,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           continue;
         }
         finalImage = designed.dataUrl;
+        if (designed.warning) warnings.push(designed.warning);
       }
       if (task.compose && finalImage && row.output?.visualTaste && row.output.artwork) {
         const art = await persistAsset({

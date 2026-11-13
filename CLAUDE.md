@@ -67,7 +67,12 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   Home's message box is `ChatComposer slim`: a one-line pill with its tools
   beside it, growing once a person writes; it sits under the cards, never on them.
   Home is `HomeBento` above the message box (`/home-lab`); its cards only open
-  existing places via `useOpenCreate`. Chat has its own entry (`chatPath`).
+  existing places via `useOpenCreate`. It scrolls on into `HomeExplore`:
+  Make anything (each card with quick picks to an exact format), Creator
+  videos, the brain tiles with "To finish" / "Lately" (Brain overview rows
+  only), Plan and grow, and Ask Mox (fills the box, never sends). Pure rules
+  in `src/lib/home/explore.ts`; the moving pictures (`HomeMotion`, `home-*`
+  keyframes) are decoration and never show a number. Chat has its own entry (`chatPath`).
   A solid primary fill (`bg-primary text-primary-foreground`) paints the Mox
   gradient with ink text (rule at the end of `styles.css`); never draw a flat
   neon-lime pill, tick or ring. Sidebar rows may carry a `badge`
@@ -1187,8 +1192,15 @@ with `_WS_<id>`), on unless `false`.
   more". The image model draws a design layer with key-colour windows
   (`src/lib/studio/photo-design/`); code places the real photos
   (`src/server/studio/photo-design/compose.server.ts`).
-- **No template fallback.** A layer that fails the pure checks (`checks.ts`)
-  is asked for once more with the reason, then the piece fails plainly.
+- **A photo design is always made.** A layer that fails the pure checks
+  (`checks.ts`) is asked for once more with the reason; if that fails too, the
+  windows it did leave are used (`lenientWindows`, faces kept clear of the
+  design), else code lays the photos out at the post size
+  (`composeFittedPhotos`: whole over a blurred copy, or a grid), with a
+  warning. Every model image is brought to the exact ratio asked
+  (`fitPortraitImage`), and a "Post as is" photo outside the feed range
+  (4:5 to 1.91:1) is shown whole on the post canvas (`sourcePhotoCanvas`,
+  `fitWhole`). Never crop or redraw the photo to fit.
 - **The model never draws a logo or a person**; only the real logo, placed by
   code.
 - `resolvePhotoMode` decides the mode once, before pricing. "Post as is" with

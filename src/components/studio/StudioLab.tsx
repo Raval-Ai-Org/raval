@@ -1009,6 +1009,17 @@ const SCENES: Scene[] = [
     fixtures: { rows: ROWS.video, distribution: true },
   },
   {
+    // Create on the storyboard: Studio steps aside; opened again from the corner
+    // list it shows the video being made, never the storyboard.
+    id: "gen-video-from-storyboard",
+    label: "Generating · Video from its storyboard",
+    make: () => {
+      const board = SCENES.find((x) => x.id === "storyboard")!.make!();
+      const gen = session("video", "generating");
+      return { ...board, step: "generating", job: { ...gen.job!, stage: "render" } };
+    },
+  },
+  {
     id: "review-video-checked",
     label: "Review · Video checked",
     make: () => {

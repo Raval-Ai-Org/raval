@@ -14,10 +14,11 @@ import {
   windowAlpha,
   type PhotoTransform,
 } from "@/lib/studio/photo-design/geometry";
-import { judgeFaces, judgeLayer } from "@/lib/studio/photo-design/checks";
-import type { PhotoDesignPlan } from "@/lib/studio/photo-design/plan";
+import { judgeFaces, judgeLayer, lenientWindows } from "@/lib/studio/photo-design/checks";
+import { ratioValue, type PhotoDesignPlan } from "@/lib/studio/photo-design/plan";
 import type { Box, PhotoReading } from "@/lib/studio/photo-design/read";
 import type { DesignPhoto } from "./photos.server";
+import { fitWhole } from "../fit-image.server";
 
 export type ComposeResult =
   { ok: true; png: Buffer; faceShares: number[] } | { ok: false; reason: string; feedback: string };
@@ -107,11 +108,38 @@ async function designFill(
   return fill;
 }
 
+/**
+ * Lenient pass only: wherever a placed photo shows a face, the photo wins
+ * over the design, so a face is never covered even when the layer drew over it.
+ */
+function clearFaces(
+  mask: Float32Array,
+  placed: Uint8Array,
+  width: number,
+  height: number,
+  boxes: { x0: number; y0: number; x1: number; y1: number }[],
+) {
+  for (const box of boxes) {
+    for (let y = Math.max(0, box.y0); y < Math.min(height, box.y1); y++)
+      for (let x = Math.max(0, box.x0); x < Math.min(width, box.x1); x++) {
+        const i = y * width + x;
+        if (placed[i * 4 + 3] > 0) mask[i] = Math.max(mask[i], placed[i * 4 + 3] / 255);
+      }
+  }
+}
+
 export async function composePhotoDesign(args: {
   layer: Buffer;
   photos: DesignPhoto[];
   readings: PhotoReading[];
   plan: PhotoDesignPlan;
+  /**
+   * The last pass after the layer's retry: use the windows the layer left
+   * (more or fewer than asked, smaller than wished) and keep faces clear of
+   * the design instead of refusing. Still refuses a layer with no usable
+   * window, so the caller can lay the photos out by code.
+   */
+  lenient?: boolean;
 }): Promise<ComposeResult> {
   const { plan, photos, readings } = args;
   const { data, info } = await sharp(args.layer)
@@ -123,16 +151,19 @@ export async function composePhotoDesign(args: {
   const design = new Uint8Array(data.buffer, data.byteOffset, data.length);
   const mask = photoMask(design, width, height, plan.key);
   const { labels, regions } = findRegions(mask, width, height);
-  const verdict = judgeLayer(
-    plan,
-    regions,
-    { width, height },
-    photos.map((photo) => photo.width / photo.height),
-  );
-  if (!verdict.ok) return verdict;
+  const aspects = photos.map((photo) => photo.width / photo.height);
+  const strict = judgeLayer(plan, regions, { width, height }, aspects);
+  let verdict: { windows: number[]; placed: number };
+  if (strict.ok) verdict = { windows: strict.windows, placed: plan.order.length };
+  else {
+    const loose = args.lenient ? lenientWindows(plan, regions, { width, height }, aspects) : null;
+    if (!loose) return strict;
+    verdict = loose;
+  }
 
   const placed = new Uint8Array(width * height * 4);
   const faceShares: number[] = [];
+  const faceBoxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
   const slots =
     plan.layout === "overlay"
       ? [
@@ -142,7 +173,7 @@ export async function composePhotoDesign(args: {
             id: 0,
           },
         ]
-      : plan.order.map((index, position) => {
+      : plan.order.slice(0, verdict.placed).map((index, position) => {
           const region = regions[verdict.windows[position]];
           // A few pixels larger, so the photo reaches into the window's soft edge.
           return {
@@ -167,11 +198,24 @@ export async function composePhotoDesign(args: {
     }
     for (const face of reading.faces.slice(0, 8)) {
       const points = facePoints(t, face);
-      if (points.length) faceShares.push(visibleShare(mask, width, height, points));
+      if (!points.length) continue;
+      faceShares.push(visibleShare(mask, width, height, points));
+      const xs = points.map((p) => p.x);
+      const ys = points.map((p) => p.y);
+      // The sample points sit inside the face; grow the box to its edges and a little past.
+      const padX = (Math.max(...xs) - Math.min(...xs)) * 0.25 + 4;
+      const padY = (Math.max(...ys) - Math.min(...ys)) * 0.25 + 4;
+      faceBoxes.push({
+        x0: Math.floor(Math.min(...xs) - padX),
+        y0: Math.floor(Math.min(...ys) - padY),
+        x1: Math.ceil(Math.max(...xs) + padX),
+        y1: Math.ceil(Math.max(...ys) + padY),
+      });
     }
   }
   const faces = judgeFaces(faceShares);
-  if (!faces.ok) return faces;
+  if (!faces.ok && !args.lenient) return faces;
+  if (!faces.ok) clearFaces(mask, placed, width, height, faceBoxes);
 
   const rgb = compositeLayers({
     width,
@@ -189,4 +233,86 @@ export async function composePhotoDesign(args: {
     .png({ compressionLevel: 8 })
     .toBuffer();
   return { ok: true, png, faceShares };
+}
+
+/** Average colour of a photo, for the backdrop behind a code-drawn layout. */
+async function averageColour(bytes: Buffer): Promise<{ r: number; g: number; b: number }> {
+  const stats = await sharp(bytes).removeAlpha().stats();
+  const [r, g, b] = stats.channels.map((channel) => Math.round(channel.mean));
+  return { r, g: g ?? r, b: b ?? r };
+}
+
+/** A photo cover-cut around its focus to exactly `w`×`h`. */
+function coverCut(
+  photo: DesignPhoto,
+  focus: { x: number; y: number },
+  w: number,
+  h: number,
+): Promise<Buffer> {
+  const t = fitPhoto(photo, { cx: w / 2, cy: h / 2, angle: 0, width: w, height: h }, focus);
+  return sharp(photo.bytes).extract(t.crop).resize(w, h, { fit: "fill" }).png().toBuffer();
+}
+
+/** Columns per row for 2 to 6 photos on a canvas of this shape. */
+function gridRows(count: number, landscape: boolean): number[] {
+  if (count === 2) return landscape ? [2] : [1, 1];
+  if (count === 3) return landscape ? [3] : [1, 2];
+  if (count === 4) return [2, 2];
+  if (count === 5) return landscape ? [3, 2] : [2, 3];
+  return landscape ? [3, 3] : [2, 2, 2];
+}
+
+/** A photo is cover-cut (instead of fitted whole) only this close to the canvas shape. */
+export const FITTED_COVER_MISMATCH = 1.12;
+
+/**
+ * The photos laid out by code at the canvas size, when no design layer could
+ * hold them: one photo is shown whole (cover-cut only when its shape is close
+ * to the canvas, else fitted over a soft blurred copy of itself), several
+ * share a clean grid. Nothing is redrawn; the piece is always made.
+ */
+export async function composeFittedPhotos(args: {
+  photos: DesignPhoto[];
+  readings: PhotoReading[];
+  plan: Pick<PhotoDesignPlan, "order" | "ratio">;
+  width?: number;
+  height?: number;
+}): Promise<Buffer> {
+  const { photos, readings, plan } = args;
+  const width = Math.max(64, Math.round(args.width ?? 1024));
+  const height = Math.max(64, Math.round(args.height ?? width / ratioValue(plan.ratio)));
+  const order = plan.order.filter((i) => photos[i]).slice(0, 6);
+  if (!order.length) throw new Error("A photo design needs at least one photo.");
+  const hero = photos[order[0]];
+  const focus = (i: number) => readings[i]?.focus ?? { x: 0.5, y: 0.5 };
+
+  if (order.length === 1) {
+    const photoAspect = hero.width / hero.height;
+    const canvasAspect = width / height;
+    const mismatch = Math.max(photoAspect / canvasAspect, canvasAspect / photoAspect);
+    if (mismatch <= FITTED_COVER_MISMATCH) return coverCut(hero, focus(order[0]), width, height);
+    return fitWhole(hero.bytes, width, height);
+  }
+
+  const background = await averageColour(hero.bytes);
+  const gap = Math.round(Math.min(width, height) * 0.02);
+  const rows = gridRows(order.length, width > height);
+  const rowHeight = (height - gap * (rows.length + 1)) / rows.length;
+  const tiles: { input: Buffer; left: number; top: number }[] = [];
+  let next = 0;
+  for (const [r, columns] of rows.entries()) {
+    const cellWidth = (width - gap * (columns + 1)) / columns;
+    for (let c = 0; c < columns && next < order.length; c++, next++) {
+      const index = order[next];
+      const left = Math.round(gap + c * (cellWidth + gap));
+      const top = Math.round(gap + r * (rowHeight + gap));
+      const w = Math.max(1, Math.round(gap + c * (cellWidth + gap) + cellWidth) - left);
+      const h = Math.max(1, Math.round(gap + r * (rowHeight + gap) + rowHeight) - top);
+      tiles.push({ input: await coverCut(photos[index], focus(index), w, h), left, top });
+    }
+  }
+  return sharp({ create: { width, height, channels: 3, background } })
+    .composite(tiles)
+    .png()
+    .toBuffer();
 }

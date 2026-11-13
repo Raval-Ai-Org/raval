@@ -24,7 +24,8 @@ import {
   type StudioReference,
 } from "../references.server";
 import { contactSheet, cropToScreen, loadDesignPhotos, readDesignPhotos } from "./photos.server";
-import { composePhotoDesign } from "./compose.server";
+import sharp from "sharp";
+import { composeFittedPhotos, composePhotoDesign } from "./compose.server";
 
 /** Stored on the Studio image task while its design layer renders. */
 export type PhotoDesignTask = {
@@ -260,9 +261,14 @@ export function photoDesignReferences(task: PhotoDesignTask, workspaceId: string
 }
 
 export type FinishedPhotoDesign =
-  | { state: "ready"; dataUrl: string }
+  | { state: "ready"; dataUrl: string; warning?: string }
   | { state: "retry"; prompt: string; reason: string }
   | { state: "failed"; reason: string };
+
+export const PHOTO_DESIGN_ADJUSTED =
+  "The design was adjusted to fit your photos. Check it, or ask for a change to try another layout.";
+export const PHOTO_DESIGN_FITTED =
+  "Your photo is shown fitted to the post size: the design couldn't frame it cleanly. Ask for a change to try another design.";
 
 /** Lay the real photos into a finished layer, or say what to ask for next. */
 export async function finishPhotoDesign(args: {
@@ -295,19 +301,40 @@ export async function finishPhotoDesign(args: {
       task.plan.screens?.[task.plan.order.indexOf(i)] ? cropToScreen(photo) : photo,
     ),
   );
-  const result = await composePhotoDesign({
-    layer,
-    photos,
-    readings: task.readings,
-    plan: task.plan,
-  });
-  if (result.ok)
-    return { state: "ready", dataUrl: `data:image/png;base64,${result.png.toString("base64")}` };
+  const png = (bytes: Buffer) => `data:image/png;base64,${bytes.toString("base64")}`;
+  const compose = (lenient: boolean) =>
+    composePhotoDesign({ layer, photos, readings: task.readings, plan: task.plan, lenient }).catch(
+      (error: unknown) => ({
+        ok: false as const,
+        reason: error instanceof Error ? error.message : "The design layer could not be read.",
+        feedback: "",
+      }),
+    );
+  const result = await compose(false);
+  if (result.ok) return { state: "ready", dataUrl: png(result.png) };
   if (task.attempts < LAYER_RETRIES)
     return {
       state: "retry",
       reason: result.reason,
       prompt: `${task.basePrompt}\n\nThe last attempt was rejected: ${result.reason} ${result.feedback}`,
     };
-  return { state: "failed", reason: result.reason };
+  // Never fail the piece over the layout: first use what the layer did leave,
+  // then lay the real photos out by code at the post's size.
+  console.warn("[studio] photo design layer refused, adapting", result.reason);
+  const loose = await compose(true);
+  if (loose.ok) return { state: "ready", dataUrl: png(loose.png), warning: PHOTO_DESIGN_ADJUSTED };
+  try {
+    const { width, height } = await sharp(layer).metadata();
+    const fitted = await composeFittedPhotos({
+      photos,
+      readings: task.readings,
+      plan: task.plan,
+      width,
+      height,
+    });
+    return { state: "ready", dataUrl: png(fitted), warning: PHOTO_DESIGN_FITTED };
+  } catch (error) {
+    console.warn("[studio] fitted photo layout failed", error);
+    return { state: "failed", reason: result.reason };
+  }
 }
