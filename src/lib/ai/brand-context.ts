@@ -2,6 +2,7 @@
 // Used by both the browser (ChatPanel) and server routes/functions so the
 // model sees the same context shape regardless of caller. Skips empty
 // fields entirely — no `(empty)` filler tokens.
+import { whoRunsLine, type OnboardingProfile } from "@/lib/onboarding/answers";
 
 export type BrandCtxDna = {
   brandName?: string | null;
@@ -24,6 +25,8 @@ export type BrandCtxDna = {
   mission?: string | null;
   positioning?: string | null;
   uniqueValueProp?: string | null;
+  /** Who runs the brand (onboarding, ADR-0049). */
+  profile?: OnboardingProfile | null;
   userInsights?: Array<{ title: string; body: string }> | null;
   competitors?: Array<{ name: string; positioning?: string; url?: string }> | null;
   customer?: {
@@ -87,6 +90,7 @@ export function serializeBrandContext(
     push("About", dna.about);
     push("Industry", dna.industry);
     push("Business model", dna.businessModel);
+    push("Who runs it", whoRunsLine(dna.profile));
     push("Voice", dna.voice);
     push(
       "Audience",

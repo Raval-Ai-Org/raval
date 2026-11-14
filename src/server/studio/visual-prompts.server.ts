@@ -153,15 +153,42 @@ export function carouselBackdropPrompt(
     .join("\n\n");
 }
 
+/**
+ * How each Story frame is staged, by position. Each frame of a Story is its
+ * own post at the network, so frames must not look alike: a fixed, different
+ * camera and layout per position keeps three frames from coming back as the
+ * same picture three times.
+ */
+const STORY_FRAME_STAGING = [
+  "Staging for this frame: a bold close-up of one subject filling most of the frame, headline large over a calm area of the picture.",
+  "Staging for this frame: a wider scene with depth and space around the subject, the headline set in a clean block, a clearly different camera angle and crop from the frame before.",
+  "Staging for this frame: a type-led layout on a flat or softly textured colour field from the brand palette, with only a small supporting visual detail, so it reads as the closing frame.",
+  "Staging for this frame: an overhead (top-down) arrangement with the headline beside the subject, not over it.",
+  "Staging for this frame: a split layout, picture in one half and the words in the other.",
+  "Staging for this frame: a macro detail or texture shot with the headline across the middle third.",
+  "Staging for this frame: a person-free environment shot of where the brand's work happens, headline at the top of the safe zone.",
+] as const;
+
+export function storyFrameStaging(index: number, count: number): string {
+  // The last frame of a multi-frame Story is always the type-led close.
+  if (count > 1 && index === count - 1) return STORY_FRAME_STAGING[2];
+  const order = [0, 1, 3, 4, 5, 6];
+  return STORY_FRAME_STAGING[order[index % order.length]];
+}
+
 export function storyFramePrompt(
   args: Common & { frame: StoryFrame; frames: StoryFrame[] },
 ): string {
   const frame = args.frame;
+  const count = args.frames.length;
   return [
     visualSystem(args),
-    `Vertical Story frame ${args.index + 1} of ${args.frames.length}. Render as one complete 9:16 image with the final typography integrated in the image.`,
+    `Vertical Story frame ${args.index + 1} of ${count}. Render as one complete 9:16 image with the final typography integrated in the image.`,
     "Leave the top 15% and bottom 20% clear for native Story controls. Keep all words within the center safe zone.",
     `Frame role: ${frame.role}.`,
+    count > 1
+      ? `${storyFrameStaging(args.index, count)} This frame is seen on its own, one after the other frames: it must look clearly different from them (composition, camera, scale and colour balance), never a copy or a near-copy, and it never repeats another frame's words.`
+      : "",
     verbatimTextBlock({
       lines: [
         { label: "Exact small label", text: frame.kicker ?? "" },
@@ -176,8 +203,12 @@ export function storyFramePrompt(
       ? `Exact reply choices to typeset as clear visual options: ${frame.options.map((option) => JSON.stringify(option)).join(", ")}. These are prompts to reply, not interactive poll stickers.`
       : "",
     frame.visual ? `Visual direction: ${frame.visual}` : "",
-    `Series narrative: ${args.frames.map((f, i) => `${i + 1}. ${f.heading}`).join(" | ")}`,
-    "Do not draw simulated app controls, progress bars or reply boxes. Do not add any extra words.",
+    // The other frames' roles only, never their words: an image model draws
+    // whatever headlines it is shown, which made every frame the whole Story.
+    count > 1
+      ? `Where this frame sits in the Story (for pacing only, draw none of it): ${args.frames.map((f, i) => (i === args.index ? `${i + 1}. this frame` : `${i + 1}. ${f.role}`)).join(" → ")}.`
+      : "",
+    "Do not draw simulated app controls, progress bars or reply boxes. The only words in this image are the exact lines above; do not add any extra words.",
     qualityCheckLines({ hasText: !args.noText }).join("\n"),
   ]
     .filter(Boolean)

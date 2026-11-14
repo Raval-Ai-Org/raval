@@ -97,6 +97,8 @@ export const VideoJudgeSchema = z.object({
         sameSubject: score,
         clean: score,
         followsPlan: score,
+        /** Fills the frame: no bars, borders, picture-in-picture or stuck corner badge. */
+        framing: score.optional(),
         problem: z.string().max(240).catch(""),
       }),
     )
@@ -149,6 +151,11 @@ export function visualFailures(
       out.push({ clip, reason: `The person, product or place changes in this clip.${problem}` });
     else if (row.clean < PASS_SCORE)
       out.push({ clip, reason: `Something looks wrong (warped, melting or garbled).${problem}` });
+    else if ((row.framing ?? 10) < PASS_SCORE)
+      out.push({
+        clip,
+        reason: `The picture doesn't fill the frame cleanly (bars, borders, a picture inside a picture or a stuck corner badge).${problem}`,
+      });
     else if (row.followsPlan < PASS_SCORE - 2)
       out.push({ clip, reason: `The clip doesn't show what was planned.${problem}` });
   }
@@ -160,6 +167,18 @@ export function visualFailures(
   if (kind === "living-picture" && (judge.sourceFaithful ?? 10) < PASS_SCORE)
     out.push({ clip: 0, reason: "The post's picture, words or product changed." });
   return out;
+}
+
+/** Said when the measured frames sit on bars (see `letterboxedVideo`). */
+export const LETTERBOX_REASON =
+  "The video sits on blurred bars instead of filling the frame. Fill the whole frame edge to edge.";
+
+/**
+ * The measured framing check: a video whose frames sit on bars fails its
+ * first clip (where the bars come from), so the redo starts there.
+ */
+export function framingFailures(letterboxed: boolean): ClipFailure[] {
+  return letterboxed ? [{ clip: 0, reason: LETTERBOX_REASON }] : [];
 }
 
 export type RedoPlan = { clips: number[]; notes: Record<number, string> } | null;

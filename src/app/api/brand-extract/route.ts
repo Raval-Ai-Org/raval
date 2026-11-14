@@ -131,23 +131,16 @@ export const POST = defineRoute({
               const workspaceId = target.workspaceId;
               after(async () => {
                 try {
-                  const db = supabaseAdmin as unknown as SupabaseClient;
-                  const existing = await db
-                    .from("brand_visual_capture_jobs")
-                    .select("id")
-                    .eq("workspace_id", workspaceId)
-                    .limit(1);
-                  if (existing.error || existing.data?.length) return;
-                  const { startVisualCapture } =
+                  // The included first style read (ADR-0048): learns the look
+                  // from the site's screenshots and artwork, and uses it by
+                  // itself when the brand has no look of its own.
+                  const { startIncludedSiteRead } =
                     await import("@/server/brand-visuals/service.server");
-                  const job = await startVisualCapture(
+                  const job = await startIncludedSiteRead(
                     { workspaceId, userId, role: target.role },
-                    {
-                      url: safeUrl.href,
-                      idempotencyKey: `initial-visual:${workspaceId}`,
-                      maxPages: 4,
-                    },
+                    safeUrl.href,
                   );
+                  if (!job) return;
                   const { advanceVisualCapture } =
                     await import("@/server/brand-visuals/worker.server");
                   await advanceVisualCapture(job.id, workspaceId);

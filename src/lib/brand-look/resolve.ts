@@ -103,9 +103,15 @@ export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
     video: spec.video ?? {},
     rules: { do: d.doRules?.trim() || null, dont: d.dontRules?.trim() || null },
     logoUrl: d.logoUrl || null,
-    // The brand's creator alone is a choice of person, not a style.
-    customized: !!(spec.writing || spec.visual || videoStyled(spec.video)),
+    // The brand's creator alone is a choice of person, not a style, and how
+    // often its own media is used is a rotation setting, not a look.
+    customized: !!(spec.writing || visualStyled(spec.visual) || videoStyled(spec.video)),
   };
+}
+
+function visualStyled(visual: VisualStyle | undefined): boolean {
+  if (!visual) return false;
+  return Object.entries(visual).some(([key, value]) => key !== "ownMedia" && value !== undefined);
 }
 
 function videoStyled(video: VideoStyle | undefined): boolean {

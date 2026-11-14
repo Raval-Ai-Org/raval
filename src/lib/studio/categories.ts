@@ -769,24 +769,30 @@ export function categoryPictureLines(category: Category | null): string[] {
 
 /* ───────────────────────────── picking one ───────────────────────────── */
 
-/** How often each category comes up for a goal when Write it for me picks. */
+/**
+ * How often each category comes up for a goal when Write it for me picks.
+ * Auto never makes a meme: a joke post is made only when a person picks Meme
+ * (or a meme template).
+ */
 const GOAL_MIX: Partial<Record<GoalId, Partial<Record<CategoryId, number>>>> = {
-  offer: { sale: 4, product: 2, "before-after": 1, proof: 1, meme: 1 },
+  offer: { sale: 4, product: 2, "before-after": 1, proof: 1 },
   launch: { launch: 4, product: 2, trend: 1, "behind-scenes": 1 },
   leads: { proof: 3, "before-after": 2, tips: 2, ugc: 1 },
   education: { tips: 3, myth: 3, list: 2, "before-after": 1 },
-  engagement: { meme: 3, relatable: 3, "this-or-that": 2, trend: 2, storytime: 1 },
+  engagement: { relatable: 3, "this-or-that": 2, trend: 2, storytime: 1 },
   awareness: {
-    meme: 2,
     relatable: 2,
     trend: 2,
-    product: 1,
+    product: 2,
     aesthetic: 1,
     local: 1,
     "behind-scenes": 1,
     tips: 1,
   },
 };
+
+/** Kinds Auto never picks by itself: only a person's pick makes one. */
+export const NEVER_AUTO: readonly CategoryId[] = ["meme"];
 
 function hash(text: string): number {
   let h = 2166136261;
@@ -814,7 +820,10 @@ export function pickCategory(args: {
   let pool = (Object.entries(mix) as [CategoryId, number][]).filter(
     ([id]) => fits(id) && !recent.has(id),
   );
-  if (!pool.length) pool = categoriesFor(args.type).map((c) => [c.id, 1] as [CategoryId, number]);
+  if (!pool.length)
+    pool = categoriesFor(args.type)
+      .filter((c) => !NEVER_AUTO.includes(c.id))
+      .map((c) => [c.id, 1] as [CategoryId, number]);
   if (!pool.length) return CATEGORIES[0];
   const total = pool.reduce((sum, [, w]) => sum + w, 0);
   let roll = hash(args.seed) % total;

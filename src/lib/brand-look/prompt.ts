@@ -165,6 +165,9 @@ export function visualStyleBlock(resolved: BrandLook): string {
 }
 
 /** Video rules for shot plans and video prompts. */
+/** "product-motion" → "product motion". */
+const idLabel = (id: string) => id.replace(/[-_]+/g, " ").trim();
+
 export function videoStyleBlock(resolved: BrandLook): string {
   const v = resolved.video;
   const lines: string[] = [];
@@ -192,6 +195,14 @@ export function videoStyleBlock(resolved: BrandLook): string {
   push("Intro", v.intro);
   push("Outro", v.outro);
   push("Music mood", v.music);
+  if (v.voiceover)
+    push(
+      "Voiceover",
+      v.voiceover === "on" ? "a spoken voiceover" : "no voiceover, music and on-screen words only",
+    );
+  if (v.kinds?.length) push("Video styles the brand likes", v.kinds.map(idLabel).join(", "));
+  if (v.formats?.length)
+    push("Creator video formats the brand likes", v.formats.map(idLabel).join(", "));
   push("Notes", v.notes);
   const pal = resolved.visual.palette;
   if (pal.primary)

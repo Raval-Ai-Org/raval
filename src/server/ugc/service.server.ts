@@ -4,6 +4,7 @@
 // kernel verified membership and role; project rows go through the caller's
 // RLS client, render rows and reservations through the worker store.
 import "server-only";
+import { HOOK_TEXT_PRESET_IDS } from "@/lib/ugc/hook-text";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -451,6 +452,7 @@ async function projectLook(workspaceId: string) {
  * (`look.video.creator`, Inspo / the creator picker). Never throws.
  */
 async function withBrandCreator(workspaceId: string, brief: Brief): Promise<Brief> {
+  brief = await withBrandHookText(workspaceId, brief);
   if (brief.creator.characterId || brief.creator.personAssetId) return brief;
   try {
     const chosen = (await loadBrandLook(workspaceId)).look.video.creator;
@@ -473,6 +475,32 @@ async function withBrandCreator(workspaceId: string, brief: Brief): Promise<Brie
     // No look: the brief's own creator settings stand.
   }
   return brief;
+}
+
+/**
+ * The brand's hook words (Inspo → Video look): a brief with no preset of its
+ * own uses the brand's, and the brand can switch hook words off. A person's
+ * choice in the composer always stands. Never throws.
+ */
+async function withBrandHookText(workspaceId: string, brief: Brief): Promise<Brief> {
+  if (brief.hookText.preset) return brief;
+  try {
+    const hook = (await loadBrandLook(workspaceId)).look.video.hookText;
+    const preset = (HOOK_TEXT_PRESET_IDS as readonly string[]).includes(hook?.preset ?? "")
+      ? (hook!.preset as Brief["hookText"]["preset"])
+      : undefined;
+    if (!preset && hook?.on !== false) return brief;
+    return {
+      ...brief,
+      hookText: {
+        ...brief.hookText,
+        ...(preset ? { preset } : {}),
+        ...(hook?.on === false ? { enabled: false } : {}),
+      },
+    };
+  } catch {
+    return brief;
+  }
 }
 
 /** Image asset ids that really belong to this workspace and are stored. */

@@ -9,7 +9,49 @@ import { BOARD_CHIPS, canLearn, shelfCards, type InspoChip } from "@/lib/inspo/b
 import type { InspoSection } from "@/lib/inspo/sections";
 import type { StrengthStep } from "@/lib/inspo/strength";
 import { cn } from "@/lib/utils";
-import { DirectionArt } from "./DirectionCard";
+import { BibleNotes, DirectionArt } from "./DirectionCard";
+
+const ADHERENCE_LABEL = { light: "Light", close: "Close", strict: "Strict" } as const;
+
+/** How closely pictures follow the learned style. Light is the default. */
+function AdherencePill({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: "light" | "close" | "strict";
+  disabled: boolean;
+  onChange: (level: "light" | "close" | "strict") => void;
+}) {
+  return (
+    <div
+      className="ds-well inline-flex p-0.5"
+      role="radiogroup"
+      aria-label="How closely posts follow this style"
+      title="Light keeps your world and type and varies the layout. Strict follows your examples' layout too."
+    >
+      {(["light", "close", "strict"] as const).map((level) => (
+        <button
+          key={level}
+          type="button"
+          role="radio"
+          aria-checked={value === level}
+          disabled={disabled}
+          onClick={() => onChange(level)}
+          className={cn(
+            "h-7 rounded-full px-3 text-[12px] font-semibold transition-colors",
+            value === level
+              ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
+              : "text-muted-foreground hover:text-foreground",
+            dsFocus,
+          )}
+        >
+          {ADHERENCE_LABEL[level]}
+        </button>
+      ))}
+    </div>
+  );
+}
 import { CardWall, EASE, InspoCardView, InspoDrop, StrengthRing, UploadCardView } from "./parts";
 import type { InspoHandlers, InspoView } from "./types";
 
@@ -170,6 +212,13 @@ export function Board({
             </>
           )}
           {taste?.active && !taste.draft && (
+            <AdherencePill
+              value={taste.adherence}
+              disabled={!canEdit || !!view.busy}
+              onChange={handlers.setAdherence}
+            />
+          )}
+          {taste?.active && !taste.draft && (
             <span className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--ds-well-bg)] pl-3 pr-1 text-[12.5px] font-medium">
               <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.2)]" />
               {taste.active.name}
@@ -199,21 +248,48 @@ export function Board({
             className="rounded-[28px] bg-[var(--ds-tile-bg)] p-4 ring-1 ring-primary/30 sm:p-5"
             data-testid="inspo-directions"
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-[14px] font-semibold">Pick your style</span>
-              <button
-                type="button"
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                disabled={!canEdit || !!view.busy}
-                onClick={handlers.useDirection}
-              >
-                {view.busy === "direction" ? (
-                  <Spinner className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="block text-[14px] font-semibold">
+                  {taste.auto ? "In use — Mellox picked this from your site" : "Pick your style"}
+                </span>
+                {taste.auto && (
+                  <span className="block text-[12px] text-muted-foreground">
+                    Your posts already follow it. Keep it, pick another, or stop.
+                  </span>
                 )}
-                Use this
-              </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <AdherencePill
+                  value={taste.adherence}
+                  disabled={!canEdit || !!view.busy}
+                  onChange={handlers.setAdherence}
+                />
+                {taste.auto && (
+                  <button
+                    type="button"
+                    className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+                    disabled={!canEdit || !!view.busy}
+                    onClick={handlers.stopDirection}
+                  >
+                    Stop
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                  disabled={!canEdit || !!view.busy}
+                  onClick={handlers.useDirection}
+                  data-testid="inspo-use-direction"
+                >
+                  {view.busy === "direction" ? (
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  {taste.auto ? "Keep this" : "Use this"}
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {taste.draft.profile.directions.map((d, i) => {
@@ -244,6 +320,7 @@ export function Board({
                       <span className="truncate">{d.name}</span>
                       {on && <Check className="h-4 w-4 shrink-0 text-primary-ink" />}
                     </div>
+                    <BibleNotes profile={taste.draft!.profile} index={i} />
                   </motion.button>
                 );
               })}

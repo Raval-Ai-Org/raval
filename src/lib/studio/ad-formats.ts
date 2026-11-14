@@ -197,6 +197,84 @@ export const AD_FORMATS: AdFormat[] = [
     copy: "headline: a bold, specific statement in 3-7 words. support: 4-10 words. badge: empty.",
     thumb: "type",
   },
+  // ── Round 6 (docs/studio/reference-study-2026-10.md): small-business ads ──
+  {
+    id: "photo-band",
+    label: "Headline band",
+    tagline: "A colour band with the promise, a real scene, a button strip",
+    needsProduct: false,
+    goals: ["leads", "offer", "awareness"],
+    layout:
+      "Three stacked zones. Top 30%: a solid band in the brand's darkest colour with a small calm corner for the logo (added later) and a two-line headline, the first line regular weight and the second line bold. Middle: a real, candid photograph of the service happening to a customer, full width, natural light. Bottom 12%: a strip in the accent colour holding a small white rectangular button on the left and one short line beside it.",
+    copy: "headline: two short lines, 3-6 words each; the first sets the scene, the second is the payoff. support: one short line for the bottom strip with a real price or condition from the brief, else empty. badge: empty.",
+    thumb: "lifestyle",
+  },
+  {
+    id: "founder-promise",
+    label: "Built for you",
+    tagline: "Why the brand exists, said plainly, over a real moment",
+    needsProduct: false,
+    goals: ["leads", "awareness"],
+    layout:
+      "The top third is a rich gradient in the brand's main colour that melts smoothly into a candid editorial photograph filling the rest (a person relaxed in a real place, natural light). Top-left: a large serif headline over three short lines in white; under it one small monospaced line in white; leave a calm spot under that for the logo, added later. Bottom-right over the photo: a small white pill button.",
+    copy: "headline: the brand's reason to exist in plain first-person plural, 6-10 words (e.g. 'We built the … we wish we'd had'), only if the brand details support it. support: one proof line of 6-12 words with a real figure copied from the brief or brand details, else a plain statement of what it does. badge: empty.",
+    thumb: "hero",
+  },
+  {
+    id: "negation-trio",
+    label: "No, no, just",
+    tagline: "Strip away what people dread, then name the one thing that matters",
+    needsProduct: false,
+    goals: ["awareness", "leads", "launch"],
+    layout:
+      "A near-black or deep brand-colour background with a faint large outline motif. A tiny tracked caps line at the top left. In the middle-left, three short statements stacked in a tall condensed serif, each on its own line, the last word of the last line in the accent colour. A small support line below in light grey, then a small solid accent-colour button with a small arrow.",
+    copy: "headline: three short sentences in the shape 'No X. No Y. Just Z.', each X and Y something the audience really dreads and Z the brand's real promise, 6-10 words in all. support: 8-16 words with real details from the brief. badge: a 3-6 word place or audience line for the top, or empty.",
+    thumb: "type",
+  },
+  {
+    id: "not-equal",
+    label: "Not the same",
+    tagline: "Two things people confuse, set as an equation",
+    needsProduct: false,
+    goals: ["education", "engagement", "awareness"],
+    layout:
+      "A calm, airy photo set acting out balance (two stones balanced on a plank over still water, or a soft plant shadow on a pale wall), low contrast. Centred in the upper two thirds: the first idea, a large ≠ sign in the accent colour, the second idea, stacked on three lines in one heavy typeface; optionally a thin accent-colour circle loosely around them. Logo small in the top-right corner, added later. No button.",
+    copy: "headline: the two ideas joined by ' ≠ ', 2-4 words each (e.g. 'Revenue ≠ profit'), a distinction the brand really teaches. support: empty. badge: empty.",
+    thumb: "versus",
+  },
+  {
+    id: "live-moment",
+    label: "Right now",
+    tagline: "A real figure about today, set big on a real photo",
+    needsProduct: false,
+    goals: ["awareness", "offer", "engagement"],
+    layout:
+      "A full-bleed, sunny, real photograph of the experience (people enjoying the place, a hand on the water, a view). Top-left over the calm part of the photo (sky or water): one large figure in the accent colour followed by the headline in heavy white caps, with a small simple line icon beside it; under it one short white line. The logo in white bottom-left, added later. No panel and no box behind the words.",
+    copy: "badge: one real current figure copied exactly from the brief (a temperature, a count of places left, today's catch), else empty. headline: 3-6 words that place the figure in time ('by the water this week'). support: a short 3-6 word line that repeats the moment ('Exactly now. Exactly this week.'). Never invent a figure.",
+    thumb: "stat",
+  },
+  {
+    id: "checklist-split",
+    label: "Services list",
+    tagline: "What you get, as a short checklist, with one clear button",
+    needsProduct: false,
+    goals: ["leads", "offer", "education"],
+    layout:
+      "The frame is split by one clean diagonal: the upper area white, the lower area the brand's darkest colour. Upper area: a large heavy headline over three lines with two key words in the accent colour, then three short service lines each led by a small accent-colour dot. Lower area: a rounded accent-colour button with dark text and one short white line under it; a few accent-colour dots of growing size scattered toward the bottom-right corner, echoing the brand's mark.",
+    copy: "headline: 5-8 words naming the result the customer comes back to. points: exactly 3 real services from the brief or brand details, 1-4 words each. support: one short line with a real condition or place, 4-8 words. badge: empty.",
+    thumb: "split",
+  },
+  {
+    id: "stat-card-photo",
+    label: "Photo with a figure",
+    tagline: "A close, real moment with one proof figure on a small card",
+    needsProduct: false,
+    goals: ["leads", "education"],
+    layout:
+      "A close, candid photograph of the product or service in use (hands, a phone, a tool) filling the frame, with shallow depth of field. In the lower-right, a small dark rounded card holding one huge figure in the accent colour and two short lines in white under it, with a thin accent line at the bottom of the card. Nothing else on the picture.",
+    copy: "badge: one real figure copied exactly from the brief or brand details (e.g. '100%', '24h'); if there is none, use a 1-2 word outcome instead. headline: empty unless needed, at most 4 words. support: 5-9 words that explain the figure. Never invent a figure.",
+    thumb: "stat",
+  },
 ];
 
 const BY_ID = new Map(AD_FORMATS.map((f) => [f.id, f]));
@@ -248,7 +326,11 @@ export function pickAdFormat(args: {
   const ranked = args.hasProduct
     ? [...choices.filter((f) => f.needsProduct), ...choices.filter((f) => !f.needsProduct)]
     : choices;
-  const top = ranked.slice(0, Math.max(3, Math.ceil(ranked.length / 2)));
+  // The shortlist: with a product, its layouts plus a couple of others, so
+  // adding non-product layouts never crowds the product out.
+  const withProduct = args.hasProduct ? ranked.filter((f) => f.needsProduct).length : 0;
+  const size = withProduct ? withProduct + 2 : Math.ceil(ranked.length / 2);
+  const top = ranked.slice(0, Math.max(3, size));
   return top[hash(args.seed) % top.length];
 }
 

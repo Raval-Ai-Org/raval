@@ -1,24 +1,14 @@
 "use client";
 
-import { Spinner } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { LayoutGroup } from "framer-motion";
 import { toast } from "@/lib/toast";
 import { Logo } from "@/components/brand/Logo";
-import { BrandReveal, type BrandEdits } from "@/components/onboarding/BrandReveal";
+import type { BrandEdits } from "@/components/onboarding/BrandReveal";
 import { SCAN_PHASES, advancePhase } from "@/components/onboarding/phases";
 import { ScanStage, type ScanProgress, type ScanStatus } from "@/components/onboarding/ScanStage";
-import { ScanStrip } from "@/components/onboarding/ScanStrip";
 import type { CompetitorResearchStatus } from "@/components/onboarding/CompetitorResearchPreview";
-import { AmbientCanvas } from "@/components/onboarding/ui";
 import { UrlStep } from "@/components/onboarding/UrlStep";
-import {
-  GoalStep,
-  emptyGoalDraft,
-  goalDraftFrom,
-  goalDraftToRaw,
-  type GoalDraft,
-} from "@/components/onboarding/GoalStep";
 import {
   ManualBrandStep,
   emptyManualBrand,
@@ -27,12 +17,10 @@ import {
 import { useManualInspiration } from "@/components/onboarding/manual/use-manual-inspiration";
 import { manualDnaFields, readManualDraft, type ManualPart } from "@/lib/onboarding/manual-brand";
 import { ProductsStep } from "@/components/onboarding/ProductsStep";
-import { ChannelsStep } from "@/components/onboarding/ChannelsStep";
-import { LanguageStep, browserContentLanguage } from "@/components/onboarding/LanguageStep";
+import { browserContentLanguage } from "@/components/onboarding/LanguageStep";
 import { withLanguage } from "@/lib/brand-look/languages";
 import { tidyLook } from "@/lib/inspo/look";
 import { VisorTransition, markEntryBloom } from "@/components/brand/mox/VisorTransition";
-import { FinishStep } from "@/components/onboarding/FinishStep";
 import { SocialAccountsSection } from "@/components/app/SocialAccountsSection";
 import { hostOf, normalizeUrl, validUrl } from "@/components/onboarding/url";
 import { useOnboardingProducts } from "@/components/onboarding/use-onboarding-products";
@@ -45,27 +33,48 @@ import { authedFetch } from "@/lib/authed-fetch";
 import { userSafeMessage } from "@/lib/user-errors";
 import { mergeExtractionIntoDna } from "@/lib/brand-dna-merge";
 import type { BrandExtractResult, Discoveries, SiteDiscovery } from "@/lib/brand-extract-events";
-import {
-  bootstrapCompetitors,
-  getCompetitorOverview,
-  type CompetitorView,
-} from "@/lib/competitors.functions";
+import { bootstrapCompetitors, type CompetitorView } from "@/lib/competitors.functions";
 import { getGoals, saveGoals } from "@/lib/goals.functions";
 import type { WorkspaceGoals } from "@/lib/goals/contracts";
 import {
   blockedReason,
-  indicatorIndex,
-  indicatorSteps,
   nextStep,
   previousStep,
+  progressOf,
+  screensLeft,
   type FlowMode,
   type FlowState,
   type OnboardingStep,
 } from "@/lib/onboarding/flow";
+import {
+  answersToGoals,
+  answersToLook,
+  answersToProfile,
+  readAnswers,
+  type Answers,
+  type OnboardingChannel,
+  type Role,
+} from "@/lib/onboarding/answers";
+import { askScreens, minutesLeft, type AskScreen } from "@/lib/onboarding/questions";
+import { onboardingArt } from "@/lib/onboarding/art";
 import { productsSummary } from "@/lib/products/catalog";
 import { readBrandExtractStream } from "@/lib/brand-extract-stream";
-import { duration, ease } from "@/lib/motion";
 import { useNavigate } from "@/lib/navigation";
+import { Stage, type StageAction, type StageScene } from "@/components/onboarding/ask/Stage";
+import { ScanDock } from "@/components/onboarding/ask/ScanDock";
+import { PickScreen } from "@/components/onboarding/ask/PickScreen";
+import { SayScreen } from "@/components/onboarding/ask/SayScreen";
+import { ChannelsScreen } from "@/components/onboarding/ask/ChannelsScreen";
+import { LookSwipe, LOOK_MIN_SWIPES } from "@/components/onboarding/ask/LookSwipe";
+import {
+  AnswerTrail,
+  AudiencePick,
+  BrandCard,
+  ConnectStep,
+  LanguagePick,
+  type Learned,
+} from "@/components/onboarding/ask/AfterSteps";
+import { DoneStep } from "@/components/onboarding/ask/DoneStep";
 
 type Step = OnboardingStep;
 
@@ -76,23 +85,38 @@ function isDuplicateDomainError(error: { code?: string; message?: string } | nul
   );
 }
 
-const STEP_WIDTH: Record<Step, string> = {
-  website: "max-w-2xl",
-  manual: "max-w-5xl",
-  goals: "max-w-3xl",
-  scan: "max-w-[460px]",
-  review: "max-w-6xl",
-  language: "max-w-3xl",
-  products: "max-w-5xl",
-  channels: "max-w-3xl",
-  first: "max-w-5xl",
-  done: "max-w-xl",
-};
-
 /** Hold on the completed scan so the final phase visibly lands before the reveal. */
 const COMPLETE_BEAT_MS = 700;
 
 const IDLE_PROGRESS: ScanProgress = { stage: "idle", message: "", pct: 0 };
+
+/** The role answer as the account's persona (set once, first writer wins). */
+const ROLE_PERSONA: Record<Role, "agency" | "founder" | "professional"> = {
+  agency: "agency",
+  owner: "founder",
+  creator: "founder",
+  marketing: "professional",
+};
+
+const STEP_ORDER: Step[] = [
+  "website",
+  "manual",
+  "ask",
+  "scan",
+  "review",
+  "audience",
+  "products",
+  "language",
+  "connect",
+  "first",
+  "done",
+];
+
+const APPROVAL_LINE = {
+  autopilot: "you approve each post",
+  assist: "you approve the plan and each post",
+  full: "fully automatic, anything unsure waits for you",
+} as const;
 
 /**
  * Brand DNA for storage: the extraction result mapped through the shared
@@ -130,8 +154,7 @@ function Onboarding() {
   const [edits, setEdits] = useState<BrandEdits>({});
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
   const [manualPart, setManualPart] = useState<ManualPart>("basics");
-  // The brand's content language (Mellox 2.0): what Mox writes in. Starts
-  // from the browser's language; saved on the look before products.
+  // The brand's content language (Mellox 2.0): what Mox writes in.
   const [language, setLanguage] = useState("English");
   useEffect(() => setLanguage(browserContentLanguage()), []);
   const [discoveries, setDiscoveries] = useState<Discoveries>({});
@@ -142,13 +165,16 @@ function Onboarding() {
   const [competitors, setCompetitors] = useState<CompetitorView[]>([]);
   const [competitorResearchStatus, setCompetitorResearchStatus] =
     useState<CompetitorResearchStatus>("idle");
-  const [goalDraft, setGoalDraft] = useState<GoalDraft>(emptyGoalDraft);
   const [goals, setGoals] = useState<WorkspaceGoals | null>(null);
-  const [goalSaving, setGoalSaving] = useState(false);
-  const [goalError, setGoalError] = useState<string | null>(null);
-  const [goalWarnings, setGoalWarnings] = useState<string[]>([]);
   const [connected, setConnected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // One question per screen (ADR-0049): the answers and where the person is.
+  const [answers, setAnswers] = useState<Answers>({});
+  const [askIndex, setAskIndex] = useState(0);
+  const [sourceKnown, setSourceKnown] = useState(true);
+  const [flash, setFlash] = useState(0);
+  const [audience, setAudience] = useState<string[] | null>(null);
+  const userId = useRef<string | null>(null);
   const scanFor = useRef<string | null>(null);
   const resultFor = useRef<string | null>(null);
   const scanAbort = useRef<AbortController | null>(null);
@@ -162,8 +188,8 @@ function Onboarding() {
   // A finished scan survives a refresh (this browser only), so a reload never
   // pays for the same site twice.
   const scanKey = (id: string) => `onboarding:scan:${id}`;
-  // The no-website brand kit survives a refresh (this browser only).
   const manualKey = (id: string) => `onboarding:manual:${id}`;
+  const answersKey = (id: string) => `onboarding:answers:${id}`;
   const inspiration = useManualInspiration(workspaceId);
   const brand: BrandExtractResult =
     mode === "manual"
@@ -182,19 +208,40 @@ function Onboarding() {
     () => discoveries.products?.products ?? result?.productCandidates ?? [],
     [discoveries.products, result?.productCandidates],
   );
-  // What the scan finds is kept as it arrives, while the person sets their
-  // goal, so the products step is already filled in when they get there.
+  // What the scan finds is kept as it arrives, while the person answers.
   const { autoKeep } = catalogue;
   useEffect(() => {
     if (mode === "site" && candidates.length) autoKeep(candidates);
   }, [mode, candidates, autoKeep]);
+
+  const audienceOptions = useMemo(
+    () => (mode === "site" ? (result?.audienceTags ?? []).filter(Boolean).slice(0, 4) : []),
+    [mode, result?.audienceTags],
+  );
+  // The scan's groups start picked; the person removes what's wrong.
+  useEffect(() => {
+    if (audience === null && audienceOptions.length) setAudience(audienceOptions);
+  }, [audience, audienceOptions]);
 
   const flow: FlowState = {
     mode,
     scan: scanStatus,
     goalsSaved: Boolean(goals),
     activeProducts: catalogue.products.length,
+    audienceOptions: audienceOptions.length,
   };
+
+  const screens = useMemo(
+    () => askScreens(answers, { mode, sourceKnown }),
+    [answers, mode, sourceKnown],
+  );
+  const index = Math.min(askIndex, screens.length - 1);
+  const screen: AskScreen = screens[index];
+
+  // Screens slide the way the person is going (forward or back).
+  const position = STEP_ORDER.indexOf(step) * 1000 + (step === "ask" ? index : 0);
+  const [nav, setNav] = useState({ position, direction: 1 as 1 | -1 });
+  if (nav.position !== position) setNav({ position, direction: position > nav.position ? 1 : -1 });
 
   useEffect(() => {
     if (workspace.onboarded) {
@@ -215,28 +262,48 @@ function Onboarding() {
     } catch {
       /* storage unavailable or unreadable */
     }
+    // Answers given before a refresh are kept, and so is the screen.
+    try {
+      const kept = JSON.parse(localStorage.getItem(answersKey(workspace.id)) || "null") as {
+        answers?: unknown;
+        index?: unknown;
+      } | null;
+      if (kept) {
+        setAnswers(readAnswers(kept.answers));
+        if (typeof kept.index === "number" && kept.index >= 0) setAskIndex(Math.floor(kept.index));
+      }
+    } catch {
+      /* nothing kept */
+    }
     if (recovered) {
       setWebsiteUrl(recovered);
-      setStep("goals");
+      setStep("ask");
     } else if (draft) {
-      // A brand kit typed before a refresh: back to it, nothing lost.
       setManual(draft);
       setMode("manual");
       setStep("manual");
     } else if (new URLSearchParams(window.location.search).get("start") === "manual") {
-      // "No website?" on the projects page: straight to the brand kit, no scan.
       setMode("manual");
       setStep("manual");
     }
-    // A goal set before a refresh is kept.
     void getGoals({ data: { workspaceId: workspace.id } })
       .then((view) => {
-        if (view.goals) {
-          setGoals(view.goals);
-          setGoalDraft(goalDraftFrom(view.goals));
-        }
+        if (view.goals) setGoals(view.goals);
       })
       .catch(() => undefined);
+    // "Where did you hear of Mellox?" is asked once per account.
+    void (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id ?? null;
+      userId.current = uid;
+      if (!uid) return;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("signup_source")
+        .eq("id", uid)
+        .maybeSingle();
+      if (!error && data && !data.signup_source) setSourceKnown(false);
+    })().catch(() => undefined);
     return () => {
       scanAbort.current?.abort();
     };
@@ -256,17 +323,25 @@ function Onboarding() {
     return () => window.clearTimeout(timer);
   }, [workspaceId, mode, manual]);
 
-  // Each new step moves focus to its heading, so keyboard and screen-reader
+  useEffect(() => {
+    if (!workspaceId) return;
+    try {
+      localStorage.setItem(answersKey(workspaceId), JSON.stringify({ answers, index: askIndex }));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [workspaceId, answers, askIndex]);
+
+  // Each new screen moves focus to its heading, so keyboard and screen-reader
   // users land on the new content instead of a control that no longer exists.
   useEffect(() => {
     if (firstStep.current) {
       firstStep.current = false;
       return;
     }
-    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
-    const timer = window.setTimeout(() => headingRef.current?.focus({ preventScroll: true }), 60);
+    const timer = window.setTimeout(() => headingRef.current?.focus({ preventScroll: true }), 80);
     return () => window.clearTimeout(timer);
-  }, [step, reduce, manualPart]);
+  }, [step, askIndex, manualPart]);
 
   const startCompetitorResearch = (site: SiteDiscovery) => {
     if (!workspaceId || competitorFor.current === site.hostname) return;
@@ -294,27 +369,7 @@ function Onboarding() {
     );
   };
 
-  useEffect(() => {
-    if (
-      !workspaceId ||
-      competitorResearchStatus !== "ready" ||
-      !competitors.some(
-        (entry) => entry.profileStatus === "pending" || entry.profileStatus === "running",
-      )
-    )
-      return;
-    const timer = window.setInterval(() => {
-      void getCompetitorOverview({ data: { workspaceId } })
-        .then((overview) => setCompetitors(overview.competitors.slice(0, 6)))
-        .catch(() => undefined);
-    }, 8_000);
-    return () => window.clearInterval(timer);
-  }, [workspaceId, competitorResearchStatus, competitors]);
-
-  /**
-   * Scan the site in the background. The person answers the goal questions
-   * meanwhile; the review opens when both are done.
-   */
+  /** Scan the site in the background while the person answers. */
   const runScan = async (rawUrl: string, attempt = 0) => {
     const url = normalizeUrl(rawUrl);
     if (!workspaceId || !validUrl(url) || (scanStatus === "loading" && attempt === 0)) return;
@@ -341,7 +396,6 @@ function Onboarding() {
     setScanStatus("loading");
     setScanError(null);
     if (attempt === 0) {
-      // A retry keeps what was already discovered on screen; a new scan starts clean.
       setDiscoveries({});
       setPhase(0);
     }
@@ -402,7 +456,6 @@ function Onboarding() {
         throw new Error("The scan response was incomplete. Please try again.");
       if (!outcome.result) throw new Error("We couldn't build Brand DNA from that site.");
 
-      // Edits survive "Scan again" on the same site, not a different one.
       if (resultFor.current !== url) setEdits({});
       resultFor.current = url;
       setResult(outcome.result);
@@ -464,48 +517,12 @@ function Onboarding() {
       /* nothing kept: scan */
     }
     void runScan(websiteUrl);
-    // The guarded status check makes refresh recovery run once for the persisted URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, workspaceId, websiteUrl, scanStatus, mode]);
 
-  const rescan = () => {
-    scanFor.current = null;
-    setStep("scan");
-    void runScan(websiteUrl);
-  };
+  const go = (from: Step, state: FlowState = flow) => setStep(nextStep(from, state));
 
-  const go = (from: Step) => setStep(nextStep(from, flow));
-  const back = (from: Step) => {
-    const prev = previousStep(from, flow);
-    if (prev) setStep(prev);
-  };
-
-  const submitGoals = async () => {
-    if (!workspaceId || goalSaving) return;
-    setGoalSaving(true);
-    setGoalError(null);
-    try {
-      const saved = await saveGoals({
-        data: { workspaceId, goals: goalDraftToRaw(goalDraft) },
-      });
-      setGoals(saved.goals);
-      const warnings = saved.warnings.map((w) => w.message);
-      setGoalWarnings(warnings);
-      if (saved.goals) {
-        // A stretch is shown once on this step, then the person moves on.
-        if (warnings.length && goalWarnings.join() !== warnings.join()) {
-          toast.message("Goal saved", { description: warnings[0] });
-        }
-        setStep(nextStep("goals", { ...flow, goalsSaved: true }));
-      }
-    } catch (error) {
-      setGoalError(error instanceof Error ? error.message : "Couldn't save your goal. Try again.");
-    } finally {
-      setGoalSaving(false);
-    }
-  };
-
-  /** The Brand DNA as it stands: scan + review edits, or the manual answers. */
+  /** The Brand DNA as it stands: scan + edits (or the manual kit) + the answers. */
   const siteUrl = (): string | null => {
     const url = normalizeUrl(websiteUrl);
     return url && validUrl(url) ? url : null;
@@ -518,10 +535,14 @@ function Onboarding() {
         ? { ...emptyDna, ...manualDnaFields(manual), websiteUrl: finalUrl }
         : buildBrandDna(result, edits, finalUrl);
     const summary = productsSummary(catalogue.products);
+    const picked = (audience ?? []).filter(Boolean);
     return {
       ...base,
-      look: tidyLook(withLanguage(base.look ?? {}, language)),
-      // The catalogue is what the brand sells; the scan's guess is only a fallback.
+      // Every answer reaches the generators through the look (styleBlockFor)
+      // and the profile ("Who runs it"); a value the person set wins.
+      look: tidyLook(withLanguage(answersToLook(answers, base.look), language)),
+      profile: answersToProfile(answers, base.profile),
+      ...(picked.length ? { audienceTags: picked } : {}),
       products: summary || base.products,
       status: mode === "site" && scanStatus === "ok" ? "ok" : "idle",
       extractedAt: mode === "site" && scanStatus === "ok" ? Date.now() : null,
@@ -543,23 +564,88 @@ function Onboarding() {
     }
   };
 
-  const continueFromLanguage = async () => {
+  /** The goal from the answers, through decideGoals on the server. */
+  const persistGoals = async (a: Answers = answers): Promise<WorkspaceGoals | null> => {
+    if (!workspaceId) return null;
+    const raw = answersToGoals(a, goals);
+    if (!raw) return goals;
+    try {
+      const saved = await saveGoals({ data: { workspaceId, goals: raw } });
+      if (saved.goals) setGoals(saved.goals);
+      return saved.goals ?? goals;
+    } catch (error) {
+      toast.error("Couldn't save your goal", {
+        description: error instanceof Error ? error.message : "Try again in a moment.",
+      });
+      return null;
+    }
+  };
+
+  /* ── The questions ─────────────────────────────────────────────────── */
+
+  const leaveAsk = async (a: Answers = answers) => {
+    if (saving) return;
+    setSaving(true);
+    const saved = await persistGoals(a);
+    setSaving(false);
+    if (!saved) {
+      // No goal yet: back to the goal question.
+      const focusAt = screens.findIndex((s) => s.id === "focus");
+      if (!a.focus && focusAt >= 0) setAskIndex(focusAt);
+      return;
+    }
+    go("ask", { ...flow, goalsSaved: true });
+  };
+
+  const nextAsk = (a: Answers = answers) => {
+    const list = askScreens(a, { mode, sourceKnown });
+    if (index >= list.length - 1) {
+      void leaveAsk(a);
+      return;
+    }
+    setAskIndex(index + 1);
+  };
+
+  const pick = (id: string, value: string | number) => {
+    const next = { ...answers, [id]: value } as Answers;
+    setAnswers(next);
+    setFlash((n) => n + 1);
+    if (id === "role") {
+      void supabase
+        .rpc("set_persona_once", { _persona: ROLE_PERSONA[value as Role] })
+        .then(() => undefined);
+    }
+    if (id === "source" && userId.current) {
+      void supabase
+        .from("profiles")
+        .update({ signup_source: String(value) })
+        .eq("id", userId.current)
+        .is("signup_source", null)
+        .then(() => undefined);
+    }
+    nextAsk(next);
+  };
+
+  const continueAsk = () => {
+    if (screen.kind === "channels") {
+      setFlash((n) => n + 1);
+      // The goal is saved as soon as its parts are in, so a refresh keeps it.
+      void persistGoals();
+    }
+    nextAsk();
+  };
+
+  /* ── After the questions ───────────────────────────────────────────── */
+
+  const continueWithSave = async (from: Step) => {
     if (saving) return;
     setSaving(true);
     const ok = await saveDna();
     setSaving(false);
-    if (ok) go("language");
+    if (ok) go(from);
   };
 
-  const continueFromReview = async () => {
-    if (saving) return;
-    setSaving(true);
-    const ok = await saveDna();
-    setSaving(false);
-    if (ok) go("review");
-  };
-
-  /** The essentials are in: mark the workspace set up. Channels and first posts are extras. */
+  /** The essentials are in: mark the workspace set up. Connecting is an extra. */
   const finishSetup = async () => {
     if (!workspaceId || saving) return;
     setSaving(true);
@@ -583,7 +669,7 @@ function Onboarding() {
     if (error) {
       setSaving(false);
       toast.error("Couldn't finish setup", {
-        description: "Your edits are still here. Try again.",
+        description: "Your answers are still here. Try again.",
       });
       return;
     }
@@ -594,15 +680,13 @@ function Onboarding() {
       localStorage.removeItem(urlKey(workspaceId));
       localStorage.removeItem(scanKey(workspaceId));
       localStorage.removeItem(manualKey(workspaceId));
+      localStorage.removeItem(answersKey(workspaceId));
     } catch {
       /* storage unavailable */
     }
-    // The early website search ran alongside the scan. Reconcile it with the
-    // completed Brand DNA without adding another onboarding step.
     if (mode === "manual" && manual.competitors.length) {
       // The competitors typed in are on Brand DNA; the included first research
-      // lifts them into Brain → Competitors (looking up a site from a name).
-      // A plan without competitor tracking skips this quietly.
+      // lifts them into Brain → Competitors. A plan without tracking skips it.
       void bootstrapCompetitors({ data: { workspaceId } })
         .then((research) => {
           setCompetitors(research.competitors);
@@ -622,7 +706,7 @@ function Onboarding() {
         }
       })();
     }
-    go("products");
+    go("language");
   };
 
   const skip = async () => {
@@ -643,15 +727,17 @@ function Onboarding() {
       toast.error("Couldn't skip setup", { description: "Your URL is still saved. Try again." });
       return;
     }
+    // What was answered is still used, even when the rest is skipped.
+    if (answers.focus) await persistGoals();
     saveBrandDnaFor(workspaceId, { ...currentDna(), status: "idle", extractedAt: null }, true);
     try {
       localStorage.removeItem(urlKey(workspaceId));
       localStorage.removeItem(manualKey(workspaceId));
+      localStorage.removeItem(answersKey(workspaceId));
     } catch {
       /* storage unavailable */
     }
     setSaving(false);
-    // Onboarding is done: Back must never lead into it again.
     navigate({ to: workspacePath(workspaceId), replace: true });
   };
 
@@ -674,16 +760,102 @@ function Onboarding() {
     navigate({ to: entering, replace: true });
   };
 
-  const centered = step === "website" || step === "scan";
-  const stepMotion = {
-    initial: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
-    animate: { opacity: 1, y: 0, transition: { duration: duration.xslow, ease: ease.emphasized } },
-    exit: { opacity: 0, transition: { duration: duration.base, ease: ease.accelerate } },
+  /* ── Back, and the primary action of each screen ───────────────────── */
+
+  const back = (): (() => void) | null => {
+    if (step === "ask" && index > 0) return () => setAskIndex(index - 1);
+    if (step === "first") return () => setStep("connect");
+    const prev = previousStep(step, flow);
+    if (!prev) return null;
+    return () => {
+      if (prev === "ask") setAskIndex(screens.length - 1);
+      setStep(prev);
+    };
   };
 
+  const action: StageAction | null = (() => {
+    switch (step) {
+      case "ask":
+        if (screen.kind === "say" || screen.kind === "channels")
+          return { label: "Continue", onClick: continueAsk, busy: saving };
+        if (screen.kind === "swipe") {
+          const swiped = (answers.likes?.length ?? 0) + (answers.skips?.length ?? 0);
+          return swiped >= LOOK_MIN_SWIPES
+            ? { label: "Continue", onClick: continueAsk }
+            : { label: "Skip", quiet: true, onClick: continueAsk };
+        }
+        // A pick answers with a tap; going back to one keeps its answer.
+        return answers[screen.id] !== undefined
+          ? { label: "Keep it", quiet: true, onClick: () => nextAsk(), busy: saving }
+          : null;
+      case "review":
+        return {
+          label: "Looks right",
+          onClick: () => void continueWithSave("review"),
+          busy: saving,
+        };
+      case "audience":
+        return {
+          label: "Continue",
+          onClick: () => void continueWithSave("audience"),
+          busy: saving,
+        };
+      case "products": {
+        const hint =
+          !catalogue.products.length && catalogue.incoming.length
+            ? "Adding what we found on your site…"
+            : blockedReason("products", flow);
+        return {
+          label: "Continue",
+          onClick: () => void continueWithSave("products"),
+          disabled: Boolean(hint),
+          busy: saving,
+          hint,
+        };
+      }
+      case "language":
+        return { label: "Continue", onClick: () => void finishSetup(), busy: saving };
+      case "connect":
+        return connected.length
+          ? { label: "Continue", onClick: () => go("connect") }
+          : { label: "Later", quiet: true, onClick: () => go("connect") };
+      default:
+        return null;
+    }
+  })();
+
+  // Space / Enter / → move on, ← goes back. Digits are the pick screen's;
+  // the swipe deck takes ←/→ for itself.
+  const keyRef = useRef<{ action: StageAction | null; back: (() => void) | null }>({
+    action: null,
+    back: null,
+  });
+  keyRef.current = { action, back: back() };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input,textarea,select,[contenteditable],button,a,[role=radio],[role=button]"))
+        return;
+      const { action: a, back: b } = keyRef.current;
+      if (
+        (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") &&
+        a &&
+        !a.disabled &&
+        !a.busy
+      ) {
+        e.preventDefault();
+        a.onClick();
+      } else if (e.key === "ArrowLeft" && b) {
+        e.preventDefault();
+        b();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Wait until the route's workspace and any saved scan URL are restored.
-  // Otherwise the empty URL form flashes for a frame before recovery switches
-  // returning users straight back to the scan.
   if (!workspaceId) {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 bg-background text-foreground">
@@ -697,283 +869,282 @@ function Onboarding() {
     );
   }
 
-  const scanStrip =
-    mode === "site" && websiteUrl ? (
-      <ScanStrip
-        url={websiteUrl}
-        status={scanStatus}
-        progress={progress}
-        phase={phase}
-        discoveries={discoveries}
-        reduce={reduce}
-        onRetry={() => void runScan(websiteUrl)}
-      />
-    ) : undefined;
+  const askCount = { index, count: screens.length };
+  const scene: StageScene = step === "website" ? "world" : step === "first" ? "finish" : "wash";
+  const showDock =
+    mode === "site" &&
+    Boolean(websiteUrl) &&
+    step !== "website" &&
+    step !== "scan" &&
+    step !== "first";
+
+  const trail =
+    step === "ask"
+      ? screens.slice(0, index).flatMap((s) => {
+          if (s.kind !== "pick") return [];
+          const value = answers[s.id];
+          const o = s.options.find((x) => x.value === value);
+          if (!o) return [];
+          const src = o.art.kind === "image" ? onboardingArt(o.art.id) : null;
+          return [
+            {
+              id: s.id,
+              label: o.label,
+              art: src ? <img src={src} alt="" className="size-full object-cover" /> : undefined,
+            },
+          ];
+        })
+      : [];
+
+  const learned: Learned = {
+    brand: [answers.tone && answers.tone !== "auto" ? `${answers.tone} tone` : null, language]
+      .filter(Boolean)
+      .join(" · "),
+    audience: (audience ?? [])[0] || brand.audience?.slice(0, 40) || undefined,
+    competitors: competitors.length
+      ? `${competitors.length} ${competitors.length === 1 ? "rival" : "rivals"} found`
+      : undefined,
+    market: brand.industry?.slice(0, 40) || undefined,
+  };
+  const rhythm = goals?.postsPerWeek ?? answers.rhythm;
+  const plan = [
+    rhythm ? `${rhythm} ${rhythm === 1 ? "post" : "posts"} a week` : null,
+    answers.approval ? APPROVAL_LINE[answers.approval] : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const screenKey =
+    step === "ask" ? `ask:${screen.id}` : step === "manual" ? `manual:${manualPart}` : step;
 
   return (
-    // Mellox 2.0: onboarding sits in the same white window on Mox's backdrop
-    // as the app, with a gradient progress line at the top (Holo's layout).
-    <div
-      data-mellox-app
-      className="ds-backdrop relative flex min-h-[100dvh] flex-col lg:p-[var(--ds-frame-inset)]"
-    >
-      <div className="ds-frame relative flex min-h-[calc(100dvh-2*var(--ds-frame-inset))] flex-1 flex-col overflow-x-clip text-foreground max-lg:min-h-[100dvh] max-lg:rounded-none">
-        <div aria-hidden className="ds-aurora pointer-events-none absolute inset-0" />
-        <AmbientCanvas />
-        {/* The finish is Mox alone, full screen (Holo): no logo or progress. */}
-        <header
-          className={`relative z-10 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6 ${step === "first" ? "hidden" : ""}`}
+    <>
+      <LayoutGroup>
+        <Stage
+          scene={scene}
+          progress={progressOf(step, askCount, mode)}
+          minutes={step === "first" ? null : minutesLeft(screensLeft(step, askCount, flow))}
+          hideHeader={step === "first"}
+          trail={<AnswerTrail chips={trail} reduce={reduce} />}
+          screenKey={screenKey}
+          reduce={reduce}
+          onBack={step === "website" || step === "first" ? null : back()}
+          onSkip={step === "first" || step === "connect" ? null : () => void skip()}
+          skipping={saving}
+          action={action}
+          direction={nav.direction}
+          scan={
+            showDock ? (
+              <ScanDock
+                url={websiteUrl}
+                status={scanStatus}
+                pct={progress.pct}
+                phase={phase}
+                message={scanStatus === "loading" ? progress.message : undefined}
+                discoveries={discoveries}
+                flash={flash}
+                reduce={reduce}
+                onRetry={() => void runScan(websiteUrl)}
+              />
+            ) : null
+          }
         >
-          <span className="sm:hidden">
-            <Logo markOnly height={28} />
-          </span>
-          <span className="hidden sm:block">
-            <Logo height={30} />
-          </span>
-          <StepIndicator mode={mode} step={step} />
-          <div className="justify-self-end">
-            {step !== "done" && step !== "channels" && step !== "first" && (
-              <button
-                type="button"
-                onClick={() => void skip()}
-                disabled={saving}
-                className="inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> Saving…
-                  </>
-                ) : (
-                  "Skip for now"
-                )}
-              </button>
-            )}
-          </div>
-        </header>
-
-        <main
-          className={`relative z-10 flex flex-1 justify-center px-4 py-8 sm:px-6 sm:py-12 ${centered ? "items-center" : "items-start"}`}
-        >
-          {/* One child: the global `main > * + *` rhythm would offset the entering step. */}
-          <div className="relative flex w-full justify-center">
-            <LayoutGroup>
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.div key={step} {...stepMotion} className={`w-full ${STEP_WIDTH[step]}`}>
-                  {step === "website" && (
-                    <UrlStep
-                      value={websiteUrl}
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      onChange={setWebsiteUrl}
-                      onSubmit={() => {
-                        setMode("site");
-                        setStep("goals");
-                        void runScan(websiteUrl);
-                      }}
-                      onNoWebsite={() => {
-                        scanAbort.current?.abort();
-                        setWebsiteUrl("");
-                        setMode("manual");
-                        setStep("manual");
-                      }}
-                    />
-                  )}
-                  {step === "manual" && (
-                    <ManualBrandStep
-                      value={manual}
-                      part={manualPart}
-                      inspirations={inspiration.items}
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      onChange={(patch) => setManual((m) => ({ ...m, ...patch }))}
-                      onPart={setManualPart}
-                      onAddInspoFiles={inspiration.addFiles}
-                      onAddInspoLink={inspiration.addLink}
-                      onRemoveInspo={(key) => void inspiration.remove(key)}
-                      onRetryInspo={inspiration.retry}
-                      onHaveWebsite={() => {
-                        setMode("site");
-                        setStep("website");
-                      }}
-                      onDone={() => go("manual")}
-                    />
-                  )}
-                  {step === "goals" && (
-                    <GoalStep
-                      draft={goalDraft}
-                      saving={goalSaving}
-                      error={goalError}
-                      warnings={goalWarnings}
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      scanStrip={scanStrip}
-                      onChange={(patch) => {
-                        setGoalError(null);
-                        setGoalDraft((d) => ({ ...d, ...patch }));
-                      }}
-                      onBack={() => back("goals")}
-                      onContinue={() => void submitGoals()}
-                    />
-                  )}
-                  {step === "scan" && (
-                    <ScanStage
-                      url={websiteUrl}
-                      status={scanStatus}
-                      progress={progress}
-                      phase={phase}
-                      discoveries={discoveries}
-                      competitors={competitors}
-                      competitorResearchStatus={competitorResearchStatus}
-                      error={scanError}
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      onRetry={() => void runScan(websiteUrl)}
-                      onEdit={() => setStep("website")}
-                      onSkip={() => {
-                        // No usable scan: carry on by hand from the brand questions.
-                        scanAbort.current?.abort();
-                        setMode("manual");
-                        setStep("manual");
-                      }}
-                    />
-                  )}
-                  {step === "review" && (
-                    <BrandReveal
-                      brand={brand}
-                      competitors={competitors}
-                      competitorResearchStatus={competitorResearchStatus}
-                      url={websiteUrl}
-                      saving={saving}
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      onChange={(patch) => setEdits((current) => ({ ...current, ...patch }))}
-                      onContinue={() => void continueFromReview()}
-                      onRescan={rescan}
-                      onChangeUrl={() => setStep("website")}
-                    />
-                  )}
-                  {step === "language" && (
-                    <LanguageStep
-                      value={language}
-                      saving={saving}
-                      headingRef={headingRef}
-                      onChange={setLanguage}
-                      onBack={() => back("language")}
-                      onContinue={() => void continueFromLanguage()}
-                    />
-                  )}
-                  {step === "products" && (
-                    <ProductsStep
-                      brandName={brandName}
-                      defaultKind={
-                        mode === "manual" && manual.sells === "services" ? "service" : "product"
-                      }
-                      siteHost={mode === "site" && websiteUrl ? hostOf(websiteUrl) : null}
-                      scanning={mode === "site" && scanStatus === "loading"}
-                      incoming={catalogue.incoming}
-                      failed={catalogue.failed}
-                      products={catalogue.products}
-                      loading={catalogue.loading}
-                      busy={catalogue.busy}
-                      lowResolution={catalogue.lowResolution}
-                      adding={catalogue.adding}
-                      error={catalogue.error}
-                      blockedReason={
-                        saving
-                          ? "Saving…"
-                          : !catalogue.products.length && catalogue.incoming.length
-                            ? "Adding what we found on your site…"
-                            : blockedReason("products", flow)
-                      }
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      onRetry={catalogue.retryFailed}
-                      onRemoveFound={() => void catalogue.removeFound()}
-                      onAdd={(d) => void catalogue.add(d)}
-                      onSave={(id, d) => void catalogue.save(id, d)}
-                      onArchive={(id) => void catalogue.archive(id)}
-                      onUpload={(id, file) => void catalogue.upload(id, file)}
-                      onPrimary={(id, assetId) => void catalogue.setPrimary(id, assetId)}
-                      onBack={() => back("products")}
-                      onContinue={() => void finishSetup()}
-                    />
-                  )}
-                  {step === "channels" && (
-                    <ChannelsStep
-                      connectedCount={connected.length}
-                      headingRef={headingRef}
-                      onBack={() => back("channels")}
-                      onContinue={() => go("channels")}
-                    >
-                      <SocialAccountsSection
-                        variant="onboarding"
-                        onConnectedChange={setConnected}
-                      />
-                    </ChannelsStep>
-                  )}
-                  {step === "first" && (
-                    <FinishStep
-                      brandName={brandName}
-                      language={language}
-                      products={catalogue.products.length}
-                      channels={connected.length}
-                      reduce={reduce}
-                      headingRef={headingRef}
-                      onBack={() => back("first")}
-                      onEnter={() => enterApp()}
-                    />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </LayoutGroup>
-          </div>
-        </main>
-      </div>
+          {step === "website" && (
+            <div className="ob-scene-content" data-side="right">
+              <div className="ob-scene-panel ob-glass rounded-[32px] p-5 sm:p-7">
+                <UrlStep
+                  value={websiteUrl}
+                  reduce={reduce}
+                  headingRef={headingRef}
+                  onChange={setWebsiteUrl}
+                  onSubmit={() => {
+                    setMode("site");
+                    setAskIndex(0);
+                    setStep("ask");
+                    void runScan(websiteUrl);
+                  }}
+                  onNoWebsite={() => {
+                    scanAbort.current?.abort();
+                    setWebsiteUrl("");
+                    setMode("manual");
+                    setStep("manual");
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {step === "manual" && (
+            <div className="h-full overflow-y-auto overscroll-contain px-1 pb-4">
+              <ManualBrandStep
+                value={manual}
+                part={manualPart}
+                inspirations={inspiration.items}
+                reduce={reduce}
+                headingRef={headingRef}
+                onChange={(patch) => setManual((m) => ({ ...m, ...patch }))}
+                onPart={setManualPart}
+                onAddInspoFiles={inspiration.addFiles}
+                onAddInspoLink={inspiration.addLink}
+                onRemoveInspo={(key) => void inspiration.remove(key)}
+                onRetryInspo={inspiration.retry}
+                onHaveWebsite={() => {
+                  setMode("site");
+                  setStep("website");
+                }}
+                onDone={() => {
+                  setAskIndex(0);
+                  go("manual");
+                }}
+              />
+            </div>
+          )}
+          {step === "ask" && screen.kind === "say" && (
+            <SayScreen
+              screen={screen}
+              reduce={reduce}
+              headingRef={headingRef}
+              onNext={continueAsk}
+            />
+          )}
+          {step === "ask" && screen.kind === "pick" && (
+            <PickScreen
+              screen={screen}
+              value={answers[screen.id]}
+              reduce={reduce}
+              headingRef={headingRef}
+              onPick={(v) => pick(screen.id, v)}
+            />
+          )}
+          {step === "ask" && screen.kind === "channels" && (
+            <ChannelsScreen
+              screen={screen}
+              value={answers.channels ?? []}
+              reduce={reduce}
+              headingRef={headingRef}
+              onChange={(channels: OnboardingChannel[]) => setAnswers((a) => ({ ...a, channels }))}
+            />
+          )}
+          {step === "ask" && screen.kind === "swipe" && (
+            <LookSwipe
+              screen={screen}
+              likes={answers.likes ?? []}
+              skips={answers.skips ?? []}
+              reduce={reduce}
+              headingRef={headingRef}
+              onSwipe={(id, liked) =>
+                setAnswers((a) => ({
+                  ...a,
+                  likes: liked ? [...(a.likes ?? []), id] : (a.likes ?? []),
+                  skips: liked ? (a.skips ?? []) : [...(a.skips ?? []), id],
+                }))
+              }
+              onDone={() => nextAsk()}
+            />
+          )}
+          {step === "scan" && (
+            <div className="grid h-full place-items-center overflow-y-auto">
+              <ScanStage
+                url={websiteUrl}
+                status={scanStatus}
+                progress={progress}
+                phase={phase}
+                discoveries={discoveries}
+                competitors={competitors}
+                competitorResearchStatus={competitorResearchStatus}
+                error={scanError}
+                reduce={reduce}
+                headingRef={headingRef}
+                onRetry={() => void runScan(websiteUrl)}
+                onEdit={() => setStep("website")}
+                onSkip={() => {
+                  // No usable scan: carry on by hand from the brand kit.
+                  scanAbort.current?.abort();
+                  setMode("manual");
+                  setStep("manual");
+                }}
+              />
+            </div>
+          )}
+          {step === "review" && (
+            <BrandCard
+              brand={brand}
+              url={websiteUrl}
+              reduce={reduce}
+              headingRef={headingRef}
+              onChange={(patch) => setEdits((current) => ({ ...current, ...patch }))}
+            />
+          )}
+          {step === "audience" && (
+            <AudiencePick
+              options={audienceOptions}
+              value={audience ?? []}
+              reduce={reduce}
+              headingRef={headingRef}
+              onChange={setAudience}
+            />
+          )}
+          {step === "products" && (
+            <div className="h-full overflow-y-auto overscroll-contain px-1 pb-4">
+              <div className="mx-auto max-w-5xl">
+                <ProductsStep
+                  embedded
+                  brandName={brandName}
+                  defaultKind={
+                    mode === "manual" && manual.sells === "services" ? "service" : "product"
+                  }
+                  siteHost={mode === "site" && websiteUrl ? hostOf(websiteUrl) : null}
+                  scanning={mode === "site" && scanStatus === "loading"}
+                  incoming={catalogue.incoming}
+                  failed={catalogue.failed}
+                  products={catalogue.products}
+                  loading={catalogue.loading}
+                  busy={catalogue.busy}
+                  lowResolution={catalogue.lowResolution}
+                  adding={catalogue.adding}
+                  error={catalogue.error}
+                  blockedReason={blockedReason("products", flow)}
+                  reduce={reduce}
+                  headingRef={headingRef}
+                  onRetry={catalogue.retryFailed}
+                  onRemoveFound={() => void catalogue.removeFound()}
+                  onAdd={(d) => void catalogue.add(d)}
+                  onSave={(id, d) => void catalogue.save(id, d)}
+                  onArchive={(id) => void catalogue.archive(id)}
+                  onUpload={(id, file) => void catalogue.upload(id, file)}
+                  onPrimary={(id, assetId) => void catalogue.setPrimary(id, assetId)}
+                  onBack={() => back()?.()}
+                  onContinue={() => void continueWithSave("products")}
+                />
+              </div>
+            </div>
+          )}
+          {step === "language" && (
+            <LanguagePick
+              value={language}
+              reduce={reduce}
+              headingRef={headingRef}
+              onChange={setLanguage}
+            />
+          )}
+          {step === "connect" && (
+            <ConnectStep reduce={reduce} headingRef={headingRef}>
+              <SocialAccountsSection variant="onboarding" onConnectedChange={setConnected} />
+            </ConnectStep>
+          )}
+          {step === "first" && (
+            <DoneStep
+              brandName={brandName}
+              learned={learned}
+              plan={plan || null}
+              reduce={reduce}
+              headingRef={headingRef}
+              onEnter={() => enterApp()}
+            />
+          )}
+        </Stage>
+      </LayoutGroup>
       {entering && <VisorTransition reduced={reduce} onCovered={finishEntering} />}
-    </div>
-  );
-}
-
-function StepIndicator({ mode, step }: { mode: FlowMode; step: Step }) {
-  const steps = indicatorSteps(mode);
-  const current = indicatorIndex(mode, step);
-  // Holo's progress line: one gradient bar, with the step name under it.
-  const value = Math.min(1, (current + 0.5) / steps.length);
-  return (
-    <div className="flex w-[168px] flex-col items-center gap-1.5 sm:w-[300px]">
-      <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--ds-well-bg)]">
-        <motion.div
-          className="ds-grad-bar h-full rounded-full"
-          initial={false}
-          animate={{ width: `${value * 100}%` }}
-          transition={{ type: "spring", stiffness: 140, damping: 24 }}
-        />
-      </div>
-      <span className="text-[11px] font-semibold text-muted-foreground">
-        {steps[current] ? `${current + 1} of ${steps.length} · ${steps[current].label}` : "Done"}
-      </span>
-      <StepList steps={steps} current={current} />
-    </div>
-  );
-}
-
-/** The steps for screen readers; the bar above is what people see. */
-function StepList({
-  steps,
-  current,
-}: {
-  steps: ReturnType<typeof indicatorSteps>;
-  current: number;
-}) {
-  return (
-    <ol aria-label="Setup progress" className="sr-only">
-      {steps.map((item, index) => (
-        <li key={item.id} aria-current={index === current ? "step" : undefined}>
-          {item.label}
-          {index < current ? " (complete)" : ""}
-        </li>
-      ))}
-    </ol>
+    </>
   );
 }
 

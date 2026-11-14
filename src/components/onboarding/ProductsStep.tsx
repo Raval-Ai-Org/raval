@@ -63,6 +63,8 @@ export type ProductsStepProps = {
   onPrimary: (id: string, assetId: string) => void;
   onBack: () => void;
   onContinue: () => void;
+  /** Inside the one-question shell: Back / Continue live in its dock. */
+  embedded?: boolean;
 };
 
 const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
@@ -203,7 +205,12 @@ export function ProductsStep(p: ProductsStepProps) {
         </p>
       )}
 
-      <div className="mt-9 flex flex-wrap items-center justify-between gap-3">
+      <div
+        className={cn(
+          "mt-9 flex flex-wrap items-center justify-between gap-3",
+          p.embedded && "hidden",
+        )}
+      >
         <button
           type="button"
           onClick={p.onBack}

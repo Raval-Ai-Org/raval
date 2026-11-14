@@ -8,6 +8,10 @@ import {
 } from "@/lib/studio/jobs";
 import { writeStudioPrompt } from "@/server/studio/prompt-writer.server";
 import { runMetered } from "@/server/billing/metered.server";
+import { pickInspoMediaFor } from "@/server/inspo/media-pool.server";
+
+/** Formats where Write it for me may suggest one of the brand's own Inspo photos. */
+const MEDIA_TYPES = new Set(["image", "carousel"]);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -58,8 +62,19 @@ export const POST = defineRoute({
           recentCategories: body.recentCategories,
         }),
     );
+    // Now and then the brand's own Inspo photos are suggested with the prompt
+    // (src/lib/inspo/media-rotation.ts). Only a suggestion: the composer
+    // shows them and the person can remove them before Generate.
+    const c = body.controls;
+    const media =
+      MEDIA_TYPES.has(body.type) &&
+      !c?.referenceAssetIds?.length &&
+      !c?.productId &&
+      !c?.sourceVideoAssetIds?.length
+        ? await pickInspoMediaFor(workspaceId, body.type, crypto.randomUUID())
+        : null;
     return Response.json(
-      metered.result,
+      media ? { ...metered.result, media } : metered.result,
       metered.balance === null
         ? undefined
         : {

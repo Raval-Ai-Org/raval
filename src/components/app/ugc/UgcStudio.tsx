@@ -37,9 +37,13 @@ import {
   type BrandCreatorRef,
 } from "@/lib/ugc/creators";
 import { ugcFormat } from "@/lib/ugc/formats/formats";
-import { suggestFormats } from "@/lib/ugc/formats/suggest";
+import { favouritesFirst, suggestFormats } from "@/lib/ugc/formats/suggest";
 import { ugcProductFromCatalogue } from "@/lib/ugc/from-catalogue";
-import { HOOK_TEXT_MAX_WORDS } from "@/lib/ugc/hook-text";
+import {
+  HOOK_TEXT_MAX_WORDS,
+  HOOK_TEXT_PRESET_IDS,
+  type HookTextPresetId,
+} from "@/lib/ugc/hook-text";
 import { LANGUAGES, platformPreset } from "@/lib/ugc/options";
 import { allowedDurations, coerceSettings } from "@/lib/ugc/render-settings";
 import {
@@ -430,18 +434,22 @@ function ComposerContainer({
     [dna.industry, dna.audience, dna.audienceTags, catalogue.data],
   );
 
+  // The brand's favourite formats (Inspo → Video look) lead "For your brand".
   const formatSuggested = useMemo(
     () =>
-      suggestFormats(
-        {
-          industry: dna.industry,
-          audience: dna.audience,
-          product: (catalogue.data ?? []).flatMap((p) => [p.name, p.category]),
-          objective: project?.brief.objective,
-        },
-        6,
+      favouritesFirst(
+        look.video?.formats,
+        suggestFormats(
+          {
+            industry: dna.industry,
+            audience: dna.audience,
+            product: (catalogue.data ?? []).flatMap((p) => [p.name, p.category]),
+            objective: project?.brief.objective,
+          },
+          6,
+        ),
       ),
-    [dna.industry, dna.audience, catalogue.data, project?.brief.objective],
+    [dna.industry, dna.audience, catalogue.data, project?.brief.objective, look.video?.formats],
   );
 
   const model =
@@ -466,8 +474,8 @@ function ComposerContainer({
       // A new video starts on the format grid; a saved one or a Studio script doesn't.
       format: format?.id ?? (project || source ? "auto" : null),
       partnerId: brief.creator.partnerId ?? null,
-      hookOn: brief.hookText.enabled,
-      hookPreset: brief.hookText.preset ?? null,
+      hookOn: project ? brief.hookText.enabled : look.video?.hookText?.on !== false,
+      hookPreset: brief.hookText.preset ?? brandHookPreset(look.video?.hookText?.preset),
       hookLine: baseScript.current?.onScreen ?? "",
     };
   });
@@ -965,4 +973,11 @@ function AdCard({
       </button>
     </div>
   );
+}
+
+/** The brand's hook style from Inspo → Video look, when it's a known preset. */
+function brandHookPreset(id: string | undefined): HookTextPresetId | null {
+  return (HOOK_TEXT_PRESET_IDS as readonly string[]).includes(id ?? "")
+    ? (id as HookTextPresetId)
+    : null;
 }

@@ -10,6 +10,64 @@ import { MEDIA_CHIPS, shelfCards, type InspoChip } from "@/lib/inspo/board";
 import { cn } from "@/lib/utils";
 import { CardWall, CHIP_ICON, EASE, InspoCardView, InspoDrop, UploadCardView } from "./parts";
 import type { InspoHandlers, InspoView } from "./types";
+import { frequencyOf, type OwnMediaFrequency } from "@/lib/inspo/media-rotation";
+
+const USE_OPTIONS: Array<{ value: OwnMediaFrequency; label: string }> = [
+  { value: "rarely", label: "Rarely" },
+  { value: "sometimes", label: "Sometimes" },
+  { value: "often", label: "Often" },
+];
+
+/**
+ * How often Mox puts these on a new piece by itself (Autopilot, campaigns).
+ * Never on every piece, never two in a row; what a person picks always stands.
+ */
+function OwnMediaUse({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: OwnMediaFrequency;
+  disabled: boolean;
+  onChange: (value: OwnMediaFrequency) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-[var(--ds-well-bg)] px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-[13px] font-semibold">Use my media in new posts</p>
+        <p className="text-xs text-muted-foreground">
+          Autopilot, campaigns and Write it for me add these to some picture posts and carousels,
+          never two posts in a row. &ldquo;Always&rdquo; photos come back now and then; &ldquo;For
+          now&rdquo; ones a couple of times while they&rsquo;re fresh.
+        </p>
+      </div>
+      <div className="ds-well inline-flex shrink-0 p-0.5" role="radiogroup" aria-label="How often">
+        {USE_OPTIONS.map((o) => {
+          const on = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={disabled}
+              onClick={() => onChange(o.value)}
+              className={cn(
+                "h-7 rounded-full px-3 text-[12px] font-semibold transition-colors",
+                on
+                  ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
+                  : "text-muted-foreground hover:text-foreground",
+                dsFocus,
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function Media({ view, handlers }: { view: InspoView; handlers: InspoHandlers }) {
   const [addAs, setAddAs] = React.useState<InspoChip>("product");
@@ -92,6 +150,14 @@ export function Media({ view, handlers }: { view: InspoView; handlers: InspoHand
         </div>
       </div>
 
+      <OwnMediaUse
+        value={frequencyOf(view.look.visual?.ownMedia)}
+        disabled={!canEdit}
+        onChange={(ownMedia) =>
+          handlers.saveLook({ ...view.look, visual: { ...view.look.visual, ownMedia } })
+        }
+      />
+
       {fromSite.length > 0 && canEdit && (
         <div className="space-y-2">
           <div className="text-[12px] font-semibold text-muted-foreground">From your site</div>
@@ -134,6 +200,12 @@ export function Media({ view, handlers }: { view: InspoView; handlers: InspoHand
               onChip={(chip) => handlers.setChip(card, chip)}
               onRemove={() => handlers.remove(card)}
               onUse={() => handlers.useInPost(card)}
+              onLifetime={() =>
+                handlers.setLifetime(
+                  card,
+                  card.lifetime === "temporary" ? "permanent" : "temporary",
+                )
+              }
             />
           ))}
         </CardWall>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { VisualSchema, VideoSchema } from "@/lib/brand-look/spec";
 
-export const VISUAL_VERSION = 1;
+export const VISUAL_VERSION = 2;
 export const PURPOSES = ["style", "product", "person", "inspiration", "avoid"] as const;
 export const FORMATS = ["image", "carousel", "story", "video", "ad", "ugc"] as const;
 export const FEEDBACK_REASONS = [
@@ -19,6 +19,151 @@ export const EvidenceSchema = z.object({
   confidence: z.number().min(0).max(1),
   sourceIds: z.array(z.string().uuid()).max(12),
 });
+/** Trim instead of refusing: an over-long model string must never drop a whole profile. */
+const text = (max: number) =>
+  z
+    .string()
+    .trim()
+    .transform((s) => s.slice(0, max))
+    .catch("");
+const list = (max: number, each: number) =>
+  z
+    .array(z.string())
+    .catch([])
+    .transform((items) =>
+      items
+        .map((s) => s.trim().slice(0, each))
+        .filter(Boolean)
+        .slice(0, max),
+    );
+const ids = (max: number) =>
+  z
+    .array(z.string())
+    .catch([])
+    .transform((items) =>
+      items.filter((id) => z.string().uuid().safeParse(id).success).slice(0, max),
+    );
+
+export const SIGNATURE_KINDS = ["subject", "motif", "object", "card", "texture"] as const;
+// Ids are stored: add, never rename. "colour-words": several key words alternate in the accent colour.
+export const EMPHASIS_STYLES = [
+  "italic-accent",
+  "colour-word",
+  "weight",
+  "none",
+  "colour-words",
+] as const;
+/** What kind of picture the brand makes: a painted world, photos, or a designed graphic system. */
+export const REGISTERS = [
+  "illustrated",
+  "photographic",
+  "designed-system",
+  "typographic",
+  "mixed",
+] as const;
+/** How many words the brand puts on a picture. */
+export const TEXT_DENSITY = ["minimal", "headline", "rich"] as const;
+/** How often the logo appears on a picture (the overlay is placed by code). */
+export const LOGO_USE = ["always", "often", "sometimes", "rarely"] as const;
+/** Recurring building blocks of a designed system. Ids are stored: add, never rename. */
+export const COMPONENT_KINDS = [
+  "eyebrow-pill",
+  "icon-list",
+  "icon-grid",
+  "cta-pair",
+  "callout-box",
+  "hub-diagram",
+  "annotated-device",
+  "portrait-ring",
+  "quote",
+  "stat-band",
+  "work-cards",
+  "accent-underline",
+  "connector-lines",
+  "slide-counter",
+] as const;
+export const ADHERENCE = ["light", "close", "strict"] as const;
+export const SOURCE_ROLES = ["artwork", "photo", "ui", "type", "overview"] as const;
+export const LOGO_PLACES = [
+  "top-centre",
+  "top-left",
+  "top-right",
+  "bottom-centre",
+  "bottom-left",
+  "bottom-right",
+  "none",
+] as const;
+
+/**
+ * The brand's style bible (ADR-0048): what makes every picture of this brand
+ * look like the same brand. Written by the analysis model, kept only after
+ * `groundBible` (bible.ts) checks it against the images it really saw.
+ */
+const ComponentSchema = z.object({ kind: z.enum(COMPONENT_KINDS), description: text(200) });
+
+export const BibleSchema = z.object({
+  world: z
+    .object({
+      medium: text(200),
+      rendering: text(240),
+      setting: text(240),
+      lighting: text(200),
+      paletteMood: text(200),
+    })
+    .catch({ medium: "", rendering: "", setting: "", lighting: "", paletteMood: "" }),
+  type: z
+    .object({
+      headline: text(200),
+      emphasis: z.enum(EMPHASIS_STYLES).catch("none"),
+      casing: text(60),
+      placement: text(160),
+    })
+    .catch({ headline: "", emphasis: "none", casing: "", placement: "" }),
+  composition: z
+    .object({
+      logo: z.enum(LOGO_PLACES).catch("none"),
+      headlineZone: text(160),
+      subjectZone: text(160),
+      density: z.enum(["airy", "balanced", "full"]).catch("balanced"),
+    })
+    .catch({ logo: "none", headlineZone: "", subjectZone: "", density: "balanced" }),
+  signatures: z
+    .array(
+      z.object({
+        kind: z.enum(SIGNATURE_KINDS).catch("motif"),
+        description: text(240),
+        sourceIds: ids(12),
+      }),
+    )
+    .catch([])
+    .transform((items) => items.filter((s) => s.description).slice(0, 5)),
+  recurringSubject: z
+    .object({ description: text(300), sourceIds: ids(12) })
+    .optional()
+    .catch(undefined),
+  avoid: list(6, 160),
+  anchors: ids(4),
+  register: z.enum(REGISTERS).catch("mixed").default("mixed"),
+  text: z.enum(TEXT_DENSITY).catch("headline").default("headline"),
+  logo: z.enum(LOGO_USE).catch("often").default("often"),
+  /** The chrome every post of a series repeats (bands, counter, footer URL), described. */
+  frame: text(320).default(""),
+  // One unknown kind drops that item only, never the brand's other building blocks.
+  components: z
+    .array(z.unknown())
+    .catch([])
+    .default([])
+    .transform((items) =>
+      items
+        .flatMap((item) => {
+          const parsed = ComponentSchema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        })
+        .slice(0, 8),
+    ),
+});
+export type StyleBible = z.infer<typeof BibleSchema>;
+
 export const DirectionSchema = z.object({
   name: z.string().trim().min(1).max(80),
   summary: z.string().trim().min(1).max(600),
@@ -31,9 +176,19 @@ export const DirectionSchema = z.object({
   // Supporting evidence supplements the existing renderer unless the user opts in.
   composed: z.boolean().default(false),
   sourceIds: z.array(z.string().uuid()).max(12).default([]),
+  /** How closely pictures follow the bible. Light keeps Mellox's layout variety. */
+  adherence: z.enum(ADHERENCE).default("light").catch("light"),
+  confidence: z.number().min(0).max(1).optional().catch(undefined),
+  bible: BibleSchema.optional().catch(undefined),
 });
 export const ProfileSchema = z.object({
-  v: z.literal(1).default(1),
+  v: z.union([z.literal(1), z.literal(2)]).default(1),
+  /** Applied by Mellox itself (no manual look, nothing active); a person keeps or changes it. */
+  auto: z.boolean().default(false).catch(false),
+  roles: z
+    .array(z.object({ sourceId: z.string().uuid(), role: z.enum(SOURCE_ROLES) }))
+    .catch([])
+    .default([]),
   observations: z.array(EvidenceSchema).max(30).default([]),
   directions: z.array(DirectionSchema).min(1).max(3),
   selected: z.number().int().min(0).max(2).default(0),
@@ -193,22 +348,20 @@ export function directionRules(
   ].join("\n");
 }
 
-/** Sample different pages and reference purposes instead of the eight newest crops. */
-export function analysisReferences(sources: VisualSource[], limit = 8): VisualSource[] {
+/**
+ * What the style read looks at, best evidence first (ADR-0048): the brand's own
+ * posts, the artwork its site really shows, one overview of the whole homepage,
+ * then one section crop per page; inspiration and product/person photos last.
+ */
+export function analysisReferences(sources: VisualSource[], limit = 10): VisualSource[] {
   const eligible = sources.filter(
     (s) =>
-      s.status !== "removed" &&
-      s.purpose !== "avoid" &&
-      s.asset?.mime_type.startsWith("image/") &&
-      s.region.type !== "full",
+      s.status !== "removed" && s.purpose !== "avoid" && s.asset?.mime_type.startsWith("image/"),
   );
-  const manual = eligible
-    .filter((s) => s.kind !== "website")
-    .sort(
-      (a, b) =>
-        Number(b.purpose === "product" || b.purpose === "person") -
-        Number(a.purpose === "product" || a.purpose === "person"),
-    );
+  const manual = eligible.filter((s) => s.kind !== "website");
+  const ownPosts = manual.filter((s) => s.purpose === "style");
+  const inspiration = manual.filter((s) => s.purpose === "inspiration");
+  const media = manual.filter((s) => s.purpose === "product" || s.purpose === "person");
   const pageOrder = (s: VisualSource) =>
     typeof s.region.page === "number"
       ? s.region.page
@@ -223,16 +376,29 @@ export function analysisReferences(sources: VisualSource[], limit = 8): VisualSo
         pageOrder(a) - pageOrder(b) ||
         Number(a.region.top ?? 0) - Number(b.region.top ?? 0),
     );
+  const art = website.filter((s) => s.region.type === "art");
+  const overview = website.filter((s) => s.region.type === "full" && !s.region.mobile).slice(0, 1);
+  const sections = website.filter((s) => s.region.type === "section");
   const distinct: VisualSource[] = [];
   const pages = new Set<string>();
-  for (const source of website) {
+  for (const source of sections) {
     const page = `${source.source_url}|${source.region.mobile ? "mobile" : "desktop"}`;
     if (!pages.has(page)) {
       pages.add(page);
       distinct.push(source);
     }
   }
-  const result = [...manual.slice(0, 4), ...distinct, ...manual.slice(4), ...website];
+  const result = [
+    ...ownPosts.slice(0, 4),
+    ...art.slice(0, 3),
+    ...overview,
+    ...distinct,
+    ...inspiration.slice(0, 2),
+    ...media.slice(0, 2),
+    ...ownPosts.slice(4),
+    ...art.slice(3),
+    ...sections,
+  ];
   return [...new Map(result.map((s) => [s.id, s])).values()].slice(0, limit);
 }
 

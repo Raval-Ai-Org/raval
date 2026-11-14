@@ -378,6 +378,7 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "studio.image.cutout",
   "studio.image.design",
   "studio.image.storyboard",
+  "studio.image.reframe",
   "studio.video.clip",
   // The local open-source sidecar (src/server/local-ai): $0, never a model plan.
   "studio.image.ocr",

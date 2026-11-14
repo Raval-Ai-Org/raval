@@ -5,6 +5,7 @@
 import "server-only";
 import { runStructuredPrompt } from "@/lib/ai";
 import {
+  framingFailures,
   qaFrameTimes,
   technicalIssues,
   visualFailures,
@@ -16,7 +17,9 @@ import { videoKind, type VideoKindId } from "@/lib/studio/video/kinds";
 import type { ClipPlan } from "@/lib/studio/video/lengths";
 import type { VideoStoryboard } from "@/lib/studio/video/storyboard";
 import { DISSOLVE_SECONDS } from "@/server/ugc/providers/assemble.server";
+import { letterboxedVideo } from "@/lib/studio/video/opening-frame";
 import { probeVideo, sampleFrames } from "./finish.server";
+import { frameProfile } from "./opening-frame.server";
 
 export type VideoCheckResult = {
   failures: ClipFailure[];
@@ -36,9 +39,10 @@ const JUDGE_SYSTEM = [
   "- sameSubject: the people, product and place look the same as in the clip before and as the storyboard's bible describes (10 = identical; below 6 = a viewer would notice a different face, outfit, product shape, label or room).",
   "- clean: no warped hands or faces, extra fingers, melting objects, garbled or misspelled letters, drifting logos, or objects appearing from nowhere (10 = flawless).",
   "- followsPlan: the clip shows what its part of the storyboard describes.",
+  "- framing: the picture fills the whole frame edge to edge (10). Below 6: blurred or empty bars, a border, a picture inside a picture, words or a badge cut at an edge or overlapping each other or the product, or a logo or watermark stuck in a corner when the brief says no logo was asked for.",
   "Also score `ending` (the last frame is a calm, finished moment, not mid-action or mid-blur) and, only when a reference picture is given, `sourceFaithful` (the first frame and the product, colours and words match the reference).",
   "In `problem`, name what is wrong in at most 20 plain words, or leave it empty. Never praise; only report.",
-  'Return JSON: {"clips": [{"clip": number, "sameSubject": number, "clean": number, "followsPlan": number, "problem": string}], "ending": number, "sourceFaithful"?: number, "summary": string}',
+  'Return JSON: {"clips": [{"clip": number, "sameSubject": number, "clean": number, "followsPlan": number, "framing": number, "problem": string}], "ending": number, "sourceFaithful"?: number, "summary": string}',
 ].join("\n");
 
 const jpeg = (bytes: Buffer) => ({
@@ -54,6 +58,8 @@ export async function checkStudioVideo(args: {
   audio: boolean;
   /** The post's picture or the product photo the video must stay true to. */
   reference?: Buffer | null;
+  /** The person asked for the logo; otherwise a corner badge counts against framing. */
+  logoWanted?: boolean;
 }): Promise<VideoCheckResult> {
   const kind = videoKind(args.kind);
   const dissolve = kind.join === "cut" ? DISSOLVE_SECONDS : 0;
@@ -73,6 +79,13 @@ export async function checkStudioVideo(args: {
     times.map((frame) => frame.time),
   );
   const frames = times.map((frame, i) => ({ time: frame.time, bytes: bytes[i] }));
+  // Measured, not judged: frames that sit on bars of a blurred copy.
+  const profiles = await Promise.all(
+    bytes.filter(Boolean).map((frame) => frameProfile(frame).catch(() => null)),
+  );
+  failures.push(
+    ...framingFailures(letterboxedVideo(profiles.filter((p): p is NonNullable<typeof p> => !!p))),
+  );
   const storyboard = args.storyboard.clips
     .map((clip, i) =>
       [
@@ -94,6 +107,9 @@ export async function checkStudioVideo(args: {
       system: JUDGE_SYSTEM,
       user: [
         `Kind of video: ${kind.label}. ${args.plan.length} clip(s).`,
+        args.logoWanted
+          ? "The person asked for the brand's logo: a small logo in one clear corner is expected."
+          : "No logo or watermark was asked for: a badge stuck in a corner counts against framing (the product's own printed label is fine).",
         `Story: ${args.storyboard.logline}`,
         bible ? `Bible (must stay the same):\n${bible}` : "",
         `Storyboard:\n${storyboard}`,

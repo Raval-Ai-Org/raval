@@ -37,7 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Logo } from "@/components/brand/Logo";
 import { dsGhostBtn, dsIconBtn } from "@/components/app/surface/buttons";
 import { Link, useNavigate, useSearchParams } from "@/lib/navigation";
-import { WORKSPACES_HOME } from "@/lib/workspace/paths";
+import { ALL_WORKSPACES } from "@/lib/workspace/paths";
 import { cn } from "@/lib/utils";
 import { buildDigest, digestToCsv, digestToText } from "@/lib/agency/command-center";
 import { useCommandCenter } from "./use-command-center";
@@ -325,7 +325,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
         group: "Actions",
         label: "Add a client",
         icon: <Plus className={ic} />,
-        run: () => go(WORKSPACES_HOME),
+        run: () => go(ALL_WORKSPACES),
       },
     ];
     const perClient = cc.clients.flatMap<PaletteEntry>((c) => [
@@ -478,14 +478,14 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
           <header className="sticky top-0 z-30 border-b border-transparent bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
             <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:px-6">
               <Link
-                to={WORKSPACES_HOME}
+                to={ALL_WORKSPACES}
                 aria-label="Back to all clients"
                 className={cn(dsIconBtn, "h-9 w-9 shrink-0 border border-border/70 bg-card")}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Link>
               <Link
-                to={WORKSPACES_HOME}
+                to={ALL_WORKSPACES}
                 aria-label="Mellox AI home"
                 className="hidden shrink-0 sm:block"
               >

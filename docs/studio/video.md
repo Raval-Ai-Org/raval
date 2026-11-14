@@ -20,8 +20,11 @@ Decision record: [ADR-0041](../adr/0041-studio-video-kinds.md).
    `withVideoComposition`). One prompt per clip from `clipPrompt`. Story
    kinds chain: each clip opens on the last frame of the one before
    (`video_chain_frame` asset). Mood clips run in parallel and dissolve
-   (0.3 s). A post's picture is framed whole for the video shape
-   (`frameForVideo`) and stored as `video_first_frame`.
+   (0.3 s). A post's picture is made the video's shape before anything is
+   spent (`openingFrameForVideo`: zoom a thin edge, else recreate it at the
+   video's shape and check it; the corner badge is cleared unless the
+   person asked for the logo) and stored as `video_first_frame`. A person's
+   own photo is framed whole (`frameForVideo`).
 4. **Check** (`finishStoryboardVideo`, `src/server/studio/video/qa.server.ts`,
    pure verdicts in `checks.ts`). FFmpeg probe + vision judge
    (`studio.video.qa`) on frames from every clip. Fail → `redoPlan` →

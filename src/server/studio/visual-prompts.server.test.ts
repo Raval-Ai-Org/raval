@@ -54,6 +54,23 @@ describe("complete model-generated series prompts", () => {
     expect(prompt).toContain("QUALITY CHECK BEFORE FINALIZING");
   });
 
+  it("never shows a Story frame the other frames' words, and stages each frame differently", () => {
+    const frames = [
+      { role: "hook" as const, heading: "Morning starts here", body: "" },
+      { role: "value" as const, heading: "Roasted on Tuesday", body: "Fresh every week." },
+      { role: "cta" as const, heading: "Reply for a sample", body: "" },
+    ];
+    const prompts = frames.map((frame, index) =>
+      storyFramePrompt({ ...common, index, frame, frames }),
+    );
+    expect(prompts[0]).not.toContain("Roasted on Tuesday");
+    expect(prompts[0]).not.toContain("Reply for a sample");
+    expect(prompts[1]).not.toContain("Morning starts here");
+    expect(prompts[2]).toContain('Exact headline: "Reply for a sample"');
+    const staging = prompts.map((p) => p.match(/Staging for this frame: [^.]+\./)?.[0]);
+    expect(new Set(staging).size).toBe(3);
+  });
+
   it("sets slide copy as verbatim data with the brand's emphasis and a final check", () => {
     const slides = [
       { heading: "5 roasting myths", body: "", role: "cover" as const, emphasis: "myths" },

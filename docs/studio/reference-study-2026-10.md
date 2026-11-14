@@ -109,6 +109,55 @@ What was left out on purpose: the prompts' model names, "8K" and other
 quality tags (the gateway picks the model), famous people and other brands'
 logos or slogans, and "comment KEYWORD for the link" (still banned bait).
 
+## Round 6: small-business post wall (2026-11-14)
+
+About 60 posts on a public "made with" wall of another AI marketing tool:
+restaurants, campsites, parking, cleaning products, property software,
+advisers, founders' own photos and a few stock editor templates. Nothing was
+copied; every lesson below is rewritten brand-neutral.
+
+**What the best ones do**
+
+- **Portrait 4:5, words in the top third, picture below.** The headline sits
+  top-left on a generous margin; the picture fills the rest; the logo is small
+  in a corner; the button is a small pill low down. One accent colour.
+- **Real photos carry the post; design only frames them.** A colour band
+  across the top with a two-line headline (first line regular, second bold),
+  or a light panel with a curved lower edge, or words straight on the sky, or
+  a small dark card in a corner with one figure. Faces are never covered.
+- **Copy shapes that keep working:**
+  - a flipped pair of short sentences ("Small shop. Big hours.");
+  - "No X. No Y. Just Z.";
+  - two things people confuse, set as "X ≠ Y";
+  - a real fact about right now (the water is 22° this week);
+  - "We built the … we wish we'd had" (only when true);
+  - a quiet lowercase line under one still object.
+- **One idea, one object.** A padlock for "the load gets lighter", three
+  linked rings for "one system", a single chair for hospitality: lit like a
+  product, a short line above, a thin accent rule.
+- **Emphasis is one move:** a coloured key word, an italic phrase in a serif,
+  or a thick underline, never two at once.
+- **Founders' own candid photos** (a team, a milestone, a joke) go out with
+  no overlay at all; "Post as is" already covers that.
+
+**Mistakes seen:** stock-template posts with script fonts, lorem ipsum,
+decorative blobs and three typefaces look dated next to the rest. The
+type system (one display face) and "never invent" rules already refuse them.
+
+**Where it lives**
+
+| Lesson                                                                                                                                                                               | Module                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| How words go on a person's own photo (8 treatments, picked clear of faces)                                                                                                           | `photo-design/overlays.ts` → `plan.treatment` → `designLayerPrompt` |
+| 10 picture layouts (`not-equal`, `still-object`, `symbol-object`, `line-engraving`, `outcome-chips`, `iso-panel`, `heritage-ornament`, `blob-event`, `named-hero-card`, `edge-word`) | `art-direction.ts`                                                  |
+| Deliverable `mix-up` ("X ≠ Y"); event, quote, intro and product hero prefer the new layouts                                                                                          | `creative-knowledge.ts`                                             |
+| 7 ad layouts (`photo-band`, `founder-promise`, `negation-trio`, `not-equal`, `live-moment`, `checklist-split`, `stat-card-photo`), listed under the objectives                       | `ad-formats.ts`, `ad-objectives.ts`                                 |
+| Openings `paradox`, `negation`, `right-now`                                                                                                                                          | `memory.ts` (`HOOK_STYLES`)                                         |
+
+Checked by `round6-recipes.test.ts` and `photo-design/overlays.test.ts`.
+How to use and extend them: the `studio-design-recipes` skill
+(`.claude/skills/studio-design-recipes/SKILL.md`).
+
 ## Mistakes seen in the set (and guarded against)
 
 - A cover promising "8 slides" over 6 slides → `carouselStoryIssue` refuses it.
@@ -122,3 +171,62 @@ logos or slogans, and "comment KEYWORD for the link" (still banned bait).
   full size; a product hero's cut-out is checked and cleaned before use.
 - A product photo pasted in a card with clip-art (round 3) → product hero
   posters, `HERO_NEVER`, and "no unrelated props" in the quality check.
+
+## Round 7, November 2026: illustrated brand worlds
+
+Five posts and the landing page of one brand that paints everything in one
+illustrated world (kept in `Post Training/2026-11-illustrated-world/`, never
+named in the product). What makes the set read as one brand:
+
+- **One world, every time.** Hand-painted watercolour with soft anime-style
+  linework; the same mountain-lake landscapes and warm wooden interiors; golden
+  light; cream skies. The website hero is the same painting as the posts.
+- **A recurring figure** in the same clothes, usually seen from behind or with
+  its face hidden, so it never competes with the message.
+- **One type signature.** A high-contrast editorial serif in sentence case, two
+  lines, centred in the top third, with one word set in italics in the brand's
+  gold. The wordmark sits small and centred above it.
+- **The product lives inside the world.** A laptop on a desk by the window, or
+  product cards floating around a relaxed figure on soft motion trails, never a
+  raw screenshot pasted on top.
+- **Metaphor by landscape.** A figure on a high rock looking over a valley where
+  the idea appears as a network of lights.
+
+Where it lives: the style bible (ADR-0048) learns any brand's version of these
+from its own site and posts; the layouts `illustrated-world-poster`,
+`ui-in-scene`, `orbiting-cards` and `vista-metaphor` (`art-direction.ts`) carry
+them brand-neutral.
+
+## Round 8, November 2026: designed graphic systems
+
+One agency's website and six of its posts (notes in
+`Post Training/2026-11-designed-system/`, never named in the product). Round 7
+was a painted world; this is the opposite register, and both must keep working.
+What makes the set read as one brand:
+
+- **A series frame.** Every slide opens with a dark top band (the mark small at
+  the left, a slide counter pill in the accent colour at the right) and many end
+  with a dark footer band carrying the site address and one diagonal accent
+  slash. The frame, not a picture style, is what you recognise first.
+- **Three colours only.** Black, white and one coral red, plus a medium grey for
+  paragraphs. The website uses exactly the same: red buttons, black stat band,
+  outlined icon cards.
+- **Type does the work.** A heavy geometric grotesk in capitals, three or four
+  lines, base colour with two or three key words in the accent colour; one hand
+  -drawn accent underline under a word on some slides.
+- **Repeated building blocks.** An outlined eyebrow pill ("02 - section"), line
+  icons in rounded outlined squares with a label (a list or a 2x4 grid), a hub
+  diagram (big outlined circle, four satellite icons), an annotated phone (accent
+  dots linked to short labels), team portraits in a dashed ring, a "key takeaway"
+  callout box, a pair of buttons (filled "follow" with an arrow, outlined
+  "discuss a project"), thin connector lines ending in a dot.
+- **More words than a poster.** Headline, one paragraph, a list and buttons on
+  most slides: an explainer carousel, not a mood picture.
+- **The logo is part of the frame**, small; slides without the frame carry none.
+- **Real work, framed.** Screenshots and phones in rounded frames with a soft
+  shadow, never a painted or 3D scene.
+
+Where it lives: the bible's `register`, `frame`, `components`, `text` and
+`logo` (ADR-0048 round 8); the layouts `framed-system-slide`, `service-hub`,
+`icon-grid-card` and `annotated-device` (`art-direction.ts`); campaign pieces
+get an eyebrow heading and button through `wantsSupportingLines`.

@@ -4,11 +4,12 @@
 // Options panel. "Auto" leaves the pick to Write it for me / the brief. A pick
 // steers every writer, the picture and a carousel's structure.
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import {
   BookOpen,
   Camera,
   Check,
+  ChevronDown,
   Columns2,
   Eye,
   Flame,
@@ -74,15 +75,32 @@ export function CategoryPicker({
   disabled?: boolean;
 }) {
   const reduce = useReducedMotionSafe();
+  const [open, setOpen] = useState(false);
   const list = categoriesFor(type);
   // A category saved for another format is shown as Auto here.
   const selected = list.some((c) => c.id === value) ? categoryById(value) : null;
   if (!list.length) return null;
+  const pick = (next: CategoryId | undefined) => {
+    onChange(next);
+    setOpen(false);
+  };
 
   return (
     <div>
       <div className="mb-2 space-y-0.5">
-        <p className="text-xs font-medium text-foreground">Kind of post</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-foreground">Kind of post</p>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            disabled={disabled}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            {open ? "Close" : "Choose a kind"}
+            <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
+          </button>
+        </div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.p
             key={selected?.id ?? "auto"}
@@ -92,49 +110,91 @@ export function CategoryPicker({
             transition={{ duration: duration.fast, ease: ease.emphasized }}
             className="min-h-4 text-[11px] leading-4 text-muted-foreground"
           >
-            {selected ? selected.whyItSpreads : "Mellox picks one that fits"}
+            {selected
+              ? selected.whyItSpreads
+              : "Mellox picks one that fits, never a meme unless you pick it"}
           </motion.p>
         </AnimatePresence>
       </div>
 
       <LayoutGroup id="studio-category">
         <div className="space-y-3" role="radiogroup" aria-label="Kind of post">
-          <Tile
-            label="Auto"
-            tagline="Best fit for your idea and goal"
-            Icon={Sparkles}
-            active={!selected}
-            disabled={disabled}
-            reduce={reduce}
-            onClick={() => onChange(undefined)}
-            index={0}
-          />
-          {CATEGORY_GROUPS.map((group) => {
-            const items = list.filter((c) => c.group === group.id);
-            if (!items.length) return null;
-            return (
-              <div key={group.id}>
-                <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.label}
-                </p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {items.map((c, i) => (
-                    <Tile
-                      key={c.id}
-                      label={c.label}
-                      tagline={c.tagline}
-                      Icon={GLYPHS[c.glyph] ?? Sparkles}
-                      active={selected?.id === c.id}
-                      disabled={disabled}
-                      reduce={reduce}
-                      index={i + 1}
-                      onClick={() => onChange(selected?.id === c.id ? undefined : c.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+          <div className="grid grid-cols-2 gap-1.5">
+            <Tile
+              label="Auto"
+              tagline="Best fit for your idea and goal"
+              Icon={Sparkles}
+              active={!selected}
+              disabled={disabled}
+              reduce={reduce}
+              onClick={() => pick(undefined)}
+              index={0}
+            />
+            {selected && !open ? (
+              <Tile
+                label={selected.label}
+                tagline={selected.tagline}
+                Icon={GLYPHS[selected.glyph] ?? Sparkles}
+                active
+                disabled={disabled}
+                reduce={reduce}
+                onClick={() => setOpen(true)}
+                index={1}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                disabled={disabled}
+                aria-expanded={open}
+                className="flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border px-2.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+              >
+                {open ? "Hide kinds" : `${list.length} kinds to choose`}
+                <ChevronDown
+                  className={cn("size-3.5 transition-transform", open && "rotate-180")}
+                />
+              </button>
+            )}
+          </div>
+          <AnimatePresence initial={false}>
+            {open ? (
+              <motion.div
+                key="kinds"
+                initial={reduce ? false : { height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={reduce ? undefined : { height: 0, opacity: 0 }}
+                transition={{ duration: duration.base, ease: ease.emphasized }}
+                className="space-y-3 overflow-hidden"
+              >
+                {CATEGORY_GROUPS.map((group) => {
+                  const items = list.filter((c) => c.group === group.id);
+                  if (!items.length) return null;
+                  return (
+                    <div key={group.id}>
+                      <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {group.label}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {items.map((c, i) => (
+                          <Tile
+                            key={c.id}
+                            label={c.label}
+                            tagline={c.tagline}
+                            Icon={GLYPHS[c.glyph] ?? Sparkles}
+                            active={selected?.id === c.id}
+                            disabled={disabled}
+                            reduce={reduce}
+                            index={i + 1}
+                            onClick={() => pick(selected?.id === c.id ? undefined : c.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       </LayoutGroup>
     </div>

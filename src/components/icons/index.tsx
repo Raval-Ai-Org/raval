@@ -140,6 +140,7 @@ export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
 export { Shapes } from "lucide-react";
 // Studio post categories (categories.ts), lucide until bespoke glyphs exist.
 export {
+  Ban,
   Columns2,
   Flame,
   Laugh,

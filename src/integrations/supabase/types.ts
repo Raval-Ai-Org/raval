@@ -556,6 +556,7 @@ export type Database = {
       ai_usage_daily: {
         Row: {
           cached_calls: number;
+          cached_input_tokens: number;
           calls: number;
           cost_usd: number;
           day: string;
@@ -573,6 +574,7 @@ export type Database = {
         };
         Insert: {
           cached_calls?: number;
+          cached_input_tokens?: number;
           calls?: number;
           cost_usd?: number;
           day: string;
@@ -590,6 +592,7 @@ export type Database = {
         };
         Update: {
           cached_calls?: number;
+          cached_input_tokens?: number;
           calls?: number;
           cost_usd?: number;
           day?: string;
@@ -618,7 +621,9 @@ export type Database = {
       ai_usage_events: {
         Row: {
           billing_account_id: string | null;
+          cache_write_tokens: number;
           cached: boolean;
+          cached_input_tokens: number;
           charge_id: string | null;
           created_at: string;
           est_cost_usd: number;
@@ -629,6 +634,7 @@ export type Database = {
           model: string;
           output_tokens: number;
           provider: string;
+          reasoning_tokens: number;
           request_id: string | null;
           route: string;
           run_id: string | null;
@@ -637,11 +643,16 @@ export type Database = {
           truncated: boolean;
           units: number;
           user_id: string | null;
+          workflow_id: string | null;
+          workflow_kind: string | null;
+          workflow_stage: string | null;
           workspace_id: string | null;
         };
         Insert: {
           billing_account_id?: string | null;
+          cache_write_tokens?: number;
           cached?: boolean;
+          cached_input_tokens?: number;
           charge_id?: string | null;
           created_at?: string;
           est_cost_usd?: number;
@@ -652,6 +663,7 @@ export type Database = {
           model: string;
           output_tokens?: number;
           provider: string;
+          reasoning_tokens?: number;
           request_id?: string | null;
           route: string;
           run_id?: string | null;
@@ -660,11 +672,16 @@ export type Database = {
           truncated?: boolean;
           units?: number;
           user_id?: string | null;
+          workflow_id?: string | null;
+          workflow_kind?: string | null;
+          workflow_stage?: string | null;
           workspace_id?: string | null;
         };
         Update: {
           billing_account_id?: string | null;
+          cache_write_tokens?: number;
           cached?: boolean;
+          cached_input_tokens?: number;
           charge_id?: string | null;
           created_at?: string;
           est_cost_usd?: number;
@@ -675,6 +692,7 @@ export type Database = {
           model?: string;
           output_tokens?: number;
           provider?: string;
+          reasoning_tokens?: number;
           request_id?: string | null;
           route?: string;
           run_id?: string | null;
@@ -683,6 +701,9 @@ export type Database = {
           truncated?: boolean;
           units?: number;
           user_id?: string | null;
+          workflow_id?: string | null;
+          workflow_kind?: string | null;
+          workflow_stage?: string | null;
           workspace_id?: string | null;
         };
         Relationships: [
@@ -2860,15 +2881,7 @@ export type Database = {
           stripe_customer_id?: string;
           workspace_id?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "billing_customers_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: true;
-            referencedRelation: "workspaces";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
       billing_enforcement_actions: {
         Row: {
@@ -4480,6 +4493,171 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_shares_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      community_jobs: {
+        Row: {
+          attempt_count: number;
+          created_at: string;
+          id: string;
+          last_error: string | null;
+          last_found: number;
+          last_run_at: string | null;
+          lease_until: string | null;
+          locked_by: string | null;
+          next_run_at: string;
+          requested_by: string | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          last_found?: number;
+          last_run_at?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          next_run_at?: string;
+          requested_by?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          created_at?: string;
+          id?: string;
+          last_error?: string | null;
+          last_found?: number;
+          last_run_at?: string | null;
+          lease_until?: string | null;
+          locked_by?: string | null;
+          next_run_at?: string;
+          requested_by?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "community_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      community_threads: {
+        Row: {
+          community: string;
+          competitor_name: string | null;
+          created_at: string;
+          fingerprint: string;
+          found_at: string;
+          id: string;
+          matched_on: string;
+          matched_term: string;
+          posted_at: string | null;
+          relevance: number;
+          reply: Json | null;
+          snippet: string;
+          source: string;
+          status: string;
+          summary: string;
+          title: string;
+          updated_at: string;
+          url: string;
+          workspace_id: string;
+        };
+        Insert: {
+          community?: string;
+          competitor_name?: string | null;
+          created_at?: string;
+          fingerprint: string;
+          found_at?: string;
+          id?: string;
+          matched_on: string;
+          matched_term?: string;
+          posted_at?: string | null;
+          relevance?: number;
+          reply?: Json | null;
+          snippet?: string;
+          source: string;
+          status?: string;
+          summary?: string;
+          title: string;
+          updated_at?: string;
+          url: string;
+          workspace_id: string;
+        };
+        Update: {
+          community?: string;
+          competitor_name?: string | null;
+          created_at?: string;
+          fingerprint?: string;
+          found_at?: string;
+          id?: string;
+          matched_on?: string;
+          matched_term?: string;
+          posted_at?: string | null;
+          relevance?: number;
+          reply?: Json | null;
+          snippet?: string;
+          source?: string;
+          status?: string;
+          summary?: string;
+          title?: string;
+          updated_at?: string;
+          url?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "community_threads_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      community_watches: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          kind: string;
+          value: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kind: string;
+          value: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          kind?: string;
+          value?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "community_watches_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -7221,6 +7399,149 @@ export type Database = {
           },
         ];
       };
+      integration_accounts: {
+        Row: {
+          app: string;
+          auth_config_id: string;
+          composio_account_id: string;
+          connected_at: string | null;
+          connected_by: string | null;
+          created_at: string;
+          external_id: string | null;
+          id: string;
+          label: string | null;
+          last_checked_at: string | null;
+          last_error: string | null;
+          metadata: Json;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          scopes: string[];
+          status: string;
+          toolkit: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          app: string;
+          auth_config_id: string;
+          composio_account_id: string;
+          connected_at?: string | null;
+          connected_by?: string | null;
+          created_at?: string;
+          external_id?: string | null;
+          id?: string;
+          label?: string | null;
+          last_checked_at?: string | null;
+          last_error?: string | null;
+          metadata?: Json;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          scopes?: string[];
+          status?: string;
+          toolkit: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          app?: string;
+          auth_config_id?: string;
+          composio_account_id?: string;
+          connected_at?: string | null;
+          connected_by?: string | null;
+          created_at?: string;
+          external_id?: string | null;
+          id?: string;
+          label?: string | null;
+          last_checked_at?: string | null;
+          last_error?: string | null;
+          metadata?: Json;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          scopes?: string[];
+          status?: string;
+          toolkit?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "integration_accounts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      integration_tool_calls: {
+        Row: {
+          account_id: string | null;
+          app: string;
+          approval_ref: string | null;
+          created_at: string;
+          duration_ms: number;
+          error_code: string | null;
+          id: string;
+          is_write: boolean;
+          log_id: string | null;
+          ok: boolean;
+          purpose: string;
+          summary: Json;
+          tool: string;
+          user_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          account_id?: string | null;
+          app: string;
+          approval_ref?: string | null;
+          created_at?: string;
+          duration_ms?: number;
+          error_code?: string | null;
+          id?: string;
+          is_write?: boolean;
+          log_id?: string | null;
+          ok: boolean;
+          purpose: string;
+          summary?: Json;
+          tool: string;
+          user_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          account_id?: string | null;
+          app?: string;
+          approval_ref?: string | null;
+          created_at?: string;
+          duration_ms?: number;
+          error_code?: string | null;
+          id?: string;
+          is_write?: boolean;
+          log_id?: string | null;
+          ok?: boolean;
+          purpose?: string;
+          summary?: Json;
+          tool?: string;
+          user_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "integration_tool_calls_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "integration_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "integration_tool_calls_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       link_order_events: {
         Row: {
           actor: string | null;
@@ -7265,13 +7586,6 @@ export type Database = {
             columns: ["order_id"];
             isOneToOne: false;
             referencedRelation: "link_orders";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "link_order_events_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -7384,13 +7698,6 @@ export type Database = {
             columns: ["order_id"];
             isOneToOne: false;
             referencedRelation: "link_orders";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "link_order_lines_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -7543,13 +7850,6 @@ export type Database = {
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "backlink_campaigns";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "link_orders_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -8361,6 +8661,7 @@ export type Database = {
           name: string | null;
           persona: string | null;
           persona_set_at: string | null;
+          signup_source: string | null;
         };
         Insert: {
           app_tour_seen_at?: string | null;
@@ -8370,6 +8671,7 @@ export type Database = {
           name?: string | null;
           persona?: string | null;
           persona_set_at?: string | null;
+          signup_source?: string | null;
         };
         Update: {
           app_tour_seen_at?: string | null;
@@ -8379,6 +8681,7 @@ export type Database = {
           name?: string | null;
           persona?: string | null;
           persona_set_at?: string | null;
+          signup_source?: string | null;
         };
         Relationships: [];
       };
@@ -8752,6 +9055,7 @@ export type Database = {
           updated_at: string;
           webflow_collection_id: string | null;
           webflow_field_map: Json | null;
+          wix_member_id: string | null;
           workspace_id: string;
           wp_category_id: number | null;
           wp_posts_page_id: number | null;
@@ -8775,6 +9079,7 @@ export type Database = {
           updated_at?: string;
           webflow_collection_id?: string | null;
           webflow_field_map?: Json | null;
+          wix_member_id?: string | null;
           workspace_id: string;
           wp_category_id?: number | null;
           wp_posts_page_id?: number | null;
@@ -8798,6 +9103,7 @@ export type Database = {
           updated_at?: string;
           webflow_collection_id?: string | null;
           webflow_field_map?: Json | null;
+          wix_member_id?: string | null;
           workspace_id?: string;
           wp_category_id?: number | null;
           wp_posts_page_id?: number | null;
@@ -9369,6 +9675,82 @@ export type Database = {
           },
         ];
       };
+      social_account_posts: {
+        Row: {
+          caption: string;
+          content_item_id: string | null;
+          created_at: string;
+          format: string;
+          id: string;
+          metrics: Json;
+          platform: string;
+          platform_post_id: string;
+          posted_at: string | null;
+          provider_post_id: string | null;
+          social_account_id: string;
+          synced_at: string;
+          thumbnail_url: string | null;
+          url: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          caption?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          format?: string;
+          id?: string;
+          metrics?: Json;
+          platform: string;
+          platform_post_id: string;
+          posted_at?: string | null;
+          provider_post_id?: string | null;
+          social_account_id: string;
+          synced_at?: string;
+          thumbnail_url?: string | null;
+          url?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          caption?: string;
+          content_item_id?: string | null;
+          created_at?: string;
+          format?: string;
+          id?: string;
+          metrics?: Json;
+          platform?: string;
+          platform_post_id?: string;
+          posted_at?: string | null;
+          provider_post_id?: string | null;
+          social_account_id?: string;
+          synced_at?: string;
+          thumbnail_url?: string | null;
+          url?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "social_account_posts_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "social_account_posts_social_account_id_fkey";
+            columns: ["social_account_id"];
+            isOneToOne: false;
+            referencedRelation: "social_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "social_account_posts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       social_accounts: {
         Row: {
           avatar_url: string | null;
@@ -9378,7 +9760,9 @@ export type Database = {
           created_at: string;
           disconnected_at: string | null;
           display_name: string | null;
+          feed_synced_at: string | null;
           id: string;
+          integration_account_id: string | null;
           last_synced_at: string;
           platform: string;
           provider: string;
@@ -9397,7 +9781,9 @@ export type Database = {
           created_at?: string;
           disconnected_at?: string | null;
           display_name?: string | null;
+          feed_synced_at?: string | null;
           id?: string;
+          integration_account_id?: string | null;
           last_synced_at?: string;
           platform: string;
           provider?: string;
@@ -9416,7 +9802,9 @@ export type Database = {
           created_at?: string;
           disconnected_at?: string | null;
           display_name?: string | null;
+          feed_synced_at?: string | null;
           id?: string;
+          integration_account_id?: string | null;
           last_synced_at?: string;
           platform?: string;
           provider?: string;
@@ -9428,6 +9816,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "social_accounts_integration_account_id_fkey";
+            columns: ["integration_account_id"];
+            isOneToOne: false;
+            referencedRelation: "integration_accounts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "social_accounts_workspace_id_fkey";
             columns: ["workspace_id"];
@@ -10195,6 +10590,120 @@ export type Database = {
           },
         ];
       };
+      wix_oauth_credentials: {
+        Row: {
+          access_token_enc: string | null;
+          access_token_expires_at: string | null;
+          connection_id: string;
+          created_at: string;
+          instance_id_enc: string;
+          permissions: string[];
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          access_token_enc?: string | null;
+          access_token_expires_at?: string | null;
+          connection_id: string;
+          created_at?: string;
+          instance_id_enc: string;
+          permissions?: string[];
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          access_token_enc?: string | null;
+          access_token_expires_at?: string | null;
+          connection_id?: string;
+          created_at?: string;
+          instance_id_enc?: string;
+          permissions?: string[];
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wix_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "wix_oauth_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      wix_sites: {
+        Row: {
+          connection_id: string;
+          created_at: string;
+          domains: string[];
+          id: string;
+          installed_apps: string[];
+          last_error: string | null;
+          last_synced_at: string | null;
+          selected: boolean;
+          site_id: string;
+          site_name: string;
+          site_url: string | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id: string;
+          created_at?: string;
+          domains?: string[];
+          id?: string;
+          installed_apps?: string[];
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          selected?: boolean;
+          site_id: string;
+          site_name: string;
+          site_url?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string;
+          created_at?: string;
+          domains?: string[];
+          id?: string;
+          installed_apps?: string[];
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          selected?: boolean;
+          site_id?: string;
+          site_name?: string;
+          site_url?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wix_sites_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "wix_sites_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       wordpress_credentials: {
         Row: {
           api_namespaces: string[];
@@ -10482,6 +10991,7 @@ export type Database = {
           goal: Json;
           id: string;
           key_date: string | null;
+          last_notified_at: string | null;
           name: string;
           plan: Json;
           started_at: string | null;
@@ -10502,6 +11012,7 @@ export type Database = {
           goal?: Json;
           id?: string;
           key_date?: string | null;
+          last_notified_at?: string | null;
           name: string;
           plan?: Json;
           started_at?: string | null;
@@ -10522,6 +11033,7 @@ export type Database = {
           goal?: Json;
           id?: string;
           key_date?: string | null;
+          last_notified_at?: string | null;
           name?: string;
           plan?: Json;
           started_at?: string | null;
@@ -10759,15 +11271,7 @@ export type Database = {
           updated_at?: string;
           workspace_id?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "workspace_credit_balances_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: true;
-            referencedRelation: "workspaces";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
       workspace_credit_ledger: {
         Row: {
@@ -10815,15 +11319,7 @@ export type Database = {
           reason?: string | null;
           workspace_id?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "workspace_credit_ledger_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: false;
-            referencedRelation: "workspaces";
-            referencedColumns: ["id"];
-          },
-        ];
+        Relationships: [];
       };
       workspace_deletions: {
         Row: {
@@ -11586,6 +12082,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_cost_per_output: { Args: { p_days: number }; Returns: Json };
       admin_emails_for: { Args: { p_ids: string[] }; Returns: { id: string; email: string }[] };
       admin_flag_save: {
         Args: {
@@ -11895,6 +12392,15 @@ export type Database = {
       claim_autopilot_actions: {
         Args: { p_worker: string; p_max?: number; p_lease_seconds?: number; p_id?: string };
         Returns: Database["public"]["Tables"]["autopilot_actions"]["Row"][];
+      };
+      claim_community_jobs: {
+        Args: {
+          p_worker: string;
+          p_max?: number;
+          p_lease_seconds?: number;
+          p_workspace_id?: string;
+        };
+        Returns: Database["public"]["Tables"]["community_jobs"]["Row"][];
       };
       claim_competitor_jobs: {
         Args: {

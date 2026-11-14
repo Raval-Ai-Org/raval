@@ -7,7 +7,11 @@
 // (src/lib/products/feature.ts), the same way the server picks it.
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ShoppingBag } from "@/components/icons";
+import { AnimatePresence, motion } from "framer-motion";
+import { Ban, Briefcase, Check, Plus, ShoppingBag } from "@/components/icons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
+import { emitAppEvent } from "@/lib/app-events";
 import { cn } from "@/lib/utils";
 import { adFormatsFor, type AdFormat, type AdFormatThumb } from "@/lib/studio/ad-formats";
 import { AD_OBJECTIVES, preferFormats, type AdObjectiveId } from "@/lib/studio/ad-objectives";
@@ -31,11 +35,6 @@ export function useStudioProducts(workspaceId: string) {
     staleTime: 60_000,
   });
 }
-
-const chip =
-  "flex h-14 shrink-0 items-center gap-2 rounded-2xl border px-2.5 text-left text-[12.5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55";
-const on = "border-primary bg-primary/10 text-foreground";
-const off = "border-border bg-surface-3 text-muted-foreground hover:text-foreground";
 
 /** The product's photos, main first, as `productPhotoControls` takes them. */
 export function productPhotoIds(product: Product | null | undefined): string[] {
@@ -103,74 +102,205 @@ export function withProductPhotos(
     : session.controls;
 }
 
+/**
+ * What the piece is about: big cards, one per product or service from the
+ * catalogue, with "None" first so a pick can always be undone. A press on
+ * the chosen card lets it go again too.
+ */
 export function ProductPicker({
   workspaceId,
   value,
   type,
   onChange,
+  showEmpty = false,
+  title = "Product or service",
 }: {
   workspaceId: string;
   value: string | undefined;
   type: string;
   onChange: (productId: string | undefined) => void;
+  /** With an empty catalogue, show a card that opens Brain → Products. */
+  showEmpty?: boolean;
+  title?: string;
 }) {
-  const { data: products } = useStudioProducts(workspaceId);
-  if (!products?.length) return null;
-  return (
-    <div>
-      <FieldLabel>Product</FieldLabel>
-      <div
-        role="radiogroup"
-        aria-label="Product this piece is about"
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [contain:inline-size]"
-      >
+  const { data: products, isLoading } = useStudioProducts(workspaceId);
+  const reduce = useReducedMotionSafe();
+  if (isLoading && showEmpty)
+    return (
+      <div>
+        <FieldLabel>{title}</FieldLabel>
+        <div className="grid grid-cols-2 gap-2">
+          {[0, 1].map((i) => (
+            <Skeleton key={i} className="h-[132px] rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  if (!products?.length) {
+    if (!showEmpty) return null;
+    return (
+      <div>
+        <FieldLabel>{title}</FieldLabel>
         <button
           type="button"
-          role="radio"
-          aria-checked={!value}
-          onClick={() => onChange(undefined)}
-          className={cn(chip, !value ? on : off)}
+          onClick={() => emitAppEvent("open:brain", { section: "brand", tab: "products" })}
+          className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-border bg-surface-3 p-3 text-left transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
         >
-          No product
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--ds-well-bg)] text-muted-foreground">
+            <Plus className="size-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[13px] font-semibold text-foreground">
+              Add your products or services
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Then pick one here and Mellox shows the real thing.
+            </span>
+          </span>
         </button>
-        {products.map((p) => {
-          const active = value === p.id;
+      </div>
+    );
+  }
+  const chosen = products.find((p) => p.id === value);
+  return (
+    <div className="@container">
+      <FieldLabel hint={chosen ? undefined : "Optional"}>{title}</FieldLabel>
+      <div
+        role="radiogroup"
+        aria-label="Product or service this piece is about"
+        className="grid grid-cols-2 gap-2 @md:grid-cols-3"
+      >
+        <ProductCard
+          index={0}
+          reduce={reduce}
+          active={!chosen}
+          onClick={() => onChange(undefined)}
+          label="None"
+          detail="Not about one product"
+        />
+        {products.map((p, i) => {
           const photo =
-            p.images.find((img) => img.assetId === p.primaryAssetId)?.url ?? p.images[0]?.url;
+            p.images.find((img) => img.assetId === p.primaryAssetId)?.url ??
+            p.images[0]?.url ??
+            undefined;
           return (
-            <button
+            <ProductCard
               key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(p.id)}
-              title={p.name}
-              className={cn(chip, "max-w-[190px]", active ? on : off)}
-            >
-              <span className="size-9 shrink-0 overflow-hidden rounded-xl bg-[var(--ds-well-bg)]">
-                {photo ? (
-                  <img src={photo} alt="" className="size-full object-cover" loading="lazy" />
-                ) : (
-                  <ShoppingBag className="m-2.5 size-4" />
-                )}
-              </span>
-              <span className="truncate">{p.name}</span>
-            </button>
+              index={i + 1}
+              reduce={reduce}
+              active={value === p.id}
+              onClick={() => onChange(value === p.id ? undefined : p.id)}
+              label={p.name}
+              detail={[p.kind === "service" ? "Service" : "Product", p.price]
+                .filter(Boolean)
+                .join(" · ")}
+              photo={photo}
+              service={p.kind === "service"}
+            />
           );
         })}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {!value
-          ? "Pick a product, or name it in your brief, to show the real thing."
-          : !productPhotoIds(products.find((p) => p.id === value)).length
-            ? "Written about this product with its real name, price and facts. Add a photo in Brain → Products to show it too."
+        {!chosen
+          ? "Pick one, or name it in your brief, to show the real thing."
+          : !productPhotoIds(chosen).length
+            ? `Written about ${chosen.name} with its real name, price and facts.${chosen.kind === "product" ? " Add a photo in Brain → Products to show it too." : ""}`
             : type === "carousel"
               ? "Its real photos go on the slides, unchanged."
               : type === "video" || type === "story"
-                ? "Made from its real photo, so the product looks like itself."
+                ? "Made from its real photo, so it looks like itself."
                 : "Designed around its real photo. The photo itself is never changed."}
       </p>
     </div>
+  );
+}
+
+function ProductCard({
+  label,
+  detail,
+  photo,
+  service,
+  active,
+  onClick,
+  index,
+  reduce,
+}: {
+  label: string;
+  detail: string;
+  photo?: string;
+  service?: boolean;
+  active: boolean;
+  onClick: () => void;
+  index: number;
+  reduce: boolean;
+}) {
+  const none = label === "None" && !photo && service === undefined;
+  return (
+    <motion.button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      title={label}
+      onClick={onClick}
+      initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, delay: reduce ? 0 : Math.min(index, 8) * 0.03 }}
+      whileHover={reduce ? undefined : { y: -2 }}
+      whileTap={reduce ? undefined : { scale: 0.97 }}
+      className={cn(
+        "group relative flex min-w-0 flex-col overflow-hidden rounded-2xl border text-left transition-[border-color,box-shadow]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
+        active
+          ? "border-primary-border shadow-[0_0_0_3px_hsl(var(--primary)/0.18),0_14px_30px_-18px_hsl(var(--primary)/0.9)]"
+          : none
+            ? "border-dashed border-border bg-surface-3 hover:border-foreground/30"
+            : "border-border bg-surface-3 hover:border-border-strong",
+      )}
+    >
+      <span
+        className={cn(
+          "relative block aspect-[4/3] w-full overflow-hidden",
+          none ? "bg-transparent" : "bg-[var(--ds-well-bg)]",
+        )}
+      >
+        {photo ? (
+          <img
+            src={photo}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <span className="grid size-full place-items-center text-muted-foreground">
+            {none ? (
+              <Ban className="size-6" />
+            ) : service ? (
+              <Briefcase className="size-6" />
+            ) : (
+              <ShoppingBag className="size-6" />
+            )}
+          </span>
+        )}
+        <AnimatePresence>
+          {active ? (
+            <motion.span
+              key="tick"
+              initial={reduce ? false : { scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={reduce ? undefined : { scale: 0.4, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 520, damping: 30 }}
+              className="absolute right-2 top-2 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground shadow-md"
+            >
+              <Check className="size-3.5" strokeWidth={3} />
+            </motion.span>
+          ) : null}
+        </AnimatePresence>
+      </span>
+      <span className={cn("block px-2.5 py-2", active && "bg-primary-surface")}>
+        <span className="block truncate text-[12.5px] font-semibold text-foreground">{label}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{detail}</span>
+      </span>
+    </motion.button>
   );
 }
 

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Onboarding's goal, product, channel and first-post steps at /onboarding-lab
+ * Onboarding's product, no-website, language and finish screens at /onboarding-lab
  * (dev only, no sign-in, sample data). Checks the required-product gate, the
  * no-website path, that every button is a pill, the finish, and
  * that nothing scrolls sideways, at desktop and phone width.
@@ -29,7 +29,7 @@ async function noSideScroll(page: Page) {
 async function everyButtonIsAPill(page: Page) {
   // Text buttons are pills; cards and tiles that happen to be <button>s are not.
   const square = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLButtonElement>("main button")]
+    [...document.querySelectorAll<HTMLButtonElement>("[data-ob-stage] main button")]
       .filter((b) => !b.className.includes("ds-tile") && b.offsetHeight > 0)
       .filter((b) => b.offsetHeight <= 48)
       .filter((b) => parseFloat(getComputedStyle(b).borderTopLeftRadius) < b.offsetHeight / 2 - 1)
@@ -45,21 +45,12 @@ for (const vp of VIEWPORTS) {
     test.use({ viewport: { width: vp.width, height: vp.height } });
     test.setTimeout(180_000);
 
-    test("goal step shows the live scan and the target fields", async ({ page }) => {
+    test("the old goal page now opens the one-tap goal question", async ({ page }) => {
       await openLab(page, "step=goals");
-      await expect(page.locator('main [role="status"]')).toContainText("northwind.example");
-      await expect(page.getByRole("radio", { name: /Grow my following/ })).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
-      await page.getByRole("button", { name: /Add a target/ }).click();
-      await expect(page.getByText("Where you are today")).toBeVisible();
-      await page.getByRole("button", { name: "More posts" }).click();
-      await expect(page.locator("output")).toHaveText("4");
-      await page.getByRole("button", { name: /Set my goal/ }).click();
-      await expect(last(page)).toHaveText("goals:continue");
+      await expect(page).toHaveURL(/step=ask&id=focus|id=focus/);
+      await expect(page.locator("[data-ob-stage]")).toBeVisible();
+      await expect(page.getByRole("radio", { name: /Grow my following/ })).toBeVisible();
       await noSideScroll(page);
-      await everyButtonIsAPill(page);
     });
 
     test("no website: the basics, then every other part can be skipped", async ({ page }) => {
@@ -82,7 +73,7 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByRole("button", { name: /Primary #0B3D91/ })).toBeVisible();
       await page.getByRole("button", { name: "Bold" }).click();
       await next.click();
-      await page.getByRole("button", { name: "Skip for now" }).click();
+      await page.locator("form").getByRole("button", { name: "Skip for now" }).click();
       await expect(last(page)).toHaveText("part:competitors");
       await page.getByLabel("Competitor name").fill("Bean Bros");
       await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -142,8 +133,8 @@ for (const vp of VIEWPORTS) {
       await openLab(page, "step=language");
       const grid = page.getByRole("radiogroup", { name: "Content language" });
       await page.getByRole("textbox", { name: "Search languages" }).fill("urdu");
-      await grid.getByRole("radio", { name: /Urdu/ }).click();
-      await expect(grid.getByRole("radio", { name: /Urdu/ })).toHaveAttribute(
+      await grid.getByRole("radio", { name: /Urdu/ }).first().click();
+      await expect(grid.getByRole("radio", { name: /Urdu/ }).first()).toHaveAttribute(
         "aria-checked",
         "true",
       );
@@ -153,11 +144,9 @@ for (const vp of VIEWPORTS) {
 
     test("finish: no posts are made, press and hold to enter", async ({ page }) => {
       await openLab(page, "step=finish");
-      await expect(page.getByRole("list", { name: "What Mox learned" })).toContainText("Brand DNA");
+      await expect(page).toHaveURL(/step=done/);
       await expect(page.getByText(/first 3 posts/i)).toHaveCount(0);
-      await expect(
-        page.getByRole("button", { name: "Press and hold to enter Mellox" }),
-      ).toBeVisible();
+      await expect(page.getByText("Hold to go in")).toBeVisible();
       await noSideScroll(page);
     });
   });

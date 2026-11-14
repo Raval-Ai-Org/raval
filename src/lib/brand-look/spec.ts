@@ -150,6 +150,12 @@ export const VisualSchema = z.object({
     .optional(),
   avoid: list(12, 120).optional(),
   notes: short(600).optional(),
+  /**
+   * How often the brand's own Inspo media (product shots, people, clips) are
+   * put on a new piece by themselves (src/lib/inspo/media-rotation.ts). Absent
+   * means "sometimes". A person's own pick in Studio always stands.
+   */
+  ownMedia: z.enum(["rarely", "sometimes", "often"]).optional(),
 });
 export type VisualStyle = z.infer<typeof VisualSchema>;
 
@@ -172,6 +178,19 @@ export const VideoSchema = z.object({
   outro: short(200).optional(),
   music: short(160).optional(),
   notes: short(600).optional(),
+  /** Video kinds the brand likes (src/lib/studio/video/kinds.ts ids), for Auto to lean on. */
+  kinds: list(4, 40).optional(),
+  /** Creator (UGC) formats the brand likes (src/lib/ugc/formats ids), shown first. */
+  formats: list(6, 40).optional(),
+  /** The brand's hook words on Creator videos: a preset id from src/lib/ugc/hook-text.ts. */
+  hookText: z
+    .object({
+      on: z.boolean().optional(),
+      preset: short(24).optional(),
+    })
+    .optional(),
+  /** Spoken voiceover on made videos (absent: the kind decides). */
+  voiceover: z.enum(["on", "off"]).optional(),
   /**
    * The brand's own creator for every Creator (UGC) video: a ready-made
    * creator id (src/lib/ugc/creators.ts) or one of the brand's people (an

@@ -6,6 +6,7 @@ import type { BrandLookSpec } from "@/lib/brand-look/spec";
 import type { VisualProfile, VisualSource } from "@/lib/brand-visuals/contracts";
 import type { InspoCard, InspoChip } from "@/lib/inspo/board";
 import type { InspoSection } from "@/lib/inspo/sections";
+import type { MediaLifetime } from "@/lib/inspo/media-rotation";
 
 export type InspoUpload = {
   id: string;
@@ -24,6 +25,10 @@ export type InspoTaste = {
   draft: { id: string; profile: VisualProfile } | null;
   /** The direction generators follow now. */
   active: { id: string; name: string } | null;
+  /** The active direction was picked by Mellox from the site (ADR-0048) and waits to be kept. */
+  auto: boolean;
+  /** How closely pictures follow the active (or drafted) style. */
+  adherence: "light" | "close" | "strict";
   running: { stage: string; pages: number } | null;
   lastError: string | null;
   /** Credits for the next analysis; 0 = included. */
@@ -49,6 +54,8 @@ export type InspoHandlers = {
   upload: (files: File[], chip: InspoChip) => void;
   addLink: (url: string, chip: InspoChip) => void;
   setChip: (card: InspoCard, chip: InspoChip) => void;
+  /** Own media: keep always, or only for a while. */
+  setLifetime: (card: InspoCard, lifetime: MediaLifetime) => void;
   remove: (card: InspoCard) => void;
   undo: () => void;
   learn: () => void;
@@ -56,6 +63,8 @@ export type InspoHandlers = {
   pickDirection: (index: number) => void;
   useDirection: () => void;
   stopDirection: () => void;
+  /** Light keeps Mellox's layout variety; Close and Strict follow the examples more. */
+  setAdherence: (level: "light" | "close" | "strict") => void;
   useInPost: (card: InspoCard) => void;
   openBrand: (tab?: string) => void;
   dismissError: () => void;

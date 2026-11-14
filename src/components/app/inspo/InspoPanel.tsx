@@ -96,18 +96,25 @@ export function tasteOf(view: VisualView | null, draft: VisualProfile | null): I
   const newest = view.profiles[0];
   const active = view.profiles.find((p) => p.id === view.activeId);
   const running = view.jobs.find((j) => j.status === "queued" || j.status === "running");
+  // Mellox's own pick stays on screen as the draft until a person keeps or changes it.
+  const auto = !!active?.profile.auto && newest?.id === active.id;
+  const shown = draft ?? active?.profile ?? null;
   return {
     available: view.available,
     canEdit: view.canEdit,
     sources: view.sources,
     draft:
-      newest && newest.status === "candidate" && draft ? { id: newest.id, profile: draft } : null,
+      newest && (newest.status === "candidate" || auto) && draft
+        ? { id: newest.id, profile: draft }
+        : null,
     active: active
       ? {
           id: active.id,
           name: active.profile.directions[active.profile.selected]?.name ?? "Your style",
         }
       : null,
+    auto,
+    adherence: shown?.directions[shown.selected]?.adherence ?? "light",
     running: running ? { stage: running.stage, pages: running.next_page } : null,
     // Older rows may still hold raw browser text: show only a plain sentence.
     lastError:
@@ -413,6 +420,14 @@ export function InspoPanel({
       if (card.chip === chip) return;
       void perform("chip", () => setStatus(card, "approved", chip));
     },
+    setLifetime: (card, lifetime) => {
+      if (card.lifetime === lifetime) return;
+      void perform("lifetime", () =>
+        updateVisualReference({
+          data: { workspaceId, id: card.id, status: "approved", lifetime },
+        }),
+      );
+    },
     remove: (card) =>
       void perform("remove", () => setStatus(card, "removed")).then((ok) => ok && setRemoved(card)),
     undo: () => {
@@ -452,6 +467,29 @@ export function InspoPanel({
           },
         }),
       ).then((ok) => ok && toast.success("Style saved"));
+    },
+    setAdherence: (level) => {
+      const withLevel = (p: VisualProfile): VisualProfile => ({
+        ...p,
+        directions: p.directions.map((d, i) => (i === p.selected ? { ...d, adherence: level } : d)),
+      });
+      const current = tasteOf(view, draft);
+      if (current?.draft) {
+        setDraft((d) => (d ? withLevel(d) : d));
+        return;
+      }
+      const active = view?.profiles.find((p) => p.id === view.activeId);
+      if (!active) return;
+      void perform("direction", () =>
+        saveVisualDirection({
+          data: {
+            workspaceId,
+            profile: withLevel(active.profile),
+            expectedActiveId: view?.activeId ?? null,
+            confirm: true,
+          },
+        }),
+      );
     },
     stopDirection: () =>
       void perform("manual", () =>

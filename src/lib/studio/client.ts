@@ -181,6 +181,8 @@ export type WrittenPrompt = {
   goal?: GoalId;
   category?: CategoryId;
   categoryPicked?: boolean;
+  /** The brand's own Inspo photos suggested with this prompt, now and then. */
+  media?: { assetIds: string[]; reason: string };
 };
 
 /** Brand DNA fields worth sending to the server (drops heavy/provenance data). */

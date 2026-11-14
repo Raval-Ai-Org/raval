@@ -375,6 +375,7 @@ export function InspoCardView({
   onChip,
   onRemove,
   onUse,
+  onLifetime,
 }: {
   card: InspoCard;
   chips: InspoChip[];
@@ -382,6 +383,8 @@ export function InspoCardView({
   onChip: (chip: InspoChip) => void;
   onRemove: () => void;
   onUse?: () => void;
+  /** Own media only: switch between kept always and only for a while. */
+  onLifetime?: () => void;
 }) {
   return (
     <motion.figure
@@ -404,6 +407,30 @@ export function InspoCardView({
           </span>
         )}
       </figcaption>
+      {onLifetime && (
+        <button
+          type="button"
+          disabled={!canEdit}
+          onClick={onLifetime}
+          aria-label={
+            card.lifetime === "temporary"
+              ? "Used for a while. Keep it always instead"
+              : "Kept always. Use it only for a while instead"
+          }
+          title={
+            card.lifetime === "temporary"
+              ? "For now: used a couple of times while it's fresh"
+              : "Always: comes back now and then"
+          }
+          className={cn(
+            "absolute right-2 top-2 inline-flex h-6 items-center rounded-full px-2 text-[11px] font-semibold text-white backdrop-blur transition-colors",
+            card.lifetime === "temporary" ? "bg-amber-500/70" : "bg-black/40 hover:bg-black/55",
+            dsFocus,
+          )}
+        >
+          {card.lifetime === "temporary" ? "For now" : "Always"}
+        </button>
+      )}
       {canEdit && (
         <div className="absolute inset-x-1.5 bottom-1.5 flex translate-y-2 items-center justify-between gap-1 opacity-0 sm:inset-x-2 sm:bottom-2 transition-all duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100">
           <div className="flex rounded-full bg-black/45 p-0.5 backdrop-blur-md">

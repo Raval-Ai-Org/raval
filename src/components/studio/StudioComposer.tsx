@@ -66,7 +66,8 @@ import {
 } from "@/lib/studio/session-store";
 import { needsStoryboard, withStoryboard } from "@/lib/studio/video/board";
 import { ControlsPanel, PlatformControls } from "./ControlsPanel";
-import { AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
+import { AdObjectivePicker, ProductPicker, useStudioProducts } from "./ProductAndFormat";
+import { PostCanvasSettings } from "./PostCanvasSettings";
 import { SourceClips } from "./SourceClips";
 import { canvasPickers, missingFor, startFor } from "@/lib/studio/start";
 import {
@@ -78,7 +79,6 @@ import {
   usePromptMedia,
 } from "./PromptMedia";
 import { GenerationProgress } from "./GenerationProgress";
-import { IdeasPanel } from "./IdeasPanel";
 import { VideoCanvasSettings } from "./VideoCanvasSettings";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
 import { usePromptWriter, WriteForMeButton, WritingOverlay, WrittenNote } from "./PromptWriter";
@@ -700,15 +700,14 @@ function TypeSwitcher({ session }: { session: StudioSession }) {
 export function IntentStep({
   session,
   isMobile,
-  onPickIdea,
-  fixtureIdeas,
   drawerOpen = false,
   onDrawerChange,
   panelHost,
 }: {
   session: StudioSession;
   isMobile: boolean;
-  onPickIdea: (idea: StudioIdea) => void;
+  /** Kept for callers; ideas are no longer offered in the composer. */
+  onPickIdea?: (idea: StudioIdea) => void;
   fixtureIdeas?: StudioIdea[];
   /** Holo's side panel: options, ideas and templates. */
   drawerOpen?: boolean;
@@ -760,37 +759,44 @@ export function IntentStep({
     });
   };
 
-  const pickAndClose = (idea: StudioIdea) => {
-    onPickIdea(idea);
-    onDrawerChange?.(false);
-  };
-
   // On a desktop the extra choices live in Holo's side panel; on a phone
-  // they stay in the page.
+  // they stay in the page. Ideas are not offered here: Write it for me
+  // writes a fresh idea from the brand's own signals.
   const sidePanel = !isMobile;
-  const [tab, setTab] = useState<"options" | "ideas">("options");
-  const openPanel = (next: "options" | "ideas") => {
-    setTab(next);
-    onDrawerChange?.(true);
-  };
+  const openPanel = () => onDrawerChange?.(true);
   const goalLabel = GOALS.find((g) => g.id === session.goal)?.label;
   const pickedCategory = categoryById(session.category);
   const categoryLabel = pickedCategory?.formats.includes(session.type)
     ? pickedCategory.label
     : undefined;
+  const { data: catalogue } = useStudioProducts(session.workspaceId);
+  const productLabel = catalogue?.find((p) => p.id === session.controls.productId)?.name;
+  const showProduct = !canvas.product && session.type !== "script" && !session.sourceScript;
   const options = (
     <>
-      {!session.sourceScript ? (
-        <CategoryPicker
-          type={session.type}
-          value={session.category}
-          disabled={busy}
-          onChange={(category) => updateSession(session.id, { category })}
-        />
+      {showProduct ? (
+        <PanelSection index={0}>
+          <ProductPicker
+            workspaceId={session.workspaceId}
+            type={session.type}
+            value={session.controls.productId}
+            showEmpty
+            // "None" also stops a product the brief names being picked.
+            onChange={(productId) =>
+              updateSession(session.id, {
+                controls: {
+                  ...session.controls,
+                  productId,
+                  noProduct: productId ? undefined : true,
+                },
+              })
+            }
+          />
+        </PanelSection>
       ) : null}
 
       {!session.sourceScript ? (
-        <div>
+        <PanelSection index={1}>
           <p className="mb-2 text-xs font-medium text-foreground">Goal</p>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Goal">
             {GOALS.map((g) => (
@@ -810,10 +816,29 @@ export function IntentStep({
               </ChipButton>
             ))}
           </div>
-        </div>
+        </PanelSection>
       ) : null}
 
-      <ControlsPanel session={session} disabled={busy} />
+      {!session.sourceScript ? (
+        <PanelSection index={2}>
+          <CategoryPicker
+            type={session.type}
+            value={session.category}
+            disabled={busy}
+            onChange={(category) => updateSession(session.id, { category })}
+          />
+        </PanelSection>
+      ) : null}
+
+      <PanelSection index={3}>
+        <ControlsPanel session={session} disabled={busy} />
+      </PanelSection>
+
+      {!session.sourceScript ? (
+        <PanelSection index={4}>
+          <TemplateGallery session={session} textareaRef={textarea} title="Start from a template" />
+        </PanelSection>
+      ) : null}
     </>
   );
 
@@ -1045,6 +1070,7 @@ export function IntentStep({
             <PlatformControls session={session} disabled={busy} />
 
             <VideoCanvasSettings session={session} media={media} disabled={busy} />
+            <PostCanvasSettings session={session} disabled={busy} />
 
             {sidePanel ? (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -1052,22 +1078,14 @@ export function IntentStep({
                   icon={<SlidersHorizontal />}
                   label="Options"
                   hint={
-                    [categoryLabel, goalLabel].filter(Boolean).join(" · ") ||
-                    "Kind of post, goal, product"
+                    [productLabel, goalLabel, categoryLabel].filter(Boolean).join(" · ") ||
+                    (showProduct ? "Product, goal, kind of post" : "Goal, kind of post")
                   }
-                  onClick={() => openPanel("options")}
+                  onClick={openPanel}
                 />
-                {!session.sourceScript ? (
-                  <PanelChip icon={<Sparkles />} label="Ideas" onClick={() => openPanel("ideas")} />
-                ) : null}
               </div>
             ) : (
-              <>
-                {options}
-                {!session.sourceScript ? (
-                  <PanelChip icon={<Sparkles />} label="Ideas" onClick={() => openPanel("ideas")} />
-                ) : null}
-              </>
+              options
             )}
           </div>
         </div>
@@ -1081,7 +1099,7 @@ export function IntentStep({
                 <PanelHandle
                   key="studio-panel-handle"
                   marked={!!categoryLabel || !!session.goal || !!session.controls.productId}
-                  onOpen={() => openPanel("options")}
+                  onOpen={openPanel}
                 />
               ) : null}
             </AnimatePresence>,
@@ -1122,56 +1140,17 @@ export function IntentStep({
                   <ArrowLeft className="size-4" />
                   Back
                 </button>
-                {!session.sourceScript ? (
-                  <div
-                    role="tablist"
-                    aria-label="Panel"
-                    className="grid grid-cols-2 rounded-full bg-[var(--ds-well-bg)] p-1"
-                  >
-                    {(["options", "ideas"] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        role="tab"
-                        aria-selected={tab === t}
-                        onClick={() => setTab(t)}
-                        className="relative h-8 rounded-full text-[13px] font-semibold"
-                      >
-                        {tab === t ? (
-                          <motion.span
-                            layoutId="studio-panel-tab"
-                            className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[0_4px_14px_-6px_rgb(0_0_0/0.18)]"
-                          />
-                        ) : null}
-                        <span
-                          className={cn(
-                            "relative",
-                            tab === t ? "text-foreground" : "text-muted-foreground",
-                          )}
-                        >
-                          {t === "options" ? "Options" : "Ideas"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+                <div>
+                  <h2 className="text-[17px] font-bold tracking-tight">
+                    <span className="ds-grad-text">{format.label}</span> options
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    All optional. Mellox fills in whatever you leave.
+                  </p>
+                </div>
               </div>
-              <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-5 pb-5 [scrollbar-width:thin]">
-                {tab === "ideas" && !session.sourceScript ? (
-                  <>
-                    <IdeasPanel
-                      workspaceId={session.workspaceId}
-                      type={session.type}
-                      selectedId={session.ideaId}
-                      onPick={pickAndClose}
-                      limit={4}
-                      fixtureIdeas={fixtureIdeas}
-                    />
-                    <TemplateGallery session={session} textareaRef={textarea} title="Templates" />
-                  </>
-                ) : sidePanel ? (
-                  options
-                ) : null}
+              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-5 [scrollbar-width:thin]">
+                {sidePanel ? options : null}
               </div>
               <div className="px-5 pb-5 pt-2">
                 <Button
@@ -1220,6 +1199,24 @@ export function IntentStep({
         </div>
       </footer>
     </div>
+  );
+}
+
+/** One block of the options panel: fades up in order when the panel opens. */
+function PanelSection({ index, children }: { index: number; children: React.ReactNode }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.28,
+        ease: ease.emphasized,
+        delay: reduce ? 0 : 0.06 + index * 0.05,
+      }}
+    >
+      {children}
+    </motion.div>
   );
 }
 

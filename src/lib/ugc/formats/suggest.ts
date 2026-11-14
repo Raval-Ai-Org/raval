@@ -62,3 +62,14 @@ export function suggestFormats(profile: FormatProfile, limit = 3): string[] {
   }
   return out;
 }
+
+/** The brand's favourite formats first (known ids only), then the suggestions, at most `limit`. */
+export function favouritesFirst(
+  favourites: readonly string[] | undefined,
+  suggested: readonly string[],
+  limit = 6,
+): string[] {
+  const known = new Set(UGC_FORMATS.map((f) => f.id as string));
+  const fav = (favourites ?? []).filter((id) => known.has(id));
+  return [...new Set([...fav, ...suggested])].slice(0, limit);
+}

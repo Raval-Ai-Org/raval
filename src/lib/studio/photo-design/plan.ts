@@ -5,6 +5,7 @@
 import type { AspectRatio } from "../aspect";
 import type { CopyLine } from "../creative-knowledge";
 import { KEY_GREEN, KEY_MAGENTA, type KeyColour } from "./geometry";
+import { pickOverlay, type OverlayId } from "./overlays";
 import type { Box, PhotoReading } from "./read";
 
 /** Most photos one design holds (the contact sheet shows them all to the model). */
@@ -30,6 +31,8 @@ export type PhotoDesignPlan = {
   avoid: Box[];
   /** In `order`: which photos are website screens, shown inside a device. */
   screens?: boolean[];
+  /** Overlay only: how the words sit on the photo (overlays.ts), chosen clear of faces. */
+  treatment?: OverlayId;
 };
 
 const RATIO_VALUE: Record<AspectRatio, number> = {
@@ -150,6 +153,10 @@ export function planPhotoDesign(args: {
   layout?: PhotoDesignPlan["layout"];
   /** Per photo, in input order: a website capture, framed as a device screen. */
   screens?: boolean[];
+  /** A video opening whose captions run along the bottom. */
+  keepBottomClear?: boolean;
+  /** The brand's last treatments, so the next post sits differently. */
+  recentTreatments?: (string | null | undefined)[];
 }): PhotoDesignPlan {
   const count = Math.min(args.readings.length, args.sizes.length, MAX_DESIGN_PHOTOS);
   if (!count) throw new Error("A photo design needs at least one photo.");
@@ -165,6 +172,21 @@ export function planPhotoDesign(args: {
   const layout =
     args.layout ??
     (single && mismatch <= 1.35 && !FRAMED.test(args.brief) && !anyScreen ? "overlay" : "windows");
+  const avoid =
+    layout === "overlay" ? overlayAvoid(args.readings[0], args.sizes[0], args.ratio) : [];
+  const treatment =
+    layout === "overlay"
+      ? pickOverlay({
+          faces: avoid,
+          words: args.copy.reduce(
+            (n, line) => n + line.text.split(/\s+/).filter(Boolean).length,
+            0,
+          ),
+          seed: `${args.brief}::${args.copy.map((line) => line.text).join("|")}`,
+          keepBottomClear: args.keepBottomClear,
+          recent: args.recentTreatments,
+        })
+      : null;
   return {
     v: 1,
     layout,
@@ -178,7 +200,8 @@ export function planPhotoDesign(args: {
     scenes: order.map((i) => args.readings[i].scene),
     ...(args.occasion ? { occasion: args.occasion } : {}),
     copy: args.copy,
-    avoid: layout === "overlay" ? overlayAvoid(args.readings[0], args.sizes[0], args.ratio) : [],
+    avoid,
     ...(anyScreen ? { screens: order.map((i) => !!args.screens?.[i]) } : {}),
+    ...(treatment ? { treatment: treatment.id } : {}),
   };
 }

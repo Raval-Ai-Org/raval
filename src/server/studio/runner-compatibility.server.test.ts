@@ -18,7 +18,13 @@ vi.mock("@/lib/openrouter-image.server", () => ({
   startImageTask: mocks.start,
 }));
 vi.mock("./image-review.server", () => ({ reviewGeneratedImage: mocks.review }));
-vi.mock("./logo-overlay.server", () => ({ overlayBrandLogo: mocks.logo }));
+vi.mock("./logo-overlay.server", () => ({
+  overlayBrandLogo: mocks.logo,
+  placeBrandLogo: async (image: string, ...rest: unknown[]) => ({
+    dataUrl: await mocks.logo(image, ...rest),
+    placement: { corner: "bottom-right", moved: false, skipped: false },
+  }),
+}));
 vi.mock("@/server/assets/persist.server", () => ({
   persistAsset: mocks.save,
   signAssetPath: vi.fn(),

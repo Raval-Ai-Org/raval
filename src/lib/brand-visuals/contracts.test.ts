@@ -90,7 +90,7 @@ describe("visual taste decisions", () => {
     )
       .flat()
       .reverse();
-    const selected = analysisReferences(sources);
+    const selected = analysisReferences(sources, 8);
     expect(selected).toHaveLength(8);
     expect(new Set(selected.map((s) => s.region.page)).size).toBe(4);
     expect(selected[0].region).toMatchObject({ page: 0, top: 0 });

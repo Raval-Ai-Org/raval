@@ -257,6 +257,7 @@ async function openingOverlay(
     brief: task.brief,
     brandColours: task.brand.colours,
     layout: "overlay",
+    keepBottomClear: captionBand,
   });
   const reference = await asDataUrl(hero);
   let feedback: string | undefined;

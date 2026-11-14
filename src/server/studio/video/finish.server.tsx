@@ -13,6 +13,7 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import type { VideoProbe } from "@/lib/studio/video/checks";
 import { cueFades, type TextCue } from "@/lib/studio/video/overlay";
+import { coverCrop, MAX_ZOOM_CROP } from "@/lib/studio/video/opening-frame";
 import type { HookCue } from "@/lib/ugc/hook-text";
 import { loadFonts } from "@/server/studio/carousel-render.server";
 
@@ -166,10 +167,13 @@ export function videoCanvasFor(ratio: string): { width: number; height: number }
 export async function frameForVideo(picture: Buffer, ratio: string): Promise<Buffer> {
   const { width, height } = videoCanvasFor(ratio);
   const meta = await sharp(picture).metadata();
-  const sameShape =
-    meta.width && meta.height && Math.abs(meta.width / meta.height - width / height) < 0.02;
-  if (sameShape)
-    return sharp(picture).resize(width, height, { fit: "cover" }).jpeg({ quality: 92 }).toBuffer();
+  // The same shape, or one a thin edge's zoom fills: no bars at all.
+  const crop = coverCrop({ width: meta.width ?? 0, height: meta.height ?? 0 }, ratio);
+  if (meta.width && meta.height && crop <= MAX_ZOOM_CROP)
+    return sharp(picture)
+      .resize(width, height, { fit: "cover", position: "attention" })
+      .jpeg({ quality: 92 })
+      .toBuffer();
   const backdrop = await sharp(picture)
     .resize(width, height, { fit: "cover" })
     .blur(36)

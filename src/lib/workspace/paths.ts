@@ -4,6 +4,9 @@
 
 export const WORKSPACES_HOME = "/projects";
 
+/** The workspace list itself, shown even when there is only one workspace. */
+export const ALL_WORKSPACES = `${WORKSPACES_HOME}?all=1`;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isWorkspaceId(value: unknown): value is string {
@@ -202,4 +205,23 @@ export function resolveLegacyAppLink(pathname: string, search: string): LegacyTa
     params.set("tab", LEGACY_TABS[section]);
   }
   return { kind: "workspace", href: workspacePath(explicit, "", params.toString()) };
+}
+
+/**
+ * Where landing on Mellox goes (sign-in, the site root, a bare /projects):
+ * the person's only workspace, straight in (or its setup), so one brand never
+ * sees the list. Two or more, none, or an explicit list request (?all, ?add)
+ * stay on the list. This is not a "last workspace" fallback: with one
+ * workspace there is nothing to choose.
+ */
+export function soleWorkspaceLanding(
+  workspaces: readonly { id: string; onboarded: boolean }[],
+  search: string,
+): string | null {
+  const params = new URLSearchParams(search);
+  if (params.has("all") || params.has("add")) return null;
+  if (workspaces.length !== 1) return null;
+  const only = workspaces[0];
+  if (!isWorkspaceId(only.id)) return null;
+  return only.onboarded ? workspacePath(only.id) : onboardingPath(only.id);
 }

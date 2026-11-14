@@ -11,6 +11,7 @@ import { templateDirective } from "./templates";
 import { MEME_LAYOUTS, categoryPictureLines, categorySection, resolveCategory } from "./categories";
 import type { BrandLook } from "@/lib/brand-look/resolve";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
+import { wantsSupportingLines } from "@/lib/brand-visuals/bible";
 import { slidePlanText, type CarouselStructure } from "./carousel/story";
 import { framePlanText, type StoryTheme } from "@/lib/stories/frames";
 import { consistencySection, memorySection, type HookStyle } from "./memory";
@@ -25,6 +26,7 @@ import { TRENDS_RULE, trendLines, type SocialTrends } from "./trends";
 import { shareSection } from "./viral";
 import { ARCHETYPE_IDS, archetypeMenu, recentLayouts } from "./art-direction";
 import { CONCEPT_METHOD, COVER_TEST, SELF_REVIEW } from "./creative-knowledge";
+import { briefVisualIdea, pictureJobFor, pictureRules } from "./brief-visual";
 import { applyLean } from "@/lib/taste/bias";
 import type { Lean, Taste } from "@/lib/taste/contracts";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
@@ -468,6 +470,19 @@ export const SocialSchema = z.object({
       }),
     )
     .min(1),
+  /**
+   * The post's picture, written with the caption in the same call (only asked
+   * for when the post has one): a scene and a short banner headline. The
+   * caption is never typeset on it.
+   */
+  picture: z
+    .object({
+      purpose: Str(300).default(""),
+      scene: Str(1400).default(""),
+      headline: Str(60).default(""),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 export const CarouselSchema = z.object({
@@ -688,6 +703,8 @@ export function buildSocialPrompt(
   const platforms = args.controls.platforms.length
     ? args.controls.platforms
     : STUDIO_FORMATS.social.defaultPlatforms;
+  const withPicture = !args.captionsOnly && !!args.controls.includeImage;
+  const pictureIdea = withPicture ? briefVisualIdea(args.intent.brief, "social") : "";
   return {
     route: "studio.social",
     system: systemPrompt(
@@ -700,20 +717,31 @@ export function buildSocialPrompt(
         args.controls.tone ? `Tone override: ${args.controls.tone}` : "",
         // Captions under a picture follow its concept, which already carried the craft.
         args.captionsOnly ? "" : craftRule(args, "social"),
+        ...(withPicture
+          ? pictureRules(
+              pictureJobFor({ category: resolveCategory(args.intent), goal: args.intent.goal }),
+            )
+          : []),
       ].filter(Boolean),
-      `{"title": string (internal working title), "variants": [{"platform": "<id>", "title": string, "body": string, "hashtags": string[]}]}`,
+      withPicture
+        ? `{"title": string (internal working title), "variants": [{"platform": "<id>", "title": string, "body": string, "hashtags": string[]}], "picture": {"purpose": string, "scene": string, "headline": string}}`
+        : `{"title": string (internal working title), "variants": [{"platform": "<id>", "title": string, "body": string, "hashtags": string[]}]}`,
     ),
     user: sections([
       ...sharedUser(args, "social"),
       { label: "Platforms and rules", body: platformRubric(platforms) },
+      {
+        label: "Picture the brief asks for (build the picture on it)",
+        body: pictureIdea || null,
+      },
       ...refineSections(args.refine, args.current),
       {
         label: "Output",
-        body: `Return exactly ${platforms.length} variants, one per platform id: ${platforms.join(", ")}.`,
+        body: `Return exactly ${platforms.length} variants, one per platform id: ${platforms.join(", ")}.${withPicture ? " Also return `picture`." : ""}`,
       },
     ]),
     schema: SocialSchema,
-    maxTokens: Math.min(6000, 500 + platforms.length * 500),
+    maxTokens: Math.min(6000, 500 + platforms.length * 500 + (withPicture ? 450 : 0)),
     temperature: args.refine ? TEMPERATURE.refine : TEMPERATURE.draft,
   };
 }
@@ -957,9 +985,19 @@ export function buildVisualBriefPrompt(
     : native
       ? "`concept` is one candid, phone-native picture that looks posted by a real person, not an ad: the exact moment, who (always a fictional person) or what is in it, the real place and its details, the phone-camera angle and the natural light. 4 to 7 concrete sentences a photographer could shoot on a phone."
       : "`concept` is art direction for one poster-grade visual, written the way the best campaign prompts are: name the hero subject and its scale, the set or backdrop, any person (always a fictional model) with pose, outfit and expression, where the headline sits relative to the subject (for example a giant word behind it, partly hidden), lens and camera angle, the light (key, rim, shadows, reflections), real materials and textures, a palette taken from the brand colours, and the finish. 5 to 8 concrete sentences a photographer, 3D artist or retoucher could execute.";
-  const imageText = meme
-    ? "`onImageLines` holds the meme's exact words, one entry per label of the chosen layout, in order, 12 words in total at most, written like a person posts (lowercase is fine). `onImageText` is an empty string. `altText` describes the result for accessibility."
-    : "`onImageText` is the scroll-stopping headline set in the picture, 2-6 words, written like a campaign line (a sharp claim, a promise or a question, never a label or a description of the picture), using only facts from the brief; or an empty string when the picture is stronger without words. `onImageLines` is an empty list. It is typeset exactly as written. `altText` describes the result for accessibility.";
+  // A brand whose posts carry more words (ADR-0048, style bible `text: "rich"`).
+  // A campaign piece always gets a heading: its eyebrow is the campaign's name.
+  const campaign = args.controls.campaign?.trim();
+  const rich =
+    !video && !meme && !native && wantsSupportingLines(args.ctx.visualTaste?.direction, campaign);
+  const eyebrow = campaign
+    ? `one \`eyebrow: \` that is exactly "${campaign.slice(0, 40)}" or its phase (2-4 words)`
+    : "one `eyebrow: ` (2-4 words, a section label like the brand's own)";
+  const imageText = rich
+    ? `\`onImageText\` is the headline set in the picture, 3-9 words, written like a campaign line, using only facts from the brief. \`onImageLines\` holds the supporting words typeset in the brand's system, each line starting with its role: ${eyebrow}, one \`body: \` (one sentence, 18 words at most), up to four \`item: \` (2-4 words each, a service, feature or step the brief or Brand DNA names) and at most one \`button: \` (2-5 words, an action${campaign && args.controls.cta ? `, the campaign's own call to action when it fits: "${args.controls.cta.slice(0, 60)}"` : ""}). Use fewer lines when the idea needs fewer; never invent a figure, name, quote or offer. Everything is typeset exactly as written. \`altText\` describes the result for accessibility.`
+    : meme
+      ? "`onImageLines` holds the meme's exact words, one entry per label of the chosen layout, in order, 12 words in total at most, written like a person posts (lowercase is fine). `onImageText` is an empty string. `altText` describes the result for accessibility."
+      : "`onImageText` is the scroll-stopping headline set in the picture, 2-6 words, written like a campaign line (a sharp claim, a promise or a question, never a label or a description of the picture), using only facts from the brief; or an empty string when the picture is stronger without words. `onImageLines` is an empty list. It is typeset exactly as written. `altText` describes the result for accessibility.";
   return {
     route: video ? "studio.video.brief" : "studio.image.brief",
     system: systemPrompt(
@@ -995,6 +1033,11 @@ export function buildVisualBriefPrompt(
             : [
                 `\`artDirection\` is the id of the one campaign layout below that best fits this brand and message; build the concept on it and adapt it, never name other brands.\n${layoutMenu(args)}`,
               ]),
+        ...(video || meme
+          ? []
+          : [
+              `Picture: this picture's job: ${pictureJobFor({ category, goal: args.intent.goal }).scene} \`onImageText\` is ${pictureJobFor({ category, goal: args.intent.goal }).headline}. Less text is better.`,
+            ]),
         ...(video ? [] : categoryPictureLines(category).map((line) => `Picture: ${line}`)),
         ...(video
           ? []
@@ -1028,6 +1071,12 @@ export function buildVisualBriefPrompt(
     ),
     user: sections([
       ...sharedUser(args, args.medium),
+      {
+        label: video
+          ? "Shots the brief asks for (follow them)"
+          : "Picture the brief asks for (follow it; the caption is written separately and never set in the picture)",
+        body: briefVisualIdea(args.intent.brief, args.medium) || null,
+      },
       ...(args.source
         ? [
             {

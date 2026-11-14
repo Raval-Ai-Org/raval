@@ -1,4 +1,5 @@
 import "server-only";
+import { MEDIA_LIFETIMES } from "@/lib/inspo/media-rotation";
 import { after } from "next/server";
 import { z } from "zod";
 import { createServerFn, type ServerFnContext } from "@/server/server-fn";
@@ -116,6 +117,8 @@ export const updateVisualReference = createServerFn({ method: "POST" })
         status: z.enum(["candidate", "approved", "removed"]),
         notes: z.string().max(600).optional(),
         purpose: z.enum(PURPOSES).optional(),
+        /** Inspo → Media: kept always, or used a couple of times while fresh. */
+        lifetime: z.enum(MEDIA_LIFETIMES).optional(),
       })
       .parse(data),
   )

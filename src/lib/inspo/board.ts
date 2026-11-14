@@ -2,6 +2,7 @@
 // cards. Pure: it only reshapes rows that exist (`brand_visual_sources`).
 
 import type { VisualSource } from "@/lib/brand-visuals/contracts";
+import { lifetimeOf, type MediaLifetime } from "./media-rotation";
 
 /** The one chip a card wears. "like" covers the stored `style` and `inspiration`. */
 export type InspoChip = "like" | "avoid" | "product" | "person";
@@ -44,6 +45,8 @@ export type InspoCard = {
   /** Ids of the still frames a video upload made (removed together with it). */
   frameIds: string[];
   createdAt: string;
+  /** Own media: kept always, or used a couple of times while fresh (media-rotation.ts). */
+  lifetime: MediaLifetime;
 };
 
 // A video upload also saves still frames named "<label> · 1.2s".
@@ -82,6 +85,7 @@ export function inspoCards(sources: VisualSource[]): InspoCard[] {
         fromSite: s.kind === "website",
         frameIds: frameIds.get(s.id) ?? [],
         createdAt: s.created_at,
+        lifetime: lifetimeOf(s),
       };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

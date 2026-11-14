@@ -228,7 +228,8 @@ export type ImageMeterRoute =
   | "studio.image.edit"
   | "studio.image.cutout"
   | "studio.image.design"
-  | "studio.image.storyboard";
+  | "studio.image.storyboard"
+  | "studio.image.reframe";
 
 export type GenerateImageResult = GeneratedImage & {
   route: string;

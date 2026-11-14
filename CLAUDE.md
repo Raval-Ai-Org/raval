@@ -49,7 +49,7 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   balance only in `MoxGauge`, the top bar's corner shows the plan.
   Create is Holo's "choose a method" card grid (`CreateLauncher`); Home's
   Swipe ideas / Blog ideas open `IdeaSwipeDeck` (a pick only fills a brief);
-  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, an Options and an Ideas pill); goal, product, size and the rest live in the right side panel (Holo), ideas and templates in its Ideas tab; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
+  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, then the shape on the canvas: size, slides, Story frames — `PostCanvasSettings`, videos `VideoCanvasSettings` — and one Options pill); the right side panel (Holo) is one list, no tabs: product or service first (big cards with "None"), goal, kind of post (Auto, the grid only on "Choose a kind"), the format's own settings, templates. No ideas there: Write it for me writes the idea; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
   the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
   Mox's gradient only on the canvas wash, the primary pill, progress bars, the
   visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
@@ -107,7 +107,11 @@ Decision record [ADR-0014](docs/adr/0014-canonical-workspaces.md).
     `useOptionalWorkspaceId()` (`src/components/workspace/WorkspaceProvider.tsx`).
   - `workspace:last-opened` is a highlight only.
   - Never fall back to "first/newest/last" workspace.
-- **Home is `/projects`.** Sign-in and app roots land there.
+- **Home is `/projects`.** Sign-in and app roots land there. A person with exactly
+  one workspace goes straight into it (`soleWorkspaceLanding`, `paths.ts`): its
+  app, or its onboarding if unfinished. That is the only workspace, not a
+  "first/newest" pick; links meant to show the list use `ALL_WORKSPACES`
+  (`?all=1`).
 - **Create, list and delete** only go through
   `src/server/workspaces/service.server.ts`:
   - create uses the idempotent, domain-deduplicated
@@ -240,10 +244,28 @@ Brand Styles and the Brand Kit are gone — never add them back).
     Product, Person) through `POST /api/brand-visuals/upload`; Post look,
     Video look and Voice write `dna.look` via `tidyLook`. No new table.
   - "Learn my style" is the existing paid analysis with the price on the
-    button; a direction is used only after "Use this". Style strength and the
-    voice sample are pure and free. The first read of the brand's site is
-    the included one and starts by itself when an editor first opens Inspo
-    (no profile, no job yet); every repeat is a click with its price.
+    button. Style strength and the voice sample are pure and free. The first
+    read of the brand's site is the included one and starts by itself after
+    the Brand DNA scan or when an editor first opens Inspo (no profile, no job
+    yet, `startIncludedSiteRead`); every repeat is a click with its price.
+  - **Style bible** ([ADR-0048](docs/adr/0048-brand-style-bible.md),
+    `src/lib/brand-visuals/bible.ts`): the read writes a direction's world,
+    type signature, composition, signatures, recurring subject and anchor
+    examples from the brand's own posts, its site's artwork and a homepage
+    overview; `groundProfile` keeps only what the pictures it saw support (a
+    recurring subject needs two of the brand's own pictures). With nothing
+    active and no visual look of its own, the strongest direction is used by
+    itself (`auto`, "Mellox picked this"); Inspo offers Keep this / Stop and
+    Light (default) / Close / Strict. A person's save always wins and clears
+    `auto`. Pictures get it only through `compileVisualSnapshot`
+    (`bibleRules` + `pickAnchors`, two of four slots for the examples); the
+    review adds a `style` score and `off-style:` earns the one redo.
+    Round 8 also learns the register, the series `frame`, building blocks
+    (`COMPONENT_KINDS`), text density and the logo habit: `bibleWantsLogo`
+    decides per piece whether the logo is placed (not every post has it), and
+    rich brands and every campaign piece get an eyebrow, body, items and a
+    button set verbatim (`wantsSupportingLines`). New rounds: the
+    `brand-style-training` skill.
   - Creator (UGC) videos pick from the Brand DNA catalogue first
     (`ugcProductFromCatalogue`, `src/lib/ugc/from-catalogue.ts`): the
     product's stored facts and its own photo assets, no second page read.
@@ -344,6 +366,21 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
   after 6 s. Products show Holo-style: a list on the left, the chosen one on
   the right (`ProductRow` / `ProductDetail`), never empty photo boxes. `/onboarding-lab` renders every new
   step with sample data (`tests/integration/onboarding-lab.spec.ts`).
+- **One question per screen** (ADR-0049, Native-style): after the website,
+  `askScreens` (`src/lib/onboarding/questions.ts`, pure) asks role, team,
+  goal, activity, rhythm, channels, Autopilot approval, tone, emoji, caption
+  length, a look swipe deck (real wall posts) and, once per account, where
+  they heard of Mellox (`profiles.signup_source`). A tap answers and moves on;
+  Mox story screens sit between. Answers map only through `answers.ts`
+  (`answersToLook` → `dna.look`, `answersToProfile` → `dna.profile` and the
+  "Who runs it" line, `answersToGoals` → `decideGoals`, approval → Autopilot's
+  proposed mode); never overwrite a value a person set. The shell
+  (`components/onboarding/ask/Stage.tsx`) never scrolls: the primary pill is
+  always in the dock, and the scan runs in `ScanDock`, where the four brains
+  fill from real scan progress (`src/lib/onboarding/brains.ts`). Art is
+  `public/brand/mox/onboarding/*` (`art.ts`, written by
+  `scripts/generate-onboarding-art.mjs`, paid: ask before running it).
+  `/onboarding-lab?step=ask&id=<screen>` + `tests/integration/onboarding-ask.spec.ts`.
 - **Goals are the person's numbers** (`workspace_goals`).
   - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the
     RPC in `src/server/fns/goals.ts`.
@@ -982,8 +1019,22 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   (`checks.ts`, `qa.server.ts`, route `studio.video.qa`); one redo at
   Mellox's cost, then the job fails and nothing is charged. Never turn a
   failed check into a warning.
-- A video from a post opens on the whole post (`frameForVideo`, never
-  cropped) and ends on the exact post.
+- A video from a post opens on the post made the video's shape, never on
+  bars (`openingFrameFit`, `src/lib/studio/video/opening-frame.ts`;
+  `openingFrameForVideo`): the same shape or a thin edge is zoomed; any other
+  shape (a square post in a 9:16 Reel or Story) is recreated by the image
+  model (`studio.image.reframe`, at Mellox's cost) and checked before any
+  video spend (shape, no bars, a vision read); one retry, then the post
+  leads as a reference. A person's own photo is never redrawn (shown whole).
+  It ends on that frame. QA fails a video whose frames sit on bars
+  (`looksLetterboxed`, measured) or that the judge scores low on `framing`.
+- **A video carries the logo only when the person asks** (`wantsLogoInVideo`):
+  the post's corner badge is cleared from the opening frame and the video
+  model is told none; "no logo" always wins.
+- **The logo never covers words on a picture** (`pickLogoCorner`,
+  `src/lib/studio/logo-corner.ts`): each corner is measured before the logo
+  is placed; a busy brand corner moves to the calmest one, and with every
+  corner busy the logo is left off with a note.
 - Premium video is sold from Starter (`video_premium`); Cinematic stays
   Agency and up.
 - **Premium videos are a monthly quota** (meter `premium_video`,
@@ -1211,13 +1262,17 @@ benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
 - Lessons from studied reference posts are distilled into these modules and
   [docs/studio/reference-study-2026-10.md](docs/studio/reference-study-2026-10.md).
   `Post Training/` is never committed or shipped; never name a brand from it.
+  How to use or add a recipe (layouts, ad layouts, words on a person's own
+  photo `photo-design/overlays.ts`, openings): the `studio-design-recipes`
+  skill (`.claude/skills/`).
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
 - **A post has a kind** (`src/lib/studio/categories.ts`, pure; ids stored on
   `intent.category`: add, never rename): sale, product, launch, meme,
   relatable, trend, tips, myth, before/after, proof, behind the scenes,
   storytime, this-or-that, quote, local, aesthetic, list, UGC. Picked in the
-  Options panel (`CategoryPicker`, Auto first), by a template
+  Options panel (`CategoryPicker`, Auto first; Auto never makes a meme,
+  `NEVER_AUTO`), by a template
   (`TEMPLATE_CATEGORY`) or by Write it for me (`pickCategory`, never the last
   two). It steers every writer (`categorySection`), the visual brief and the
   image prompt: `register: "native"` kinds (meme, POV, UGC…) are made like a

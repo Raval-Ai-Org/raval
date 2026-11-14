@@ -16,7 +16,7 @@ import { duration, ease } from "@/lib/motion";
 import { readBrandPayload, studioApi, type WrittenPrompt } from "@/lib/studio/client";
 import { getTemplate } from "@/lib/studio/templates";
 import { categoryById } from "@/lib/studio/categories";
-import { updateSession, type StudioSession } from "@/lib/studio/session-store";
+import { getSession, updateSession, type StudioSession } from "@/lib/studio/session-store";
 
 const HISTORY_LIMIT = 30;
 
@@ -132,6 +132,7 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
       goal: session.goal,
       ideaId: session.ideaId,
       ideaSource: session.ideaSource,
+      controls: session.controls,
     };
     setBusy(true);
     try {
@@ -168,7 +169,21 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
           if (!alive.current) return;
         }
       }
+      // Inspo photos suggested with the prompt join only a box with none yet.
+      const latest = getSession(session.id)?.controls ?? session.controls;
+      const media =
+        written.media?.assetIds.length && !latest.referenceAssetIds?.length ? written.media : null;
       updateSession(session.id, {
+        ...(media
+          ? {
+              controls: {
+                ...latest,
+                referenceAssetIds: media.assetIds,
+                referenceMode: "design" as const,
+                photoFidelity: "exact" as const,
+              },
+            }
+          : {}),
         brief: full,
         // The category it was written as is selected, so the post is made as that kind.
         ...(written.category ? { category: written.category } : {}),
@@ -180,7 +195,9 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
       setResult(written);
       const kind = categoryById(written.category)?.label;
       toast.success("Your prompt is ready", {
-        description: kind ? `${kind} · ${written.title}` : written.title,
+        description: [kind ? `${kind} · ${written.title}` : written.title, media?.reason]
+          .filter(Boolean)
+          .join(" "),
         action: {
           label: "Undo",
           onClick: () => {

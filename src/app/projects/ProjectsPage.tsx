@@ -25,7 +25,12 @@ import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { brandRoom } from "@/lib/workspace/brand-room";
 import { DeleteWorkspaceDialog } from "@/components/workspace/DeleteWorkspaceDialog";
 import { normalizeDomain, toWebsiteUrl } from "@/lib/workspace/domain";
-import { onboardingPath, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
+import {
+  ALL_WORKSPACES,
+  onboardingPath,
+  soleWorkspaceLanding,
+  workspacePath,
+} from "@/lib/workspace/paths";
 import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
 import { MoxFace } from "@/components/brand/mox/MoxFace";
@@ -166,6 +171,19 @@ function ProjectsPage() {
     };
   }, [ensureWorkspace, navigate, sessionAttempt]);
 
+  // One brand goes straight in (soleWorkspaceLanding): the list is only for
+  // choosing, and with one workspace there is nothing to choose. The search
+  // is read once, before ?add= is cleared below.
+  const [landingSearch] = useState(() =>
+    typeof window === "undefined" ? "?all=1" : window.location.search,
+  );
+  const landing = workspacesQuery.data
+    ? soleWorkspaceLanding(workspacesQuery.data, landingSearch)
+    : null;
+  useEffect(() => {
+    if (landing) navigate({ to: landing, replace: true });
+  }, [landing, navigate]);
+
   const openProject = (w: Workspace) => {
     navigate({ to: openHref(w) });
   };
@@ -279,7 +297,7 @@ function ProjectsPage() {
           {/* Top bar */}
           <header className="sticky top-0 z-20 flex h-16 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 group-data-[scrolled]/projects:border-[var(--ds-card-border)] group-data-[scrolled]/projects:bg-[var(--ds-frame-bg)]/80 group-data-[scrolled]/projects:backdrop-blur-xl items-center justify-between gap-3 px-4 sm:px-5">
             <Link
-              to={WORKSPACES_HOME}
+              to={ALL_WORKSPACES}
               aria-label="Mellox home"
               className="flex h-9 shrink-0 items-center"
             >
@@ -313,7 +331,7 @@ function ProjectsPage() {
               transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
               className="mt-2 text-[34px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[44px]"
             >
-              {loading ? (
+              {loading || landing ? (
                 <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
               ) : workspaceListFailed ? (
                 "Your workspaces couldn't load"
@@ -475,7 +493,7 @@ function ProjectsPage() {
           </section>
         )}
 
-        {loading && (
+        {(loading || landing) && (
           <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
             <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
               {[0, 1, 2].map((i) => (
@@ -631,7 +649,7 @@ function AccountMenu({
           </div>
           <div className="text-[12px] text-muted-foreground truncate max-w-full">{email}</div>
           <button
-            onClick={() => navigate({ to: WORKSPACES_HOME })}
+            onClick={() => navigate({ to: ALL_WORKSPACES })}
             className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-[12px] font-medium text-foreground transition hover:bg-muted"
           >
             <UserCircle2 className="h-3.5 w-3.5" /> Manage your account
@@ -657,7 +675,7 @@ function AccountMenu({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
-            onSelect={() => navigate({ to: WORKSPACES_HOME })}
+            onSelect={() => navigate({ to: ALL_WORKSPACES })}
           >
             <Settings className="h-4 w-4 text-muted-foreground" /> Settings
           </DropdownMenuItem>

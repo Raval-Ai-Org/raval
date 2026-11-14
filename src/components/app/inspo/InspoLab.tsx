@@ -83,9 +83,55 @@ const direction = DirectionSchema.parse({
     typography: { heading: "Fraunces", body: "Inter" },
   },
   sourceIds: ["00000000-0000-4000-8000-000000000001"],
+  bible: {
+    world: {
+      medium: "Hand-painted watercolour illustration with soft anime-style linework",
+      rendering: "visible brush texture, gentle grain, warm paper",
+      setting: "mountain lakes and cosy wooden interiors",
+      lighting: "golden morning light",
+      paletteMood: "warm cream, moss and honey",
+    },
+    type: {
+      headline: "High-contrast editorial serif, sentence case",
+      emphasis: "italic-accent",
+      casing: "sentence case",
+      placement: "centred in the top third",
+    },
+    composition: {
+      logo: "top-centre",
+      headlineZone: "top third, centred, two lines",
+      subjectZone: "lower two-thirds, the scene bleeds to the edges",
+      density: "balanced",
+    },
+    register: "illustrated",
+    text: "headline",
+    logo: "often",
+    frame: "",
+    components: [],
+    signatures: [
+      {
+        kind: "subject",
+        description: "A cheerful figure in a mustard rain jacket",
+        sourceIds: ["00000000-0000-4000-8000-000000000001"],
+      },
+      {
+        kind: "card",
+        description: "Product cards floating inside the scene",
+        sourceIds: ["00000000-0000-4000-8000-000000000001"],
+      },
+    ],
+    recurringSubject: {
+      description: "A cheerful figure in a mustard rain jacket with a canvas backpack",
+      sourceIds: ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"],
+    },
+    avoid: ["glossy 3D renders"],
+    anchors: ["00000000-0000-4000-8000-000000000001"],
+  },
 });
 const draftProfile: VisualProfile = {
-  v: 1,
+  v: 2,
+  auto: false,
+  roles: [],
   selected: 0,
   coverage: [],
   warnings: [],
@@ -114,6 +160,7 @@ const SCENES = [
   "board",
   "board-empty",
   "directions",
+  "picked",
   "learning",
   "post",
   "video",
@@ -131,6 +178,7 @@ export function InspoLab() {
   const [sources, setSources] = useState<VisualSource[]>(sampleSources);
   const [look, setLook] = useState<BrandLookSpec>({});
   const [draft, setDraft] = useState<VisualProfile | null>(null);
+  const [adherence, setAdherence] = useState<"light" | "close" | "strict">("light");
   const [removedId, setRemovedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -144,7 +192,7 @@ export function InspoLab() {
     setScene(next);
     setSection(parseInspoSection(next));
     setSources(next === "board-empty" ? [] : sampleSources());
-    setDraft(next === "directions" ? draftProfile : null);
+    setDraft(next === "directions" || next === "picked" ? draftProfile : null);
     setRemovedId(null);
   }
 
@@ -158,6 +206,8 @@ export function InspoLab() {
     active: scene === "board" ? { id: "lab-active", name: "Quiet editorial" } : null,
     running: scene === "learning" ? { stage: "analysing", pages: 0 } : null,
     lastError: null,
+    auto: scene === "picked",
+    adherence,
     learnPrice: scene === "board" ? 125 : 0,
   };
   const dna: BrandDna = { ...sampleDna, look };
@@ -175,6 +225,10 @@ export function InspoLab() {
   };
 
   const handlers: InspoHandlers = {
+    setAdherence: (level) => {
+      setAdherence(level);
+      log(`adherence:${level}`);
+    },
     onSection: (s) => {
       setSection(s);
       log(`section:${s}`);
@@ -194,6 +248,12 @@ export function InspoLab() {
         list.map((s) => (s.id === card.id ? { ...s, purpose: purposeOf(chip, s.purpose) } : s)),
       );
       log(`chip:${card.label}:${chip}`);
+    },
+    setLifetime: (card, lifetime) => {
+      setSources((list) =>
+        list.map((s) => (s.id === card.id ? { ...s, region: { ...s.region, lifetime } } : s)),
+      );
+      log(`lifetime:${card.label}:${lifetime}`);
     },
     remove: (card) => {
       setSources((list) => list.filter((s) => s.id !== card.id));

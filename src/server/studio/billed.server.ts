@@ -95,6 +95,13 @@ export async function createBilledStudioJob(args: {
    */
   autoProduct?: "named" | "any";
   /**
+   * A worker's new piece may carry the brand's own Inspo photos by itself,
+   * only sometimes and in rotation (src/lib/inspo/media-rotation.ts). The
+   * seed keeps the decision the same on a retry. Never used when a product
+   * or photos were already chosen.
+   */
+  ownMediaSeed?: string;
+  /**
    * A person's request: answer once the job exists and make it after the
    * response (see `createStudioJob`). Workers leave this off.
    */
@@ -133,6 +140,28 @@ export async function createBilledStudioJob(args: {
       input.controls.referenceMode = photos.referenceMode;
       if (photos.referenceMode === "design") input.controls.photoFidelity = "exact";
       heroFromProduct = photos.referenceMode === "hero";
+    }
+  }
+  // The brand's own Inspo photos, now and then, on a worker's picture post
+  // or carousel that has no product and no photos of its own. Decided here,
+  // before pricing, so the charge matches what runs.
+  if (
+    args.ownMediaSeed &&
+    !revision &&
+    !input.controls.productId &&
+    !input.controls.referenceAssetIds?.length &&
+    !input.controls.sourceVideoAssetIds?.length &&
+    isPhotoDesignEnabled(workspaceId) &&
+    (input.type === "image" ||
+      input.type === "carousel" ||
+      (input.type === "social" && input.controls.includeImage))
+  ) {
+    const { pickInspoMediaFor } = await import("@/server/inspo/media-pool.server");
+    const pick = await pickInspoMediaFor(workspaceId, input.type, args.ownMediaSeed);
+    if (pick) {
+      input.controls.referenceAssetIds = pick.assetIds;
+      input.controls.referenceMode = "design";
+      input.controls.photoFidelity = "exact";
     }
   }
   // A product hero is only ever made from the picked product's own photo

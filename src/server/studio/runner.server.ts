@@ -101,6 +101,8 @@ import {
   renderEndCard,
   videoBuffer,
 } from "@/server/studio/video/finish.server";
+import { openingFrameForVideo } from "@/server/studio/video/opening-frame.server";
+import { wantsLogoInVideo } from "@/lib/studio/video/opening-frame";
 import { checkStudioVideo } from "@/server/studio/video/qa.server";
 import {
   collectSoundtrack,
@@ -148,7 +150,12 @@ import {
   type BrandDnaLite,
   type ImageStyleInput,
 } from "@/lib/post-image";
-import { overlayBrandLogo, type LogoCorner } from "@/server/studio/logo-overlay.server";
+import {
+  overlayBrandLogo,
+  placeBrandLogo,
+  type LogoCorner,
+} from "@/server/studio/logo-overlay.server";
+import { LOGO_LEFT_OFF_NOTE } from "@/lib/studio/logo-corner";
 import { loadBrandLook, type LoadedLook } from "@/server/brand-look/resolve.server";
 import {
   imageStyleInput,
@@ -232,6 +239,14 @@ import { studioOutputQualityIssue } from "@/lib/studio/quality";
 import { checkMemoryConformance } from "@/lib/memory/conformance";
 import { loadMemories } from "@/server/memory/context.server";
 import { reviewGeneratedImage, type ImageReview } from "./image-review.server";
+import {
+  briefVisualIdea,
+  pictureJobFor,
+  postTopic,
+  preflightPictureBrief,
+} from "@/lib/studio/brief-visual";
+import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
+import { bibleWantsLogo, wantsSupportingLines } from "@/lib/brand-visuals/bible";
 import {
   loadGenerationVisualSnapshot,
   loadVisualFeedbackRules,
@@ -1154,6 +1169,31 @@ function brandLite(brand: CreateJobInput["brand"]): BrandDnaLite | null {
   return (brand ?? null) as BrandDnaLite | null;
 }
 
+/**
+ * Tell the image model what the attached brand examples are (ADR-0048). The
+ * learned style's examples come first among the visual references; a person's
+ * own picked pictures lead instead and keep their own instruction.
+ */
+function withStyleReferences(
+  look: ImageStyleInput | null,
+  taste: VisualSnapshot | null,
+  supplied: number,
+): ImageStyleInput | null {
+  if (!look || !taste || supplied) return look;
+  const count = taste.references.filter(
+    (r) => r.purpose === "style" || r.purpose === "inspiration",
+  ).length;
+  if (!count) return look;
+  const adherence = taste.direction.adherence ?? "light";
+  return {
+    ...look,
+    references: {
+      count,
+      strength: adherence === "strict" ? "exact" : adherence === "close" ? "close" : "world",
+    },
+  };
+}
+
 function imagePrompt(args: {
   body: string;
   title: string;
@@ -1338,6 +1378,73 @@ async function recentMotionLayouts(client: Db, workspaceId: string): Promise<str
     .filter((layout): layout is string => typeof layout === "string");
 }
 
+/** Said to the video model when the person didn't ask for the logo. */
+const NO_VIDEO_LOGO =
+  "No logo, badge or watermark in any corner of the video, and none added. The product's own printed label stays as it is.";
+
+/** Where the brand's posts carry the code-placed logo, or null when they carry none. */
+function postBadgeCorner(
+  ctx: StudioContext,
+  brand: { logoUrl?: string | null } | null | undefined,
+): LogoCorner | null {
+  const look = ctx.style ? imageStyleInput(ctx.style) : null;
+  if (look?.useLogo === false || !brand?.logoUrl?.trim()) return null;
+  return look?.logoCorner ?? "bottom-right";
+}
+
+/**
+ * The first frame of a video made from a post: recreated at the video's
+ * shape and checked (openingFrameForVideo), saved and signed. `url` is null
+ * when the recreation failed its checks and the post should lead as a
+ * reference instead, unless `wholeIfNotRecreated` asks for the post shown
+ * whole on the video's canvas.
+ */
+async function prepareOpeningFrame(a: {
+  client: Db;
+  job: JobRow;
+  path: string;
+  url: string;
+  ratio: string;
+  brandName: string;
+  keepLogo: boolean;
+  badgeCorner: LogoCorner | null;
+  wholeIfNotRecreated?: boolean;
+}): Promise<{ path: string | null; url: string | null }> {
+  const downloaded = await downloadAssetObject(a.client, a.path);
+  if (downloaded.error || !downloaded.data)
+    throw new StudioJobError(503, "Could not open the post's picture. Try again.");
+  const picture = Buffer.from(await downloaded.data.arrayBuffer());
+  const opening = await openingFrameForVideo({
+    picture,
+    pictureUrl: a.url,
+    ratio: a.ratio,
+    brandName: a.brandName,
+    keepLogo: a.keepLogo,
+    badgeCorner: a.badgeCorner,
+  });
+  const frame =
+    opening.frame ?? (a.wholeIfNotRecreated ? await frameForVideo(picture, a.ratio) : null);
+  if (!frame) return { path: null, url: null };
+  const saved = await persistAsset({
+    workspaceId: a.job.workspace_id,
+    idempotencyKey: `video-first-frame:${a.job.id}:${a.job.attempt}`,
+    bytes: frame,
+    assetType: "image",
+    mimeType: "image/jpeg",
+    metadata: {
+      source: "video_first_frame",
+      job_id: a.job.id,
+      opening_fit: opening.frame ? opening.fit : "whole",
+      ...(opening.note ? { opening_note: opening.note.slice(0, 300) } : {}),
+    },
+  });
+  if (!saved.ok || !saved.asset.storage_path)
+    throw new StudioJobError(503, "Could not prepare the post's picture. Try again.");
+  const url = await signAssetPath(saved.asset.storage_path, 6 * 3600);
+  if (!url) throw new StudioJobError(503, "Could not prepare the post's picture.");
+  return { path: saved.asset.storage_path, url };
+}
+
 async function startStoryboardVideo(a: {
   client: Db;
   job: JobRow;
@@ -1352,6 +1459,8 @@ async function startStoryboardVideo(a: {
   supplied: { url: string; storagePath: string }[];
   approved: string[];
   notes: (string | undefined)[];
+  /** The corner a code-placed logo usually sits in on the brand's posts, if it has a logo. */
+  postBadgeCorner?: LogoCorner | null;
 }): Promise<ProviderTask> {
   const { job, input, ctx, plan } = a;
   const kind = videoKind(plan.kind);
@@ -1370,7 +1479,33 @@ async function startStoryboardVideo(a: {
     (opensOnChosenPhoto(plan.kind, input.controls) ? a.supplied[0]?.storagePath : null);
   let firstFramePath: string | undefined;
   let firstFrameUrl: string | null = null;
-  if (picturePath) {
+  // A post recreated at the video's shape failed its checks: it leads as a
+  // reference instead, so the video fills the screen rather than sit on bars.
+  let postReferenceUrl: string | null = null;
+  const keepLogo = wantsLogoInVideo(input.intent.brief);
+  if (picturePath && a.sourceImagePath) {
+    // A post: recreated at the video's shape (badge cleared unless asked for)
+    // and checked before any video is paid for.
+    const postUrl = await signAssetPath(a.sourceImagePath, 6 * 3600);
+    if (!postUrl) throw new StudioJobError(503, "Could not open the post's picture. Try again.");
+    const opening = await prepareOpeningFrame({
+      client: a.client,
+      job,
+      path: a.sourceImagePath,
+      url: postUrl,
+      ratio: a.ratio,
+      brandName: ctx.brandName,
+      keepLogo,
+      badgeCorner: a.postBadgeCorner ?? null,
+      // A living picture is that picture: it must open on it, whole if need be.
+      wholeIfNotRecreated: plan.kind === "living-picture",
+    });
+    firstFramePath = opening.path ?? undefined;
+    firstFrameUrl = opening.url;
+    if (!opening.url) postReferenceUrl = postUrl;
+  } else if (picturePath) {
+    // The person's own photo is never redrawn: a thin edge is zoomed off, any
+    // other shape is shown whole.
     const downloaded = await downloadAssetObject(a.client, picturePath);
     if (downloaded.error || !downloaded.data)
       throw new StudioJobError(503, "Could not open the post's picture. Try again.");
@@ -1416,7 +1551,13 @@ async function startStoryboardVideo(a: {
     lastFrameUrl = await signAssetPath(lastFramePath, 6 * 3600);
     if (!lastFrameUrl) throw new StudioJobError(503, "Could not prepare the end frame.");
   }
-  const lead = firstFrameUrl ? [firstFrameUrl] : a.referenceUrl ? [a.referenceUrl] : [];
+  const lead = firstFrameUrl
+    ? [firstFrameUrl]
+    : postReferenceUrl
+      ? [postReferenceUrl]
+      : a.referenceUrl
+        ? [a.referenceUrl]
+        : [];
   // A living picture keeps to its picture alone; a video from a post adds
   // only the person's own photos; anything else also gets the brand's
   // approved style references.
@@ -1426,6 +1567,10 @@ async function startStoryboardVideo(a: {
       : a.sourceImagePath
         ? a.supplied.map((reference) => reference.url)
         : a.approved;
+  // The post as a reference (not the first frame): say so, and fill the frame.
+  const postLeadNote = postReferenceUrl
+    ? "The first image is the brand's post: keep its product, colours and look, made as a full-screen video at this shape. Fill the whole frame; no bars, borders or a picture inside a picture."
+    : "";
   const imageUrls = [...new Set([...lead, ...rest])].slice(0, 4);
   const own = new Set([...lead, ...a.supplied.map((reference) => reference.url)]);
   const styleReferenceCount = imageUrls.filter((url) => !own.has(url)).length;
@@ -1438,6 +1583,8 @@ async function startStoryboardVideo(a: {
     ctx.visualTaste?.rules ?? ctx.visualFeedbackRules ?? "",
     ...a.notes,
     lastFrameUrl ? END_FRAME_NOTE : "",
+    postLeadNote,
+    keepLogo ? "" : NO_VIDEO_LOGO,
   ].filter((note): note is string => !!note);
   const script = input.intent.sourceScript;
   const total = clips.reduce((sum, clip) => sum + clip.seconds, 0);
@@ -1466,6 +1613,7 @@ async function startStoryboardVideo(a: {
       ratio: a.ratio,
       chained,
       fromPicture: !!firstFrameUrl,
+      keepLogo,
       productPhoto: !!input.controls.productId && a.supplied.length > 0,
       audio,
       people: plan.people,
@@ -1640,7 +1788,11 @@ async function startMedia(args: {
     if (videoMode !== "motion" && !isClipEditEnabled(job.workspace_id))
       throw new StudioJobError(404, "Making videos from your own clips isn't available here.");
     const look = ctx.style ? imageStyleInput(ctx.style) : null;
-    const logoUrl = look?.useLogo === false ? null : brand?.logoUrl?.trim() || null;
+    // A video carries the logo only when the person asks for it.
+    const logoUrl =
+      look?.useLogo === false || !wantsLogoInVideo(input.intent.brief)
+        ? null
+        : brand?.logoUrl?.trim() || null;
     const motion = videoMode === "recap" ? (input.controls.recapMotion ?? "camera") : undefined;
     const tasks: ProviderTask[] = [];
     if (motion === "ai") {
@@ -1842,32 +1994,57 @@ ${ctx.brandText}`,
           supplied: suppliedReferences,
           approved: approvedReferences,
           notes: [refineNote, input.intent.sourceScript ? undefined : noveltyNote],
+          postBadgeCorner: postBadgeCorner(ctx, brand),
         }),
       ];
     // The shot plan written in the brief stage drives the render; the user's
     // own brief is the fallback if that stage produced nothing.
     const concept = output.concept?.trim() || input.intent.brief;
-    // A video made from a finished post opens on that post's own picture. The
-    // person may also have attached it as a reference; it is sent once.
-    const sourceImage = args.sourceImagePath
+    // A video made from a finished post opens on that post's own picture,
+    // made the video's shape first (a square post never sits on bars in a
+    // Reel). The person may also have attached it as a reference; it is sent once.
+    const postImage = args.sourceImagePath
       ? (suppliedReferences.find((reference) => reference.storagePath === args.sourceImagePath)
           ?.url ?? (await signAssetPath(args.sourceImagePath)))
       : null;
-    if (args.sourceImagePath && !sourceImage)
+    if (args.sourceImagePath && !postImage)
       throw new StudioJobError(503, "Could not open the post's picture. Try again.");
+    const opening =
+      args.sourceImagePath && postImage
+        ? await prepareOpeningFrame({
+            client: args.client,
+            job,
+            path: args.sourceImagePath,
+            url: postImage,
+            ratio,
+            brandName: ctx.brandName,
+            keepLogo: wantsLogoInVideo(input.intent.brief),
+            badgeCorner: postBadgeCorner(ctx, brand),
+          })
+        : null;
+    // A recreation that failed its checks leads as a reference instead.
+    const sourceImage = opening?.url ?? null;
+    const postReference = opening && !opening.url ? postImage : null;
     const lead = [
       ...(sourceImage ? [sourceImage] : []),
+      ...(postReference ? [postReference] : []),
       ...(args.referenceUrl ? [args.referenceUrl] : []),
     ];
     // Animating a picture keeps to that picture: the brand's other style
     // references would pull the first frame away from it.
     const videoRefs = withReferences(
       lead,
-      sourceImage ? suppliedReferences.map((reference) => reference.url) : approvedReferences,
+      sourceImage || postReference
+        ? suppliedReferences.map((reference) => reference.url)
+        : approvedReferences,
     );
     const full = videoPrompt(
       [
         sourceImage ? animateImageDirection(seconds) : null,
+        postReference
+          ? "The first image is the brand's post: keep its product, colours and look, made as a full-screen video at this shape. Fill the whole frame; no bars, borders or a picture inside a picture."
+          : null,
+        sourceImage && !wantsLogoInVideo(input.intent.brief) ? NO_VIDEO_LOGO : null,
         input.intent.sourceScript
           ? sourceScriptDirection(
               input.intent.sourceScript,
@@ -2066,8 +2243,47 @@ ${ctx.brandText}`,
       : input.controls.referenceMode === "inspire" && suppliedReferences.length
         ? "The supplied images are visual inspiration for a new composition; do not copy their text or present the result as the original photo."
         : undefined;
-  const look = ctx.style ? imageStyleInput(ctx.style) : null;
+  const styledLook = withStyleReferences(
+    ctx.style ? imageStyleInput(ctx.style) : null,
+    output.visualTaste ?? null,
+    suppliedReferences.length,
+  );
+  // Not every post carries the logo (ADR-0048): the brand's own habit decides,
+  // the same way on every retry of this piece.
+  const look =
+    styledLook && !bibleWantsLogo(output.visualTaste?.direction, job.id)
+      ? { ...styledLook, useLogo: false }
+      : styledLook;
   const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
+  // The check before the image model is called (brief-visual.ts, free): a
+  // scene always exists (the writer's, else the brief's picture idea), the
+  // headline is a short banner line, and no caption sentence is drawn.
+  const picture =
+    (job.type === "image" || job.type === "social") && output.memeMode !== "classic"
+      ? (() => {
+          const caption = output.variants?.[0]?.body ?? "";
+          const topic =
+            postTopic({ title: output.title, caption }) || input.intent.brief.slice(0, 140);
+          const checked = preflightPictureBrief({
+            scene: concept,
+            purpose: (output as StudioJobOutput & { picturePurpose?: string }).picturePurpose,
+            job: pictureJobFor({
+              category: resolveCategory(input.intent),
+              goal: input.intent.goal,
+            }),
+            briefIdea: briefVisualIdea(input.intent.brief, job.type),
+            headline: output.onImageText,
+            caption,
+            topic,
+            // A brand that puts more words on its posts gets a longer headline.
+            maxWords: wantsSupportingLines(output.visualTaste?.direction, input.controls.campaign)
+              ? Math.min(look?.maxWords ?? 9, 9)
+              : Math.min(look?.maxWords ?? 6, 6),
+          });
+          if (checked.notes.length) console.info("[studio] picture brief", job.id, checked.notes);
+          return { ...checked, topic };
+        })()
+      : null;
   const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   const logoAt = logoUrl ? (look?.logoCorner ?? logoCorner(builderSize)) : null;
   // A catalogue product's single picture: the product cut out of its own
@@ -2272,13 +2488,10 @@ ${ctx.brandText}`,
         novelty: noveltyNote,
       })
     : imagePrompt({
-        // An image post's brief wrote a scene: it is drawn as the scene, and
-        // the post's own words are the message (they used to be swapped).
-        body:
-          job.type === "image" && concept
-            ? (output.variants?.[0]?.body ?? input.intent.brief)
-            : body,
-        scene: job.type === "image" ? concept : null,
+        // A picture post (and a post with a picture) is drawn from its scene;
+        // the caption only gives the topic and is never set in the picture.
+        body: picture ? picture.topic : body,
+        scene: picture?.scene ?? null,
         category: resolveCategory(input.intent),
         memeLayout: job.type === "image" ? output.memeLayout : null,
         onImageLines: job.type === "image" ? output.onImageLines : null,
@@ -2303,7 +2516,7 @@ ${ctx.brandText}`,
         artDirection: archetypeById(output.artDirection)?.id ?? null,
         avoidArtDirections: input.refine ? [] : recentLayouts(ctx.recent),
         noText: compose,
-        onImageText: job.type === "image" ? output.onImageText : null,
+        onImageText: picture ? picture.headline : null,
       });
   // More versions of the same piece: one task per version, each told how to
   // differ. They are saved without touching the post until a person picks one.
@@ -3533,7 +3746,20 @@ async function shapeOutput(args: {
   switch (type) {
     case "social": {
       const { variants } = finalizeVariants(platforms, parsed as never);
-      return { title, variants };
+      // The picture written with the caption (only asked for when there is one).
+      const picture = parsed.picture as
+        { purpose?: string; scene?: string; headline?: string } | undefined;
+      return {
+        title,
+        variants,
+        ...(input.controls.includeImage && picture?.scene?.trim()
+          ? ({
+              concept: picture.scene.trim(),
+              onImageText: (picture.headline ?? "").trim(),
+              picturePurpose: (picture.purpose ?? "").trim(),
+            } as object)
+          : {}),
+      };
     }
     case "carousel": {
       const caption = String(parsed.caption ?? "");
@@ -3677,6 +3903,8 @@ async function shapeOutput(args: {
             ? { artDirection: archetypeById(parsed.artDirection)!.id }
             : {}),
           onImageText: String(parsed.onImageText ?? "").trim(),
+          // Who the picture is for and what it must do (not shown).
+          picturePurpose: String(parsed.strategy ?? "").trim(),
           // A meme on a real template (ADR-0047): its id, how it is made and its words.
           ...(memeTemplate(parsed.memeFormat) &&
           ["classic", "remix"].includes(readMemeMode(parsed.memeMode) ?? "") &&
@@ -3698,7 +3926,16 @@ async function shapeOutput(args: {
                     .filter(Boolean)
                     .slice(0, memeLayout(parsed.memeLayout)!.lines.length),
                 }
-              : {}),
+              : // A rich-text brand's supporting lines (eyebrow, body, items, button), typeset verbatim.
+                Array.isArray(parsed.onImageLines) &&
+                  wantsSupportingLines(ctx.visualTaste?.direction, input.controls.campaign)
+                ? {
+                    onImageLines: (parsed.onImageLines as unknown[])
+                      .map((line) => String(line ?? "").trim())
+                      .filter((line) => /^(eyebrow|body|item|button):\s*\S/i.test(line))
+                      .slice(0, 7),
+                  }
+                : {}),
           altText: String(parsed.altText ?? ""),
         } as object),
         ...(planned ? { videoPlan: planned.videoPlan } : {}),
@@ -3945,6 +4182,7 @@ async function finishStoryboardVideo(
     storyboard: plan.storyboard,
     audio: requiresSourceAudio({ requested: video.audio, soundtrackAvailable }),
     reference,
+    logoWanted: wantsLogoInVideo(row.input?.intent?.brief),
   });
   const warnings: string[] = [];
   // The frames the checker saw are kept for staff, never shown as the piece.
@@ -4741,8 +4979,11 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         });
         finalImage = `data:image/jpeg;base64,${composed.toString("base64")}`;
       }
-      if (row.output?.visualTaste && finalImage && task.kind === "image" && task.logo)
-        finalImage = await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner);
+      if (row.output?.visualTaste && finalImage && task.kind === "image" && task.logo) {
+        const placed = await placeBrandLogo(finalImage, task.logo.url, task.logo.corner);
+        finalImage = placed.dataUrl;
+        if (placed.placement?.skipped) warnings.push(LOGO_LEFT_OFF_NOTE);
+      }
       // A storyboard frame is a preview, never published: no vision review.
       const boardFrame = isBoardSlot(task.slot) || row.output?.storyboard?.status === "preview";
       // What the picture must do decides how it is judged (meme, sale, design).
@@ -4771,12 +5012,28 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
                         ? `Exact words: ${task.photoDesign.plan.copy.map((line) => JSON.stringify(line.text)).join(", ")}`
                         : "No words are expected on it.",
                     ]
-                  : [
-                      row.title,
-                      row.output?.concept,
-                      task.prompt.slice(-1900),
-                      task.prompt.slice(0, 350),
-                    ]
+                  : row.type === "image" || row.type === "social"
+                    ? // A post's picture is judged on its topic and its own
+                      // banner words, never on the caption.
+                      [
+                        `Post topic (the picture must clearly be about this): ${postTopic({ title: row.output?.title ?? row.title, caption: row.output?.variants?.[0]?.body })}`,
+                        `Scene asked for: ${(row.output?.concept ?? "").slice(0, 900)}`,
+                        row.output?.onImageText
+                          ? `Exact words: ${JSON.stringify(row.output.onImageText)}. No other words.`
+                          : "No words are expected on it. Flag any caption-like sentence or paragraph drawn in it as extra text.",
+                        `${
+                          pictureJobFor({
+                            category: resolveCategory(row.input?.intent ?? {}),
+                            goal: row.input?.intent?.goal,
+                          }).review
+                        } Clean and professional, little text. Flag the picture as off-topic if it shows something unrelated to the post topic.`,
+                      ]
+                    : [
+                        row.title,
+                        row.output?.concept,
+                        task.prompt.slice(-1900),
+                        task.prompt.slice(0, 350),
+                      ]
               )
                 .filter(Boolean)
                 .join("\n"),
@@ -4885,10 +5142,14 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         warnings.push(...imageReview.issues.map((issue) => `Visual review: ${issue}`));
       if (task.kind === "image" && !imageReview && !boardFrame)
         warnings.push("Visual review was unavailable. Check this artwork before publishing.");
-      const savedImage =
-        !row.output?.visualTaste && finalImage && task.kind === "image" && task.logo
-          ? await overlayBrandLogo(finalImage, task.logo.url, task.logo.corner)
-          : finalImage;
+      // The logo goes in a corner that is clear of words and the product
+      // (measured, pickLogoCorner); with no clear corner it is left off.
+      let savedImage = finalImage;
+      if (!row.output?.visualTaste && finalImage && task.kind === "image" && task.logo) {
+        const placed = await placeBrandLogo(finalImage, task.logo.url, task.logo.corner);
+        savedImage = placed.dataUrl;
+        if (placed.placement?.skipped) warnings.push(LOGO_LEFT_OFF_NOTE);
+      }
       const persisted = await persistAsset({
         workspaceId: row.workspace_id,
         idempotencyKey: `studio:${row.id}:${task.slot}:${task.taskId}`,

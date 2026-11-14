@@ -23,6 +23,14 @@ const HARD = [
   /(extra|missing|fused|deformed|malformed) (finger|hand|limb|arm|leg|eye)s?|deformed|malformed/i,
   /fake (logo|brand)|invented (logo|brand|badge|claim|price|offer)/i,
   /blank|empty (image|picture|canvas)|corrupt/i,
+  // Elements on top of each other: a logo or badge over the headline, words
+  // over the product, a headline cut at the edge.
+  /\b(logo|badge|watermark|text|words?|headline|caption|title)\b[^.]{0,50}\b(overlap|overlaps|overlapping|collid\w*|clash\w*|runs? into|cover(s|ing)? (the )?(text|words|headline|product|logo))|\b(text|words?|headline|title)\b[^.]{0,30}\b(cut off|cropped|clipped) (at|by) (the )?edge/i,
+  // A picture in another medium or world than the brand's learned style
+  // (ADR-0048): the reviewer says "off-style" only for a clear departure.
+  /\boff[- ]style\b/i,
+  // A picture about something else than the post can't go out with it.
+  /off[- ]topic|unrelated to the (post|topic|brief|message)|(does not|doesn't|fails to) (show|match|reflect) the (post|topic|brief)/i,
 ];
 
 /** The issues that justify one automatic re-render (all others stay notes). */
@@ -43,6 +51,7 @@ export const RUBRIC_KEYS = [
   "craft",
   "joke",
   "offer",
+  "style",
 ] as const;
 export type RubricKey = (typeof RUBRIC_KEYS)[number];
 export type RubricScores = Partial<Record<RubricKey, number>>;
@@ -58,18 +67,24 @@ export const RUBRIC_LINES: Record<RubricKey, string> = {
   joke: "joke: the meme reads in two seconds, the picture supports the punchline, the text sits where this format puts it",
   offer:
     "offer: the offer, who it is for and the action are clear in the first glance, with the action visible",
+  style:
+    "style: painted in the brand's own world from its examples and style bible: same medium, rendering, palette, lighting and type treatment (composition may differ)",
 };
 
 /** The dimensions each kind is judged on, with their weights. */
+// `style` is only asked for (and so only counted) when the brand has a learned
+// style with examples; creativeScore skips a dimension that wasn't scored.
 const WEIGHTS: Record<ReviewKind, Partial<Record<RubricKey, number>>> = {
-  designed: { brief: 2, hierarchy: 2, legibility: 1.5, brand: 1.5, craft: 2 },
-  native: { brief: 2, legibility: 1, brand: 1, craft: 2 },
-  meme: { brief: 1, legibility: 2, craft: 1, joke: 3 },
-  sales: { brief: 1.5, hierarchy: 2, legibility: 2, brand: 1, craft: 1.5, offer: 3 },
+  designed: { brief: 2, hierarchy: 2, legibility: 1.5, brand: 1.5, craft: 2, style: 2 },
+  native: { brief: 2, legibility: 1, brand: 1, craft: 2, style: 1 },
+  meme: { brief: 1, legibility: 2, craft: 1, joke: 3, style: 0.5 },
+  sales: { brief: 1.5, hierarchy: 2, legibility: 2, brand: 1, craft: 1.5, offer: 3, style: 1.5 },
 };
 
-export function rubricFor(kind: ReviewKind): RubricKey[] {
-  return RUBRIC_KEYS.filter((key) => WEIGHTS[kind][key] !== undefined);
+export function rubricFor(kind: ReviewKind, opts: { style?: boolean } = {}): RubricKey[] {
+  return RUBRIC_KEYS.filter(
+    (key) => WEIGHTS[kind][key] !== undefined && (key !== "style" || !!opts.style),
+  );
 }
 
 /** Pick the kind from what the piece is (category register, its group, the format). */

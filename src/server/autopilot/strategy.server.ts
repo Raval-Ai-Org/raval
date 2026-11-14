@@ -21,6 +21,7 @@ import { isStoryPlatform } from "@/lib/stories/placement";
 import { isValidTimeZone } from "@/lib/autopilot/time";
 import { isFullAutopilotEnabled } from "@/lib/feature-flags";
 import { toAutopilotGoal } from "@/lib/goals/decide";
+import { autopilotModeFor, weekdaysForRhythm } from "@/lib/onboarding/answers";
 import { readGoals } from "@/server/goals/service.server";
 import type { PlatformId } from "@/lib/social-platforms";
 import { runWithScope } from "@/server/request-context";
@@ -156,6 +157,8 @@ export async function suggestStrategy(args: {
         : ["linkedin"]
   ) as PlatformId[];
   const postsPerWeek = goals?.postsPerWeek ?? 5;
+  // What the person said in onboarding (ADR-0049): who approves, and how often.
+  const profile = (ctx.brand as { profile?: { approval?: string } } | null)?.profile;
   if (goals && !confirmed) goal = toAutopilotGoal(goals.focus);
   // A daily Story when an Instagram or Facebook account is connected: it's
   // where Stories live, and one a day is the habit that works.
@@ -174,13 +177,13 @@ export async function suggestStrategy(args: {
   const settings: ProgramSettings = {
     // Set up once and it runs: fully automatic where that is allowed. Its
     // checks still hold anything unsure for a person.
-    mode: isFullAutopilotEnabled(workspaceId) ? "full" : "autopilot",
+    mode: autopilotModeFor(profile?.approval, isFullAutopilotEnabled(workspaceId)),
     goal,
     goalNote: "",
     platforms,
     contentTypes: [...contentTypes],
     postsPerWeek,
-    weekdays: [1, 2, 3, 4, 5],
+    weekdays: goals ? weekdaysForRhythm(postsPerWeek) : [1, 2, 3, 4, 5],
     timezone: isValidTimeZone(args.timezone) ? args.timezone : "UTC",
     weeks: 52,
     creditCapPerWeek: Math.ceil((estimate * 1.5) / 10) * 10,

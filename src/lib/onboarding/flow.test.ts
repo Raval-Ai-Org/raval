@@ -1,28 +1,54 @@
 import { describe, expect, it } from "vitest";
-import { blockedReason, indicatorIndex, nextStep, previousStep, type FlowState } from "./flow";
+import {
+  blockedReason,
+  nextStep,
+  previousStep,
+  progressOf,
+  screensLeft,
+  type FlowState,
+} from "./flow";
 
-const site: FlowState = { mode: "site", scan: "loading", goalsSaved: true, activeProducts: 0 };
+const site: FlowState = {
+  mode: "site",
+  scan: "loading",
+  goalsSaved: true,
+  activeProducts: 0,
+  audienceOptions: 3,
+};
 
 describe("nextStep", () => {
-  it("asks the goal while the scan runs, then waits for it", () => {
-    expect(nextStep("website", site)).toBe("goals");
-    expect(nextStep("goals", site)).toBe("scan");
-    expect(nextStep("goals", { ...site, scan: "ok" })).toBe("review");
-    expect(nextStep("review", site)).toBe("language");
-    expect(nextStep("language", site)).toBe("products");
+  it("asks the questions while the scan runs, then waits for it", () => {
+    expect(nextStep("website", site)).toBe("ask");
+    expect(nextStep("ask", site)).toBe("scan");
+    expect(nextStep("ask", { ...site, scan: "ok" })).toBe("review");
+    expect(nextStep("review", site)).toBe("audience");
+    expect(nextStep("audience", site)).toBe("products");
+    expect(nextStep("products", site)).toBe("language");
+    expect(nextStep("language", site)).toBe("connect");
+    expect(nextStep("connect", site)).toBe("first");
+  });
+
+  it("skips the audience question when the scan offered no groups", () => {
+    const none = { ...site, audienceOptions: 0 };
+    expect(nextStep("review", none)).toBe("products");
+    expect(previousStep("products", none)).toBe("review");
   });
 
   it("skips the scan without a website", () => {
     const manual: FlowState = { ...site, mode: "manual" };
     expect(nextStep("website", manual)).toBe("manual");
-    expect(nextStep("goals", manual)).toBe("language");
-    expect(previousStep("language", manual)).toBe("goals");
+    expect(nextStep("manual", manual)).toBe("ask");
+    expect(nextStep("ask", manual)).toBe("products");
+    expect(previousStep("products", manual)).toBe("ask");
+    expect(previousStep("ask", manual)).toBe("manual");
   });
 
-  it("asks the language before products, and goes back to it", () => {
-    expect(previousStep("language", site)).toBe("review");
-    expect(previousStep("products", site)).toBe("language");
-    expect(blockedReason("language", site)).toBeNull();
+  it("goes back one step at a time", () => {
+    expect(previousStep("ask", site)).toBe("website");
+    expect(previousStep("review", site)).toBe("ask");
+    expect(previousStep("language", site)).toBe("products");
+    expect(previousStep("connect", site)).toBe("language");
+    expect(previousStep("first", site)).toBe("connect");
   });
 });
 
@@ -32,13 +58,31 @@ describe("gates", () => {
     expect(blockedReason("products", { ...site, activeProducts: 1 })).toBeNull();
   });
 
-  it("needs a goal", () => {
-    expect(blockedReason("goals", { ...site, goalsSaved: false })).not.toBeNull();
+  it("needs a goal before leaving the questions", () => {
+    expect(blockedReason("ask", { ...site, goalsSaved: false })).not.toBeNull();
+    expect(blockedReason("ask", site)).toBeNull();
+  });
+});
+
+describe("progress", () => {
+  it("only moves forward through the flow", () => {
+    const ask = { index: 0, count: 15 };
+    const order = [
+      progressOf("website", ask, "site"),
+      progressOf("ask", { index: 0, count: 15 }, "site"),
+      progressOf("ask", { index: 14, count: 15 }, "site"),
+      progressOf("review", ask, "site"),
+      progressOf("products", ask, "site"),
+      progressOf("first", ask, "site"),
+      progressOf("done", ask, "site"),
+    ];
+    for (let i = 1; i < order.length; i++) expect(order[i]).toBeGreaterThan(order[i - 1]);
+    expect(order.at(-1)).toBe(1);
   });
 
-  it("puts the scan under the goal step in the header", () => {
-    expect(indicatorIndex("site", "scan")).toBe(indicatorIndex("site", "goals"));
-    expect(indicatorIndex("site", "done")).toBe(7);
-    expect(indicatorIndex("site", "language")).toBe(3);
+  it("counts the screens still to come", () => {
+    const ask = { index: 3, count: 15 };
+    expect(screensLeft("ask", ask, site)).toBe(11 + 6);
+    expect(screensLeft("first", ask, site)).toBe(0);
   });
 });

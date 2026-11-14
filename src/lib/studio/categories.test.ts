@@ -71,6 +71,14 @@ describe("categories", () => {
     }
   });
 
+  it("Auto never makes a meme, for any goal or format", () => {
+    const goals = ["offer", "launch", "leads", "education", "engagement", "awareness"] as const;
+    for (const type of ["image", "carousel", "story", "social"] as const)
+      for (const goal of goals)
+        for (let i = 0; i < 30; i++)
+          expect(pickCategory({ type, goal, seed: `${type}${goal}${i}` }).id).not.toBe("meme");
+  });
+
   it("the picker lists only what a format can make", () => {
     for (const c of categoriesFor("image")) expect(c.formats).toContain("image");
   });

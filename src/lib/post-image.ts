@@ -464,7 +464,14 @@ export type ImageStyleInput = {
   composition?: string;
   mood?: string;
   /** Reference images attached to the request, and how closely to follow them. */
-  references?: { count: number; strength: "close" | "exact" };
+  references?: { count: number; strength: "world" | "close" | "exact" };
+};
+
+const SUPPORT_LABEL: Record<string, string> = {
+  eyebrow: "Eyebrow label",
+  body: "Supporting sentence",
+  item: "List item",
+  button: "Button",
 };
 
 const STYLE_NEVER =
@@ -493,7 +500,9 @@ function styleLead(style: ImageStyleInput): string[] {
       ? [
           refs.strength === "exact"
             ? `REFERENCE IMAGES (${refs.count} attached): these are the brand's own posts. Make this image look like the next post in that exact series: same layout grid, type treatment, palette, background, lighting, graphic elements and finish. Change only the subject and message for this post. Never copy their text.`
-            : `REFERENCE IMAGES (${refs.count} attached): the brand's own posts. A viewer should believe this image came from the same designer: match their layout, palette, background, lighting, type treatment and graphic elements. Create a NEW image for this post; never copy their subject or text.`,
+            : refs.strength === "world"
+              ? `REFERENCE IMAGES (the first ${refs.count} attached): the brand's own artwork. Paint this image in the same world: the same medium and rendering, palette, lighting, finish and type treatment, so it is unmistakably the same brand. Compose it freshly for this post's idea; never copy their subject, layout or text.`
+              : `REFERENCE IMAGES (${refs.count} attached): the brand's own posts. A viewer should believe this image came from the same designer: match their layout, palette, background, lighting, type treatment and graphic elements. Create a NEW image for this post; never copy their subject or text.`,
         ]
       : []),
   ];
@@ -502,7 +511,8 @@ function styleLead(style: ImageStyleInput): string[] {
 /** The layout line a style supplies, if any (its own words, else its examples). */
 function styleComposition(style: ImageStyleInput | null | undefined): string | null {
   if (style?.composition) return style.composition;
-  if (style?.references?.count) return "follow the layout of the attached reference images";
+  if (style?.references?.count && style.references.strength !== "world")
+    return "follow the layout of the attached reference images";
   return null;
 }
 
@@ -710,10 +720,25 @@ export function buildImagePromptDetailed(args: {
           .filter((l) => l.text.trim())
           .slice(0, meme.lines.length)
       : [];
+  // A rich-text brand's supporting lines arrive as "role: words" (ADR-0048).
+  const supporting =
+    !meme && allowText
+      ? (args.onImageLines ?? []).flatMap((line) => {
+          const m = /^(eyebrow|body|item|button):\s*(.+)$/i.exec(line.trim());
+          return m ? [{ label: SUPPORT_LABEL[m[1].toLowerCase()], text: m[2] }] : [];
+        })
+      : [];
+  const headlineFits = !!exactText && exactText.split(" ").length <= Math.max(maxWords, 1);
   const verbatim = memeLines.length
     ? verbatimTextBlock({ lines: memeLines })
-    : allowText && exactText && exactText.split(" ").length <= Math.max(maxWords, 1)
-      ? verbatimTextBlock({ lines: [{ label: "Headline", text: exactText }] })
+    : allowText && (headlineFits || supporting.length)
+      ? verbatimTextBlock({
+          lines: [
+            ...supporting.filter((l) => l.label === "Eyebrow label"),
+            ...(headlineFits ? [{ label: "Headline", text: exactText }] : []),
+            ...supporting.filter((l) => l.label !== "Eyebrow label"),
+          ],
+        })
       : [];
   const artDirectionLines = archetype
     ? archetypePromptLines(archetype, {
@@ -820,9 +845,9 @@ export function buildImagePromptDetailed(args: {
     doRules && `• Brand do's: ${doRules}`,
     "",
     scene
-      ? "POST MESSAGE — what the caption says (context only; the SCENE above is what to draw):"
-      : "POST MESSAGE — the visual must REINFORCE this message, not describe it literally:",
-    hook && `• Hook: "${hook}"`,
+      ? "TOPIC — what the post is about (context only; the SCENE above is what to draw). The caption is posted under the picture: never write it, or any sentence from it, on the image:"
+      : "POST MESSAGE — the visual must REINFORCE this message, not describe it literally. Never typeset this copy on the image:",
+    scene ? hook && `• ${hook}` : hook && `• Hook: "${hook}"`,
     scene ? "" : `• Draft copy: ${snippet}`,
     "",
     // With a written scene the strategy is already decided; its generic lines only add noise.
@@ -875,7 +900,8 @@ export function buildImagePromptDetailed(args: {
       : "• Absolutely NOT: stock-photo, clip-art, AI-generic collage, cliché 3D blobs, generic gradient mesh, purple-pink SaaS gradient, off-palette colors, low-resolution textures.",
     "",
     "TEXT ON IMAGE:",
-    ...(verbatim.length ? verbatim : [textRule(maxWords)]),
+    // A scene-led picture is a clean banner: its one headline, or no words.
+    ...(verbatim.length ? verbatim : scene ? [textRule(0)] : [textRule(maxWords)]),
     ...(native
       ? [
           "• Set the words the way Instagram posts set them (see MADE LIKE A REAL POST above), not in the brand's display type. Large, plain, perfectly spelled, legible at thumbnail size.",

@@ -32,6 +32,7 @@ export type DeliverableId =
   | "tips"
   | "feature-board"
   | "comparison"
+  | "mix-up"
   | "product-hero"
   | "brand-moment";
 
@@ -79,7 +80,7 @@ export const DELIVERABLES: readonly Deliverable[] = [
       "one strong visual concept for the theme with a calm, structured information block; date and time grouped together and clearly separated from the title",
     copy: "Title largest; date · time on one line; place on the next; action in a small pill.",
     neverInvent: `sponsors, speakers, ticket prices, venues, time zones, QR codes, or ${NO_FACTS}`,
-    prefer: ["portal-pop-out", "name-on-the-wall", "quiet-editorial", "pop-collage"],
+    prefer: ["portal-pop-out", "name-on-the-wall", "quiet-editorial", "pop-collage", "blob-event"],
   },
   {
     id: "hiring",
@@ -181,7 +182,13 @@ export const DELIVERABLES: readonly Deliverable[] = [
       "a dark, striking first frame with one bold visual of the brand's shape or colour cropped off two edges and the name set large in the lower left; later frames light and type-led",
     copy: "A short lead word, the name large, one small aside that promises what the reader gets; three type roles at most (statement, warm serif, small label).",
     neverInvent: `services, clients, awards, ratings, testimonials, figures, or ${NO_FACTS}`,
-    prefer: ["glossy-macro", "name-on-the-wall", "portrait-backdrop", "quiet-editorial"],
+    prefer: [
+      "glossy-macro",
+      "name-on-the-wall",
+      "portrait-backdrop",
+      "quiet-editorial",
+      "edge-word",
+    ],
   },
   {
     id: "humour",
@@ -217,7 +224,7 @@ export const DELIVERABLES: readonly Deliverable[] = [
       "type-led card: generous margins, one quiet texture or photograph in the background, quotation marks used once, lots of line spacing",
     copy: "The quote exactly as supplied, in an elegant readable face; attribution small below it.",
     neverInvent: `the quote, a name, a role, a company, a star rating, a portrait, or ${NO_FACTS}`,
-    prefer: ["quiet-editorial", "material-lettering", "double-exposure"],
+    prefer: ["quiet-editorial", "material-lettering", "double-exposure", "still-object"],
   },
   {
     id: "tips",
@@ -245,6 +252,18 @@ export const DELIVERABLES: readonly Deliverable[] = [
     prefer: ["callout-board", "exploded-view", "annotated-giant", "flat-lay-story"],
   },
   {
+    id: "mix-up",
+    name: "Two things people confuse",
+    signals:
+      /(≠|\bis not the same as\b|\bisn['’]t the same as\b|\bdoes(n['’]t| not) equal\b|\bnot equal\b|\bdoes(n['’]t| not) mean\b)/i,
+    readingOrder: "first the two ideas and the ≠ between them, then the one line that explains it",
+    layout:
+      "type-led equation centred on a calm metaphor image (balanced stones, a soft plant shadow): the first idea, a large ≠, the second idea",
+    copy: "The two ideas in two to four words each; the ≠ in the accent colour; any explanation belongs in the caption.",
+    neverInvent: `figures, results or ${NO_FACTS}`,
+    prefer: ["not-equal", "symbol-object", "literal-metaphor"],
+  },
+  {
     id: "comparison",
     name: "Comparison or before/after",
     signals:
@@ -264,7 +283,14 @@ export const DELIVERABLES: readonly Deliverable[] = [
       "the product large and accurate (60–75% of the frame), clean silhouette, honest materials, one surface or set that fits the brand; a backdrop tinted from the product's own colour with one contrasting accent; the product itself is in the scene, never a photo inside a frame or card",
     copy: "One short headline at most; the product's own label is the only other writing.",
     neverInvent: `label text, colourways, accessories, or ${NO_FACTS}`,
-    prefer: ["spotlight-noir", "hero-world", "monument-object", "material-swap", "benefit-list"],
+    prefer: [
+      "spotlight-noir",
+      "hero-world",
+      "monument-object",
+      "material-swap",
+      "benefit-list",
+      "named-hero-card",
+    ],
   },
   {
     id: "brand-moment",

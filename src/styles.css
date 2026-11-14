@@ -7323,3 +7323,271 @@ pre {
 :root[data-chat-motion="reduced"] .ap-flow-fill {
   animation-duration: 7s;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * One-question onboarding (ADR-0049) — `ob-*`
+ *   ob-root / ob-stage   the no-scroll shell; the stage is a size container
+ *   ob-wash / ob-orb     the soft Mox wash behind the questions
+ *   ob-card              a big answer card; ob-card-on when chosen
+ *   ob-glass             frosted pills (scan dock, Back, trail chips)
+ *   ob-title             one centred question line
+ * Motion is decoration only; every keyframe stops under reduced motion.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.ob-root {
+  --ob-card-bg: rgb(255 255 255 / 0.86);
+  --ob-card-border: rgb(15 23 20 / 0.07);
+}
+.dark .ob-root {
+  --ob-card-bg: rgb(28 32 31 / 0.82);
+  --ob-card-border: rgb(255 255 255 / 0.08);
+}
+.ob-stage {
+  container-type: size;
+  container-name: ob-stage;
+}
+.ob-wash {
+  background:
+    radial-gradient(55% 45% at 12% 105%, rgb(198 242 78 / 0.42), transparent 70%),
+    radial-gradient(45% 40% at 95% -5%, rgb(25 214 230 / 0.22), transparent 70%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.72), rgb(250 252 247 / 0.9));
+}
+.dark .ob-wash {
+  background:
+    radial-gradient(55% 45% at 12% 105%, rgb(124 194 26 / 0.22), transparent 70%),
+    radial-gradient(45% 40% at 95% -5%, rgb(14 127 110 / 0.24), transparent 70%),
+    linear-gradient(180deg, rgb(14 16 15 / 0.82), rgb(14 16 15 / 0.92));
+}
+.ob-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.45;
+  animation: ob-drift 18s ease-in-out infinite alternate;
+}
+.ob-orb-a {
+  width: 38vmax;
+  height: 38vmax;
+  left: -10vmax;
+  bottom: -14vmax;
+  background: radial-gradient(closest-side, #d9f53a, transparent);
+}
+.ob-orb-b {
+  width: 30vmax;
+  height: 30vmax;
+  right: -8vmax;
+  top: -10vmax;
+  background: radial-gradient(closest-side, #19d6e6, transparent);
+  animation-duration: 23s;
+  animation-direction: alternate-reverse;
+}
+@keyframes ob-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6vmax, -4vmax, 0) scale(1.15); }
+}
+
+.ob-title {
+  font-size: clamp(1.35rem, 3.4vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.ob-title-xl { font-size: clamp(1.5rem, 4.4vw, 2.75rem); }
+@container ob-stage (max-height: 420px) {
+  .ob-title { font-size: clamp(1.1rem, 2.6vw, 1.5rem); }
+}
+
+.ob-glass {
+  background: rgb(255 255 255 / 0.72);
+  border: 1px solid rgb(255 255 255 / 0.7);
+  box-shadow:
+    0 12px 32px -18px rgb(15 23 20 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.8);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+.dark .ob-glass {
+  background: rgb(28 32 31 / 0.7);
+  border-color: rgb(255 255 255 / 0.08);
+  box-shadow: 0 12px 32px -18px rgb(0 0 0 / 0.6);
+}
+.ob-glass-flash { box-shadow: 0 0 0 2px rgb(46 230 107 / 0.55), 0 12px 32px -18px rgb(15 23 20 / 0.35); }
+
+/* Answer cards: they size to the stage, never past it (no scrolling). */
+.ob-grid {
+  grid-template-columns: repeat(var(--pcols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--prows), minmax(0, 1fr));
+  max-width: min(100%, 1040px);
+  height: min(100%, calc(var(--prows) * 300px));
+}
+@container ob-stage (min-width: 720px) {
+  .ob-grid {
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
+    height: min(100%, calc(var(--rows) * 340px));
+  }
+}
+.ob-card {
+  background: var(--ob-card-bg);
+  border: 1px solid var(--ob-card-border);
+  box-shadow: 0 14px 34px -24px rgb(15 23 20 / 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.ob-card:hover { box-shadow: 0 22px 44px -24px rgb(15 23 20 / 0.45); }
+.ob-card:focus-visible { outline: 2px solid var(--mox-green); outline-offset: 3px; }
+.ob-card-on {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 2.5px var(--mox-green),
+    0 22px 48px -24px rgb(46 230 107 / 0.55);
+}
+.ob-card-sheen {
+  background: radial-gradient(120% 80% at 50% 120%, rgb(198 242 78 / 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.ob-card:hover .ob-card-sheen,
+.ob-card-on .ob-card-sheen { opacity: 1; }
+.ob-card-art {
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgb(244 248 238), rgb(236 243 228));
+}
+.dark .ob-card-art { background: linear-gradient(180deg, rgb(38 44 40), rgb(30 35 32)); }
+.ob-art-img { transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+.ob-card:hover .ob-art-img { transform: scale(1.05) translateY(-2px); }
+/* Short stages: the hint line goes, the cards keep their pictures. */
+@container ob-stage (max-height: 470px) {
+  .ob-card-hint { display: none; }
+}
+
+.ob-caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 2px;
+  vertical-align: -0.1em;
+  background: var(--mox-green);
+  animation: ob-blink 0.8s steps(1) infinite;
+}
+@keyframes ob-blink { 50% { opacity: 0; } }
+.ob-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(15 23 20 / 0.12);
+  background: rgb(255 255 255 / 0.8);
+  font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif;
+  box-shadow: 0 1px 0 rgb(15 23 20 / 0.12);
+}
+.ob-mox-idle { animation: ob-float 4.2s ease-in-out 0.8s infinite; }
+@keyframes ob-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(-1deg); }
+}
+.ob-team { animation: ob-pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.ob-day-on {
+  background: var(--mox-gradient);
+  animation: ob-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.ob-line { transform-origin: left; animation: ob-grow 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.ob-pop { animation: ob-pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes ob-pop-in {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes ob-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.ob-spark { animation: ob-spark 0.95s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes ob-spark {
+  0% { transform: translate(0, 0) rotate(0deg) scale(0.4); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--x), calc(var(--y) + 60px)) rotate(var(--r)) scale(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-orb, .ob-mox-idle, .ob-team, .ob-day-on, .ob-line, .ob-pop, .ob-spark, .ob-caret { animation: none; }
+  .ob-art-img { transition: none; }
+}
+
+/* ── Onboarding scenes: Mox in the picture, the content beside him ──────
+ * world-day has Mox on the left, world-finish on the right (`data-side`
+ * on the picture). Wide screens put the content on the other side; tall
+ * screens give Mox the top of the screen and the content the bottom. */
+.ob-scene-blur {
+  filter: blur(28px) saturate(1.1);
+  transform: scale(1.12);
+}
+.ob-scene-wrap { height: 100%; }
+.ob-scene-wrap[data-side="left"] .ob-scene { object-position: 18% 50%; }
+.ob-scene-wrap[data-side="right"] .ob-scene { object-position: 74% 50%; }
+.ob-scene-wrap[data-side="right"] .ob-scene-scrim {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.62) 0%, rgb(255 255 255 / 0.3) 36%, transparent 56%);
+}
+.ob-scene-wrap[data-side="left"] .ob-scene-scrim {
+  background: linear-gradient(270deg, rgb(255 255 255 / 0.5) 0%, rgb(255 255 255 / 0.18) 40%, transparent 60%);
+}
+.ob-scene-content {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: center;
+  color: var(--mox-ink);
+}
+.ob-scene-panel {
+  display: flex;
+  width: 100%;
+  max-width: 520px;
+  flex-direction: column;
+  align-items: center;
+}
+@media (min-aspect-ratio: 13/10) and (min-width: 820px) {
+  .ob-scene-content { justify-content: center; text-align: left; }
+  .ob-scene-content[data-side="left"] { align-items: flex-start; }
+  .ob-scene-content[data-side="right"] { align-items: flex-end; }
+  .ob-scene-panel { width: min(48%, 520px); align-items: flex-start; }
+}
+@media (max-aspect-ratio: 13/10), (max-width: 819px) {
+  [data-ob-stage][data-scene="world"] {
+    background: linear-gradient(180deg, #e6f4fb 0%, #eef8e6 56%, #f8fcf3 100%);
+  }
+  [data-ob-stage][data-scene="finish"] {
+    background: linear-gradient(180deg, #fde9cf 0%, #eef7e2 56%, #f8fcf3 100%);
+  }
+  .ob-scene-wrap {
+    height: 56%;
+    -webkit-mask-image: linear-gradient(180deg, #000 68%, transparent);
+    mask-image: linear-gradient(180deg, #000 68%, transparent);
+  }
+  .ob-scene-wrap[data-side="left"] .ob-scene { object-position: 22% 45%; }
+  .ob-scene-wrap[data-side="right"] .ob-scene { object-position: 68% 45%; }
+  .ob-scene-scrim { display: none; }
+}
+@media (max-height: 640px) {
+  .ob-hide-short { display: none; }
+}
+.dark [data-ob-stage][data-scene="world"] .ob-scene-content,
+.dark [data-ob-stage][data-scene="finish"] .ob-scene-content { color: var(--mox-ink); }
+/* The no-scroll stage sizes its pictures and single lines exactly: take back
+   the global narrow-screen rules (img height:auto, truncate wraps) here. */
+[data-ob-stage] img {
+  max-width: revert-layer;
+  height: revert-layer;
+}
+[data-ob-stage] .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+/* The Mox pictures sit on white; multiply melts that into the card's wash. */
+:root:not(.dark) .ob-card-art .ob-art-img { mix-blend-mode: multiply; }

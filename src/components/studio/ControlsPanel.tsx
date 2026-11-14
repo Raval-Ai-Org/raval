@@ -13,7 +13,8 @@ import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
 import { SourceClips } from "./SourceClips";
 import { canvasPickers } from "@/lib/studio/start";
-import { AdFormatPicker, AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
+import { AdFormatPicker, AdObjectivePicker } from "./ProductAndFormat";
+import { showsPostCanvas } from "./PostCanvasSettings";
 import { studioPriceLabel } from "@/lib/studio/billing";
 import { shortClipPlan } from "@/lib/studio/short-clip";
 import { needsStoryboard } from "@/lib/studio/video/board";
@@ -179,6 +180,7 @@ export function ControlsPanel({
   const onCanvas = showsVideoCanvas(session);
   const showRatio =
     !onCanvas &&
+    !showsPostCanvas(session) &&
     session.type !== "story" &&
     format.ratios.length > 0 &&
     (format.media !== "optional-image" || c.includeImage || session.type === "carousel");
@@ -259,9 +261,7 @@ export function ControlsPanel({
           />
         </div>
       ) : null}
-      {session.type === "story" ? (
-        <StoryControls controls={c} set={set} lengths={lengths} length={settled.durationSec} />
-      ) : null}
+      {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
 
       {format.media === "optional-image" && !storyVideo && !c.seamless ? (
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
@@ -290,17 +290,6 @@ export function ControlsPanel({
         <AdObjectivePicker value={c.adObjective} onChange={(adObjective) => set({ adObjective })} />
       )}
 
-      {!canvas.product &&
-        (["image", "video", "carousel", "story", "ad"].includes(session.type) ||
-          c.includeImage) && (
-          <ProductPicker
-            workspaceId={session.workspaceId}
-            type={session.type}
-            value={c.productId}
-            // "No product" also stops a product the brief names being picked.
-            onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
-          />
-        )}
       {session.type === "ad" && (
         <AdFormatPicker
           value={c.adFormat}
@@ -494,22 +483,6 @@ export function ControlsPanel({
               </div>
             ) : null}
 
-            {session.type === "carousel" ? (
-              <div>
-                <FieldLabel hint={`${c.slideCount ?? 6} slides`}>Slides</FieldLabel>
-                <input
-                  type="range"
-                  min={3}
-                  max={10}
-                  step={1}
-                  value={c.slideCount ?? 6}
-                  onChange={(e) => set({ slideCount: Number(e.target.value) })}
-                  aria-label="Number of slides"
-                  className="w-full accent-[hsl(var(--primary))]"
-                />
-              </div>
-            ) : null}
-
             {session.type === "video" && !ownFootage ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -604,63 +577,22 @@ export function ControlsPanel({
   );
 }
 
-/** What only a Story asks: designed frames or a video, how many, and what about. */
+/**
+ * What only a Story asks in the side panel: what it is about and who to tag.
+ * Frames or video, and how many, sit on the canvas (PostCanvasSettings).
+ */
 function StoryControls({
   controls: c,
   set,
-  lengths,
-  length,
 }: {
   controls: StudioControls;
   set: (patch: Partial<StudioControls>) => void;
-  /** Whole-clip lengths for a Story video (src/lib/studio/video/lengths.ts). */
-  lengths: number[];
-  length?: number;
 }) {
-  const video = c.storyMode === "video";
   const [mentions, setMentions] = useState((c.mentions ?? []).map((m) => `@${m}`).join(" "));
   return (
     <div className="space-y-4">
       <div>
-        <FieldLabel>Made of</FieldLabel>
-        <Segmented
-          label="Made of"
-          value={(video ? "video" : "frames") as "frames" | "video"}
-          onChange={(storyMode) =>
-            set({ storyMode, ...(storyMode === "video" ? { includeImage: false } : {}) })
-          }
-          options={[
-            { value: "frames", label: "Designed frames", hint: "Your brand look" },
-            { value: "video", label: "AI video", hint: "8s uses credits" },
-          ]}
-        />
-      </div>
-
-      {video ? (
-        <div>
-          <FieldLabel>Length</FieldLabel>
-          <Segmented
-            label="Length"
-            className="max-w-full flex-wrap"
-            value={length ?? lengths[0] ?? 8}
-            onChange={(durationSec) => set({ durationSec })}
-            options={(lengths.length ? lengths : [8]).map((v) => ({ value: v, label: `${v}s` }))}
-          />
-        </div>
-      ) : (
-        <div>
-          <FieldLabel hint="Each frame shows for about 5 seconds">Frames</FieldLabel>
-          <Segmented
-            label="Frames"
-            value={c.frameCount ?? 3}
-            onChange={(frameCount) => set({ frameCount })}
-            options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))}
-          />
-        </div>
-      )}
-
-      <div>
-        <FieldLabel hint="Optional">About</FieldLabel>
+        <FieldLabel hint="Optional">What the Story is about</FieldLabel>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="What the Story is about">
           {[
             { id: "", label: "Mellox picks" },
@@ -675,7 +607,7 @@ function StoryControls({
                 title={"detail" in t ? t.detail : "Picked to differ from your last Stories"}
                 onClick={() => set({ storyTheme: t.id || undefined })}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-[colors,transform] active:scale-95",
                   on
                     ? "border-primary-border bg-primary-surface text-foreground"
                     : "border-border bg-surface-3 text-muted-foreground hover:text-foreground",
@@ -686,6 +618,10 @@ function StoryControls({
             );
           })}
         </div>
+        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+          {getStoryTheme(c.storyTheme)?.detail ??
+            "Each frame says one new thing; Mellox picks a theme your last Stories didn't use."}
+        </p>
       </div>
 
       {c.platforms.includes("instagram") ? (

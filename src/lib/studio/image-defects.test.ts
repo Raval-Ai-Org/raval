@@ -84,3 +84,37 @@ describe("creative rubric", () => {
     expect(reviewKindOf({})).toBe("designed");
   });
 });
+
+describe("hardImageDefects: overlapping elements", () => {
+  it("treats a logo on the headline or words over the product as hard", () => {
+    const hard = [
+      "The logo overlaps the headline in the bottom-right corner.",
+      "Headline text runs into the product.",
+      "The badge is covering the text.",
+      "The headline is cut off at the edge.",
+    ];
+    expect(hardImageDefects(hard)).toEqual(hard);
+  });
+
+  it("does not catch plain layout notes", () => {
+    expect(hardImageDefects(["The text could be larger.", "The logo is small."])).toEqual([]);
+  });
+});
+
+describe("learned style (ADR-0048)", () => {
+  it("asks for the style score only when the brand has a learned style", async () => {
+    const { rubricFor } = await import("./image-defects");
+    expect(rubricFor("designed")).not.toContain("style");
+    expect(rubricFor("designed", { style: true })).toContain("style");
+  });
+  it("an off-style picture earns the one redo", async () => {
+    const { creativeRedo } = await import("./image-defects");
+    const decision = creativeRedo(
+      { issues: ["off-style: a photograph where the brand paints watercolour"] },
+      "designed",
+      0,
+    );
+    expect(decision).toMatchObject({ redo: true, reason: "hard" });
+    expect(creativeRedo({ issues: ["off-style: photo"] }, "designed", 1).redo).toBe(false);
+  });
+});

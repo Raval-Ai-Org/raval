@@ -244,7 +244,8 @@ export function ManualBrandStep(p: ManualBrandStepProps) {
             </motion.div>
           </AnimatePresence>
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+          {/* Pinned to the bottom of the stage, so Continue is always on screen. */}
+          <div className="ob-glass sticky bottom-0 z-10 mt-8 flex flex-wrap items-center justify-between gap-2 rounded-[26px] p-1.5">
             <button
               type="button"
               onClick={back}

@@ -79,16 +79,16 @@ export function UrlStep({
       <h1
         ref={headingRef}
         tabIndex={-1}
-        className="mt-4 max-w-xl text-[clamp(2.25rem,6vw,3.5rem)] font-semibold leading-[1.02] tracking-[-0.04em] outline-none"
+        className="mt-3 max-w-xl text-[clamp(1.75rem,4.6vw,2.9rem)] font-semibold leading-[1.04] tracking-[-0.035em] outline-none"
       >
         Let Mellox learn your brand.
       </h1>
-      <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-muted-foreground">
+      <p className="mt-3 max-w-lg text-[14.5px] leading-relaxed text-muted-foreground">
         Mellox learns your look, voice and audience from it.
       </p>
 
       <form
-        className="mt-8"
+        className="mt-6"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -142,12 +142,12 @@ export function UrlStep({
         </motion.div>
       </form>
 
-      <div className="mt-10">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <div className="mt-6">
+        <p className="ob-hide-short text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           What Mellox will learn
         </p>
         <motion.ul
-          className="mt-3 flex flex-wrap gap-2"
+          className="ob-hide-short mt-3 flex flex-wrap gap-2"
           variants={list}
           initial="hidden"
           animate="show"
@@ -163,7 +163,7 @@ export function UrlStep({
             </motion.li>
           ))}
         </motion.ul>
-        <p className="mt-6 text-[12px] text-muted-foreground">
+        <p className="ob-hide-short mt-5 text-[12px] text-muted-foreground">
           Public pages only. You'll review everything before it's saved.
         </p>
         {onNoWebsite && (

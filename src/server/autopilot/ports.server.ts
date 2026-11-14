@@ -50,6 +50,7 @@ import { runWithScope } from "@/server/request-context";
 import { scheduleForWorkspace } from "@/server/social/schedule.server";
 import { createBilledStudioJob } from "@/server/studio/billed.server";
 import { loadStudioContext } from "@/server/studio/context.server";
+import { lookTextFor } from "@/server/brand-look/resolve.server";
 import { trendsFor } from "@/lib/studio/trends";
 import type { PlatformId } from "@/lib/social-platforms";
 import { advanceStudioJob, getJobRow } from "@/server/studio/runner.server";
@@ -701,6 +702,12 @@ export const realPorts: AutopilotPorts = {
             role,
             input,
             autoProduct: "any",
+            // Now and then a piece shows the brand's own Inspo photos, unless
+            // its campaign already placed photos or clips on it.
+            ownMediaSeed:
+              campaign.referenceAssetIds || campaign.sourceVideoAssetIds
+                ? undefined
+                : `autopilot:${action.id}`,
           }),
       );
       const charged =
@@ -972,7 +979,12 @@ export const realPorts: AutopilotPorts = {
 
     async propose(input) {
       const { program } = input;
-      const ctx = await context(program.workspace_id);
+      const [ctx, voice] = await Promise.all([
+        context(program.workspace_id),
+        // How the brand writes (onboarding answers, Inspo voice), so each
+        // week's ideas already fit how it sounds. A free read.
+        lookTextFor(program.workspace_id, "social"),
+      ]);
       const extras = [
         ...ctx.upcoming
           .slice(0, 8)
@@ -993,7 +1005,12 @@ export const realPorts: AutopilotPorts = {
           llmJson<{ items?: unknown[] }>({
             route: "autopilot.plan",
             system: PLAN_SYSTEM,
-            user: planUser(input, ctx.brandText, extras, ctx.audience),
+            user: planUser(
+              input,
+              [ctx.brandText, voice].filter(Boolean).join("\n\n"),
+              extras,
+              ctx.audience,
+            ),
             maxTokens: 6_000,
             outputSchema: PLAN_SCHEMA as unknown as Record<string, unknown>,
             timeoutMs: 60_000,

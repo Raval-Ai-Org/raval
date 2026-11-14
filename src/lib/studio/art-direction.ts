@@ -42,7 +42,28 @@ export type ArchetypeId =
   | "portrait-backdrop"
   | "carved-relief"
   | "sculpted-backdrop"
-  | "annotated-giant";
+  | "annotated-giant"
+  // Round 6 (docs/studio/reference-study-2026-10.md): small-business posts.
+  | "not-equal"
+  | "still-object"
+  | "symbol-object"
+  | "line-engraving"
+  | "outcome-chips"
+  | "iso-panel"
+  | "heritage-ornament"
+  | "blob-event"
+  | "named-hero-card"
+  | "edge-word"
+  // Round 7 (reference study, November 2026): illustrated brand worlds.
+  | "illustrated-world-poster"
+  | "ui-in-scene"
+  | "orbiting-cards"
+  | "vista-metaphor"
+  // Round 8 (reference study, November 2026): designed graphic systems.
+  | "framed-system-slide"
+  | "service-hub"
+  | "icon-grid-card"
+  | "annotated-device";
 
 type Energy = "calm" | "bold" | "playful";
 
@@ -659,6 +680,320 @@ export const ARCHETYPES: readonly Archetype[] = [
     finish: "High-end product infographic meets commercial portrait: elegant, airy, uncluttered.",
     avoid:
       "more than three callouts, labels on the wrong part, invented features, a distorted label",
+  },
+  // ── Round 6: what small businesses' best-performing posts do ──
+  {
+    id: "not-equal",
+    name: "Not-equal poster",
+    summary:
+      "two things people mix up set as an equation with a large ≠ between them, centred over one calm metaphor image (balanced stones, a soft botanical shadow)",
+    formats: ["minimal-typography", "comparison", "educational-visual", "abstract-metaphorical"],
+    energy: ["calm"],
+    person: "none",
+    needsText: true,
+    onlyFor: "a myth, a mix-up, or two things people confuse",
+    scene: () =>
+      "A calm, airy set that quietly acts out the idea of balance or difference: two smooth stones balanced on a thin plank over still water, or the soft shadow of a plant falling across a pale wall. The image sits behind and below the words, low contrast, with the upper two thirds clear and calm.",
+    type: "The two ideas set as an equation, centred, stacked on three lines: the first idea, a large ≠ sign in the accent colour, the second idea. One typeface (a heavy grotesk, or a large editorial serif for a calm brand), sentence case, tight leading. Optionally one thin circular stroke in the accent colour loosely ringing the words. Nothing else.",
+    typeWithoutText:
+      "Keep the upper two thirds clear and evenly lit for an equation added later. No letters.",
+    light: "Soft, even daylight; long gentle shadows; nothing harsh.",
+    finish: "Thoughtful, editorial, very clean: the kind of post people save and forward.",
+    avoid: "any other symbol or arrow, a busy photo behind the words, more than two ideas",
+  },
+  {
+    id: "still-object",
+    name: "Still object",
+    summary:
+      "one ordinary object that stands for the brand (a chair, a glass, a key) centred small on a saturated flat colour field, with one quiet lowercase line",
+    formats: ["minimal-typography", "editorial", "storytelling", "abstract-metaphorical"],
+    energy: ["calm"],
+    person: "none",
+    scene: (hero) =>
+      `One ordinary, real object that quietly stands for ${hero} (a chair at a table, an empty glass, a key, a cup), photographed alone and centred a little below the middle, at about a quarter of the frame's height, on a seamless, fully saturated field of one brand colour that fills everything. A soft, believable contact shadow under it. Nothing else in the frame.`,
+    type: "One quiet line in small lowercase with wide letter-spacing, centred above or below the object, at most a third of the frame's width, in white or the darkest brand colour. No headline, no button.",
+    typeWithoutText: "Keep a calm band above the object for one short line added later.",
+    light: "Soft single-source studio light from the side; a gentle shadow; true materials.",
+    finish: "Gallery-poster restraint: most of the frame is pure colour, the object is the poem.",
+    avoid: "more than one object, props, patterns, gradients, a big headline",
+  },
+  {
+    id: "symbol-object",
+    name: "Symbol object",
+    summary:
+      "one symbolic object that carries the idea (a padlock for security, three linked rings for one system, a key for access) lit like a product on a deep gradient, a short line above it",
+    formats: ["abstract-metaphorical", "problem-solution", "minimal-typography", "editorial"],
+    energy: ["calm", "bold"],
+    person: "none",
+    scene: () =>
+      "One physical object that stands for the message's idea in a single glance (a padlock, linked rings in contrasting metals, a key, a scale, a compass), photographed like a premium product: centred in the lower two thirds, large, true materials (brushed brass, steel, ceramic, glass), on a deep, smooth gradient in the brand's darkest colour or on a clean pale studio sweep.",
+    type: "One short line above the object, centred, in a heavy sans-serif; under it a thin short rule in the accent colour. Optionally one small support line in caps in the accent colour.",
+    typeWithoutText:
+      "Keep the top third calm and evenly toned for a short line added later. No letters.",
+    light:
+      "Dramatic but soft key light from above, a fine rim light, believable reflections and contact shadow; 85mm, object razor sharp.",
+    finish: "Premium print-ad simplicity: the object does the explaining.",
+    avoid: "more than one object, clip-art, surreal distortion, cartoon rendering",
+  },
+  {
+    id: "line-engraving",
+    name: "Line engraving",
+    summary:
+      "a fine hand-drawn engraving in one ink colour on warm cream, framed by delicate botanical lines, one lowercase serif line in the middle",
+    formats: ["editorial", "storytelling", "minimal-typography"],
+    energy: ["calm"],
+    person: "none",
+    scene: (hero) =>
+      `A delicate hand-drawn illustration in the style of an old engraving or fine pen drawing, in one warm ink colour (sepia, deep green or the brand's darkest colour) on a warm cream paper ground: a symmetrical motif that stands for ${hero} or the feeling of the message (two birds facing each other, a branch, a vessel), with fine botanical lines curling around the edges. One tiny touch of the accent colour at the heart of the drawing.`,
+    type: "One line in a light, elegant serif, lowercase, centred under the drawing, letter-spaced; at most two lines.",
+    typeWithoutText: "Keep a calm band under the drawing for one line added later.",
+    light: "Flat, even, like a printed card; subtle paper texture.",
+    finish: "Wedding-stationery craft: fine, airy, handmade.",
+    avoid: "heavy fills, many colours, digital gradients, clip-art flowers",
+  },
+  {
+    id: "outcome-chips",
+    name: "Outcome chips",
+    summary:
+      "a warm gradient field, an editorial serif headline with one italic phrase, and a few small dark interface chips that show work already done",
+    formats: ["product-focused", "problem-solution", "educational-visual", "minimal-typography"],
+    energy: ["calm"],
+    person: "none",
+    screenOnly: true,
+    scene: () =>
+      "A soft, warm vertical gradient (pale cream at the top melting into a warm brand-tinted glow at the bottom). In the middle third, two to four small dark rounded interface chips float at gentle staggered offsets, like notifications, each with a tiny icon and room for a few words. No device, no screenshot, no people.",
+    type: "A two-line headline top-left in a large editorial serif: a plain first sentence, then the payoff with one phrase in italic. One small sans-serif support line under it. Each chip carries one short completed action taken from the supplied copy, else stays blank. A small solid dark rounded button bottom-left with the button label.",
+    typeWithoutText:
+      "Blank chips with no letters; keep the top-left calm for a headline added later.",
+    light: "Flat and soft; chips have a fine shadow so they float.",
+    finish: "Modern software brand: warm, quiet, confident.",
+    avoid: "a full app screenshot, more than four chips, invented features or numbers",
+  },
+  {
+    id: "iso-panel",
+    name: "Isometric panel",
+    summary:
+      "a clean isometric 3D illustration of the idea on a brand-colour panel filling the top, a white panel below holding a two-colour headline",
+    formats: ["educational-visual", "problem-solution", "data-statistic", "abstract-metaphorical"],
+    energy: ["calm", "playful"],
+    person: "none",
+    scene: (hero) =>
+      `The frame is split: the top 55–60% is a flat field in the brand's main colour holding one clean isometric 3D illustration of the idea behind ${hero} (a house drawn as an opening box, a document beside a measuring tape, a small machine of simple parts) in the brand's darks and white, with a few tiny floating squares as accents. The bottom 40% is a plain white panel.`,
+    type: "In the white panel: a two-line headline in a heavy sans-serif, the key phrase in the brand colour and the rest near-black, then one plain support line. The real logo is placed later, small, centred at the bottom.",
+    typeWithoutText: "Keep the white panel empty for words added later.",
+    light: "Soft illustrative light, gentle ambient shadows, no harsh contrast.",
+    finish: "Clean explainer illustration: friendly, precise, flat edges.",
+    avoid: "photoreal rendering, clutter, more than one illustration, gibberish labels",
+  },
+  {
+    id: "heritage-ornament",
+    name: "Heritage type",
+    summary:
+      "a bold two-sentence statement on a rich deep colour, key words in a metallic accent, fine ornament in the corners drawn from the brand's own craft or heritage",
+    formats: ["minimal-typography", "editorial", "storytelling"],
+    energy: ["bold", "calm"],
+    person: "none",
+    needsText: true,
+    scene: () =>
+      "A rich, deep field in the brand's main colour with a faint tone-on-tone pattern. Fine ornament sits only in the corners: in a metallic or accent tone in one corner, tone-on-tone in the opposite one. The ornament comes from the brand's own craft or heritage only where the brand details name it; otherwise it is a fine geometric line pattern. The centre stays clear for type.",
+    type: "A large left-aligned headline in a heavy sans-serif across four or five short lines, with the two key words in the metallic accent colour; under it one small serif support line. The real logo is placed later, small, low and centred.",
+    typeWithoutText: "Keep the left two thirds clear for a headline added later.",
+    light: "Flat and rich, like fine print on textured paper.",
+    finish: "Proud, crafted, restaurant-menu or heritage-brand quality.",
+    avoid: "stereotyped imagery, religious symbols, ornament crossing the words, many colours",
+  },
+  {
+    id: "blob-event",
+    name: "Organic event poster",
+    summary:
+      "a recurring event set like a poster: three large organic colour shapes overlapping from the edges, a tall condensed serif headline in the middle, a pill button",
+    formats: ["minimal-typography", "editorial"],
+    energy: ["playful", "bold"],
+    person: "none",
+    needsText: true,
+    onlyFor: "an event, a recurring night, a happy hour or opening hours",
+    scene: () =>
+      "Three large, soft-edged organic shapes in three brand colours (one deep, one warm, one bright) overlapping from the edges of the frame like cut paper, leaving one deep calm field in the middle for type. Flat colour, no gradients, a faint paper grain.",
+    type: "In the middle field: a small tracked caps line, then the event name very large in a tall condensed serif on two lines, then a tracked caps line with the day, then one plain sentence line, then a rounded pill button. All centred, in cream or white.",
+    typeWithoutText: "Keep the deep middle field clear for words added later.",
+    light: "Flat, like a printed poster.",
+    finish: "Bar or venue poster: warm, social, confident.",
+    avoid: "photos, confetti, clip-art drinks, more than three shapes, an invented date or time",
+  },
+  {
+    id: "named-hero-card",
+    name: "Named hero card",
+    summary:
+      "the item shot dark and moody in the top two thirds, then its name in an elegant serif, a small gold caps kicker, a short description and a fine divider ornament",
+    formats: ["product-focused", "editorial", "storytelling"],
+    energy: ["calm"],
+    person: "none",
+    physicalOnly: true,
+    scene: (hero) =>
+      `${cap(hero)} photographed from slightly above in a dark, moody set (a dark textured surface, a linen cloth, one or two natural props from its own world), filling the top two thirds, warm and appetising or precious, with a little steam, gloss or sparkle where real. The bottom third darkens smoothly into near-black for the type.`,
+    type: "In the dark bottom third, centred: the item's name in a large elegant serif, a small tracked caps kicker in gold under it, two or three short lines of description in a small serif, then a fine gold divider ornament and one tiny caps line. The real logo is placed later, small at the top.",
+    typeWithoutText: "Keep the dark bottom third clear for a name and description added later.",
+    light: "Low, warm side light, deep shadows, rich highlights; 50mm, shallow depth.",
+    finish: "Fine-dining menu or luxury catalogue page.",
+    avoid: "a bright flat background, clutter, invented ingredients or claims",
+  },
+  {
+    id: "edge-word",
+    name: "Edge-to-edge word",
+    summary:
+      "one word set so large in a classic serif that it touches both edges of a flat saturated colour field; nothing else",
+    formats: ["minimal-typography", "cinematic-campaign", "editorial"],
+    energy: ["bold", "calm"],
+    person: "none",
+    needsText: true,
+    scene: () =>
+      "A flat, fully saturated field of one brand colour, edge to edge, with a fine paper grain. Nothing else.",
+    type: "The headline set in a classic high-contrast serif, so large it runs from the left edge to the right edge (cropped a hair at both), vertically centred, in near-black or white: one word on one line, or a short phrase on as few lines as possible, each line edge to edge. No other words, no logo drawn.",
+    typeWithoutText: "A flat colour field with nothing on it, for one word added later.",
+    light: "Flat, like a printed poster.",
+    finish: "Bold editorial confidence: the word is the whole idea.",
+    avoid: "more than one word, decoration, gradients, a second colour",
+  },
+  // Round 7: posters set in one painted brand world (brand-neutral).
+  {
+    id: "illustrated-world-poster",
+    name: "Illustrated world poster",
+    summary:
+      "a calm headline in the top third over one painted scene from the brand's own world that fills the rest and bleeds to the edges",
+    formats: ["storytelling", "editorial", "human-lifestyle"],
+    energy: ["calm"],
+    person: "optional",
+    scene: (hero, people) =>
+      `One continuous painted scene from the brand's world filling the lower two-thirds and bleeding off every edge, with ${hero} as its focal point${people ? `, and ${PERSON} seen from behind or in three-quarter view within it` : ""}. The top third is open, soft sky or a plain wall, quietly blending into the scene.`,
+    type: "The wordmark small and centred at the very top; under it a two-line headline centred in a refined editorial serif, sentence case, with one key word set apart in the brand's emphasis style.",
+    typeWithoutText: "Keep the top third open and calm for a headline added later.",
+    light: "Soft, warm natural light that matches the brand's world; one gentle direction.",
+    finish: "Hand-made illustration finish with visible texture, like a poster from one series.",
+    avoid:
+      "a photograph mixed into the painting, frames or cards around the scene, more than two lines of headline",
+  },
+  {
+    id: "ui-in-scene",
+    name: "Product screen in the scene",
+    summary:
+      "the product's screen on a laptop or phone sitting naturally inside the brand's world, a character or hand beside it, the headline above",
+    formats: ["product-focused", "storytelling"],
+    energy: ["calm"],
+    person: "optional",
+    screenOnly: true,
+    scene: (hero, people) =>
+      `A laptop or phone placed naturally on a desk or table inside the brand's world (a window view, plants, a mug), its screen showing ${hero} as a clean, simple interface${people ? `, with ${PERSON} seen from behind or at the edge of the frame using it` : ""}. The device is drawn in the same medium as the rest of the scene.`,
+    type: "Wordmark small at the top; a two-line headline above the device, with one key word in the brand's emphasis style; one short supporting line under it.",
+    typeWithoutText: "Keep the top band calm above the device for a headline added later.",
+    light: "Window light falling across the desk and the device.",
+    finish: "One coherent illustrated scene; the screen is part of it, never pasted on top.",
+    avoid:
+      "a raw screenshot filling the frame, unreadable fake UI text, a floating device with no surface",
+  },
+  {
+    id: "orbiting-cards",
+    name: "Orbiting cards",
+    summary:
+      "a relaxed subject at the centre with three to five small product or integration cards floating around it on soft motion arcs",
+    formats: ["product-focused", "storytelling", "educational-visual"],
+    energy: ["playful", "calm"],
+    person: "optional",
+    scene: (hero, people) =>
+      `${people ? `${PERSON[0].toUpperCase()}${PERSON.slice(1)} leaning back, relaxed, at the centre of a cosy scene in the brand's world` : `A calm centre piece in the brand's world`}, with three to five small rounded cards floating around it on soft curved motion trails, each card showing ${hero} or one of its items as a simple picture.`,
+    type: "Wordmark small in the top-left; a short line of words bottom-right, small, with one key word in the brand's emphasis style.",
+    typeWithoutText: "Keep the bottom-right corner calm for a short line added later.",
+    light: "Soft daylight, gentle shadows under the cards so they float.",
+    finish: "Illustration and cards in one finish; cards clean and legible at phone size.",
+    avoid:
+      "more than five cards, words or prices on the cards that the brand didn't give, cluttered corners",
+  },
+  {
+    id: "vista-metaphor",
+    name: "Vista metaphor",
+    summary:
+      "a small figure seen from behind on a high point, looking out over a wide landscape where the idea appears as light, paths or a network",
+    formats: ["storytelling", "editorial", "cinematic-campaign"],
+    energy: ["calm"],
+    person: "optional",
+    scene: (hero, people) =>
+      `A wide landscape from the brand's world seen from a high rock or hill, ${people ? `${PERSON} small in the lower left, seen from behind, looking out over it` : "a single small object in the lower left looking out over it"}. Far below, ${hero} appears as a metaphor: a glowing path, a network of small lights or one bright point the eye is led to.`,
+    type: "Wordmark small and centred at the top; a two-line serif headline under it, one key word in the brand's emphasis style; optionally one short label low in the frame.",
+    typeWithoutText: "Keep the sky above the horizon calm for a headline added later.",
+    light: "Golden hour from the horizon, haze in the distance.",
+    finish: "Painterly and spacious; most of the frame is landscape and sky.",
+    avoid: "a face toward the camera, busy foreground, more than one bright focal point",
+  },
+  // Round 8: posts built from a brand's repeated graphic parts (brand-neutral).
+  {
+    id: "framed-system-slide",
+    name: "Framed system slide",
+    summary:
+      "a clean designed slide: eyebrow pill, big caps headline with key words in the accent colour, a short grey paragraph and an icon list on the left, the real work in a rounded frame on the right",
+    formats: ["educational-visual", "product-focused", "editorial"],
+    energy: ["bold", "calm"],
+    person: "none",
+    needsText: true,
+    scene: (hero) =>
+      `A flat, clean light background. On the right, ${hero} shown as real work: one to three rounded-corner frames with a soft shadow, or a phone or browser seen straight on. Thin accent connector lines with a small dot run off one edge as decoration.`,
+    type: "Left column, top to bottom: a small outlined pill label in the accent colour; a heavy geometric sans-serif headline in capitals over three or four lines, base colour with its key words in the accent colour; a short sentence in medium grey; then a list of three or four rows, each a thin-line accent icon in a rounded outlined square with a label beside it.",
+    typeWithoutText: "Keep the left column calm for words added later.",
+    light: "Flat and even, like a printed design; only soft drop shadows under the frames.",
+    finish:
+      "Crisp vector design with generous margins and a strict grid; looks made in a design tool, not generated.",
+    avoid:
+      "a 3D or painted scene, gradients, invented screens with fake text, more than two colours plus grey",
+  },
+  {
+    id: "service-hub",
+    name: "Service hub",
+    summary:
+      "a big outlined accent circle holding the name or idea, with four satellite icons in small outlined circles joined to it by thin lines, each with a short caps label",
+    formats: ["educational-visual", "product-focused"],
+    energy: ["calm"],
+    person: "none",
+    needsText: true,
+    scene: (hero) =>
+      `A flat light background. A large circle drawn with a thick accent outline sits right of centre; four small outlined circles around it, each holding one thin-line accent icon for a part of ${hero}, joined to the big circle by thin straight lines.`,
+    type: "The headline on the left in heavy caps, key words in the accent colour; the name or idea inside the big circle in two lines; a short caps label next to each satellite icon, taken from the supplied copy.",
+    typeWithoutText: "Leave the big circle and the left column empty for words added later.",
+    light: "Flat, printed.",
+    finish: "Clean diagram design: even line weights, aligned labels, lots of white space.",
+    avoid: "more than five satellites, arrows everywhere, icons in different styles",
+  },
+  {
+    id: "icon-grid-card",
+    name: "Icon grid card",
+    summary:
+      "a headline and one short paragraph above a tidy grid of six or eight outlined tiles, each with a thin-line accent icon and a caps label, buttons underneath",
+    formats: ["educational-visual", "product-focused"],
+    energy: ["calm", "bold"],
+    person: "none",
+    needsText: true,
+    scene: (hero) =>
+      `A flat light-grey or white background. The lower half is a grid of six or eight equal rounded tiles with thin accent outlines, each holding one thin-line accent icon for one part of ${hero}. One simple outlined accent illustration sits top right.`,
+    type: "A heavy caps headline top left with key words in the accent colour, a hand-drawn accent underline under it, one short dark-grey paragraph, a caps label under each icon, and optionally two buttons at the bottom: one filled accent, one outlined.",
+    typeWithoutText: "Keep the top half and the tile labels free for words added later.",
+    light: "Flat, printed.",
+    finish: "Systematic and calm: identical tiles, one icon style, perfect alignment.",
+    avoid: "icons in mixed styles, uneven tiles, photos inside the tiles",
+  },
+  {
+    id: "annotated-device",
+    name: "Annotated device",
+    summary:
+      "a phone held upright on the right with the product on screen, three or four accent dots on it linked by thin lines to short labels that explain each part",
+    formats: ["educational-visual", "product-focused"],
+    energy: ["calm"],
+    person: "none",
+    screenOnly: true,
+    needsText: true,
+    scene: (hero) =>
+      `A flat light background. A modern phone, straight on, right of centre, its screen showing ${hero} as a clean, simple interface. Three or four accent dots sit on parts of the screen, each linked by a thin line to a label outside the phone.`,
+    type: "Headline top left in heavy caps with key words in the accent colour, a short grey sentence under it; next to each dot a small caps label in the accent colour with three to five plain words under it, all from the supplied copy.",
+    typeWithoutText: "Keep the left column and the label spots empty for words added later.",
+    light: "Flat, printed; a soft shadow under the phone.",
+    finish: "Explainer-grade clarity, like a product manual page.",
+    avoid: "unreadable fake interface text, more than four callouts, a hand holding the phone",
   },
 ];
 

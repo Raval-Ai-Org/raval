@@ -121,7 +121,13 @@ export function InspoScreen({
             ) : section === "post" ? (
               <PostLook view={view} spec={view.look} resolved={resolved} handlers={handlers} />
             ) : section === "video" ? (
-              <VideoLook spec={view.look} resolved={resolved} handlers={handlers} />
+              <VideoLook
+                spec={view.look}
+                resolved={resolved}
+                handlers={handlers}
+                people={view.cards.filter((c) => c.chip === "person")}
+                canEdit={view.taste?.canEdit ?? true}
+              />
             ) : section === "voice" ? (
               <Voice view={view} spec={view.look} handlers={handlers} />
             ) : (
