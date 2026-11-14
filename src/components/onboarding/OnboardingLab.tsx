@@ -112,6 +112,7 @@ export function OnboardingLab() {
   const [ready, setReady] = useState(false);
   const [step, setStep] = useState("website");
   const [last, setLast] = useState("");
+  const [entering, setEntering] = useState(false);
   // `?step=finish&beat=glow`: hold the VR entry on one beat.
   const [beat, setBeat] = useState<Beat | null>(null);
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
@@ -296,8 +297,26 @@ export function OnboardingLab() {
       <p data-testid="lab-last" className="sr-only">
         {last}
       </p>
-      {ready && <AskLab key={step} step={step} slot={slot} onLast={setLast} />}
-      {beat && <VisorTransition freeze={beat} onCovered={() => setLast("entered")} />}
+      {ready && (
+        <AskLab
+          key={step}
+          step={step}
+          slot={slot}
+          onLast={(what) => {
+            setLast(what);
+            if (what === "done:enter") setEntering(true);
+          }}
+        />
+      )}
+      {(beat || entering) && (
+        <VisorTransition
+          freeze={beat ?? undefined}
+          onCovered={() => {
+            setEntering(false);
+            setLast("entered");
+          }}
+        />
+      )}
     </div>
   );
 }

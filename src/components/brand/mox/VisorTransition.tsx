@@ -9,6 +9,7 @@
 // Reduced motion: a plain fade. The light tunnel only runs on capable devices.
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Mox } from "./Mox";
 
@@ -131,12 +132,17 @@ export function VisorTransition({
 
   const past = (b: Beat) => AT[beat] >= AT[b];
 
-  return (
+  // Rendered into <body> so no page wrapper (a transform, a scroll box, a
+  // header row) can leave a strip of the page showing around it.
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => setHost(document.body), []);
+  if (!host) return null;
+  return createPortal(
     <motion.div
       role="status"
       aria-live="polite"
       aria-label="Entering Mellox"
-      className="fixed inset-0 z-[200] overflow-hidden"
+      className="fixed -inset-[2px] z-[2147483000] overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: reduced ? 0.3 : 0.4, ease: EASE_OUT }}
@@ -247,7 +253,8 @@ export function VisorTransition({
           />
         </>
       )}
-    </motion.div>
+    </motion.div>,
+    host,
   );
 }
 
@@ -285,7 +292,7 @@ export function EntryBloom() {
         <motion.div
           key="bloom"
           aria-hidden
-          className="pointer-events-none fixed inset-0 z-[200] bg-white"
+          className="pointer-events-none fixed -inset-[2px] z-[2147483000] bg-white"
           initial={{ opacity: 1 }}
           animate={{ opacity: 0 }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}

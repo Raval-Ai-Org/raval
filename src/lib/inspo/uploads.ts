@@ -15,7 +15,17 @@ export const MAX_REFERENCES = 1000;
 /** Files uploaded at the same time from one browser. */
 export const PARALLEL_UPLOADS = 4;
 
-export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+/** Photos are redrawn to PNG on the server, so any format sharp reads works. */
+export const IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "image/heic",
+  "image/heif",
+  "image/tiff",
+] as const;
 export const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"] as const;
 export const ACCEPT_ATTRIBUTE = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 
@@ -23,7 +33,7 @@ export type UploadKind = "image" | "video";
 export type UploadFileInfo = { name: string; type: string; size: number };
 
 export const UPLOAD_MESSAGES = {
-  type: "Use a PNG, JPEG or WebP photo, or an MP4, MOV or WebM video.",
+  type: "Use a photo (JPG, PNG, WebP, GIF, AVIF, HEIC, TIFF) or an MP4, MOV or WebM video.",
   empty: "This file is empty.",
   imageSize: "Too big: photos up to 100 MB.",
   videoSize: "Too big: videos up to 300 MB.",
@@ -37,26 +47,50 @@ export const UPLOAD_MESSAGES = {
 } as const;
 
 export function uploadKind(type: string): UploadKind | null {
+  type = normalType(type);
   if ((IMAGE_TYPES as readonly string[]).includes(type)) return "image";
   if ((VIDEO_TYPES as readonly string[]).includes(type)) return "video";
   return null;
 }
 
-/** Some browsers leave `type` empty for .mov files; the name decides then. */
+/** Older or odd names browsers give the same formats. */
+function normalType(type: string): string {
+  const t = type.trim().toLowerCase();
+  const alias: Record<string, string> = {
+    "image/jpg": "image/jpeg",
+    "image/pjpeg": "image/jpeg",
+    "image/x-png": "image/png",
+    "image/heic-sequence": "image/heic",
+    "image/heif-sequence": "image/heif",
+    "image/tif": "image/tiff",
+    "video/x-m4v": "video/mp4",
+  };
+  return alias[t] ?? t;
+}
+
+/** Some browsers leave `type` empty (.mov, .heic on Windows); the name decides then. */
 export function uploadType(file: { name: string; type: string }): string {
-  if (file.type) return file.type;
+  const known = normalType(file.type);
+  if (uploadKind(known)) return known;
   const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
   const byExt: Record<string, string> = {
     png: "image/png",
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
+    jfif: "image/jpeg",
     webp: "image/webp",
+    gif: "image/gif",
+    avif: "image/avif",
+    heic: "image/heic",
+    heif: "image/heif",
+    tif: "image/tiff",
+    tiff: "image/tiff",
     mp4: "video/mp4",
     m4v: "video/mp4",
     mov: "video/quicktime",
     webm: "video/webm",
   };
-  return (ext && byExt[ext]) || "";
+  return (ext && byExt[ext]) || known;
 }
 
 /** A plain reason this file can't be added, or null when it can. */
@@ -80,11 +114,16 @@ export function uploadExtension(type: string): string {
     "image/png": "png",
     "image/jpeg": "jpg",
     "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "image/tiff": "tiff",
     "video/mp4": "mp4",
     "video/webm": "webm",
     "video/quicktime": "mov",
   };
-  return map[type] ?? "bin";
+  return map[normalType(type)] ?? "bin";
 }
 
 /** The reference's name, from the file name without its extension. */

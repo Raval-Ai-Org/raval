@@ -323,7 +323,7 @@ export function InspoDrop({
         type="file"
         hidden
         multiple
-        accept={`${ACCEPT_ATTRIBUTE},.mov`}
+        accept={`${ACCEPT_ATTRIBUTE},image/*,.mov,.heic,.heif,.jfif,.avif,.tif,.tiff`}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";

@@ -59,8 +59,13 @@ type Started =
     }
   | { name: string; error: string; id?: undefined };
 
-/** Send one file straight to storage, reporting how much has gone. */
-function putFile(file: File, signed: Signed, onProgress: (share: number) => void) {
+/** Send one file, reporting how much has gone. */
+function putFile(
+  file: File,
+  signed: Signed,
+  onProgress: (share: number) => void,
+  body: Blob = file,
+) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(signed.method, signed.url);
@@ -71,7 +76,7 @@ function putFile(file: File, signed: Signed, onProgress: (share: number) => void
         ? resolve()
         : reject(new Error(UPLOAD_MESSAGES.missing));
     xhr.onerror = () => reject(new Error(UPLOAD_MESSAGES.missing));
-    xhr.send(file);
+    xhr.send(body);
   });
 }
 
@@ -316,7 +321,31 @@ export function InspoPanel({
           async ({ p, item }) => {
             if (!item.id) return;
             try {
-              await putFile(p.file, item.upload, (share) => patch(p.key, share));
+              // Straight to storage first; if the browser can't reach it, the
+              // same file goes through Mellox's server to the same place.
+              await putFile(p.file, item.upload, (share) => patch(p.key, share)).catch(async () => {
+                const {
+                  data: { session },
+                } = await supabase.auth.getSession();
+                if (!session) throw new Error("Sign in again to add this.");
+                const relay = `/api/brand-visuals/upload/relay?${new URLSearchParams({
+                  workspaceId,
+                  id: item.id,
+                  type: item.type,
+                })}`;
+                await putFile(
+                  p.file,
+                  {
+                    url: relay,
+                    method: "PUT",
+                    headers: {
+                      authorization: `Bearer ${session.access_token}`,
+                      "content-type": item.type,
+                    },
+                  },
+                  (share) => patch(p.key, share),
+                );
+              });
               patch(p.key, undefined);
               const { upload: _signed, ...info } = item;
               sent.push({ ...info, key: p.key });

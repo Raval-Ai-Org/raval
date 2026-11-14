@@ -31,9 +31,11 @@ describe("uploadProblem", () => {
   });
 
   it("refuses other types, empty files and files over the limit", () => {
-    expect(uploadProblem({ name: "a.gif", type: "image/gif", size: 10 })).toBe(
+    expect(uploadProblem({ name: "a.pdf", type: "application/pdf", size: 10 })).toBe(
       UPLOAD_MESSAGES.type,
     );
+    for (const type of ["image/gif", "image/avif", "image/heic", "image/tiff", "image/jpg"])
+      expect(uploadProblem({ name: "a", type, size: 10 })).toBeNull();
     expect(uploadProblem({ name: "a.png", type: "image/png", size: 0 })).toBe(
       UPLOAD_MESSAGES.empty,
     );
