@@ -10,6 +10,11 @@
 import type { BrandLookSpec } from "@/lib/brand-look/spec";
 import type { GoalFocus, WorkspaceGoals } from "@/lib/goals/contracts";
 import { tidyLook } from "@/lib/inspo/look";
+import {
+  PICTURE_STYLE_IDS,
+  cleanStyleIds,
+  mediumForStyles,
+} from "@/lib/brand-look/picture-styles";
 
 export const ROLES = ["owner", "marketing", "agency", "creator"] as const;
 export type Role = (typeof ROLES)[number];
@@ -68,9 +73,8 @@ export type Answers = {
   emoji?: EmojiChoice;
   length?: LengthChoice;
   approval?: Approval;
-  /** Look sample ids swiped right / left (LOOK_SAMPLES). */
-  likes?: string[];
-  skips?: string[];
+  /** Picture styles picked (picture-styles.ts ids, up to three); empty = Mox decides. */
+  styles?: string[];
   source?: SignupSource;
 };
 
@@ -82,90 +86,6 @@ export type OnboardingProfile = {
   /** Autopilot's starting mode, proposed by suggestStrategy. */
   approval?: Approval;
 };
-
-/** A real Mellox-made post shown in the "Which posts feel like you?" swipe. */
-export type LookSample = {
-  id: string;
-  src: string;
-  alt: string;
-  medium: VisualMedium;
-};
-
-/** Two of each medium, so a medium is only chosen when the person liked it twice. */
-export const LOOK_SAMPLES: readonly LookSample[] = [
-  {
-    id: "photo-product",
-    src: "/Home/wall/burger-4.webp",
-    alt: "A burger on a skateboard in a sunny street",
-    medium: "photo",
-  },
-  {
-    id: "3d-chrome",
-    src: "/Home/wall/classes-2.webp",
-    alt: "Chrome 3D numbers on a dark background",
-    medium: "3d",
-  },
-  {
-    id: "type-bold",
-    src: "/Home/wall/build-2.webp",
-    alt: "A bold black-and-white headline poster with one orange accent",
-    medium: "typographic",
-  },
-  {
-    id: "illustration-app",
-    src: "/Home/wall/wallet-2.webp",
-    alt: "A bright blue illustration of a person and a phone app",
-    medium: "illustration",
-  },
-  {
-    id: "photo-people",
-    src: "/Home/wall/sunscreen-6.webp",
-    alt: "A smiling person with a sunscreen bottle on a bright background",
-    medium: "photo",
-  },
-  {
-    id: "3d-product",
-    src: "/Home/wall/finance-1.webp",
-    alt: "A glowing 3D cable plug on a dark green background",
-    medium: "3d",
-  },
-  {
-    id: "type-poster",
-    src: "/Home/wall/build-1.webp",
-    alt: "A big condensed headline over a construction site at sunset",
-    medium: "typographic",
-  },
-  {
-    id: "illustration-people",
-    src: "/Home/wall/wallet-4.webp",
-    alt: "A flat illustration of a person with a phone on blue",
-    medium: "illustration",
-  },
-];
-
-const MEDIUM_MOOD: Partial<Record<VisualMedium, string>> = {
-  photo: "Real photography: natural light, real places and real people with the product.",
-  "3d": "Polished 3D renders: glossy materials, dramatic light, one hero object.",
-  typographic: "Type-led posters: big bold headlines carry the post, one accent colour.",
-  illustration: "Bright flat illustration: friendly characters, clean shapes, bold colour.",
-};
-
-/** The medium the person liked at least twice and more than any other, else null. */
-export function pickedMedium(
-  likes: readonly string[] | undefined,
-  samples: readonly LookSample[] = LOOK_SAMPLES,
-): VisualMedium | null {
-  const counts = new Map<VisualMedium, number>();
-  for (const id of new Set(likes ?? [])) {
-    const s = samples.find((x) => x.id === id);
-    if (s) counts.set(s.medium, (counts.get(s.medium) ?? 0) + 1);
-  }
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const [top, second] = ranked;
-  if (!top || top[1] < 2) return null;
-  if (second && second[1] === top[1]) return null;
-  return top[0];
-}
 
 /** The rhythm Mox stars: steady enough to grow, light enough to approve. */
 export function recommendedRhythm(activity?: Activity, focus?: GoalFocus): Rhythm {
@@ -226,11 +146,17 @@ export function answersToLook(a: Answers, look: BrandLookSpec | null | undefined
   if (a.emoji && a.emoji !== "auto" && !writing.emoji) writing.emoji = EMOJI_RULES[a.emoji];
 
   const visual = { ...(base.visual ?? {}) };
-  const medium = pickedMedium(a.likes);
-  if (medium && !visual.medium) {
-    visual.medium = medium;
-    const mood = MEDIUM_MOOD[medium];
-    if (mood && !visual.mood) visual.mood = mood;
+  // Styles the person picked; none means Mox decides from what the brand sells.
+  const styles = cleanStyleIds(a.styles);
+  const ownStyles = cleanStyleIds(visual.styles);
+  if (!ownStyles.length && visual.stylesAuto !== false) {
+    if (styles.length) {
+      visual.styles = styles;
+      visual.stylesAuto = false;
+      if (!visual.medium) visual.medium = mediumForStyles(styles);
+    } else if (a.styles) {
+      visual.stylesAuto = true;
+    }
   }
 
   return tidyLook({ ...base, writing, visual });
@@ -305,7 +231,6 @@ export function readAnswers(raw: unknown): Answers {
           (x) => !allowed || allowed.includes(x),
         )
       : undefined;
-  const sampleIds = LOOK_SAMPLES.map((s) => s.id);
   const out: Answers = {
     role: one(ROLES, r.role),
     teamSize: one(TEAM_SIZES, r.teamSize),
@@ -318,8 +243,7 @@ export function readAnswers(raw: unknown): Answers {
     emoji: one(EMOJI_CHOICES, r.emoji),
     length: one(LENGTHS, r.length),
     approval: one(APPROVALS, r.approval),
-    likes: ids(r.likes, sampleIds),
-    skips: ids(r.skips, sampleIds),
+    styles: ids(r.styles, PICTURE_STYLE_IDS)?.slice(0, 3),
     source: one(SOURCES, r.source),
   };
   return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined)) as Answers;

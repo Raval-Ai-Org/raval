@@ -16,7 +16,6 @@ import { canvasPickers } from "@/lib/studio/start";
 import { AdFormatPicker, AdObjectivePicker } from "./ProductAndFormat";
 import { showsPostCanvas } from "./PostCanvasSettings";
 import { studioPriceLabel } from "@/lib/studio/billing";
-import { shortClipPlan } from "@/lib/studio/short-clip";
 import { needsStoryboard } from "@/lib/studio/video/board";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { Crown } from "@/components/icons";
@@ -336,34 +335,12 @@ export function ControlsPanel({
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {animatedRecap
-              ? "Economy and Standard use credits for each photo. Premium uses video credits."
-              : `${recommendedKey && MODEL_NAMES[recommendedKey] ? `${MODEL_NAMES[recommendedKey]} works best for this kind. ` : ""}8 seconds or less on Economy or Standard uses credits. Longer or Premium uses video credits.`}
+              ? "Each animated photo is a short clip, priced in credits."
+              : `${recommendedKey && MODEL_NAMES[recommendedKey] ? `${MODEL_NAMES[recommendedKey]} works best for this kind. ` : ""}Videos are priced per second in credits: Economy 1.5, Standard 3, Premium 5.`}
           </p>
         </div>
       )}
 
-      {billing?.creation?.active &&
-        ((session.type !== "video" && !storyVideo) ||
-          c.videoPreview ||
-          shortClipPlan({ type: session.type, controls: c })) && (
-          <div>
-            <FieldLabel>Pay for this creation with</FieldLabel>
-            <Segmented
-              label="Payment source"
-              className="flex w-full flex-wrap"
-              value={c.paymentSource ?? "creation"}
-              onChange={(paymentSource) => set({ paymentSource, paymentSourceExplicit: true })}
-              options={[
-                { value: "creation", label: "Creation points" },
-                { value: "credits", label: "Wallet credits" },
-              ]}
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              {billing.meters.creation?.available ?? 0} creation points available. Wallet credits
-              are used only when you choose them.
-            </p>
-          </div>
-        )}
       {session.type === "carousel" && c.paymentSource === "creation" && (
         <div>
           <FieldLabel>Artwork</FieldLabel>

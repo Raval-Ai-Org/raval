@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * The one-question onboarding (ADR-0049) at /onboarding-lab: nothing ever
  * scrolls the page, the primary action is always on screen, a tap answers
- * and moves on, keys work, and the swipe deck answers with ←/→.
+ * and moves on, keys work, and picture styles pick up to three.
  */
 
 const VIEWPORTS = [
@@ -101,12 +101,16 @@ test.describe("One-question onboarding — behaviour", () => {
     await expect(page.getByTestId("lab-last")).toHaveText("pick:teamSize:small");
   });
 
-  test("the swipe deck answers with arrow keys", async ({ page }) => {
-    await openLab(page, "step=ask&id=look");
-    await page.locator("body").press("ArrowRight");
-    await expect(page.getByTestId("lab-last")).toContainText(":like");
-    await page.locator("body").press("ArrowLeft");
-    await expect(page.getByTestId("lab-last")).toContainText(":skip");
+  test("picture styles: Mox decides by default, up to three picks", async ({ page }) => {
+    await openLab(page, "step=ask&id=styles");
+    await expect(page.getByRole("button", { name: /Let Mox decide/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await page.getByRole("button", { name: /Bold poster/ }).click();
+    await expect(page.getByTestId("lab-last")).toHaveText("styles:bold-poster");
+    await page.getByRole("button", { name: /Let Mox decide/ }).click();
+    await expect(page.getByTestId("lab-last")).toHaveText("styles:auto");
   });
 
   test("the scan dock shows the four brains and opens", async ({ page }) => {

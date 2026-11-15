@@ -2,30 +2,34 @@
 
 // The upgrade window, wired to the real plan and balance. Opens only from a
 // person's click (the Upgrade button, a lock, or the button on an "out of
-// credits" toast). What it looks like is `UpgradeScreen`.
+// credits" toast), except in the app with no plan at all (`requirePlan`):
+// there is no Free plan (pricing v4, ADR-0050), so it stays open and can't be
+// closed until a plan is chosen. Plan & billing stays reachable from it.
+// What it looks like is `UpgradeScreen`.
 //
 import { useEffect, useState } from "react";
 import { onAppEvent } from "@/lib/app-events";
-import { PLANS, planRank, type BillingInterval } from "@/lib/billing/catalog";
+import { planRank, type BillingInterval } from "@/lib/billing/catalog";
 import { asPlan, nextPlan, suggestedPlan, type BillingBlock } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { UpgradeWindow, type UpgradeChoice, type UpgradeView } from "./UpgradeScreen";
 import { useBillingActions } from "./use-billing-actions";
 
-export function UpgradeDialog() {
+export function UpgradeDialog({ requirePlan = false }: { requirePlan?: boolean }) {
   const [open, setOpen] = useState(false);
   const [block, setBlock] = useState<BillingBlock | null>(null);
   const [view, setView] = useState<UpgradeView>("plans");
   const [interval, setBillingInterval] = useState<BillingInterval>("year");
   const [packsAsked, setPacksAsked] = useState(false);
-  const { data } = useEntitlements({ enabled: open });
+  const { data } = useEntitlements({ enabled: open || requirePlan });
   const actions = useBillingActions(data);
   const current = asPlan(data?.entitledPlan);
-  // On Free, running out of credits is a reason to pick a plan (credits every
-  // month), not to buy a one-time pack. Packs stay one tab away.
-  const freeAndEmpty =
-    current === "free" && block?.code === "insufficient_balance" && block.meter !== "video";
-  const shownView = freeAndEmpty && !packsAsked ? "plans" : view;
+  // No plan: the app is locked behind the plan picker (data stays readable
+  // through Plan & billing). Only while billing is enforced.
+  const mustChoose =
+    requirePlan && Boolean(data) && current === "free" && data?.enforcement === "on";
+  // With no plan, a plan is the answer (credits every month), not a pack.
+  const shownView = current === "free" && !packsAsked ? "plans" : view;
 
   useEffect(
     () =>
@@ -54,8 +58,12 @@ export function UpgradeDialog() {
 
   return (
     <UpgradeWindow
-      open={open}
-      onOpenChange={setOpen}
+      open={open || mustChoose}
+      required={mustChoose}
+      onOpenChange={(next) => {
+        if (!next && mustChoose) return;
+        setOpen(next);
+      }}
       screen={
         data
           ? {
@@ -74,7 +82,7 @@ export function UpgradeDialog() {
               busy: actions.busy,
               askSent: actions.sent.has("ask-owner"),
               balance: data.meters.credits.available,
-              showVideoPacks: block?.meter === "video" || PLANS[current].allowances.videoUnits > 0,
+              showVideoPacks: false,
               onChoose: (item) => void choose(item),
               onAskOwner: (plan) =>
                 void actions.askOwner({

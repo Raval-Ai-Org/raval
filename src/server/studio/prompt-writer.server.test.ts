@@ -6,6 +6,10 @@ const lookTextFor = vi.fn();
 vi.mock("@/lib/ai", () => ({ runStructuredPrompt: (opts: unknown) => run(opts) }));
 vi.mock("@/server/brand-look/resolve.server", () => ({
   lookTextFor: (...args: unknown[]) => lookTextFor(...args),
+  loadBrandLook: async () => ({
+    look: { pictureStyles: { ids: ["bold-poster", "3d"], auto: true } },
+    dna: null,
+  }),
 }));
 vi.mock("@/server/guardrails/events", () => ({ logGuardrailEvent: vi.fn() }));
 vi.mock("./context.server", () => ({
@@ -56,7 +60,10 @@ describe("writeStudioPrompt", () => {
     expect(call.route).toBe("studio.prompt");
     expect(call.noCache).toBe(true);
     expect(call.regenerate).toBe(true);
-    expect(call.system).toContain("Camera and composition");
+    expect(call.system).toContain("Headline, Supporting line, Picture");
+    expect(call.system).not.toContain("Camera and composition");
+    expect(call.system).toMatch(/60–160 words/);
+    expect(call.system).toMatch(/'(Bold poster|3D render)' style/);
     expect(call.system).toContain("Invent one fresh");
     expect(call.user).toContain("Cold brew searches are rising");
     expect(call.user).toContain("Meet our farmers");

@@ -174,7 +174,7 @@ export function MoxGauge({
                           : "text-foreground",
                     )}
                   >
-                    {w ? formatNumber(w.points ?? w.credits) : "…"}
+                    {w ? formatNumber(w.shown) : "…"}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
                     {w?.points !== null && w?.points !== undefined ? "points" : "credits"}

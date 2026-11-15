@@ -3,6 +3,17 @@
 Last update: 30 September 2026. Source of truth for prices: `src/lib/billing/catalog.ts`
 (matches `docs/pricing/v2/` as of 29 September: Post for Me, unlimited posts on every plan).
 
+## Pricing v4 (15 November 2026, ADR-0050)
+
+- No Free plan; Starter $49 / Growth $149 / Agency $399 (yearly $39 / $119 / $319 a
+  month) with 150 / 500 / 1,500 credits. 1 credit = 1 image post; text is included;
+  video is credits per second. Margins in `src/lib/billing/plan-economics.ts`.
+- Migration `20261115120000_pricing_v4.sql` lets a 0-credit Studio job link without
+  a hold. The existing Starter account moved to v4 for its current window.
+- Still to do: Stripe prices for the new amounts, the image redo rate
+  (`studio.image.rerender`), KIE flat-cost rows, UGC render cost metering, and the
+  local cutout sidecar.
+
 ## How it works
 
 - **One wallet per owner**, shared by all their brands: credits, videos, Pro messages,

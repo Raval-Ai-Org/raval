@@ -19,6 +19,7 @@ import {
   type StrategySuggestion,
 } from "@/lib/autopilot/contracts";
 import { estimateCost } from "@/lib/autopilot/policy";
+import { UNITS_PER_CREDIT, creditsOf, formatCredits } from "@/lib/billing/catalog";
 import { PLAN_GOALS } from "@/lib/calendar/planner";
 import { PLATFORM_ORDER, PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import { STUDIO_FORMATS } from "@/lib/studio/formats";
@@ -534,20 +535,20 @@ export function SettingRows({
           open={open === "limit"}
           onToggle={toggleRow}
           label="Weekly limit"
-          value={`${s.creditCapPerWeek} credits`}
+          value={formatCredits(s.creditCapPerWeek)}
         >
           <NumberInput
             label="Credit limit per week"
-            value={s.creditCapPerWeek}
+            value={creditsOf(s.creditCapPerWeek)}
             min={0}
-            max={100_000}
-            step={10}
+            max={Math.floor(100_000 / UNITS_PER_CREDIT)}
+            step={5}
             suffix="credits a week at most"
-            onChange={(n) => set("creditCapPerWeek", n)}
+            onChange={(n) => set("creditCapPerWeek", n * UNITS_PER_CREDIT)}
           />
           <Hint>
-            This pace uses about {estimate} credits a week. Each post costs the same as making it
-            yourself.
+            This pace uses about {formatCredits(estimate)} a week. Text posts are included; each
+            picture costs the same as making it yourself.
             {s.creditCapPerWeek < estimate && " Below this pace, some posts will be skipped."}
           </Hint>
         </Row>

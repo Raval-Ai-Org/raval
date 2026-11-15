@@ -14,8 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Crown, Lock, Wallet } from "@/components/icons";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
-import { FEATURES, PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
-import { CREATION_PLANS } from "@/lib/billing/creation";
+import { FEATURES, PLANS, creditsOf } from "@/lib/billing/catalog";
 import {
   asPlan,
   formatMeter,
@@ -200,13 +199,8 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
     );
   };
 
-  // Free credits are a one-time signup grant, so size the bar to it.
-  const creditTotal =
-    current === "free"
-      ? SIGNUP_GRANT.credits
-      : data.creation?.active
-        ? data.creation.flexCredits
-        : plan.allowances.credits;
+  // The bar is sized to the month's plan credits (none without a plan).
+  const creditTotal = plan.allowances.credits;
   const resets = data.period.nextGrantAt ? `Resets ${day(data.period.nextGrantAt)}` : null;
 
   return (
@@ -305,44 +299,20 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           )}
         </div>
         <div className="ds-tile space-y-5 p-5">
-          {!data.creation?.active && current !== "free" && (
-            <p className="text-xs text-muted-foreground">
-              Your current wallet balances keep their existing terms. At the next renewal, this plan
-              receives {CREATION_PLANS[current].points} protected creation points and{" "}
-              {CREATION_PLANS[current].flexCredits} wallet credits, with video and chat allowances
-              kept separate.
-            </p>
-          )}
-          {data.creation?.active && (
-            <div className="space-y-2">
-              <UsageBar
-                label="Creation points"
-                left={data.meters.creation.available}
-                total={Math.max(data.creation.monthlyPoints, data.meters.creation.available)}
-                note={`${formatNumber(data.meters.creation.available)} available of ${formatNumber(data.creation.monthlyPoints)} monthly points`}
-              />
-              <p className="text-xs text-muted-foreground">
-                One text post set uses 1 point. A standard AI image post uses 2. Three caption
-                improvements are included per paid creation. New artwork has its own price. Research
-                and chat cannot spend these points.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Up to {Math.floor(data.meters.creation.available / 2)} standard image posts
-                remaining, or a mix of formats. Creation points expire at the end of their grant
-                window.
-              </p>
-            </div>
-          )}
           <UsageBar
-            label={data.creation?.active ? "Wallet credits for extras" : "Credits available"}
+            label="Credits available"
             left={data.meters.credits.available}
             total={Math.max(creditTotal, data.meters.credits.available)}
             note={ofTotal(
-              formatNumber(data.meters.credits.available),
-              formatNumber(creditTotal),
+              formatNumber(creditsOf(data.meters.credits.available)),
+              formatNumber(creditsOf(creditTotal)),
               data.meters.credits.available <= creditTotal,
             )}
           />
+          <p className="text-xs text-muted-foreground">
+            One credit makes one image post. Text posts, captions, scripts and standard articles are
+            included. Video is priced per second. Unused plan credits roll over a month.
+          </p>
           {Object.values(data.meters).some((meter) => meter.held > 0) && (
             <div className="space-y-2 rounded-lg bg-secondary/50 p-3 text-[13px]">
               <p className="font-medium">Reserved for work in progress</p>
@@ -357,9 +327,9 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
               {workspaceId && <StopStudioJobsButton workspaceId={workspaceId} />}
             </div>
           )}
-          {(plan.allowances.videoUnits > 0 || data.meters.video.available > 0) && (
+          {data.meters.video.available > 0 && (
             <UsageBar
-              label="Video Credits"
+              label="Video credits from before (used first on videos)"
               left={data.meters.video.available}
               total={Math.max(plan.allowances.videoUnits, data.meters.video.available)}
               note={ofTotal(

@@ -3,6 +3,7 @@
 // accounts already connected, and returns a brand strategy plus sensible
 // settings. The model writes the words; the settings are decided here.
 import "server-only";
+import { UNITS_PER_CREDIT } from "@/lib/billing/catalog";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
@@ -186,7 +187,7 @@ export async function suggestStrategy(args: {
     weekdays: goals ? weekdaysForRhythm(postsPerWeek) : [1, 2, 3, 4, 5],
     timezone: isValidTimeZone(args.timezone) ? args.timezone : "UTC",
     weeks: 52,
-    creditCapPerWeek: Math.ceil((estimate * 1.5) / 10) * 10,
+    creditCapPerWeek: Math.ceil((estimate * 1.5) / (5 * UNITS_PER_CREDIT)) * 5 * UNITS_PER_CREDIT,
     videoCapPerWeek: 1,
     actOnOpportunities: true,
     strategy,

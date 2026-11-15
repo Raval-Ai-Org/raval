@@ -1,12 +1,13 @@
 // Brand look → prompt text. Pure, deterministic (stable order, so response caches
 // hit), and capped. Brand DNA facts stay in serializeBrandContext; these blocks
 // only describe *how* content reads and looks.
+import { pictureStyleLines } from "./picture-styles";
 import { languageNote } from "./languages";
 import type { BrandLook } from "./resolve";
 import type { StyleFormat } from "./spec";
 
 export const WRITING_BLOCK_MAX = 2400;
-export const VISUAL_BLOCK_MAX = 1800;
+export const VISUAL_BLOCK_MAX = 2400;
 export const VIDEO_BLOCK_MAX = 1000;
 
 const cap = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
@@ -145,7 +146,11 @@ export function visualStyleBlock(resolved: BrandLook): string {
     ].filter(Boolean);
     push("Typography", bits.join(", "));
   }
-  push("Medium", v.medium);
+  // The picture styles replace the old one-word medium: "photo" alone made
+  // flat stock photos. A brand with no picks gets Mox's three.
+  const styleLines = pictureStyleLines(resolved.pictureStyles?.ids ?? []);
+  if (styleLines) lines.push(styleLines);
+  else push("Medium", v.medium);
   push("Mood", v.mood);
   push("Lighting", v.lighting);
   push("Colour grading", v.grading);

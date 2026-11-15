@@ -54,7 +54,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "Is there a free trial?",
-    a: "You can sign up for free and no credit card is required to get started. Plans and pricing for growing teams and agencies are listed on the pricing page.",
+    a: "Plans start at $39 a month billed yearly, and you can try Growth for 7 days first. Every plan and its price is on the pricing page.",
   },
   {
     q: "What is AEO or GEO?",

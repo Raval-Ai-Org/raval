@@ -9,6 +9,7 @@ import { loadBrandLook } from "@/server/brand-look/resolve.server";
 import {
   frequencyOf,
   lifetimeOf,
+  pickNamedMedia,
   pickRotationMedia,
   type MediaUseRecord,
   type OwnMediaFrequency,
@@ -53,7 +54,9 @@ export async function loadInspoMediaPool(workspaceId: string): Promise<InspoMedi
           purpose: s.purpose,
           lifetime: lifetimeOf(s),
           addedAt: s.created_at,
-          label: s.label || undefined,
+          // The person's own words win over the file name.
+          label: s.notes?.trim() || s.label || undefined,
+          folder: folderOf(s.region) ?? undefined,
         } satisfies RotationMedia,
       ];
     });
@@ -97,13 +100,37 @@ function referenceIdsOf(input: unknown): string[] {
   return ids.filter((id): id is string => typeof id === "string");
 }
 
-/** Own photos for one new piece by itself (Autopilot, Write it for me), or none. */
+function folderOf(region: unknown): string | null {
+  const folder = (region as { folder?: unknown } | null | undefined)?.folder;
+  return typeof folder === "string" && folder.trim() ? folder.trim() : null;
+}
+
+/**
+ * Own photos for one new piece (Autopilot, campaigns, Write it for me,
+ * Studio), or none. Photos the brief names by folder or label always come
+ * first; otherwise the rotation's roll decides.
+ */
 export async function pickInspoMediaFor(
   workspaceId: string,
   format: string,
   seed: string,
+  brief?: string,
 ): Promise<RotationPick | null> {
   const pool = await loadInspoMediaPool(workspaceId);
   if (!pool.media.length) return null;
-  return pickRotationMedia({ ...pool, now: new Date(), format, seed });
+  const now = new Date();
+  const named = brief ? pickNamedMedia({ media: pool.media, brief, format, now }) : null;
+  if (named) return named;
+  return pickRotationMedia({ ...pool, now, format, seed });
+}
+
+/** Only photos the brief names (folder or label), or none. Never a random roll. */
+export async function namedInspoMediaFor(
+  workspaceId: string,
+  format: string,
+  brief: string,
+): Promise<RotationPick | null> {
+  const pool = await loadInspoMediaPool(workspaceId);
+  if (!pool.media.length) return null;
+  return pickNamedMedia({ media: pool.media, brief, format, now: new Date() });
 }

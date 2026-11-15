@@ -17,7 +17,7 @@ import { ScanDock } from "./ScanDock";
 import { PickScreen } from "./PickScreen";
 import { SayScreen } from "./SayScreen";
 import { ChannelsScreen } from "./ChannelsScreen";
-import { LookSwipe, LOOK_MIN_SWIPES } from "./LookSwipe";
+import { StylesScreen } from "./StylesScreen";
 import { AnswerTrail, AudiencePick, BrandCard, LanguagePick } from "./AfterSteps";
 import { DoneStep } from "./DoneStep";
 import { UrlStep } from "../UrlStep";
@@ -107,17 +107,12 @@ export function AskLab({
   const screen = screens[Math.min(index, screens.length - 1)];
   const next = () => setIndex((i) => Math.min(i + 1, screens.length - 1));
 
-  const swiped = (answers.likes?.length ?? 0) + (answers.skips?.length ?? 0);
   const action: StageAction | null = slot
     ? slot.action
     : step === "ask"
-      ? screen.kind === "say" || screen.kind === "channels"
+      ? screen.kind === "say" || screen.kind === "channels" || screen.kind === "styles"
         ? { label: "Continue", onClick: () => (onLast(`ask:${screen.id}:continue`), next()) }
-        : screen.kind === "swipe"
-          ? swiped >= LOOK_MIN_SWIPES
-            ? { label: "Continue", onClick: () => onLast("look:continue") }
-            : { label: "Skip", quiet: true, onClick: () => onLast("look:skip") }
-          : null
+        : null
       : step === "done" || step === "website"
         ? null
         : {
@@ -191,22 +186,16 @@ export function AskLab({
             onChange={(channels: OnboardingChannel[]) => setAnswers((a) => ({ ...a, channels }))}
           />
         )}
-        {step === "ask" && screen.kind === "swipe" && (
-          <LookSwipe
+        {step === "ask" && screen.kind === "styles" && (
+          <StylesScreen
             screen={screen}
-            likes={answers.likes ?? []}
-            skips={answers.skips ?? []}
+            value={answers.styles}
             reduce={reduce}
             headingRef={headingRef}
-            onSwipe={(id, liked) => {
-              onLast(`swipe:${id}:${liked ? "like" : "skip"}`);
-              setAnswers((a) => ({
-                ...a,
-                likes: liked ? [...(a.likes ?? []), id] : (a.likes ?? []),
-                skips: liked ? (a.skips ?? []) : [...(a.skips ?? []), id],
-              }));
+            onChange={(styles) => {
+              onLast(`styles:${styles.join(",") || "auto"}`);
+              setAnswers((a) => ({ ...a, styles }));
             }}
-            onDone={() => onLast("look:done")}
           />
         )}
         {slot && (

@@ -17,6 +17,7 @@ import type { StudioControls } from "@/lib/studio/jobs";
 import type { StudioType } from "@/lib/studio/formats";
 import { signAssetPath } from "@/server/assets/persist.server";
 import { safeFetch } from "@/server/safe-fetch";
+import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import {
   resolveStudioClips,
   resolveStudioReferences,
@@ -133,5 +134,58 @@ async function clipStills(
     return stills;
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * The top of the brand's own website (the newest full-page capture from the
+ * Brand DNA scan), so the writer sees what the brand sells and how it looks.
+ * Context only: it is never the piece's photo. Read with the caller's client,
+ * so RLS keeps it to the workspace; anything unreadable is left out.
+ */
+export async function loadSiteGlance(
+  client: SupabaseClient,
+  workspaceId: string,
+): Promise<PromptMedia> {
+  try {
+    const { data } = await client
+      .from("assets")
+      .select("id,storage_path,metadata,created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("metadata->>source", "website_capture")
+      .eq("metadata->region->>type", "full")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const row = (data ?? [])[0] as { storage_path?: string | null } | undefined;
+    if (!row?.storage_path || !isWorkspaceStoragePath(row.storage_path, workspaceId)) return NONE;
+    const url = await signAssetPath(row.storage_path);
+    if (!url) return NONE;
+    const { bytes } = await safeFetch(url, {
+      maxBytes: 45 * 1024 * 1024,
+      timeoutMs: 20_000,
+      onOverflow: "error",
+    });
+    const source = sharp(Buffer.from(bytes), { limitInputPixels: 1024 * 18_000 * 4 });
+    const meta = await source.metadata();
+    const width = meta.width ?? 0;
+    const height = meta.height ?? 0;
+    if (!width || !height) return NONE;
+    // The first two screens: the hero, the offer and the way the brand speaks.
+    const top = Math.min(height, Math.round(width * 1.25));
+    const image = await source
+      .extract({ left: 0, top: 0, width, height: top })
+      .resize(1024, 1280, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 72 })
+      .toBuffer();
+    return {
+      images: [{ mediaType: "image/webp", data: image.toString("base64") }],
+      note: "The image is the top of the brand's own website, for context only: what it sells, its headline, its colours and the way it speaks. Make the piece fit this brand; never describe this screenshot as the piece's picture and never copy its words unless they are the brand's own offer.",
+    };
+  } catch (error) {
+    console.warn(
+      "[studio] site capture left out of the prompt",
+      error instanceof Error ? error.message.slice(0, 200) : "unreadable",
+    );
+    return NONE;
   }
 }

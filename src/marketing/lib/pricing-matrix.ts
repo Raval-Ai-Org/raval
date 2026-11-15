@@ -1,217 +1,134 @@
-// The plan comparison table on /pricing. Keep every row in step with src/lib/billing/catalog.ts (plans, limits and
-// each feature's `minPlan`): this table must never promise more than the product gives.
-import { PLANS } from "@/lib/billing/catalog";
+// The plan comparison table on /pricing (pricing v4, ADR-0050). Numbers come from src/lib/billing/catalog.ts
+// (plans, limits and each feature's `minPlan`), so this table can never promise more than the product gives.
+// Rows are grouped by the five feature groups the plan cards and the upgrade screen use.
+import {
+  PLANS,
+  annualMonthlyUsd,
+  creditsOf,
+  planAllows,
+  type FeatureKey,
+  type PaidPlanId,
+} from "@/lib/billing/catalog";
+import { planOutcomes } from "@/lib/billing/plan-economics";
 
 export type Cell = string | boolean;
 export type MatrixRow = { label: string; values: Cell[] };
 export type MatrixGroup = { title: string; rows: MatrixRow[] };
 
-// The column prices come from the product's own catalog, so they can't drift from what the product charges.
-export const MATRIX_COLUMNS = [
-  { name: "Free", price: "$0" },
-  ...(["starter", "growth", "agency", "scale"] as const).map((id) => ({
-    name: PLANS[id].label,
-    price: `$${PLANS[id].priceMonthlyUsd.toLocaleString("en-US")} /mo`,
-    ...(id === "growth" ? { highlight: true } : {}),
-  })),
-];
+const COLUMNS: PaidPlanId[] = ["starter", "growth", "agency", "scale"];
+const n = (value: number) => Math.round(value).toLocaleString("en-US");
+
+// Yearly is the headline price; Enterprise is quoted.
+export const MATRIX_COLUMNS = COLUMNS.map((id) => ({
+  name: PLANS[id].label,
+  price: id === "scale" ? "Talk to us" : `$${n(annualMonthlyUsd(id))} /mo yearly`,
+  ...(id === "growth" ? { highlight: true } : {}),
+}));
+
+const each = (value: (plan: PaidPlanId) => Cell): Cell[] => COLUMNS.map(value);
+const has = (feature: FeatureKey): Cell[] => each((plan) => planAllows(plan, feature));
+const plus = (plan: PaidPlanId, value: string) => (plan === "scale" ? `${value}+` : value);
 
 export const MATRIX: MatrixGroup[] = [
   {
-    title: "Workspace",
+    title: "Create",
     rows: [
       {
-        label: "Brand workspaces",
-        values: ["1", "1", "3", "10", "30"],
+        label: "Credits every month (1 credit = 1 image post)",
+        values: each((plan) => plus(plan, n(creditsOf(PLANS[plan].allowances.credits)))),
       },
       {
-        label: "Seats",
-        values: ["1", "2", "5", "Unlimited", "Unlimited"],
+        label: "10-second videos, if spent on video",
+        values: each((plan) => plus(plan, `≈ ${n(planOutcomes(plan).videos)}`)),
       },
       {
-        label: "Mellox credits per month",
-        values: ["100 one time", "2,000", "6,000", "18,000", "50,000"],
+        label: "Text posts, captions, scripts, standard articles",
+        values: each(() => "Unlimited"),
       },
+      { label: "Image posts, carousels, Stories and ads", values: has("studio") },
+      { label: "Premium GEO-grounded articles", values: has("premium_articles") },
+      { label: "Creator (UGC) video ads", values: has("ugc") },
+      { label: "Premium, Long-take and Cinematic video, 1080p", values: has("video_cinematic") },
       {
-        label: "Video credits per month",
-        values: ["None", "4", "12", "40 pooled", "100 pooled"],
-      },
-      {
-        label: "Pooled credits across brands",
-        values: [false, false, true, true, true],
+        label: "Videos rendering at the same time",
+        values: each((plan) => n(PLANS[plan].limits.maxConcurrentRenders)),
       },
     ],
   },
   {
-    title: "Assistant",
+    title: "Autopilot",
     rows: [
+      { label: "Autopilot plans, writes and schedules", values: has("autopilot") },
+      { label: "Campaign plans and the content calendar", values: has("campaigns") },
+      { label: "Publishing to every social network", values: each(() => "Unlimited") },
+    ],
+  },
+  {
+    title: "Brain",
+    rows: [
+      { label: "Brand DNA, products, audience and strategy", values: each(() => true) },
       {
-        label: "Mellox Flash chat, fair use",
-        values: ["30 messages", "800", "2,000", "5,000", "12,000"],
+        label: "Competitors tracked",
+        values: each((plan) => n(PLANS[plan].limits.competitors)),
+      },
+      {
+        label: "Market Brain, weekly",
+        values: each((plan) => {
+          const brands = PLANS[plan].limits.marketBrainWeeklyBrands;
+          return `${n(brands)} ${brands === 1 ? "brand" : "brands"}`;
+        }),
       },
       {
         label: "Mellox Pro chat messages",
-        values: [false, "30", "150", "400 pooled", "1,200 pooled"],
+        values: each((plan) => n(PLANS[plan].allowances.proMessages)),
       },
-      {
-        label: "Live web research in chat",
-        values: [false, true, true, true, true],
-      },
+      { label: "Mellox Flash chat", values: each(() => "Unlimited, fair use") },
     ],
   },
   {
-    title: "Studio",
+    title: "Grow",
     rows: [
       {
-        label: "Posts, images, carousels, ads, scripts",
-        values: ["100 credits to try", true, true, true, true],
-      },
-      {
-        label: "Premium GEO grounded articles",
-        values: [false, true, true, true, true],
-      },
-      {
-        label: "Campaign plans",
-        values: [false, false, true, true, true],
-      },
-      {
-        label: "Approval workflows",
-        values: [false, false, true, true, true],
-      },
-      {
-        label: "Posting to every social network",
-        values: ["Unlimited", "Unlimited", "Unlimited", "Unlimited", "Unlimited"],
-      },
-    ],
-  },
-  {
-    title: "Video",
-    rows: [
-      {
-        label: "Draft and Standard video, 720p",
-        values: [false, true, true, true, true],
-      },
-      {
-        label: "Premium and Long take",
-        values: [false, true, true, true, true],
-      },
-      {
-        label: "1080p",
-        values: [false, false, true, true, true],
-      },
-      {
-        label: "Cinematic multi shot",
-        values: [false, false, false, true, true],
-      },
-      {
-        label: "Renders at the same time",
-        values: [false, "1", "2", "4", "8"],
-      },
-    ],
-  },
-  {
-    title: "AI visibility",
-    rows: [
-      {
-        label: "Tracked prompts, checked weekly",
-        values: ["5", "25", "100", "300 pooled", "1,000 pooled"],
-      },
-      {
-        label: "Answer engines",
-        values: ["ChatGPT, Gemini", "+ Perplexity", "3 engines", "3 engines", "3 engines"],
+        label: "Tracked AI questions, checked weekly on 3 engines",
+        values: each((plan) => n(PLANS[plan].limits.trackedPrompts)),
       },
       {
         label: "Site scans per month (max pages)",
-        values: ["1 (25)", "4 (50)", "10 (150)", "30 (300)", "90 (500)"],
+        values: each(
+          (plan) => `${n(PLANS[plan].limits.scansPerMonth)} (${n(PLANS[plan].limits.geoMaxPages)})`,
+        ),
       },
-      {
-        label: "GEO fix proposals",
-        values: ["View findings", true, true, true, true],
-      },
-      {
-        label: "CMS fixes, WordPress and Webflow",
-        values: [false, false, true, true, true],
-      },
-      {
-        label: "GEO Engineer and Fix all",
-        values: [false, false, true, true, true],
-      },
+      { label: "GEO fix proposals", values: has("geo_fix_proposals") },
+      { label: "One-click fixes, WordPress and Webflow", values: has("geo_apply_fixes") },
+      { label: "GEO Engineer and Fix all", values: has("geo_agent") },
+      { label: "Proof Engine experiments", values: has("experiments") },
+      { label: "GA4 and Search Console insights", values: has("analytics_insights") },
     ],
   },
   {
-    title: "Intelligence",
+    title: "Team",
     rows: [
       {
-        label: "Competitors tracked",
-        values: [false, "3", "10", "30", "90"],
+        label: "Brand workspaces",
+        values: each((plan) => plus(plan, n(PLANS[plan].brands))),
       },
       {
-        label: "Market Brain updates",
-        values: [
-          false,
-          "Weekly, 1 brand",
-          "Weekly, 3 brands",
-          "Weekly, 10 brands",
-          "Weekly, 30 brands",
-        ],
+        label: "Seats",
+        values: each((plan) => {
+          const seats = PLANS[plan].seats;
+          return seats === null ? "Unlimited" : n(seats);
+        }),
       },
-      {
-        label: "Weekly Marketing Coach briefing",
-        values: [false, "1 brand", "1 brand", "3 brands", "10 brands"],
-      },
-      {
-        label: "GA4 and Search Console insights",
-        values: [false, true, true, true, true],
-      },
-      {
-        label: "Test posts on your audience first",
-        values: [false, true, true, true, true],
-      },
-    ],
-  },
-  {
-    title: "Team and agency",
-    rows: [
-      {
-        label: "Client portal and share links",
-        values: [false, false, true, true, true],
-      },
-      {
-        label: "Agency command center, white label",
-        values: [false, false, false, true, true],
-      },
+      { label: "Approval workflows", values: has("approvals") },
+      { label: "Client portal and share links", values: has("client_portal") },
+      { label: "Agency command center", values: has("command_center") },
+      { label: "White-label client reports", values: has("white_label") },
       {
         label: "SSO and API access",
-        values: [false, false, false, false, "Coming soon"],
+        values: each((plan) => (plan === "scale" ? "Coming soon" : false)),
       },
-      {
-        label: "Credit rollover on annual plans",
-        values: [false, "Up to 1 month", "Up to 1 month", "Up to 1 month", "Up to 1 month"],
-      },
-    ],
-  },
-  {
-    title: "Connections and automation",
-    rows: [
-      { label: "Autopilot mode", values: [false, false, true, true, true] },
-      { label: "MCP connection (Claude and ChatGPT)", values: [false, true, true, true, true] },
-      { label: "Slack and Notion", values: [false, true, true, true, true] },
-      { label: "Edit generated images in Canva", values: [false, true, true, true, true] },
-    ],
-  },
-  {
-    title: "Support",
-    rows: [
-      {
-        label: "Support level",
-        values: [
-          "Community",
-          "Email",
-          "Email, 24 h",
-          "Priority and onboarding call",
-          "Dedicated manager",
-        ],
-      },
+      { label: "Unused credits roll over", values: each(() => "1 month") },
+      { label: "Support", values: each((plan) => PLANS[plan].support) },
     ],
   },
 ];

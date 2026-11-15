@@ -1,6 +1,13 @@
 import "server-only";
 
-import { ADDONS, CREDIT_PACKS, PLANS, VIDEO_PACKS, type PlanId } from "@/lib/billing/catalog";
+import {
+  ADDONS,
+  PLANS,
+  VIDEO_PACKS,
+  creditPackFor,
+  formatCredits,
+  type PlanId,
+} from "@/lib/billing/catalog";
 import { buildOverviewActivity, type AdminOverviewActivityItem } from "@/lib/admin/activity";
 import type { AdminOverview } from "@/lib/admin/types";
 import { emailsFor, showEmail } from "./audit-read.server";
@@ -163,8 +170,8 @@ function catalogLabel(key: string): string {
   const plan = PLANS[key as PlanId];
   if (plan) return `${plan.label} plan`;
   if (key in ADDONS) return ADDONS[key as keyof typeof ADDONS].label;
-  const creditPack = CREDIT_PACKS.find((pack) => pack.key === key);
-  if (creditPack) return `${creditPack.credits.toLocaleString()} credit pack`;
+  const creditPack = creditPackFor(key);
+  if (creditPack) return `${formatCredits(creditPack.credits)} pack`;
   const videoPack = VIDEO_PACKS.find((pack) => pack.key === key);
   if (videoPack) return `${videoPack.videoUnits / 100} Video Credit pack`;
   return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());

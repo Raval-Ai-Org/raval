@@ -75,7 +75,7 @@ export const AUDIENCES = [
   {
     title: "Startups and founders",
     body: "A full marketing function without hiring one. Strategy, content and distribution from day one.",
-    cta: { label: "Start free", href: "/signup" },
+    cta: { label: "Get started", href: "/signup" },
   },
   {
     title: "Marketing agencies",
@@ -90,7 +90,7 @@ export const AUDIENCES = [
   {
     title: "Personal brands and creators",
     body: "Content and visibility tools sized for one consistent voice, not a corporate content calendar.",
-    cta: { label: "Start free", href: "/signup" },
+    cta: { label: "Get started", href: "/signup" },
   },
 ];
 

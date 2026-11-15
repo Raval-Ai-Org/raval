@@ -32,10 +32,9 @@ import { duration, ease, spring } from "@/lib/motion";
 import { isActiveJob } from "@/lib/studio/jobs";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
-import { studioChargeFor, studioPriceLabel } from "@/lib/studio/billing";
+import { studioChargeFor, studioPriceLabel, studioVideoCredits } from "@/lib/studio/billing";
 import { shortClipPlan, shortClipPrice } from "@/lib/studio/short-clip";
 import type { CreditAction } from "@/lib/billing/catalog";
-import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { useBriefProduct, withProductPhotos } from "./ProductAndFormat";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
@@ -43,7 +42,6 @@ import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
 import { closeOnlyFromSidebar, useCanvasHost, useShellWindow } from "@/lib/shell/window";
 import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
-import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
 import { countBlanks, getTemplate } from "@/lib/studio/templates";
@@ -125,11 +123,10 @@ export function StudioComposer() {
     if (session && billing && !session.pendingKey && !session.job) {
       const controls = { ...session.controls };
       let changed = false;
-      if (
-        !controls.paymentSourceExplicit &&
-        controls.paymentSource !== (billing.creation?.active ? "creation" : "credits")
-      ) {
-        controls.paymentSource = billing.creation?.active ? "creation" : "credits";
+      // Pricing v4: one currency. Everything pays in credits.
+      if (controls.paymentSource !== "credits") {
+        controls.paymentSource = "credits";
+        controls.paymentSourceExplicit = undefined;
         changed = true;
       }
       if (
@@ -1404,12 +1401,7 @@ function StudioPrice({ session }: { session: StudioSession }) {
   return charge === "studio_video" ? (
     <CostChip
       announce
-      videoUnits={studioVideoUnits(
-        // Animated recap photos are five seconds each, whatever length was picked.
-        videoMode === "recap"
-          ? (session.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS
-          : session.controls.durationSec,
-      )}
+      credits={studioVideoCredits(session.type, { ...session.controls, videoMode })}
       className="ml-auto shrink-0"
     />
   ) : (

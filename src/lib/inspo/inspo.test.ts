@@ -48,7 +48,7 @@ describe("inspo board", () => {
     expect(purposeOf("product")).toBe("product");
   });
 
-  it("hides removed rows, page captures and a video's frames", () => {
+  it("hides removed rows and a video's frames; a full-page capture is Website media", () => {
     const video = source({ label: "Reel", mime: "video/mp4" });
     const frame = source({ label: "Reel · 1.5s" });
     const cards = inspoCards([
@@ -62,8 +62,9 @@ describe("inspo board", () => {
     expect(cards.map((c) => c.kind)).not.toContain(undefined);
     expect(cards.find((c) => c.id === frame.id)).toBeUndefined();
     expect(cards.find((c) => c.id === video.id)?.frameIds).toEqual([frame.id]);
-    expect(cards.filter((c) => c.fromSite)).toHaveLength(1);
-    expect(shelfCards(cards, "media")).toHaveLength(1);
+    expect(cards.filter((c) => c.capture)).toHaveLength(1);
+    expect(cards.filter((c) => c.fromSite && !c.capture)).toHaveLength(1);
+    expect(shelfCards(cards, "media")).toHaveLength(2);
     expect(cards[0].createdAt >= cards[cards.length - 1].createdAt).toBe(true);
   });
 

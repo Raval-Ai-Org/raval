@@ -112,7 +112,7 @@ export function CategoryPicker({
           >
             {selected
               ? selected.whyItSpreads
-              : "Mellox picks one that fits, never a meme unless you pick it"}
+              : "Mellox picks a designed post that fits your idea and goal"}
           </motion.p>
         </AnimatePresence>
       </div>

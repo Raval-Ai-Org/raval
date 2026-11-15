@@ -36,7 +36,7 @@ const live = (balance: number) => ({
 });
 
 describe("calculateFunding", () => {
-  it("requires $40 of provider credits and $41.65 cash for one unfunded Starter account", () => {
+  it("requires $39.40 of provider credits and $41.02 cash for one unfunded Starter account", () => {
     const result = calculateFunding({
       accounts: [account("starter")],
       openRouter: live(0),
@@ -45,10 +45,10 @@ describe("calculateFunding", () => {
     });
 
     expect(result.providers[0]).toMatchObject({
-      reserveUsd: 30,
-      shortfallUsd: 30,
-      purchaseFeeUsd: 1.65,
-      cashRequiredUsd: 31.65,
+      reserveUsd: 29.4,
+      shortfallUsd: 29.4,
+      purchaseFeeUsd: 1.62,
+      cashRequiredUsd: 31.02,
     });
     expect(result.providers[1]).toMatchObject({
       reserveUsd: 10,
@@ -57,9 +57,9 @@ describe("calculateFunding", () => {
       cashRequiredUsd: 10,
     });
     expect(result.calculation).toMatchObject({
-      totalReserveUsd: 40,
-      verifiedTopUpUsd: 40,
-      estimatedCashRequiredUsd: 41.65,
+      totalReserveUsd: 39.4,
+      verifiedTopUpUsd: 39.4,
+      estimatedCashRequiredUsd: 41.02,
     });
   });
 
@@ -72,14 +72,14 @@ describe("calculateFunding", () => {
       dependencies: [],
     });
 
-    expect(result.calculation.totalReserveUsd).toBe(149);
+    expect(result.calculation.totalReserveUsd).toBe(144.8);
     expect(result.providers[0]).toMatchObject({
       id: "openrouter",
-      reserveUsd: 124,
+      reserveUsd: 119.8,
       balanceUsd: 50,
-      shortfallUsd: 74,
-      purchaseFeeUsd: 4.07,
-      cashRequiredUsd: 78.07,
+      shortfallUsd: 69.8,
+      purchaseFeeUsd: 3.84,
+      cashRequiredUsd: 73.64,
     });
     expect(result.providers[1]).toMatchObject({
       id: "kie",
@@ -89,8 +89,8 @@ describe("calculateFunding", () => {
       shortfallUsd: 20,
       shortfallCredits: 4_000,
     });
-    expect(result.calculation.verifiedTopUpUsd).toBe(94);
-    expect(result.calculation.estimatedCashRequiredUsd).toBe(98.07);
+    expect(result.calculation.verifiedTopUpUsd).toBe(89.8);
+    expect(result.calculation.estimatedCashRequiredUsd).toBe(93.64);
     expect(result.status).toBe("action_needed");
   });
 

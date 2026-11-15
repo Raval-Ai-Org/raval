@@ -9,11 +9,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
-import { asPlan, freeNudge, isBillingMessage } from "@/lib/billing/present";
+import { asPlan, isBillingMessage } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { BillingCenter } from "./billing/BillingCenter";
 import { UpgradeDialog } from "./billing/UpgradeDialog";
-import { plansFrom, upgradeCopy } from "./billing/UpgradePrompt";
+import { upgradeCopy } from "./billing/UpgradePrompt";
 
 export { WalletPill } from "./billing/WalletPill";
 
@@ -62,44 +62,6 @@ function BlockedToasts() {
       });
     });
   }, []);
-  return null;
-}
-
-/**
- * On Free, tell the owner once per visit when the one-time credits are low,
- * gone or about to end. A toast with a button: the upgrade screen still opens
- * only when they click.
- */
-function FreeNudges() {
-  const { data } = useEntitlements();
-  const free = Boolean(data?.isOwner) && asPlan(data?.entitledPlan) === "free";
-  const credits = data?.meters.credits.available;
-  const nextExpiry = data?.meters.credits.nextExpiry ?? null;
-  useEffect(() => {
-    if (!free || typeof credits !== "number") return;
-    const nudge = freeNudge({ credits, nextExpiry });
-    if (!nudge) return;
-    const key = `mellox:free-nudge:${nudge.id}`;
-    try {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "1");
-    } catch {
-      return;
-    }
-    toast(nudge.title, {
-      id: key,
-      description: `${nudge.text} ${plansFrom()}`,
-      action: {
-        label: "See plans",
-        onClick: () =>
-          emitAppEvent(
-            "open:upgrade",
-            nudge.id === "empty" ? { code: "insufficient_balance", meter: "credits" } : undefined,
-          ),
-      },
-      duration: 12_000,
-    });
-  }, [free, credits, nextExpiry]);
   return null;
 }
 
@@ -240,14 +202,18 @@ function BillingDeepLink() {
   return null;
 }
 
-export function BillingPanel() {
+/**
+ * `requirePlan` (the app shell): with no plan the plan picker stays open and
+ * can't be closed (pricing v4 has no Free plan). The projects list leaves it
+ * off, so a new brand can still be set up and onboarded before choosing.
+ */
+export function BillingPanel({ requirePlan = false }: { requirePlan?: boolean }) {
   return (
     <>
       <BillingDeepLink />
       <BillingCenter />
-      <UpgradeDialog />
+      <UpgradeDialog requirePlan={requirePlan} />
       <BlockedToasts />
-      <FreeNudges />
     </>
   );
 }

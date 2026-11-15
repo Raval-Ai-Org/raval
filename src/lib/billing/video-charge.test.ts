@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  FREE_VIDEO_UNITS,
-  PLANS,
-  VIDEO_PACKS,
-  creditsForVideoUnits,
-  videoCreditsFor,
-} from "./catalog";
+import { FREE_VIDEO_UNITS, PLANS, UNITS_PER_CREDIT, VIDEO_PACKS, videoCreditsFor } from "./catalog";
 import { freeVideoLabel, freeVideosLeft, videoChargePlan } from "./video-charge";
 
 describe("videoChargePlan", () => {
@@ -26,17 +20,17 @@ describe("videoChargePlan", () => {
     expect(long).toMatchObject({ meter: "video", amount: FREE_VIDEO_UNITS });
   });
 
-  it("takes credits once the free videos are used", () => {
+  it("takes credits once the legacy free videos are used (3 a second on Standard)", () => {
     const plan = videoChargePlan({
       videoBalance: 99,
       option: "standard",
       seconds: 8,
       resolution: "720p",
     });
-    expect(plan).toEqual({ meter: "credits", amount: 120, label: "120 credits" });
+    expect(plan).toEqual({ meter: "credits", amount: 24 * UNITS_PER_CREDIT, label: "24 credits" });
     expect(
       videoChargePlan({ videoBalance: 0, option: "standard", seconds: 24, resolution: "720p" }),
-    ).toMatchObject({ meter: "credits", amount: 360 });
+    ).toMatchObject({ meter: "credits", amount: 72 * UNITS_PER_CREDIT });
   });
 
   it("always charges credits for Premium, Cinematic and Long", () => {
@@ -52,7 +46,7 @@ describe("videoChargePlan", () => {
     expect(
       videoChargePlan({ videoBalance: 200, option: "premium", seconds: 10, resolution: "1080p" })
         .amount,
-    ).toBe(240);
+    ).toBe(50 * UNITS_PER_CREDIT);
   });
 
   it("uses a premium video for Premium, Cinematic and Long up to 24 s, then credits", () => {
@@ -97,39 +91,35 @@ describe("videoChargePlan", () => {
     ).toBe("credits");
   });
 
-  it("gives every paid plan its monthly premium videos and Free none", () => {
-    expect(PLANS.free.allowances.premiumVideos).toBe(0);
-    expect(PLANS.starter.allowances.premiumVideos).toBe(2);
-    expect(PLANS.growth.allowances.premiumVideos).toBe(5);
-    expect(PLANS.agency.allowances.premiumVideos).toBe(12);
-    expect(PLANS.scale.allowances.premiumVideos).toBe(30);
+  it("grants no new premium videos: video is priced in credits (pricing v4)", () => {
+    for (const plan of ["free", "starter", "growth", "agency", "scale"] as const)
+      expect(PLANS[plan].allowances.premiumVideos).toBe(0);
   });
 
   it("keeps the provider-cost floor in the credit price", () => {
     const cheap = videoCreditsFor("standard", 8, "720p", 0.3);
     const dear = videoCreditsFor("standard", 8, "720p", 3);
-    expect(cheap).toBe(120);
+    expect(cheap).toBe(24 * UNITS_PER_CREDIT);
     expect(dear).toBeGreaterThan(cheap);
-    expect(dear % 5).toBe(0);
+    expect(dear % UNITS_PER_CREDIT).toBe(0);
   });
 });
 
 describe("catalog", () => {
-  it("gives paid plans 2 free videos a month and Free none", () => {
-    expect(PLANS.free.allowances.videoUnits).toBe(0);
-    for (const plan of ["starter", "growth", "agency", "scale"] as const)
-      expect(PLANS[plan].allowances.videoUnits).toBe(2 * FREE_VIDEO_UNITS);
+  it("grants no new free videos (pricing v4)", () => {
+    for (const plan of ["free", "starter", "growth", "agency", "scale"] as const)
+      expect(PLANS[plan].allowances.videoUnits).toBe(0);
   });
 
   it("takes video packs off sale", () => {
     expect(VIDEO_PACKS.every((pack) => pack.availability === "later")).toBe(true);
   });
 
-  it("rounds credits up to 5", () => {
-    expect(creditsForVideoUnits(100)).toBe(120);
-    expect(creditsForVideoUnits(125)).toBe(150);
-    expect(creditsForVideoUnits(1)).toBe(5);
-    expect(creditsForVideoUnits(0)).toBe(0);
+  it("prices video per second in whole credits", () => {
+    expect(videoCreditsFor("standard", 10, "720p")).toBe(30 * UNITS_PER_CREDIT);
+    expect(videoCreditsFor("premium", 10, "1080p")).toBe(50 * UNITS_PER_CREDIT);
+    expect(videoCreditsFor("draft", 5, "720p")).toBe(8 * UNITS_PER_CREDIT);
+    expect(videoCreditsFor("cinematic", 10, "2k")).toBe(120 * UNITS_PER_CREDIT);
   });
 });
 

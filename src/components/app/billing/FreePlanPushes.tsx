@@ -15,7 +15,7 @@ import { emitAppEvent } from "@/lib/app-events";
 import {
   FEATURES,
   PLANS,
-  SIGNUP_GRANT,
+  creditsOf,
   isFeatureAvailable,
   type FeatureKey,
   type PlanId,
@@ -23,10 +23,10 @@ import {
 import { asPlan, formatNumber, freeNudge, type FreeNudge } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
-import { CREATION_PLANS } from "@/lib/billing/creation";
+
 import { PlanLock, PrimaryButton } from "./billing-ui";
 
-const MONTHLY = formatNumber(CREATION_PLANS.starter.points);
+const MONTHLY = formatNumber(creditsOf(PLANS.starter.allowances.credits));
 
 function openPlans(credits: number) {
   emitAppEvent(
@@ -56,7 +56,7 @@ export function FreeSidebarCardView({
   onUpgrade: () => void;
   className?: string;
 }) {
-  const total = Math.max(SIGNUP_GRANT.credits, credits);
+  const total = Math.max(1, credits);
   const left = Math.max(0, Math.min(1, credits / total));
   const tone = credits <= 0 ? "bg-destructive" : nudge?.id === "low" ? "bg-warning" : "bg-primary";
   return (
@@ -85,7 +85,7 @@ export function FreeSidebarCardView({
         ) : (
           "Free credits come once. "
         )}
-        Get {MONTHLY} creation points every month with Starter.
+        Get {MONTHLY} credits every month with Starter.
       </p>
       <PrimaryButton className="h-8 w-full text-[12.5px]" onClick={onUpgrade}>
         <Crown className="h-3.5 w-3.5" aria-hidden />

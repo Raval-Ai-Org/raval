@@ -206,8 +206,9 @@ describe("Studio billing shadow path", () => {
         account_id: "account-1",
         action: "post_set",
         meter: "credits",
-        amount: 12,
-        shadow_decision: "would_charge",
+        // Text posts are included (pricing v4): linked, never held.
+        amount: 0,
+        shadow_decision: "included",
       }),
     );
     expect(mocked.hold).not.toHaveBeenCalled();
@@ -219,7 +220,7 @@ describe("Studio billing shadow path", () => {
 
 describe("Studio async billing", () => {
   it.each(["image", "video"])(
-    "reserves only text credits for a %s caption revision",
+    "holds nothing for a %s caption revision (text is included)",
     async (type) => {
       mocked.getEntitlements.mockResolvedValue({
         accountId: "account-1",
@@ -246,11 +247,9 @@ describe("Studio async billing", () => {
         }),
       );
       expect(response.status).toBe(200);
-      expect(mocked.hold).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "post_regenerate", meter: "credits", amount: 4 }),
-      );
+      expect(mocked.hold).not.toHaveBeenCalled();
       expect(mocked.saveLink).toHaveBeenCalledWith(
-        expect.objectContaining({ action: "post_regenerate", amount: 4 }),
+        expect.objectContaining({ action: "post_regenerate", amount: 0, hold_id: null }),
       );
     },
   );
@@ -271,10 +270,10 @@ describe("Studio async billing", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           workspaceId: "00000000-0000-4000-8000-000000000002",
-          type: "script",
+          type: "image",
           idempotencyKey: "same-job-request-001",
-          intent: { brief: "The same requested script" },
-          controls: {},
+          intent: { brief: "The same requested picture" },
+          controls: { platforms: ["instagram"] },
         }),
       }),
     );

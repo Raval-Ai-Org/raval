@@ -111,84 +111,120 @@ export function ScanDock({
         layout
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.9 }}
-        animate={{ opacity: 1, y: 0, scale: flashing && !reduce ? [1, 1.04, 1] : 1 }}
-        transition={{ type: "spring", stiffness: 320, damping: 26 }}
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.94 }}
+        animate={{ opacity: 1, y: 0, scale: flashing && !reduce ? [1, 1.025, 1] : 1 }}
+        transition={{ type: "spring", stiffness: 320, damping: 28 }}
         className={cn(
-          "ob-glass flex h-12 max-w-[min(64vw,420px)] items-center gap-2.5 rounded-full pl-1.5 pr-3 text-left sm:h-14 sm:pr-4",
+          "ob-glass relative block overflow-hidden text-left",
+          done
+            ? "w-auto max-w-[min(92vw,360px)] rounded-full py-2 pl-2 pr-4"
+            : "w-[min(92vw,440px)] rounded-[22px] px-3 pb-3 pt-2.5 sm:px-3.5",
           flashing && "ob-glass-flash",
         )}
       >
-        <BrandMark
-          sources={[site?.logoUrl, site?.faviconUrl]}
-          name={name}
-          size={reduce ? 34 : 36}
-        />
-        <span className="hidden items-center -space-x-1 min-[380px]:flex">
-          {BRAINS.map((b, i) => (
-            <BrainRing
-              key={b}
-              brain={b}
-              value={fill[b]}
-              size={24}
-              reduce={reduce}
-              delay={i * 0.08}
+        <span className="flex items-center gap-3">
+          <span className="relative shrink-0">
+            <BrandMark
+              sources={[site?.logoUrl, site?.faviconUrl]}
+              name={name}
+              size={done ? 32 : 38}
             />
-          ))}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12.5px] font-semibold leading-tight sm:text-[13px]">
-            {line}
+            {done && (
+              <span className="absolute -bottom-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-primary text-primary-foreground ring-2 ring-white">
+                <Check className="size-2.5" strokeWidth={3.5} aria-hidden />
+              </span>
+            )}
           </span>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={sub}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22 }}
-              className={cn(
-                "block truncate text-[11px] leading-tight",
-                flashing
-                  ? "font-semibold text-[var(--mox-green-ink,#13803f)]"
-                  : "text-muted-foreground",
-              )}
-            >
-              {sub}
-            </motion.span>
-          </AnimatePresence>
-        </span>
-        {done ? (
-          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
-            <Check className="size-3.5" strokeWidth={3} aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-semibold leading-tight tracking-[-0.01em] sm:text-[13.5px]">
+              {line}
+            </span>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={sub}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.2 }}
+                className={cn(
+                  "mt-0.5 block truncate text-[11.5px] leading-tight",
+                  flashing
+                    ? "font-semibold text-[var(--mox-green-ink,#13803f)]"
+                    : "text-muted-foreground",
+                )}
+              >
+                {sub}
+              </motion.span>
+            </AnimatePresence>
           </span>
-        ) : failed ? (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRetry();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
+          {!done && !failed && (
+            <span className="flex shrink-0 flex-col items-end gap-1">
+              <span className="flex items-center">
+                <AnimatePresence initial={false}>
+                  {colors.map((c, i) => (
+                    <motion.span
+                      key={c}
+                      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.4 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ type: "spring", stiffness: 420, damping: 22, delay: i * 0.06 }}
+                      className="-ml-1 size-3.5 rounded-full border-2 border-white shadow-sm first:ml-0"
+                      style={{ background: c }}
+                    />
+                  ))}
+                </AnimatePresence>
+              </span>
+              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                {timeLeft(pct)}
+              </span>
+            </span>
+          )}
+          {failed && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
                 e.stopPropagation();
                 onRetry();
-              }
-            }}
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-[12px] font-medium hover:bg-secondary"
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRetry();
+                }
+              }}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-[12px] font-medium hover:bg-secondary"
+            >
+              <RefreshCw className="size-3.5" aria-hidden /> Retry
+            </span>
+          )}
+        </span>
+        {!done && (
+          <span
+            className="mt-2.5 block h-[5px] overflow-hidden rounded-full bg-foreground/[0.07]"
+            aria-hidden
           >
-            <RefreshCw className="size-3.5" aria-hidden /> Retry
-          </span>
-        ) : (
-          <span className="shrink-0 text-[11.5px] font-semibold tabular-nums text-muted-foreground">
-            {Math.round(pct)}%
+            <motion.span
+              className={cn(
+                "block h-full rounded-full",
+                failed ? "bg-destructive/60" : "ds-grad-bar",
+              )}
+              initial={false}
+              animate={{ width: `${Math.max(4, Math.min(100, pct))}%` }}
+              transition={{ duration: reduce ? 0 : 0.8, ease: [0.16, 1, 0.3, 1] }}
+            />
           </span>
         )}
       </motion.button>
     </div>
   );
+}
+
+/** Native's "~1 min remaining", read from the server's real progress. */
+function timeLeft(pct: number) {
+  if (pct >= 90) return "Almost done";
+  if (pct >= 55) return "Under a minute";
+  return "~1 min left";
 }
 
 /** One brain's glyph inside a ring that fills in the brain's own colour. */

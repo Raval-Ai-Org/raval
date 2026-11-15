@@ -5,18 +5,17 @@ import "server-only";
 import {
   studioChargeFor,
   studioJobRenders,
+  studioVideoCredits,
   studioTextOnlyRevision,
   type StudioCharge,
 } from "@/lib/studio/billing";
 import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
-import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
 import { createStudioJob } from "@/server/studio/runner.server";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
 import {
   CREDIT_ACTIONS,
   creditsFor,
-  creditsForVideoUnits,
   videoFeatureFor,
   type CreditAction,
 } from "@/lib/billing/catalog";
@@ -157,11 +156,42 @@ export async function createBilledStudioJob(args: {
       (input.type === "social" && input.controls.includeImage))
   ) {
     const { pickInspoMediaFor } = await import("@/server/inspo/media-pool.server");
-    const pick = await pickInspoMediaFor(workspaceId, input.type, args.ownMediaSeed);
+    const pick = await pickInspoMediaFor(
+      workspaceId,
+      input.type,
+      args.ownMediaSeed,
+      input.intent?.brief ?? "",
+    );
     if (pick) {
       input.controls.referenceAssetIds = pick.assetIds;
       input.controls.referenceMode = "design";
       input.controls.photoFidelity = "exact";
+    }
+  }
+  // A person's brief that names their own Media ("use our launch event
+  // photos", a folder or a label) is made with those photos, the way a named
+  // product is picked by itself. Decided before pricing.
+  if (
+    !args.ownMediaSeed &&
+    !revision &&
+    !input.controls.productId &&
+    !input.controls.referenceAssetIds?.length &&
+    !input.controls.sourceVideoAssetIds?.length &&
+    isPhotoDesignEnabled(workspaceId) &&
+    (input.type === "image" ||
+      input.type === "carousel" ||
+      (input.type === "social" && input.controls.includeImage))
+  ) {
+    const brief = input.intent?.brief ?? "";
+    const { briefAsksForOwnMedia } = await import("@/lib/inspo/media-library");
+    if (briefAsksForOwnMedia(brief)) {
+      const { namedInspoMediaFor } = await import("@/server/inspo/media-pool.server");
+      const pick = await namedInspoMediaFor(workspaceId, input.type, brief);
+      if (pick) {
+        input.controls.referenceAssetIds = pick.assetIds;
+        input.controls.referenceMode = "design";
+        input.controls.photoFidelity = "exact";
+      }
     }
   }
   // A product hero is only ever made from the picked product's own photo
@@ -332,13 +362,12 @@ export async function createBilledStudioJob(args: {
     };
   };
   if (videoQuote) keepQuote(videoQuote);
-  const useCreation = input.controls.paymentSource === "creation" && !video;
-  const entitlements = useCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
-  if (useCreation && !entitlements?.creation?.active)
-    throw new HttpError(
-      409,
-      "Your creation allowance starts with your next plan renewal. Use wallet credits for this request.",
-    );
+  // Creation points are legacy (pricing v4, ADR-0050): only a window granted
+  // before v4 still pays in points. Anything else pays in credits.
+  const askedCreation = input.controls.paymentSource === "creation" && !video;
+  const entitlements = askedCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
+  const useCreation = askedCreation && Boolean(entitlements?.creation?.active);
+  if (askedCreation && !useCreation) input.controls.paymentSource = "credits";
   const points = useCreation ? creationPointsFor(input) : null;
   let captionEditId: string | null = null;
   let captionCostChargeId: string | null = null;
@@ -375,7 +404,7 @@ export async function createBilledStudioJob(args: {
     ? 0
     : (points ??
       (video
-        ? (videoQuote?.units ?? creditsForVideoUnits(studioVideoUnits(input.controls.durationSec)))
+        ? (videoQuote?.units ?? studioVideoCredits(input.type, input.controls))
         : clip
           ? (videoQuote?.units ?? shortClipCreditsForRecap(input.controls, clip.clips))
           : creditsFor(action as CreditAction) *

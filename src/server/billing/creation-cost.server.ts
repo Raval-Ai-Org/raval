@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { PLANS, type PlanId } from "@/lib/billing/catalog";
-import { creationProviderLimits } from "@/lib/billing/creation-economics";
+import { creationProviderLimits } from "@/lib/billing/plan-economics";
 import { notifyAdmins } from "./notify.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;

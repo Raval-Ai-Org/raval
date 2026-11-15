@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ADDONS,
   CREDIT_PACKS,
+  creditPackFor,
   PAUSE,
   PLANS,
   TRIAL,
@@ -108,7 +109,13 @@ function environment(): "sandbox" | "production" {
   return key.startsWith("sk_live_") ? "production" : "sandbox";
 }
 
-function catalogItem(kind: PurchaseKind, key: string, interval: BillingInterval | null) {
+function catalogItem(
+  kind: PurchaseKind,
+  key: string,
+  interval: BillingInterval | null,
+  /** Fulfilling a checkout already paid: packs from before v4 still count. */
+  opts: { legacy?: boolean } = {},
+) {
   if (kind === "plan") {
     if (!interval || !(key in PLANS) || key === "free") throw new HttpError(400, "Invalid plan.");
     const plan = PLANS[key as PaidPlanId];
@@ -120,7 +127,9 @@ function catalogItem(kind: PurchaseKind, key: string, interval: BillingInterval 
   if (interval) throw new HttpError(400, "Packs are one-time purchases.");
   const pack =
     kind === "credit_pack"
-      ? CREDIT_PACKS.find((item) => item.key === key)
+      ? opts.legacy
+        ? creditPackFor(key)
+        : CREDIT_PACKS.find((item) => item.key === key)
       : VIDEO_PACKS.find((item) => item.key === key);
   if (!pack) throw new HttpError(400, "Unknown pack.");
   return { cents: pack.usd * 100, interval: "one_time" as const };
@@ -1137,7 +1146,9 @@ async function intentForSession(session: Stripe.Checkout.Session): Promise<Check
 
 async function grantPack(intent: CheckoutIntent, session: Stripe.Checkout.Session): Promise<void> {
   if (session.payment_status !== "paid") return;
-  const expected = catalogItem(intent.kind, intent.catalog_key, intent.interval);
+  const expected = catalogItem(intent.kind, intent.catalog_key, intent.interval, {
+    legacy: true,
+  });
   if (session.currency !== "usd" || session.amount_total !== expected.cents * intent.quantity) {
     throw new Error("Checkout total mismatch.");
   }
@@ -1166,7 +1177,7 @@ async function grantPack(intent: CheckoutIntent, session: Stripe.Checkout.Sessio
   }
   const grantIds: string[] = [];
   if (intent.kind === "credit_pack") {
-    const pack = CREDIT_PACKS.find((item) => item.key === intent.catalog_key);
+    const pack = creditPackFor(intent.catalog_key);
     if (!pack) throw new Error("Unknown paid credit pack.");
     const paid = await grantMeter({
       accountId: intent.account_id,
@@ -1488,6 +1499,7 @@ async function syncSubscription(
       ["pro_messages", TRIAL.proMessages],
       ["flash_messages", TRIAL.flashMessages],
     ] as const) {
+      if (amount <= 0) continue;
       await grantMeter({
         accountId: account.id,
         meter,

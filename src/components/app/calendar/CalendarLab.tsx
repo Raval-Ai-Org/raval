@@ -159,7 +159,7 @@ function autopilotView(items: ContentItem[], mode: LabAutopilot): AutopilotView 
       timezone: "UTC",
       startsOn: fmtYMD(addDays(new Date(), -7)),
       endsOn: fmtYMD(addDays(new Date(), 21)),
-      creditCapPerWeek: 200,
+      creditCapPerWeek: 1500,
       videoCapPerWeek: 0,
       actOnOpportunities: false,
       strategy: null,

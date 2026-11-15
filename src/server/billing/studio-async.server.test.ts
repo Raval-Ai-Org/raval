@@ -78,13 +78,15 @@ describe("Studio async settlement", () => {
     expect(mocked.capture).not.toHaveBeenCalled();
   });
 
-  it("captures just the text price after an optional image fails", async () => {
+  it("returns the whole hold when only the included text was delivered", async () => {
     await settleStudioBilling({
       ...job("succeeded"),
       type: "social",
       output: { partial: [{ target: "media", error: "Provider failed" }] },
     });
-    expect(mocked.capture).toHaveBeenCalledWith(expect.objectContaining({ amount: 12 }));
+    expect(mocked.capture).not.toHaveBeenCalled();
+    expect(mocked.release).toHaveBeenCalledWith(expect.objectContaining({ holdId: "hold-1" }));
+    expect(mocked.update).toHaveBeenCalledOnce();
   });
 
   it("does not mark an uncertain capture as settled", async () => {

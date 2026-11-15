@@ -81,7 +81,7 @@ describe("Brand DNA billing", () => {
     expect(mocked.begin).toHaveBeenCalledWith(
       expect.objectContaining({
         actionName: "brand_dna_rescan",
-        amount: 125,
+        amount: 90,
         workspaceId: undefined,
       }),
     );

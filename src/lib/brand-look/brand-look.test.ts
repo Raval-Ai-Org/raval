@@ -136,8 +136,11 @@ describe("prompt blocks", () => {
     expect(restyleImagePrompt("A photo of a red bicycle", input)).toContain("BRAND STYLE");
   });
 
-  it("gives nothing to say when the brand has nothing set", () => {
-    expect(imageStyleInput(resolveLook(null))).toBeNull();
+  it("gives only Mox's picture styles when the brand has nothing set", () => {
+    const input = imageStyleInput(resolveLook(null));
+    expect(input?.block).toMatch(/Picture styles this brand uses/);
+    expect(input?.colors).toEqual([]);
+    expect(resolveLook(null).customized).toBe(false);
     expect(styleBlockFor(resolveLook(null), "social")).toBe("");
   });
 

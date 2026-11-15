@@ -59,7 +59,7 @@ export type PickScreen = {
 };
 
 export type ChannelsScreen = { kind: "channels"; id: "channels"; title: string; sub: string };
-export type SwipeScreen = { kind: "swipe"; id: "look"; title: string; sub: string };
+export type StylesScreen = { kind: "styles"; id: "styles"; title: string; sub: string };
 export type SayScreen = {
   kind: "say";
   id: string;
@@ -70,7 +70,7 @@ export type SayScreen = {
   side: "right" | "center";
 };
 
-export type AskScreen = PickScreen | ChannelsScreen | SwipeScreen | SayScreen;
+export type AskScreen = PickScreen | ChannelsScreen | StylesScreen | SayScreen;
 
 const ROLE_OPTIONS: Option<Role>[] = [
   {
@@ -370,16 +370,16 @@ export function askScreens(a: Answers, ctx: AskContext): AskScreen[] {
       columns: 4,
     },
     {
-      kind: "swipe",
-      id: "look",
-      title: "Which posts feel like **you**?",
-      sub: "Swipe right on the ones you love, left on the rest.",
+      kind: "styles",
+      id: "styles",
+      title: "How should your **posts look**?",
+      sub: "Pick up to 3, or let Mox decide for your brand.",
     },
     {
       kind: "say",
       id: "look-learned",
       lines: [
-        "Perfect. Mox **learns what you like** from every swipe, so posts keep getting better.",
+        "Perfect. Mox makes every picture in **your styles** and rotates them, so posts never look the same.",
       ],
       pose: "pose-thinking",
       side: "right",

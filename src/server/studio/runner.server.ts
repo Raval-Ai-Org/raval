@@ -9,6 +9,7 @@
 // persist.server.ts).
 import { humanizeOutput } from "@/lib/studio/humanize";
 import { naturalizeVariants } from "@/lib/studio/naturalize.server";
+import { copyIssue } from "@/lib/studio/copy-qa";
 import { fitImagePrompt } from "@/lib/studio/image-prompt-fit";
 import { memeLayout, resolveCategory, type Category } from "@/lib/studio/categories";
 import { memeMode as readMemeMode, memeTemplate } from "@/lib/studio/memes/select";
@@ -3158,6 +3159,12 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       // A template meme whose words don't fit its boxes: one more try with the reason
       // (a second miss is made as an original scene, below).
       const memeIssue = attempt === 1 ? null : memeConceptIssue(candidate);
+      // Copy review (copy-qa.ts): generic AI phrasing or on-picture words too
+      // long to read. Soft: one more take with the reason, then kept as is.
+      const genericCopy =
+        input.refine || attempt === 1 || type === "article"
+          ? null
+          : copyIssue(candidate, input.intent.brief);
       // A video's storyboard is checked on every take, edits included: it is
       // what the paid render is made from.
       const storyboardIssue =
@@ -3197,7 +3204,8 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         !qualityIssue &&
         !repeatedOpening &&
         !repeatedJoke &&
-        !memeIssue
+        !memeIssue &&
+        !genericCopy
       ) {
         output = candidate;
         break;
@@ -3233,9 +3241,11 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
             ? `It was too close to “${similar.title}”.`
             : memeIssue
               ? memeIssue
-              : repeatedJoke
-                ? `It told the same joke as an earlier post (“${repeatedJoke.joke}”). Write a brand-new joke: a different situation, setup and punchline, and a different meme layout.`
-                : `It opened the same way as “${repeatedOpening!.opening}”.`;
+              : genericCopy
+                ? genericCopy
+                : repeatedJoke
+                  ? `It told the same joke as an earlier post (“${repeatedJoke.joke}”). Write a brand-new joke: a different situation, setup and punchline, and a different meme layout.`
+                  : `It opened the same way as “${repeatedOpening!.opening}”.`;
       if (attempt === 1 && qualityIssue)
         throw new StudioJobError(502, `${qualityIssue} Try again with a clearer brief.`);
       if (attempt === 1 && uncitedResearch)

@@ -24,7 +24,7 @@ import { PLANS } from "@/lib/billing/catalog";
 import { accountForUser, accountForWorkspace } from "@/server/billing/accounts.server";
 import { enforcementFor, entitledPlanFor } from "@/server/billing/entitlements.server";
 import { creationPolicyFor } from "@/server/billing/creation.server";
-import { creationProviderLimits } from "@/lib/billing/creation-economics";
+import { creationProviderLimits } from "@/lib/billing/plan-economics";
 import {
   getPlanLimits,
   SOFT_LIMIT_RATIO,
@@ -241,7 +241,7 @@ export async function checkBudget(
             mode: "block",
             scope: "account",
             reason:
-              "Generation is temporarily paused while we check this account's provider spending. Your creation points are returned.",
+              "Generation is temporarily paused while we check this account's provider spending. Your credits are returned.",
           };
         await noteBudgetEvent(scopeKey, verdict.mode, kind, verdict.reason);
         if (verdict.mode === "warn" && verdict.reason)

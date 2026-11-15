@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { toast } from "@/lib/toast";
-import { RefreshCw, Sparkles, Wand2 } from "@/components/icons";
+import { Dices, RefreshCw, Sparkles, Wand2 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { readBrandPayload, studioApi, type WrittenPrompt } from "@/lib/studio/client";
@@ -69,11 +69,11 @@ function remember(workspaceId: string, items: (string | null)[]) {
 }
 
 const STATUS = [
-  "Checking what's trending",
   "Reading your brand",
+  "Checking what's working now",
   "Finding a fresh angle",
-  "Writing the details",
-  "Polishing your prompt",
+  "Writing it sharp",
+  "Checking it reads right",
 ];
 
 export type PromptWriterState = {
@@ -116,13 +116,15 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
   const isStarter = !!template && brief === template.starter.trim();
   const hasOwnIdea = brief.length >= 12 && !isOurs && !isStarter;
 
+  // "Surprise me" (was "Write it for me"): a fresh, random, on-brand idea
+  // each press; with the person's own words it sharpens them instead.
   const label = busy
-    ? "Writing…"
+    ? "Thinking…"
     : isOurs
-      ? "Try another"
+      ? "Another idea"
       : hasOwnIdea
-        ? "Improve it"
-        : "Write it for me";
+        ? "Sharpen it"
+        : "Surprise me";
 
   const write = async () => {
     if (busy) return;
@@ -248,7 +250,8 @@ export function WriteForMeButton({
   className?: string;
 }) {
   const reduce = useReducedMotionSafe();
-  const Icon = writer.label === "Try another" ? RefreshCw : Wand2;
+  const Icon =
+    writer.label === "Sharpen it" ? Wand2 : writer.label === "Another idea" ? RefreshCw : Dices;
   return (
     <motion.button
       type="button"
@@ -268,7 +271,14 @@ export function WriteForMeButton({
           className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent opacity-0 transition-[left,opacity] duration-700 group-hover:left-[120%] group-hover:opacity-100"
         />
       ) : null}
-      <Icon className={cn("relative size-3.5", writer.busy && "animate-spin")} />
+      <motion.span
+        className="relative"
+        animate={writer.busy && !reduce ? { rotate: [0, 180, 360] } : { rotate: 0 }}
+        transition={writer.busy ? { duration: 0.9, repeat: Infinity, ease: "easeInOut" } : {}}
+        whileHover={reduce || writer.busy ? undefined : { rotate: [0, -18, 14, 0] }}
+      >
+        <Icon className="size-3.5" />
+      </motion.span>
       <span className="relative">
         {writer.label} · {creditsFor("ideas")} credits
       </span>

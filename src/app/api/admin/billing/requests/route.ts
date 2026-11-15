@@ -1,7 +1,7 @@
 // Billing admin console: the "Upgrade now" request queue.
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { CREDIT_PACKS, PLANS, VIDEO_PACKS, type PlanId } from "@/lib/billing/catalog";
+import { PLANS, VIDEO_PACKS, creditPackFor, type PlanId } from "@/lib/billing/catalog";
 import { defineRoute } from "@/server/route";
 import { HttpError } from "@/server/http-error";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -15,11 +15,7 @@ function priceUsd(kind: string, key: string, interval: string | null): number | 
     const plan = PLANS[key as PlanId];
     return interval === "year" ? plan.priceAnnualUsd : plan.priceMonthlyUsd;
   }
-  return (
-    CREDIT_PACKS.find((pack) => pack.key === key)?.usd ??
-    VIDEO_PACKS.find((pack) => pack.key === key)?.usd ??
-    null
-  );
+  return creditPackFor(key)?.usd ?? VIDEO_PACKS.find((pack) => pack.key === key)?.usd ?? null;
 }
 
 export const GET = defineRoute({

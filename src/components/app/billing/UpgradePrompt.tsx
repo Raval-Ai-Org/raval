@@ -6,18 +6,10 @@
 
 import { Bolt, Crown, Lock, Users } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
-import { FEATURES, PLANS, type PlanId } from "@/lib/billing/catalog";
-import {
-  asFeature,
-  asPlan,
-  formatNumber,
-  formatUsd,
-  planPrice,
-  type BillingBlock,
-} from "@/lib/billing/present";
+import { FEATURES, PLANS, formatCredits, type PlanId } from "@/lib/billing/catalog";
+import { asFeature, asPlan, formatUsd, planPrice, type BillingBlock } from "@/lib/billing/present";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { cn } from "@/lib/utils";
-import { CREATION_PLANS } from "@/lib/billing/creation";
 import { GhostButton, PrimaryButton } from "./billing-ui";
 
 /** "Plans start at $41 a month": the lowest price the upgrade screen shows. */
@@ -39,29 +31,18 @@ export function upgradeCopy(
   const plan = PLANS[asPlan(block.requiredPlan)];
   switch (block.code) {
     case "insufficient_balance":
-      if (block.meter === "creation")
+      if (current === "free") {
         return {
-          title: "Your creation points are used",
-          text: "They refill at your next renewal. In Studio, choose Wallet credits to see its price before continuing, or upgrade for more monthly points.",
-          action: "See plans",
-          Icon: Bolt,
-        };
-      if (current === "free" && block.meter !== "video" && block.meter !== "pro_messages") {
-        return {
-          title: "You've used your free credits",
-          text: `Get ${CREATION_PLANS.starter.points} creation points a month, plus wallet credits for extras. ${plansFrom()}`,
+          title: "Choose a plan to start",
+          text: `Starter gives you ${formatCredits(PLANS.starter.allowances.credits)} every month. ${plansFrom()}`,
           action: "See plans",
           Icon: Bolt,
         };
       }
       return {
         title:
-          block.meter === "video"
-            ? "You're out of videos"
-            : block.meter === "pro_messages"
-              ? "You're out of Pro messages"
-              : "You're out of credits",
-        text: "Top up or upgrade to keep going.",
+          block.meter === "pro_messages" ? "You're out of Pro messages" : "You're out of credits",
+        text: "Top up or upgrade to keep going. Unused plan credits roll over a month.",
         action: "Get credits",
         Icon: Bolt,
       };

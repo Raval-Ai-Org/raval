@@ -120,7 +120,8 @@ const UGC_OPTION: Option = {
 };
 
 /*
- * Six cards, kept simple. The tools Mellox is for come first: the AI creator
+ * Nine cards, one screen, no scrolling: the posts people make most (image,
+ * carousel, Story) open straight away, then the video tools. Kept simple. The tools Mellox is for come first: the AI creator
  * (UGC) video and the product video open straight away, a post becomes a
  * video ad, then social posts and ads. Everything else waits in "More ways
  * to make". The creator video also sits under Ads, because people look for
@@ -128,13 +129,51 @@ const UGC_OPTION: Option = {
  */
 export const CREATE_CATEGORIES: Category[] = [
   {
+    id: "image",
+    label: "Image post",
+    line: "One designed picture, caption included",
+    illo: "post",
+    options: [
+      studio("image", {
+        label: "Image post",
+        line: "One designed picture, caption included",
+        keywords: "photo picture instagram feed single banner poster graphic",
+      }),
+    ],
+  },
+  {
+    id: "carousel",
+    label: "Carousel",
+    line: "Swipeable slides, one story",
+    illo: "carousel",
+    options: [
+      studio("carousel", {
+        label: "Carousel",
+        line: "Swipeable slides that tell one story",
+        keywords: "slides swipe linkedin document",
+      }),
+    ],
+  },
+  {
+    id: "story",
+    label: "Story",
+    line: "Full-screen frames, 9:16",
+    illo: "story",
+    options: [
+      studio("story", {
+        label: "Story",
+        line: "Full-screen frames for Instagram and Facebook",
+        keywords: "stories vertical frames",
+      }),
+    ],
+  },
+  {
     id: "creator",
-    label: "AI creator video",
+    label: "Creator video",
     line: "A creator talks up your product (UGC)",
     illo: "video",
     photo: "/creators/amara.jpg",
     badge: "Most used",
-    wide: true,
     options: [UGC_OPTION],
   },
   {
@@ -155,7 +194,7 @@ export const CREATE_CATEGORIES: Category[] = [
   },
   {
     id: "post-video",
-    label: "Post to video ad",
+    label: "Post to video",
     line: "A post or photo, set in motion",
     illo: "animate",
     badge: "New",
@@ -169,34 +208,6 @@ export const CREATE_CATEGORIES: Category[] = [
         needs: "You add: a post or photo",
         keywords: "animate photo image to video bring to life move motion reel loop",
       },
-    ],
-  },
-  {
-    id: "posts",
-    label: "Social posts",
-    line: "Image, carousel, Story, text",
-    illo: "post",
-    options: [
-      studio("image", {
-        label: "Image post",
-        line: "One designed picture, captions included",
-        keywords: "photo picture instagram feed single",
-      }),
-      studio("carousel", {
-        label: "Carousel",
-        line: "Swipeable slides that tell one story",
-        keywords: "slides swipe linkedin document",
-      }),
-      studio("story", {
-        label: "Story",
-        line: "Full-screen frames for Instagram and Facebook",
-        keywords: "stories vertical frames",
-      }),
-      studio("social", {
-        label: "Text post",
-        line: "Just the words, written for each platform",
-        keywords: "caption words tweet thread linkedin",
-      }),
     ],
   },
   {
@@ -227,11 +238,23 @@ export const CREATE_CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "text",
+    label: "Text post",
+    line: "Just the words, per platform",
+    illo: "swipe",
+    options: [
+      studio("social", {
+        label: "Text post",
+        line: "Just the words, written for each platform",
+        keywords: "caption words tweet thread linkedin",
+      }),
+    ],
+  },
+  {
     id: "more",
     label: "More to make",
-    line: "Clips, photos, website, writing",
+    line: "Clips, slideshows, website, writing",
     illo: "versions",
-    wide: true,
     options: [
       studio("video", {
         id: "clips",
@@ -469,14 +492,16 @@ export function CreateLauncher() {
   const shift = reduce ? 0 : 36;
 
   const optionGrid = (options: Option[]) => (
-    <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:gap-1.5">
+    <div
+      className={`grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:gap-1.5${options.length > 4 ? " md:grid-cols-3" : ""}`}
+    >
       {options.map((o, i) => {
         const lock = lockFor(o);
         return (
           <MethodCard
             key={o.id}
             index={i}
-            wide={options.length % 2 === 1 && i === options.length - 1}
+            wide={options.length <= 4 && options.length % 2 === 1 && i === options.length - 1}
             label={o.label}
             line={o.line}
             needs={o.needs}
@@ -504,12 +529,12 @@ export function CreateLauncher() {
         title={group ? group.label : "Create"}
         onBack={group ? () => setGroupId(null) : searching ? () => setQuery("") : undefined}
         srDescription="Choose what to make, then pick a format if there are multiple options."
-        bodyClassName="overflow-x-hidden px-4 pb-6 pt-1 sm:px-8 [@media(max-height:500px)]:p-2"
+        bodyClassName="overflow-x-hidden px-4 pb-4 pt-0 sm:px-8 [@media(max-height:500px)]:p-2"
       >
-        <div className="flex min-h-full flex-col items-center justify-center py-2 sm:py-8 [@media(max-height:500px)]:py-0">
-          <div className="w-full max-w-[720px]">
+        <div className="flex min-h-full flex-col items-center justify-center py-1 sm:py-3 [@media(max-height:500px)]:py-0">
+          <div className="w-full max-w-[900px]">
             {/* Autopilot's steps: kind, format, then the brief in Studio. */}
-            <div className="mb-6 flex flex-col items-center gap-2.5 max-[419px]:hidden [@media(max-height:500px)]:hidden">
+            <div className="mb-3 flex flex-col items-center gap-2 max-[419px]:hidden [@media(max-height:760px)]:hidden">
               <StepPills
                 steps={CREATE_STEPS}
                 current={group || searching ? "format" : "kind"}
@@ -539,9 +564,9 @@ export function CreateLauncher() {
                 exit="out"
                 transition={{ type: "spring", stiffness: 460, damping: 38, mass: 0.7 }}
               >
-                <div className="mb-6 flex flex-col items-center text-center max-[419px]:mb-4 [@media(max-height:500px)]:hidden">
-                  <span className="mox-float mb-2 max-[419px]:hidden">
-                    <MoxFace mood={group ? "excited" : "happy"} size={48} track />
+                <div className="mb-4 flex flex-col items-center text-center max-[419px]:mb-3 [@media(max-height:500px)]:hidden">
+                  <span className="mox-float mb-1.5 max-[419px]:hidden [@media(max-height:820px)]:hidden">
+                    <MoxFace mood={group ? "excited" : "happy"} size={44} track />
                   </span>
                   <h3 className="text-[24px] font-bold leading-tight tracking-[-0.025em] max-[419px]:text-[21px] sm:text-[28px]">
                     {group ? (
@@ -562,7 +587,7 @@ export function CreateLauncher() {
                 </div>
 
                 {!group ? (
-                  <label className="mb-4 flex h-11 items-center max-[419px]:hidden [@media(max-height:500px)]:hidden gap-2 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-4 shadow-[var(--ds-card-shadow)] focus-within:border-primary-border [@media(max-height:500px)]:mb-2 [@media(max-height:500px)]:h-9">
+                  <label className="mx-auto mb-3 flex h-10 max-w-[560px] items-center max-[419px]:hidden [@media(max-height:500px)]:hidden gap-2 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] px-4 shadow-[var(--ds-card-shadow)] focus-within:border-primary-border [@media(max-height:500px)]:mb-2 [@media(max-height:500px)]:h-9">
                     <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
                     <span className="sr-only">Search formats</span>
                     <input
@@ -598,7 +623,7 @@ export function CreateLauncher() {
                     </p>
                   )
                 ) : !group ? (
-                  <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-1.5">
+                  <div className="grid grid-cols-2 gap-2.5 min-[420px]:gap-3 md:grid-cols-3 [@media(max-height:500px)]:grid-cols-3 [@media(max-height:500px)]:gap-1.5">
                     {CREATE_CATEGORIES.map((g, i) => {
                       const only = g.options.length === 1 ? g.options[0] : null;
                       const lock = only ? lockFor(only) : null;

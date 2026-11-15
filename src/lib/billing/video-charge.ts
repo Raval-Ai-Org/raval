@@ -5,6 +5,7 @@
 // price a person sees is the one charged.
 import {
   FREE_VIDEO_UNITS,
+  formatCredits,
   videoCreditsFor,
   type UgcModelKey,
   type VideoResolution,
@@ -42,7 +43,7 @@ export function videoChargePlan(args: {
   )
     return { meter: "premium_video", amount: 1, label: "Premium video" };
   const amount = videoCreditsFor(args.option, args.seconds, args.resolution, args.providerCostUsd);
-  return { meter: "credits", amount, label: `${amount.toLocaleString("en-US")} credits` };
+  return { meter: "credits", amount, label: formatCredits(amount) };
 }
 
 /** Whole free videos left in a video balance. */

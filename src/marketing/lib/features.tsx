@@ -154,7 +154,7 @@ export const FEATURES: Feature[] = [
       },
       {
         q: "Which AI engines do you check?",
-        a: "ChatGPT, Gemini and Perplexity. The Free plan covers ChatGPT and Gemini, Starter adds Perplexity, and Growth and above include all three.",
+        a: "ChatGPT, Gemini and Perplexity, on every plan, checked weekly.",
       },
     ],
   },

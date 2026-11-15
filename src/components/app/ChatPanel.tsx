@@ -63,7 +63,7 @@ import {
 } from "@/lib/studio/session-store";
 import { cn } from "@/lib/utils";
 import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./chat/ChatComposer";
-import { FreeCreditStrip } from "./billing/FreePlanPushes";
+
 import { autopilotPath, useComposerAutopilot } from "./autopilot/composer/useComposerAutopilot";
 import { useWorkspacePulse } from "./pulse/use-pulse";
 import { WaitingChip } from "./pulse/WaitingChip";
@@ -1888,7 +1888,7 @@ export function ChatPanel({
             ) : null}
           </AnimatePresence>
           {mobileAccessory ? <div className="mb-2">{mobileAccessory}</div> : null}
-          <FreeCreditStrip className="mb-2" />
+
           <ChatComposer
             ref={composerRef}
             // Home docks a slim Holo pill; a new chat keeps the big box.

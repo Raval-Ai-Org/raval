@@ -55,6 +55,8 @@ export type ReferenceTarget = {
   notes?: string;
   format?: string;
   campaign?: string;
+  /** Inspo → Media folder (stored in `region.folder`). */
+  folder?: string;
   sourceUrl?: string;
 };
 
@@ -94,6 +96,7 @@ function sourceFields(target: ReferenceTarget, video: boolean) {
     notes: (target.notes ?? "").slice(0, 600),
     formats: format !== "all" ? [format] : video ? ["video", "ugc"] : [],
     campaign: target.campaign,
+    folder: target.folder,
     kind: "upload" as const,
   };
 }

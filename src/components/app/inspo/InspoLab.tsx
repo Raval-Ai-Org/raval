@@ -51,7 +51,24 @@ const SAMPLES: Array<[VisualSource["purpose"], number, number, string, string, s
   ["style", 600, 520, "#f6f1e7", "#1f3d2b", "Weekend"],
   ["product", 600, 700, "#3a2a1f", "#cba66c", "Bag 250g"],
   ["person", 600, 800, "#495a45", "#f5f1e8", "Maya"],
+  ["product", 600, 600, "#c2410c", "#fff7ed", "Opening"],
+  ["product", 600, 600, "#1f2937", "#fde68a", "Ribbon"],
+  ["style", 600, 1500, "#ffffff", "#111111", "Homepage"],
 ];
+
+/** Lab extras: a Media folder with labels, and a full-page capture of the site. */
+const EXTRAS: Record<number, Partial<VisualSource>> = {
+  7: {
+    notes: "Doors open at the Lahore store launch",
+    region: { folder: "Launch event", lifetime: "temporary" },
+  },
+  8: {
+    notes: "Ribbon cutting with the team",
+    region: { folder: "Launch event", lifetime: "temporary" },
+  },
+  6: { notes: "Maya, our head roaster", region: { folder: "Team" } },
+  9: { kind: "website", region: { type: "full" } },
+};
 
 function sampleSources(): VisualSource[] {
   return SAMPLES.map(([purpose, w, h, bg, fg, word], i) => ({
@@ -70,6 +87,7 @@ function sampleSources(): VisualSource[] {
     region: {},
     created_at: new Date(Date.UTC(2026, 9, 20 - i)).toISOString(),
     asset: { storage_path: "lab", mime_type: "image/png", url: art(w, h, bg, fg, word) },
+    ...EXTRAS[i],
   }));
 }
 
@@ -241,7 +259,27 @@ export function InspoLab() {
       setLook({});
       log("reset");
     },
-    upload: (files, chip) => log(`upload:${files.length}:${chip}`),
+    upload: (files, chip, folder) =>
+      log(`upload:${files.length}:${chip}${folder ? `:${folder}` : ""}`),
+    setDetails: (card, patch) => {
+      setSources((list) =>
+        list.map((s) =>
+          s.id === card.id
+            ? {
+                ...s,
+                notes: patch.label,
+                purpose: card.capture ? s.purpose : purposeOf(patch.chip, s.purpose),
+                region: {
+                  ...s.region,
+                  lifetime: patch.lifetime,
+                  ...(patch.folder ? { folder: patch.folder } : { folder: undefined }),
+                },
+              }
+            : s,
+        ),
+      );
+      log(`details:${card.label}:${patch.folder ?? "-"}:${patch.lifetime}`);
+    },
     addLink: (url, chip) => log(`link:${chip}:${url}`),
     setChip: (card, chip) => {
       setSources((list) =>

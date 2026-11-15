@@ -956,7 +956,7 @@ function AppShell() {
                 <CreateLauncher />
                 <AnimateFlow />
               </Suspense>
-              <BillingPanel />
+              <BillingPanel requirePlan />
             </div>
           </motion.div>
         </header>

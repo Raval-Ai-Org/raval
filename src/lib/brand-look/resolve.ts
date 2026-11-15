@@ -3,6 +3,7 @@
 // Pure. The single shape every generator consumes (BrandLook). A field the look
 // sets wins; a field it leaves empty comes from Brand DNA (colours, fonts,
 // voice, logo, rules), so the look tracks later Brand DNA edits automatically.
+import { effectiveStyles, type PictureStyleId } from "./picture-styles";
 import { normalizeHex, parseLook } from "./spec";
 import type { StylePalette, VideoStyle, VisualStyle, WritingStyle } from "./spec";
 
@@ -14,6 +15,8 @@ export type ResolveDna = {
   colors?: Array<{ name?: string; hex: string }> | null;
   fonts?: string[] | null;
   logoUrl?: string | null;
+  industry?: string | null;
+  products?: string | null;
   /** The stored look (BrandLookSpec); anything else is ignored. */
   look?: unknown;
 };
@@ -24,6 +27,8 @@ export type BrandLook = {
   video: VideoStyle;
   rules: { do: string | null; dont: string | null };
   logoUrl: string | null;
+  /** The picture styles every picture is made in (own picks, else Mox's). */
+  pictureStyles: { ids: PictureStyleId[]; auto: boolean };
   /** Something beyond plain Brand DNA facts was set (tone, image look, video…). */
   customized: boolean;
 };
@@ -72,7 +77,7 @@ export function lookReady(look: BrandLook): boolean {
   return !!(
     look.visual.palette.primary &&
     look.visual.typography?.heading &&
-    look.visual.medium &&
+    (look.visual.medium || look.pictureStyles?.ids.length) &&
     look.visual.mood?.trim()
   );
 }
@@ -103,6 +108,11 @@ export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
     video: spec.video ?? {},
     rules: { do: d.doRules?.trim() || null, dont: d.dontRules?.trim() || null },
     logoUrl: d.logoUrl || null,
+    pictureStyles: effectiveStyles(spec.visual, {
+      industry: typeof d.industry === "string" ? d.industry : null,
+      products: typeof d.products === "string" ? d.products : null,
+      brandName: d.brandName ?? null,
+    }),
     // The brand's creator alone is a choice of person, not a style, and how
     // often its own media is used is a rotation setting, not a look.
     customized: !!(spec.writing || visualStyled(spec.visual) || videoStyled(spec.video)),

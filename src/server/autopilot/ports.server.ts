@@ -4,7 +4,6 @@
 // Market Brain and the competitor sweeps supply the signals. Nothing here
 // generates, publishes or searches the web on its own.
 import "server-only";
-import { getEntitlements } from "@/server/billing/entitlements.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
@@ -648,7 +647,6 @@ export const realPorts: AutopilotPorts = {
     },
 
     async create({ workspaceId, userId, role, idempotencyKey, action, platforms, story }) {
-      const entitlements = await getEntitlements({ workspaceId, userId, role });
       const type = (action.content_type ?? "social") as StudioType;
       // Instagram, TikTok and YouTube can't take words alone: the post gets a picture.
       const picture = withPicture(type, action.platform);
@@ -680,7 +678,7 @@ export const realPorts: AutopilotPorts = {
           autopilotProgramId: action.program_id ?? undefined,
         },
         controls: {
-          paymentSource: entitlements.creation?.active ? "creation" : "credits",
+          paymentSource: "credits",
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
           ...(picture ? { includeImage: true } : {}),
           ...campaign,

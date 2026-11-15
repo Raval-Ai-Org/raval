@@ -1183,6 +1183,14 @@ export const PLAYBOOKS: readonly Playbook[] = [
 
 const BY_ID = new Map(PLAYBOOKS.map((p) => [p.id, p]));
 
+/** Kinds no longer offered for new campaigns (ids kept so old campaigns read). */
+export const RETIRED_PLAYBOOKS: readonly string[] = ["memes"];
+
+/** The kinds a person can start a new campaign from. */
+export const OFFERED_PLAYBOOKS: readonly Playbook[] = PLAYBOOKS.filter(
+  (p) => !RETIRED_PLAYBOOKS.includes(p.id),
+);
+
 export function playbookById(id: unknown): Playbook | null {
   return typeof id === "string" ? (BY_ID.get(id) ?? null) : null;
 }

@@ -2,11 +2,9 @@ import { describe, expect, it } from "vitest";
 import { resolveLook } from "@/lib/brand-look/resolve";
 import { styleBlockFor } from "@/lib/brand-look/prompt";
 import {
-  LOOK_SAMPLES,
   answersToGoals,
   answersToLook,
   answersToProfile,
-  pickedMedium,
   readAnswers,
   recommendedRhythm,
   whoRunsLine,
@@ -50,29 +48,15 @@ describe("answersToLook", () => {
         role: "marketing",
         tone: "personal",
         emoji: "none",
-        likes: ["photo-product", "photo-people", "3d-chrome"],
+        styles: ["bold-poster", "3d"],
       },
       {},
     );
     const block = styleBlockFor(resolveLook({ look }), "image");
     expect(block).toMatch(/Point of view/);
     expect(block).toMatch(/No emoji/);
-    expect(block).toMatch(/Medium: photo/);
-  });
-});
-
-describe("pickedMedium", () => {
-  it("needs two likes of one medium, and a clear winner", () => {
-    expect(pickedMedium(["photo-product"])).toBeNull();
-    expect(pickedMedium(["photo-product", "photo-people"])).toBe("photo");
-    expect(pickedMedium(["photo-product", "photo-people", "3d-chrome", "3d-product"])).toBeNull();
-    expect(pickedMedium(["photo-product", "photo-product"])).toBeNull();
-  });
-
-  it("has two samples of every medium it offers", () => {
-    const counts = new Map<string, number>();
-    for (const s of LOOK_SAMPLES) counts.set(s.medium, (counts.get(s.medium) ?? 0) + 1);
-    for (const n of counts.values()) expect(n).toBe(2);
+    expect(block).toMatch(/Bold poster/);
+    expect(block).not.toMatch(/Medium: photo/);
   });
 });
 
@@ -130,8 +114,8 @@ describe("profile", () => {
 describe("readAnswers", () => {
   it("drops anything that isn't a real answer", () => {
     expect(
-      readAnswers({ role: "king", tone: "funny", rhythm: 5, likes: ["photo-people", "nope", 3] }),
-    ).toEqual({ tone: "funny", likes: ["photo-people"] });
+      readAnswers({ role: "king", tone: "funny", rhythm: 5, styles: ["3d", "nope", 3] }),
+    ).toEqual({ tone: "funny", styles: ["3d"] });
   });
 });
 

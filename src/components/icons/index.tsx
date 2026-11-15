@@ -136,6 +136,8 @@ export * from "./glyphs";
 export * from "./social";
 // Campaigns (ADR-0039): the campaign kinds' marks, lucide until bespoke glyphs exist.
 export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
+// Studio's "Surprise me" (random idea) button, lucide until a bespoke glyph exists.
+export { Dices } from "lucide-react";
 // Studio motion graphics (ADR-0043), lucide until a bespoke glyph exists.
 export { Shapes } from "lucide-react";
 // Studio post categories (categories.ts), lucide until bespoke glyphs exist.

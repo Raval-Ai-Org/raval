@@ -3,14 +3,15 @@
 import { useEffect } from "react";
 import { Bolt, Video } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
-import { CREDIT_ACTIONS, type CreditAction } from "@/lib/billing/catalog";
+import { CREDIT_ACTIONS, creditsOf, formatCredits, type CreditAction } from "@/lib/billing/catalog";
 import { formatNumber, formatVideos } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
 
 /**
- * The price on a paid button: "12 credits" or "1 video". Charged only when the
- * action succeeds. Pass `videoUnits` for video, `credits` for a price worked
- * out elsewhere (a short video clip); otherwise a catalog action.
+ * The price on a paid button: "1 credit", "30 credits". Charged only when the
+ * action succeeds. `credits` is a price worked out elsewhere (a video), in
+ * ledger units; otherwise a catalog action. An action included in every plan
+ * shows "Free". `videoUnits` is only for balances held from before pricing v4.
  */
 export function CostChip({
   action,
@@ -34,14 +35,14 @@ export function CostChip({
   announce?: boolean;
   className?: string;
 }) {
+  const units =
+    fixedCredits ?? (action ? Math.ceil(CREDIT_ACTIONS[action].credits * quantity) : undefined);
+  const included = free || units === 0;
   const announced =
     typeof videoUnits === "number"
       ? { videoUnits, label: `${formatVideos(videoUnits)} video credits` }
-      : !free && (action || fixedCredits !== undefined)
-        ? (() => {
-            const c = fixedCredits ?? Math.ceil(CREDIT_ACTIONS[action!].credits * quantity);
-            return { credits: c, label: `${formatNumber(c)} ${c === 1 ? "credit" : "credits"}` };
-          })()
+      : !included && units !== undefined
+        ? { credits: units, label: formatCredits(units) }
         : null;
   const key = announce && announced ? announced.label : null;
   useEffect(() => {
@@ -52,7 +53,7 @@ export function CostChip({
   }, [key]);
   const base =
     "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium tabular-nums leading-4 text-muted-foreground";
-  if (free) {
+  if (included) {
     return (
       <span data-slot="cost-chip" className={cn(base, "bg-primary/12 text-primary-ink", className)}>
         Free
@@ -72,9 +73,9 @@ export function CostChip({
       </span>
     );
   }
-  if (!action && fixedCredits === undefined) return null;
-  const credits = fixedCredits ?? Math.ceil(CREDIT_ACTIONS[action!].credits * quantity);
-  const label = `${formatNumber(credits)} ${credits === 1 ? "credit" : "credits"}`;
+  if (units === undefined) return null;
+  const credits = Math.max(1, creditsOf(units));
+  const label = formatCredits(units);
   return (
     <span
       data-slot="cost-chip"

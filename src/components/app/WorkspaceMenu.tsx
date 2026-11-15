@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ErrorState } from "@/components/ui/empty-state";
 import { ArrowLeft, Check, Gift, Plus, Search, LayoutGrid, LogOut } from "@/components/brand/icons";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
-import { PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
+import { PLANS } from "@/lib/billing/catalog";
 import { asPlan, formatNumber, nextPlan } from "@/lib/billing/present";
 import { useWorkspaces, workspaceLabel, type WorkspaceSummary } from "@/hooks/use-workspaces";
 import { workspacePath, ALL_WORKSPACES } from "@/lib/workspace/paths";
@@ -65,7 +65,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   // The real account balance (shared by all the owner's brands).
   const plan = asPlan(billing.data?.entitledPlan);
   const credits = billing.data?.meters.credits.available ?? 0;
-  const allowance = plan === "free" ? SIGNUP_GRANT.credits : PLANS[plan].allowances.credits;
+  const allowance = PLANS[plan].allowances.credits;
   const leftPct = allowance > 0 ? Math.max(0, Math.min(100, (credits / allowance) * 100)) : 0;
   const low = leftPct <= 20;
   const canUpgrade = Boolean(billing.data?.isOwner && nextPlan(plan));

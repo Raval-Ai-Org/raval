@@ -47,9 +47,11 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   Big `AppModalShell` windows fill the canvas column (Back pill, title pill).
   The sidebar is four short groups; Share lives only in the top bar, the
   balance only in `MoxGauge`, the top bar's corner shows the plan.
-  Create is Holo's "choose a method" card grid (`CreateLauncher`); Home's
+  Create is Holo's "choose a method" card grid (`CreateLauncher`): nine cards,
+  3×3, one screen with no scroll; Image post, Carousel and Story open straight
+  away (never hidden in a "Social posts" group); Home's
   Swipe ideas / Blog ideas open `IdeaSwipeDeck` (a pick only fills a brief);
-  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, then the shape on the canvas: size, slides, Story frames — `PostCanvasSettings`, videos `VideoCanvasSettings` — and one Options pill); the right side panel (Holo) is one list, no tabs: product or service first (big cards with "None"), goal, kind of post (Auto, the grid only on "Choose a kind"), the format's own settings, templates. No ideas there: Write it for me writes the idea; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
+  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, then the shape on the canvas: size, slides, Story frames — `PostCanvasSettings`, videos `VideoCanvasSettings` — and one Options pill); the right side panel (Holo) is one list, no tabs: product or service first (big cards with "None"), goal, kind of post (Auto, the grid only on "Choose a kind"), the format's own settings, templates. No ideas there: Surprise me writes the idea; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
   the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
   Mox's gradient only on the canvas wash, the primary pill, progress bars, the
   visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
@@ -244,7 +246,9 @@ Brand Styles and the Brand Kit are gone — never add them back).
     Product, Person) through `POST /api/brand-visuals/upload`; Post look,
     Video look and Voice write `dna.look` via `tidyLook`. No new table.
   - "Learn my style" is the existing paid analysis with the price on the
-    button. Style strength and the voice sample are pure and free. The first
+    button; Board uploads (Love / Avoid) also start it by themselves, once,
+    5 s after the last batch (`queueLearn` in `InspoPanel`, the person's own
+    upload is the click). Style strength and the voice sample are pure and free. The first
     read of the brand's site is the included one and starts by itself after
     the Brand DNA scan or when an editor first opens Inspo (no profile, no job
     yet, `startIncludedSiteRead`); every repeat is a click with its price.
@@ -1267,6 +1271,25 @@ benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
   skill (`.claude/skills/`).
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
+- **Picture styles** (`src/lib/brand-look/picture-styles.ts`, ids stored on
+  `dna.look.visual.styles`: add, never rename): up to three, or "Let Mox
+  decide" (`stylesAuto`, `autoPictureStyles` from industry and products).
+  Chosen in onboarding (`StylesScreen`, replaced the swipe deck) and Inspo →
+  Post look (`PictureStylePicker`). There is no "Photo" medium choice any more.
+  Surprise me rotates them per piece (`styleForPiece`).
+- **Surprise me** (was "Write it for me", `PromptWriter`): a 60–160 word brief
+  (`PROMPT_BLUEPRINTS`) that says WHAT, never camera or lighting. With no media
+  of the person's own it sees the top of the brand's site capture
+  (`loadSiteGlance`); it may use Media named in the brief (`mediaForBrief`).
+  Every brief passes `briefIssues` (free) and gets one rewrite with the reasons.
+- **Copy QA** (`src/lib/studio/copy-qa.ts`, pure): generic AI phrasing and
+  on-picture words over 12 get one more take in the runner's loop, then the
+  draft is kept (soft, never fails a piece). The person's own words are theirs.
+  The catalogue block carries each product's benefits and real page, and
+  writers send people to that page; never invent a link.
+- **Retired kinds:** meme and before/after (`RETIRED_CATEGORIES`, the memes
+  playbook, `RETIRED_VIDEO_KINDS`) are no longer offered or picked; Auto picks
+  designed kinds only. Their ids stay readable for old posts.
 - **A post has a kind** (`src/lib/studio/categories.ts`, pure; ids stored on
   `intent.category`: add, never rename): sale, product, launch, meme,
   relatable, trend, tips, myth, before/after, proof, behind the scenes,
@@ -1459,23 +1482,31 @@ verify.server.ts`, through `safeFetch`) is deliberately conservative: a bot
 ## Billing and credits
 
 Status and next steps: [docs/billing/PROGRESS.md](docs/billing/PROGRESS.md); decision
-record ADR-0027.
+records ADR-0027 and [ADR-0050](docs/adr/0050-pricing-v4.md) (pricing v4).
 
 - **Catalog** `src/lib/billing/catalog.ts` is the only source of prices, plans, limits
   and feature gates (browser-safe). Never put a price anywhere else.
+- **Pricing v4: no Free plan, one credit.** Starter $49 / Growth $149 / Agency $399
+  (yearly $39 / $119 / $319 a month), 150 / 500 / 1,500 credits, Enterprise is "Talk
+  to us". `free` is only the locked no-plan state (`hasActivePlan`): `AppShell`'s
+  `BillingPanel requirePlan` shows a picker that can't be closed. 1 credit = 1 image
+  post = 30 ledger units (`UNITS_PER_CREDIT`, `cr()`, `formatCredits(units)`);
+  text work is included (0 credits: no hold, but `assertIncluded` still checks the
+  plan). Video is credits per second (`videoCreditsFor`). Never add a Free plan,
+  creation points or Video Credits back; old balances only spend down.
+  Margins are code (`plan-economics.ts`, its test is the floor).
 - **One wallet per owner** (`billing_accounts`), shared across their brands; meters
-  `credits`, `video` (100 units = 1 video), `pro_messages`, `flash_messages`.
+  `credits`, `pro_messages`, `flash_messages` (legacy `video` / `premium_video` /
+  `creation` balances only spend down).
 - **Paid user actions go through `runMetered` / `beginDeferredMetered`**
   (`src/server/billing/metered.server.ts`): hold → run → capture, release on failure.
   Included work uses `requireBillingFeature` / `requireWithinLimit`. Background jobs
   use `beginAsyncCharge` → `link(kind, rowId)` (`async-charges.server.ts`) and settle
   from the job's own status; add new kinds to `billing_async_links` and `outcomeFor`.
-- **Short clips use credits, not Video Credits.** One AI clip of 8 s or less on
-  Economy or Standard (a picture brought to life, each animated recap photo, an
-  8 s video or video Story) is `studio_short_clip`: `SHORT_CLIP_CREDITS` in the
-  catalog, decided by the pure `shortClipPlan` (`src/lib/studio/short-clip.ts`),
-  also payable in creation points. Longer, Premium, Cinematic and UGC renders
-  stay on Video Credits.
+- **Short clips** (8 s or less on Economy or Standard: a picture brought to life,
+  each animated recap photo, an 8 s video or video Story) are `studio_short_clip`:
+  `SHORT_CLIP_CREDITS`, decided by the pure `shortClipPlan`
+  (`src/lib/studio/short-clip.ts`). Everything else, UGC included, is per second.
 - Notices go through `notify()` (`src/server/billing/notify.server.ts`, deduped per
   window); email only via `src/server/notify/email.server.ts` (Resend).
 - Tracked prompts: `src/server/geo/tracked-prompts.server.ts`, run from the existing

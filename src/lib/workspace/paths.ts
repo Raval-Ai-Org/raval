@@ -220,8 +220,12 @@ export function soleWorkspaceLanding(
 ): string | null {
   const params = new URLSearchParams(search);
   if (params.has("all") || params.has("add")) return null;
-  if (workspaces.length !== 1) return null;
+  // A brand counts once its setup is finished; an abandoned setup never keeps
+  // someone with one real brand on the list.
+  const finished = workspaces.filter((w) => w.onboarded);
+  if (finished.length === 1)
+    return isWorkspaceId(finished[0].id) ? workspacePath(finished[0].id) : null;
+  if (finished.length > 1 || workspaces.length !== 1) return null;
   const only = workspaces[0];
-  if (!isWorkspaceId(only.id)) return null;
-  return only.onboarded ? workspacePath(only.id) : onboardingPath(only.id);
+  return isWorkspaceId(only.id) ? onboardingPath(only.id) : null;
 }

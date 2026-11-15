@@ -16,13 +16,13 @@ describe("Studio charges follow the work requested", () => {
         type: "image",
         controls: { platforms: [], referenceMode: "preserve", referenceAssetIds: ["photo"] },
       }),
-    ).toBe("12 credits");
+    ).toBe("Included");
     expect(
       studioPriceLabel({
         type: "image",
         controls: { platforms: [], referenceMode: "inspire", referenceAssetIds: ["photo"] },
       }),
-    ).toBe("30 credits");
+    ).toBe("1 credit");
   });
   it.each(["social", "image", "video", "ad"] as const)(
     "keeps %s caption edits on the text price and never starts media",
@@ -35,10 +35,10 @@ describe("Studio charges follow the work requested", () => {
       };
       expect(studioTextOnlyRevision(request)).toBe(true);
       expect(studioJobRenders(request)).toBe(false);
-      expect(studioPriceLabel(request)).toBe("4 credits");
+      expect(studioPriceLabel(request)).toBe("Included");
     },
   );
-  it("prices an explicit video retake with video units, and a preview with credits", () => {
+  it("prices an explicit video retake per second, and a preview with credits", () => {
     expect(
       studioPriceLabel({
         type: "video",
@@ -46,19 +46,19 @@ describe("Studio charges follow the work requested", () => {
         parentJobId: "original",
         refine: { instruction: "Remake the visual", target: "media" },
       }),
-    ).toBe("240 credits");
+    ).toBe("30 credits");
     expect(
       studioPriceLabel({ type: "video", controls: { platforms: [], videoPreview: true } }),
-    ).toBe("10 credits");
+    ).toBe("2 credits");
   });
-  it("charges only for copy when the requested optional image fails", () => {
+  it("charges nothing for the included copy when the requested optional image fails", () => {
     const job = {
       status: "succeeded",
       type: "social",
       output: { partial: [{ target: "media", error: "Unavailable" }] },
     } as StudioJob;
-    expect(studioCapturedAmount(job, 30)).toBe(12);
-    expect(studioCapturedAmount({ ...job, parent_job_id: "original" }, 30)).toBe(4);
+    expect(studioCapturedAmount(job, 30)).toBe(0);
+    expect(studioCapturedAmount({ ...job, parent_job_id: "original" }, 30)).toBe(0);
     expect(studioCapturedAmount({ ...job, status: "failed" }, 30)).toBe(0);
   });
   it("does not change visual content or the other platform during a scoped caption edit", () => {
@@ -191,7 +191,7 @@ describe("motion graphics and the premium quota", () => {
         type: "video",
         controls: { platforms: [], videoMode: "motion", durationSec: 12 },
       }),
-    ).toBe("90 credits");
+    ).toBe("3 credits");
   });
 
   it("says how many premium videos are left", () => {

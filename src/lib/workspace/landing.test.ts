@@ -10,6 +10,24 @@ describe("soleWorkspaceLanding", () => {
     expect(soleWorkspaceLanding([{ id: A, onboarded: false }], "")).toBe(`/w/${A}/onboarding`);
   });
 
+  it("one finished brand goes straight in, whatever setups were left unfinished", () => {
+    const one = [
+      { id: A, onboarded: true },
+      { id: B, onboarded: false },
+    ];
+    expect(soleWorkspaceLanding(one, "")).toBe(`/w/${A}/app`);
+    // Two unfinished setups and no brand yet: let the person choose.
+    expect(
+      soleWorkspaceLanding(
+        [
+          { id: A, onboarded: false },
+          { id: B, onboarded: false },
+        ],
+        "",
+      ),
+    ).toBeNull();
+  });
+
   it("keeps the list for two or more, none, or an explicit request", () => {
     const two = [
       { id: A, onboarded: true },

@@ -169,7 +169,8 @@ export function Board({
         </div>
       </div>
 
-      {/* Learning the style: the one paid step, always a person's click. */}
+      {/* Learning the style starts by itself after Love/Avoid uploads; the
+          buttons stay for a re-learn by hand. */}
       {taste?.available !== false && (
         <div className="flex flex-wrap items-center gap-2">
           {learning ? (
@@ -192,7 +193,7 @@ export function Board({
                 disabled={!canEdit || !canLearn(view.cards) || !!view.busy}
                 onClick={handlers.learn}
                 data-testid="inspo-learn"
-                title="Your look already comes from the Brand DNA scan. This adds what you put on the board."
+                title="Mox learns by itself after you add pictures. Press this to learn again now."
               >
                 <Sparkles className="h-4 w-4" />{" "}
                 {taste?.active ? "Update from board" : "Learn my style"}{" "}

@@ -44,18 +44,18 @@ const args = {
   workspaceId: "workspace-1",
   userId: "user-1",
   role: "editor" as const,
-  action: "post_set" as const,
+  action: "image_post" as const,
   idempotencyKey: "click-1",
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocked.insert.mockResolvedValue({ error: null });
-  mocked.hold.mockResolvedValue({ ok: true, id: "hold-1", available: 988 });
-  mocked.capture.mockResolvedValue({ ok: true, available: 988, charge_id: "charge-1" });
+  mocked.hold.mockResolvedValue({ ok: true, id: "hold-1", available: 970 });
+  mocked.capture.mockResolvedValue({ ok: true, available: 970, charge_id: "charge-1" });
   mocked.release.mockResolvedValue({ ok: true, available: 1000 });
   mocked.heldRecord.mockResolvedValue({
-    data: { amount: 12, action: "post_set", user_id: "user-1", workspace_id: "workspace-1" },
+    data: { amount: 30, action: "image_post", user_id: "user-1", workspace_id: "workspace-1" },
     error: null,
   });
 });
@@ -74,9 +74,9 @@ describe("runMetered", () => {
     await runMetered(args, async () => "created");
     expect(mocked.insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "post_set",
+        action: "image_post",
         meter: "credits",
-        amount: 12,
+        amount: 30,
         decision: "would_charge",
       }),
     );
@@ -101,7 +101,7 @@ describe("runMetered", () => {
     });
     expect(result.result).toBe("partial");
     expect(mocked.hold).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 12, accountId: "account-1" }),
+      expect.objectContaining({ amount: 30, accountId: "account-1" }),
     );
     expect(mocked.capture).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 5, holdId: "hold-1" }),

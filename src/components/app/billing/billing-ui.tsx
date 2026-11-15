@@ -40,7 +40,7 @@ export function IntervalToggle({
           {option === "month" ? "Monthly" : "Yearly"}
           {option === "year" && (
             <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary-ink">
-              2 months free
+              Save 20%
             </span>
           )}
         </button>

@@ -630,10 +630,21 @@ export function categoryById(id: unknown): Category | null {
   return CATEGORIES.find((c) => c.id === id) ?? null;
 }
 
+/**
+ * Kinds no longer offered or made (2026-11): memes and before/after gave
+ * inconsistent pictures. Ids stay so old posts still read; nothing new is
+ * made as one, and their templates are hidden.
+ */
+export const RETIRED_CATEGORIES: readonly CategoryId[] = ["meme", "before-after"];
+
+export function isRetiredCategory(id: unknown): boolean {
+  return RETIRED_CATEGORIES.includes(id as CategoryId);
+}
+
 /** Categories that suit a format, best fits first, grouped in picker order. */
 export function categoriesFor(type: StudioType): Category[] {
   const order = new Map(CATEGORY_GROUPS.map((g, i) => [g.id, i]));
-  return CATEGORIES.filter((c) => c.formats.includes(type)).sort(
+  return CATEGORIES.filter((c) => c.formats.includes(type) && !isRetiredCategory(c.id)).sort(
     (a, b) =>
       (order.get(a.group) ?? 0) - (order.get(b.group) ?? 0) ||
       a.formats.indexOf(type) - b.formats.indexOf(type),
@@ -701,12 +712,13 @@ export function categoryOfTemplate(templateId: string | null | undefined): Categ
   return templateId ? (TEMPLATE_CATEGORY[templateId] ?? null) : null;
 }
 
-/** The category a piece follows: the person's pick, else its template's. */
+/** The category a piece follows: the person's pick, else its template's. Never a retired kind. */
 export function resolveCategory(intent: {
   category?: string | null;
   template?: string | null;
 }): Category | null {
-  return categoryById(intent.category) ?? categoryById(categoryOfTemplate(intent.template));
+  const found = categoryById(intent.category) ?? categoryById(categoryOfTemplate(intent.template));
+  return found && !isRetiredCategory(found.id) ? found : null;
 }
 
 /** How the picture is made: a category decides, else the polished default. */
@@ -771,28 +783,24 @@ export function categoryPictureLines(category: Category | null): string[] {
 
 /**
  * How often each category comes up for a goal when Write it for me picks.
- * Auto never makes a meme: a joke post is made only when a person picks Meme
- * (or a meme template).
+ * Auto only makes designed posts (real graphics, banners, carousels): the
+ * phone-native kinds (POV, trend, storytime, UGC, behind the scenes) gave
+ * inconsistent pictures, so they are made only when a person picks them.
  */
 const GOAL_MIX: Partial<Record<GoalId, Partial<Record<CategoryId, number>>>> = {
-  offer: { sale: 4, product: 2, "before-after": 1, proof: 1 },
-  launch: { launch: 4, product: 2, trend: 1, "behind-scenes": 1 },
-  leads: { proof: 3, "before-after": 2, tips: 2, ugc: 1 },
-  education: { tips: 3, myth: 3, list: 2, "before-after": 1 },
-  engagement: { relatable: 3, "this-or-that": 2, trend: 2, storytime: 1 },
-  awareness: {
-    relatable: 2,
-    trend: 2,
-    product: 2,
-    aesthetic: 1,
-    local: 1,
-    "behind-scenes": 1,
-    tips: 1,
-  },
+  offer: { sale: 4, product: 3, proof: 1 },
+  launch: { launch: 4, product: 3, list: 1 },
+  leads: { proof: 3, tips: 2, product: 2, list: 1 },
+  education: { tips: 3, list: 3, myth: 2 },
+  engagement: { "this-or-that": 2, tips: 2, list: 2, quote: 1, product: 1 },
+  awareness: { product: 3, tips: 2, list: 1, aesthetic: 1, quote: 1, local: 1 },
 };
 
-/** Kinds Auto never picks by itself: only a person's pick makes one. */
-export const NEVER_AUTO: readonly CategoryId[] = ["meme"];
+/** Kinds Auto never picks by itself: retired kinds and every phone-native kind. */
+export const NEVER_AUTO: readonly CategoryId[] = [
+  ...RETIRED_CATEGORIES,
+  ...CATEGORIES.filter((c) => c.register === "native").map((c) => c.id),
+];
 
 function hash(text: string): number {
   let h = 2166136261;
@@ -822,9 +830,13 @@ export function pickCategory(args: {
   );
   if (!pool.length)
     pool = categoriesFor(args.type)
+      .filter((c) => !NEVER_AUTO.includes(c.id) && !recent.has(c.id))
+      .map((c) => [c.id, 1] as [CategoryId, number]);
+  if (!pool.length)
+    pool = categoriesFor(args.type)
       .filter((c) => !NEVER_AUTO.includes(c.id))
       .map((c) => [c.id, 1] as [CategoryId, number]);
-  if (!pool.length) return CATEGORIES[0];
+  if (!pool.length) return categoryById("product")!;
   const total = pool.reduce((sum, [, w]) => sum + w, 0);
   let roll = hash(args.seed) % total;
   for (const [id, weight] of pool) {

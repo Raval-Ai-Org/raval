@@ -81,13 +81,13 @@ export default async function UseCasePage({ params }: Props) {
           <p className="lede">{u.lede}</p>
           <div className="ft-actions">
             <a href="/signup" className="px-cta px-cta-lime">
-              Start free
+              Get started
             </a>
             <Link href="/pricing" className="ft-ghost">
               See pricing
             </Link>
           </div>
-          <p className="ft-note">No credit card required.</p>
+          <p className="ft-note">Plans from $39 a month.</p>
         </div>
       </header>
 
@@ -230,7 +230,7 @@ export default async function UseCasePage({ params }: Props) {
 
         <CtaBand
           title={<>See Mellox working for {u.name.toLowerCase()}.</>}
-          text="Start free. No credit card required."
+          text="Plans from $39 a month, or try Growth for 7 days."
           primary={{ label: "Get started", href: "/signup" }}
         />
       </main>

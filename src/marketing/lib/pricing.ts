@@ -1,28 +1,37 @@
-// Pricing content for /pricing and the other public pages.
+// Pricing content for /pricing and the other public pages (pricing v4, ADR-0050).
 //
 // Plans, packs and add-ons come from the product's own catalog (src/lib/billing/catalog.ts), so this page can
 // never show a price, an allowance or a feature the product doesn't really sell. Change a number there, not here.
 import {
   ADDONS as CATALOG_ADDONS,
+  CREDIT_ACTIONS,
   CREDIT_PACKS as CATALOG_CREDIT_PACKS,
+  PACK_VALID_DAYS,
+  PAUSE,
   PLANS as CATALOG_PLANS,
-  VIDEO_PACKS as CATALOG_VIDEO_PACKS,
-  VIDEO_UNITS_PER_VC,
+  PUBLIC_PLANS,
+  TRIAL,
+  UNITS_PER_CREDIT,
+  VIDEO_CREDITS_PER_SECOND,
+  annualMonthlyUsd,
+  creditsOf,
   type AddonKey,
+  type CreditAction,
   type PaidPlanId,
 } from "@/lib/billing/catalog";
+import { planOutcomes } from "@/lib/billing/plan-economics";
 import type { Faq } from "./faqs";
 import { NEW_FAQS } from "./whats-new";
-import { CREATION_PLANS } from "@/lib/billing/creation";
 
 const n = (value: number) => Math.round(value).toLocaleString("en-US");
+const credits = (units: number) => creditsOf(units);
 
 export type Plan = {
   id: PaidPlanId;
   name: string;
   badge?: string;
   tagline: string;
-  /** Monthly price in USD. Every plan has one; `null` is kept for the pages that still check for it. */
+  /** Monthly price in USD. `null` shows "Custom" (Enterprise). */
   monthly: number | null;
   credits: string;
   imagePosts: string;
@@ -36,12 +45,12 @@ export type Plan = {
   featured?: boolean;
 };
 
-/** The paid plans, cheapest first. */
-export const PAID_PLANS: PaidPlanId[] = ["starter", "growth", "agency", "scale"];
+/** The three plans sold on the page, cheapest first. Enterprise is "Talk to us". */
+export const PAID_PLANS: PaidPlanId[] = [...PUBLIC_PLANS];
 
 export const PLANS: Plan[] = PAID_PLANS.map((id, i) => {
   const def = CATALOG_PLANS[id];
-  const videos = def.allowances.videoUnits / VIDEO_UNITS_PER_VC;
+  const made = planOutcomes(id);
   const below = PAID_PLANS[i - 1];
   return {
     id,
@@ -49,10 +58,10 @@ export const PLANS: Plan[] = PAID_PLANS.map((id, i) => {
     badge: def.badge,
     tagline: def.fit,
     monthly: def.priceMonthlyUsd,
-    credits: `${n(CREATION_PLANS[id].points)} creation points + ${n(CREATION_PLANS[id].flexCredits)} wallet credits/mo`,
-    imagePosts: `up to ${n(CREATION_PLANS[id].points / 2)} standard image posts, or a mix`,
-    articles: "Articles share your creation allowance",
-    video: `+ ${n(videos)} Video Credits a month; clip count varies`,
+    credits: `${n(made.credits)} credits a month`,
+    imagePosts: `≈ ${n(made.imagePosts)} image posts`,
+    articles: "Text posts, captions, scripts and articles included",
+    video: `or ≈ ${n(made.videos)} 10-second videos`,
     chips: [
       `${n(def.brands)} ${def.brands === 1 ? "brand" : "brands"}`,
       def.seats === null ? "Unlimited seats" : `${n(def.seats)} seats`,
@@ -64,57 +73,61 @@ export const PLANS: Plan[] = PAID_PLANS.map((id, i) => {
   };
 });
 
+/** What one Starter replaces, for the value line on the page (public list prices, 2026-11). */
+export const VALUE_ANCHOR = {
+  tools: ["Holo", "Arcads", "Otterly", "a scheduler"],
+  usdPerMonth: 205,
+  line: `Replaces Holo, Arcads, Otterly and a scheduler (about $205 a month), from ${"$"}${n(annualMonthlyUsd("starter"))}.`,
+};
+
 export const TRY_FIRST = [
   {
-    id: "free",
-    kicker: "No card needed",
-    name: "Free plan",
-    blurb: "Scan your brand, see your first AI visibility findings, and try the assistant.",
+    id: "trial",
+    kicker: `${TRIAL.days} days of ${CATALOG_PLANS[TRIAL.plan].label}`,
+    name: `${CATALOG_PLANS[TRIAL.plan].label} trial`,
+    blurb: "Run a real week of marketing on your own brand before the first payment.",
     features: [
-      "100 credits to spend, one time",
-      "1 brand with a Brand DNA scan",
-      "5 tracked AI prompts, checked weekly",
-      "1 site scan, up to 25 pages",
-      "30 Mellox Flash chat messages",
+      `${n(credits(TRIAL.credits))} credits to make posts and videos`,
+      `${n(CATALOG_PLANS[TRIAL.plan].brands)} brand workspaces`,
+      `${n(TRIAL.proMessages)} Mellox Pro chat messages`,
+      "Card required; cancel before it ends and pay nothing",
     ],
-    cta: "Start free",
+    cta: `Start the ${TRIAL.days}-day trial`,
   },
   {
-    id: "trial",
-    kicker: "14 days of Growth",
-    name: "Growth trial",
-    blurb: "Run a real workflow across several brands before you commit to a plan.",
+    id: "enterprise",
+    kicker: "30+ brands",
+    name: CATALOG_PLANS.scale.label,
+    blurb: "For large teams and networks of brands, with a dedicated account manager.",
     features: [
-      "500 credits and 2 video credits",
-      "3 brand workspaces",
-      "20 Mellox Pro chat messages",
-      "Card required to start",
+      `${n(CATALOG_PLANS.scale.brands)}+ brands and unlimited seats`,
+      `${n(credits(CATALOG_PLANS.scale.allowances.credits))}+ credits a month`,
+      "Support with a guaranteed response time",
+      "SSO and API access (coming soon)",
     ],
-    cta: "Start 14 day trial",
+    cta: "Talk to us",
   },
 ];
 
 export const CREDIT_PACKS = CATALOG_CREDIT_PACKS.map((pack) => ({
   price: pack.usd,
-  credits: pack.credits + pack.bonusCredits,
+  credits: credits(pack.credits + pack.bonusCredits),
   bonus: Math.round((pack.bonusCredits / pack.credits) * 100),
 }));
 
-export const VIDEO_PACKS = CATALOG_VIDEO_PACKS.map((pack) => {
-  const videos = pack.videoUnits / VIDEO_UNITS_PER_VC;
-  return { credits: videos, rate: `$${(pack.usd / videos).toFixed(2)}`, price: `$${pack.usd}` };
-});
+/** Video is priced per second in credits; there are no separate video packs any more. */
+export const VIDEO_PACKS: { credits: number; rate: string; price: string }[] = [];
 
 // What each add-on is, in a sentence. Only add-ons the product sells today are listed: one the catalog marks
 // "later" is never promised here.
 const ADDON_TEXT: Record<AddonKey, { name: string; desc: string }> = {
   extra_brand: {
     name: "Extra brand",
-    desc: "One more workspace with its own tracked prompts, credits and weekly Market Brain. Growth, Agency, Scale.",
+    desc: `One more workspace with ${n(credits(CATALOG_ADDONS.extra_brand.adds.credits ?? 0))} credits a month, ${n(CATALOG_ADDONS.extra_brand.adds.trackedPrompts ?? 0)} tracked prompts and weekly Market Brain. Growth and Agency.`,
   },
   prompts_100: {
-    name: "+100 tracked prompts",
-    desc: "One hundred more prompts, checked weekly on your plan's engines.",
+    name: "+100 tracked AI questions",
+    desc: "One hundred more questions, checked weekly on ChatGPT, Gemini and Perplexity.",
   },
   daily_tracking_100: {
     name: "Daily tracking",
@@ -132,7 +145,7 @@ const ADDON_TEXT: Record<AddonKey, { name: string; desc: string }> = {
   extra_seat: { name: "Extra seat", desc: "One more teammate. Starter and Growth." },
   white_label_domain: {
     name: "White label domain",
-    desc: "Serve the client portal on your agency's own domain. Agency and Scale.",
+    desc: "Serve the client portal on your agency's own domain.",
   },
 };
 
@@ -140,67 +153,80 @@ export const ADDONS = Object.values(CATALOG_ADDONS)
   .filter((addon) => addon.availability === "launch")
   .map((addon) => ({ ...ADDON_TEXT[addon.key], price: `$${addon.usdPerMonth}` }));
 
+const price = (action: CreditAction) => {
+  const c = CREDIT_ACTIONS[action].credits / UNITS_PER_CREDIT;
+  return c === 0 ? "Free" : n(c);
+};
+
+/** The credit menu: what a credit buys, from the catalog. */
 export const CREDIT_MENU: [string, string][] = [
-  ["Social post set, up to 3 platforms", "12"],
-  ["Standard image", "15"],
-  ["Image post, copy and image", "30"],
-  ["Carousel", "30"],
-  ["Premium image", "40"],
-  ["Campaign plan", "55"],
-  ["Premium article, about 1,200 words", "100"],
-  ["Long form article, about 2,500 words", "140"],
-  ["Marketing Coach briefing, on demand", "100"],
-  ["Competitor intelligence report", "30"],
-  ["Brand DNA re-scan, first scan free", "125"],
-  ["GEO fix proposal, per finding", "150"],
-  ["GEO CMS fix, WordPress or Webflow", "55"],
-  ["Extra site scan, per 100 pages", "35"],
+  ["Text post set, captions, scripts, standard articles", price("post_set")],
+  ["Image post (copy and picture)", price("image_post")],
+  ["Ad, carousel or a new version of a picture", price("ad_set")],
+  ["Campaign plan", price("campaign")],
+  ["Story with picture frames", price("story")],
+  ["Product poster", price("product_hero")],
+  ["Premium article, about 1,200 words", price("article_premium")],
+  ["Long-form article, about 2,500 words", price("article_long")],
+  ["Motion graphic", price("motion_graphics")],
+  ["Competitor report", price("competitor_intel")],
+  ["Brand DNA re-scan (the first scan is included)", price("brand_dna_rescan")],
+  ["GEO fix proposal, per finding", price("geo_fix")],
+  ["One-click website fix", price("geo_cms_fix")],
+  ["GEO Engineer run", price("geo_agent_run")],
 ];
 
+const perSecond = (key: keyof typeof VIDEO_CREDITS_PER_SECOND) =>
+  `${VIDEO_CREDITS_PER_SECOND[key]} a second`;
+
+/** Video, in credits per second of output. */
 export const VIDEO_MENU: [string, string][] = [
-  ["Draft video", "0.5 to 0.75 VC"],
-  ["Standard video", "1 to 1.25 VC"],
-  ["Premium video", "1.5 to 2 VC"],
-  ["Long take video", "1 to 2 VC"],
-  ["Cinematic video", "2 VC"],
+  ["Draft video", perSecond("draft")],
+  ["Standard video (10 s = 30 credits)", perSecond("standard")],
+  ["Long take", perSecond("long")],
+  ["Premium video", perSecond("premium")],
+  ["Cinematic video", perSecond("cinematic")],
+  ["Creator (UGC) video ads", "same per-second prices"],
 ];
+
+const starter = CATALOG_PLANS.starter;
 
 export const PRICING_FAQS: Faq[] = [
   {
-    q: "How do creation points work?",
-    a: "Creation points are protected for making content. A text post set or an unchanged uploaded-photo post uses 1 point, a standard AI image post 2, and a template carousel with one shared background 3. Up to three platform versions are included. Three short caption edits are included on paid social, image, ad and video creations. New artwork has its own quote. These are alternative uses of one monthly allowance, not separate cumulative quotas. Existing wallet balances keep their value, and current grant windows retain their terms until renewal.",
-  },
-  {
     q: "What is a credit?",
-    a: "Credits pay for AI work: posts, images, articles, research and audits. One credit is worth $0.01 at face value. A social post set costs 12 credits, an image post 30 and a premium article 100. The full list is on this page.",
+    a: `One credit makes one image post. Text work is free on every plan: post sets, captions and caption edits, scripts, standard articles, Flash chat, scheduling and publishing. Bigger work costs more credits (a Story 2, a long article 3) and video is priced per second (Standard is ${VIDEO_CREDITS_PER_SECOND.standard} credits a second, so a 10-second video is ${VIDEO_CREDITS_PER_SECOND.standard * 10}). The price shows on the button before you spend.`,
   },
   {
-    q: "Why does video have its own allowance?",
-    a: "So a few renders can never drain the credits you need for posts and articles. One video credit buys one 8 second Standard video. Draft quality costs less, Premium and Cinematic cost more, and the price shows on the Generate button before you spend.",
+    q: "Is there a free plan?",
+    a: `No. Every plan makes everything, and plans start at $${n(annualMonthlyUsd("starter"))} a month billed yearly. You can try ${CATALOG_PLANS[TRIAL.plan].label} for ${TRIAL.days} days first; a card is needed and you can cancel before the trial ends.`,
   },
   {
     q: "Do unused credits roll over?",
-    a: "Creation points expire at the end of each monthly grant window. Wallet credits and Video Credits from annual plans can roll over once, capped at one month of their allowance. Purchased credit and video packs never expire. Existing balances retain their original expiry dates.",
+    a: `Yes. Unused plan credits roll over for one month, up to one month of your plan's credits. Top-ups stay valid for ${Math.round(PACK_VALID_DAYS / 30)} months.`,
   },
   {
     q: "What happens when I run out?",
-    a: "You get a nudge at 80% of your credits, video credits or Pro messages, with one click packs or an upgrade. Flash chat is fair use, then 2 credits a message. Pro chat is 25 credits a message after your plan's allowance.",
+    a: "You get a nudge at 80% of your credits or Pro messages, with a one-click top-up or an upgrade. Flash chat is unlimited within fair use. Pro chat costs 1 credit a message after your plan's allowance.",
   },
   {
     q: "How does annual billing work?",
-    a: `You pay for 10 months and get 12. ${PLANS.map((p) => `${p.name} is $${n(CATALOG_PLANS[p.id].priceAnnualUsd)} a year`).join(", ")}, which works out to the per month prices shown above.`,
+    a: `You save about 20%. ${PLANS.map((p) => `${p.name} is $${n(CATALOG_PLANS[p.id].priceAnnualUsd)} a year ($${n(annualMonthlyUsd(p.id))} a month)`).join(", ")}.`,
+  },
+  {
+    q: "What does Starter really make in a month?",
+    a: `${n(credits(starter.allowances.credits))} credits: for example 100 image posts, 10 carousels and a 10-second video, plus unlimited text posts and publishing, Autopilot, the four brains and ${n(starter.limits.trackedPrompts)} tracked AI questions every week.`,
   },
   {
     q: "Can I pause instead of cancelling?",
-    a: "Yes, on any paid plan. Pausing costs $9 a month and keeps your data, your brands and 10 weekly tracked prompts.",
+    a: `Yes, on any plan. Pausing costs $${PAUSE.usdPerMonth} a month and keeps your data, your brands and ${PAUSE.trackedPrompts} weekly tracked prompts.`,
   },
   {
     q: "Can I add more brands or seats?",
-    a: "Extra brands are $39 a month on Growth, Agency and Scale. Extra seats are $15 a month on Starter and Growth. Agency already has unlimited seats.",
+    a: `Extra brands are $${CATALOG_ADDONS.extra_brand.usdPerMonth} a month on Growth and Agency, each with its own credits. Extra seats are $${CATALOG_ADDONS.extra_seat.usdPerMonth} a month on Starter and Growth. Agency already has unlimited seats.`,
   },
   {
-    q: "What does Scale include?",
-    a: `Scale is for large teams: ${n(CATALOG_PLANS.scale.brands)} brands, ${n(CREATION_PLANS.scale.points)} monthly creation points, ${n(CREATION_PLANS.scale.flexCredits)} wallet credits and ${n(CATALOG_PLANS.scale.allowances.videoUnits / VIDEO_UNITS_PER_VC)} Video Credits. Clip count depends on model and duration. It includes a dedicated account manager and support with a guaranteed response time. It is $${n(CATALOG_PLANS.scale.priceMonthlyUsd)} a month, or $${n(CATALOG_PLANS.scale.priceAnnualUsd)} a year. SSO and API access are coming soon.`,
+    q: "What about larger teams?",
+    a: `${CATALOG_PLANS.scale.label} is for ${n(CATALOG_PLANS.scale.brands)}+ brands, with a dedicated account manager and support with a guaranteed response time. Talk to us for a quote. SSO and API access are coming soon.`,
   },
   ...NEW_FAQS,
 ];

@@ -181,11 +181,11 @@ export const FAQS = [
   },
   {
     q: "Which AI assistants do you track?",
-    a: "ChatGPT, Gemini and Perplexity. The Free plan covers ChatGPT and Gemini, Starter adds Perplexity, and Growth and above include all three.",
+    a: "ChatGPT, Gemini and Perplexity, on every plan, checked weekly.",
   },
   {
     q: "Which plans include publishing?",
-    a: "Publishing is on paid plans: up to 100 posts a month on Starter, 500 on Growth, 3,000 on Agency and 10,000 on Scale. The Free plan is for scanning and trying the assistant.",
+    a: "Every plan publishes to every network, and publishing never uses credits.",
   },
   {
     q: "Do you connect to my website?",

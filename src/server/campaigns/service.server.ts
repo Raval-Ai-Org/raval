@@ -527,9 +527,24 @@ async function inspoExtraFor(
       assetId: m.assetId,
       kind: m.kind,
       role: m.purpose === "person" ? "people" : "hero",
-      label: (m.label ?? "").slice(0, 80),
+      label: [m.folder, m.label].filter(Boolean).join(": ").slice(0, 80),
     }));
   if (!media.length) return undefined;
+  // Photos from a Media folder or label the campaign names come first.
+  const { mediaForBrief } = await import("@/lib/inspo/media-library");
+  const named = new Set(
+    mediaForBrief(
+      pool.media.map((m) => ({
+        assetId: m.assetId,
+        kind: m.kind,
+        folder: m.folder,
+        label: m.label,
+      })),
+      [brief.name, (brief as { about?: string }).about ?? ""].join(" "),
+      12,
+    ).map((m) => m.assetId),
+  );
+  if (named.size) media.sort((a, b) => Number(named.has(b.assetId)) - Number(named.has(a.assetId)));
   return {
     media,
     remaining: remainingUses(pool.media, pool.uses, new Date()),

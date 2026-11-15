@@ -2,7 +2,7 @@
 
 // The kinds of campaign, grouped, as cards. Used on Campaigns home and as the
 // first step of the designer. Hovering a card brings up its phases.
-import { PLAYBOOKS, PLAYBOOK_GROUPS } from "@/lib/campaigns/playbooks";
+import { OFFERED_PLAYBOOKS as PLAYBOOKS, PLAYBOOK_GROUPS } from "@/lib/campaigns/playbooks";
 import { cn } from "@/lib/utils";
 import { CampaignArt } from "./CampaignArt";
 

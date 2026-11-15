@@ -36,9 +36,8 @@ describe("system prompt size", () => {
     expect(
       buildVisualBriefPrompt({ ...base("product"), medium: "image" }).system.length,
     ).toBeLessThan(SYSTEM_MAX_CHARS.image);
-    const meme = buildVisualBriefPrompt({ ...base("meme"), medium: "image" });
-    expect(meme.route).toBe("studio.meme.concept");
-    expect(meme.system.length).toBeLessThan(SYSTEM_MAX_CHARS.meme);
+    // Memes are retired (categories.ts): a retired kind is never resolved, so
+    // the meme concept route is no longer reached from a picked kind.
   });
   it("sends a shortlist of layouts, not all of them", () => {
     const { system } = buildVisualBriefPrompt({ ...base("product"), medium: "image" });

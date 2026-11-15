@@ -1134,8 +1134,25 @@ export const POPULAR_TEMPLATE_IDS = [
   "article-how-to",
 ];
 
+/**
+ * Templates no longer offered (memes and before/after, retired 2026-11 with
+ * their kinds in categories.ts). Ids still resolve so old drafts read.
+ */
+export const RETIRED_TEMPLATES: readonly string[] = [
+  "image-meme",
+  "carousel-meme-dump",
+  "carousel-running-joke",
+  "video-meme-reel",
+  "story-meme",
+  "image-before-after",
+  "carousel-before-after",
+  "video-transformation",
+];
+
 export function templatesFor(type: StudioType): StudioTemplate[] {
-  return STUDIO_TEMPLATES.filter((t) => t.types.includes(type));
+  return STUDIO_TEMPLATES.filter(
+    (t) => t.types.includes(type) && !RETIRED_TEMPLATES.includes(t.id),
+  );
 }
 
 export function getTemplate(id: string | null | undefined): StudioTemplate | null {

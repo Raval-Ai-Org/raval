@@ -47,12 +47,19 @@ export type InspoCard = {
   createdAt: string;
   /** Own media: kept always, or used a couple of times while fresh (media-rotation.ts). */
   lifetime: MediaLifetime;
+  /** Inspo → Media folder, or null. */
+  folder: string | null;
+  /** A full-page capture of the brand's own website (shown under Media → Website). */
+  capture: boolean;
 };
 
 // A video upload also saves still frames named "<label> · 1.2s".
 const FRAME_LABEL = /^(.*) · \d+(?:\.\d+)?s$/;
 
-/** Visible cards, newest first. Removed rows, full-page captures and video frames are hidden. */
+/**
+ * Visible cards, newest first. Removed rows and video frames are hidden;
+ * full-page captures of the brand's own site show under Media → Website.
+ */
 export function inspoCards(sources: VisualSource[]): InspoCard[] {
   const live = sources.filter((s) => s.status !== "removed");
   const videos = live.filter((s) => s.asset?.mime_type.startsWith("video/"));
@@ -68,15 +75,18 @@ export function inspoCards(sources: VisualSource[]): InspoCard[] {
   }
   return live
     .filter((s) => !hidden.has(s.id))
-    .filter((s) => s.kind !== "website" || (s.status === "approved" && s.region.type !== "full"))
+    .filter((s) => s.kind !== "website" || s.status === "approved" || s.region.type === "full")
     .map((s): InspoCard => {
+      const capture = s.kind === "website" && s.region.type === "full";
       const chip = chipOf(s.purpose);
       const video = !!s.asset?.mime_type.startsWith("video/");
+      const folder = (s.region as { folder?: unknown } | null)?.folder;
       return {
         id: s.id,
         assetId: s.asset_id,
         chip,
-        shelf: CHIPS[chip].shelf,
+        // A capture of the brand's own site is media, not a mood reference.
+        shelf: capture ? "media" : CHIPS[chip].shelf,
         kind: video ? "video" : "image",
         label: s.label,
         notes: s.notes,
@@ -86,6 +96,8 @@ export function inspoCards(sources: VisualSource[]): InspoCard[] {
         frameIds: frameIds.get(s.id) ?? [],
         createdAt: s.created_at,
         lifetime: lifetimeOf(s),
+        folder: typeof folder === "string" && folder.trim() ? folder.trim() : null,
+        capture,
       };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

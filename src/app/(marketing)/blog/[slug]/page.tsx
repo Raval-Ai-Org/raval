@@ -188,7 +188,7 @@ export default async function BlogPostPage({ params }: Props) {
             <div className="px-card bl-cta" data-reveal>
               <div>
                 <h2>See how AI talks about your brand.</h2>
-                <p>Start free. No credit card required.</p>
+                <p>Plans from $39 a month, or try Growth for 7 days.</p>
               </div>
               <a href="/signup" className="px-cta px-cta-lime">
                 Get started

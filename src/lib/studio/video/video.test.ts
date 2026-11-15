@@ -54,7 +54,7 @@ describe("video kinds", () => {
   it.each([
     ["Our summer sale: 20% off everything", {}, "offer-teaser"],
     ["How to brew the perfect pour over", {}, "how-it-works"],
-    ["Before and after a deep clean", {}, "before-after"],
+    ["Before and after a deep clean", {}, "product-demo"],
     ["The vibe of our cafe on a rainy morning", {}, "mood-broll"],
     ["A customer's morning with our app", {}, "brand-story"],
     ["Show off the new bottle", { product: true }, "product-motion"],

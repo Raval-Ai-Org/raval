@@ -13,20 +13,16 @@ import {
   suggestedPlan,
 } from "./present";
 
-describe("free plan nudges", () => {
+describe("no-plan nudge", () => {
   const now = new Date("2026-10-07T00:00:00Z");
-  it("says nothing while there is plenty left", () => {
+  it("says nothing while there are credits left", () => {
     expect(freeNudge({ credits: 80, nextExpiry: "2026-11-01T00:00:00Z", now })).toBeNull();
-    expect(freeNudge({ credits: 80, nextExpiry: null, now })).toBeNull();
   });
-  it("speaks up when credits are low, gone or about to end", () => {
-    expect(freeNudge({ credits: 16, nextExpiry: null, now })?.title).toBe("16 free credits left");
-    expect(freeNudge({ credits: 1, nextExpiry: null, now })?.title).toBe("1 free credit left");
-    expect(freeNudge({ credits: 0, nextExpiry: null, now })?.id).toBe("empty");
-    expect(freeNudge({ credits: 80, nextExpiry: "2026-10-10T00:00:00Z", now })?.title).toBe(
-      "Your free credits end in 3 days",
-    );
-    expect(freeNudge({ credits: 80, nextExpiry: "2026-10-01T00:00:00Z", now })).toBeNull();
+  it("asks for a plan once nothing is left", () => {
+    const nudge = freeNudge({ credits: 0, nextExpiry: null, now });
+    expect(nudge?.id).toBe("empty");
+    expect(nudge?.title).toBe("Choose a plan to start");
+    expect(nudge?.text).toContain("150 credits");
   });
 });
 
@@ -36,11 +32,12 @@ describe("billing presentation helpers", () => {
     expect(formatVideos(350)).toBe("3.5");
     expect(formatVideos(125)).toBe("1.25");
     expect(formatMeter("video", 100)).toBe("1 video credit");
-    expect(formatMeter("credits", 2000)).toBe("2,000 credits");
+    expect(formatMeter("credits", 2000)).toBe("66 credits");
+    expect(formatMeter("credits", 30)).toBe("1 credit");
   });
 
-  it("prices annual plans at ten months", () => {
-    expect(planPrice("growth", "year")).toEqual({ perMonth: 124.17, billed: 1490, savings: 298 });
+  it("prices yearly plans at the yearly rate", () => {
+    expect(planPrice("growth", "year")).toEqual({ perMonth: 119, billed: 1428, savings: 360 });
     expect(planPrice("starter", "month").perMonth).toBe(49);
   });
 
@@ -82,7 +79,7 @@ describe("billing presentation helpers", () => {
     );
     expect(ledgerLabel({ kind: "grant", action: null, meter: "credits" })).toBe("Added to balance");
     expect(blockHeadline({ code: "insufficient_balance", meter: "video" })).toBe(
-      "Not enough Video Credits left",
+      "Not enough credits left",
     );
   });
 });

@@ -65,7 +65,7 @@ import { ScanDock } from "@/components/onboarding/ask/ScanDock";
 import { PickScreen } from "@/components/onboarding/ask/PickScreen";
 import { SayScreen } from "@/components/onboarding/ask/SayScreen";
 import { ChannelsScreen } from "@/components/onboarding/ask/ChannelsScreen";
-import { LookSwipe, LOOK_MIN_SWIPES } from "@/components/onboarding/ask/LookSwipe";
+import { StylesScreen } from "@/components/onboarding/ask/StylesScreen";
 import {
   AnswerTrail,
   AudiencePick,
@@ -776,14 +776,8 @@ function Onboarding() {
   const action: StageAction | null = (() => {
     switch (step) {
       case "ask":
-        if (screen.kind === "say" || screen.kind === "channels")
+        if (screen.kind === "say" || screen.kind === "channels" || screen.kind === "styles")
           return { label: "Continue", onClick: continueAsk, busy: saving };
-        if (screen.kind === "swipe") {
-          const swiped = (answers.likes?.length ?? 0) + (answers.skips?.length ?? 0);
-          return swiped >= LOOK_MIN_SWIPES
-            ? { label: "Continue", onClick: continueAsk }
-            : { label: "Skip", quiet: true, onClick: continueAsk };
-        }
         // A pick answers with a tap; going back to one keeps its answer.
         return answers[screen.id] !== undefined
           ? { label: "Keep it", quiet: true, onClick: () => nextAsk(), busy: saving }
@@ -824,8 +818,7 @@ function Onboarding() {
     }
   })();
 
-  // Space / Enter / → move on, ← goes back. Digits are the pick screen's;
-  // the swipe deck takes ←/→ for itself.
+  // Space / Enter / → move on, ← goes back. Digits are the pick screen's.
   const keyRef = useRef<{ action: StageAction | null; back: (() => void) | null }>({
     action: null,
     back: null,
@@ -1024,21 +1017,13 @@ function Onboarding() {
               onChange={(channels: OnboardingChannel[]) => setAnswers((a) => ({ ...a, channels }))}
             />
           )}
-          {step === "ask" && screen.kind === "swipe" && (
-            <LookSwipe
+          {step === "ask" && screen.kind === "styles" && (
+            <StylesScreen
               screen={screen}
-              likes={answers.likes ?? []}
-              skips={answers.skips ?? []}
+              value={answers.styles}
               reduce={reduce}
               headingRef={headingRef}
-              onSwipe={(id, liked) =>
-                setAnswers((a) => ({
-                  ...a,
-                  likes: liked ? [...(a.likes ?? []), id] : (a.likes ?? []),
-                  skips: liked ? (a.skips ?? []) : [...(a.skips ?? []), id],
-                }))
-              }
-              onDone={() => nextAsk()}
+              onChange={(styles) => setAnswers((a) => ({ ...a, styles }))}
             />
           )}
           {step === "scan" && (

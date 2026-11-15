@@ -51,11 +51,17 @@ export type InspoHandlers = {
   onSection: (section: InspoSection) => void;
   saveLook: (next: BrandLookSpec) => void;
   resetLook: () => void;
-  upload: (files: File[], chip: InspoChip) => void;
+  /** `folder`: Inspo → Media folder the files go into. */
+  upload: (files: File[], chip: InspoChip, folder?: string) => void;
   addLink: (url: string, chip: InspoChip) => void;
   setChip: (card: InspoCard, chip: InspoChip) => void;
   /** Own media: keep always, or only for a while. */
   setLifetime: (card: InspoCard, lifetime: MediaLifetime) => void;
+  /** Own media: the person's label, folder, keep-for and what it shows, in one save. */
+  setDetails: (
+    card: InspoCard,
+    patch: { label: string; folder: string | null; lifetime: MediaLifetime; chip: InspoChip },
+  ) => void;
   remove: (card: InspoCard) => void;
   undo: () => void;
   learn: () => void;

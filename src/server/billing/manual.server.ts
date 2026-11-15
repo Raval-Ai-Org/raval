@@ -12,6 +12,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   CREDIT_PACKS,
+  creditPackFor,
+  formatCredits,
   PLANS,
   VIDEO_PACKS,
   planRank,
@@ -128,8 +130,8 @@ function itemName(kind: string, key: string, interval: string | null): string {
   if (kind === "plan" && key in PLANS) {
     return `${PLANS[key as PlanId].label} plan (${interval === "year" ? "yearly" : "monthly"})`;
   }
-  const credit = CREDIT_PACKS.find((pack) => pack.key === key);
-  if (credit) return `${credit.credits + credit.bonusCredits} credits pack`;
+  const credit = creditPackFor(key);
+  if (credit) return `${formatCredits(credit.credits + credit.bonusCredits)} pack`;
   const video = VIDEO_PACKS.find((pack) => pack.key === key);
   if (video) return `${video.videoUnits / 100} videos pack`;
   return key;
@@ -140,11 +142,7 @@ function itemPriceUsd(kind: string, key: string, interval: string | null): numbe
     const plan = PLANS[key as PlanId];
     return interval === "year" ? plan.priceAnnualUsd : plan.priceMonthlyUsd;
   }
-  return (
-    CREDIT_PACKS.find((pack) => pack.key === key)?.usd ??
-    VIDEO_PACKS.find((pack) => pack.key === key)?.usd ??
-    null
-  );
+  return creditPackFor(key)?.usd ?? VIDEO_PACKS.find((pack) => pack.key === key)?.usd ?? null;
 }
 
 /** Email Mellox staff about a new Upgrade now request (reply goes to the customer). */
@@ -422,7 +420,7 @@ export async function grantManualPack(args: {
   requestId?: string;
 }): Promise<{ replayed: boolean }> {
   const account = await loadAccount(args.accountId);
-  const credit = CREDIT_PACKS.find((pack) => pack.key === args.key);
+  const credit = creditPackFor(args.key);
   const video = VIDEO_PACKS.find((pack) => pack.key === args.key);
   if ((args.kind === "credit_pack" && !credit) || (args.kind === "video_pack" && !video)) {
     throw new HttpError(400, "Unknown pack.");

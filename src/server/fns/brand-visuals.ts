@@ -119,6 +119,8 @@ export const updateVisualReference = createServerFn({ method: "POST" })
         purpose: z.enum(PURPOSES).optional(),
         /** Inspo → Media: kept always, or used a couple of times while fresh. */
         lifetime: z.enum(MEDIA_LIFETIMES).optional(),
+        /** Inspo → Media folder; null takes it out. */
+        folder: z.string().max(60).nullable().optional(),
       })
       .parse(data),
   )

@@ -16,45 +16,10 @@ import type { BrandLook } from "@/lib/brand-look/resolve";
 import { paletteFromDnaColors } from "@/lib/brand-look/resolve";
 import type { BrandLookSpec, VisualStyle } from "@/lib/brand-look/spec";
 import { cn } from "@/lib/utils";
+import { PictureStylePicker } from "@/components/brand/PictureStylePicker";
+import { autoPictureStyles, cleanStyleIds, mediumForStyles } from "@/lib/brand-look/picture-styles";
 import { Block, EASE, PickTile } from "./parts";
 import type { InspoHandlers, InspoView } from "./types";
-
-export const MEDIUMS: Array<{
-  value: NonNullable<VisualStyle["medium"]>;
-  label: string;
-  art: string;
-}> = [
-  {
-    value: "photo",
-    label: "Photo",
-    art: "radial-gradient(circle at 30% 30%, #fff8 0 18%, transparent 19%), linear-gradient(135deg, #8aa 0%, #345 100%)",
-  },
-  {
-    value: "illustration",
-    label: "Drawn",
-    art: "radial-gradient(circle at 70% 65%, #ffd166 0 26%, transparent 27%), radial-gradient(circle at 30% 35%, #ef476f 0 20%, transparent 21%), #f4f1de",
-  },
-  {
-    value: "3d",
-    label: "3D",
-    art: "radial-gradient(circle at 38% 34%, #fff 0 6%, #b9c6ff 22%, #5b6ee1 60%, #2b2f77 100%)",
-  },
-  {
-    value: "flat",
-    label: "Flat",
-    art: "linear-gradient(90deg, #264653 0 34%, #2a9d8f 34% 67%, #e9c46a 67% 100%)",
-  },
-  {
-    value: "collage",
-    label: "Collage",
-    art: "linear-gradient(115deg, #f2e9e4 0 40%, transparent 40%), linear-gradient(200deg, #c9ada7 0 45%, #4a4e69 45% 100%)",
-  },
-  {
-    value: "typographic",
-    label: "Type only",
-    art: "repeating-linear-gradient(180deg, #111 0 5px, transparent 5px 12px), #f6f6f6",
-  },
-];
 
 const ROLES = [
   ["primary", "Main"],
@@ -306,18 +271,24 @@ export function PostLook({
         </Block>
 
         <Block label="Pictures">
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
-            {MEDIUMS.map((m, i) => (
-              <PickTile
-                key={m.value}
-                index={i}
-                on={v.medium === m.value}
-                label={m.label}
-                art={m.art}
-                onClick={() => set({ medium: v.medium === m.value ? undefined : m.value })}
-              />
-            ))}
-          </div>
+          <PictureStylePicker
+            value={{
+              auto: v.stylesAuto === true || !cleanStyleIds(v.styles).length,
+              ids: cleanStyleIds(v.styles),
+            }}
+            autoIds={autoPictureStyles({
+              industry: dna.industry,
+              products: dna.products,
+              brandName: dna.brandName,
+            })}
+            onChange={(next) =>
+              set(
+                next.auto
+                  ? { styles: undefined, stylesAuto: true, medium: undefined }
+                  : { styles: next.ids, stylesAuto: false, medium: mediumForStyles(next.ids) },
+              )
+            }
+          />
         </Block>
 
         <Block

@@ -39,8 +39,10 @@ describe("manual (paid offline) plans", () => {
   it("only accepts real catalog items", () => {
     expect(validPurchase("plan", "growth")).toBe(true);
     expect(validPurchase("plan", "free")).toBe(false);
-    expect(validPurchase("credit_pack", "credits_100")).toBe(true);
-    expect(validPurchase("video_pack", "credits_100")).toBe(false);
+    expect(validPurchase("credit_pack", "credits_200")).toBe(true);
+    // Packs from before v4 are off sale.
+    expect(validPurchase("credit_pack", "credits_100")).toBe(false);
+    expect(validPurchase("video_pack", "credits_200")).toBe(false);
   });
 
   it("entitles the manual plan until its date, then falls back to Free", () => {
@@ -57,10 +59,10 @@ describe("manual (paid offline) plans", () => {
     ).toBeNull();
   });
 
-  it("gives Free accounts publishing with a fair-use cap and no paid features", () => {
+  it("locks an account with no plan: no publishing and no paid features", () => {
     const view = resolveEntitlements({ account: base, userId: "owner", role: "owner" });
-    expect(view.features.publishing.allowed).toBe(true);
+    expect(view.features.publishing.allowed).toBe(false);
     expect(view.features.campaigns.allowed).toBe(false);
-    expect(view.limits.postsFairUse).toBe(100);
+    expect(view.features.studio.allowed).toBe(false);
   });
 });

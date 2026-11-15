@@ -419,7 +419,8 @@ describe("content lifecycle", () => {
 
   it("skips a piece when the weekly limit is reached, without spending", async () => {
     const p = await program(w, { credit_cap_per_week: 5 });
-    const action = await piece(w, p);
+    // A picture post costs a credit; text posts are included and never skipped.
+    const action = await piece(w, p, { content_type: "image" });
     await sweep(w);
     expect(action.status).toBe("skipped");
     expect(w.created).toHaveLength(0);
@@ -658,7 +659,7 @@ describe("Story Autopilot", () => {
       }));
   };
   const plan = async (over: Partial<ProgramRow> = {}) => {
-    const p = await program(w, { stories: STORIES, credit_cap_per_week: 400, ...over });
+    const p = await program(w, { stories: STORIES, credit_cap_per_week: 30 * 30, ...over });
     await w.store.insertActions([
       { workspace_id: WS, program_id: p.id, kind: "plan", dedupe_key: `plan:${p.id}:1`, cycle: 1 },
     ]);

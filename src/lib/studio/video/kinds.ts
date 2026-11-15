@@ -376,6 +376,9 @@ export type KindSource = {
  * The kind a video is made as when the person left "Auto". A post's picture
  * comes alive; a carousel moves by code; otherwise the brief decides.
  */
+/** Kinds no longer offered in pickers (ids kept so old videos read). */
+export const RETIRED_VIDEO_KINDS: readonly VideoKindId[] = ["before-after"];
+
 export function pickVideoKind(
   brief: string,
   source: KindSource = {},
@@ -388,7 +391,9 @@ export function pickVideoKind(
   if (source.picture) return source.product ? "product-motion" : "living-picture";
   if (source.script) return "brand-story";
   if (OFFER.test(brief)) return "offer-teaser";
-  if (BEFORE.test(brief)) return "before-after";
+  // Before/after is retired from Auto (2026-11, like the post kind): such a
+  // brief is made as a product demo, which shows the change honestly.
+  if (BEFORE.test(brief)) return "product-demo";
   if (DEMO.test(brief)) return "product-demo";
   if (HOW.test(brief)) return "how-it-works";
   if (ANIMATE.test(brief)) return "product-motion";

@@ -11,6 +11,8 @@
 // then left alone). A person's own pick in Studio or a campaign always stands;
 // this only decides what code adds on its own.
 
+import { mediaForBrief } from "./media-library";
+
 export const MEDIA_LIFETIMES = ["permanent", "temporary"] as const;
 export type MediaLifetime = (typeof MEDIA_LIFETIMES)[number];
 
@@ -25,6 +27,8 @@ export type RotationMedia = {
   /** When it was added (ISO). Temporary media expires from this. */
   addedAt: string;
   label?: string;
+  /** Inspo → Media folder. */
+  folder?: string;
 };
 
 /** One earlier piece that carried this asset (ISO time). */
@@ -129,6 +133,49 @@ export function rankMedia(
 }
 
 export type RotationPick = { assetIds: string[]; reason: string };
+
+/** How many photos a format takes from a folder or label the brief names. */
+const NAMED_PER_FORMAT: Record<string, number> = {
+  carousel: 4,
+  image: 1,
+  social: 1,
+  story: 3,
+  video: 4,
+};
+
+/**
+ * Photos the brief names by folder or label ("our launch event photos"):
+ * always used, like a named product, as long as they haven't expired
+ * (a temporary photo past its 30 days stays out). Null when none match.
+ */
+export function pickNamedMedia(args: {
+  media: readonly RotationMedia[];
+  brief: string;
+  format: string;
+  now: Date;
+}): RotationPick | null {
+  const want = NAMED_PER_FORMAT[args.format];
+  if (!want || !args.brief.trim()) return null;
+  const t = args.now.getTime();
+  const fresh = args.media.filter((m) => {
+    if (m.kind !== "image") return false;
+    const added = Date.parse(m.addedAt);
+    return !(Number.isFinite(added) && t - added > LIFETIME_RULES[m.lifetime].expiresDays * DAY);
+  });
+  const hits = mediaForBrief(
+    fresh.map((m) => ({ assetId: m.assetId, kind: m.kind, folder: m.folder, label: m.label })),
+    args.brief,
+    want,
+  );
+  if (!hits.length) return null;
+  const folder = hits[0].folder?.trim();
+  return {
+    assetIds: hits.map((h) => h.assetId),
+    reason: folder
+      ? `Uses your "${folder}" photos from Media.`
+      : "Uses the photos from Media your brief names.",
+  };
+}
 
 /**
  * Own photos for one new piece, or none. `lastPieceUsedMedia` is whether the

@@ -4,8 +4,7 @@ import "server-only";
 // "your free month ends in 3 days" and referral rewards.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLANS, REFERRAL, type PlanId } from "@/lib/billing/catalog";
-import { formatNumber } from "@/lib/billing/present";
+import { PLANS, REFERRAL, formatCredits, type PlanId } from "@/lib/billing/catalog";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { appUrl } from "@/server/notify/email.server";
 import { grantMeter } from "./meters.server";
@@ -118,6 +117,7 @@ export async function rewardReferrals(now = new Date()): Promise<number> {
         ["credits", REFERRAL.credits],
         ["video", REFERRAL.videoUnits],
       ] as const) {
+        if (amount <= 0) continue;
         await grantMeter({
           accountId: String(accountId),
           meter,
@@ -142,7 +142,7 @@ export async function rewardReferrals(now = new Date()): Promise<number> {
           windowKey: `referral:${row.id}`,
           email: {
             subject: "You earned a referral reward",
-            text: `Thanks for spreading the word. ${formatNumber(REFERRAL.credits)} credits and ${REFERRAL.videoUnits / 100} videos were added to your balance.`,
+            text: `Thanks for spreading the word. ${formatCredits(REFERRAL.credits)} were added to your balance.`,
             action: ["Open Mellox", appUrl("/projects")],
           },
         });

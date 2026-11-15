@@ -53,8 +53,16 @@ describe("categories", () => {
   });
 
   it("a person's pick wins over the template's", () => {
-    expect(resolveCategory({ category: "meme", template: "image-product-hero" })?.id).toBe("meme");
-    expect(resolveCategory({ template: "image-meme" })?.id).toBe("meme");
+    expect(resolveCategory({ category: "tips", template: "image-product-hero" })?.id).toBe("tips");
+    expect(resolveCategory({ template: "image-product-hero" })?.id).toBe("product");
+  });
+
+  it("retired kinds are never made or offered", () => {
+    expect(resolveCategory({ category: "meme" })).toBeNull();
+    expect(resolveCategory({ template: "image-meme" })).toBeNull();
+    expect(resolveCategory({ category: "before-after" })).toBeNull();
+    for (const type of ["image", "carousel", "story", "video", "ad"] as const)
+      for (const c of categoriesFor(type)) expect(["meme", "before-after"]).not.toContain(c.id);
     expect(resolveCategory({})).toBeNull();
   });
 
@@ -71,12 +79,15 @@ describe("categories", () => {
     }
   });
 
-  it("Auto never makes a meme, for any goal or format", () => {
+  it("Auto only makes designed posts, never a meme, for any goal or format", () => {
     const goals = ["offer", "launch", "leads", "education", "engagement", "awareness"] as const;
-    for (const type of ["image", "carousel", "story", "social"] as const)
+    for (const type of ["image", "carousel", "story", "social", "video", "ad"] as const)
       for (const goal of goals)
-        for (let i = 0; i < 30; i++)
-          expect(pickCategory({ type, goal, seed: `${type}${goal}${i}` }).id).not.toBe("meme");
+        for (let i = 0; i < 30; i++) {
+          const c = pickCategory({ type, goal, seed: `${type}${goal}${i}` });
+          expect(c.register).toBe("designed");
+          expect(["meme", "before-after"]).not.toContain(c.id);
+        }
   });
 
   it("the picker lists only what a format can make", () => {

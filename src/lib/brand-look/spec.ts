@@ -121,6 +121,13 @@ export const VisualSchema = z.object({
   medium: z
     .enum(["photo", "illustration", "3d", "flat", "collage", "typographic", "mixed"])
     .optional(),
+  /**
+   * Up to three picture styles (picture-styles.ts ids). Unknown ids are
+   * dropped where they are read (`cleanStyleIds`), never refused here.
+   */
+  styles: z.array(z.string().max(40)).max(3).optional(),
+  /** Mox picks the styles from what the brand sells (the default). */
+  stylesAuto: z.boolean().optional(),
   mood: short(200).optional(),
   lighting: short(160).optional(),
   grading: short(160).optional(),

@@ -17,8 +17,10 @@ import type { StudioType } from "./formats";
 
 /** The brief sections (prompt-writer.ts blueprints) that describe the picture. */
 export const VISUAL_SECTIONS: Partial<Record<StudioType, string[]>> = {
-  social: ["Image idea"],
+  // "Picture" is the 2026-11 blueprint; the rest are older briefs, still read.
+  social: ["Picture", "Image idea"],
   image: [
+    "Picture",
     "Scene",
     "Main subject",
     "Camera and composition",
@@ -28,14 +30,32 @@ export const VISUAL_SECTIONS: Partial<Record<StudioType, string[]>> = {
     "Details and props",
     "Avoid",
   ],
-  ad: ["Visual"],
+  ad: ["Picture", "Visual"],
   carousel: ["Design look"],
   story: [],
-  video: ["Scene by scene", "Camera movement", "Lighting and colour", "Mood and pacing"],
+  video: ["Shots", "Scene by scene", "Camera movement", "Lighting and colour", "Mood and pacing"],
 };
 
 /** Every label the blueprints use, so a section ends where the next begins. */
 const ALL_LABELS = [
+  // 2026-11 blueprints (prompt-writer.ts).
+  "Message",
+  "Picture",
+  "Cover",
+  "Slides",
+  "Headline",
+  "Supporting line",
+  "Offer",
+  "For",
+  "Angle",
+  "Button",
+  "Shots",
+  "Hook",
+  "Scenes",
+  "Search intent",
+  "Keywords",
+  "Questions to answer",
+  // Older briefs.
   "Idea",
   "Why now",
   "Opening line",

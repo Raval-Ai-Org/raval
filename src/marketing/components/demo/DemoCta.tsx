@@ -1,6 +1,6 @@
 import CtaBand from "@/marketing/components/cta/CtaBand";
 
-/** Sales-led call to action: "Book a demo" first, "Start free" second. Used on pricing, compare and similar pages. */
+/** Sales-led call to action: "Book a demo" first, "Get started" second. Used on pricing, compare and similar pages. */
 export default function DemoCta({
   title = "Want to see it on your own brand?",
   text = "Book a demo and we will walk through Mellox using your website, then help you pick the right plan.",
@@ -16,7 +16,7 @@ export default function DemoCta({
       title={title}
       text={text}
       primary={{ label: "Book a demo", href: interest ? `/demo?interest=${interest}` : "/demo" }}
-      secondary={{ label: "Start free", href: "/signup" }}
+      secondary={{ label: "Get started", href: "/signup" }}
     />
   );
 }

@@ -5,8 +5,7 @@ import { HttpError } from "@/server/http-error";
 import { paidTargetForUserRoute } from "@/server/billing/accounts.server";
 import { runMetered } from "@/server/billing/metered.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DEFAULT_VIDEO_DURATION, MAX_VIDEO_DURATION, studioVideoUnits } from "@/lib/ugc/duration";
-import { STUDIO_VIDEO_UNITS } from "@/lib/billing/catalog";
+import { DEFAULT_VIDEO_DURATION, MAX_VIDEO_DURATION } from "@/lib/ugc/duration";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -52,8 +51,14 @@ export const POST = defineRoute({
       {
         ...target,
         userId,
-        action: "studio_video",
-        quantity: studioVideoUnits(body.duration) / STUDIO_VIDEO_UNITS,
+        // Priced per second in credits, for the model this route renders with.
+        action: {
+          video: {
+            ugcKey: MODEL_KEY,
+            seconds: body.duration,
+            resolution: body.resolution === "1080P" ? "1080p" : "720p",
+          },
+        },
         idempotencyKey: request.headers.get("Idempotency-Key") ?? randomUUID(),
         route: "video",
       },

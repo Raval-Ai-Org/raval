@@ -228,6 +228,8 @@ export async function addVisualSource(
     notes: string;
     formats: string[];
     campaign?: string;
+    /** Inspo → Media folder, kept in `region.folder`. */
+    folder?: string;
     kind?: "upload" | "library";
     sourceUrl?: string;
   },
@@ -266,12 +268,29 @@ export async function addVisualSource(
         notes: args.notes,
         formats: args.formats,
         campaign: args.campaign ?? null,
+        ...(cleanFolder(args.folder) ? { region: { folder: cleanFolder(args.folder) } } : {}),
         status: "approved",
       },
       { onConflict: "workspace_id,asset_id" },
     ),
   );
   await invalidateVisualLook(c.workspaceId);
+}
+
+/** A folder name as stored: trimmed, single spaces, at most 60 characters. */
+function cleanFolder(folder: string | null | undefined): string | null {
+  const name = (folder ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+  return name || null;
+}
+
+function withFolder(
+  region: Record<string, unknown>,
+  folder: string | null | undefined,
+): Record<string, unknown> {
+  if (folder === undefined) return region;
+  const name = cleanFolder(folder);
+  const { folder: _old, ...rest } = region;
+  return name ? { ...rest, folder: name } : rest;
 }
 
 export async function changeVisualSource(
@@ -282,6 +301,8 @@ export async function changeVisualSource(
     notes?: string;
     purpose?: VisualSource["purpose"];
     lifetime?: "permanent" | "temporary";
+    /** Inspo → Media folder; null or "" takes it out of its folder. */
+    folder?: string | null;
   },
 ) {
   editor(c);
@@ -305,12 +326,15 @@ export async function changeVisualSource(
         status: args.status,
         ...(args.notes !== undefined ? { notes: args.notes } : {}),
         ...(args.purpose ? { purpose: args.purpose } : {}),
-        ...(args.lifetime
+        ...(args.lifetime || args.folder !== undefined
           ? {
-              region: {
-                ...((source.region as Record<string, unknown> | null) ?? {}),
-                lifetime: args.lifetime,
-              },
+              region: withFolder(
+                {
+                  ...((source.region as Record<string, unknown> | null) ?? {}),
+                  ...(args.lifetime ? { lifetime: args.lifetime } : {}),
+                },
+                args.folder,
+              ),
             }
           : {}),
       })

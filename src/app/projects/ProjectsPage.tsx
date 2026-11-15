@@ -1,5 +1,6 @@
 "use client";
 
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { useNavigate, Link } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { useEffect, useMemo, useState } from "react";
@@ -33,7 +34,6 @@ import {
 } from "@/lib/workspace/paths";
 import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
-import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { AppFrame } from "@/components/app/shell/AppFrame";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/empty-state";
@@ -88,6 +88,24 @@ type Workspace = WorkspaceSummary;
 export type ClientStatus = Workspace["clientStatus"];
 
 /** The tag on a project card, from what is actually going on in it. */
+/** The placeholder name a "No website" brand has until the kit names it. */
+const BLANK_DRAFT_NAME = "New brand";
+
+/** An unfinished brand: setup was started but never finished. */
+export function isUnfinished(w: Pick<Workspace, "onboarded" | "duplicateOf">): boolean {
+  return !w.onboarded && !w.duplicateOf;
+}
+
+/** The person's own untouched "No website" draft, if there is one. */
+function blankDraft(existing: Workspace[]): Workspace | null {
+  return (
+    existing
+      .filter((w) => w.isOwner && isUnfinished(w) && !w.websiteUrl && !w.domain)
+      .filter((w) => w.name.trim() === BLANK_DRAFT_NAME)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+  );
+}
+
 function projectTag(w: Workspace): { label: string; dot: string } {
   if (w.clientStatus === "paused") return { label: "Paused", dot: "bg-zinc-400" };
   if (!w.onboarded) return { label: "Finish setup", dot: "bg-amber-500" };
@@ -193,6 +211,7 @@ function ProjectsPage() {
    * create that returned an existing workspace (same brand domain) opens it instead.
    */
   const afterCreate = (result: CreateWorkspaceOutcome, opts?: { manual?: boolean }) => {
+    if (result.resumed) toast.message("Picking up where you left off");
     if (!result.created) {
       toast.message(`You already have ${result.domain || result.name}`, {
         description: "Opening the existing workspace instead of creating a duplicate.",
@@ -224,16 +243,20 @@ function ProjectsPage() {
     document.getElementById("your-brands")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // A brand is a finished setup; an unfinished one waits in its own row.
+  const finished = useMemo(() => workspaces.filter((w) => !isUnfinished(w)), [workspaces]);
+  const unfinished = useMemo(() => workspaces.filter((w) => isUnfinished(w)), [workspaces]);
+  const reduce = useReducedMotionSafe();
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return workspaces.filter((w) => {
+    return finished.filter((w) => {
       if (statusFilter === "attention" && w.health === "healthy") return false;
       if (statusFilter === "setup" && w.onboarded) return false;
       if (statusFilter === "paused" && w.clientStatus !== "paused") return false;
       if (!q) return true;
       return [w.name, w.domain, w.websiteUrl, w.industry].some((v) => v?.toLowerCase().includes(q));
     });
-  }, [workspaces, query, statusFilter]);
+  }, [finished, query, statusFilter]);
 
   const handleRename = async (id: string, name: string) => {
     try {
@@ -320,87 +343,79 @@ function ProjectsPage() {
             </div>
           </header>
 
-          {/* Hero */}
-          <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-6 pt-8 text-center sm:pb-8 sm:pt-10">
-            <span className="mox-float mx-auto mb-2 inline-block">
-              <MoxFace mood="happy" size={96} track />
-            </span>
-            <motion.h1
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-2 text-[34px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[44px]"
-            >
-              {loading || landing ? (
+          {/* Hero: Mox's world (the same 3D scene as onboarding), Mox on the
+              left of the picture and everything you do on the right. */}
+          <ProjectsHero
+            reduce={reduce}
+            eyebrow={finished.length === 0 ? "Let's meet your brand" : "Your brands"}
+            title={
+              loading || landing ? (
                 <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
               ) : workspaceListFailed ? (
                 "Your workspaces couldn't load"
-              ) : workspaces.length === 0 ? (
+              ) : finished.length === 0 ? (
                 copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
               ) : (
-                copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
-              )}
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
-              className="mt-2 text-[14px] text-muted-foreground"
-            >
-              {workspaceListFailed
+                copy.returningHeadline(userName ? userName.split(" ")[0] : undefined)
+              )
+            }
+            subtitle={
+              workspaceListFailed
                 ? workspaceRouteMissing
                   ? "Please try again in a moment."
                   : "Please try again."
-                : workspaces.length === 0
+                : finished.length === 0
                   ? copy.firstSubhead
-                  : copy.returningSubhead}
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto mt-8 w-full max-w-xl"
-            >
-              {workspaceListFailed ? (
-                <ErrorState
-                  title="Couldn't load your workspaces"
-                  description={
-                    workspaceRouteMissing
-                      ? "Refresh the page and try again."
-                      : "Try again before adding another brand."
-                  }
-                  detail={
-                    workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null
-                  }
-                  onRetry={() => void workspacesQuery.refetch()}
-                />
-              ) : (
-                <PasteLinkBar
-                  existing={workspaces}
-                  initialUrl={pendingAddUrl}
-                  onCreated={afterCreate}
-                  onOpenAdvanced={() => setDialogOpen(true)}
-                  onManage={showBrandList}
-                />
-              )}
-              <NewProjectDialog
-                open={dialogOpen}
-                onOpenChange={setDialogOpen}
-                copy={copy}
-                existing={workspaces}
-                onCreated={afterCreate}
-                onManage={() => {
-                  setDialogOpen(false);
-                  showBrandList();
-                }}
+                  : copy.returningSubhead
+            }
+          >
+            {workspaceListFailed ? (
+              <ErrorState
+                title="Couldn't load your workspaces"
+                description={
+                  workspaceRouteMissing
+                    ? "Refresh the page and try again."
+                    : "Try again before adding another brand."
+                }
+                detail={
+                  workspacesQuery.error instanceof Error ? workspacesQuery.error.message : null
+                }
+                onRetry={() => void workspacesQuery.refetch()}
               />
-            </motion.div>
-          </section>
+            ) : (
+              <PasteLinkBar
+                existing={workspaces}
+                initialUrl={pendingAddUrl}
+                onCreated={afterCreate}
+                onOpenAdvanced={() => setDialogOpen(true)}
+                onManage={showBrandList}
+              />
+            )}
+            <NewProjectDialog
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              copy={copy}
+              existing={workspaces}
+              onCreated={afterCreate}
+              onManage={() => {
+                setDialogOpen(false);
+                showBrandList();
+              }}
+            />
+          </ProjectsHero>
+
+          {!loading && !landing && unfinished.length > 0 && (
+            <UnfinishedSetups
+              items={unfinished}
+              reduce={reduce}
+              onContinue={openProject}
+              onDiscard={(w) => setDeleteTarget(w)}
+            />
+          )}
         </ProjectsStage>
 
         {/* Projects panel — only shown when at least one client exists */}
-        {!loading && workspaces.length > 0 && (
+        {!loading && !landing && finished.length > 0 && (
           <section
             id="your-brands"
             className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-20 px-5 pb-12 pt-4"
@@ -412,7 +427,7 @@ function ProjectsPage() {
                     {copy.sectionTitle}
                   </span>
                   <span className="text-[12px] text-muted-foreground">
-                    {workspaces.length} {workspaces.length === 1 ? copy.noun : copy.nounPlural}
+                    {finished.length} {finished.length === 1 ? copy.noun : copy.nounPlural}
                   </span>
                   <BrandPlaces />
                   <select
@@ -423,7 +438,6 @@ function ProjectsPage() {
                   >
                     <option value="all">All</option>
                     <option value="attention">Needs attention</option>
-                    <option value="setup">Finish setup</option>
                     <option value="paused">Paused</option>
                   </select>
                 </div>
@@ -1115,6 +1129,15 @@ export function PasteLinkBar({
   // so nothing is scanned. The kit's brand name replaces this placeholder.
   const startManual = async () => {
     if (saving) return;
+    // An untouched "No website" draft is reopened, never doubled.
+    const draft = blankDraft(existing);
+    if (draft) {
+      onCreated(
+        { id: draft.id, created: true, resumed: true, domain: null, name: draft.name },
+        { manual: true },
+      );
+      return;
+    }
     if (brands.full) {
       openBrandUpgrade();
       return;
@@ -1397,6 +1420,171 @@ function RenameDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The top of the Projects page: Mox's world (the same 3D scene as onboarding),
+ * Mox on the left of the picture and the heading and website bar on the
+ * right; on narrow screens the picture sits on top. Presentational.
+ */
+export function ProjectsHero({
+  eyebrow,
+  title,
+  subtitle,
+  reduce,
+  children,
+}: {
+  eyebrow: React.ReactNode;
+  title: React.ReactNode;
+  subtitle: React.ReactNode;
+  reduce: boolean;
+  children: React.ReactNode;
+}) {
+  const rise = (delay: number) =>
+    reduce
+      ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.2 } }
+      : {
+          initial: { opacity: 0, y: 14 },
+          animate: { opacity: 1, y: 0 },
+          transition: { delay, duration: 0.6, ease: [0.22, 1, 0.36, 1] as const },
+        };
+  return (
+    <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-4 pt-1 sm:px-5 sm:pb-6">
+      <motion.div
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: reduce ? 0.2 : 0.75, ease: [0.22, 1, 0.36, 1] }}
+        className="projects-world"
+        data-testid="projects-world"
+      >
+        <motion.img
+          src="/brand/mox/onboarding/world-day.webp"
+          alt=""
+          aria-hidden
+          draggable={false}
+          initial={reduce ? false : { scale: 1.08 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+          className="projects-world__img"
+        />
+        <div aria-hidden className="projects-world__scrim" />
+        {!reduce && <Fireflies />}
+        <div className="projects-world__content">
+          <motion.p
+            {...rise(0.2)}
+            className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[rgb(22_25_27/0.55)]"
+          >
+            {eyebrow}
+          </motion.p>
+          <motion.h1
+            {...rise(0.28)}
+            className="mt-2 text-[30px] font-bold leading-[1.05] tracking-[-0.035em] text-[#16191b] sm:text-[40px]"
+          >
+            {title}
+          </motion.h1>
+          <motion.p
+            {...rise(0.36)}
+            className="mt-2 text-[14px] leading-relaxed text-[rgb(22_25_27/0.7)]"
+          >
+            {subtitle}
+          </motion.p>
+          <motion.div {...rise(0.46)} className="mt-6 w-full max-w-xl">
+            {children}
+          </motion.div>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+/** A few slow lights over Mox's world. Decoration only. */
+function Fireflies() {
+  const dots = [
+    { left: "8%", top: "22%", d: 0 },
+    { left: "24%", top: "62%", d: 1.4 },
+    { left: "38%", top: "30%", d: 2.6 },
+    { left: "55%", top: "18%", d: 0.8 },
+    { left: "71%", top: "70%", d: 2 },
+    { left: "88%", top: "34%", d: 3.2 },
+  ];
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {dots.map((p, i) => (
+        <span
+          key={i}
+          className="projects-firefly"
+          style={{ left: p.left, top: p.top, animationDelay: `${p.d}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Setups that were started but never finished. They are not brands yet, so
+ * they sit in their own quiet row: carry on, or let it go (owner, typed
+ * confirmation, same delete as a brand).
+ */
+export function UnfinishedSetups({
+  items,
+  reduce,
+  onContinue,
+  onDiscard,
+}: {
+  items: Workspace[];
+  reduce: boolean;
+  onContinue: (w: Workspace) => void;
+  onDiscard: (w: Workspace) => void;
+}) {
+  return (
+    <div
+      role="region"
+      aria-label="Unfinished setups"
+      className="relative z-10 mx-auto -mt-1 w-full max-w-6xl px-4 pb-2 sm:px-5"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-[12px] font-medium text-muted-foreground">Not finished yet</span>
+        <AnimatePresence initial={false}>
+          {items.map((w, i) => {
+            const label = w.name.trim() === BLANK_DRAFT_NAME ? "Brand without a website" : w.name;
+            return (
+              <motion.div
+                key={w.id}
+                layout
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                transition={{ delay: reduce ? 0 : 0.5 + i * 0.05, duration: 0.35 }}
+                className="flex h-10 items-center gap-1 rounded-full border border-border/70 bg-card/90 pl-1 pr-1 shadow-[0_8px_24px_-18px_hsl(var(--foreground)/0.5)] backdrop-blur"
+              >
+                <button
+                  type="button"
+                  onClick={() => onContinue(w)}
+                  className="inline-flex h-8 items-center gap-2 rounded-full pl-2 pr-3 text-[13px] font-medium text-foreground transition hover:bg-secondary"
+                >
+                  <span className="size-2 rounded-full bg-amber-500" aria-hidden />
+                  <span className="max-w-[180px] truncate">{label}</span>
+                  <span className="text-muted-foreground">· Continue</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+                {w.isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => onDiscard(w)}
+                    aria-label={`Discard ${label}`}
+                    title="Discard"
+                    className="grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }
 

@@ -19,7 +19,12 @@ import {
 } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
 import type { StudioControls } from "@/lib/studio/jobs";
-import { VIDEO_KIND_GROUPS, VIDEO_KINDS, type VideoKindId } from "@/lib/studio/video/kinds";
+import {
+  RETIRED_VIDEO_KINDS,
+  VIDEO_KIND_GROUPS,
+  VIDEO_KINDS,
+  type VideoKindId,
+} from "@/lib/studio/video/kinds";
 import { FieldLabel, OptionCards } from "./studio-ui";
 
 const ICONS: Record<VideoKindId, LucideIcon> = {
@@ -97,7 +102,9 @@ export function VideoKindPicker({
   };
   const nameOf = (id: VideoKindId | undefined) => VIDEO_KINDS.find((k) => k.id === id)?.label;
   const optionsFor = (group: (typeof VIDEO_KIND_GROUPS)[number]["id"]) =>
-    VIDEO_KINDS.filter((kind) => kind.group === group).map((kind) => ({
+    VIDEO_KINDS.filter(
+      (kind) => kind.group === group && !RETIRED_VIDEO_KINDS.includes(kind.id),
+    ).map((kind) => ({
       value: kind.id as Choice,
       label: kind.label,
       hint: kind.needsSource && !hasPicture ? "Add a photo in the box above first" : kind.hint,
