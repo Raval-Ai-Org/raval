@@ -183,7 +183,7 @@ export const FEATURES: Feature[] = [
     table: {
       title: "Market intelligence on each plan",
       intro: "The brains are on every plan. Paid plans add regular updates and competitor tracking.",
-      rows: ["Market Brain updates", "Weekly Marketing Coach briefing", "Competitors tracked"],
+      rows: ["Market Brain, weekly", "Brand DNA, products, audience and strategy", "Competitors tracked"],
     },
     faqs: [
       {
@@ -227,7 +227,7 @@ export const FEATURES: Feature[] = [
     table: {
       title: "Publishing on each plan",
       intro: "Where you can publish, and the tools that help you plan and approve posts.",
-      rows: ["Posting to every social network", "Campaign plans", "Approval workflows"],
+      rows: ["Publishing to every social network", "Campaign plans and the content calendar", "Approval workflows"],
     },
     faqs: [
       {
@@ -329,7 +329,7 @@ export const FEATURES: Feature[] = [
     table: {
       title: "Autopilot on each plan",
       intro: "Autopilot is part of the paid plans, alongside the publishing and planning tools it works with.",
-      rows: ["Autopilot mode", "Posting to every social network", "Campaign plans"],
+      rows: ["Autopilot plans, writes and schedules", "Publishing to every social network", "Campaign plans and the content calendar"],
     },
     faqs: [
       {
@@ -374,7 +374,7 @@ export const FEATURES: Feature[] = [
     table: {
       title: "Connections on each plan",
       intro: "The assistants and apps you can connect, by plan.",
-      rows: ["MCP connection (Claude and ChatGPT)", "Slack and Notion", "Edit generated images in Canva"],
+      rows: ["Publishing to every social network", "GA4 and Search Console insights", "One-click fixes, WordPress and Webflow"],
     },
     faqs: [
       {
