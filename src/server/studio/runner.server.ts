@@ -386,6 +386,8 @@ type ProviderTask = {
 
 /** A video the provider ended with an outage-type failure is made again this many times. */
 const VIDEO_RESUBMITS = 2;
+/** A picture refused for balance or rate while its siblings ran is sent again this often. */
+const IMAGE_BALANCE_RESUBMITS = 2;
 /**
  * Passing errors (a slow download, a dropped connection, a busy encoder)
  * tolerated while collecting a video. Both must be used up before a finished,
@@ -4750,6 +4752,36 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           task.kind === "image" && check.retryable !== false && check.code !== "safety_unavailable"
             ? task.fallbacks[0]
             : undefined;
+        // Pictures sent together (Story frames, carousel slides, versions):
+        // OpenRouter holds each one's worst-case cost, so on a low balance the
+        // last one sent is refused (402) or throttled (429) in a split second
+        // while the others are made. Wait for those to finish, which frees the
+        // hold, then send it again on the same model instead of failing it.
+        if (
+          task.kind === "image" &&
+          (check.code === "insufficient_credits" || check.code === "rate_limited") &&
+          (task.resubmits ?? 0) < IMAGE_BALANCE_RESUBMITS
+        ) {
+          if (tasks.some((t) => t !== task && t.kind === "image" && t.state === "pending")) {
+            continue;
+          }
+          await requireActiveJob(c, row);
+          const restarted = await startImageTask({
+            costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
+            prompt: task.prompt,
+            size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
+            model: task.model,
+            referenceAssets: await retryReferenceUrls(c, row, task),
+            background: task.photoDesign?.background,
+            meterRoute: "studio.image.rerender",
+          });
+          Object.assign(task, {
+            taskId: restarted.taskId,
+            resubmits: (task.resubmits ?? 0) + 1,
+            startedAt: Date.now(),
+          });
+          continue;
+        }
         if (next) {
           await requireActiveJob(c, row);
           const size = IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize;
