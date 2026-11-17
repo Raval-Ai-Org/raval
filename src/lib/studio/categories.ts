@@ -1,20 +1,10 @@
-// Studio categories: the kinds of post that travel on Instagram, written down
-// once. A person picks one in Studio (or Write it for me picks one for them);
-// every writer, the visual brief and the image prompt then follow it, so a
-// meme reads and looks like a meme and a sale post like a designed sale post.
-//
-// A category is the genre of a piece. It sits beside the aim (viral.ts: why a
-// stranger keeps, sends or answers it) and the template (templates.ts: the
-// exact structure). Each one says:
-//   - why it spreads, and the aim it serves by default;
-//   - how to write it, and what never to do;
-//   - how the picture looks: `register` "native" (made on a phone, posted by a
-//     person) or "designed" (a professional, art-directed post), plus the
-//     picture's own rules and, for memes, the meme layouts;
-//   - how a carousel and a video of it are built.
-//
-// Ids are stored on jobs (intent.category): add categories, never rename ids.
-// Pure and browser-safe.
+// Studio categories: the kinds of post Studio used to offer (sale, meme, tips,
+// myth...). RETIRED as a way to make posts (ADR-0051, 2026-11): a piece is now
+// made from what the person asked for (brief-read.ts), never from a picked or
+// randomly chosen kind, so `resolveCategory` always answers none and there is
+// no picker. The definitions stay only so stored ids on old jobs
+// (intent.category) still read and show their label. Never steer a new piece
+// by kind again. Pure and browser-safe.
 import type { GoalId } from "./jobs";
 import type { StudioType } from "./formats";
 import type { ShareAimId } from "./viral";
@@ -712,13 +702,17 @@ export function categoryOfTemplate(templateId: string | null | undefined): Categ
   return templateId ? (TEMPLATE_CATEGORY[templateId] ?? null) : null;
 }
 
-/** The category a piece follows: the person's pick, else its template's. Never a retired kind. */
-export function resolveCategory(intent: {
+/**
+ * Post kinds are retired (ADR-0051): a piece is made from what the person
+ * asked for, never from a picked or random kind. Stored ids stay readable
+ * (`categoryById`) so old posts still show their label; nothing steers a
+ * new piece by kind any more.
+ */
+export function resolveCategory(_intent: {
   category?: string | null;
   template?: string | null;
 }): Category | null {
-  const found = categoryById(intent.category) ?? categoryById(categoryOfTemplate(intent.template));
-  return found && !isRetiredCategory(found.id) ? found : null;
+  return null;
 }
 
 /** How the picture is made: a category decides, else the polished default. */
@@ -777,71 +771,4 @@ export function categoryPictureLines(category: Category | null): string[] {
     ...(category.register === "native" ? NATIVE_PICTURE : DESIGNED_PICTURE),
     ...category.picture,
   ];
-}
-
-/* ───────────────────────────── picking one ───────────────────────────── */
-
-/**
- * How often each category comes up for a goal when Write it for me picks.
- * Auto only makes designed posts (real graphics, banners, carousels): the
- * phone-native kinds (POV, trend, storytime, UGC, behind the scenes) gave
- * inconsistent pictures, so they are made only when a person picks them.
- */
-const GOAL_MIX: Partial<Record<GoalId, Partial<Record<CategoryId, number>>>> = {
-  offer: { sale: 4, product: 3, proof: 1 },
-  launch: { launch: 4, product: 3, list: 1 },
-  leads: { proof: 3, tips: 2, product: 2, list: 1 },
-  education: { tips: 3, list: 3, myth: 2 },
-  engagement: { "this-or-that": 2, tips: 2, list: 2, quote: 1, product: 1 },
-  awareness: { product: 3, tips: 2, list: 1, aesthetic: 1, quote: 1, local: 1 },
-};
-
-/** Kinds Auto never picks by itself: retired kinds and every phone-native kind. */
-export const NEVER_AUTO: readonly CategoryId[] = [
-  ...RETIRED_CATEGORIES,
-  ...CATEGORIES.filter((c) => c.register === "native").map((c) => c.id),
-];
-
-function hash(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/**
- * The category Write it for me uses when the person picked none: weighted by
- * the goal, only ones that suit the format, never the last two used. `seed`
- * makes it vary per click while staying testable.
- */
-export function pickCategory(args: {
-  type: StudioType;
-  goal?: GoalId | null;
-  recent?: readonly (string | null | undefined)[];
-  seed: string;
-}): Category {
-  const mix = GOAL_MIX[args.goal ?? "awareness"] ?? GOAL_MIX.awareness!;
-  const recent = new Set((args.recent ?? []).filter(Boolean).slice(0, 2));
-  const fits = (id: CategoryId) => !!categoryById(id)?.formats.includes(args.type);
-  let pool = (Object.entries(mix) as [CategoryId, number][]).filter(
-    ([id]) => fits(id) && !recent.has(id),
-  );
-  if (!pool.length)
-    pool = categoriesFor(args.type)
-      .filter((c) => !NEVER_AUTO.includes(c.id) && !recent.has(c.id))
-      .map((c) => [c.id, 1] as [CategoryId, number]);
-  if (!pool.length)
-    pool = categoriesFor(args.type)
-      .filter((c) => !NEVER_AUTO.includes(c.id))
-      .map((c) => [c.id, 1] as [CategoryId, number]);
-  if (!pool.length) return categoryById("product")!;
-  const total = pool.reduce((sum, [, w]) => sum + w, 0);
-  let roll = hash(args.seed) % total;
-  for (const [id, weight] of pool) {
-    if (roll < weight) return categoryById(id)!;
-    roll -= weight;
-  }
-  return categoryById(pool[0][0])!;
 }

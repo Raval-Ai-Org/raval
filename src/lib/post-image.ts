@@ -488,7 +488,7 @@ function textRule(maxWords: number): string {
  * end of a long prompt loses to whatever came before it, so the look leads and
  * the brief below it only decides what the image says and shows.
  */
-function styleLead(style: ImageStyleInput): string[] {
+export function styleLead(style: ImageStyleInput): string[] {
   const refs = style.references;
   return [
     `BRAND STYLE${style.name ? ` "${style.name}"` : ""} — THE LOOK, highest priority. This is the brand's own design. Every colour, font, layout and finish choice comes from here; the brief further down only decides what the image says and shows.`,

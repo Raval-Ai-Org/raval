@@ -11,7 +11,8 @@ import {
 
 // The system prompt is the part every call pays for; these ceilings keep a
 // new rule from quietly doubling the bill (Round 5). Raise one only with a reason.
-const SYSTEM_MAX_CHARS = { social: 9000, carousel: 10000, ad: 10000, image: 13000, meme: 12000 };
+// The post writer is brief-first and short (ADR-0051): about 4k, ceiling 5k.
+const SYSTEM_MAX_CHARS = { social: 9000, carousel: 10000, ad: 10000, image: 5000, meme: 12000 };
 
 function base(category: string | null, goal = "awareness") {
   return {
@@ -40,9 +41,15 @@ describe("system prompt size", () => {
     // the meme concept route is no longer reached from a picked kind.
   });
   it("sends a shortlist of layouts, not all of them", () => {
-    const { system } = buildVisualBriefPrompt({ ...base("product"), medium: "image" });
-    const menu = system.split("\n").filter((l) => /^- [a-z-]+: .+Best for/.test(l));
-    expect(menu.length).toBeLessThanOrEqual(8);
+    const { user } = buildVisualBriefPrompt({ ...base("product"), medium: "image" });
+    // Native post styles (post-styles.ts): a short best-fit list.
+    const menu = user
+      .split("## Post styles")[1]
+      ?.split("##")[0]
+      .split("\n")
+      .filter((l) => /^- [a-z-]+: /.test(l));
+    expect(menu?.length).toBeGreaterThan(0);
+    expect(menu?.length).toBeLessThanOrEqual(3);
   });
 });
 

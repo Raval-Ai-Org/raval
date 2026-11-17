@@ -1155,7 +1155,10 @@ async function distribute(
       deps.designedMedia &&
       !designedPaths
     ) {
-      skip(id, "The Story frames could not be updated. Try again before publishing.");
+      skip(
+        id,
+        "The designed pictures (Story frames or carousel slides) could not be updated. Try again before publishing.",
+      );
       continue;
     }
     const storagePaths =
@@ -1831,7 +1834,7 @@ export async function retryHandler(
       return fail(
         409,
         "CONFLICT",
-        "The Story frames could not be updated. Try again before retrying.",
+        "The designed pictures (Story frames or carousel slides) could not be updated. Try again before retrying.",
       );
     }
     const storagePaths =

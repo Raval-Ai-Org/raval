@@ -150,12 +150,17 @@ export function creativeRedo(
   return { redo: false, reason: null, fixes: [], score };
 }
 
-/** After a redo: keep the first picture only when it scored clearly better and had no hard defect. */
+/**
+ * After a redo: keep the first picture when it is clearly the better one. A
+ * picture without a hard defect beats one with; between two of the same kind
+ * the first stays only when it scored at least half a point higher, so a redo
+ * that isn't better never replaces it.
+ */
 export function keepFirstRender(
   first: { score: number | null; hard: boolean } | null | undefined,
   second: { score: number | null; hard: boolean },
 ): boolean {
-  if (!first || first.hard || first.score === null) return false;
-  if (second.hard) return true;
+  if (!first || first.score === null) return false;
+  if (first.hard !== second.hard) return second.hard;
   return second.score !== null && first.score - second.score >= 0.5;
 }

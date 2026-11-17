@@ -123,7 +123,10 @@ describe("pictureJobFor", () => {
 
   it("falls back to the goal, then to a brand picture", () => {
     expect(pictureJobFor({ goal: "engagement" }).id).toBe("engage");
-    expect(pictureJobFor({ goal: "offer" }).id).toBe("sell");
+    // An offer goal sells only when the brief names the product (ADR-0051).
+    expect(pictureJobFor({ goal: "offer" }).id).toBe("brand");
+    expect(pictureJobFor({ goal: "offer", productAsked: true }).id).toBe("sell");
+    expect(pictureJobFor({ deliverable: "hiring", goal: "offer" }).id).not.toBe("sell");
     expect(pictureJobFor({}).id).toBe("brand");
     expect(pictureJobFor({ type: "ad", category: { id: "tips" } }).id).toBe("sell");
   });

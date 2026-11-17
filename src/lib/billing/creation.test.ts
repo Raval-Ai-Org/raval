@@ -22,10 +22,11 @@ describe("legacy creation allowance", () => {
       studioPriceLabel({ type: "image", controls: { platforms: [], paymentSource: "creation" } }),
     ).toBe("2 creation points");
   });
-  it("prices every generated slide in full artwork and every Story frame", () => {
+  it("prices every generated slide and every Story frame", () => {
+    // Carousel slides are always designed by the model now (ADR-0051).
     expect(
       creationPointsFor({ type: "carousel", controls: { platforms: [], slideCount: 10 } }),
-    ).toBe(3);
+    ).toBe(21);
     expect(
       creationPointsFor({
         type: "carousel",

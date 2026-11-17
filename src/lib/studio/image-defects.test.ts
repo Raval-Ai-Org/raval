@@ -71,6 +71,9 @@ describe("creative rubric", () => {
     expect(keepFirstRender({ score: 6, hard: false }, { score: 5, hard: false })).toBe(true);
     expect(keepFirstRender({ score: 6, hard: false }, { score: 9, hard: true })).toBe(true);
     expect(keepFirstRender({ score: 6, hard: true }, { score: 2, hard: false })).toBe(false);
+    // Both had a hard defect: the clearly better one stays.
+    expect(keepFirstRender({ score: 6, hard: true }, { score: 4, hard: true })).toBe(true);
+    expect(keepFirstRender({ score: 5, hard: true }, { score: 5.2, hard: true })).toBe(false);
   });
 
   it("knows a meme, a sale and a native photo", () => {

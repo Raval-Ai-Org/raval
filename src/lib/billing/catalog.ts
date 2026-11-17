@@ -713,12 +713,16 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.08,
     routes: ["studio.ad"],
   },
+  // Every slide is designed by the image model (ADR-0051): 1 credit for the
+  // cover plus half a credit per extra slide (carouselCredits, studio/billing.ts).
+  // Listed here at the default 6 slides: 6 pictures at about $0.045 with their
+  // review, plus the writer.
   carousel: {
-    credits: cr(1),
+    credits: cr(3.5),
     label: "Carousel",
-    unit: "drawn slides + cover picture",
+    unit: "6 designed slides (1 + ½ per extra slide)",
     feature: "studio",
-    expectedCostUsd: 0.08,
+    expectedCostUsd: 0.28,
     routes: ["studio.carousel"],
   },
   photo_design: {
@@ -1016,6 +1020,9 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "studio.image.review",
   // A video's brief is part of the video, charged with it.
   "studio.video.brief",
+  // The one rewrite after a failed brief check, or a long carousel's words:
+  // part of the already charged Studio piece (ADR-0051).
+  "studio.plan.escalate",
   "studio.video.storyboard",
   // Checking a video before anyone sees it (and one redo) is Mellox's cost.
   "studio.video.qa",

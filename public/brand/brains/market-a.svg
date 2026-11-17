@@ -1,0 +1,9 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <title>Market growth emblem</title>
+  <g fill="#FE7032">
+    <path d="M187 671C355 594 560 426 652 276L607 260C582 251 581 222 608 212L793 144C815 136 834 150 832 173L814 341C811 366 788 374 771 357L747 333C607 503 395 637 196 685C177 690 171 679 187 671Z" />
+    <rect x="180" y="704" width="202" height="196" rx="47" />
+    <rect x="411" y="605" width="202" height="295" rx="47" />
+    <rect x="642" y="457" width="202" height="443" rx="47" />
+  </g>
+</svg>

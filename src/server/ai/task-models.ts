@@ -226,6 +226,10 @@ const REGISTRY: Record<string, TaskPlan> = {
   // The visual brief a picture or video is made from (buildVisualBriefPrompt).
   "studio.image.brief": tier(WRITER, "low"),
   "studio.video.brief": tier(WRITER, "low"),
+  // The stronger writer, only where it pays off (ADR-0051): a draft whose
+  // words drifted from the brief (brief-fit.ts), a carousel of 7+ slides, and
+  // the rewritten prompt for a picture that failed review. Haiku does the rest.
+  "studio.plan.escalate": tier(CONVERSATION, "low", { maxTokens: 4_000 }),
   // A meme's concept (buildMemeConceptPrompt): three ideas, a critique and the
   // pick, on a real template or an original scene. Humour needs the stronger
   // writer; it replaces the image brief for memes, it never adds a call.

@@ -8,6 +8,7 @@
 // the brief or campaign names. A colour mood other than the brand's own is
 // used only when the brief asks for it. Ids are stored on posts
 // (`meta.hero_look`): add, never rename.
+import { briefFacts, contentWords } from "../brief-read";
 import { hash } from "../art-direction";
 import type { Staging, StagingId } from "./stagings";
 
@@ -139,6 +140,7 @@ export const SETS: Record<StagingId, readonly HeroSet[]> = {
 /* ───────────── topics ───────────── */
 
 export type TopicId =
+  | "the-brief"
   | "one-benefit"
   | "texture"
   | "ingredients"
@@ -157,6 +159,25 @@ export type Topic = {
   stagings: StagingId[];
   asks?: RegExp;
 };
+
+/**
+ * The poster says what the person asked for (ADR-0051): used whenever the
+ * brief carries a message beyond the bare product name. Rotation through the
+ * product's own topics is only for a bare "make a post for X" brief.
+ */
+export const BRIEF_TOPIC: Topic = {
+  id: "the-brief",
+  direction:
+    "the brief's own message (what the person asked this post to say), shown with the product; the headline says that message",
+  stagings: ["glow-sweep", "type-wall", "podium-stack", "colour-split"],
+};
+
+/** The brief says more than the product's name: an offer, a date, an occasion, a message. */
+export function briefHasMessage(brief: string, productName = ""): boolean {
+  if (briefFacts(brief).length) return true;
+  const own = new Set(contentWords(productName));
+  return contentWords(brief).filter((w) => !own.has(w)).length >= 3;
+}
 
 export const TOPICS: readonly Topic[] = [
   {
@@ -217,7 +238,7 @@ export const TOPICS: readonly Topic[] = [
 ];
 
 export function topicById(id: unknown): Topic | null {
-  return TOPICS.find((t) => t.id === id) ?? null;
+  return id === BRIEF_TOPIC.id ? BRIEF_TOPIC : (TOPICS.find((t) => t.id === id) ?? null);
 }
 
 /**
@@ -231,7 +252,10 @@ export function pickTopic(input: {
   texture: string | null;
   ingredients: readonly string[];
   recent: readonly Partial<HeroLook>[];
+  /** The product's name, so a brief that only names it still rotates. */
+  productName?: string;
 }): Topic {
+  if (briefHasMessage(input.brief, input.productName)) return BRIEF_TOPIC;
   const fits = TOPICS.filter(
     (t) =>
       (t.needs?.benefits ?? 0) <= input.benefits &&

@@ -188,6 +188,7 @@ import {
   countWords,
   finalizeVariant,
   finalizeVariants,
+  BRIEF_ANGLE,
   pickAngle,
   scriptToMarkdown,
   type Angle,
@@ -246,6 +247,17 @@ import {
   postTopic,
   preflightPictureBrief,
 } from "@/lib/studio/brief-visual";
+import { readBrief, type BriefRead } from "@/lib/studio/brief-read";
+import { sentWords } from "@/lib/studio/creative-knowledge";
+import {
+  POST_STYLES,
+  carouselStyleById,
+  offeredPostStyles,
+  pickCarouselStyle,
+  postStyleById,
+  type PostStyle,
+} from "@/lib/studio/post-styles";
+import { HEADLINE_MAX_WORDS, briefFitIssues } from "@/lib/studio/brief-fit";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import { bibleWantsLogo, wantsSupportingLines } from "@/lib/brand-visuals/bible";
 import {
@@ -258,6 +270,7 @@ import {
   adImagePrompt,
   carouselBackdropPrompt,
   carouselSlidePrompt,
+  postImagePrompt,
   storyFramePrompt,
 } from "./visual-prompts.server";
 import { getAdFormat, pickAdFormat, type AdFormat } from "@/lib/studio/ad-formats";
@@ -273,7 +286,12 @@ import {
 /** The media slot of a connected carousel's one background picture. */
 const BACKDROP_SLOT = "backdrop";
 import { messageForFailure, userSafeMessage } from "@/lib/user-errors";
-import { archetypeById, recentLayouts, type ArchetypeId } from "@/lib/studio/art-direction";
+import {
+  archetypeById,
+  recentLayouts,
+  sellsPhysicalProduct,
+  type ArchetypeId,
+} from "@/lib/studio/art-direction";
 import { planProductHero, type HeroProduct } from "@/lib/studio/product-hero/plan";
 import { recentStagings, stagingById } from "@/lib/studio/product-hero/stagings";
 import type { HeroLook } from "@/lib/studio/product-hero/variety";
@@ -326,6 +344,11 @@ type ProviderTask = {
   clipEdit?: ClipEditTask;
   /** A finished animated photo's stored file, for the recap that waits for it. */
   assetPath?: string;
+  /**
+   * A carousel slide that waits for slide 1 and then starts with it as its
+   * first reference, so the set shares one grid, type and colour (ADR-0051).
+   */
+  anchor?: { slot: string; started?: boolean };
   startedAt: number;
   state: "pending" | "done" | "failed";
   failure?: JobErrorInfo;
@@ -2155,6 +2178,10 @@ ${ctx.brandText}`,
   const referenceAssets = refs.urls;
   const seriesReferences = referenceAssets;
   if (job.type === "carousel" && output.slides?.length) {
+    // Slide 1 is drawn first; the others wait for it and start with it as
+    // their first reference (ADR-0051). A revision already passes the earlier
+    // slide 1 as a reference, so every slide starts at once.
+    const anchored = !args.referenceUrl && output.slides.length > 1;
     return Promise.all(
       output.slides.map(async (slide, index) => {
         const prompt = carouselSlidePrompt({
@@ -2168,9 +2195,24 @@ ${ctx.brandText}`,
           ratio,
           style: ctx.style ? imageStyleInput(ctx.style) : null,
           revision: refineNote,
-          novelty: noveltyNote,
           seed: `${seed}:${variationKey}`,
+          anchoredToCover: index > 0 && (anchored || !!args.referenceUrl),
+          carouselStyle: carouselStyleById(output.carouselStyle),
         });
+        if (anchored && index > 0)
+          return {
+            slot: `slide:${index}`,
+            kind: "image" as const,
+            taskId: `waiting:slide:${index}`,
+            model: "",
+            fallbacks: [],
+            ratio,
+            prompt,
+            referenceAssets: seriesReferences,
+            anchor: { slot: "slide:0" },
+            startedAt: Date.now(),
+            state: "pending" as const,
+          };
         const started = await startImageTask({
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt,
@@ -2271,17 +2313,16 @@ ${ctx.brandText}`,
             scene: concept,
             purpose: (output as StudioJobOutput & { picturePurpose?: string }).picturePurpose,
             job: pictureJobFor({
-              category: resolveCategory(input.intent),
+              deliverable: output.briefRead?.deliverable,
+              productAsked: output.briefRead?.productAsked,
               goal: input.intent.goal,
             }),
             briefIdea: briefVisualIdea(input.intent.brief, job.type),
             headline: output.onImageText,
             caption,
             topic,
-            // A brand that puts more words on its posts gets a longer headline.
-            maxWords: wantsSupportingLines(output.visualTaste?.direction, input.controls.campaign)
-              ? Math.min(look?.maxWords ?? 9, 9)
-              : Math.min(look?.maxWords ?? 6, 6),
+            // One limit for the writer, this check and the picture prompt.
+            maxWords: Math.min(look?.maxWords ?? HEADLINE_MAX_WORDS, HEADLINE_MAX_WORDS),
           });
           if (checked.notes.length) console.info("[studio] picture brief", job.id, checked.notes);
           return { ...checked, topic };
@@ -2490,37 +2531,60 @@ ${ctx.brandText}`,
         revision: refineNote,
         novelty: noveltyNote,
       })
-    : imagePrompt({
-        // A picture post (and a post with a picture) is drawn from its scene;
-        // the caption only gives the topic and is never set in the picture.
-        body: picture ? picture.topic : body,
-        scene: picture?.scene ?? null,
-        category: resolveCategory(input.intent),
-        memeLayout: job.type === "image" ? output.memeLayout : null,
-        onImageLines: job.type === "image" ? output.onImageLines : null,
-        title: output.title ?? input.intent.brief.slice(0, 80),
-        brand: styled,
-        ctx,
-        platform: platforms[0] ?? null,
-        ratio,
-        seed,
-        variationKey,
-        extra: [
-          refineNote,
-          noveltyNote,
-          sourceInstruction,
-          compose
-            ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
-            : undefined,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-        style: look,
-        artDirection: archetypeById(output.artDirection)?.id ?? null,
-        avoidArtDirections: input.refine ? [] : recentLayouts(ctx.recent),
-        noText: compose,
-        onImageText: picture ? picture.headline : null,
-      });
+    : picture
+      ? // A picture post (and a post with a picture), built like a Story frame
+        // from the art director's paragraph (ADR-0051): short, coherent,
+        // never cut by the image model's limit.
+        postImagePrompt({
+          brandName: ctx.brandName,
+          concept: picture.scene,
+          postStyle:
+            postStyleById(output.postStyle) ?? chosenPostStyle(null, output.briefRead, ctx, input),
+          deliverable: output.briefRead?.deliverable,
+          headline: compose ? null : picture.headline,
+          lines: compose || !picture.headline ? [] : (output.onImageLines ?? []),
+          noText: compose || look?.maxWords === 0,
+          ratio,
+          style: look,
+          palette: (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
+          fonts: (styled?.fonts ?? []).filter(Boolean),
+          visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
+          logoCorner: logoAt,
+          physicalProduct: sellsPhysicalProduct(ctx.visualBrandText ?? ctx.brandText),
+          revision: refineNote,
+          source: sourceInstruction,
+          avoidLayouts: input.refine ? [] : recentLayouts(ctx.recent),
+          emphasisSeed: seed,
+        })
+      : imagePrompt({
+          body,
+          scene: null,
+          category: null,
+          memeLayout: null,
+          onImageLines: null,
+          title: output.title ?? input.intent.brief.slice(0, 80),
+          brand: styled,
+          ctx,
+          platform: platforms[0] ?? null,
+          ratio,
+          seed,
+          variationKey,
+          extra: [
+            refineNote,
+            noveltyNote,
+            sourceInstruction,
+            compose
+              ? "Generate only the photographic or illustrated scene. Absolutely no words, letters, logo or graphic text panels; exact typography and the real logo are added afterward."
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+          style: look,
+          artDirection: archetypeById(output.artDirection)?.id ?? null,
+          avoidArtDirections: input.refine ? [] : recentLayouts(ctx.recent),
+          noText: compose,
+          onImageText: null,
+        });
   // More versions of the same piece: one task per version, each told how to
   // differ. They are saved without touching the post until a person picks one.
   if (isVariationsRequest(input)) {
@@ -2946,24 +3010,38 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
   const mediaOnly = !!parent && !!input.refine && (input.refine.target === "media" || variations);
   const addPlatforms = !!input.refine && input.refine.target === "platforms" && !!parent;
   const previousAngle = parent?.output?.angle ?? null;
-  const angle: Angle = pickAngle(
-    input.idempotencyKey,
-    ctx.recent.map((r) => r.angle),
-    input.refine ? ANGLE_ID(previousAngle) : undefined,
-    // A planned piece keeps to the angles that do what it is for.
-    input.intent.aim ? AIM_ANGLES[input.intent.aim] : undefined,
-    ctx.taste?.lean.angle,
-  );
-  // A new piece opens in a way the last few didn't; a revision keeps its opening.
-  const hook = input.refine
-    ? undefined
-    : pickHookStyle(
-        input.idempotencyKey,
-        ctx.recent.map((r) => r.hookStyle),
-        // The plan already chose how this piece opens.
-        input.intent.hookStyle,
-        ctx.taste?.lean.hook,
-      );
+  // A person's own piece makes the point they asked for (ADR-0051): no random
+  // angle or opening is forced on it. Only a planned piece (Autopilot,
+  // campaigns: `intent.aim`) keeps to the angles and opening its plan chose.
+  const planned = !!input.intent.aim || !!input.intent.hookStyle;
+  const angle: Angle =
+    planned || (input.refine && ANGLE_ID(previousAngle))
+      ? pickAngle(
+          input.idempotencyKey,
+          ctx.recent.map((r) => r.angle),
+          input.refine ? ANGLE_ID(previousAngle) : undefined,
+          input.intent.aim ? AIM_ANGLES[input.intent.aim] : undefined,
+          ctx.taste?.lean.angle,
+        )
+      : BRIEF_ANGLE;
+  const hook =
+    input.refine || !planned
+      ? undefined
+      : pickHookStyle(
+          input.idempotencyKey,
+          ctx.recent.map((r) => r.hookStyle),
+          // The plan already chose how this piece opens.
+          input.intent.hookStyle,
+          ctx.taste?.lean.hook,
+        );
+  // What the person asked for, read once (brief-read.ts, ADR-0051): every
+  // writer and picture prompt is built on it.
+  const briefRead = readBrief(input.intent.brief, {
+    physicalProduct: sellsPhysicalProduct(ctx.brandText),
+  });
+  if (controls.productId && !controls.noProduct && briefRead.deliverable === "brand-moment")
+    briefRead.deliverable = "product-hero";
+  if (controls.productId) briefRead.productAsked = true;
   const carouselStructure =
     type === "carousel"
       ? pickCarouselStructure({
@@ -2976,6 +3054,21 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           lean: ctx.taste?.lean.structure,
           category: resolveCategory(input.intent)?.id,
         })
+      : undefined;
+
+  // The native carousel style (post-styles.ts): code decides from the brief
+  // and the platform; a revision keeps its own.
+  const carouselStyle =
+    type === "carousel"
+      ? ((input.refine ? carouselStyleById(parent?.output?.carouselStyle) : null) ??
+        pickCarouselStyle({
+          deliverable: briefRead.deliverable,
+          platform: platforms[0],
+          physicalProduct: sellsPhysicalProduct(ctx.brandText),
+          productAsked: briefRead.productAsked,
+          brief: input.intent.brief,
+          seed: input.idempotencyKey,
+        }))
       : undefined;
 
   const storyTheme: StoryTheme | undefined =
@@ -3070,9 +3163,11 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       ctx,
       intent: input.intent,
       controls,
+      briefRead,
       angle,
       hook,
       carouselStructure,
+      carouselStyle,
       storyTheme,
       source,
       adFormat,
@@ -3104,17 +3199,25 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       await setStage(client, job.id, "writing");
     }
     let rejected: string | null = null;
+    let driftedFromBrief = false;
     let usableVariants: NonNullable<StudioJobOutput["variants"]> = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       partial.length = 0;
       await requireActiveJob(client, job);
       const parsed = (await runStructuredPrompt({
-        route: built.route,
+        // A draft that drifted from the brief is rewritten once by the
+        // stronger writer (ADR-0051); everything else retries on its route.
+        // A long carousel is planned by the stronger writer from the start.
+        route:
+          (attempt === 1 && driftedFromBrief) ||
+          (type === "carousel" && !input.refine && (controls.slideCount ?? 6) >= 7)
+            ? "studio.plan.escalate"
+            : built.route,
         system: built.system,
         user:
           attempt === 0
             ? built.user
-            : `${built.user}\n\n## Required correction\nThe previous candidate was rejected: ${rejected ?? "it was incomplete or repeated recent work"} Meet the requested format and length exactly. Choose a different audience question, opening line, example, structure and visual concept from anything listed as already made. If current web research is supplied, cite its exact URL beside the relevant article claim. Keep the user's brief and verified brand facts.`,
+            : `${built.user}\n\n## Required correction\nThe previous candidate was rejected: ${rejected ?? "it was incomplete or repeated recent work"} Meet the requested format and length exactly. Keep the subject, purpose and facts of the person's brief exactly; change only the wording and the opening line, never the topic. If current web research is supplied, cite its exact URL beside the relevant article claim.`,
         schema: built.schema as never,
         maxTokens: built.maxTokens,
         temperature: built.temperature,
@@ -3134,6 +3237,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         partial,
         storyTheme,
         sourceContentId: source ? input.intent.sourceContentId : undefined,
+        briefRead,
       });
       if (type === "social") {
         const byPlatform = new Map(
@@ -3151,7 +3255,26 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           variants: completeVariants(platforms, usableVariants, input.intent.brief),
         };
       }
-      const similar = input.refine ? null : findSimilarRecent(type, candidate, ctx.recent);
+      // Only a planned piece is pushed away from recent work; a person's own
+      // brief is theirs to repeat (a second hiring post is still a hiring post).
+      const similar =
+        input.refine || !planned ? null : findSimilarRecent(type, candidate, ctx.recent);
+      // The words on the picture still say what the person asked for (brief-fit.ts).
+      const offBrief =
+        input.refine || attempt === 1 || captionOnly || !BRIEF_FIT_TYPES.has(type)
+          ? null
+          : briefFitIssues({
+              read: briefRead,
+              headline: candidate.onImageText ?? candidate.slides?.[0]?.heading,
+              lines: [
+                ...(candidate.onImageLines ?? []),
+                ...(candidate.slides ?? []).flatMap((slide) => [slide.heading, slide.body]),
+              ],
+              visual: [candidate.concept, candidate.title].filter(Boolean).join(" "),
+              knownFacts: `${input.intent.brief}
+${ctx.brandText}
+${source?.body ?? ""}`,
+            }).join(" ") || null;
       // Same opening as an earlier piece: worth one more try, never a failure.
       const repeatedOpening =
         input.refine || attempt === 1 ? null : findRepeatedOpening(candidate, ctx.recent);
@@ -3207,7 +3330,8 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         !repeatedOpening &&
         !repeatedJoke &&
         !memeIssue &&
-        !genericCopy
+        !genericCopy &&
+        !offBrief
       ) {
         output = candidate;
         break;
@@ -3235,19 +3359,22 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         };
         break;
       }
-      rejected = qualityIssue
-        ? qualityIssue
-        : uncitedResearch
-          ? "It did not cite the research it was given."
-          : similar
-            ? `It was too close to “${similar.title}”.`
-            : memeIssue
-              ? memeIssue
-              : genericCopy
-                ? genericCopy
-                : repeatedJoke
-                  ? `It told the same joke as an earlier post (“${repeatedJoke.joke}”). Write a brand-new joke: a different situation, setup and punchline, and a different meme layout.`
-                  : `It opened the same way as “${repeatedOpening!.opening}”.`;
+      driftedFromBrief = !!offBrief;
+      rejected = offBrief
+        ? offBrief
+        : qualityIssue
+          ? qualityIssue
+          : uncitedResearch
+            ? "It did not cite the research it was given."
+            : similar
+              ? `It was too close to “${similar.title}”.`
+              : memeIssue
+                ? memeIssue
+                : genericCopy
+                  ? genericCopy
+                  : repeatedJoke
+                    ? `It told the same joke as an earlier post (“${repeatedJoke.joke}”). Write a brand-new joke: a different situation, setup and punchline, and a different meme layout.`
+                    : `It opened the same way as “${repeatedOpening!.opening}”.`;
       if (attempt === 1 && qualityIssue)
         throw new StudioJobError(502, `${qualityIssue} Try again with a clearer brief.`);
       if (attempt === 1 && uncitedResearch)
@@ -3266,6 +3393,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
   // Copy must read human: no em dashes anywhere, whatever the model returned.
   output = humanizeOutput({
     ...output,
+    briefRead,
     angle: angle.label,
     partial: partial.length ? partial : undefined,
   });
@@ -3330,6 +3458,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
   if (type === "carousel" && output.slides?.length) {
     output = {
       ...output,
+      ...(carouselStyle ? { carouselStyle: carouselStyle.id } : {}),
       carousel: carouselSpec({
         job,
         input,
@@ -3342,21 +3471,11 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
     };
   }
 
-  if (type === "carousel" && output.carousel && !isSeamless(output.carousel.design)) {
-    // Every carousel's price buys one shared background with the slides drawn
-    // over it by code (exact words, no per-slide picture). Full artwork, one
-    // picture per slide, is an explicit creation-point option whose quote
-    // scales with slide count; wallet credits are priced for one background.
-    const fullArtwork =
-      input.controls.paymentSource === "creation" && input.controls.artworkMode === "full";
-    output.carousel = {
-      ...output.carousel,
-      design: {
-        ...output.carousel.design,
-        flow: fullArtwork ? undefined : "composed",
-      },
-    };
-  }
+  // Every carousel is designed by the image model, slide by slide, like a
+  // Story (ADR-0051). Code-drawn slides (text on a flat colour) are kept only
+  // for connected (seamless) slides, the brand's own photos (below) and a
+  // brand whose saved look sets its type afterward (carouselSpec). Priced per
+  // slide; the old "artwork" switch is gone.
   // The brand's own photos and screenshots go on the slides as they are
   // (a case study shows the real work). A revision keeps the ones it had.
   if (
@@ -3437,7 +3556,9 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         // What the piece showed, so the next one features another product and
         // is staged on another layout (src/lib/products/feature.ts).
         ...(product ? { product_id: controls.productId } : {}),
-        ...(output.artDirection ? { art_direction: output.artDirection } : {}),
+        ...(output.postStyle || output.artDirection
+          ? { art_direction: output.postStyle || output.artDirection }
+          : {}),
         // The kind of post and the joke it told, so no later post repeats it (novelty.ts).
         ...(resolveCategory(input.intent) ? { category: resolveCategory(input.intent)!.id } : {}),
         ...(output.memeLayout ? { meme_layout: output.memeLayout } : {}),
@@ -3714,6 +3835,9 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
   }
 }
 
+/** Formats whose words are set in a picture and checked against the brief. */
+const BRIEF_FIT_TYPES: ReadonlySet<StudioType> = new Set(["image", "carousel", "ad"]);
+
 function ANGLE_ID(label: string | null): string | undefined {
   if (!label) return undefined;
   const lower = label.toLowerCase();
@@ -3738,6 +3862,29 @@ function freshLayout(id: unknown, recent: ArchetypeId[]): boolean {
   return !!layout && !recent.includes(layout.id);
 }
 
+/** The post style a picture post is made in (post-styles.ts, ADR-0051). */
+function chosenPostStyle(
+  picked: unknown,
+  read: BriefRead | undefined,
+  ctx: StudioContext,
+  input: CreateJobInput,
+): PostStyle {
+  const offered = offeredPostStyles({
+    read: read ?? readBrief(input.intent.brief),
+    platform: input.controls.platforms?.[0],
+    physicalProduct: sellsPhysicalProduct(ctx.brandText),
+    recent: ctx.recent.map((r) => r.artDirection),
+    // A revision stays in its style: its own post is not a reason to move.
+    refine: !!input.refine,
+    seed: `${ctx.brandName}:${input.intent.brief}`,
+  });
+  const writerPick = postStyleById(picked);
+  return (
+    (writerPick && offered.some((s) => s.id === writerPick.id) ? writerPick : offered[0]) ??
+    POST_STYLES[0]
+  );
+}
+
 async function shapeOutput(args: {
   client: Db;
   job: JobRow;
@@ -3751,6 +3898,8 @@ async function shapeOutput(args: {
   partial: { target: string; error: string }[];
   storyTheme?: StoryTheme;
   sourceContentId?: string;
+  /** What the person asked for (brief-read.ts): picks the post style. */
+  briefRead?: BriefRead;
 }): Promise<StudioJobOutput> {
   const { client, job, type, parsed, platforms, ctx, input, angle, partial } = args;
   const title = String(parsed.title ?? "").trim() || input.intent.brief.slice(0, 80);
@@ -3914,6 +4063,11 @@ async function shapeOutput(args: {
           ...(freshLayout(parsed.artDirection, input.refine ? [] : recentLayouts(ctx.recent))
             ? { artDirection: archetypeById(parsed.artDirection)!.id }
             : {}),
+          // The native post style (post-styles.ts): the writer's pick when it is
+          // one of the offered styles, else the best fit; a revision keeps its own.
+          ...(type === "image"
+            ? { postStyle: chosenPostStyle(parsed.postStyle, args.briefRead, ctx, input).id }
+            : {}),
           onImageText: String(parsed.onImageText ?? "").trim(),
           // Who the picture is for and what it must do (not shown).
           picturePurpose: String(parsed.strategy ?? "").trim(),
@@ -3938,16 +4092,30 @@ async function shapeOutput(args: {
                     .filter(Boolean)
                     .slice(0, memeLayout(parsed.memeLayout)!.lines.length),
                 }
-              : // A rich-text brand's supporting lines (eyebrow, body, items, button), typeset verbatim.
+              : // Supporting lines (eyebrow, body, items, button), typeset verbatim:
+                // as many as the post style carries (a hiring post's role and
+                // how to apply), or a rich-text brand's set.
                 Array.isArray(parsed.onImageLines) &&
-                  wantsSupportingLines(ctx.visualTaste?.direction, input.controls.campaign)
+                  type === "image" &&
+                  !wantsSupportingLines(ctx.visualTaste?.direction, input.controls.campaign)
                 ? {
                     onImageLines: (parsed.onImageLines as unknown[])
                       .map((line) => String(line ?? "").trim())
                       .filter((line) => /^(eyebrow|body|item|button):\s*\S/i.test(line))
-                      .slice(0, 7),
+                      .slice(
+                        0,
+                        chosenPostStyle(parsed.postStyle, args.briefRead, ctx, input).maxLines,
+                      ),
                   }
-                : {}),
+                : Array.isArray(parsed.onImageLines) &&
+                    wantsSupportingLines(ctx.visualTaste?.direction, input.controls.campaign)
+                  ? {
+                      onImageLines: (parsed.onImageLines as unknown[])
+                        .map((line) => String(line ?? "").trim())
+                        .filter((line) => /^(eyebrow|body|item|button):\s*\S/i.test(line))
+                        .slice(0, 7),
+                    }
+                  : {}),
           altText: String(parsed.altText ?? ""),
         } as object),
         ...(planned ? { videoPlan: planned.videoPlan } : {}),
@@ -4619,6 +4787,43 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       if (slot >= 0) media[slot] = { ...media[slot], ...patch };
     };
     try {
+      // A carousel slide waiting for slide 1: start it once slide 1 is ready,
+      // with slide 1 as its first reference (ADR-0051). If slide 1 failed,
+      // it starts with the brand's references alone.
+      if (task.anchor && !task.anchor.started) {
+        const lead = tasks.find((t) => t.slot === task.anchor!.slot);
+        if (lead && lead.state === "pending") continue;
+        const leadPath =
+          lead?.state === "done"
+            ? media.find((m) => m.slot === task.anchor!.slot)?.storagePath
+            : undefined;
+        const leadUrl =
+          leadPath && isWorkspaceStoragePath(leadPath, row.workspace_id)
+            ? await signAssetPath(leadPath)
+            : null;
+        const references = [
+          ...new Set([...(leadUrl ? [leadUrl] : []), ...(task.referenceAssets ?? [])]),
+        ].slice(0, 4);
+        await requireActiveJob(c, row);
+        const started = await startImageTask({
+          costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
+          prompt: leadUrl
+            ? task.prompt
+            : task.prompt.replace(/^The first reference image is slide 1 of this carousel.*$/m, ""),
+          size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
+          referenceAssets: references,
+          meterRoute: "studio.image.slide",
+        });
+        Object.assign(task, {
+          ...started,
+          referenceAssets: references,
+          // Retries and redos keep slide 1 first.
+          ...(leadPath ? { referenceAssetPath: leadPath } : {}),
+          anchor: { ...task.anchor, started: true },
+          startedAt: Date.now(),
+        });
+        continue;
+      }
       // A recap still waiting for its animated photos has not started yet.
       const waitingToStart = !!task.clipEdit && !task.clipEdit.startedAt;
       const timedOut = !waitingToStart && studioProviderTaskIsTimedOut(task, now);
@@ -5060,15 +5265,23 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
                       [
                         `Post topic (the picture must clearly be about this): ${postTopic({ title: row.output?.title ?? row.title, caption: row.output?.variants?.[0]?.body })}`,
                         `Scene asked for: ${(row.output?.concept ?? "").slice(0, 900)}`,
-                        row.output?.onImageText
-                          ? `Exact words: ${JSON.stringify(row.output.onImageText)}. No other words.`
-                          : "No words are expected on it. Flag any caption-like sentence or paragraph drawn in it as extra text.",
+                        // Exactly the words the prompt sent (headline and
+                        // supporting lines), never words it didn't ask for.
+                        ((sent) =>
+                          sent?.length
+                            ? `Exact words: ${sent.map((w) => JSON.stringify(w)).join(", ")}. No other words.`
+                            : sent === null && row.output?.onImageText
+                              ? `Exact words: ${JSON.stringify(row.output.onImageText)}. No other words.`
+                              : "No words are expected on it. Flag any caption-like sentence or paragraph drawn in it as extra text.")(
+                          sentWords(task.prompt),
+                        ),
                         `${
                           pictureJobFor({
-                            category: resolveCategory(row.input?.intent ?? {}),
+                            deliverable: row.output?.briefRead?.deliverable,
+                            productAsked: row.output?.briefRead?.productAsked,
                             goal: row.input?.intent?.goal,
                           }).review
-                        } Clean and professional, little text. Flag the picture as off-topic if it shows something unrelated to the post topic.`,
+                        } Clean and professional. Flag the picture as off-topic if it shows something unrelated to the post topic.`,
                       ]
                     : [
                         row.title,
@@ -5131,8 +5344,9 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       }
       if (decision.redo && finalImage) {
         await requireActiveJob(c, row);
-        // A taste redo keeps the first picture, so the better of the two wins.
-        if (decision.reason === "score" && imageReview) {
+        // Every redo keeps the first picture, so the better of the two wins
+        // (keepFirstRender): a redo that isn't better never replaces it.
+        if (imageReview) {
           const first = await persistAsset({
             workspaceId: row.workspace_id,
             idempotencyKey: `studio-review-first:${row.id}:${task.slot}:${task.taskId}`,
@@ -5145,7 +5359,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             task.firstRender = {
               storagePath: first.asset.storage_path,
               score: decision.score,
-              hard: false,
+              hard: hardNow,
               review: imageReview,
             };
         }

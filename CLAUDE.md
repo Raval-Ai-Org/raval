@@ -51,7 +51,7 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   3×3, one screen with no scroll; Image post, Carousel and Story open straight
   away (never hidden in a "Social posts" group); Home's
   Swipe ideas / Blog ideas open `IdeaSwipeDeck` (a pick only fills a brief);
-  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, then the shape on the canvas: size, slides, Story frames — `PostCanvasSettings`, videos `VideoCanvasSettings` — and one Options pill); the right side panel (Holo) is one list, no tabs: product or service first (big cards with "None"), goal, kind of post (Auto, the grid only on "Choose a kind"), the format's own settings, templates. No ideas there: Surprise me writes the idea; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
+  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, then the shape on the canvas: size, slides, Story frames — `PostCanvasSettings`, videos `VideoCanvasSettings` — and one Options pill); the right side panel (Holo) is one list, no tabs: product or service first (big cards with "None"), goal, the format's own settings (no kind of post: kinds are retired, ADR-0051), templates. No ideas there: Surprise me writes the idea; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
   the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
   Mox's gradient only on the canvas wash, the primary pill, progress bars, the
   visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
@@ -176,8 +176,10 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
   through `fitImagePrompt` so the 10k cut never drops them. A hard defect
   (`hardImageDefects`) or a rubric score under `REDO_BELOW` with concrete
   fixes (`creativeRedo`, ADR-0047) earns one automatic re-render at Mellox's
-  cost, never more; `keepFirstRender` keeps the better of the two. Every carousel paints one
-  shared background unless a creation-point "Individual artwork" is chosen.
+  cost, never more; `keepFirstRender` keeps the better of the two (hard redos
+  too). The review checks exactly the words the prompt sent (`sentWords`).
+  A carousel's slides are designed by the image model one by one, each anchored
+  on slide 1 (ADR-0051); only seamless or the brand's own photos are drawn by code.
   Image spend is metered as `studio.image.*` labels.
 - **Video (still KIE):** `VIDEO_PROVIDER=kie` with automatic fallback to
   OpenRouter (`VIDEO_PROVIDER_FALLBACK`) only on out-of-credits, auth or
@@ -1155,7 +1157,45 @@ benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
 
 ## Studio: carousels, trends and content memory
 
-- **A carousel is one story, drawn by code.** Pure core in
+- **Brief first** ([ADR-0051](docs/adr/0051-brief-first-generation.md)).
+  `readBrief` (`src/lib/studio/brief-read.ts`, pure) reads what the person
+  asked for once per job (deliverable, facts, quoted words, subject words,
+  `productAsked`) and is stored on `output.briefRead`. One writer
+  (`buildPostPlanPrompt`, `src/lib/studio/post-plan.ts`, route
+  `studio.image.brief`) plans the words and the picture together and writes
+  the picture's art direction as one paragraph; `postImagePrompt`
+  (`visual-prompts.server.ts`) adds only short hard rules (exact words, look,
+  type, margins, logo, check) and stays far under the 10k cut.
+  `briefFitIssues` (`brief-fit.ts`, free) checks the copy kept the brief's
+  subject, invented no figure and kept quoted words; a failure gets one
+  rewrite on `studio.plan.escalate` (Sonnet 5.5), which also writes carousels
+  of 7+ slides. Angle and opening are picked only for planned pieces
+  (Autopilot's `intent.aim` / `hookStyle`); a person's post gets `BRIEF_ANGLE`.
+  A product is never attached to hiring, greeting, event and other
+  non-selling briefs, and a product poster keeps the brief's own message
+  (topic `the-brief`, brief facts allowed in `groundConcept`).
+- **Native post styles, picked by code** (ADR-0051 round 2,
+  `src/lib/studio/post-styles.ts`, pure; ids stored, add never rename). A
+  picture post is made in one of the styles brands really publish (photo with
+  a headline, the photo is the post, bold type post, announcement card,
+  product spotlight, offer post, quote, tip card, statement, greeting, behind
+  the scenes, side by side). `offeredPostStyles` gives the writer the best
+  three for the brief and the first platform; `chosenPostStyle` (runner)
+  keeps the writer's pick only when it was offered; `postImagePrompt` gets the
+  style's picture and word rules. The campaign-stunt layouts in
+  `art-direction.ts` are no longer offered for posts (still used by ads and old
+  posts). A style's `maxLines` decides how many supporting lines are kept.
+  Carousels get one `CAROUSEL_STYLES` style (`pickCarouselStyle`: editorial
+  text, photo story, step-by-step, product tour) for the writer and every
+  slide; it is stored on `output.carouselStyle` and a revision keeps it.
+  Surprise me with nothing to start from picks a kind of post good brands
+  publish (`pickSurpriseIdea`); trend and competitor signals no longer drive it.
+- **Carousels are designed per slide** (ADR-0051). Slide 1 starts first; the
+  others wait on it (`anchor`) and take it as their first reference, so the
+  set shares one grid, type and colours. Priced 1 credit for the cover plus
+  half a credit per extra slide (`carouselCredits`, `studioCreditUnits`).
+  Model slides aren't edited as text in review: the edit chat redraws them.
+- **A drawn carousel is one story.** Seamless and own-photo carousels are drawn by code. Pure core in
   `src/lib/studio/carousel/`: `story.ts` (structure, a role per slide,
   `normalizeSlides`, `carouselStoryIssue`), `design.ts` (look per brand,
   colourway and motif per carousel, readable themes), `SlideArt.tsx` (the one
@@ -1290,7 +1330,10 @@ benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
 - **Retired kinds:** meme and before/after (`RETIRED_CATEGORIES`, the memes
   playbook, `RETIRED_VIDEO_KINDS`) are no longer offered or picked; Auto picks
   designed kinds only. Their ids stay readable for old posts.
-- **A post has a kind** (`src/lib/studio/categories.ts`, pure; ids stored on
+- **Kinds are retired** (ADR-0051): `resolveCategory` always returns null,
+  there is no picker and nothing picks one; the brief decides what a post is.
+  The list below stays only so old posts' ids still read.
+- **A post had a kind** (`src/lib/studio/categories.ts`, pure; ids stored on
   `intent.category`: add, never rename): sale, product, launch, meme,
   relatable, trend, tips, myth, before/after, proof, behind the scenes,
   storytime, this-or-that, quote, local, aesthetic, list, UGC. Picked in the

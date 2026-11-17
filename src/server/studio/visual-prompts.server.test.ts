@@ -93,7 +93,8 @@ describe("complete model-generated series prompts", () => {
     });
     expect(cover).toContain("TEXT — RENDER VERBATIM");
     expect(cover).toContain("DELIVERABLE — Tips or how-to cover");
-    expect(cover).toContain("ART DIRECTION");
+    // The cover gets one short layout line, never the long art-direction block.
+    expect(cover).not.toContain("ART DIRECTION");
     expect(inside).not.toContain("ART DIRECTION");
     expect(inside).toContain('Exact small label: "Myth 1"');
     expect(inside).toContain("Use exactly these 3 lines");

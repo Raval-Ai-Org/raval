@@ -2,8 +2,10 @@
 // credit or video hold, shared by the jobs route (a person pressing Generate)
 // and Autopilot (the worker, acting as a stored member). Same price either way.
 import "server-only";
+import { NON_SELLING, readBrief } from "@/lib/studio/brief-read";
 import {
   studioChargeFor,
+  studioCreditUnits,
   studioJobRenders,
   studioVideoCredits,
   studioTextOnlyRevision,
@@ -15,7 +17,6 @@ import { createStudioJob } from "@/server/studio/runner.server";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
 import {
   CREDIT_ACTIONS,
-  creditsFor,
   videoFeatureFor,
   type CreditAction,
 } from "@/lib/billing/catalog";
@@ -407,8 +408,11 @@ export async function createBilledStudioJob(args: {
         ? (videoQuote?.units ?? studioVideoCredits(input.type, input.controls))
         : clip
           ? (videoQuote?.units ?? shortClipCreditsForRecap(input.controls, clip.clips))
-          : creditsFor(action as CreditAction) *
-            (isVariationsRequest(input) ? variationCount(input.controls) : 1)));
+          : studioCreditUnits(
+              action as StudioCharge,
+              input.controls,
+              isVariationsRequest(input) ? variationCount(input.controls) : 1,
+            )));
   const meter = useCreation
     ? ("creation" as const)
     : video
@@ -546,6 +550,18 @@ export async function createBilledStudioJob(args: {
   }
 }
 
+/** Briefs that never feature a product unless a person picks one. */
+const NEVER_PRODUCT: ReadonlySet<string> = new Set([
+  "hiring",
+  "greeting",
+  "event",
+  "milestone",
+  "intro",
+  "collab",
+  "market-entry",
+  "case-study",
+]);
+
 /** The catalogue product a new piece is about when none was chosen. Fails open. */
 async function autoPickProduct(
   workspaceId: string,
@@ -558,6 +574,11 @@ async function autoPickProduct(
     const products = await featureCandidates(workspaceId);
     if (!products.length) return null;
     const rotate = mode === "any";
+    // A post that is not about selling never gets a product attached by
+    // itself (ADR-0051): a hiring post or a greeting stays what it is.
+    const { deliverable } = readBrief(input.intent.brief);
+    if (NEVER_PRODUCT.has(deliverable)) return null;
+    if (rotate && NON_SELLING.has(deliverable)) return null;
     const pick = pickFeaturedProduct({
       text: [input.intent.brief, input.controls.campaign].filter(Boolean).join("\n"),
       goal: input.intent.goal,

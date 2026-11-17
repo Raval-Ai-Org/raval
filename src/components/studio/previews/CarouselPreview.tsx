@@ -292,7 +292,14 @@ export function CarouselPreview({
         </button>
       </div>
 
-      {editing ? (
+      {editing && generatedSlides?.length ? (
+        // Designed slides carry their words inside the picture: a text edit here
+        // would not change the picture, so changes go through the edit chat.
+        <p className="mt-4 text-xs text-muted-foreground">
+          These slides are designed pictures. Ask for a change in the edit chat below and Mox
+          redraws the slide.
+        </p>
+      ) : editing ? (
         <div className="mt-4 space-y-2">
           {current > 0 && current < count - 1 ? (
             <input

@@ -166,7 +166,12 @@ it("re-renders a hard defect once, fix first, with the exact reference packet", 
   );
   expect(repair).toContain('- The headline is misspelled: "Sumer".');
   expect(mocks.logo).not.toHaveBeenCalled();
-  expect(mocks.save).not.toHaveBeenCalled();
+  // The first picture is kept aside, unlinked, so the better of the two ships.
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+  expect(mocks.save.mock.calls[0][0]).toMatchObject({
+    contentItemIds: [],
+    metadata: { source: "studio_review_first" },
+  });
   expect(row.provider_tasks[0].reviewAttempts).toBe(1);
 });
 it("retains existing model fallback and references when the original image provider fails", async () => {

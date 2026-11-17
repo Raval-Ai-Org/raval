@@ -1,11 +1,13 @@
 import "server-only";
 import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import type { StoryFrame } from "@/lib/stories/frames";
-import type { ImageStyleInput } from "@/lib/post-image";
+import { styleLead, type ImageStyleInput } from "@/lib/post-image";
 import { onImageCopyLines, type AdFormat, type AdOnImage } from "@/lib/studio/ad-formats";
+import type { DeliverableId } from "@/lib/studio/creative-knowledge";
+import type { CarouselStyle, PostStyle } from "@/lib/studio/post-styles";
 import type { AdObjective } from "@/lib/studio/ad-objectives";
 import {
-  archetypePromptLines,
+  archetypeById,
   carouselSeriesRules,
   heroSubject,
   pickArchetype,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/studio/art-direction";
 import {
   TYPE_SYSTEM,
+  deliverableById,
   deliverablePromptLines,
   detectDeliverable,
   qualityCheckLines,
@@ -33,6 +36,8 @@ type Common = {
   seed?: string;
   /** The words are drawn by Mellox afterward; the picture carries none. */
   noText?: boolean;
+  /** Carousels: the native carousel style (post-styles.ts) every slide follows. */
+  carouselStyle?: CarouselStyle | null;
 };
 
 function visualSystem(args: Common): string {
@@ -44,7 +49,7 @@ function visualSystem(args: Common): string {
     theme
       ? `Visual identity: background ${theme.bg}, ink ${theme.ink}, accent ${theme.accent}; heading style ${theme.headingFont}, body style ${theme.bodyFont}. Use these as art direction, not as a flat template.`
       : "",
-    args.spec?.design
+    args.spec?.design && !args.carouselStyle
       ? `Series direction: ${args.spec.design.look} editorial feeling, ${args.spec.design.colorway} colorway, recurring ${args.spec.design.motif} motif interpreted naturally.`
       : "",
     args.style ? `Approved style: ${args.style.block.slice(0, 2000)}` : "",
@@ -64,7 +69,12 @@ function visualSystem(args: Common): string {
 }
 
 export function carouselSlidePrompt(
-  args: Common & { slide: CarouselSlide; slides: CarouselSlide[] },
+  args: Common & {
+    slide: CarouselSlide;
+    slides: CarouselSlide[];
+    /** Slide 1 is attached as the first reference (ADR-0051). */
+    anchoredToCover?: boolean;
+  },
 ): string {
   const slide = args.slide;
   const position =
@@ -72,9 +82,24 @@ export function carouselSlidePrompt(
   return [
     visualSystem(args),
     `Carousel slide ${args.index + 1} of ${args.slides.length}. Render as one complete ${args.ratio ?? "4:5"} social post frame, with final typography inside the image.`,
+    args.anchoredToCover
+      ? "The first reference image is slide 1 of this carousel. Keep its grid, margins, headline position, typefaces, type sizes, colour roles, background treatment and recurring motif exactly, so the set reads as one designed piece; give this slide a new composition and its own words. Never copy slide 1's words."
+      : "",
     `This slide's job: ${slide.role ?? "point"}. ${args.index === 0 ? "This is the cover: create a striking hook." : args.index === args.slides.length - 1 ? "This is the closing slide: make the next action obvious." : "Advance the narrative with a fresh composition."}`,
-    carouselSeriesRules(position).join("\n"),
-    position === "cover" ? coverArtDirection(args, slide) : "",
+    ...(args.carouselStyle
+      ? [
+          `CAROUSEL STYLE: ${args.carouselStyle.name}. ${args.carouselStyle[position]}`,
+          carouselSeriesRules(position)[0],
+          carouselSeriesRules(position)[2],
+          args.carouselStyle.medium === "photo"
+            ? "Photographs must look real: true-to-life materials, natural light and colour, never a 3D render, plastic CGI look or illustration."
+            : "",
+          "Never surreal scale tricks, floating objects, miniature worlds or visual metaphors: a real, simple, well-made slide.",
+        ]
+      : [
+          carouselSeriesRules(position).join("\n"),
+          position === "cover" ? coverArtDirection(args, slide) : "",
+        ]),
     verbatimTextBlock({
       lines: [
         { label: "Exact small label", text: slide.kicker ?? "" },
@@ -86,7 +111,9 @@ export function carouselSlidePrompt(
     }).join("\n"),
     TYPE_SYSTEM.join("\n"),
     slide.visual ? `Visual direction: ${slide.visual}` : "",
-    `Whole series narrative for continuity: ${args.slides.map((s, i) => `${i + 1}. ${s.heading}`).join(" | ")}`,
+    // Roles only, never the other slides' words: an image model draws every
+    // headline it is shown (the same lesson as Story frames).
+    `Where this slide sits (for pacing only, draw none of it): ${args.slides.map((s, i) => (i === args.index ? `${i + 1}. this slide` : `${i + 1}. ${s.role ?? "point"}`)).join(" → ")}.`,
     `Do not put any other words in the artwork beyond the exact supplied headline, label and supporting copy. If exact long copy cannot fit legibly, prioritize the headline and leave the supporting copy out rather than inventing or mangling text.`,
     qualityCheckLines({ hasText: true, hasProduct: sellsPhysicalProduct(args.brandContext) }).join(
       "\n",
@@ -113,14 +140,14 @@ function coverArtDirection(args: Common, slide: CarouselSlide): string {
     seed: args.seed ?? `${args.brandName}::${slide.heading}`,
     prefer: deliverable.prefer,
   });
+  // One condensed layout line, never the full craft list: the cover's words
+  // sit on a calm area, never behind the subject (ADR-0051).
+  const hero = slide.visual
+    ? `the subject named in this slide's visual direction (${slide.visual.slice(0, 160)})`
+    : heroSubject({ products: null, physical });
   return [
     ...(deliverable.id === "brand-moment" ? [] : deliverablePromptLines(deliverable)),
-    ...archetypePromptLines(archetype, {
-      hero: slide.visual
-        ? `the subject named in this slide's visual direction (${slide.visual.slice(0, 160)})`
-        : heroSubject({ products: null, physical }),
-      deferToStyle: !!args.style,
-    }),
+    `Cover layout "${archetype.name}": ${archetype.summary}, built around ${hero}. Light: ${archetype.light} Finish: ${archetype.finish} Avoid: ${archetype.avoid}. The headline sits on a calm area of the frame, never hidden behind the subject.${args.style ? " The brand style above still decides colours, fonts and medium." : ""}`,
   ].join("\n");
 }
 
@@ -277,6 +304,133 @@ export function adImagePrompt(args: {
       hasText: lines.length > 0,
       hasProduct: sellsPhysicalProduct(args.brandContext),
     }).join("\n"),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** The real canvas, said once in plain words (no pixel maths). */
+export function canvasLine(ratio: string): string {
+  switch (ratio) {
+    case "4:5":
+      return "Portrait 4:5 feed post. It is rendered a little taller and trimmed about 4% at the top and bottom, so keep every word and the focal subject at least 8% away from the top and bottom edges and 6% from the sides.";
+    case "9:16":
+      return "Vertical 9:16 frame. Keep the top 14% and bottom 20% free of words and faces for the app's own buttons; everything important sits in the middle.";
+    case "16:9":
+      return "Landscape 16:9 post. Keep words and the focal subject inside the central 85%, with 6% margins on every side.";
+    default:
+      return "Square 1:1 feed post. Keep words and the focal subject inside the central 88%, with 6% margins on every side.";
+  }
+}
+
+const LINE_LABEL: Record<string, string> = {
+  eyebrow: "Exact small label",
+  body: "Exact supporting line",
+  item: "Exact list item",
+  button: "Exact button text",
+};
+
+/** "role: text" lines from the writer as labelled exact copy. */
+export function supportCopy(lines: readonly string[] | null | undefined) {
+  return (lines ?? [])
+    .map((line) => {
+      const match = /^\s*(eyebrow|body|item|button)\s*:\s*(.+)$/i.exec(line);
+      return match
+        ? { label: LINE_LABEL[match[1].toLowerCase()], text: match[2].trim() }
+        : { label: "Exact supporting line", text: line.trim() };
+    })
+    .filter((line) => line.text)
+    .slice(0, 4);
+}
+
+/**
+ * One picture post (ADR-0051), built like a Story frame: the art director's
+ * paragraph (post-plan.ts) leads, then only short hard rules. It stays well
+ * under the image model's 10,000-character cut, so the exact words and the
+ * final check are never lost; nothing in it contradicts anything else.
+ */
+export function postImagePrompt(args: {
+  brandName: string;
+  /** The writer's art direction for this picture. */
+  concept: string;
+  /** The native post style it is made in (post-styles.ts, ADR-0051). */
+  postStyle?: PostStyle | null;
+  /** Older posts: the campaign layout they were staged on (art-direction.ts). */
+  layout?: string | null;
+  deliverable?: DeliverableId | null;
+  headline?: string | null;
+  lines?: readonly string[] | null;
+  /** No words in the picture: the look allows none, or Mellox sets them afterward. */
+  noText?: boolean;
+  ratio: string;
+  style: ImageStyleInput | null;
+  palette?: string[];
+  fonts?: string[];
+  visualTasteRules?: string;
+  logoCorner?: string | null;
+  physicalProduct?: boolean;
+  revision?: string;
+  /** A source photo's rule (edit or inspire). */
+  source?: string;
+  /** Layouts the brand's latest pictures used. */
+  avoidLayouts?: readonly string[];
+  emphasisSeed?: string;
+}): string {
+  const postStyle = args.postStyle ?? null;
+  const layout = postStyle ? null : archetypeById(args.layout);
+  const deliverable = deliverableById(args.deliverable);
+  const copy = args.noText
+    ? []
+    : [
+        ...(args.headline?.trim() ? [{ label: "Exact headline", text: args.headline.trim() }] : []),
+        ...supportCopy(args.lines),
+      ];
+  const look = args.style ? styleLead(args.style).join("\n").slice(0, 1400) : "";
+  const palette = (args.style?.colors.length ? args.style.colors : (args.palette ?? []))
+    .filter(Boolean)
+    .slice(0, 5);
+  const fonts = (args.style?.fonts.length ? args.style.fonts : (args.fonts ?? []))
+    .filter(Boolean)
+    .slice(0, 2);
+  const avoid = (postStyle ? [] : (args.avoidLayouts ?? []))
+    .map((id) => archetypeById(id)?.name)
+    .filter((name): name is string => !!name && name !== layout?.name);
+  return [
+    `Create a finished, publishable social media post for ${args.brandName}. The entire design, including its typography, is made in this image. It must look like a real post a strong brand published on its feed this year: simple, believable and made for the person scrolling.`,
+    "Act as a senior art director: an intentional, polished composition with one focal point, a clear reading order, real materials and light, and generous negative space. Avoid generic AI marketing imagery, surreal scale tricks, floating objects, random gradients, 3D icons, plastic objects and stock-photo clichés.",
+    postStyle
+      ? `POST STYLE: ${postStyle.name}. ${postStyle.picture}
+Words: ${postStyle.words}`
+      : "",
+    canvasLine(args.ratio),
+    args.revision ?? "",
+    args.source ?? "",
+    `ART DIRECTION (follow it):\n${args.concept.trim().slice(0, 1900)}`,
+    layout ? `Layout: "${layout.name}", ${layout.summary}, adapted to this message.` : "",
+    deliverable && deliverable.id !== "brand-moment"
+      ? `This is a ${deliverable.name.toLowerCase()}: ${deliverable.readingOrder}. Never invent ${deliverable.neverInvent}.`
+      : "",
+    look,
+    !look && palette.length
+      ? `Brand colours, use these and close tints only: ${palette.join(", ")}; the first is the main colour, one accent used sparingly.`
+      : "",
+    !look && fonts.length ? `Type character in the spirit of ${fonts.join(" and ")}.` : "",
+    args.visualTasteRules ? args.visualTasteRules.trim().slice(0, 500) : "",
+    copy.length
+      ? verbatimTextBlock({ lines: copy, emphasisSeed: args.emphasisSeed ?? args.brandName }).join(
+          "\n",
+        )
+      : "Absolutely no words, letters, numbers, labels or logos anywhere in the image.",
+    copy.length
+      ? "Words always sit on a calm area (a clean background, a solid band, open space), never over busy detail and never covered by the subject."
+      : "",
+    copy.length ? TYPE_SYSTEM.join("\n") : "",
+    args.logoCorner
+      ? `Leave the ${args.logoCorner} corner clear (about 16% of the width): the brand's real logo is placed there afterward. Do not draw any logo.`
+      : "Do not draw any logo.",
+    avoid.length ? `Stage it differently from the brand's latest posts (${avoid.join(", ")}).` : "",
+    "Never: invented prices, discounts, dates, ratings, reviews, quotes or names; another brand's logo or product; fake app screens or social media buttons; watermarks; gibberish text; extra or fused fingers.",
+    qualityCheckLines({ hasText: copy.length > 0, hasProduct: args.physicalProduct }).join("\n"),
   ]
     .filter(Boolean)
     .join("\n\n");

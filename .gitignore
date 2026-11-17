@@ -69,3 +69,4 @@ Post Training/
 # MotionMox bundle (npm run motionmox:bundle)
 .motionmox-bundle
 vendor/motionmox/packages/*/node_modules
+public/promo-mox

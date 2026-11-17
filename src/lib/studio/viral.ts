@@ -125,7 +125,7 @@ const SEARCHED: readonly PlatformId[] = ["instagram", "tiktok", "youtube", "pint
 /** What every piece needs before it is worth posting, whatever its aim. */
 export function shareRules(type: StudioType, platforms: readonly PlatformId[] = []): string[] {
   const rules = [
-    "Decide first why a stranger would keep it, send it or answer it. With no reason, change the idea, not the wording.",
+    "Decide first why the reader would keep it, send it or answer it, and make that reason sharper in the wording. Never change what the person asked the piece to be about.",
     "The opening is a promise and the rest keeps it. Never open on the brand's name, a greeting, or how excited anyone is.",
     "Be specific: a named situation, a real example, a figure that is in the context. A general statement is skipped.",
     "One idea. Everything that does not serve it is cut.",

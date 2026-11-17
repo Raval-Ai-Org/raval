@@ -8,7 +8,6 @@ import {
   categoriesFor,
   categoryById,
   categorySection,
-  pickCategory,
   resolveCategory,
 } from "./categories";
 import { getCarouselStructure, pickCarouselStructure } from "./carousel/story";
@@ -52,42 +51,13 @@ describe("categories", () => {
     }
   });
 
-  it("a person's pick wins over the template's", () => {
-    expect(resolveCategory({ category: "tips", template: "image-product-hero" })?.id).toBe("tips");
-    expect(resolveCategory({ template: "image-product-hero" })?.id).toBe("product");
-  });
-
-  it("retired kinds are never made or offered", () => {
+  it("post kinds are retired: nothing steers a new piece by kind (ADR-0051)", () => {
+    expect(resolveCategory({ category: "tips", template: "image-product-hero" })).toBeNull();
+    expect(resolveCategory({ template: "image-product-hero" })).toBeNull();
     expect(resolveCategory({ category: "meme" })).toBeNull();
-    expect(resolveCategory({ template: "image-meme" })).toBeNull();
-    expect(resolveCategory({ category: "before-after" })).toBeNull();
-    for (const type of ["image", "carousel", "story", "video", "ad"] as const)
-      for (const c of categoriesFor(type)) expect(["meme", "before-after"]).not.toContain(c.id);
     expect(resolveCategory({})).toBeNull();
-  });
-
-  it("an automatic pick suits the format and skips the last two", () => {
-    for (let i = 0; i < 40; i++) {
-      const picked = pickCategory({
-        type: "carousel",
-        goal: "engagement",
-        recent: ["meme", "relatable"],
-        seed: `s${i}`,
-      });
-      expect(picked.formats).toContain("carousel");
-      expect(["meme", "relatable"]).not.toContain(picked.id);
-    }
-  });
-
-  it("Auto only makes designed posts, never a meme, for any goal or format", () => {
-    const goals = ["offer", "launch", "leads", "education", "engagement", "awareness"] as const;
-    for (const type of ["image", "carousel", "story", "social", "video", "ad"] as const)
-      for (const goal of goals)
-        for (let i = 0; i < 30; i++) {
-          const c = pickCategory({ type, goal, seed: `${type}${goal}${i}` });
-          expect(c.register).toBe("designed");
-          expect(["meme", "before-after"]).not.toContain(c.id);
-        }
+    // Stored ids still read, so old posts keep their label.
+    expect(categoryById("sale")?.label).toBeTruthy();
   });
 
   it("the picker lists only what a format can make", () => {

@@ -4,11 +4,14 @@
 // "don't repeat these" list. Pure (no server imports) so it is unit-testable.
 import type { HeroLook } from "./product-hero/variety";
 import { z } from "zod";
+import { briefReadLines, readBrief, type BriefRead } from "./brief-read";
+import type { CarouselStyle } from "./post-styles";
+import { buildPostPlanPrompt } from "./post-plan";
 import { PLATFORMS, type PlatformId } from "@/lib/social-platforms";
 import type { MarketingMoment } from "./moments";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { templateDirective } from "./templates";
-import { MEME_LAYOUTS, categoryPictureLines, categorySection, resolveCategory } from "./categories";
+import { MEME_LAYOUTS, categoryPictureLines, resolveCategory } from "./categories";
 import type { BrandLook } from "@/lib/brand-look/resolve";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import { wantsSupportingLines } from "@/lib/brand-visuals/bible";
@@ -205,6 +208,18 @@ export const ANGLES: Angle[] = [
   },
 ];
 
+/**
+ * A person's own piece (ADR-0051): it makes the point they asked for, with no
+ * angle picked for it. Only a planned piece (Autopilot, campaigns) is given
+ * one of the angles above.
+ */
+export const BRIEF_ANGLE: Angle = {
+  id: "brief",
+  label: "The brief's own point",
+  directive:
+    "Make exactly the point the person asked for in the brief, plainly and specifically. Do not reframe it as a myth, a contrarian take, a story or any other angle they did not ask for.",
+};
+
 function hash(value: string): number {
   let h = 2166136261;
   for (let i = 0; i < value.length; i++) {
@@ -241,7 +256,7 @@ export function pickAngle(
 
 /* ───────────────────────── Shared sections ───────────────────────── */
 
-type Section = { label: string; body: string | null | undefined | false };
+export type Section = { label: string; body: string | null | undefined | false };
 
 export function sections(parts: Section[]): string {
   return parts
@@ -315,7 +330,7 @@ const CRAFT_RULES = [
   "Be specific to this brand: its products, audience, and voice. No placeholder names, no [brackets], no lorem ipsum.",
   "Avoid clichés: 'game-changer', 'unlock', 'elevate', 'in today's fast-paced world', 'dive in', 'look no further'.",
   "Never invent statistics, clients, awards, or quotes. If proof isn't in the context, use a concrete illustrative scenario and keep it honest.",
-  "Do not repeat the topics, hooks, or structures of the recent content listed below.",
+  "The brief is the subject: never swap it for another topic. Only avoid reusing the exact headlines and opening lines of the recent content listed below.",
   "Lead with the audience's real question or need. Give a useful answer, example, or next step before promotion. Make the answer understandable without surrounding context.",
   "Use only supplied brand facts and attributable research. Never turn a competitor claim, market signal, or illustrative scenario into an unqualified fact about this brand.",
   "For public content, make the topic and relevant entities clear in natural language so people and answer engines can understand it. Never stuff keywords or promise search placement.",
@@ -356,6 +371,7 @@ function sharedUser(
     extra?: Section[];
     /** The piece this one is made from (repurpose), read by every text format. */
     source?: BuildArgs["source"];
+    briefRead?: BriefRead;
   },
   format = "social",
 ): Section[] {
@@ -365,7 +381,11 @@ function sharedUser(
     ? args.controls.platforms
     : STUDIO_FORMATS[type].defaultPlatforms;
   const trends = trendLines(ctx.socialTrends, platforms);
+  // The brief leads every writer (ADR-0051): it is what the piece is about.
+  const read = args.briefRead ?? readBrief(intent.brief);
   return [
+    { label: "The brief (this is the piece; never change its subject)", body: intent.brief },
+    { label: "What the brief asks for", body: briefReadLines(read).join("\n") },
     { label: "Brand", body: ctx.brandText || `Brand: ${ctx.brandName}` },
     styleSection(ctx, format),
     {
@@ -383,13 +403,9 @@ function sharedUser(
         .filter(Boolean)
         .join("\n"),
     },
-    { label: "Brief", body: intent.brief },
     // Visual briefs carry their own source section (an approved picture or script).
     ...(format === "image" || format === "video" ? [] : [sourceSection(args.source, type)]),
     { label: "Template", body: templateDirective(intent.template) },
-    // The kind of post the person picked (categories.ts): how it is written
-    // and, for a carousel or a video, how it is built.
-    { label: "Category", body: categorySection(resolveCategory(intent), type) },
     {
       label: "Placeholders",
       body: /\[[^\]\n]{1,60}\]/.test(intent.brief)
@@ -424,7 +440,7 @@ function sharedUser(
   ];
 }
 
-function refineSections(refine?: StudioRefine, current?: StudioJobOutput): Section[] {
+export function refineSections(refine?: StudioRefine, current?: StudioJobOutput): Section[] {
   if (!refine || !current) return [];
   const { media: _media, partial: _partial, warnings: _warnings, ...editable } = current;
   return [
@@ -591,7 +607,8 @@ export const AdSchema = z.object({
 
 export const VisualBriefSchema = z.object({
   title: Str(120),
-  concept: Str(1400),
+  /** A picture post: its full art direction for the image model (post-plan.ts). */
+  concept: Str(2600),
   /** The campaign layout chosen from ARCHETYPES, or none (video). */
   artDirection: z.enum(ARCHETYPE_IDS).optional().catch(undefined),
   /** A short phrase allowed to appear in the image, or empty for none. */
@@ -608,6 +625,8 @@ export const VisualBriefSchema = z.object({
   strategy: Str(300).default(""),
   /** Meme: the three ideas weighed before the pick (kept short, not shown). */
   memeIdeas: StrList(3, 220),
+  /** A picture post: the native post style it is made in (post-styles.ts id). */
+  postStyle: Str(40).default(""),
   altText: Str(240).default(""),
 });
 
@@ -622,10 +641,12 @@ export type BuiltPrompt<T> = {
   temperature: number;
 };
 
-type BuildArgs = {
+export type BuildArgs = {
   ctx: StudioContext;
   intent: StudioIntent;
   controls: StudioControls;
+  /** What the person asked for, read once at job start (brief-read.ts, ADR-0051). */
+  briefRead?: BriefRead;
   angle: Angle;
   refine?: StudioRefine;
   current?: StudioJobOutput;
@@ -633,6 +654,8 @@ type BuildArgs = {
   hook?: HookStyle;
   /** Carousels: the story structure the slides follow. */
   carouselStructure?: CarouselStructure;
+  /** Carousels: the native carousel style its slides are designed in (post-styles.ts). */
+  carouselStyle?: CarouselStyle;
   /** Stories: the theme the frames follow. */
   storyTheme?: StoryTheme;
   /** Repurposing: the piece this one is made from (already in this workspace). */
@@ -719,7 +742,11 @@ export function buildSocialPrompt(
         args.captionsOnly ? "" : craftRule(args, "social"),
         ...(withPicture
           ? pictureRules(
-              pictureJobFor({ category: resolveCategory(args.intent), goal: args.intent.goal }),
+              pictureJobFor({
+                deliverable: args.briefRead?.deliverable,
+                productAsked: args.briefRead?.productAsked,
+                goal: args.intent.goal,
+              }),
             )
           : []),
       ].filter(Boolean),
@@ -779,8 +806,11 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
           : "`kicker` is a label of 1 to 3 words above the heading that shows where the reader is. Keep one consistent pattern.",
         "`emphasis` is the 1 to 3 words of that slide's heading that carry its meaning, copied exactly from the heading. They are highlighted in the design.",
         "`role` is one of cover, context, point, proof, recap, cta, matching the slide order above.",
-        "Every slide's words are set exactly as written in the slide design. Keep every heading to 8 words or fewer and each body to 20 words or fewer so every word stays legible on a phone. No emoji, hashtags, markdown, or 'swipe' instructions.",
-        "`visual` is one line of art direction for that slide. Keep one visual idea running through every slide (the same setting, object or metaphor), never unrelated pictures. Slide 1's visual is a poster-grade hook: a concrete hero subject, a surprise of scale, material or pose, and the light. Later slides reuse that hero or motif from a new angle or closer crop. No text-in-image instructions.",
+        "Every slide's words are set exactly as written in the slide design. Every slide is designed by an image model that sets these exact words: keep every heading to 8 words or fewer and each body to 14 words or fewer, so every word is spelled right and legible on a phone. The whole carousel is about the brief's own subject, on every slide. No emoji, hashtags, markdown, or 'swipe' instructions.",
+        args.carouselStyle
+          ? `How the slides look (${args.carouselStyle.name}): ${args.carouselStyle.writer}`
+          : "",
+        "`visual` is one line naming what that slide's picture shows: a concrete, real subject from the brand's world that illustrates that slide's words (the product in use, the place, the step being done, the people at work), the same world on every slide. Never a surreal trick, a giant object, a miniature world or a visual metaphor. No text-in-image instructions.",
         "`caption` is the post caption: an opening line that names the topic in plain searchable words, 1-3 short lines of context, and a call to action. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
         carouselPhotoNote(args.controls, count),
@@ -972,7 +1002,8 @@ export function buildVisualBriefPrompt(
   args: BuildArgs & { medium: "image" | "video" },
 ): BuiltPrompt<z.infer<typeof VisualBriefSchema>> {
   const video = args.medium === "video";
-  if (!video && resolveCategory(args.intent)?.id === "meme") return buildMemeConceptPrompt(args);
+  // A picture post is planned brief-first by one writer (post-plan.ts, ADR-0051).
+  if (!video) return buildPostPlanPrompt(args);
   const seconds = args.controls.durationSec ?? 10;
   // A video made from a finished post: its picture is attached and opens the video.
   const animate = video && !!args.source && args.source.kind !== "script";

@@ -1,6 +1,7 @@
 // What a Studio job costs, shared by the jobs route (which charges it) and the
 // composer (which shows it on the Generate button). Browser-safe.
 import {
+  cr,
   creditsFor,
   formatCredits,
   videoCreditsFor,
@@ -20,6 +21,38 @@ import {
 import { isPhotoDesignType, withResolvedPhotoMode } from "./photo-design/mode";
 import { RECAP_AI_SECONDS } from "./clip-edit";
 import { shortClipPlan, shortClipPrice } from "./short-clip";
+
+/** Credit units for one extra designed carousel slide (the cover is 1 credit). */
+export const CAROUSEL_SLIDE_UNITS = cr(0.5);
+
+/**
+ * A carousel's price (ADR-0051): every slide is designed by the image model,
+ * so it is 1 credit for the cover plus half a credit per extra slide. Slides
+ * still drawn by code (connected slides, the brand's own photos) cost 1 credit.
+ */
+export function carouselCredits(controls: {
+  slideCount?: number;
+  seamless?: boolean;
+  referenceAssetIds?: string[];
+  referenceMode?: string;
+}): number {
+  const drawnByCode =
+    !!controls.seamless ||
+    (!!controls.referenceAssetIds?.length && (controls.referenceMode ?? "preserve") === "preserve");
+  if (drawnByCode) return cr(1);
+  const slides = Math.min(10, Math.max(3, Math.round(controls.slideCount ?? 6)));
+  return cr(1) + (slides - 1) * CAROUSEL_SLIDE_UNITS;
+}
+
+/** Credit units a Studio action costs, with a carousel priced per slide. */
+export function studioCreditUnits(
+  action: StudioCharge,
+  controls: Parameters<typeof carouselCredits>[0],
+  quantity = 1,
+): number {
+  if (action === "carousel") return carouselCredits(controls) * quantity;
+  return creditsFor(action as CreditAction) * quantity;
+}
 
 /** "studio_short_clip": an AI clip of 8 s or less, in credits (src/lib/studio/short-clip.ts). */
 export type StudioCharge = CreditAction | "studio_video" | "studio_short_clip";
@@ -186,8 +219,11 @@ export function studioPriceLabel(
     if (quote?.meter === "credits") return formatCredits(quote.units);
     return formatCredits(studioVideoCredits(input.type, input.controls));
   }
-  const units =
-    creditsFor(action as CreditAction) * (variations ? variationCount(input.controls) : 1);
+  const units = studioCreditUnits(
+    action,
+    input.controls,
+    variations ? variationCount(input.controls) : 1,
+  );
   return units === 0 ? "Included" : formatCredits(units);
 }
 

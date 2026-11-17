@@ -32,7 +32,12 @@ import { duration, ease, spring } from "@/lib/motion";
 import { isActiveJob } from "@/lib/studio/jobs";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
-import { studioChargeFor, studioPriceLabel, studioVideoCredits } from "@/lib/studio/billing";
+import {
+  carouselCredits,
+  studioChargeFor,
+  studioPriceLabel,
+  studioVideoCredits,
+} from "@/lib/studio/billing";
 import { shortClipPlan, shortClipPrice } from "@/lib/studio/short-clip";
 import type { CreditAction } from "@/lib/billing/catalog";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
@@ -83,8 +88,6 @@ import { usePromptWriter, WriteForMeButton, WritingOverlay, WrittenNote } from "
 import { ScriptPreview } from "./previews/ScriptPreview";
 import { BeatPills, TemplateGallery } from "./TemplateGallery";
 import { ChipButton, TypeGlyph } from "./studio-ui";
-import { CategoryPicker } from "./CategoryPicker";
-import { categoryById } from "@/lib/studio/categories";
 import { TypePicker } from "./TypePicker";
 
 const STEPS = [
@@ -762,10 +765,8 @@ export function IntentStep({
   const sidePanel = !isMobile;
   const openPanel = () => onDrawerChange?.(true);
   const goalLabel = GOALS.find((g) => g.id === session.goal)?.label;
-  const pickedCategory = categoryById(session.category);
-  const categoryLabel = pickedCategory?.formats.includes(session.type)
-    ? pickedCategory.label
-    : undefined;
+  // Post kinds are retired (ADR-0051): the brief decides what a post is.
+  const categoryLabel: string | undefined = undefined;
   const { data: catalogue } = useStudioProducts(session.workspaceId);
   const productLabel = catalogue?.find((p) => p.id === session.controls.productId)?.name;
   const showProduct = !canvas.product && session.type !== "script" && !session.sourceScript;
@@ -813,17 +814,6 @@ export function IntentStep({
               </ChipButton>
             ))}
           </div>
-        </PanelSection>
-      ) : null}
-
-      {!session.sourceScript ? (
-        <PanelSection index={2}>
-          <CategoryPicker
-            type={session.type}
-            value={session.category}
-            disabled={busy}
-            onChange={(category) => updateSession(session.id, { category })}
-          />
         </PanelSection>
       ) : null}
 
@@ -1397,6 +1387,14 @@ function StudioPrice({ session }: { session: StudioSession }) {
   if (clip)
     return (
       <CostChip announce credits={shortClipPrice(clip).credits} className="ml-auto shrink-0" />
+    );
+  if (charge === "carousel")
+    return (
+      <CostChip
+        announce
+        credits={carouselCredits({ ...session.controls, ...controls })}
+        className="ml-auto shrink-0"
+      />
     );
   return charge === "studio_video" ? (
     <CostChip

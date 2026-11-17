@@ -316,7 +316,7 @@ export function slidePlanText(count: number): string {
     context:
       "context. Why this matters now: the cost of the problem, or the moment the reader will recognise. It must make the next slide feel needed.",
     point:
-      "point. One idea only. Heading at most 8 words, body at most 30 words with a concrete detail, example or instruction.",
+      "point. One idea only. Heading at most 8 words, body at most 14 words with a concrete detail, example or instruction.",
     proof: "proof. One concrete example, result or demonstration from the supplied facts.",
     recap:
       "recap. The whole carousel in 3 or 4 lines. `body` is those lines separated by line breaks, each at most 6 words, in the same order as the slides.",

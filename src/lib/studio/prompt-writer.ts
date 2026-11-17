@@ -51,7 +51,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
   image: {
     sections: ["Idea", "Headline", "Supporting line", "Picture", "Caption idea"],
     guidance:
-      "'Headline' is the exact words set on the picture (2–6 words, punchy, no full sentence). 'Supporting line' is optional small text (under 10 words) or 'none'. 'Picture' is one or two sentences: the hero subject and the one idea that makes it stop the scroll (a surprise of scale, the product in its own world, a bold graphic metaphor). Say nothing about camera, lens, lighting or colours: the brand's look decides those. 'Caption idea' is the caption's angle and first line.",
+      "'Headline' is the exact words set on the picture (2–6 words, punchy, no full sentence). 'Supporting line' is optional small text (under 10 words) or 'none'. 'Picture' is one or two sentences: what a real, believable post shows (the product in real use, the place, the people at work, the result, or a clean type-led design), concrete and specific to this brand. Never a surreal trick, a giant object or a visual metaphor. Say nothing about camera, lens, lighting or colours: the brand's look decides those. 'Caption idea' is the caption's angle and first line.",
   },
   ad: {
     sections: ["Offer", "For", "Angle", "Headline", "Supporting line", "Picture", "Button"],

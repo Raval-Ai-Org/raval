@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { DURATION, SCENES, STAGE } from "@/lib/promo/timeline";
+import { MOX_DURATION, MOX_SCENES } from "@/lib/promo/mox-timeline";
 import { PromoFilm } from "./PromoFilm";
+import { MoxFilm } from "./mox/MoxFilm";
+import { MOX_MARK_SRC } from "./mox/parts";
 import { MARK_SRC } from "./parts";
+
+export type PromoFilmId = "tour" | "mox";
 
 declare global {
   interface Window {
@@ -14,10 +19,22 @@ declare global {
 }
 
 /**
- * Plays the product film in the browser. With `record` there are no controls
- * and the clock only moves when the recorder asks (`window.__promoSeek`).
+ * Plays a product film in the browser (`tour`, the 40-second one, or `mox`,
+ * the 107-second "Meet Mox"). With `record` there are no controls and the
+ * clock only moves when the recorder asks (`window.__promoSeek`).
  */
-export function PromoLab({ record, site }: { record: boolean; site: string }) {
+export function PromoLab({
+  record,
+  site,
+  film = "tour",
+}: {
+  record: boolean;
+  site: string;
+  film?: PromoFilmId;
+}) {
+  const mox = film === "mox";
+  const duration = mox ? MOX_DURATION : DURATION;
+  const scenes = mox ? MOX_SCENES : SCENES;
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(!record);
   const [scale, setScale] = useState(1);
@@ -40,14 +57,14 @@ export function PromoLab({ record, site }: { record: boolean; site: string }) {
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      clock.current = (clock.current + (now - last) / 1000) % DURATION;
+      clock.current = (clock.current + (now - last) / 1000) % duration;
       last = now;
       setT(clock.current);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [playing]);
+  }, [playing, duration]);
 
   useEffect(() => {
     if (!record) return;
@@ -55,6 +72,12 @@ export function PromoLab({ record, site }: { record: boolean; site: string }) {
       clock.current = time;
       flushSync(() => setT(time));
       await document.fonts.ready;
+      // Footage is drawn as numbered stills: wait for this frame's pictures.
+      await Promise.all(
+        Array.from(document.images, (image) =>
+          image.complete && image.naturalWidth > 0 ? null : image.decode().catch(() => null),
+        ),
+      );
       await new Promise<void>((done) =>
         requestAnimationFrame(() => requestAnimationFrame(() => done())),
       );
@@ -75,7 +98,7 @@ export function PromoLab({ record, site }: { record: boolean; site: string }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: record ? "#FAFAF8" : "#111214",
+        background: record ? (mox ? "#FFFFFF" : "#FAFAF8") : "#111214",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -85,13 +108,13 @@ export function PromoLab({ record, site }: { record: boolean; site: string }) {
     >
       {/* Loaded up front so no scene ever draws a frame without its mark. */}
       <img
-        src={MARK_SRC}
+        src={mox ? MOX_MARK_SRC : MARK_SRC}
         alt=""
         style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
       />
       <div style={{ width: STAGE.width * scale, height: STAGE.height * scale, flexShrink: 0 }}>
         <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0" }}>
-          <PromoFilm t={t} site={site} />
+          {mox ? <MoxFilm t={t} site={site} /> : <PromoFilm t={t} site={site} />}
         </div>
       </div>
       {record ? null : (
@@ -123,7 +146,7 @@ export function PromoLab({ record, site }: { record: boolean; site: string }) {
           <input
             type="range"
             min={0}
-            max={DURATION}
+            max={duration}
             step={1 / 30}
             value={t}
             onChange={(event) => {
@@ -135,7 +158,7 @@ export function PromoLab({ record, site }: { record: boolean; site: string }) {
           />
           <span style={{ width: 150, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
             {t.toFixed(2)}s ·{" "}
-            {SCENES.find((scene) => t >= scene.start && t < scene.end)?.id ?? "outro"}
+            {scenes.find((scene) => t >= scene.start && t < scene.end)?.id ?? "end"}
           </span>
         </div>
       )}

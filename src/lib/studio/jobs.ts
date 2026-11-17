@@ -1,5 +1,6 @@
 // The Studio job contract shared by the browser and the server: what a
 // generation request contains and what a finished job returns. Pure + zod.
+import type { BriefRead } from "./brief-read";
 import type { HeroLook } from "./product-hero/variety";
 import { z } from "zod";
 import type { PlatformId } from "@/lib/social-platforms";
@@ -486,10 +487,16 @@ export type StudioJobOutput = {
   concept?: string;
   /** New AI video: its kind, clips and storyboard, and the checks it passed. */
   videoPlan?: VideoPlanOutput;
+  /** Image: the native post style it is made in (post-styles.ts id, ADR-0051). */
+  postStyle?: string;
+  /** Carousel: the native carousel style its slides are designed in (post-styles.ts id). */
+  carouselStyle?: string;
   /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
   artDirection?: string;
   /** Product poster: its staging, colour mood, light, set, idea and words (ADR-0040). */
   heroLook?: HeroLook;
+  /** What the person asked for, read once at job start (brief-read.ts, ADR-0051). */
+  briefRead?: BriefRead;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
   /** Meme and other multi-line layouts: the exact lines, in order (categories.ts). */

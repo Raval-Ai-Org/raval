@@ -14,6 +14,7 @@
 //     a scene always exists, the headline is a short banner line and not a
 //     caption sentence, and no long caption sentence is left in the scene.
 import type { StudioType } from "./formats";
+import type { DeliverableId } from "./creative-knowledge";
 
 /** The brief sections (prompt-writer.ts blueprints) that describe the picture. */
 export const VISUAL_SECTIONS: Partial<Record<StudioType, string[]>> = {
@@ -279,7 +280,8 @@ export function preflightPictureBrief(args: {
  * behind-the-scenes post looks candid. The kind (categories.ts) decides,
  * else the goal; with neither, the picture is a calm brand moment.
  */
-export type PictureJobId = "sell" | "engage" | "teach" | "proof" | "candid" | "quote" | "brand";
+export type PictureJobId =
+  "sell" | "engage" | "teach" | "proof" | "candid" | "quote" | "brand" | "announce" | "greet";
 
 export type PictureJob = {
   id: PictureJobId;
@@ -344,6 +346,23 @@ const JOBS: Record<PictureJobId, PictureJob> = {
     review:
       "A quote picture: the exact quote is the clear hero, set cleanly and legibly in the brand's look.",
   },
+  announce: {
+    id: "announce",
+    scene:
+      "A designed announcement that makes the news obvious in one glance (who is hiring and for what, what is happening and when, what has arrived): the news is the hero, set as strong type with one supporting visual from the brand's world. It does not sell a product.",
+    headline:
+      "the news itself in a few words, as the brief states it (the role, the event, the milestone), never a product or sales line",
+    review:
+      "An announcement: the news the brief gives reads at a glance and the picture supports it; no product is sold.",
+  },
+  greet: {
+    id: "greet",
+    scene:
+      "A calm, beautiful greeting for the occasion: one universal symbol of the day in the brand's colours, a lot of quiet space, the greeting set small and elegant. It does not sell.",
+    headline: "the greeting only, as the brief gives it",
+    review:
+      "A greeting: calm, warm and on-brand, the greeting legible, nothing sold, no invented offers.",
+  },
   brand: {
     id: "brand",
     scene:
@@ -376,24 +395,54 @@ const BY_CATEGORY: Record<string, PictureJobId> = {
   aesthetic: "brand",
 };
 
-const BY_GOAL: Record<string, PictureJobId> = {
-  offer: "sell",
+/** What the brief asks for decides first (brief-read.ts, ADR-0051). */
+const BY_DELIVERABLE: Partial<Record<DeliverableId, PictureJobId>> = {
+  "promo-offer": "sell",
+  "product-hero": "sell",
   launch: "sell",
-  leads: "sell",
+  "feature-board": "sell",
+  event: "announce",
+  hiring: "announce",
+  teaser: "announce",
+  milestone: "announce",
+  collab: "announce",
+  "market-entry": "announce",
+  greeting: "greet",
+  "case-study": "proof",
+  humour: "engage",
+  quote: "quote",
+  tips: "teach",
+  comparison: "teach",
+  "mix-up": "teach",
+  intro: "brand",
+};
+
+/** Only for a brief with no clearer purpose; selling needs a product the brief names. */
+const BY_GOAL: Record<string, PictureJobId> = {
   engagement: "engage",
   education: "teach",
   awareness: "brand",
 };
 
 export function pictureJobFor(args: {
+  /** Retired post kinds (ADR-0051); still read for an old job's revision. */
   category?: { id: string } | null;
   goal?: string | null;
   type?: StudioType;
+  deliverable?: DeliverableId | null;
+  /** The brief names a product (or one was picked). */
+  productAsked?: boolean;
 }): PictureJob {
   if (args.type === "ad") return JOBS.sell;
+  const fromBrief = args.deliverable ? BY_DELIVERABLE[args.deliverable] : undefined;
   const id =
+    fromBrief ??
     (args.category ? BY_CATEGORY[args.category.id] : undefined) ??
-    (args.goal ? BY_GOAL[args.goal] : undefined) ??
+    ((args.goal === "offer" || args.goal === "launch") && args.productAsked
+      ? "sell"
+      : args.goal
+        ? BY_GOAL[args.goal]
+        : undefined) ??
     "brand";
   return JOBS[id];
 }
@@ -404,7 +453,7 @@ export function pictureRules(job: PictureJob): string[] {
     "`picture` is the post's image, written now so it matches what the post is about. The caption and the picture are different: the caption is posted under the picture and is NEVER written on it.",
     `This picture's job: ${job.scene}`,
     "`picture.purpose`: one line: who it is for (an audience group from the Brand section when there is one) · what they should feel or do · how it serves the confirmed strategy, goal or running campaign when there is one.",
-    "`picture.scene`: art direction for one clean, professionally designed social image that does this job, 4 to 6 concrete sentences: the hero subject (the brand's real product, service, place or people type, never an invented product detail), its scale, the set or backdrop, the light, the camera angle, real materials, colours from the brand palette, and where a short headline sits on a calm area. Build on 'Picture the brief asks for' when given, and use what 'What is working right now' and the market context say only where it fits the brand. Describe only what to draw; never quote caption sentences. Make it different from the pictures in 'Already made'.",
-    `\`picture.headline\`: 2 to 6 words set in the picture: ${job.headline}; only facts from the brief, never the caption's first line. Less text is better; use an empty string when the picture is stronger without words.`,
+    "`picture.scene`: art direction for one clean, professionally designed social image that does this job, 4 to 6 concrete sentences: the hero subject (the brand's real product, service, place or people type, never an invented product detail), its scale, the set or backdrop, the light, the camera angle, real materials, colours from the brand palette, and where a short headline sits on a calm area. It shows what the brief is about (never a different subject). Build on 'Picture the brief asks for' when given. Describe only what to draw; never quote caption sentences.",
+    `\`picture.headline\`: 2 to 8 words set in the picture that say the brief's point: ${job.headline}; only facts from the brief, never the caption's first line. Use an empty string only when the picture must carry no words.`,
   ];
 }

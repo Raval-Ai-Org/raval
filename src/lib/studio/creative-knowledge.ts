@@ -378,6 +378,27 @@ export function verbatimTextBlock(args: {
   ].filter(Boolean);
 }
 
+/**
+ * The exact words an image prompt asked to be drawn, read back from its
+ * verbatim block, so the picture review checks what was really sent (ADR-0051).
+ * `null` when the prompt has no verbatim block (the caller decides).
+ */
+export function sentWords(prompt: string): string[] | null {
+  const at = prompt.indexOf("TEXT — RENDER VERBATIM");
+  if (at < 0) return null;
+  const out: string[] = [];
+  for (const line of prompt.slice(at).split("\n").slice(1)) {
+    const m = /^[^:"]{1,40}:\s*("(?:[^"\\]|\\.)*")\s*$/.exec(line.trim());
+    if (!m) break;
+    try {
+      out.push(JSON.parse(m[1]) as string);
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
 /** How professional posts emphasise: one device, used once. */
 export const EMPHASIS_RULE =
   "Emphasis comes from one change only: a weight contrast (a light word or line, then a heavy one) or one key word in the accent colour; never both on one frame, never more than one emphasised phrase.";

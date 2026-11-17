@@ -341,21 +341,6 @@ export function ControlsPanel({
         </div>
       )}
 
-      {session.type === "carousel" && c.paymentSource === "creation" && (
-        <div>
-          <FieldLabel>Artwork</FieldLabel>
-          <Segmented
-            label="Artwork"
-            className="flex w-full flex-wrap"
-            value={c.artworkMode ?? "template"}
-            onChange={(artworkMode) => set({ artworkMode })}
-            options={[
-              { value: "template", label: "Designed template", hint: "One shared background" },
-              { value: "full", label: "Individual artwork", hint: "Each slide is priced" },
-            ]}
-          />
-        </div>
-      )}
       {session.type === "article" && (
         <div>
           <FieldLabel>Writing quality</FieldLabel>
