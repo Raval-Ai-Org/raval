@@ -3,8 +3,8 @@
 import { useEffect } from "react";
 import { Bolt, Video } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
-import { CREDIT_ACTIONS, creditsOf, formatCredits, type CreditAction } from "@/lib/billing/catalog";
-import { formatNumber, formatVideos } from "@/lib/billing/present";
+import { CREDIT_ACTIONS, formatCreditPrice, type CreditAction } from "@/lib/billing/catalog";
+import { formatVideos } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,7 +42,7 @@ export function CostChip({
     typeof videoUnits === "number"
       ? { videoUnits, label: `${formatVideos(videoUnits)} video credits` }
       : !included && units !== undefined
-        ? { credits: units, label: formatCredits(units) }
+        ? { credits: units, label: formatCreditPrice(units) }
         : null;
   const key = announce && announced ? announced.label : null;
   useEffect(() => {
@@ -74,8 +74,7 @@ export function CostChip({
     );
   }
   if (units === undefined) return null;
-  const credits = Math.max(1, creditsOf(units));
-  const label = formatCredits(units);
+  const label = formatCreditPrice(units);
   return (
     <span
       data-slot="cost-chip"
@@ -84,7 +83,7 @@ export function CostChip({
       aria-label={compact ? label : undefined}
     >
       <Bolt className="h-3 w-3 shrink-0" aria-hidden />
-      {compact ? formatNumber(credits) : label}
+      {compact ? label.split(" ")[0] : label}
     </span>
   );
 }

@@ -63,6 +63,8 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-visually-hidden": "^1.2.6",
+    "@stripe/react-stripe-js": "7.0.1",
+    "@stripe/stripe-js": "10.2.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.110.0",
     "@tailwindcss/postcss": "^4.2.1",

@@ -156,17 +156,44 @@ async function mappedPrice(kind: PurchaseKind, key: string, interval: BillingInt
   return String(data.provider_price_id);
 }
 
+async function customerExists(id: string): Promise<boolean> {
+  try {
+    const customer = await stripe().customers.retrieve(id);
+    return !("deleted" in customer && customer.deleted);
+  } catch (cause) {
+    if ((cause as { code?: string })?.code === "resource_missing") return false;
+    throw new HttpError(503, "Could not check the billing customer.");
+  }
+}
+
 async function customerFor(account: BillingAccount, email: string | null): Promise<string> {
   if (account.provider !== "stripe" && account.provider_customer_id) {
     throw new HttpError(409, "This account uses another billing provider.");
   }
-  if (account.provider_customer_id) return account.provider_customer_id;
+  if (account.provider_customer_id) {
+    const stored = String(account.provider_customer_id);
+    if (await customerExists(stored)) return stored;
+    // A customer made with the other Stripe mode (test vs live) or deleted in
+    // the dashboard can never be charged here. With no subscription on it,
+    // nothing depends on it: release it (compare-and-set) and make a new one.
+    if (account.provider_subscription_id)
+      throw new HttpError(409, "Your billing customer needs attention. Contact support.");
+    const { error: clearError } = await admin
+      .from("billing_accounts")
+      .update({ provider_customer_id: null, updated_at: new Date().toISOString() })
+      .eq("id", account.id)
+      .eq("provider_customer_id", stored)
+      .is("provider_subscription_id", null);
+    if (clearError) throw new HttpError(503, "Could not link the billing customer.");
+    account = { ...account, provider_customer_id: null };
+  }
   const customer = await stripe().customers.create(
     {
       email: email ?? undefined,
       metadata: { mellox_account_id: account.id },
     },
-    { idempotencyKey: `mellox-customer:${account.id}` },
+    // Keyed per Stripe mode: a test-mode key's customer is never replayed live.
+    { idempotencyKey: `mellox-customer:${environment()}:${account.id}` },
   );
   const { data, error } = await admin
     .from("billing_accounts")
@@ -228,7 +255,8 @@ async function resumeOrReplacePlanCheckout(args: {
   key: string;
   interval: BillingInterval | null;
   trial: boolean;
-}): Promise<{ url: string } | null> {
+  ui: CheckoutUi;
+}): Promise<CheckoutOpened | null> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data, error } = await admin
       .from("checkout_intents")
@@ -284,13 +312,27 @@ async function resumeOrReplacePlanCheckout(args: {
     const trialMatches = recordedTrial === String(args.trial);
     const selectionMatches =
       intent.catalog_key === args.key && intent.interval === args.interval && trialMatches;
-    if (selectionMatches && session.url) return { url: session.url };
+    const uiMatches = (session.ui_mode === "elements") === (args.ui === "elements");
+    const opened = openedFrom(session);
+    if (selectionMatches && uiMatches && opened) return opened;
 
     await stripe().checkout.sessions.expire(session.id);
     await releaseCheckoutIntent(intent.id);
     return null;
   }
   return null;
+}
+
+/** "hosted" sends the person to Stripe's page; "elements" keeps them on Mellox's /checkout. */
+export type CheckoutUi = "hosted" | "elements";
+export type CheckoutOpened = { sessionId: string; url?: string; clientSecret?: string };
+
+function openedFrom(session: Stripe.Checkout.Session): CheckoutOpened | null {
+  if (session.ui_mode === "elements")
+    return session.client_secret
+      ? { sessionId: session.id, clientSecret: session.client_secret }
+      : null;
+  return session.url ? { sessionId: session.id, url: session.url } : null;
 }
 
 export async function createAccountCheckout(args: {
@@ -302,7 +344,9 @@ export async function createAccountCheckout(args: {
   interval?: BillingInterval;
   trial?: boolean;
   returnPath?: string;
-}): Promise<{ url: string }> {
+  ui?: CheckoutUi;
+}): Promise<CheckoutOpened> {
+  const ui: CheckoutUi = args.ui ?? "hosted";
   if (!(await stripeAccountReady()))
     throw new HttpError(503, "Purchases open after Stripe webhook and prices are verified.");
   let account = await accountForUser(args.userId);
@@ -359,6 +403,7 @@ export async function createAccountCheckout(args: {
       key: args.key,
       interval,
       trial: Boolean(args.trial),
+      ui,
     });
     if (existing) return existing;
   }
@@ -384,6 +429,7 @@ export async function createAccountCheckout(args: {
       key: args.key,
       interval,
       trial: Boolean(args.trial),
+      ui,
     });
     if (existing) return existing;
     // The competing reservation was stale and has now been released.
@@ -408,6 +454,11 @@ export async function createAccountCheckout(args: {
   const origin = getAppUrl();
   const returnPath = args.returnPath ?? "/projects";
   const mode = args.kind === "plan" ? "subscription" : "payment";
+  const back = (state: string) =>
+    `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=${state}&checkout_session_id={CHECKOUT_SESSION_ID}`;
+  // On Mellox's own checkout page the person stays here; Stripe only comes back
+  // to the page after a bank or wallet redirect, and the page shows Launch.
+  const pageReturn = `${origin}/checkout?step=launch&checkout_session_id={CHECKOUT_SESSION_ID}&from=${encodeURIComponent(returnPath)}`;
   let session: Stripe.Checkout.Session;
   try {
     session = await stripe().checkout.sessions.create(
@@ -429,25 +480,54 @@ export async function createAccountCheckout(args: {
           : {}),
         line_items: [{ price: priceId, quantity: args.quantity }],
         expires_at: Math.floor(expiresAt.getTime() / 1000),
-        billing_address_collection: "auto",
-        customer_update: { address: "auto", name: "auto" },
-        custom_text: {
-          submit: {
-            message:
-              mode === "subscription"
-                ? "Your Mellox plan activates automatically after payment."
-                : "Your credits are added automatically after payment.",
-          },
-        },
-        ...(mode === "subscription"
-          ? { payment_method_collection: "always" as const }
-          : { saved_payment_method_options: { payment_method_save: "enabled" as const } }),
-        success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=success&checkout_session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel&checkout_session_id={CHECKOUT_SESSION_ID}`,
+        ...(ui === "elements"
+          ? {
+              ui_mode: "elements" as const,
+              return_url: pageReturn,
+              // Card only on Mellox's page (Apple Pay, Google Pay and Link pay
+              // with a card too); no Cash App / Amazon Pay tabs.
+              payment_method_types: ["card" as const, "link" as const],
+            }
+          : {
+              billing_address_collection: "auto" as const,
+              customer_update: { address: "auto" as const, name: "auto" as const },
+              custom_text: {
+                submit: {
+                  message:
+                    mode === "subscription"
+                      ? "Your Mellox plan activates automatically after payment."
+                      : "Your credits are added automatically after payment.",
+                },
+              },
+              success_url: back("success"),
+              cancel_url: back("cancel"),
+            }),
+        ...(mode === "subscription" ? { payment_method_collection: "always" as const } : {}),
+        // Offer "save this card" and show a returning customer the cards they
+        // saved before (only ones they agreed to keep: allow_redisplay "always").
+        // A subscription keeps its card for renewals either way.
+        saved_payment_method_options:
+          ui === "elements"
+            ? {
+                payment_method_save: "enabled" as const,
+                allow_redisplay_filters: ["always" as const],
+              }
+            : mode === "payment"
+              ? { payment_method_save: "enabled" as const }
+              : undefined,
       },
       { idempotencyKey: `mellox-checkout:${intentId}` },
     );
-  } catch {
+  } catch (cause) {
+    // Stripe's own reason (a parameter it refused, a price it can't use) never
+    // reaches the browser, but the operator needs it to fix the setup.
+    console.error("[billing] checkout session refused", {
+      ui,
+      mode,
+      code: (cause as { code?: string })?.code,
+      param: (cause as { param?: string })?.param,
+      message: cause instanceof Error ? cause.message : String(cause),
+    });
     await admin
       .from("checkout_intents")
       .update({ consumed_at: new Date().toISOString() })
@@ -455,9 +535,10 @@ export async function createAccountCheckout(args: {
       .is("consumed_at", null);
     throw new HttpError(502, "Secure checkout could not be opened. Please try again.");
   }
-  if (!session.url) {
+  const opened = openedFrom(session);
+  if (!opened) {
     await consumeCheckoutIntent(intentId).catch(() => undefined);
-    throw new HttpError(502, "Stripe did not return a checkout URL.");
+    throw new HttpError(502, "Stripe did not return a checkout.");
   }
   const { error: linkError } = await admin
     .from("checkout_intents")
@@ -475,7 +556,7 @@ export async function createAccountCheckout(args: {
       .is("consumed_at", null);
     throw new HttpError(503, "Could not finish checkout setup.");
   }
-  return { url: session.url };
+  return opened;
 }
 
 export type AccountCheckoutStatus = {

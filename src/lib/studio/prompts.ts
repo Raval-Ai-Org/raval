@@ -503,6 +503,8 @@ export const SocialSchema = z.object({
 
 export const CarouselSchema = z.object({
   title: Str(120),
+  /** The director's one look for every slide (ADR-0051 round 3). */
+  look: Str(1200).optional().catch(undefined),
   caption: z.coerce.string(),
   hashtags: StrList(15, 60),
   slides: z
@@ -514,7 +516,7 @@ export const CarouselSchema = z.object({
           .string()
           .default("")
           .transform((s) => s.trim().slice(0, 320)),
-        visual: Str(240).optional().catch(undefined),
+        visual: Str(1000).optional().catch(undefined),
         role: z.coerce.string().optional().catch(undefined),
         kicker: Str(40).optional().catch(undefined),
         emphasis: Str(60).optional().catch(undefined),
@@ -794,6 +796,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
       "You are Mellox, a creative director who writes carousels people swipe to the end and save.",
       [
         `Write exactly ${count} slides, in this order:\n${slidePlanText(count)}`,
+        `The person chose ${count} slides. If the brief lists more or fewer slides or names another number, ${count} wins: merge, drop or split points so there are exactly ${count}. Never write a different slide count on a slide or in the caption.`,
         "It is ONE piece told across slides, not a set of separate cards. Decide the single idea first, then make every slide a step toward it.",
         "Continuity: each slide picks up where the one before stopped and leaves a reason to see the next. Slide 2 must pay off the cover. Never restart the topic, never repeat a point, and keep the same terms for the same things from the first slide to the last.",
         "Read alone in order, the headings must tell the whole story.",
@@ -810,14 +813,15 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
         args.carouselStyle
           ? `How the slides look (${args.carouselStyle.name}): ${args.carouselStyle.writer}`
           : "",
-        "`visual` is one line naming what that slide's picture shows: a concrete, real subject from the brand's world that illustrates that slide's words (the product in use, the place, the step being done, the people at work), the same world on every slide. Never a surreal trick, a giant object, a miniature world or a visual metaphor. No text-in-image instructions.",
+        "`look` is the one look every slide shares, decided first for this brief and brand, in 40 to 90 words of plain prose: the background, the grid, where the words sit, the type character and colours by the brand's hex values, the photo treatment. Native to the feed and simple: for example clean editorial type on the brand colour with one real photo per slide, or a real step-by-step photo series with one consistent type band.",
+        "`visual` is that slide's image prompt, 50 to 120 words of plain prose an image model draws the finished slide from: its own picture (a concrete, real subject from the brand's world that shows that slide's point: the product in use, the place, the step being done, the people at work), the composition within the look, and where the heading and body sit. Refer to the words as 'the heading' and 'the line', never repeat their text. Real photographs look real. Never a surreal trick, a giant object, a miniature world, a visual metaphor or another brand's name.",
         "`caption` is the post caption: an opening line that names the topic in plain searchable words, 1-3 short lines of context, and a call to action. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
         carouselPhotoNote(args.controls, count),
         craftRule(args, "carousel"),
         SELF_REVIEW,
       ].filter(Boolean),
-      `{"title": string, "caption": string, "hashtags": string[], "slides": [{"role": string, "kicker": string, "heading": string, "emphasis": string, "body": string, "visual": string}]}`,
+      `{"title": string, "look": string, "caption": string, "hashtags": string[], "slides": [{"role": string, "kicker": string, "heading": string, "emphasis": string, "body": string, "visual": string}]}`,
     ),
     user: sections([...sharedUser(args, "carousel"), ...refineSections(args.refine, args.current)]),
     schema: CarouselSchema,

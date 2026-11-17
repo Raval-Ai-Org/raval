@@ -999,9 +999,9 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
   {
     id: "image-pov",
     types: ["image"],
-    label: "POV moment",
+    label: "Through their eyes",
     tagline: "Put them right in the moment",
-    beats: ["POV: the situation", "What they see", "The feeling"],
+    beats: ["The situation, first person", "What they see", "The feeling"],
     starter: "POV: you [the moment your customer lives] and [product] is right there.",
     directive: `Image: a first-person phone shot of the exact moment, natural light, real place details, with a short "pov:" line set like a real post. Caption: one line that names the feeling and asks who has been there. ${HONESTY}`,
     goal: "engagement",

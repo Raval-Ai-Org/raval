@@ -40,16 +40,14 @@ describe("system prompt size", () => {
     // Memes are retired (categories.ts): a retired kind is never resolved, so
     // the meme concept route is no longer reached from a picked kind.
   });
-  it("sends a shortlist of layouts, not all of them", () => {
-    const { user } = buildVisualBriefPrompt({ ...base("product"), medium: "image" });
-    // Native post styles (post-styles.ts): a short best-fit list.
-    const menu = user
-      .split("## Post styles")[1]
-      ?.split("##")[0]
-      .split("\n")
-      .filter((l) => /^- [a-z-]+: /.test(l));
-    expect(menu?.length).toBeGreaterThan(0);
-    expect(menu?.length).toBeLessThanOrEqual(3);
+  it("sends the director no style menus or layout lists", () => {
+    // ADR-0051 round 3: the director writes the picture itself; menus of
+    // styles and layouts made every post a template.
+    const { system, user } = buildVisualBriefPrompt({ ...base("product"), medium: "image" });
+    expect(user).not.toContain("## Post styles");
+    expect(user).not.toContain("Layout");
+    expect(system).toContain("image prompt");
+    expect(user).toContain("Our new oat latte");
   });
 });
 

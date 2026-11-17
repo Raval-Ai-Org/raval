@@ -491,6 +491,8 @@ export type StudioJobOutput = {
   postStyle?: string;
   /** Carousel: the native carousel style its slides are designed in (post-styles.ts id). */
   carouselStyle?: string;
+  /** Carousel: the director's one look every model-drawn slide follows (ADR-0051 round 3). */
+  carouselLook?: string;
   /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
   artDirection?: string;
   /** Product poster: its staging, colour mood, light, set, idea and words (ADR-0040). */

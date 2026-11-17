@@ -63,6 +63,12 @@ export function formatCredits(units: number): string {
   return `${n.toLocaleString("en-US")} ${n === 1 ? "credit" : "credits"}`;
 }
 
+/** A price in ledger units as people read it: "1 credit", "2.5 credits" (never rounded down). */
+export function formatCreditPrice(units: number): string {
+  const n = Math.ceil((Math.max(0, units) / UNITS_PER_CREDIT) * 10 - 1e-9) / 10;
+  return `${n.toLocaleString("en-US")} ${n === 1 ? "credit" : "credits"}`;
+}
+
 /**
  * Meters that hold a balance. Units are integers:
  *   credits         UNITS_PER_CREDIT units = 1 credit
@@ -702,6 +708,8 @@ export const CREDIT_ACTIONS = {
     label: "Image post",
     unit: "copy + picture",
     feature: "studio",
+    // The director on Sonnet (~$0.02) and a high-quality picture (~$0.05) with
+    // its review (ADR-0051 round 3).
     expectedCostUsd: 0.08,
     routes: ["studio.captions", "studio.image.brief", "studio.meme.concept"],
   },
@@ -714,15 +722,16 @@ export const CREDIT_ACTIONS = {
     routes: ["studio.ad"],
   },
   // Every slide is designed by the image model (ADR-0051): 1 credit for the
-  // cover plus half a credit per extra slide (carouselCredits, studio/billing.ts).
-  // Listed here at the default 6 slides: 6 pictures at about $0.045 with their
-  // review, plus the writer.
+  // cover plus ¾ credit per extra slide, rounded up to a half credit
+  // (carouselCredits, studio/billing.ts). Listed here at the default 6 slides:
+  // 6 high-quality pictures at about $0.05 with their review, plus the
+  // director on Sonnet (ADR-0051 round 3).
   carousel: {
-    credits: cr(3.5),
+    credits: cr(5),
     label: "Carousel",
-    unit: "6 designed slides (1 + ½ per extra slide)",
+    unit: "6 designed slides (1 + ¾ per extra slide)",
     feature: "studio",
-    expectedCostUsd: 0.28,
+    expectedCostUsd: 0.4,
     routes: ["studio.carousel"],
   },
   photo_design: {

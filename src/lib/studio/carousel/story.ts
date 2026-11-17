@@ -357,7 +357,11 @@ function emphasisIn(heading: string, raw: unknown): string | undefined {
  * highlighted words that exist in the heading.
  */
 export function normalizeSlides(raw: unknown, count?: number): CarouselSlide[] {
-  const list = Array.isArray(raw) ? raw : [];
+  const all = Array.isArray(raw) ? raw : [];
+  // Never more slides than the person picked: the extras before the last
+  // slide go, so the close stays the close.
+  const limit = count ? Math.max(3, Math.min(10, Math.round(count))) : 10;
+  const list = all.length > limit ? [...all.slice(0, limit - 1), all[all.length - 1]] : all;
   const plan = slidePlan(count ?? list.length);
   return list.slice(0, 10).map((item, i) => {
     const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
@@ -379,7 +383,7 @@ export function normalizeSlides(raw: unknown, count?: number): CarouselSlide[] {
             .join("\n")
         : oneLine(row.body, 320);
     const kicker = role === "cta" ? "" : oneLine(row.kicker, 26);
-    const visual = oneLine(row.visual, 240);
+    const visual = oneLine(row.visual, 1000);
     const emphasis = emphasisIn(heading, row.emphasis);
     const photo =
       Number.isInteger(row.photo) && (row.photo as number) >= 0 && (row.photo as number) < 6

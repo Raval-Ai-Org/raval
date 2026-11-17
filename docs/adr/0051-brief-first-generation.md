@@ -79,3 +79,44 @@ a surreal sculpture.
   competitor signals no longer drive the idea.
 - Supporting lines (a hiring post's details, an event's date and place) are kept up to the
   style's `maxLines`; before, only "rich" brands kept them.
+
+## Round 3: the director (2026-11-17)
+
+Round 2's posts still looked like cheap templates. The diagnosis compared Mellox with Claude
+calling the same image model by hand:
+
+- Three art directors gave orders at once: a code post-style recipe, the writer's paragraph and a
+  "BRAND STYLE, highest priority" block. On top sat a type-scale table, emphasis rules and a
+  checklist. The model averaged them into one template: label, headline, details, button.
+- Up to four reference pictures were attached to every render (style anchors from the brand's
+  site and posts, and Library loves, which are earlier Mellox outputs), with "look like the next
+  post in that exact series". Each round of training tightened that loop.
+- Posts rendered at quality "medium" and 1K, so lettering came out soft and misspelled.
+- The creative step ran on the cheapest writer at low reasoning.
+
+A paid side-by-side test on the same model (GPT Image 2.5 Flare, three briefs, about $0.22) used
+the sample brand only, so no references or learned look were in play. Today's pipeline (a 5,400
+character prompt, medium) made beige template cards. It changed "Apply by Dec 5" to "Apply now",
+added a "Shop now" nobody asked for, invented a product name on a bag and printed one line
+twice. A director prompt (about 1,580 characters, high) made full-bleed, native posts with only
+the brief's words.
+
+Decision:
+
+- **One director writes the picture.** `buildPostPlanPrompt` (route `studio.image.brief`, now
+  Sonnet 5.5) writes the headline, at most two lines and the whole image prompt in prose.
+  `postImagePrompt` adds only the exact words, the canvas and the logo corner. Carousels: the
+  writer (`studio.carousel`, Sonnet 5.5) returns one `look` and each slide's image prompt.
+  `carouselSlidePrompt` with a look sends the look, the slide's prompt, its words and the canvas.
+- **No copied pictures.** Director renders attach only the person's own photos, the render being
+  revised and, for slides 2+, slide 1.
+- **High quality for any picture with words.** It is carried on the task, so restarts and redos
+  keep it.
+- **Carousel price:** 1 credit plus ¾ per extra slide, rounded up to a half credit (6 slides = 5
+  credits). Six high-quality slides cost about $0.40 against the $0.085-per-credit guard.
+- Post styles, layout menus, type tables and checklists no longer reach these prompts. Never add
+  them back; the brand's learned look reaches the director as short guidance only.
+
+Consequences: an image post costs about $0.08 (was about $0.04) and still fits 1 credit. A
+carousel costs more credits. One step is still sequential: the captions call after the director.
+Not yet verified: carousels on the real path, and a trained brand with references.

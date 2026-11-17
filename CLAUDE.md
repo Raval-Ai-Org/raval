@@ -149,7 +149,8 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
     only rare, high-stakes work (GEO Engineer and fixes,
     experiment code, published articles, video storyboards, escalations);
   - ANALYST GPT-6.1 Sol: Brand DNA, strategy, audience groups, campaign plans;
-  - CONVERSATION Sonnet 5.5: Mellox Pro chat, Coach and Creator scripts;
+  - CONVERSATION Sonnet 5.5: Mellox Pro chat, Coach, Creator scripts and the
+    Studio director (picture posts and carousels, ADR-0051 round 3);
   - WRITER Haiku 5.5 (also SUMMARY, CAREFUL, ECONOMY): every text writer
     people see (Studio copy, Flash chat, plans, briefings), safety checks,
     caption edits, image text and audience scores; GPT-6 Luna is its spare;
@@ -1157,43 +1158,39 @@ benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
 
 ## Studio: carousels, trends and content memory
 
-- **Brief first** ([ADR-0051](docs/adr/0051-brief-first-generation.md)).
-  `readBrief` (`src/lib/studio/brief-read.ts`, pure) reads what the person
-  asked for once per job (deliverable, facts, quoted words, subject words,
-  `productAsked`) and is stored on `output.briefRead`. One writer
-  (`buildPostPlanPrompt`, `src/lib/studio/post-plan.ts`, route
-  `studio.image.brief`) plans the words and the picture together and writes
-  the picture's art direction as one paragraph; `postImagePrompt`
-  (`visual-prompts.server.ts`) adds only short hard rules (exact words, look,
-  type, margins, logo, check) and stays far under the 10k cut.
-  `briefFitIssues` (`brief-fit.ts`, free) checks the copy kept the brief's
-  subject, invented no figure and kept quoted words; a failure gets one
-  rewrite on `studio.plan.escalate` (Sonnet 5.5), which also writes carousels
-  of 7+ slides. Angle and opening are picked only for planned pieces
-  (Autopilot's `intent.aim` / `hookStyle`); a person's post gets `BRIEF_ANGLE`.
-  A product is never attached to hiring, greeting, event and other
-  non-selling briefs, and a product poster keeps the brief's own message
-  (topic `the-brief`, brief facts allowed in `groundConcept`).
-- **Native post styles, picked by code** (ADR-0051 round 2,
-  `src/lib/studio/post-styles.ts`, pure; ids stored, add never rename). A
-  picture post is made in one of the styles brands really publish (photo with
-  a headline, the photo is the post, bold type post, announcement card,
-  product spotlight, offer post, quote, tip card, statement, greeting, behind
-  the scenes, side by side). `offeredPostStyles` gives the writer the best
-  three for the brief and the first platform; `chosenPostStyle` (runner)
-  keeps the writer's pick only when it was offered; `postImagePrompt` gets the
-  style's picture and word rules. The campaign-stunt layouts in
-  `art-direction.ts` are no longer offered for posts (still used by ads and old
-  posts). A style's `maxLines` decides how many supporting lines are kept.
-  Carousels get one `CAROUSEL_STYLES` style (`pickCarouselStyle`: editorial
-  text, photo story, step-by-step, product tour) for the writer and every
-  slide; it is stored on `output.carouselStyle` and a revision keeps it.
-  Surprise me with nothing to start from picks a kind of post good brands
-  publish (`pickSurpriseIdea`); trend and competitor signals no longer drive it.
+- **The director makes posts and carousels** ([ADR-0051](docs/adr/0051-brief-first-generation.md)
+  round 3). One strong writer does what Claude does when it calls the image
+  model itself: `buildPostPlanPrompt` (`src/lib/studio/post-plan.ts`, route
+  `studio.image.brief`, Sonnet 5.5) writes the headline, at most two
+  supporting lines and the whole image prompt as plain prose (`concept`);
+  `postImagePrompt` (`visual-prompts.server.ts`) adds only the exact words
+  (`verbatimTextBlock`), the canvas and the logo corner. Carousels: the
+  writer (`studio.carousel`, Sonnet 5.5) returns one `look` for the series
+  (`output.carouselLook`) and every slide's `visual` as its image prompt;
+  `carouselSlidePrompt` with `look` is the look, that prompt, the exact words
+  and the canvas. **Never add style recipes, layout menus, type tables,
+  checklists or a "BRAND STYLE highest priority" block back to these
+  prompts**: a side-by-side test on the same model (2026-11-17) showed they
+  made every post a template and changed the person's words. The brand's own
+  look reaches the director as short guidance only (`lookGuidance`).
+  - **No copied pictures.** Director posts and slides attach only photos the
+    person chose (or the render being revised) and, for slides 2+, slide 1.
+    Style anchors and Library loves are not attached to them.
+  - **Words are drawn at high quality** (`ProviderTask.quality`, kept on every
+    restart); a picture with no words stays medium.
+  - `readBrief` (`brief-read.ts`, pure) still reads the brief once
+    (`output.briefRead`); `briefFitIssues` (free) still checks the words and
+    gets one rewrite on `studio.plan.escalate`. Angle and opening are picked
+    only for planned pieces (Autopilot); a person's post gets `BRIEF_ANGLE`.
+    A product is never attached to hiring, greeting, event and other
+    non-selling briefs, and a product poster keeps the brief's own message.
+  - `post-styles.ts` (native styles, ids stored) no longer reaches the post
+    or slide prompts; `pickSurpriseIdea` still picks what Surprise me writes.
 - **Carousels are designed per slide** (ADR-0051). Slide 1 starts first; the
   others wait on it (`anchor`) and take it as their first reference, so the
-  set shares one grid, type and colours. Priced 1 credit for the cover plus
-  half a credit per extra slide (`carouselCredits`, `studioCreditUnits`).
+  set shares one look. Priced 1 credit for the cover plus ¾ credit per extra
+  slide, rounded up to a half credit (6 slides = 5 credits; `carouselCredits`,
+  `studioCreditUnits`); prices show halves (`formatCreditPrice`).
   Model slides aren't edited as text in review: the edit chat redraws them.
 - **A drawn carousel is one story.** Seamless and own-photo carousels are drawn by code. Pure core in
   `src/lib/studio/carousel/`: `story.ts` (structure, a role per slide,
@@ -1558,10 +1555,19 @@ records ADR-0027 and [ADR-0050](docs/adr/0050-pricing-v4.md) (pricing v4).
   with a `code`; the client shows a toast with a button, never an automatic pop-up.
 - **Social publishing never costs credits** on any plan (Post for Me); only a hidden
   monthly fair-use cap (`postsFairUse`).
-- **Payments:** Stripe later. Until then "Upgrade now" creates a
-  `billing_purchase_requests` row and an admin activates it at `/admin`
-  (`src/server/billing/manual.server.ts`, keyed by operation id, append-only audit).
-  Admins: `BILLING_ADMIN_USER_IDS`.
+- **Payments are Stripe, on Mellox's own page.** Every Upgrade / Plans / Buy press
+  (`open:upgrade`, `useBillingActions().purchase`) goes to the full-screen
+  `/checkout` (Plan → Payment → Launch, `src/components/checkout/`, links only
+  through `checkoutHref` in `src/lib/billing/checkout-link.ts`), never a window in
+  the canvas and never a new tab. Payment is an Elements-mode Checkout Session
+  (`ui: "elements"` on `/api/billing/checkout`, `STRIPE_PUBLISHABLE_KEY`); Launch
+  only says "active" after `/api/billing/checkout/status` does. A subscriber's
+  plan change is made in place (prorated). Purchasing opens only when
+  `npm run billing:stripe-readiness` passes (every catalog price mapped in
+  `billing_price_map`: after a price change run `billing:stripe-sync`). No
+  invented reviews or fake countdowns on it. `/checkout-lab` shows every scene.
+  Manual `billing_purchase_requests` (`/admin`, `manual.server.ts`) remain for
+  admins (`BILLING_ADMIN_USER_IDS`).
 
 ## Website source connectors (GitHub)
 
@@ -1822,6 +1828,13 @@ UI `src/components/admin/console/`, API `src/app/api/admin/**` (except the older
   pass `skipCapacityReconcile`.
 - The billing console is `/admin/billing` and has its own checks; leave it alone
   unless a billing task says otherwise.
+- **The rail is grouped** (`AdminShell`): "Every day" (Overview, Customers,
+  Activity, Errors, Revenue) is always open; People, Product, System and Admin
+  team fold away. Those five pages read one free pulse (`/api/admin/pulse`,
+  pure rules `src/lib/admin/pulse.ts`) built from stored rows: plan per
+  person, credits left, active time (estimated from action times, labelled so),
+  what they did and their errors. Balances (OpenRouter, KIE, Stripe for billing
+  admins) are read live only on open or "Fetch balances" (`/api/admin/balances`).
 - `/admin-lab` (development only, never served in production) renders the real
   screens in the real shell with sample data from `AdminLab.fixtures.ts`, typed
   against `src/lib/admin/types.ts`; `?s=<section>&role=<role>` shows any role. Use it

@@ -3,7 +3,7 @@
 import "server-only";
 
 import Stripe from "stripe";
-import type { AdminFinanceMoney, AdminFinanceOverview } from "@/lib/admin/types";
+import type { AdminBalances, AdminFinanceMoney, AdminFinanceOverview } from "@/lib/admin/types";
 import { getUsage } from "./usage.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -731,4 +731,33 @@ export async function getFinanceOverview(): Promise<AdminFinanceOverview> {
       pending = null;
     });
   return pending;
+}
+
+/** Only the Stripe balance, read live (never cached): the admin's "Fetch" button. */
+export async function getStripeBalance(): Promise<NonNullable<AdminBalances["stripe"]>> {
+  const stripe = stripeClient();
+  if (!stripe) return { configured: false };
+  const balance = await stripe.balance.retrieve();
+  const currencies = new Set([
+    ...balance.available.map((row) => row.currency),
+    ...balance.pending.map((row) => row.currency),
+  ]);
+  const byCurrency = [...currencies].map((currency) => ({
+    currency,
+    availableCents: balance.available
+      .filter((row) => row.currency === currency)
+      .reduce((sum, row) => sum + row.amount, 0),
+    pendingCents: balance.pending
+      .filter((row) => row.currency === currency)
+      .reduce((sum, row) => sum + row.amount, 0),
+  }));
+  const main = byCurrency.sort((a, b) => b.availableCents - a.availableCents)[0];
+  return {
+    configured: true,
+    livemode: balance.livemode,
+    currency: main?.currency ?? "usd",
+    availableCents: main?.availableCents ?? 0,
+    pendingCents: main?.pendingCents ?? 0,
+    byCurrency,
+  };
 }

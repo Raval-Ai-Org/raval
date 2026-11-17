@@ -61,6 +61,7 @@ import { mergeAddedPlatforms } from "@/lib/studio/add-platforms";
 import { studioJobRenders, studioTextOnlyRevision } from "@/lib/studio/billing";
 import { retainStudioMedia } from "@/lib/studio/revisions";
 import { studioJobIsStale, studioProviderTaskIsTimedOut } from "@/lib/studio/recovery";
+import { retriesToStart, shouldRetryRefusal } from "@/lib/studio/image-retry";
 import { isCaptionRevision } from "@/lib/billing/creation";
 import { sourceScriptClipDirection, sourceScriptDirection } from "@/lib/studio/script-video";
 import { animateImageDirection, VIDEO_AD_RULES } from "@/lib/studio/video-ad";
@@ -327,6 +328,8 @@ type ProviderTask = {
   prompt: string;
   referenceAssets?: string[];
   referenceAssetPath?: string;
+  /** Render quality, kept on every restart: "high" for a director picture with words. */
+  quality?: "medium" | "high";
   /** The workspace's real logo, drawn on by code once the image is finished. */
   logo?: { url: string; corner: LogoCorner };
   referenceWarning?: string;
@@ -405,6 +408,8 @@ type ProviderTask = {
   lastCheckError?: string;
   /** Image only: times a render whose result never arrived was started again. */
   lostRestarts?: number;
+  /** Image only: refused in a burst; sent again one at a time (image-retry.ts). */
+  awaitingRetry?: boolean;
 };
 
 /** A video the provider ended with an outage-type failure is made again this many times. */
@@ -421,6 +426,24 @@ const VIDEO_CHECK_ERRORS = 10;
 const VIDEO_CHECK_ERROR_WINDOW_MS = 10 * 60_000;
 /** A lost image render is started again this many times, at Mellox's cost. */
 const IMAGE_LOST_RESTARTS = 1;
+/** Finished pictures and videos checked and saved at once in one poll. */
+const ADVANCE_CONCURRENCY = 4;
+
+/** Run `work` over `items`, at most `limit` at a time; never rejects early. */
+async function inPool<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await work(item);
+    }
+  };
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(limit, items.length) }, lane),
+  );
+  const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed) throw failed.reason;
+}
 
 type JobRow = StudioJob & {
   provider_tasks: ProviderTask[];
@@ -2177,6 +2200,16 @@ ${ctx.brandText}`,
   const refs = withReferences(args.referenceUrl ? [args.referenceUrl] : [], approvedReferences);
   const referenceAssets = refs.urls;
   const seriesReferences = referenceAssets;
+  // A director carousel (ADR-0051 round 3) copies no old pictures: slide 1
+  // anchors the set, and only photos the person chose are attached.
+  const directedSlides = job.type === "carousel" && !!output.carouselLook?.trim();
+  const slideReferences = directedSlides
+    ? withReferences(
+        args.referenceUrl ? [args.referenceUrl] : [],
+        suppliedReferences.map((r) => r.url),
+      ).urls
+    : seriesReferences;
+  const slideQuality = directedSlides ? ("high" as const) : undefined;
   if (job.type === "carousel" && output.slides?.length) {
     // Slide 1 is drawn first; the others wait for it and start with it as
     // their first reference (ADR-0051). A revision already passes the earlier
@@ -2198,6 +2231,7 @@ ${ctx.brandText}`,
           seed: `${seed}:${variationKey}`,
           anchoredToCover: index > 0 && (anchored || !!args.referenceUrl),
           carouselStyle: carouselStyleById(output.carouselStyle),
+          look: output.carouselLook,
         });
         if (anchored && index > 0)
           return {
@@ -2208,7 +2242,8 @@ ${ctx.brandText}`,
             fallbacks: [],
             ratio,
             prompt,
-            referenceAssets: seriesReferences,
+            referenceAssets: slideReferences,
+            quality: slideQuality,
             anchor: { slot: "slide:0" },
             startedAt: Date.now(),
             state: "pending" as const,
@@ -2217,15 +2252,17 @@ ${ctx.brandText}`,
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt,
           size: size as ImageSize,
-          referenceAssets: seriesReferences,
+          referenceAssets: slideReferences,
           meterRoute: "studio.image.slide",
+          quality: slideQuality,
         });
         return {
           slot: `slide:${index}`,
           kind: "image" as const,
           ratio,
           prompt,
-          referenceAssets: seriesReferences,
+          referenceAssets: slideReferences,
+          quality: slideQuality,
           startedAt: Date.now(),
           state: "pending" as const,
           ...started,
@@ -2538,23 +2575,13 @@ ${ctx.brandText}`,
         postImagePrompt({
           brandName: ctx.brandName,
           concept: picture.scene,
-          postStyle:
-            postStyleById(output.postStyle) ?? chosenPostStyle(null, output.briefRead, ctx, input),
-          deliverable: output.briefRead?.deliverable,
           headline: compose ? null : picture.headline,
           lines: compose || !picture.headline ? [] : (output.onImageLines ?? []),
           noText: compose || look?.maxWords === 0,
           ratio,
-          style: look,
-          palette: (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
-          fonts: (styled?.fonts ?? []).filter(Boolean),
-          visualTasteRules: ctx.visualTaste?.rules ?? ctx.visualFeedbackRules,
           logoCorner: logoAt,
-          physicalProduct: sellsPhysicalProduct(ctx.visualBrandText ?? ctx.brandText),
           revision: refineNote,
           source: sourceInstruction,
-          avoidLayouts: input.refine ? [] : recentLayouts(ctx.recent),
-          emphasisSeed: seed,
         })
       : imagePrompt({
           body,
@@ -2587,6 +2614,20 @@ ${ctx.brandText}`,
         });
   // More versions of the same piece: one task per version, each told how to
   // differ. They are saved without touching the post until a person picks one.
+  // A director picture post (ADR-0051 round 3) copies no old pictures: only the
+  // person's own photos, or the render being revised, are attached. Words are
+  // drawn at high quality, where medium came out soft and misspelled.
+  const directedPost = !!picture && !designedAd;
+  const renderReferences = directedPost
+    ? withReferences(
+        args.referenceUrl ? [args.referenceUrl] : [],
+        suppliedReferences.map((r) => r.url),
+      ).urls
+    : referenceAssets;
+  const renderQuality =
+    directedPost && !compose && look?.maxWords !== 0 && !!picture?.headline?.trim()
+      ? ("high" as const)
+      : undefined;
   if (isVariationsRequest(input)) {
     const count = variationCount(input.controls);
     return Promise.all(
@@ -2599,8 +2640,9 @@ ${ctx.brandText}`,
           costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt: versionPrompt,
           size: size as ImageSize,
-          referenceAssets,
+          referenceAssets: renderReferences,
           meterRoute: "studio.image.version",
+          quality: renderQuality,
         });
         return {
           slot: optionSlot(index),
@@ -2608,7 +2650,8 @@ ${ctx.brandText}`,
           kind: "image" as const,
           ratio,
           prompt: versionPrompt,
-          referenceAssets,
+          referenceAssets: renderReferences,
+          quality: renderQuality,
           ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
           startedAt: Date.now(),
           state: "pending" as const,
@@ -2621,8 +2664,9 @@ ${ctx.brandText}`,
     costTier: input.controls.paymentSource === "creation" ? "standard" : undefined,
     prompt,
     size: size as ImageSize,
-    referenceAssets,
+    referenceAssets: renderReferences,
     meterRoute: input.refine ? "studio.image.edit" : "studio.image.render",
+    quality: renderQuality,
   });
   return [
     {
@@ -2631,7 +2675,8 @@ ${ctx.brandText}`,
       kind: "image",
       ratio,
       prompt,
-      referenceAssets,
+      referenceAssets: renderReferences,
+      quality: renderQuality,
       ...(logoUrl && logoAt ? { logo: { url: logoUrl, corner: logoAt } } : {}),
       startedAt: Date.now(),
       state: "pending",
@@ -3928,6 +3973,9 @@ async function shapeOutput(args: {
       return {
         title,
         slides: normalizeSlides(parsed.slides, input.controls.slideCount ?? 6),
+        ...(String(parsed.look ?? "").trim()
+          ? { carouselLook: String(parsed.look).trim().slice(0, 1200) }
+          : {}),
         variants: platforms.map((p) => finalizeVariant(p, { title, body: caption, hashtags })),
       };
     }
@@ -4092,20 +4140,18 @@ async function shapeOutput(args: {
                     .filter(Boolean)
                     .slice(0, memeLayout(parsed.memeLayout)!.lines.length),
                 }
-              : // Supporting lines (eyebrow, body, items, button), typeset verbatim:
-                // as many as the post style carries (a hiring post's role and
-                // how to apply), or a rich-text brand's set.
-                Array.isArray(parsed.onImageLines) &&
-                  type === "image" &&
-                  !wantsSupportingLines(ctx.visualTaste?.direction, input.controls.campaign)
+              : // The director's supporting lines (ADR-0051 round 3): at most two,
+                // the brief's own details, typeset verbatim.
+                Array.isArray(parsed.onImageLines) && type === "image"
                 ? {
                     onImageLines: (parsed.onImageLines as unknown[])
-                      .map((line) => String(line ?? "").trim())
-                      .filter((line) => /^(eyebrow|body|item|button):\s*\S/i.test(line))
-                      .slice(
-                        0,
-                        chosenPostStyle(parsed.postStyle, args.briefRead, ctx, input).maxLines,
-                      ),
+                      .map((line) =>
+                        String(line ?? "")
+                          .replace(/^\s*(eyebrow|body|item|button)\s*:\s*/i, "")
+                          .trim(),
+                      )
+                      .filter(Boolean)
+                      .slice(0, 2),
                   }
                 : Array.isArray(parsed.onImageLines) &&
                     wantsSupportingLines(ctx.visualTaste?.direction, input.controls.campaign)
@@ -4780,8 +4826,8 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
   ];
   let stage: StageId = row.stage;
 
-  for (const task of tasks) {
-    if (task.state !== "pending") continue;
+  const advanceTask = async (task: ProviderTask): Promise<void> => {
+    if (task.state !== "pending") return;
     const slot = media.findIndex((m) => m.slot === task.slot);
     const setMedia = (patch: Partial<MediaOutput>) => {
       if (slot >= 0) media[slot] = { ...media[slot], ...patch };
@@ -4792,7 +4838,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       // it starts with the brand's references alone.
       if (task.anchor && !task.anchor.started) {
         const lead = tasks.find((t) => t.slot === task.anchor!.slot);
-        if (lead && lead.state === "pending") continue;
+        if (lead && lead.state === "pending") return;
         const leadPath =
           lead?.state === "done"
             ? media.find((m) => m.slot === task.anchor!.slot)?.storagePath
@@ -4809,10 +4855,14 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
           prompt: leadUrl
             ? task.prompt
-            : task.prompt.replace(/^The first reference image is slide 1 of this carousel.*$/m, ""),
+            : task.prompt.replace(
+                /^The first (?:reference|attached) image is slide 1 of this carousel.*$/m,
+                "",
+              ),
           size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
           referenceAssets: references,
           meterRoute: "studio.image.slide",
+          quality: task.quality,
         });
         Object.assign(task, {
           ...started,
@@ -4822,7 +4872,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           anchor: { ...task.anchor, started: true },
           startedAt: Date.now(),
         });
-        continue;
+        return;
       }
       // A recap still waiting for its animated photos has not started yet.
       const waitingToStart = !!task.clipEdit && !task.clipEdit.startedAt;
@@ -4845,6 +4895,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
             model: task.model,
             referenceAssets: await retryReferenceUrls(c, row, task),
+            quality: task.quality,
             background: task.photoDesign?.background,
             meterRoute: "studio.image.rerender",
           });
@@ -4861,7 +4912,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             lostRestarts: (task.lostRestarts ?? 0) + 1,
             startedAt: Date.now(),
           });
-          continue;
+          return;
         }
       }
       if (
@@ -4879,7 +4930,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           retryable: true,
         };
         setMedia({ status: "failed", error: task.failure.message });
-        continue;
+        return;
       }
       if (task.clipEdit) {
         const fail = (failure?: JobErrorInfo) => {
@@ -4897,16 +4948,16 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         );
         if (missed !== undefined || waiting.some((t) => !t)) {
           fail(missed?.failure);
-          continue;
+          return;
         }
-        if (waiting.some((t) => t!.state === "pending")) continue;
+        if (waiting.some((t) => t!.state === "pending")) return;
         const parked = task.clipEdit.startedAt ? await readClipEdit(task.taskId) : null;
         if (!parked || (parked.state === "running" && now - parked.at > CLIP_EDIT_STALL_MS)) {
           // Not started yet (it waited for animated photos), or it stopped.
           if (task.clipEdit.startedAt) {
             if ((task.resubmits ?? 0) >= VIDEO_RESUBMITS) {
               fail();
-              continue;
+              return;
             }
             task.resubmits = (task.resubmits ?? 0) + 1;
           }
@@ -4922,9 +4973,9 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             contentItemIds: row.content_item_ids ?? [],
             motionPaths: waiting.map((t) => t!.assetPath!),
           });
-          continue;
+          return;
         }
-        if (parked.state === "running") continue;
+        if (parked.state === "running") return;
         if (parked.state === "failed") {
           // A refused motion graphic says so; anything else is the clip message.
           fail(
@@ -4932,7 +4983,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
               ? { category: "quality", message: parked.message, retryable: true }
               : undefined,
           );
-          continue;
+          return;
         }
         stage = "save";
         task.state = "done";
@@ -4944,12 +4995,12 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           storagePath: parked.storagePath,
           error: undefined,
         });
-        continue;
+        return;
       }
       const check = await checkMediaTask(task);
       if (check.state === "pending") {
         if (task.checkErrors || task.checkErrorsSince) resetCheckErrors(task);
-        continue;
+        return;
       }
       if (check.state === "failed") {
         // Image attempts are metered where they ran; a failed video costs nothing.
@@ -4958,34 +5009,17 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             ? task.fallbacks[0]
             : undefined;
         // Pictures sent together (Story frames, carousel slides, versions):
-        // OpenRouter holds each one's worst-case cost, so on a low balance the
-        // last one sent is refused (402) or throttled (429) in a split second
-        // while the others are made. Wait for those to finish, which frees the
-        // hold, then send it again on the same model instead of failing it.
+        // OpenRouter holds each one's worst-case cost, so on a low balance most
+        // of a burst is refused (402/429) in a split second while one is made.
+        // The refusal waits (awaitingRetry) and is sent again one at a time once
+        // nothing else is rendering (retriesToStart, after this loop), on the
+        // same model, instead of failing the whole set (image-retry.ts).
         if (
-          task.kind === "image" &&
-          (check.code === "insufficient_credits" || check.code === "rate_limited") &&
+          shouldRetryRefusal({ task, code: check.code }) &&
           (task.resubmits ?? 0) < IMAGE_BALANCE_RESUBMITS
         ) {
-          if (tasks.some((t) => t !== task && t.kind === "image" && t.state === "pending")) {
-            continue;
-          }
-          await requireActiveJob(c, row);
-          const restarted = await startImageTask({
-            costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
-            prompt: task.prompt,
-            size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
-            model: task.model,
-            referenceAssets: await retryReferenceUrls(c, row, task),
-            background: task.photoDesign?.background,
-            meterRoute: "studio.image.rerender",
-          });
-          Object.assign(task, {
-            taskId: restarted.taskId,
-            resubmits: (task.resubmits ?? 0) + 1,
-            startedAt: Date.now(),
-          });
-          continue;
+          task.awaitingRetry = true;
+          return;
         }
         if (next) {
           await requireActiveJob(c, row);
@@ -4996,6 +5030,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             size,
             model: next,
             referenceAssets: await retryReferenceUrls(c, row, task),
+            quality: task.quality,
             background: task.photoDesign?.background,
             meterRoute: "studio.image.rerender",
           });
@@ -5005,7 +5040,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             fallbacks: task.fallbacks.slice(1),
             startedAt: Date.now(),
           });
-          continue;
+          return;
         }
         // The provider's task has ended, so a new submission can never run the
         // same video twice. Only an outage-type failure is made again, never a
@@ -5030,7 +5065,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
               checkErrorsSince: undefined,
               startedAt: Date.now(),
             });
-            continue;
+            return;
           }
         }
         task.state = "failed";
@@ -5041,7 +5076,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           retryable: check.retryable ?? true,
         };
         setMedia({ status: "failed", error: check.message });
-        continue;
+        return;
       }
       stage = "save";
       await setStage(c, row.id, "save");
@@ -5063,10 +5098,10 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         });
         if (finished.state === "redo" || finished.state === "wait") {
           await requireActiveJob(c, row);
-          continue;
+          return;
         }
         // A passing error (a slow download, a busy encoder) is tried again on the next poll.
-        if (finished.state === "error" && keepCollecting(task, finishError)) continue;
+        if (finished.state === "error" && keepCollecting(task, finishError)) return;
         if (finished.state === "failed" || finished.state === "error") {
           task.state = "failed";
           task.failure = {
@@ -5078,7 +5113,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             retryable: true,
           };
           setMedia({ status: "failed", error: task.failure.message });
-          continue;
+          return;
         }
         check.dataUrl = finished.dataUrl;
         check.url = undefined;
@@ -5181,6 +5216,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             prompt: designed.prompt,
             size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
             referenceAssets: await retryReferenceUrls(c, row, task),
+            quality: task.quality,
             background: task.photoDesign.background,
             meterRoute: "studio.image.rerender",
           });
@@ -5192,14 +5228,14 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             prompt: designed.prompt,
             startedAt: Date.now(),
           });
-          continue;
+          return;
         }
         if (designed.state === "failed") {
           console.warn("[studio] photo design could not hold the photos", designed.reason);
           task.state = "failed";
           task.failure = { category: "provider", message: PHOTO_DESIGN_FAILED, retryable: true };
           setMedia({ status: "failed", error: PHOTO_DESIGN_FAILED });
-          continue;
+          return;
         }
         finalImage = designed.dataUrl;
         if (designed.warning) warnings.push(designed.warning);
@@ -5381,6 +5417,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           prompt: repairPrompt,
           size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
           referenceAssets: await retryReferenceUrls(c, row, task),
+          quality: task.quality,
           background: task.photoDesign?.background,
           meterRoute: "studio.image.rerender",
         });
@@ -5392,7 +5429,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           reviewAttempts: 1,
           startedAt: Date.now(),
         });
-        continue;
+        return;
       }
       if (imageReview?.status === "warn")
         warnings.push(...imageReview.issues.map((issue) => `Visual review: ${issue}`));
@@ -5454,8 +5491,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       });
       // A finished video that couldn't be stored yet is still at the
       // provider: the next poll tries again (the save is idempotent).
-      if (!persisted.ok && task.kind === "video" && keepCollecting(task, persisted.message))
-        continue;
+      if (!persisted.ok && task.kind === "video" && keepCollecting(task, persisted.message)) return;
       if (task.kind === "video") {
         recordUsage({
           provider: task.provider === "kie" ? "kie" : "openrouter",
@@ -5469,7 +5505,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       if (!persisted.ok) {
         task.state = "failed";
         setMedia({ status: "failed", error: persisted.message });
-        continue;
+        return;
       }
       task.state = "done";
       if (isMotionSlot(task.slot)) task.assetPath = persisted.asset.storage_path ?? undefined;
@@ -5504,7 +5540,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         keepCollecting(task, err)
       ) {
         console.warn("[studio] video check will be retried", failure.message);
-        continue;
+        return;
       }
       task.state = "failed";
       task.failure =
@@ -5517,6 +5553,65 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           : failure;
       setMedia({ status: "failed", error: task.failure.message });
     }
+  };
+
+  // Finished pictures are checked, reviewed and saved side by side (a carousel's
+  // slides finish together), and the lease is kept alive while that runs, so a
+  // second poll never picks up the same slides and the set reaches the Library
+  // in about one review's time instead of one per slide.
+  const heartbeat = setInterval(() => {
+    void studioJobWriter(c)
+      .from("studio_jobs")
+      .update({ lease_until: new Date(Date.now() + LEASE_MS).toISOString() })
+      .eq("id", row.id)
+      .eq("status", "running")
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  }, LEASE_MS / 3);
+  try {
+    // Slides waiting for slide 1 go last, so they see it finished in this same poll.
+    const waiting = tasks.filter((t) => t.state === "pending" && t.anchor && !t.anchor.started);
+    await inPool(
+      tasks.filter((t) => !waiting.includes(t)),
+      ADVANCE_CONCURRENCY,
+      advanceTask,
+    );
+    for (const task of waiting) await advanceTask(task);
+    // Refused pictures are sent again one at a time once nothing else renders.
+    for (const task of retriesToStart(tasks)) {
+      try {
+        await requireActiveJob(c, row);
+        const restarted = await startImageTask({
+          costTier: row.input.controls.paymentSource === "creation" ? "standard" : undefined,
+          prompt: task.prompt,
+          size: IMAGE_SIZE_BY_RATIO[task.ratio] as ImageSize,
+          model: task.model || undefined,
+          referenceAssets: await retryReferenceUrls(c, row, task),
+          quality: task.quality,
+          background: task.photoDesign?.background,
+          meterRoute: "studio.image.rerender",
+        });
+        Object.assign(task, {
+          taskId: restarted.taskId,
+          model: restarted.model,
+          resubmits: (task.resubmits ?? 0) + 1,
+          awaitingRetry: false,
+          startedAt: Date.now(),
+        });
+      } catch (err) {
+        if (err instanceof StudioJobError && err.status === 409) throw err;
+        const failure = classify(err);
+        task.state = "failed";
+        task.awaitingRetry = false;
+        task.failure = failure;
+        const at = media.findIndex((m) => m.slot === task.slot);
+        if (at >= 0) media[at] = { ...media[at], status: "failed", error: failure.message };
+      }
+    }
+  } finally {
+    clearInterval(heartbeat);
   }
 
   const done = tasks.every((t) => t.state !== "pending");

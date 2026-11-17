@@ -26,14 +26,15 @@ describe("prompt writer blueprints", () => {
   it("cover every format with a detailed section plan", () => {
     for (const type of STUDIO_TYPE_ORDER) {
       const b = PROMPT_BLUEPRINTS[type];
-      expect(b.sections.length).toBeGreaterThanOrEqual(6);
+      // Short, sharp briefs (2026-11): WHAT the piece is, not camera or lighting.
+      expect(b.sections.length).toBeGreaterThanOrEqual(4);
       expect(b.guidance.length).toBeGreaterThan(120);
     }
   });
 
-  it("ask visual formats for a look and motion formats for camera moves", () => {
+  it("leave pictures to the brand look and give motion formats camera moves", () => {
     const image = pickSparks("image", seq([0.1, 0.5]));
-    expect(image.some((s) => s.startsWith("Visual direction"))).toBe(true);
+    expect(image.some((s) => s.startsWith("Visual direction"))).toBe(false);
     const video = pickSparks("video", seq([0.2, 0.4, 0.9]));
     expect(video.some((s) => s.startsWith("Camera:"))).toBe(true);
     expect(pickSparks("article", seq([0.3]))).toHaveLength(1);
@@ -102,6 +103,8 @@ describe("describeSettings", () => {
     expect(
       describeSettings("video", { platforms: ["tiktok"], ratio: "9:16", durationSec: 8 }),
     ).toBe("Platforms: tiktok\nSize: 9:16\nLength: 8 seconds");
-    expect(describeSettings("carousel", {})).toBe("Slides: 6");
+    expect(describeSettings("carousel", {})).toBe(
+      "Slides: 6 in total: the cover, 4 inside slides and the last slide",
+    );
   });
 });

@@ -1,13 +1,11 @@
 import "server-only";
 import type { CarouselSlide, CarouselSpecOutput } from "@/lib/studio/jobs";
 import type { StoryFrame } from "@/lib/stories/frames";
-import { styleLead, type ImageStyleInput } from "@/lib/post-image";
+import type { ImageStyleInput } from "@/lib/post-image";
 import { onImageCopyLines, type AdFormat, type AdOnImage } from "@/lib/studio/ad-formats";
-import type { DeliverableId } from "@/lib/studio/creative-knowledge";
-import type { CarouselStyle, PostStyle } from "@/lib/studio/post-styles";
+import type { CarouselStyle } from "@/lib/studio/post-styles";
 import type { AdObjective } from "@/lib/studio/ad-objectives";
 import {
-  archetypeById,
   carouselSeriesRules,
   heroSubject,
   pickArchetype,
@@ -15,7 +13,6 @@ import {
 } from "@/lib/studio/art-direction";
 import {
   TYPE_SYSTEM,
-  deliverableById,
   deliverablePromptLines,
   detectDeliverable,
   qualityCheckLines,
@@ -74,8 +71,11 @@ export function carouselSlidePrompt(
     slides: CarouselSlide[];
     /** Slide 1 is attached as the first reference (ADR-0051). */
     anchoredToCover?: boolean;
+    /** The director's one look for the series (ADR-0051 round 3). */
+    look?: string | null;
   },
 ): string {
+  if (args.look?.trim()) return directedSlidePrompt({ ...args, look: args.look });
   const slide = args.slide;
   const position =
     args.index === 0 ? "cover" : args.index === args.slides.length - 1 ? "last" : "middle";
@@ -344,93 +344,75 @@ export function supportCopy(lines: readonly string[] | null | undefined) {
 }
 
 /**
- * One picture post (ADR-0051), built like a Story frame: the art director's
- * paragraph (post-plan.ts) leads, then only short hard rules. It stays well
- * under the image model's 10,000-character cut, so the exact words and the
- * final check are never lost; nothing in it contradicts anything else.
+ * One picture post (ADR-0051 round 3): the director's image prompt, then only
+ * the exact words, the canvas and the logo corner. No style recipes, type
+ * tables or checklists: they made every post a template.
  */
 export function postImagePrompt(args: {
   brandName: string;
-  /** The writer's art direction for this picture. */
+  /** The director's image prompt (post-plan.ts): the whole picture, in prose. */
   concept: string;
-  /** The native post style it is made in (post-styles.ts, ADR-0051). */
-  postStyle?: PostStyle | null;
-  /** Older posts: the campaign layout they were staged on (art-direction.ts). */
-  layout?: string | null;
-  deliverable?: DeliverableId | null;
   headline?: string | null;
   lines?: readonly string[] | null;
   /** No words in the picture: the look allows none, or Mellox sets them afterward. */
   noText?: boolean;
   ratio: string;
-  style: ImageStyleInput | null;
-  palette?: string[];
-  fonts?: string[];
-  visualTasteRules?: string;
   logoCorner?: string | null;
-  physicalProduct?: boolean;
   revision?: string;
   /** A source photo's rule (edit or inspire). */
   source?: string;
-  /** Layouts the brand's latest pictures used. */
-  avoidLayouts?: readonly string[];
-  emphasisSeed?: string;
 }): string {
-  const postStyle = args.postStyle ?? null;
-  const layout = postStyle ? null : archetypeById(args.layout);
-  const deliverable = deliverableById(args.deliverable);
   const copy = args.noText
     ? []
     : [
         ...(args.headline?.trim() ? [{ label: "Exact headline", text: args.headline.trim() }] : []),
-        ...supportCopy(args.lines),
+        ...supportCopy(args.lines).slice(0, 2),
       ];
-  const look = args.style ? styleLead(args.style).join("\n").slice(0, 1400) : "";
-  const palette = (args.style?.colors.length ? args.style.colors : (args.palette ?? []))
-    .filter(Boolean)
-    .slice(0, 5);
-  const fonts = (args.style?.fonts.length ? args.style.fonts : (args.fonts ?? []))
-    .filter(Boolean)
-    .slice(0, 2);
-  const avoid = (postStyle ? [] : (args.avoidLayouts ?? []))
-    .map((id) => archetypeById(id)?.name)
-    .filter((name): name is string => !!name && name !== layout?.name);
   return [
-    `Create a finished, publishable social media post for ${args.brandName}. The entire design, including its typography, is made in this image. It must look like a real post a strong brand published on its feed this year: simple, believable and made for the person scrolling.`,
-    "Act as a senior art director: an intentional, polished composition with one focal point, a clear reading order, real materials and light, and generous negative space. Avoid generic AI marketing imagery, surreal scale tricks, floating objects, random gradients, 3D icons, plastic objects and stock-photo clichés.",
-    postStyle
-      ? `POST STYLE: ${postStyle.name}. ${postStyle.picture}
-Words: ${postStyle.words}`
-      : "",
-    canvasLine(args.ratio),
-    args.revision ?? "",
+    args.concept.trim().slice(0, 2600),
     args.source ?? "",
-    `ART DIRECTION (follow it):\n${args.concept.trim().slice(0, 1900)}`,
-    layout ? `Layout: "${layout.name}", ${layout.summary}, adapted to this message.` : "",
-    deliverable && deliverable.id !== "brand-moment"
-      ? `This is a ${deliverable.name.toLowerCase()}: ${deliverable.readingOrder}. Never invent ${deliverable.neverInvent}.`
-      : "",
-    look,
-    !look && palette.length
-      ? `Brand colours, use these and close tints only: ${palette.join(", ")}; the first is the main colour, one accent used sparingly.`
-      : "",
-    !look && fonts.length ? `Type character in the spirit of ${fonts.join(" and ")}.` : "",
-    args.visualTasteRules ? args.visualTasteRules.trim().slice(0, 500) : "",
+    args.revision ?? "",
     copy.length
-      ? verbatimTextBlock({ lines: copy, emphasisSeed: args.emphasisSeed ?? args.brandName }).join(
-          "\n",
-        )
+      ? verbatimTextBlock({ lines: copy }).join("\n")
       : "Absolutely no words, letters, numbers, labels or logos anywhere in the image.",
-    copy.length
-      ? "Words always sit on a calm area (a clean background, a solid band, open space), never over busy detail and never covered by the subject."
-      : "",
-    copy.length ? TYPE_SYSTEM.join("\n") : "",
+    canvasLine(args.ratio),
     args.logoCorner
       ? `Leave the ${args.logoCorner} corner clear (about 16% of the width): the brand's real logo is placed there afterward. Do not draw any logo.`
       : "Do not draw any logo.",
-    avoid.length ? `Stage it differently from the brand's latest posts (${avoid.join(", ")}).` : "",
-    "Never: invented prices, discounts, dates, ratings, reviews, quotes or names; another brand's logo or product; fake app screens or social media buttons; watermarks; gibberish text; extra or fused fingers.",
-    qualityCheckLines({ hasText: copy.length > 0, hasProduct: args.physicalProduct }).join("\n"),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
+ * A carousel slide planned by the director (ADR-0051 round 3): the series look,
+ * the slide's own picture in prose, then only its exact words and the canvas.
+ */
+function directedSlidePrompt(
+  args: Common & {
+    slide: CarouselSlide;
+    slides: CarouselSlide[];
+    anchoredToCover?: boolean;
+    look: string;
+  },
+): string {
+  const slide = args.slide;
+  return [
+    `Slide ${args.index + 1} of ${args.slides.length} of a social media carousel for ${args.brandName}, a finished slide with its typography made in this image. Every slide shares one look: ${args.look.trim().slice(0, 1200)}`,
+    args.anchoredToCover
+      ? "The first attached image is slide 1 of this carousel: keep its look exactly (background, grid, type, colours, photo treatment); this slide gets its own picture and its own words. Never copy slide 1's words."
+      : "",
+    (slide.visual ?? "").trim().slice(0, 1200),
+    args.revision ?? "",
+    verbatimTextBlock({
+      lines: [
+        { label: "Exact small label", text: slide.kicker ?? "" },
+        { label: "Exact headline", text: slide.heading },
+        { label: "Exact supporting line", text: slide.body },
+      ],
+    }).join("\n"),
+    canvasLine(args.ratio ?? "4:5"),
+    "Never draw a logo, another brand's name or any words beyond the exact ones above.",
   ]
     .filter(Boolean)
     .join("\n\n");

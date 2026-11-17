@@ -6,7 +6,7 @@
 // needed. The role switch (?role=support) shows how the same screens look for
 // each role, including the "your role can't do that" answers.
 //
-//   /admin-lab?s=overview|users|user|workspaces|workspace|audit|security|team|plans
+//   /admin-lab?s=overview|customers|activity|errors|revenue|users|user|workspaces|workspace|audit|security|team|plans
 //   /admin-lab?s=workspace&role=analyst
 
 import { useEffect, useState } from "react";
@@ -44,7 +44,12 @@ import {
   labWorkspaceDetail,
   labWorkspaces,
 } from "./AdminLab.fixtures";
+import { labBalances, labPulse } from "./AdminLab.pulse";
+import { ActivityScreen } from "./ActivityScreen";
 import { AuditScreen } from "./AuditScreen";
+import { CustomersScreen } from "./CustomersScreen";
+import { ErrorsScreen } from "./ErrorsScreen";
+import { RevenueScreen } from "./RevenueScreen";
 import { AbuseScreen } from "./AbuseScreen";
 import { AiControlsScreen } from "./AiControlsScreen";
 import { AnalyticsScreen } from "./AnalyticsScreen";
@@ -74,6 +79,8 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/me": "any",
   "/api/admin/overview": "overview.read",
   "/api/admin/finance": "any",
+  "/api/admin/pulse": "overview.read",
+  "/api/admin/balances": "overview.read",
   "/api/admin/users": "users.read",
   "/api/admin/users/detail": "users.read",
   "/api/admin/users/suspend": "users.suspend",
@@ -138,6 +145,10 @@ function install(role: AdminRoleKey): () => void {
         return json(me);
       case "/api/admin/overview":
         return json(LAB_OVERVIEW);
+      case "/api/admin/pulse":
+        return json(labPulse(pii));
+      case "/api/admin/balances":
+        return json(labBalances(me.billing));
       case "/api/admin/finance":
         return me.billing
           ? json(LAB_FINANCE)
@@ -220,6 +231,18 @@ export function AdminLab() {
 
   let screen;
   switch (section) {
+    case "customers":
+      screen = <CustomersScreen />;
+      break;
+    case "activity":
+      screen = <ActivityScreen />;
+      break;
+    case "errors":
+      screen = <ErrorsScreen />;
+      break;
+    case "revenue":
+      screen = <RevenueScreen />;
+      break;
     case "users":
       screen = <UsersScreen />;
       break;

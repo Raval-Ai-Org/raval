@@ -22,13 +22,14 @@ import { isPhotoDesignType, withResolvedPhotoMode } from "./photo-design/mode";
 import { RECAP_AI_SECONDS } from "./clip-edit";
 import { shortClipPlan, shortClipPrice } from "./short-clip";
 
-/** Credit units for one extra designed carousel slide (the cover is 1 credit). */
-export const CAROUSEL_SLIDE_UNITS = cr(0.5);
+/** Credits for one extra designed carousel slide (the cover is 1 credit). */
+export const CAROUSEL_SLIDE_CREDITS = 0.75;
 
 /**
- * A carousel's price (ADR-0051): every slide is designed by the image model,
- * so it is 1 credit for the cover plus half a credit per extra slide. Slides
- * still drawn by code (connected slides, the brand's own photos) cost 1 credit.
+ * A carousel's price (ADR-0051): every slide is designed by the image model at
+ * high quality, so it is 1 credit for the cover plus ¾ credit per extra slide,
+ * rounded up to a half credit (6 slides = 5 credits). Slides still drawn by
+ * code (connected slides, the brand's own photos) cost 1 credit.
  */
 export function carouselCredits(controls: {
   slideCount?: number;
@@ -41,7 +42,7 @@ export function carouselCredits(controls: {
     (!!controls.referenceAssetIds?.length && (controls.referenceMode ?? "preserve") === "preserve");
   if (drawnByCode) return cr(1);
   const slides = Math.min(10, Math.max(3, Math.round(controls.slideCount ?? 6)));
-  return cr(1) + (slides - 1) * CAROUSEL_SLIDE_UNITS;
+  return cr(Math.ceil((1 + (slides - 1) * CAROUSEL_SLIDE_CREDITS) * 2) / 2);
 }
 
 /** Credit units a Studio action costs, with a carousel priced per slide. */

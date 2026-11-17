@@ -37,9 +37,21 @@ const CLARITY_HOSTS = [
   ),
 ];
 
+// Stripe's on-page checkout (/checkout, Elements-mode Checkout Sessions): the
+// origins Stripe documents for Stripe.js, its card and 3-D Secure frames, and
+// Google Pay inside the Express Checkout Element.
+const STRIPE = {
+  script: "https://js.stripe.com https://*.js.stripe.com https://pay.google.com",
+  frame:
+    "https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://pay.google.com",
+  // Stripe.js fetches the checkout font's stylesheet (`fonts.cssSrc` in PayStep).
+  connect:
+    "https://api.stripe.com https://merchant-ui-api.stripe.com https://*.stripe.com https://fonts.googleapis.com",
+};
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${CAPTCHA_ORIGIN}${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${CAPTCHA_ORIGIN} ${STRIPE.script}${isDev ? " 'unsafe-eval'" : ""}`,
   `worker-src 'self' blob: ${PDF_WORKER_CDN}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -47,8 +59,8 @@ const csp = [
   // Pexels/Unsplash/Coverr; avatars from Google.
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
-  `connect-src 'self' https://accounts.google.com/gsi/ ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com${isDev ? " ws: http://localhost:*" : ""}`,
-  `frame-src 'self' https://accounts.google.com${CAPTCHA_ORIGIN}`,
+  `connect-src 'self' https://accounts.google.com/gsi/ ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com ${STRIPE.connect}${isDev ? " ws: http://localhost:*" : ""}`,
+  `frame-src 'self' https://accounts.google.com${CAPTCHA_ORIGIN} ${STRIPE.frame}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",

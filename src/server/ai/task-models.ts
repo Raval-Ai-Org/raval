@@ -203,7 +203,10 @@ const REGISTRY: Record<string, TaskPlan> = {
   // billed as output, and the structured schema, shapeOutput and grounding
   // checks catch a bad answer. Scripts and articles keep medium.
   "studio.social": tier(WRITER, "low"),
-  "studio.carousel": tier(WRITER, "low"),
+  // The director (ADR-0051 round 3): the carousel's look and every slide's
+  // image prompt. A side-by-side test showed the planner is what makes a
+  // picture native or a template, so it runs on the stronger writer.
+  "studio.carousel": tier(CONVERSATION, "low", { maxTokens: 6_000 }),
   "studio.story": tier(WRITER, "low"),
   "studio.script": tier(WRITER, "medium"),
   "studio.ad": tier(WRITER, "low"),
@@ -223,8 +226,9 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.prompt": tier(BUDGET, "none"),
   "studio.research": tier(WRITER, "medium"),
   "studio.trends": tier(WRITER, "low"),
-  // The visual brief a picture or video is made from (buildVisualBriefPrompt).
-  "studio.image.brief": tier(WRITER, "low"),
+  // The director (ADR-0051 round 3): a picture post's words and its whole image
+  // prompt, in one call on the stronger writer. Videos keep the writer.
+  "studio.image.brief": tier(CONVERSATION, "low", { maxTokens: 4_000 }),
   "studio.video.brief": tier(WRITER, "low"),
   // The stronger writer, only where it pays off (ADR-0051): a draft whose
   // words drifted from the brief (brief-fit.ts), a carousel of 7+ slides, and

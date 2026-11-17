@@ -140,6 +140,8 @@ export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
 export { Dices } from "lucide-react";
 // Studio motion graphics (ADR-0043), lucide until a bespoke glyph exists.
 export { Shapes } from "lucide-react";
+// Admin console: the Stripe balance card, lucide until a bespoke glyph exists.
+export { CreditCard } from "lucide-react";
 // Studio post categories (categories.ts), lucide until bespoke glyphs exist.
 export {
   Ban,

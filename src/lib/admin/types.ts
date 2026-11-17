@@ -800,3 +800,119 @@ export type AdminAbuseSignals = {
   heavyUsers: Array<{ userId: string; hour: string; calls: number }>;
   failingWorkspaces: Array<{ workspaceId: string; name: string | null; failed: number }>;
 };
+
+// ── Pulse: the admin home, customers, activity and errors ──────────────────
+
+export type AdminPulseCustomer = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  joinedAt: string;
+  planId: string;
+  planLabel: string;
+  /** Billing account status, "none" for a person with no account of their own. */
+  status: string;
+  /** Credit ledger units (UNITS_PER_CREDIT = 1 credit). */
+  creditsLeft: number;
+  creditsAllowance: number;
+  workspaces: number;
+  /** Estimated from the times of their actions (see activeMinutes). */
+  activeMinutes7d: number;
+  activeMinutes14d: number;
+  actions7d: number;
+  pieces7d: number;
+  errors7d: number;
+  lastActiveAt: string | null;
+  lastDoing: string | null;
+  topActivities: Array<{ label: string; count: number }>;
+};
+
+export type AdminPulseError = {
+  id: string;
+  source: "ai" | "studio";
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  /** What the person was trying to do, in plain words. */
+  what: string;
+  /** The route label or the piece's title. */
+  detail: string;
+  message: string;
+  at: string;
+};
+
+export type AdminPulse = {
+  generatedAt: string;
+  /** True when a source had more rows than were read (numbers are a floor). */
+  truncated: boolean;
+  totals: {
+    users: number;
+    newUsers7d: number;
+    activeUsers7d: number;
+    activeToday: number;
+    payingCustomers: number;
+    workspaces: number;
+    newWorkspaces7d: number;
+    creditsLeft: number;
+    creditsAllowance: number;
+    minutes7d: number;
+    errors7d: number;
+    errors24h: number;
+    pieces7d: number;
+  };
+  days: Array<{
+    day: string;
+    signups: number;
+    workspaces: number;
+    pieces: number;
+    errors: number;
+    activeUsers: number;
+  }>;
+  plans: Array<{ planId: string; label: string; accounts: number; creditsLeft: number }>;
+  customers: AdminPulseCustomer[];
+  errors: AdminPulseError[];
+  errorsByWhat: Array<{ label: string; count: number }>;
+  /** Sign-ups, purchases, new workspaces and failures, newest first. */
+  feed: AdminOverview["activity"]["items"];
+  newWorkspaces: Array<{
+    id: string;
+    name: string;
+    ownerId: string;
+    ownerName: string | null;
+    ownerEmail: string | null;
+    ownerPlan: string;
+    createdAt: string;
+  }>;
+};
+
+export type AdminProviderBalance = {
+  id: "openrouter" | "kie";
+  label: string;
+  state: "live" | "manual" | "unavailable" | "not_configured";
+  balanceUsd: number | null;
+  /** KIE only: its own credits. */
+  balanceCredits: number | null;
+  /** What Mellox's paying customers could still spend there (reserve policy). */
+  reserveUsd: number;
+  message: string;
+  topUpUrl: string;
+};
+
+export type AdminBalances = {
+  fetchedAt: string;
+  providers: AdminProviderBalance[];
+  /** null when this admin is not a billing admin. */
+  stripe:
+    | null
+    | { configured: false }
+    | {
+        configured: true;
+        livemode: boolean;
+        currency: string;
+        availableCents: number;
+        pendingCents: number;
+        byCurrency: Array<{ currency: string; availableCents: number; pendingCents: number }>;
+      };
+};

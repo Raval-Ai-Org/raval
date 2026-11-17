@@ -41,7 +41,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
   carousel: {
     sections: ["Idea", "Cover", "Slides", "Last slide", "Caption"],
     guidance:
-      "'Cover' is the exact cover headline (under 8 words, one sharp promise, question or number from the context) and a short subline. 'Slides' lists each inside slide on its own line as 'Slide N: heading — one short line'; match the slide count in Settings. 'Last slide' is the takeaway and one action. 'Caption' is one or two sentences.",
+      "'Cover' is the exact cover headline (under 8 words, one sharp promise, question or number from the context) and a short subline. 'Slides' lists only the inside slides, between the cover and the last slide, one per line as 'Slide N: heading — one short line', numbered from Slide 2; write exactly the number of inside slides Settings gives (the total minus the cover and the last slide), never more, and never name a different slide count anywhere. 'Last slide' is the takeaway and one action. 'Caption' is one or two sentences.",
   },
   story: {
     sections: ["Idea", "Frame 1", "Middle frames", "Last frame"],
@@ -202,6 +202,55 @@ export const SIGNAL_LABEL: Record<IdeaSource, string> = {
   campaign: "Your campaign",
 };
 
+/** The slide count a person picked (3 to 10, default 6). */
+export function slideTotal(count: number | undefined): number {
+  return Math.max(3, Math.min(10, Math.round(count ?? 6)));
+}
+
+/** "6 in total: the cover, 4 inside slides and the last slide". */
+export function carouselSlidesLine(count: number | undefined): string {
+  const total = slideTotal(count);
+  const inside = total - 2;
+  return `${total} in total: the cover, ${inside} inside ${inside === 1 ? "slide" : "slides"} and the last slide`;
+}
+
+const SLIDE_LINE = /^\s*(?:[-*•]\s*)?slide\s+(\d+)\s*[:.)\-–—]\s*/i;
+
+/**
+ * Keep a carousel brief to the slide count the person picked: the 'Slides'
+ * section holds the inside slides only, numbered from 2. Extra lines are
+ * dropped and the rest renumbered; a short list is left for the writer to fill.
+ * Pure, so the brief in the box always matches the stepper.
+ */
+export function fitBriefSlides(prompt: string, count: number | undefined): string {
+  const total = slideTotal(count);
+  const inside = total - 2;
+  let kept = 0;
+  const out: string[] = [];
+  for (const line of prompt.split("\n")) {
+    const m = SLIDE_LINE.exec(line);
+    if (!m) {
+      out.push(line);
+      continue;
+    }
+    if (kept >= inside) continue;
+    kept += 1;
+    const number = String(kept + 1);
+    out.push(line.replace(SLIDE_LINE, (whole) => whole.replace(m[1], number)));
+  }
+  // A slide count written in the text that disagrees with the stepper is corrected.
+  return out
+    .join("\n")
+    .replace(/\b(\d{1,2})([- ])(slides?)\b/gi, (whole, n: string, sep: string, word: string) =>
+      Number(n) === total ? whole : `${total}${sep}${word}`,
+    );
+}
+
+/** How many 'Slide N' lines a brief lists. */
+export function briefSlideLines(prompt: string): number {
+  return prompt.split("\n").filter((line) => SLIDE_LINE.test(line)).length;
+}
+
 /** Plain-language settings the prompt should respect. */
 export function describeSettings(
   type: StudioType,
@@ -215,7 +264,7 @@ export function describeSettings(
     parts.push(
       `Length: ${c.durationSec ?? (type === "video" || (type === "story" && c.storyMode === "video") ? 10 : 30)} seconds`,
     );
-  if (type === "carousel") parts.push(`Slides: ${c.slideCount ?? 6}`);
+  if (type === "carousel") parts.push(`Slides: ${carouselSlidesLine(c.slideCount)}`);
   if (type === "article") parts.push(`Length: ${c.length ?? "standard"}`);
   if (c.includeImage) parts.push("Include an image");
   if (c.tone) parts.push(`Voice: ${c.tone}`);
@@ -271,6 +320,8 @@ export function briefIssues(args: {
   type: StudioType;
   known: string;
   brandName?: string | null;
+  /** A carousel's slide count from the stepper. */
+  slideCount?: number;
 }): string[] {
   const issues: string[] = [];
   const text = args.prompt ?? "";
@@ -289,6 +340,15 @@ export function briefIssues(args: {
   }
   const missing = blueprint.sections.filter((s) => !labels.get(s.toLowerCase()));
   if (missing.length) issues.push(`Missing sections: ${missing.join(", ")}.`);
+
+  if (args.type === "carousel") {
+    const inside = slideTotal(args.slideCount) - 2;
+    const listed = briefSlideLines(text);
+    if (listed > inside)
+      issues.push(
+        `'Slides' lists ${listed} slides but the carousel has ${inside} inside slides (${slideTotal(args.slideCount)} in total with the cover and the last slide). List exactly ${inside}.`,
+      );
+  }
 
   const words = countWords(text);
   if (args.type !== "article" && words > 200)

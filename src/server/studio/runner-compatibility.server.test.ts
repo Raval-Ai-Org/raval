@@ -235,7 +235,8 @@ it("saves new versions without touching the post, and a missed one is only a war
     ],
   });
   mocks.review.mockResolvedValue({ status: "pass", issues: [] });
-  // The first version renders like any picture; the second fails.
+  // The first version renders like any picture; the second is refused by the
+  // model (a burst refusal would be sent again, image-retry.ts).
   const png = await sharp({ create: { width: 10, height: 10, channels: 3, background: "#123456" } })
     .png()
     .toBuffer();
@@ -245,7 +246,12 @@ it("saves new versions without touching the post, and a missed one is only a war
       state: "success",
       dataUrl: `data:image/png;base64,${png.toString("base64")}`,
     })
-    .mockResolvedValueOnce({ state: "failed", message: "Provider unavailable", retryable: false });
+    .mockResolvedValueOnce({
+      state: "failed",
+      message: "Provider unavailable",
+      code: "refusal",
+      retryable: false,
+    });
   const result = await advanceStudioJob(client, row);
   expect(result.status).toBe("succeeded");
   expect(mocks.save).toHaveBeenCalledTimes(1);

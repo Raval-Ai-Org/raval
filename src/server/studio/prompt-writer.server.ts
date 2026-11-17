@@ -24,6 +24,7 @@ import {
   briefIssues,
   cleanPrompt,
   describeSettings,
+  fitBriefSlides,
   pickSignal,
   pickSparks,
   type PromptMode,
@@ -295,7 +296,13 @@ export async function writeStudioPrompt(args: {
     .filter(Boolean)
     .join("\n");
   const check = (prompt: string) =>
-    briefIssues({ prompt: cleanPrompt(prompt), type: args.type, known, brandName: ctx.brandName });
+    briefIssues({
+      prompt: cleanPrompt(prompt),
+      type: args.type,
+      known,
+      brandName: ctx.brandName,
+      slideCount: args.controls?.slideCount,
+    });
   let parsed = await ask("", 0.9);
   const issues = check(parsed.prompt);
   if (issues.length) {
@@ -309,7 +316,11 @@ export async function writeStudioPrompt(args: {
   const source: IdeaSource = signal?.source ?? "pillar";
   return {
     title: parsed.title.trim().slice(0, 80),
-    prompt: cleanPrompt(parsed.prompt).slice(0, PROMPT_MAX_CHARS),
+    // A carousel brief always lists the slide count the stepper shows.
+    prompt: (args.type === "carousel"
+      ? fitBriefSlides(cleanPrompt(parsed.prompt), args.controls?.slideCount)
+      : cleanPrompt(parsed.prompt)
+    ).slice(0, PROMPT_MAX_CHARS),
     why: parsed.why.trim().slice(0, 140),
     basedOn: SIGNAL_LABEL[source],
     signal: signal?.headline ?? null,

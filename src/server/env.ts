@@ -119,6 +119,8 @@ const Schema = z.object({
   // Stripe — credit top-ups. Server-only. Never expose as NEXT_PUBLIC_*.
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  /** Public by design (pk_live_ / pk_test_): loads Stripe.js on /checkout. */
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   // Composio (connected apps, ADR-0042) — server-only. Never expose as NEXT_PUBLIC_*.
   // COMPOSIO_AUTH_CONFIG_<TOOLKIT> names Mellox's own OAuth app for a toolkit;
   // without one, Composio's managed sign-in is used.
