@@ -12,6 +12,7 @@ import {
   Check,
   Folder,
   Monitor,
+  Palette,
   Pencil,
   Play,
   Plus,
@@ -42,7 +43,7 @@ const USE_OPTIONS: Array<{ value: OwnMediaFrequency; label: string }> = [
 
 type Filter =
   | { kind: "all" }
-  | { kind: "chip"; chip: "product" | "person" }
+  | { kind: "chip"; chip: "product" | "person" | "element" }
   | { kind: "website" }
   | { kind: "folder"; name: string };
 
@@ -176,10 +177,11 @@ function MediaEditor({
           <span className="text-[12px] font-semibold text-muted-foreground">It shows</span>
           <Segment
             label="It shows"
-            value={chip === "person" ? "person" : "product"}
+            value={chip === "person" || chip === "element" ? chip : "product"}
             options={[
               { value: "product", label: "Product" },
               { value: "person", label: "People" },
+              { value: "element", label: "Art" },
             ]}
             onChange={(v) => setChip(v)}
           />
@@ -232,8 +234,10 @@ function MediaTile({
 }) {
   const [editing, setEditing] = React.useState(false);
   const video = React.useRef<HTMLVideoElement>(null);
-  const label = card.notes.trim();
+  // Site art keeps the site's own words for it (alt text) until a person labels it.
+  const label = card.notes.trim() || (card.chip === "element" ? card.label : "");
   const Icon = card.capture ? Monitor : CHIP_ICON[card.chip];
+  const art = card.chip === "element" && !card.capture;
   return (
     <motion.figure
       layout="position"
@@ -277,13 +281,21 @@ function MediaTile({
               "size-full transition-transform duration-[1600ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
               card.capture
                 ? "object-cover object-top group-hover:object-bottom"
-                : "object-cover group-hover:scale-[1.05]",
+                : art
+                  ? "object-contain p-3 group-hover:scale-[1.04]"
+                  : "object-cover group-hover:scale-[1.05]",
             )}
           />
         ) : null}
         <span className="absolute left-2 top-2 inline-flex h-6 items-center gap-1 rounded-full bg-black/45 px-2 text-[11px] font-semibold text-white backdrop-blur">
           <Icon className="h-3 w-3" />
-          {card.capture ? "Website" : card.chip === "person" ? "People" : "Product"}
+          {card.capture
+            ? "Website"
+            : card.chip === "person"
+              ? "People"
+              : art
+                ? "Site art"
+                : "Product"}
         </span>
         {card.lifetime === "temporary" && !card.capture && (
           <span className="absolute right-2 top-2 inline-flex h-6 items-center rounded-full bg-amber-500/80 px-2 text-[11px] font-semibold text-white backdrop-blur">
@@ -364,16 +376,19 @@ export function Media({ view, handlers }: { view: InspoView; handlers: InspoHand
   const media = shelfCards(view.cards, "media");
   const folders = mediaFolders(media);
   const folderNames = folders.map((f) => f.name);
-  const uploads = view.uploads.filter((u) => u.chip === "product" || u.chip === "person");
+  const uploads = view.uploads.filter(
+    (u) => u.chip === "product" || u.chip === "person" || u.chip === "element",
+  );
   const captures = media.filter((c) => c.capture);
   // New uploads go into the folder on screen.
   const intoFolder = filter.kind === "folder" ? filter.name : undefined;
 
   // Pictures the scan found on the site (the old Assets list), ready to keep.
   const known = new Set(view.cards.map((c) => c.label));
+  const keptUrls = new Set(view.cards.flatMap((c) => (c.sourceUrl ? [c.sourceUrl] : [])));
   const fromSite = view.dna.assets
     .filter((a) => (a.kind === "image" || a.kind === "design") && /^https?:\/\//.test(a.url))
-    .filter((a) => !known.has(a.label))
+    .filter((a) => !known.has(a.label) && !keptUrls.has(a.url))
     .slice(0, 8);
 
   const shown = media.filter((c) =>
@@ -400,6 +415,16 @@ export function Media({ view, handlers }: { view: InspoView; handlers: InspoHand
       count: media.filter((c) => !c.capture && c.chip === "person").length,
       icon: <User className="h-3.5 w-3.5" />,
     },
+    ...(media.some((c) => !c.capture && c.chip === "element")
+      ? [
+          {
+            filter: { kind: "chip", chip: "element" } as Filter,
+            label: "Site art",
+            count: media.filter((c) => !c.capture && c.chip === "element").length,
+            icon: <Palette className="h-3.5 w-3.5" />,
+          },
+        ]
+      : []),
     ...(captures.length
       ? [
           {
@@ -446,7 +471,9 @@ export function Media({ view, handlers }: { view: InspoView; handlers: InspoHand
                 ? `Add to "${intoFolder}"`
                 : addAs === "person"
                   ? "Add photos of your people"
-                  : "Add product photos & clips"
+                  : addAs === "element"
+                    ? "Add your artwork, characters & mascots"
+                    : "Add product photos & clips"
             }
             disabled={!canEdit}
             onFiles={(files) => handlers.upload(files, addAs, intoFolder)}
@@ -477,7 +504,9 @@ export function Media({ view, handlers }: { view: InspoView; handlers: InspoHand
                       />
                     )}
                     <Icon className="relative h-3.5 w-3.5" />
-                    <span className="relative">{chip === "product" ? "Product" : "People"}</span>
+                    <span className="relative">
+                      {chip === "product" ? "Product" : chip === "person" ? "People" : "Art"}
+                    </span>
                   </button>
                 );
               })}

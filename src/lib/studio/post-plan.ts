@@ -32,10 +32,40 @@ export const DIRECTOR_CRAFT: readonly string[] = [
   "Never name another brand, product or equipment maker, and never draw an invented logo, label text, price, rating or quote.",
 ];
 
+/**
+ * The brand has a design of its own that its posts follow (Custom picture
+ * style: a style bible learned from its site or posts, or saved Inspo
+ * references while styles are on auto). Then the brand's world decides the
+ * medium, not the director's default of "a real photo".
+ */
+export function followsOwnDesign(args: BuildArgs): boolean {
+  const custom = args.ctx.style?.pictureStyles?.ids?.[0] === "custom";
+  const bible = !!args.ctx.visualTaste?.direction?.bible;
+  const auto = args.ctx.style?.pictureStyles?.auto !== false;
+  return custom || (bible && auto);
+}
+
 /** The brand's own look as short guidance for the director (never orders to the image model). */
 export function lookGuidance(args: BuildArgs): string | null {
   const rules = (args.ctx.visualTaste?.rules ?? args.ctx.visualFeedbackRules ?? "").trim();
+  const own = args.ctx.style?.ownDesign?.trim();
+  if (followsOwnDesign(args)) {
+    // The brand's own design is the post's style: give the director the room
+    // to describe it (world, recurring figure, type), not a 700-character tail.
+    const text = [own ? `The brand's own design: ${own}` : "", rules].filter(Boolean).join("\n");
+    return text ? capBlock(text, 1500) : null;
+  }
   return rules ? capBlock(rules, 700) : null;
+}
+
+/** The director's craft rules, with the brand's own world first when it has one. */
+export function directorCraft(args: BuildArgs): readonly string[] {
+  if (!followsOwnDesign(args)) return DIRECTOR_CRAFT;
+  return [
+    "This brand has its own custom design (see 'The brand's own look'): make the post in that world, the medium, rendering, characters, objects, type and layout its website and posts use (an anime or painted world stays painted, a retro or space-themed brand stays retro or in space). It overrides the format suggestions below; a real photograph only when the brand's own design is photographic.",
+    "Use the brand's recurring figure or signature elements when the idea suits them, always the same design, and compose the picture freshly for this brief. Never trace an example or copy its words.",
+    ...DIRECTOR_CRAFT.filter((rule) => !rule.startsWith("A photograph must look")),
+  ];
 }
 
 /** The latest words this brand put on pictures, so the next ones are new. */
@@ -59,7 +89,7 @@ export function buildPostPlanPrompt(
     "",
     "The post is about exactly what the brief says: the same subject, the same purpose, the person's facts and exact words. Never turn it into a product ad or anything they did not ask for. Use only facts the brief or the brand gives; never invent a figure, date, price, offer, contact method or claim.",
     "",
-    ...DIRECTOR_CRAFT.map((rule) => `- ${rule}`),
+    ...directorCraft(args).map((rule) => `- ${rule}`),
     "",
     "Return these fields:",
     `\`onImageText\`: the headline, 2 to ${HEADLINE_MAX_WORDS} words, plain and strong; the person's own words when they gave some. Empty only when the picture must carry no words.`,
@@ -84,7 +114,9 @@ export function buildPostPlanPrompt(
       ),
     },
     {
-      label: "The brand's own look (a guide; the brief and a clean, native post come first)",
+      label: followsOwnDesign(args)
+        ? "The brand's own look (its custom design: make the post in it; the brief decides what it says)"
+        : "The brand's own look (a guide; the brief and a clean, native post come first)",
       body: lookGuidance(args),
     },
     campaign

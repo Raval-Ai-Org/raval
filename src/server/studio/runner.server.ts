@@ -2324,7 +2324,7 @@ ${ctx.brandText}`,
     input.controls.referenceMode === "edit" && suppliedReferences.length
       ? "TARGETED SOURCE-PHOTO EDIT: keep the supplied photo's identity, people, products, framing, lighting, colours and every untouched area as close to the original as possible. Change only what the user's brief explicitly requests. Do not redesign, restage or replace the photo."
       : input.controls.referenceMode === "inspire" && suppliedReferences.length
-        ? "The supplied images are visual inspiration for a new composition; do not copy their text or present the result as the original photo."
+        ? "The supplied images are the brand's own artwork or visual inspiration for a new composition: when one shows the brand's character, mascot, illustration or object, draw that same element true to its design (shape, colours, rendering) inside the new picture, in the brand's own style. Do not copy their text or present the result as the original photo."
         : undefined;
   const styledLook = withStyleReferences(
     ctx.style ? imageStyleInput(ctx.style) : null,

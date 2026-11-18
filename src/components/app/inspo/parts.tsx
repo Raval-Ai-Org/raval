@@ -8,6 +8,7 @@ import {
   Check,
   Heart,
   ImagePlus,
+  Palette,
   Play,
   ShoppingBag,
   ThumbsDown,
@@ -29,6 +30,7 @@ export const CHIP_ICON: Record<InspoChip, React.ComponentType<{ className?: stri
   avoid: ThumbsDown,
   product: ShoppingBag,
   person: User,
+  element: Palette,
 };
 
 const CHIP_TONE: Record<InspoChip, string> = {
@@ -36,6 +38,7 @@ const CHIP_TONE: Record<InspoChip, string> = {
   avoid: "bg-destructive/12 text-destructive ring-destructive/25",
   product: "bg-[var(--ds-tile-bg)] text-foreground ring-[var(--ds-tile-border)]",
   person: "bg-[var(--ds-tile-bg)] text-foreground ring-[var(--ds-tile-border)]",
+  element: "bg-[var(--ds-tile-bg)] text-foreground ring-[var(--ds-tile-border)]",
 };
 
 export function ChipPill({ chip, className }: { chip: InspoChip; className?: string }) {

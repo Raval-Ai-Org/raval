@@ -5,7 +5,7 @@ import type { VisualSource } from "@/lib/brand-visuals/contracts";
 import { lifetimeOf, type MediaLifetime } from "./media-rotation";
 
 /** The one chip a card wears. "like" covers the stored `style` and `inspiration`. */
-export type InspoChip = "like" | "avoid" | "product" | "person";
+export type InspoChip = "like" | "avoid" | "product" | "person" | "element";
 export type InspoShelf = "board" | "media";
 
 export const CHIPS: Record<InspoChip, { label: string; shelf: InspoShelf }> = {
@@ -13,12 +13,14 @@ export const CHIPS: Record<InspoChip, { label: string; shelf: InspoShelf }> = {
   avoid: { label: "Avoid", shelf: "board" },
   product: { label: "Product", shelf: "media" },
   person: { label: "Person", shelf: "media" },
+  element: { label: "Site art", shelf: "media" },
 };
 export const BOARD_CHIPS: InspoChip[] = ["like", "avoid"];
-export const MEDIA_CHIPS: InspoChip[] = ["product", "person"];
+export const MEDIA_CHIPS: InspoChip[] = ["product", "person", "element"];
 
 export function chipOf(purpose: VisualSource["purpose"]): InspoChip {
-  if (purpose === "avoid" || purpose === "product" || purpose === "person") return purpose;
+  if (purpose === "avoid" || purpose === "product" || purpose === "person" || purpose === "element")
+    return purpose;
   return "like";
 }
 
@@ -51,7 +53,17 @@ export type InspoCard = {
   folder: string | null;
   /** A full-page capture of the brand's own website (shown under Media → Website). */
   capture: boolean;
+  /**
+   * A screenshot of the brand's own website (the whole page, its hero, a
+   * section or an artwork crop): shown on the Board as "Your website's
+   * design", the design every picture follows with the Custom look.
+   */
+  siteShot: boolean;
+  /** Site art: the address of the picture on the brand's site. */
+  sourceUrl: string | null;
 };
+
+const SHOT_TYPES = new Set(["full", "section", "art"]);
 
 // A video upload also saves still frames named "<label> · 1.2s".
 const FRAME_LABEL = /^(.*) · \d+(?:\.\d+)?s$/;
@@ -75,9 +87,18 @@ export function inspoCards(sources: VisualSource[]): InspoCard[] {
   }
   return live
     .filter((s) => !hidden.has(s.id))
-    .filter((s) => s.kind !== "website" || s.status === "approved" || s.region.type === "full")
+    .filter(
+      (s) =>
+        s.kind !== "website" ||
+        s.status === "approved" ||
+        s.region.type === "full" ||
+        // The desktop screenshots of the site's own pages show on the Board.
+        (SHOT_TYPES.has(String(s.region.type)) && !s.region.mobile),
+    )
     .map((s): InspoCard => {
       const capture = s.kind === "website" && s.region.type === "full";
+      const siteShot = s.kind === "website" && SHOT_TYPES.has(String(s.region.type));
+      const elementUrl = (s.region as { url?: unknown } | null)?.url;
       const chip = chipOf(s.purpose);
       const video = !!s.asset?.mime_type.startsWith("video/");
       const folder = (s.region as { folder?: unknown } | null)?.folder;
@@ -85,8 +106,9 @@ export function inspoCards(sources: VisualSource[]): InspoCard[] {
         id: s.id,
         assetId: s.asset_id,
         chip,
-        // A capture of the brand's own site is media, not a mood reference.
-        shelf: capture ? "media" : CHIPS[chip].shelf,
+        // A capture of the brand's own site is media, not a mood reference;
+        // its section and artwork crops are the Board's "Your website" strip.
+        shelf: capture ? "media" : siteShot ? "board" : CHIPS[chip].shelf,
         kind: video ? "video" : "image",
         label: s.label,
         notes: s.notes,
@@ -98,6 +120,8 @@ export function inspoCards(sources: VisualSource[]): InspoCard[] {
         lifetime: lifetimeOf(s),
         folder: typeof folder === "string" && folder.trim() ? folder.trim() : null,
         capture,
+        siteShot,
+        sourceUrl: typeof elementUrl === "string" ? elementUrl : null,
       };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -112,8 +136,22 @@ export function canLearn(cards: InspoCard[]): boolean {
   return cards.some((c) => c.chip !== "avoid" && c.kind === "image");
 }
 
-/** "Use in a post": own media is designed around, everything else only inspires. */
+/**
+ * "Use in a post": own photos are designed around; site art (a character, an
+ * illustration) is drawn into a new picture in the brand's world; everything
+ * else only inspires.
+ */
 export function studioReferenceMode(chip: InspoChip): "design" | "inspire" | null {
   if (chip === "avoid") return null;
   return chip === "product" || chip === "person" ? "design" : "inspire";
+}
+
+/** The Board's "Your website's design" strip: the whole page first, then hero, sections, artwork. */
+export function siteDesignCards(cards: InspoCard[]): InspoCard[] {
+  const rank = (c: InspoCard) =>
+    c.capture ? 0 : /hero/i.test(c.label) ? 1 : /artwork/i.test(c.label) ? 2 : 3;
+  return cards
+    .filter((c) => c.siteShot && !/mobile/i.test(c.label))
+    .sort((a, b) => rank(a) - rank(b) || a.createdAt.localeCompare(b.createdAt))
+    .slice(0, 8);
 }

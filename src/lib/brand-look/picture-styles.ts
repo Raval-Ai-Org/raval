@@ -22,6 +22,9 @@ export const PICTURE_STYLE_IDS = [
   "colour-pop",
   "dark-premium",
   "editorial",
+  // The brand's own design, learned from its website and its own posts
+  // (the style bible, ADR-0048). Exclusive: it never mixes with a template.
+  "custom",
 ] as const;
 
 export type PictureStyleId = (typeof PICTURE_STYLE_IDS)[number];
@@ -151,7 +154,23 @@ export const PICTURE_STYLES: readonly PictureStyle[] = [
       "An editorial collage: cut-out photos layered with bold shapes and big outlined or condensed type, a magazine grid, small labels and arrows, one accent colour. Busy on purpose but with one clear reading order.",
     medium: "collage",
   },
+  {
+    id: "custom",
+    label: "Custom: your own look",
+    line: "Made in your website's own design",
+    examples: [],
+    direction:
+      "The brand's own custom design, learned from its website and its own posts: make the picture in exactly that world (its medium, rendering, characters or mascots, objects, backdrops, type and layout), so it looks like it came from the brand's own site. Never swap it for a generic template style (no stock 3D render, no generic product shot) unless the brand's own design is that.",
+    medium: "mixed",
+  },
 ];
+
+export const CUSTOM_STYLE: PictureStyleId = "custom";
+
+/** The template styles a person can mix (everything but Custom), for the tile grids. */
+export const TEMPLATE_STYLES: readonly PictureStyle[] = PICTURE_STYLES.filter(
+  (s) => s.id !== CUSTOM_STYLE,
+);
 
 export const MAX_PICTURE_STYLES = 3;
 
@@ -159,7 +178,7 @@ export function pictureStyleById(id: unknown): PictureStyle | null {
   return PICTURE_STYLES.find((s) => s.id === id) ?? null;
 }
 
-/** Known ids only, no repeats, at most three, in the order given. */
+/** Known ids only, no repeats, at most three, in the order given. Custom stands alone. */
 export function cleanStyleIds(ids: readonly unknown[] | null | undefined): PictureStyleId[] {
   const out: PictureStyleId[] = [];
   for (const id of ids ?? []) {
@@ -167,16 +186,17 @@ export function cleanStyleIds(ids: readonly unknown[] | null | undefined): Pictu
     if (s && !out.includes(s.id)) out.push(s.id);
     if (out.length >= MAX_PICTURE_STYLES) break;
   }
-  return out;
+  return out.includes(CUSTOM_STYLE) ? [CUSTOM_STYLE] : out;
 }
 
-/** Tap a style: on if off, off if on; a fourth replaces the oldest. */
+/** Tap a style: on if off, off if on; a fourth replaces the oldest. Custom is exclusive. */
 export function toggleStyle(
   current: readonly PictureStyleId[],
   id: PictureStyleId,
 ): PictureStyleId[] {
   if (current.includes(id)) return current.filter((x) => x !== id);
-  const next = [...current, id];
+  if (id === CUSTOM_STYLE) return [CUSTOM_STYLE];
+  const next = [...current.filter((x) => x !== CUSTOM_STYLE), id];
   return next.length > MAX_PICTURE_STYLES ? next.slice(next.length - MAX_PICTURE_STYLES) : next;
 }
 
@@ -248,20 +268,43 @@ export function mediumForStyles(
 /**
  * The styles a brand's pictures follow: its own picks, else Mox's (auto is
  * the default, so a brand that never chose still gets three real styles).
+ * On auto, a brand with its own learned design (`ownDesign`: a style bible
+ * from its website or posts) gets Custom only: a template style would pull
+ * an anime, retro or space-themed brand back to generic posts.
  */
 export function effectiveStyles(
   visual: { styles?: readonly unknown[] | null; stylesAuto?: boolean | null } | null | undefined,
   facts: BrandFacts,
+  opts: { ownDesign?: boolean } = {},
 ): { ids: PictureStyleId[]; auto: boolean } {
   const own = cleanStyleIds(visual?.styles);
   if (own.length && visual?.stylesAuto !== true) return { ids: own, auto: false };
+  if (opts.ownDesign) return { ids: [CUSTOM_STYLE], auto: true };
   return { ids: autoPictureStyles(facts), auto: true };
 }
 
-/** Prompt lines: the styles in full, the image model picks the one this post needs. */
-export function pictureStyleLines(ids: readonly PictureStyleId[]): string {
+/** Is this the brand's own design rather than a template style? */
+export function isCustomStyles(ids: readonly PictureStyleId[] | null | undefined): boolean {
+  return !!ids?.length && ids[0] === CUSTOM_STYLE;
+}
+
+/**
+ * Prompt lines: the styles in full, the image model picks the one this post
+ * needs. Custom carries the brand's own design in words (`ownDesign`, from
+ * the style bible) when there is one.
+ */
+export function pictureStyleLines(
+  ids: readonly PictureStyleId[],
+  ownDesign?: string | null,
+): string {
   const styles = ids.map(pictureStyleById).filter((s): s is PictureStyle => !!s);
   if (!styles.length) return "";
+  if (isCustomStyles(ids)) {
+    const own = ownDesign?.trim();
+    return own
+      ? `Picture style: the brand's own custom design. ${styles[0].direction}\nThe brand's own design: ${own.slice(0, 700)}`
+      : `Picture style: the brand's own custom design. ${styles[0].direction} With nothing learned yet, follow the brand's colours, fonts and saved Inspo references.`;
+  }
   if (styles.length === 1) return `Picture style: ${styles[0].label}. ${styles[0].direction}`;
   return [
     "Picture styles this brand uses (make this picture in the ONE that suits this post best; never a plain stock photo):",

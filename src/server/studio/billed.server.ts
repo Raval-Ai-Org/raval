@@ -15,11 +15,7 @@ import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
 import { createStudioJob } from "@/server/studio/runner.server";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
-import {
-  CREDIT_ACTIONS,
-  videoFeatureFor,
-  type CreditAction,
-} from "@/lib/billing/catalog";
+import { CREDIT_ACTIONS, videoFeatureFor, type CreditAction } from "@/lib/billing/catalog";
 import { InsufficientBalanceError } from "@/server/billing/errors";
 import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
@@ -165,8 +161,10 @@ export async function createBilledStudioJob(args: {
     );
     if (pick) {
       input.controls.referenceAssetIds = pick.assetIds;
-      input.controls.referenceMode = "design";
-      input.controls.photoFidelity = "exact";
+      // Site art (a mascot, an illustration) is drawn into the scene in the
+      // brand's own world; own photos are placed exactly.
+      input.controls.referenceMode = pick.mode ?? "design";
+      if (input.controls.referenceMode === "design") input.controls.photoFidelity = "exact";
     }
   }
   // A person's brief that names their own Media ("use our launch event
@@ -190,9 +188,24 @@ export async function createBilledStudioJob(args: {
       const pick = await namedInspoMediaFor(workspaceId, input.type, brief);
       if (pick) {
         input.controls.referenceAssetIds = pick.assetIds;
-        input.controls.referenceMode = "design";
-        input.controls.photoFidelity = "exact";
+        input.controls.referenceMode = pick.mode ?? "design";
+        if (input.controls.referenceMode === "design") input.controls.photoFidelity = "exact";
       }
+    }
+  }
+  // Site art chosen anywhere (a campaign's plan, a chat or assistant draft, a
+  // person's pick) is drawn into the picture in the brand's world, never
+  // pasted in like a photo.
+  if (
+    !revision &&
+    !input.controls.productId &&
+    input.controls.referenceMode === "design" &&
+    input.controls.referenceAssetIds?.length
+  ) {
+    const { allSiteArt } = await import("@/server/inspo/media-pool.server");
+    if (await allSiteArt(workspaceId, input.controls.referenceAssetIds)) {
+      input.controls.referenceMode = "inspire";
+      delete input.controls.photoFidelity;
     }
   }
   // A product hero is only ever made from the picked product's own photo

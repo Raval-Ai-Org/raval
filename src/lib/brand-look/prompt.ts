@@ -148,7 +148,7 @@ export function visualStyleBlock(resolved: BrandLook): string {
   }
   // The picture styles replace the old one-word medium: "photo" alone made
   // flat stock photos. A brand with no picks gets Mox's three.
-  const styleLines = pictureStyleLines(resolved.pictureStyles?.ids ?? []);
+  const styleLines = pictureStyleLines(resolved.pictureStyles?.ids ?? [], resolved.ownDesign);
   if (styleLines) lines.push(styleLines);
   else push("Medium", v.medium);
   push("Mood", v.mood);

@@ -22,7 +22,8 @@ export type OwnMediaFrequency = (typeof OWN_MEDIA_FREQUENCIES)[number];
 export type RotationMedia = {
   assetId: string;
   kind: "image" | "video";
-  purpose: "product" | "person";
+  /** "element": site art (a mascot, an illustration) the brand's own website shows. */
+  purpose: "product" | "person" | "element";
   lifetime: MediaLifetime;
   /** When it was added (ISO). Temporary media expires from this. */
   addedAt: string;
@@ -132,7 +133,21 @@ export function rankMedia(
   );
 }
 
-export type RotationPick = { assetIds: string[]; reason: string };
+export type RotationPick = {
+  assetIds: string[];
+  reason: string;
+  /**
+   * How the pictures are used: own photos are placed exactly ("design"); site
+   * art (characters, illustrations, objects) is drawn into a new picture in
+   * the brand's own world ("inspire"), the same design kept.
+   */
+  mode?: "design" | "inspire";
+};
+
+/** Site art is drawn into the scene; own photos are placed as they are. */
+export function pickMode(picked: readonly RotationMedia[]): "design" | "inspire" {
+  return picked.length > 0 && picked.every((m) => m.purpose === "element") ? "inspire" : "design";
+}
 
 /** How many photos a format takes from a folder or label the brief names. */
 const NAMED_PER_FORMAT: Record<string, number> = {
@@ -169,8 +184,15 @@ export function pickNamedMedia(args: {
   );
   if (!hits.length) return null;
   const folder = hits[0].folder?.trim();
+  // Site art and photos aren't mixed in one picture: the first hit's kind leads.
+  const byId = new Map(fresh.map((m) => [m.assetId, m]));
+  const lead = byId.get(hits[0].assetId);
+  const same = hits.filter(
+    (h) => (byId.get(h.assetId)?.purpose === "element") === (lead?.purpose === "element"),
+  );
   return {
-    assetIds: hits.map((h) => h.assetId),
+    mode: pickMode(same.map((h) => byId.get(h.assetId)!).filter(Boolean)),
+    assetIds: same.map((h) => h.assetId),
     reason: folder
       ? `Uses your "${folder}" photos from Media.`
       : "Uses the photos from Media your brief names.",
@@ -204,15 +226,20 @@ export function pickRotationMedia(args: {
     args.uses,
   );
   if (!photos.length) return null;
-  // A product shot leads where there's one; people and the rest follow.
+  // A product shot leads where there's one; people and the rest follow. Site
+  // art is never placed beside a photo: it is drawn into the brand's world.
   const lead = photos.find((m) => m.purpose === "product") ?? photos[0];
-  const rest = photos.filter((m) => m !== lead);
-  const picked = [lead, ...rest].slice(0, want);
+  const art = lead.purpose === "element";
+  const rest = photos.filter((m) => m !== lead && (m.purpose === "element") === art);
+  const picked = [lead, ...rest].slice(0, art ? Math.min(want, 2) : want);
   return {
+    mode: pickMode(picked),
     assetIds: picked.map((m) => m.assetId),
-    reason: picked.some((m) => m.lifetime === "temporary")
-      ? "Uses a recent photo from Inspo while it's fresh."
-      : "Uses one of your own photos from Inspo.",
+    reason: art
+      ? "Uses your website's own art, drawn into a new picture in your style."
+      : picked.some((m) => m.lifetime === "temporary")
+        ? "Uses a recent photo from Inspo while it's fresh."
+        : "Uses one of your own photos from Inspo.",
   };
 }
 

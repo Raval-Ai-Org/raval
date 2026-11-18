@@ -8,6 +8,8 @@ import type { BrainOverview } from "@/lib/brain/brain";
 import type { GoalsView } from "@/lib/goals/contracts";
 import type { WorkspacePulse } from "@/lib/pulse/pulse";
 import type { Product } from "@/lib/products/catalog";
+import type { VisualView } from "@/lib/brand-visuals/contracts";
+import { ownDesignLine } from "@/lib/brand-visuals/bible";
 import { callFn } from "../bridge.server";
 import type { McpTool } from "../tool";
 
@@ -58,6 +60,46 @@ export const brainTools: McpTool[] = [
             category: p.category || null,
             benefits: p.benefits,
             hasPhoto: p.images.length > 0,
+          })),
+      };
+    },
+  },
+  {
+    name: "get_brand_look",
+    title: "Brand look (Inspo)",
+    description:
+      "How the brand's pictures are made: the design Mox learned from its website and posts (the Custom look), whether pictures follow it, the website screenshots it was read from and the Site art, product and people media in Inspo → Media with their asset ids. Free; starts no scan. Use a media assetId as referenceAssetIds when drafting a Studio piece.",
+    input: {},
+    ...read,
+    run: async ({ workspaceId }, { caller }) => {
+      const view = await callFn<VisualView>(caller, "brand-visuals", "getVisualTaste", {
+        workspaceId,
+      });
+      const active = view.profiles.find((p) => p.id === view.activeId);
+      const direction = active?.profile.directions[active.profile.selected];
+      const live = view.sources.filter((s) => s.status !== "removed");
+      const folderOf = (region: Record<string, unknown>) =>
+        typeof region.folder === "string" ? region.folder : null;
+      return {
+        customLook: direction ? { name: direction.name, design: ownDesignLine(direction) } : null,
+        websiteScreenshots: live.filter(
+          (s) =>
+            s.kind === "website" &&
+            ["full", "section", "art"].includes(String(s.region.type)) &&
+            !s.region.mobile,
+        ).length,
+        media: live
+          .filter(
+            (s) =>
+              s.status === "approved" &&
+              (s.purpose === "element" || s.purpose === "product" || s.purpose === "person"),
+          )
+          .slice(0, 60)
+          .map((s) => ({
+            assetId: s.asset_id,
+            kind: s.purpose === "element" ? "site-art" : s.purpose,
+            label: s.notes?.trim() || s.label,
+            folder: folderOf(s.region),
           })),
       };
     },

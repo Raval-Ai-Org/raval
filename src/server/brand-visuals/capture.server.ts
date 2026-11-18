@@ -3,6 +3,7 @@ import type { BrowserContext, Page } from "playwright-core";
 import { launchVisualBrowser } from "./browser.server";
 import sharp from "sharp";
 import { assertPublicUrl, safeFetch } from "@/server/safe-fetch";
+import { elementFits, type PageElement } from "@/lib/inspo/site-elements";
 
 const MAX_HEIGHT = 18_000;
 const MAX_REQUESTS = 180;
@@ -16,6 +17,8 @@ export type CapturedPage = {
   tokens: Record<string, unknown>;
   warnings: string[];
   images: { label: string; bytes: Buffer; region: Record<string, unknown> }[];
+  /** The real pictures the page shows (img and painted backgrounds), as links. */
+  elements: PageElement[];
 };
 
 /** Every document and subresource is fulfilled by the DNS/redirect guarded fetcher.
@@ -182,6 +185,53 @@ export async function captureVisualPage(url: string, mobile = false): Promise<Ca
           })
           .sort((a, b) => b.width * b.height - a.width * a.height)
           .slice(0, 12),
+        // The real pictures the page shows (the mascot, the illustration,
+        // the hero object), as their own files: downloaded later through the
+        // guarded fetcher and kept as Inspo → Media "Site art".
+        elements: (() => {
+          const out: {
+            url: string;
+            alt: string;
+            width: number;
+            height: number;
+          }[] = [];
+          const seen = new Set<string>();
+          const nodes = [...document.querySelectorAll("img,div,section,header,figure,span")].slice(
+            0,
+            5000,
+          );
+          for (const el of nodes) {
+            const r = el.getBoundingClientRect();
+            if (r.width < 220 || r.height < 220) continue;
+            if (el.closest("nav,footer,[role='dialog'],[class*='cookie'],[id*='cookie']")) continue;
+            const s = getComputedStyle(el);
+            if (s.visibility === "hidden" || Number(s.opacity) < 0.2) continue;
+            let url = "";
+            let alt = "";
+            if (el.tagName === "IMG") {
+              const img = el as HTMLImageElement;
+              url = img.currentSrc || img.src;
+              alt = img.alt ?? "";
+            } else {
+              const m = /url\(["']?([^"')]+)["']?\)/.exec(s.backgroundImage);
+              if (!m) continue;
+              try {
+                url = new URL(m[1], location.href).href;
+              } catch {
+                continue;
+              }
+            }
+            if (!url || url.startsWith("data:") || seen.has(url)) continue;
+            seen.add(url);
+            out.push({
+              url,
+              alt: alt.slice(0, 120),
+              width: Math.round(r.width),
+              height: Math.round(r.height),
+            });
+          }
+          return out.sort((a, b) => b.width * b.height - a.width * a.height).slice(0, 24);
+        })(),
         // Design tokens the way open-source extractors read them: CSS custom
         // properties for colour and type, the loaded font faces and the buttons.
         cssVars: (() => {
@@ -308,6 +358,7 @@ export async function captureVisualPage(url: string, mobile = false): Promise<Ca
       },
       warnings,
       images,
+      elements: info.elements,
     };
   } finally {
     clearTimeout(deadline);
@@ -359,4 +410,46 @@ export function pickArtBoxes(
 /** A crop with real content: some spread of tones in at least one colour channel. */
 export function hasDetail(stdevs: number[]): boolean {
   return stdevs.some((d) => d >= 14);
+}
+
+const ELEMENT_TYPES = /^image\/(png|jpe?g|webp|avif)$/i;
+
+/**
+ * Download one picture the site shows, only through the SSRF-guarded fetcher.
+ * Kept as the site's own file (a cut-out keeps its transparency); AVIF is
+ * turned into PNG so every model can read it. Null for anything that isn't a
+ * real, big enough picture: never a fake or an error.
+ */
+export async function downloadSiteElement(
+  url: string,
+): Promise<{ bytes: Buffer; mime: string; width: number; height: number } | null> {
+  try {
+    const res = await safeFetch(assertPublicUrl(url), {
+      timeoutMs: 8000,
+      maxBytes: 8 * 1024 * 1024,
+      onOverflow: "error",
+      headers: { "User-Agent": "Mozilla/5.0 MelloxVisualBot", Accept: "image/*" },
+    });
+    const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+    if (!res.ok || !ELEMENT_TYPES.test(type)) return null;
+    const bytes = Buffer.from(res.bytes);
+    const image = sharp(bytes, { limitInputPixels: 40_000_000, failOn: "none" });
+    const meta = await image.metadata();
+    if (!elementFits({ width: meta.width, height: meta.height })) return null;
+    // A flat swatch or an empty gradient teaches nothing and shows nothing.
+    const { channels } = await image.clone().stats();
+    if (!hasDetail(channels.slice(0, 3).map((c) => c.stdev))) return null;
+    if (/avif/i.test(type)) {
+      const png = await image.png().toBuffer();
+      return { bytes: png, mime: "image/png", width: meta.width!, height: meta.height! };
+    }
+    return {
+      bytes,
+      mime: type === "image/jpg" ? "image/jpeg" : type.toLowerCase(),
+      width: meta.width!,
+      height: meta.height!,
+    };
+  } catch {
+    return null;
+  }
 }

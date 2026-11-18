@@ -162,43 +162,61 @@ export function ProductPicker({
     );
   }
   const chosen = products.find((p) => p.id === value);
+  const photoOf = (p: Product) =>
+    p.images.find((img) => img.assetId === p.primaryAssetId)?.url ?? p.images[0]?.url ?? undefined;
+  // Only pieces with a real photo get a big card; a service or product with
+  // no photo is a compact row, never a big empty frame.
+  const withPhoto = products.filter((p) => !!photoOf(p));
+  const without = products.filter((p) => !photoOf(p));
+  const detailOf = (p: Product) =>
+    [p.kind === "service" ? "Service" : "Product", p.price].filter(Boolean).join(" · ");
   return (
     <div className="@container">
       <FieldLabel hint={chosen ? undefined : "Optional"}>{title}</FieldLabel>
       <div
         role="radiogroup"
         aria-label="Product or service this piece is about"
-        className="grid grid-cols-2 gap-2 @md:grid-cols-3"
+        className="space-y-2"
       >
-        <ProductCard
-          index={0}
-          reduce={reduce}
-          active={!chosen}
-          onClick={() => onChange(undefined)}
-          label="None"
-          detail="Not about one product"
-        />
-        {products.map((p, i) => {
-          const photo =
-            p.images.find((img) => img.assetId === p.primaryAssetId)?.url ??
-            p.images[0]?.url ??
-            undefined;
-          return (
-            <ProductCard
+        {withPhoto.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 @md:grid-cols-3">
+            {withPhoto.map((p, i) => (
+              <ProductCard
+                key={p.id}
+                index={i}
+                reduce={reduce}
+                active={value === p.id}
+                onClick={() => onChange(value === p.id ? undefined : p.id)}
+                label={p.name}
+                detail={detailOf(p)}
+                photo={photoOf(p)}
+                service={p.kind === "service"}
+              />
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-1.5 @sm:grid-cols-2">
+          <CompactCard
+            index={withPhoto.length}
+            reduce={reduce}
+            active={!chosen}
+            onClick={() => onChange(undefined)}
+            label="None"
+            detail="Not about one product"
+          />
+          {without.map((p, i) => (
+            <CompactCard
               key={p.id}
-              index={i + 1}
+              index={withPhoto.length + i + 1}
               reduce={reduce}
               active={value === p.id}
               onClick={() => onChange(value === p.id ? undefined : p.id)}
               label={p.name}
-              detail={[p.kind === "service" ? "Service" : "Product", p.price]
-                .filter(Boolean)
-                .join(" · ")}
-              photo={photo}
+              detail={detailOf(p)}
               service={p.kind === "service"}
             />
-          );
-        })}
+          ))}
+        </div>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         {!chosen
@@ -212,6 +230,63 @@ export function ProductPicker({
                 : "Designed around its real photo. The photo itself is never changed."}
       </p>
     </div>
+  );
+}
+
+/** A product or service with no photo, or "None": one small row with its glyph. */
+function CompactCard({
+  label,
+  detail,
+  service,
+  active,
+  onClick,
+  index,
+  reduce,
+}: {
+  label: string;
+  detail: string;
+  service?: boolean;
+  active: boolean;
+  onClick: () => void;
+  index: number;
+  reduce: boolean;
+}) {
+  const none = service === undefined;
+  const Icon = none ? Ban : service ? Briefcase : ShoppingBag;
+  return (
+    <motion.button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      title={label}
+      onClick={onClick}
+      initial={reduce ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: reduce ? 0 : Math.min(index, 10) * 0.025 }}
+      whileTap={reduce ? undefined : { scale: 0.98 }}
+      className={cn(
+        "group flex min-w-0 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-[border-color,box-shadow,background-color]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
+        active
+          ? "border-primary-border bg-primary-surface shadow-[0_0_0_3px_hsl(var(--primary)/0.16)]"
+          : none
+            ? "border-dashed border-border bg-surface-3 hover:border-foreground/30"
+            : "border-border bg-surface-3 hover:border-border-strong",
+      )}
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--ds-well-bg)] text-muted-foreground">
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-semibold text-foreground">{label}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{detail}</span>
+      </span>
+      {active && (
+        <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+          <Check className="size-3" strokeWidth={3} />
+        </span>
+      )}
+    </motion.button>
   );
 }
 

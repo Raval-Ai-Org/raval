@@ -43,7 +43,7 @@ export async function loadInspoMediaPool(workspaceId: string): Promise<InspoMedi
     ]);
     const media: RotationMedia[] = sources.flatMap((s) => {
       if (s.status !== "approved") return [];
-      if (s.purpose !== "product" && s.purpose !== "person") return [];
+      if (s.purpose !== "product" && s.purpose !== "person" && s.purpose !== "element") return [];
       const mime = s.asset?.mime_type ?? "";
       const kind = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : null;
       if (!kind) return [];
@@ -133,4 +133,23 @@ export async function namedInspoMediaFor(
   const pool = await loadInspoMediaPool(workspaceId);
   if (!pool.media.length) return null;
   return pickNamedMedia({ media: pool.media, brief, format, now: new Date() });
+}
+
+/**
+ * Whether every one of these assets is the brand's site art (Inspo → Media
+ * "Site art"). Such a piece draws the art into a new picture in the brand's
+ * own world rather than placing it like a photo. False on any failure.
+ */
+export async function allSiteArt(
+  workspaceId: string,
+  assetIds: readonly string[],
+): Promise<boolean> {
+  if (!assetIds.length) return false;
+  try {
+    const pool = await loadInspoMediaPool(workspaceId);
+    const art = new Set(pool.media.filter((m) => m.purpose === "element").map((m) => m.assetId));
+    return assetIds.every((id) => art.has(id));
+  } catch {
+    return false;
+  }
 }

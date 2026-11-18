@@ -7,7 +7,7 @@ import { Check } from "@/components/icons";
 import { Mox } from "@/components/brand/mox/Mox";
 import {
   MAX_PICTURE_STYLES,
-  PICTURE_STYLES,
+  TEMPLATE_STYLES,
   cleanStyleIds,
   toggleStyle,
   type PictureStyle,
@@ -172,7 +172,7 @@ export function StylesScreen({
             Let Mox decide
           </span>
           <span className="relative hidden text-[10.5px] leading-tight text-muted-foreground sm:block">
-            The best 3 for your brand
+            Your site&rsquo;s own look, else the best 3
           </span>
           <span
             aria-hidden
@@ -184,7 +184,7 @@ export function StylesScreen({
             <Check className="size-3" strokeWidth={3} />
           </span>
         </motion.button>
-        {PICTURE_STYLES.map((s, i) => (
+        {TEMPLATE_STYLES.map((s, i) => (
           <Tile
             key={s.id}
             style={s}

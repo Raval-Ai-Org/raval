@@ -249,6 +249,37 @@ export function bibleRules(direction: VisualDirection, opts: { hasText?: boolean
 }
 
 /**
+ * The brand's own design in a few plain sentences (≤ 700 characters): the
+ * world it draws in, its recurring figure, signature elements and type.
+ * This is what "Custom: your own look" means in a prompt, for writers that
+ * never see the full bible (Surprise me, chat, video scripts). Null when the
+ * direction has no bible and no summary to say.
+ */
+export function ownDesignLine(direction: VisualDirection | null | undefined): string | null {
+  if (!direction) return null;
+  const b = direction.bible;
+  const world = b
+    ? [b.world.medium, b.world.rendering, b.world.setting, b.world.paletteMood]
+        .filter(Boolean)
+        .join("; ")
+    : "";
+  const parts = [
+    direction.summary ? clip(`${direction.name}: ${direction.summary}`, 220) : "",
+    world ? `World: ${clip(world, 260)}.` : "",
+    b?.recurringSubject ? `Recurring figure: ${clip(b.recurringSubject.description, 140)}.` : "",
+    b?.signatures.length
+      ? `Signature elements: ${b.signatures
+          .slice(0, 3)
+          .map((s) => clip(s.description, 70))
+          .join("; ")}.`
+      : "",
+    b?.type.headline ? `Type: ${clip(b.type.headline, 100)}.` : "",
+  ].filter(Boolean);
+  const out = parts.join(" ").trim();
+  return out ? out.slice(0, 700) : null;
+}
+
+/**
  * The reference images for one picture: up to `ANCHOR_SLOTS` of the bible's own
  * examples first (the brand's style must always be shown), then product and
  * person photos, then other approved references. Never an Avoid, never a

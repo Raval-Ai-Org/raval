@@ -29,6 +29,12 @@ export type BrandLook = {
   logoUrl: string | null;
   /** The picture styles every picture is made in (own picks, else Mox's). */
   pictureStyles: { ids: PictureStyleId[]; auto: boolean };
+  /**
+   * The brand's own learned design in words (its style bible's world, type
+   * and recurring subject), when Mox has read its site or posts. With Custom
+   * picture style it replaces the template styles in every picture prompt.
+   */
+  ownDesign?: string | null;
   /** Something beyond plain Brand DNA facts was set (tone, image look, video…). */
   customized: boolean;
 };
@@ -82,8 +88,12 @@ export function lookReady(look: BrandLook): boolean {
   );
 }
 
-export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
+export function resolveLook(
+  dna: ResolveDna | null | undefined,
+  opts: { ownDesign?: string | null } = {},
+): BrandLook {
   const d = dna ?? {};
+  const ownDesign = opts.ownDesign?.trim() || null;
   const spec = parseLook(d.look);
 
   const palette = compact({
@@ -108,14 +118,25 @@ export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
     video: spec.video ?? {},
     rules: { do: d.doRules?.trim() || null, dont: d.dontRules?.trim() || null },
     logoUrl: d.logoUrl || null,
-    pictureStyles: effectiveStyles(spec.visual, {
-      industry: typeof d.industry === "string" ? d.industry : null,
-      products: typeof d.products === "string" ? d.products : null,
-      brandName: d.brandName ?? null,
-    }),
+    pictureStyles: effectiveStyles(
+      spec.visual,
+      {
+        industry: typeof d.industry === "string" ? d.industry : null,
+        products: typeof d.products === "string" ? d.products : null,
+        brandName: d.brandName ?? null,
+      },
+      { ownDesign: !!ownDesign },
+    ),
+    ownDesign,
     // The brand's creator alone is a choice of person, not a style, and how
-    // often its own media is used is a rotation setting, not a look.
-    customized: !!(spec.writing || visualStyled(spec.visual) || videoStyled(spec.video)),
+    // often its own media is used is a rotation setting, not a look. A
+    // learned design of its own is a look.
+    customized: !!(
+      spec.writing ||
+      visualStyled(spec.visual) ||
+      videoStyled(spec.video) ||
+      ownDesign
+    ),
   };
 }
 

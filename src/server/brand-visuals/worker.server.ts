@@ -1,5 +1,5 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -18,7 +18,14 @@ import {
 } from "@/lib/brand-visuals/contracts";
 import { userSafeMessage } from "@/lib/user-errors";
 import { upstreamDetail } from "@/server/upstream";
-import { captureVisualPage } from "./capture.server";
+import { captureVisualPage, downloadSiteElement } from "./capture.server";
+import {
+  MAX_SITE_ELEMENTS,
+  SITE_ART_FOLDER,
+  elementKey,
+  elementLabel,
+  pickSiteElements,
+} from "@/lib/inspo/site-elements";
 import { createVisualPreview } from "./preview.server";
 import { autoApplyVisualProfile, readSources, type VisualCaller } from "./service.server";
 import { groundProfile } from "@/lib/brand-visuals/bible";
@@ -178,6 +185,8 @@ function evidenceKind(source: VisualSource): string {
         : `the brand's ${source.purpose} photo`;
   if (source.region.type === "full") return "overview of the whole website page (shrunk)";
   if (source.region.type === "art") return "artwork shown on the brand's website";
+  if (source.region.type === "element")
+    return "a picture the brand's website shows, as its own file (its artwork, character or object)";
   return "section of the brand's website";
 }
 
@@ -319,6 +328,13 @@ export async function advanceVisualCapture(id: string, workspaceId?: string): Pr
         );
         if (source.error) throw new Error(source.error.message);
       }
+      // The pictures the site really shows (desktop pages only): kept once as
+      // Inspo → Media "Site art", so posts, carousels, ads and videos can use
+      // them. A failure here never fails the website read.
+      if (!mobile)
+        await keepSiteElements(row, id, captured, stillActive).catch((error) =>
+          console.warn("[brand-visuals] site art skipped", upstreamDetail(error).slice(0, 300)),
+        );
       await checkpoint({
         pages,
         next_page: row.next_page + 1,
@@ -424,4 +440,85 @@ export async function runDueVisualCaptures(max = 2) {
   if (due.error) return { advanced: 0 };
   for (const row of due.data ?? []) await advanceVisualCapture(row.id);
   return { advanced: due.data?.length ?? 0 };
+}
+
+/**
+ * Save the site's own pictures as approved Media ("Site art"), at most
+ * `MAX_SITE_ELEMENTS` per brand from website reads. The asset key is the
+ * picture's address, so a second read never adds a copy, and an existing row
+ * (a person's label, folder or removal) is never overwritten.
+ */
+async function keepSiteElements(
+  row: WorkerJob,
+  jobId: string,
+  captured: Awaited<ReturnType<typeof captureVisualPage>>,
+  stillActive: () => Promise<void>,
+) {
+  if (!captured.elements.length) return;
+  const existing = await db
+    .from("brand_visual_sources")
+    .select("region")
+    .eq("workspace_id", row.workspace_id)
+    .eq("purpose", "element")
+    .eq("kind", "website")
+    .limit(200);
+  if (existing.error) return;
+  const seen = new Set(
+    (existing.data ?? []).flatMap((r) => {
+      const key = (r.region as { elementKey?: unknown } | null)?.elementKey;
+      return typeof key === "string" ? [key] : [];
+    }),
+  );
+  const room = MAX_SITE_ELEMENTS - seen.size;
+  if (room <= 0) return;
+  let kept = 0;
+  for (const el of pickSiteElements(captured.elements, { seen, max: room + 4 })) {
+    if (kept >= room) break;
+    await stillActive();
+    const file = await downloadSiteElement(el.url);
+    if (!file) continue;
+    const key = elementKey(el.url);
+    const hash = createHash("sha256").update(key).digest("hex").slice(0, 32);
+    const saved = await persistAsset({
+      workspaceId: row.workspace_id,
+      idempotencyKey: `site-element:${hash}`,
+      bytes: file.bytes,
+      preserveBytes: true,
+      assetType: "image",
+      mimeType: file.mime,
+      filename: `site-art-${hash.slice(0, 10)}`,
+      metadata: {
+        source: "website_element",
+        captured_url: captured.url,
+        element_url: el.url,
+        capture_job_id: jobId,
+      },
+    });
+    if (!saved.ok) continue;
+    await createVisualPreview(row.workspace_id, saved.asset, file.bytes, false).catch(() => {});
+    const source = await db.from("brand_visual_sources").upsert(
+      {
+        workspace_id: row.workspace_id,
+        asset_id: saved.asset.id,
+        capture_job_id: jobId,
+        kind: "website",
+        purpose: "element",
+        status: "approved",
+        label: elementLabel(el),
+        source_url: captured.url,
+        region: {
+          type: "element",
+          elementKey: key,
+          url: el.url,
+          width: file.width,
+          height: file.height,
+          page: row.next_page,
+          folder: SITE_ART_FOLDER,
+          lifetime: "permanent",
+        },
+      },
+      { onConflict: "workspace_id,asset_id", ignoreDuplicates: true },
+    );
+    if (!source.error) kept += 1;
+  }
 }

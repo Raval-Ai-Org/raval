@@ -17,7 +17,7 @@ import { paletteFromDnaColors } from "@/lib/brand-look/resolve";
 import type { BrandLookSpec, VisualStyle } from "@/lib/brand-look/spec";
 import { cn } from "@/lib/utils";
 import { PictureStylePicker } from "@/components/brand/PictureStylePicker";
-import { autoPictureStyles, cleanStyleIds, mediumForStyles } from "@/lib/brand-look/picture-styles";
+import { cleanStyleIds, effectiveStyles, mediumForStyles } from "@/lib/brand-look/picture-styles";
 import { Block, EASE, PickTile } from "./parts";
 import type { InspoHandlers, InspoView } from "./types";
 
@@ -276,11 +276,19 @@ export function PostLook({
               auto: v.stylesAuto === true || !cleanStyleIds(v.styles).length,
               ids: cleanStyleIds(v.styles),
             }}
-            autoIds={autoPictureStyles({
-              industry: dna.industry,
-              products: dna.products,
-              brandName: dna.brandName,
-            })}
+            autoIds={
+              effectiveStyles(
+                null,
+                { industry: dna.industry, products: dna.products, brandName: dna.brandName },
+                { ownDesign: !!view.taste?.active },
+              ).ids
+            }
+            customReady={!!view.taste?.active}
+            customPreview={
+              view.cards.find((c) => c.capture && !/mobile/i.test(c.label))?.thumbUrl ??
+              view.cards.find((c) => c.fromSite)?.thumbUrl ??
+              null
+            }
             onChange={(next) =>
               set(
                 next.auto

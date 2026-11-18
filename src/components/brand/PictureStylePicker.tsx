@@ -1,16 +1,20 @@
 "use client";
 
 // The picture styles a brand's posts are made in: "Let Mox decide" first,
-// then real Mellox posts per style. Up to three. Used by onboarding and
-// Inspo → Post look. Presentational: the caller saves.
+// then "Custom: your own look" (the brand's own design, learned from its site
+// and posts), then real Mellox posts per template style. Up to three
+// templates, or Custom alone. Used by Inspo → Post look. Presentational: the
+// caller saves.
 import * as React from "react";
 import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check } from "@/components/icons";
 import { Mox } from "@/components/brand/mox/Mox";
 import {
+  CUSTOM_STYLE,
   MAX_PICTURE_STYLES,
-  PICTURE_STYLES,
+  TEMPLATE_STYLES,
+  isCustomStyles,
   pictureStyleById,
   toggleStyle,
   type PictureStyle,
@@ -131,6 +135,8 @@ export function PictureStylePicker({
   value,
   onChange,
   autoIds,
+  customPreview,
+  customReady = false,
   size = "md",
   className,
 }: {
@@ -138,11 +144,17 @@ export function PictureStylePicker({
   onChange: (next: StylePick) => void;
   /** What Mox would pick for this brand, shown on the Mox tile. */
   autoIds: readonly PictureStyleId[];
+  /** A picture of the brand's own design (its website capture), for the Custom card. */
+  customPreview?: string | null;
+  /** Mox has learned the brand's own design (a style read of its site or posts). */
+  customReady?: boolean;
   size?: "md" | "lg";
   className?: string;
 }) {
   const reduce = useReducedMotion();
   const own = value.auto ? [] : value.ids;
+  const customOn = !value.auto && isCustomStyles(own);
+  const autoCustom = isCustomStyles(autoIds);
   const autoStyles = autoIds.map(pictureStyleById).filter((s): s is PictureStyle => !!s);
   return (
     <div className={cn("space-y-3", className)}>
@@ -175,22 +187,41 @@ export function PictureStylePicker({
         <span className="relative min-w-0 flex-1">
           <span className="block text-[14.5px] font-semibold">Let Mox decide</span>
           <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">
-            Mox picks the styles that suit your brand and rotates them, so every post feels fresh.
+            {autoCustom
+              ? "Mox makes every picture in your own design, learned from your website and posts."
+              : "Mox picks the styles that suit your brand and rotates them, so every post feels fresh."}
           </span>
-          {autoStyles.length > 0 && (
-            <span className="mt-2 flex flex-wrap gap-1.5">
-              {autoStyles.map((s) => (
-                <span
-                  key={s.id}
-                  className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/80 pl-0.5 pr-2 text-[11px] font-semibold ring-1 ring-black/5 dark:bg-white/10"
-                >
-                  <span className="relative h-5 w-5 overflow-hidden rounded-full">
-                    <Image src={s.examples[0]} alt="" fill sizes="20px" className="object-cover" />
-                  </span>
-                  {s.label}
-                </span>
-              ))}
+          {autoCustom ? (
+            <span className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-full bg-white/80 pl-0.5 pr-2 text-[11px] font-semibold ring-1 ring-black/5 dark:bg-white/10">
+              <span className="relative h-5 w-5 overflow-hidden rounded-full bg-muted">
+                {customPreview && (
+                  <img src={customPreview} alt="" className="size-full object-cover object-top" />
+                )}
+              </span>
+              Custom: your own look
             </span>
+          ) : (
+            autoStyles.length > 0 && (
+              <span className="mt-2 flex flex-wrap gap-1.5">
+                {autoStyles.map((s) => (
+                  <span
+                    key={s.id}
+                    className="inline-flex h-6 items-center gap-1.5 rounded-full bg-white/80 pl-0.5 pr-2 text-[11px] font-semibold ring-1 ring-black/5 dark:bg-white/10"
+                  >
+                    <span className="relative h-5 w-5 overflow-hidden rounded-full">
+                      <Image
+                        src={s.examples[0]}
+                        alt=""
+                        fill
+                        sizes="20px"
+                        className="object-cover"
+                      />
+                    </span>
+                    {s.label}
+                  </span>
+                ))}
+              </span>
+            )
           )}
         </span>
         <AnimatePresence>
@@ -207,11 +238,60 @@ export function PictureStylePicker({
         </AnimatePresence>
       </motion.button>
 
+      <motion.button
+        type="button"
+        aria-pressed={customOn}
+        onClick={() =>
+          onChange(customOn ? { auto: true, ids: [] } : { auto: false, ids: [CUSTOM_STYLE] })
+        }
+        initial={reduce ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05, ease: EASE }}
+        whileTap={{ scale: 0.985 }}
+        data-testid="style-custom"
+        className={cn(
+          "relative flex w-full items-center gap-4 overflow-hidden rounded-[24px] bg-[var(--ds-tile-bg,white)] p-3 pr-4 text-left ring-1 transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          customOn
+            ? "ring-2 ring-primary shadow-[0_14px_34px_-18px_hsl(var(--primary)/0.9)]"
+            : "ring-[var(--ds-tile-border,rgba(0,0,0,0.08))] hover:ring-primary/40",
+        )}
+      >
+        <span className="relative h-16 w-24 shrink-0 overflow-hidden rounded-[14px] bg-[var(--ds-well-bg,#f4f4f5)] ring-1 ring-black/5">
+          {customPreview ? (
+            <img src={customPreview} alt="" className="size-full object-cover object-top" />
+          ) : (
+            <span className="grid size-full place-items-center text-[10.5px] font-semibold text-muted-foreground">
+              Your site
+            </span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14.5px] font-semibold">Custom: your own look</span>
+          <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">
+            {customReady
+              ? "Every picture in your website's own design: its art, characters, type and layout. No templates."
+              : "Every picture in your website's own design. Mox reads your site's style first, then follows it."}
+          </span>
+        </span>
+        <AnimatePresence>
+          {customOn && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+              className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </motion.button>
+
       <div className="flex items-baseline justify-between gap-3 px-1 pt-1">
         <span className="text-[12px] font-semibold text-muted-foreground">
-          Or choose up to {MAX_PICTURE_STYLES}
+          Or mix up to {MAX_PICTURE_STYLES} templates
         </span>
-        {own.length > 0 && (
+        {own.length > 0 && !customOn && (
           <span className="text-[11.5px] text-muted-foreground">
             {own.length} of {MAX_PICTURE_STYLES} picked
           </span>
@@ -225,7 +305,7 @@ export function PictureStylePicker({
             : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4",
         )}
       >
-        {PICTURE_STYLES.map((s, i) => (
+        {TEMPLATE_STYLES.map((s, i) => (
           <StyleTile
             key={s.id}
             style={s}

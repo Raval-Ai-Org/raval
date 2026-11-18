@@ -2,7 +2,15 @@ import { z } from "zod";
 import { VisualSchema, VideoSchema } from "@/lib/brand-look/spec";
 
 export const VISUAL_VERSION = 2;
-export const PURPOSES = ["style", "product", "person", "inspiration", "avoid"] as const;
+export const PURPOSES = [
+  "style",
+  "product",
+  "person",
+  "inspiration",
+  "avoid",
+  // A picture the brand's own site shows (mascot, illustration, hero object): own media.
+  "element",
+] as const;
 export const FORMATS = ["image", "carousel", "story", "video", "ad", "ugc"] as const;
 export const FEEDBACK_REASONS = [
   "matches",
@@ -376,7 +384,11 @@ export function analysisReferences(sources: VisualSource[], limit = 10): VisualS
         pageOrder(a) - pageOrder(b) ||
         Number(a.region.top ?? 0) - Number(b.region.top ?? 0),
     );
-  const art = website.filter((s) => s.region.type === "art");
+  // The site's own pictures (Site art) read like its artwork crops, files first.
+  const art = [
+    ...website.filter((s) => s.region.type === "element"),
+    ...website.filter((s) => s.region.type === "art"),
+  ];
   const overview = website.filter((s) => s.region.type === "full" && !s.region.mobile).slice(0, 1);
   const sections = website.filter((s) => s.region.type === "section");
   const distinct: VisualSource[] = [];

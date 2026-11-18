@@ -60,6 +60,7 @@ export const CHAT_READ_TOOLS = [
   "get_geo_trend",
   "get_tracked_prompts",
   "list_connected_apps",
+  "get_brand_look",
 ] as const;
 
 /**
@@ -323,6 +324,7 @@ const ACTIVITY: Record<string, string> = {
   get_competitors: "Looking at your competitors",
   list_community_threads: "Looking at community threads",
   list_connected_apps: "Checking connected apps",
+  get_brand_look: "Reading your brand look",
   get_community_thread: "Reading a community thread",
   get_analytics_summary: "Reading your numbers",
   list_geo_scans: "Looking at your website scans",
