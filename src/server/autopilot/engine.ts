@@ -50,6 +50,7 @@ import {
   cycleStart,
   effectiveSlot,
   freeSlots,
+  reachableSlots,
   generateAt,
   isPastApproval,
   planVerdict,
@@ -662,7 +663,13 @@ async function runPlan(ctx: Ctx, action: ActionRow, program: ProgramRow): Promis
         })
         .catch(() => [] as CalendarPost[])
     : [];
-  const { slots, covered } = freeSlots(wanted, calendar);
+  const free = freeSlots(wanted, calendar);
+  const covered = free.covered;
+  // Only channels with a connected account get pieces (reachableSlots).
+  const connectedNow = free.slots.length
+    ? await ports.connectedPlatforms(program.workspace_id).catch(() => null)
+    : null;
+  const { slots } = reachableSlots(free.slots, connectedNow);
   const strategy = StrategySchema.safeParse(program.strategy);
   const shape = shapeWeek(slots, {
     goal: program.goal,

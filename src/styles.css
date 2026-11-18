@@ -6483,28 +6483,31 @@ pre {
     transform: translateX(-120%);
     transition: transform 700ms var(--ds-ease);
   }
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--ds-card-shadow-hover);
-    border-color: hsl(var(--primary) / 0.22);
-  }
-  &:hover::after {
-    transform: translateX(120%);
-  }
-  &:active {
-    transform: translateY(0) scale(0.985);
-  }
   & [data-arrow] {
     transition: transform 320ms var(--ds-ease);
-  }
-  &:hover [data-arrow] {
-    transform: translateX(2px);
   }
   & [data-illo] {
     transition: transform 520ms var(--ds-ease);
   }
-  &:hover [data-illo] {
-    transform: translateY(-4px) rotate(-2deg) scale(1.03);
+  /* Hover only where a pointer hovers: on a phone a tap left the card lifted. */
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--ds-card-shadow-hover);
+      border-color: hsl(var(--primary) / 0.22);
+    }
+    &:hover::after {
+      transform: translateX(120%);
+    }
+    &:hover [data-arrow] {
+      transform: translateX(2px);
+    }
+    &:hover [data-illo] {
+      transform: translateY(-4px) rotate(-2deg) scale(1.03);
+    }
+  }
+  &:active {
+    transform: translateY(0) scale(0.985);
   }
 }
 .dark .ds-card-hover::after {

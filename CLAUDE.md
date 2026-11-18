@@ -1535,6 +1535,22 @@ records ADR-0027 and [ADR-0050](docs/adr/0050-pricing-v4.md) (pricing v4).
   plan). Video is credits per second (`videoCreditsFor`). Never add a Free plan,
   creation points or Video Credits back; old balances only spend down.
   Margins are code (`plan-economics.ts`, its test is the floor).
+- **No plan, no app.** `PlanGate` (`src/components/auth/PlanGate.tsx`, `/api/billing/access`,
+  `src/server/billing/access.server.ts`) sends a signed-in person with no plan to `/checkout`
+  before `/projects`, `/start`, onboarding or any workspace draws; members of a paid brand and
+  billing admins go in. A new brand needs a plan (`createWorkspace` answers 402).
+- **Trial codes are the only way in without paying first** (migration
+  `20261118120000_promo_trials.sql`, pure `src/lib/billing/promo.ts`, server
+  `src/server/billing/promo.server.ts`, staff page `/admin/promos`). A code gives N days and
+  N credits, still needs a card (Stripe `trial_period_days`, cancel if no card at the end), and
+  the plan picked is charged when the trial ends, then every period on that date. While it runs
+  the account is on the **trial tier** (`applyTrialTier`: `TRIAL_FEATURES` only, one brand, one
+  seat, no video). One trial per account and per card (`redeem_promo_code`, claimed at the
+  webhook, never at checkout); a refused claim cancels the subscription before anything is
+  granted. There is no open trial any more: `trial: true` without a code is refused.
+- **Staff access passes** (`giftAccessPass`, `/api/admin/users/access-pass`): a plan or the
+  trial tier (`comped_tier = 'trial'`) for 1–90 days with credits that end with it, no card,
+  no renewal (`next_grant_at` cleared). Never over a card subscription.
 - **One wallet per owner** (`billing_accounts`), shared across their brands; meters
   `credits`, `pro_messages`, `flash_messages` (legacy `video` / `premium_video` /
   `creation` balances only spend down).

@@ -19,6 +19,7 @@ import { startConnect as startComposioConnect } from "@/server/integrations/acco
 import { startConnectHandler } from "@/lib/socialapi/handlers";
 import { startConnectHandler as startPostForMeConnect } from "@/lib/postforme/handlers";
 import { withPostForMe } from "@/lib/postforme/route.server";
+import { postForMeUsable } from "@/server/social/postforme-health.server";
 import {
   activateSocialProfileSlot,
   assertSocialProfileConnection,
@@ -52,13 +53,18 @@ export const POST = defineRoute({
     if (provider === "postforme") {
       const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });
       await reserveSocialProfileSlot(entitlements, workspaceId);
-      // Instagram, Facebook (and more as they're checked) connect through
-      // Composio when connected apps are on (ADR-0042); the rest stay here.
-      const route = routeSocialPlatform(platform, {
+      // Post for Me first for every network it serves; the backup connection
+      // only for Pinterest or while Post for Me is down (routing.ts).
+      const routeCtx = {
         composioReady: composioConfigured() && isIntegrationsEnabled(workspaceId),
         testing: isIntegrationsTesting(workspaceId),
+        postForMePlatforms: PROVIDER_PLATFORMS.postforme,
+      };
+      const route = routeSocialPlatform(platform, {
+        ...routeCtx,
+        postForMeReady: await postForMeUsable(),
       });
-      if (route.provider === "composio") {
+      const backup = async () => {
         const { url } = await startComposioConnect({
           workspaceId,
           userId,
@@ -67,12 +73,23 @@ export const POST = defineRoute({
           returnPath: null,
         });
         return Response.json({ authorizationUrl: url });
-      }
-      // Pinterest has no Post for Me path: it connects through Composio or not at all.
+      };
+      if (route.provider === "composio") return backup();
+      // Pinterest has no Post for Me path: it connects through the backup or not at all.
       if (!(PROVIDER_PLATFORMS.postforme as string[]).includes(platform)) {
-        return jsonError(400, `This network can't be connected right now. ${route.reason}`);
+        return jsonError(400, "This network can't be connected right now. Try again soon.");
       }
-      return withPostForMe(workspaceId, (deps) => startPostForMeConnect({ platform }, deps));
+      const primary = await withPostForMe(workspaceId, (deps) =>
+        startPostForMeConnect({ platform }, deps),
+      );
+      // Refused or unreachable: offer the backup sign-in where one exists.
+      if (
+        primary.status >= 500 &&
+        routeSocialPlatform(platform, { ...routeCtx, postForMeReady: false }).provider ===
+          "composio"
+      )
+        return backup().catch(() => primary);
+      return primary;
     }
     if (provider === "socialapi") {
       const entitlements = await assertSocialProfileConnection({ workspaceId, userId, role });

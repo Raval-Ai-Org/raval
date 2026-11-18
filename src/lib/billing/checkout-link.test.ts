@@ -47,3 +47,13 @@ describe("checkout link", () => {
     expect(safeReturnPath("/w/a/app/brain")).toBe("/w/a/app/brain");
   });
 });
+
+describe("trial code in the checkout link", () => {
+  it("keeps a normalised code and drops junk", async () => {
+    const { checkoutHref, readCheckoutLink } = await import("./checkout-link");
+    const href = checkoutHref({ promo: " mox3-zd6s9m ", required: true });
+    const link = readCheckoutLink(new URL(`https://x${href}`).searchParams);
+    expect(link.promo).toBe("MOX3-ZD6S9M");
+    expect(readCheckoutLink(new URLSearchParams("promo=%3Cscript%3E")).promo).toBeNull();
+  });
+});

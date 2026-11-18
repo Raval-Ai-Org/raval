@@ -18,7 +18,7 @@ import { normalizeDomain } from "@/lib/workspace/domain";
 import { mayRestoreFreeScan } from "@/lib/workspace/brand-room";
 import { HttpError } from "@/server/http-error";
 import { optionalWorkspaceEntitlements } from "@/server/billing/readiness.server";
-import { LimitReachedError } from "@/server/billing/errors";
+import { LimitReachedError, UpgradeRequiredError } from "@/server/billing/errors";
 import { listR2WorkspaceAssetPaths, removeAssetObjects } from "@/server/assets/storage.server";
 
 export const DELETE_CONFIRMATION = "CONFIRM";
@@ -74,6 +74,9 @@ export async function createOrGetWorkspace(args: {
   }
   const entitlements = await optionalWorkspaceEntitlements({ userId: args.userId });
   const enforcing = entitlements?.enforcement === "on";
+  // No Free plan (ADR-0050): a new brand needs a plan (or a trial) behind it.
+  if (enforcing && entitlements.entitledPlan === "free")
+    throw new UpgradeRequiredError({ requiredPlan: "starter", currentPlan: "free" });
   const { data, error } = await admin.rpc(
     enforcing ? "create_billed_workspace_for_user" : "create_workspace_for_user",
     {

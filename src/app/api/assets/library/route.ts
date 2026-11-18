@@ -4,6 +4,7 @@ import { jsonError } from "@/server/api-auth";
 import { defineRoute } from "@/server/route";
 import { signStoragePaths } from "@/server/assets/storage.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
+import { isWorkingFile } from "@/lib/assets/working-files";
 
 export const dynamic = "force-dynamic";
 
@@ -56,13 +57,14 @@ export const GET = defineRoute({
       .limit(500);
     if (assetsError) return jsonError(500, assetsError.message);
 
-    const storagePaths = (rows ?? [])
+    // Slides, Story frames, kept first renders, layers and check frames belong
+    // to a post or are internal: listed as media they read as duplicates.
+    const own = (rows ?? []).filter((row) => !isWorkingFile(row.metadata));
+    const storagePaths = own
       .flatMap((row) => [row.storage_path, row.thumbnail_path])
       .filter((path): path is string => isWorkspaceStoragePath(path, workspaceId));
     const signedUrls = await signStoragePaths(supabase, storagePaths, 3600);
-    const assets = (rows ?? []).map((row) =>
-      normalizeAsset(row as Record<string, unknown>, signedUrls),
-    );
+    const assets = own.map((row) => normalizeAsset(row as Record<string, unknown>, signedUrls));
     const visible = assets.filter((asset) => Boolean(asset.url));
 
     // Legacy compatibility: preserve older generated media until backfill is complete.

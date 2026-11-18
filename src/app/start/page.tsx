@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PlanGate } from "@/components/auth/PlanGate";
 import { SessionGate } from "@/components/auth/SessionGate";
 import StartPage from "./StartPage";
 
@@ -12,7 +13,9 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <SessionGate>
-      <StartPage />
+      <PlanGate>
+        <StartPage />
+      </PlanGate>
     </SessionGate>
   );
 }

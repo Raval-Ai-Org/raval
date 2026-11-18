@@ -23,6 +23,7 @@ import { globalBillingMode } from "./mode.server";
 import { HttpError } from "@/server/http-error";
 import { accountBillableSeatCount } from "./seat-count.server";
 import { applyOverrides, type AppliedOverride } from "@/lib/billing/overrides";
+import { applyTrialTier } from "@/lib/billing/promo";
 import { loadActiveOverrides } from "./overrides.server";
 import { CREATION_PLANS } from "@/lib/billing/creation";
 import { creationPolicyFor } from "./creation.server";
@@ -43,6 +44,11 @@ export type Entitlements = {
   status: string;
   enforcement: "off" | "shadow" | "on";
   trial: { active: boolean; endsAt: string | null; used: boolean };
+  /**
+   * On the trial tier (a code's trial or a staff trial pass): free features
+   * only, one brand, no video (`src/lib/billing/promo.ts`).
+   */
+  trialTier: boolean;
   /** A plan activated by Mellox (paid offline, or a comp) and when it ends. */
   manual: { plan: PlanId; until: string } | null;
   period: { start: string | null; end: string | null; nextGrantAt: string | null };
@@ -90,7 +96,21 @@ export function entitledPlanFor(account: BillingAccount, now = new Date()): Plan
   ) {
     return "free";
   }
+  // A trial whose first charge failed never paid: no grace on the plan.
+  if (account.status === "past_due" && account.trial_used && !account.last_paid_invoice_id)
+    return "free";
   return validPlan(account.entitled_plan_id ?? account.plan_id);
+}
+
+/** A code's trial while it runs, or a staff trial pass while it runs. */
+export function onTrialTier(account: BillingAccount, now = new Date()): boolean {
+  const promoTrial =
+    account.trial_tier === "promo" &&
+    (account.status === "trialing" || account.status === "past_due");
+  const pass =
+    account.comped_tier === "trial" &&
+    Boolean(account.comped_until && new Date(account.comped_until) > now);
+  return promoTrial || pass;
 }
 
 export function limitsFor(plan: PlanId, addons: Addon[], paused = false): Entitlements["limits"] {
@@ -148,6 +168,7 @@ export function resolveEntitlements(args: {
   const plan = validPlan(account.plan_id);
   const entitledPlan = entitledPlanFor(account, now);
   const paused = account.status === "paused";
+  const trialTier = onTrialTier(account, now);
   const features = Object.fromEntries(
     Object.entries(FEATURES).map(([key, feature]) => [
       key,
@@ -187,8 +208,11 @@ export function resolveEntitlements(args: {
     addons: (args.addons ?? [])
       .filter((item) => item.catalog_key in ADDONS)
       .map((item) => ({ key: item.catalog_key, quantity: item.quantity })),
-    features,
-    limits: limitsFor(entitledPlan, args.addons ?? [], paused),
+    trialTier,
+    ...(() => {
+      const limits = limitsFor(entitledPlan, args.addons ?? [], paused);
+      return trialTier ? applyTrialTier(features, limits) : { features, limits };
+    })(),
     usage: args.usage ?? {
       brands: 0,
       activeBrands: 0,

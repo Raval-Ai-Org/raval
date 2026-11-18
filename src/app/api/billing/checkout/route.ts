@@ -10,6 +10,8 @@ const Body = z.object({
   quantity: z.number().int().min(1).max(20),
   interval: z.enum(["month", "year"]).optional(),
   trial: z.boolean().optional(),
+  /** A trial code from Mellox (checked again on the server and at the webhook). */
+  promoCode: z.string().trim().min(4).max(40).optional(),
   returnPath: z
     .string()
     .max(300)
@@ -39,6 +41,7 @@ export const POST = defineRoute({
       quantity: body.quantity,
       interval: body.interval,
       trial: body.trial,
+      promoCode: body.promoCode,
       returnPath: body.returnPath,
       ui: body.ui,
     });

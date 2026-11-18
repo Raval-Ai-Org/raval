@@ -11,8 +11,21 @@ export type RenderSettingsState = {
   referenceIds: string[];
 };
 
+/** The longest creator video offered in the composer (clips are joined on the server). */
+export const CREATOR_MAX_SECONDS = 20;
+
+/**
+ * The lengths a person can pick: one short native clip, then 10, 15 and 20
+ * seconds. Longer than one clip is several clips joined on the server
+ * (`planVideoSegments`), which `checkRenderSettings` already accepts.
+ */
 export function allowedDurations(model: ModelView, imageCount: number): number[] {
-  return imageCount > 0 && model.imageDurations ? model.imageDurations : model.durations;
+  const native = imageCount > 0 && model.imageDurations ? model.imageDurations : model.durations;
+  if (!native.length) return native;
+  const shortest = native.filter((d) => d >= 5 && d <= 8).at(-1) ?? Math.min(...native);
+  return [...new Set([shortest, 10, 15, CREATOR_MAX_SECONDS])]
+    .filter((d) => d <= CREATOR_MAX_SECONDS && d >= Math.min(...native))
+    .sort((a, b) => a - b);
 }
 
 export function usableRefs(model: ModelView, ids: string[]): string[] {

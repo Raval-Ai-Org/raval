@@ -680,7 +680,8 @@ describe("Story Autopilot", () => {
       .map((s) => s.result.story_theme);
     for (let i = 1; i < themes.length; i++) expect(themes[i]).not.toBe(themes[i - 1]);
     for (const s of stories) {
-      expect(s.result.story_platforms).toEqual(["instagram", "facebook"]);
+      // Only connected accounts get a Story: this workspace has Instagram, not Facebook.
+      expect(s.result.story_platforms).toEqual(["instagram"]);
       const lead = Date.parse(s.planned_for!) - Date.parse(s.next_attempt_at);
       // Never made at the slot itself; at most 30 hours ahead.
       expect(lead).toBeGreaterThan(60 * 60_000);

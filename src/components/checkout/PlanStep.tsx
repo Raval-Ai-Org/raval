@@ -43,6 +43,8 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { promoLine, trialEndDate, type PromoOffer } from "@/lib/billing/promo";
 import { CtaButton, MOX, OutlineButton, PromiseRow } from "./checkout-parts";
 
 const PLAN_ICON: Record<PaidPlanId, LucideIcon> = {
@@ -69,6 +71,14 @@ export type PlanStepProps = {
   balance: number;
   onPick: (item: CheckoutItem) => void;
   onAskOwner: (plan: PaidPlanId | null) => void;
+  /** A trial code the server accepted for this account. */
+  promo?: PromoOffer | null;
+  promoCode?: string | null;
+  promoChecking?: boolean;
+  promoError?: string | null;
+  /** Only a new account (no plan, never a trial) can use a code. */
+  canUsePromo?: boolean;
+  onPromo?: (code: string | null) => void;
 };
 
 function heroCopy(block: BillingBlock | null, current: PlanId, view: "plans" | "credits") {
@@ -303,12 +313,110 @@ function PlanAction(
       onClick={() => props.onPick({ kind: "plan", key: plan, interval })}
     >
       {paymentsAvailable
-        ? planRank(current) > planRank("free")
-          ? `Switch to ${PLANS[plan].label}`
-          : `Get ${PLANS[plan].label}`
+        ? props.promo
+          ? `Start ${props.promo.days}-day free trial`
+          : planRank(current) > planRank("free")
+            ? `Switch to ${PLANS[plan].label}`
+            : `Get ${PLANS[plan].label}`
         : "Payments open soon"}
       {paymentsAvailable && <ArrowRight className="h-4 w-4" />}
     </Button>
+  );
+}
+
+/**
+ * "Have a trial code?": a code from Mellox gives a few days on the trial tier
+ * (free features, a few credits). A card is still needed; the plan picked
+ * here starts when the trial ends, and nothing is charged today.
+ */
+function PromoBox(props: PlanStepProps) {
+  const [open, setOpen] = useState(Boolean(props.promoCode));
+  const [value, setValue] = useState(props.promoCode ?? "");
+  const offer = props.promo;
+  if (offer) {
+    const ends = trialEndDate(offer.days).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+    });
+    return (
+      <div
+        role="status"
+        className="checkout-rise flex flex-wrap items-center gap-3 rounded-[22px] border border-[#30a46c]/30 bg-[#30a46c]/[0.07] px-4 py-3.5"
+      >
+        <span className="checkout-cta grid h-10 w-10 shrink-0 place-items-center rounded-xl">
+          <Sparkles className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold">
+            Code {offer.code} applied: {promoLine(offer)}
+          </p>
+          <p className="text-[12.5px] text-muted-foreground">
+            Pick the plan to keep after your trial. Nothing is charged today; your card is billed on{" "}
+            {ends} unless you cancel before then. The trial includes posts, carousels, Stories and
+            publishing for one brand. Video and the bigger tools open with the plan.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setValue("");
+            props.onPromo?.(null);
+          }}
+          className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-[12.5px] font-semibold text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" /> Remove
+        </button>
+      </div>
+    );
+  }
+  if (!open)
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start text-[13px] font-semibold text-foreground/75 underline-offset-4 hover:text-foreground hover:underline"
+      >
+        Have a trial code?
+      </button>
+    );
+  return (
+    <form
+      className="flex flex-col gap-2 sm:max-w-[460px]"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const code = value.trim();
+        if (code) props.onPromo?.(code);
+      }}
+    >
+      <label htmlFor="promo-code" className="text-[12.5px] font-semibold">
+        Trial code
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="promo-code"
+          value={value}
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={40}
+          placeholder="MOX3-XXXXXX"
+          onChange={(event) => setValue(event.target.value.toUpperCase())}
+          className="h-11 min-w-0 flex-1 rounded-full border border-foreground/[0.1] bg-background px-4 font-mono text-[14px] tracking-wide outline-none transition focus:border-[#3fe46e] focus:ring-[3px] focus:ring-[#3fe46e]/25"
+        />
+        <OutlineButton
+          type="submit"
+          className="h-11 px-5"
+          disabled={!value.trim() || props.promoChecking}
+        >
+          {props.promoChecking ? "Checking…" : "Apply"}
+        </OutlineButton>
+      </div>
+      {props.promoError && (
+        <p role="alert" className="text-[12.5px] text-[#c62a2f]">
+          {props.promoError}
+        </p>
+      )}
+    </form>
   );
 }
 
@@ -473,6 +581,8 @@ export function PlanStep(props: PlanStepProps) {
           />
         )}
       </div>
+
+      {props.canBuy && props.canUsePromo && view === "plans" && <PromoBox {...props} />}
 
       {!props.paymentsAvailable && props.canBuy && (
         <p

@@ -2565,6 +2565,7 @@ export type Database = {
           cancel_at: string | null;
           capacity_reconciled_at: string | null;
           comped_plan_id: string | null;
+          comped_tier: string | null;
           comped_until: string | null;
           created_at: string;
           current_period_end: string | null;
@@ -2591,6 +2592,7 @@ export type Database = {
           resume_plan_id: string | null;
           status: string;
           trial_ends_at: string | null;
+          trial_tier: string | null;
           trial_used: boolean;
           updated_at: string;
         };
@@ -2599,6 +2601,7 @@ export type Database = {
           cancel_at?: string | null;
           capacity_reconciled_at?: string | null;
           comped_plan_id?: string | null;
+          comped_tier?: string | null;
           comped_until?: string | null;
           created_at?: string;
           current_period_end?: string | null;
@@ -2625,6 +2628,7 @@ export type Database = {
           resume_plan_id?: string | null;
           status?: string;
           trial_ends_at?: string | null;
+          trial_tier?: string | null;
           trial_used?: boolean;
           updated_at?: string;
         };
@@ -2633,6 +2637,7 @@ export type Database = {
           cancel_at?: string | null;
           capacity_reconciled_at?: string | null;
           comped_plan_id?: string | null;
+          comped_tier?: string | null;
           comped_until?: string | null;
           created_at?: string;
           current_period_end?: string | null;
@@ -2659,6 +2664,7 @@ export type Database = {
           resume_plan_id?: string | null;
           status?: string;
           trial_ends_at?: string | null;
+          trial_tier?: string | null;
           trial_used?: boolean;
           updated_at?: string;
         };
@@ -3106,6 +3112,111 @@ export type Database = {
         };
         Relationships: [];
       };
+      billing_promo_codes: {
+        Row: {
+          active: boolean;
+          code: string;
+          created_at: string;
+          created_by: string | null;
+          credits: number;
+          expires_at: string | null;
+          id: string;
+          label: string;
+          max_redemptions: number | null;
+          note: string;
+          redeemed_count: number;
+          starts_at: string | null;
+          trial_days: number;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          code: string;
+          created_at?: string;
+          created_by?: string | null;
+          credits: number;
+          expires_at?: string | null;
+          id?: string;
+          label?: string;
+          max_redemptions?: number | null;
+          note?: string;
+          redeemed_count?: number;
+          starts_at?: string | null;
+          trial_days: number;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          code?: string;
+          created_at?: string;
+          created_by?: string | null;
+          credits?: number;
+          expires_at?: string | null;
+          id?: string;
+          label?: string;
+          max_redemptions?: number | null;
+          note?: string;
+          redeemed_count?: number;
+          starts_at?: string | null;
+          trial_days?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      billing_promo_redemptions: {
+        Row: {
+          account_id: string;
+          card_fingerprint: string | null;
+          code_id: string;
+          created_at: string;
+          id: string;
+          status: string;
+          subscription_id: string;
+          trial_ends_at: string | null;
+          updated_at: string;
+          user_id: string | null;
+        };
+        Insert: {
+          account_id: string;
+          card_fingerprint?: string | null;
+          code_id: string;
+          created_at?: string;
+          id?: string;
+          status?: string;
+          subscription_id: string;
+          trial_ends_at?: string | null;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Update: {
+          account_id?: string;
+          card_fingerprint?: string | null;
+          code_id?: string;
+          created_at?: string;
+          id?: string;
+          status?: string;
+          subscription_id?: string;
+          trial_ends_at?: string | null;
+          updated_at?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_promo_redemptions_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: true;
+            referencedRelation: "billing_accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "billing_promo_redemptions_code_id_fkey";
+            columns: ["code_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_promo_codes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       billing_provider_health: {
         Row: {
           credential_fingerprint: string | null;
@@ -3450,6 +3561,32 @@ export type Database = {
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      billing_trial_cards: {
+        Row: {
+          account_id: string;
+          created_at: string;
+          fingerprint: string;
+        };
+        Insert: {
+          account_id: string;
+          created_at?: string;
+          fingerprint: string;
+        };
+        Update: {
+          account_id?: string;
+          created_at?: string;
+          fingerprint?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_trial_cards_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "billing_accounts";
             referencedColumns: ["id"];
           },
         ];
@@ -12365,6 +12502,10 @@ export type Database = {
         }[];
       };
       backlink_spent_credits: { Args: { p_workspace: string }; Returns: number };
+      billing_accounts_due_capacity: {
+        Args: { p_limit?: number; p_only_enforced?: boolean };
+        Returns: { owner_user_id: string }[];
+      };
       billing_margin_report: { Args: never; Returns: Json };
       billing_rollout_report: { Args: never; Returns: Json };
       call_app_hook: { Args: { p_path: string }; Returns: number };
@@ -12531,6 +12672,17 @@ export type Database = {
         Returns: Json;
       };
       record_ai_usage: { Args: { p_event: Json }; Returns: number };
+      redeem_promo_code: {
+        Args: {
+          p_code: string;
+          p_account: string;
+          p_user: string;
+          p_subscription: string;
+          p_fingerprint: string;
+          p_trial_ends: string;
+        };
+        Returns: string;
+      };
       refresh_canva_authorization: {
         Args: {
           p_workspace_id: string;

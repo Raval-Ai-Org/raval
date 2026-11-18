@@ -93,16 +93,24 @@ function TiltCard({
   label: string;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
+  const frame = useRef(0);
+  // A light tilt that follows the mouse, at most once a frame. Touch and
+  // reduced motion get none; a press clears it so the press-down shows.
   const move = (e: PointerEvent<HTMLButtonElement>) => {
     const el = ref.current;
-    if (!el || e.pointerType !== "mouse") return;
+    if (!el || e.pointerType !== "mouse" || e.buttons) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const r = el.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - 0.5;
-    const y = (e.clientY - r.top) / r.height - 0.5;
-    el.style.transform = `perspective(700px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg) translateY(-2px)`;
+    const { clientX, clientY } = e;
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect();
+      const x = (clientX - r.left) / r.width - 0.5;
+      const y = (clientY - r.top) / r.height - 0.5;
+      el.style.transform = `perspective(700px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg) translateY(-2px)`;
+    });
   };
   const leave = () => {
+    cancelAnimationFrame(frame.current);
     if (ref.current) ref.current.style.transform = "";
   };
   return (
@@ -113,6 +121,7 @@ function TiltCard({
       onClick={onClick}
       onPointerMove={move}
       onPointerLeave={leave}
+      onPointerDown={leave}
       style={style}
       className={cn(
         "ds-card ds-card-hover ds-rise group flex flex-col items-start text-left will-change-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",

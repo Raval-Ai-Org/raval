@@ -21,7 +21,7 @@ export class AdminApiError extends Error {
 
 export async function adminApi<T>(
   path: string,
-  init?: { method?: "GET" | "POST"; body?: unknown },
+  init?: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown },
 ): Promise<T> {
   const response = await authedFetch(path, {
     method: init?.method ?? "GET",

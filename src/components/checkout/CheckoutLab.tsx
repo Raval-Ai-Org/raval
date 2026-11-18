@@ -15,11 +15,15 @@ const SCENES = [
   "credits",
   "member",
   "unavailable",
+  "trial",
   "pay",
+  "trial-pay",
   "card",
   "launch",
 ] as const;
 type Scene = (typeof SCENES)[number];
+
+const TRIAL_OFFER = { code: "MOX3-SAMPLE", days: 3, credits: 25, label: "3-day trial" };
 
 export function CheckoutLab() {
   const asked = useSearchParams().get("scene") as Scene | null;
@@ -39,18 +43,20 @@ export function CheckoutLab() {
     { ...EMPTY_CARD, empty: false, complete: true, saving: true },
   ][tick];
   const noop = () => undefined;
-  const step = scene === "pay" ? "pay" : scene === "launch" ? "launch" : "plan";
+  const step =
+    scene === "pay" || scene === "trial-pay" ? "pay" : scene === "launch" ? "launch" : "plan";
   return (
     <CheckoutShell step={step} back={{ label: "Back to Mellox", onClick: noop }}>
       {scene === "card" ? (
         <div className="mx-auto max-w-[380px]">
           <CardVisual state={demo} holder="you@company.com" paying={false} />
         </div>
-      ) : scene === "pay" ? (
+      ) : scene === "pay" || scene === "trial-pay" ? (
         <PayStep
           item={{ kind: "plan", key: "growth", interval }}
           returnPath="/projects"
-          subscribed
+          subscribed={scene === "pay"}
+          promo={scene === "trial-pay" ? TRIAL_OFFER : null}
           onIntervalChange={setBillingInterval}
           onChangePlan={noop}
           onPaid={noop}
@@ -78,6 +84,9 @@ export function CheckoutLab() {
           balance={35 * 30}
           onPick={noop}
           onAskOwner={noop}
+          canUsePromo
+          promo={scene === "trial" ? TRIAL_OFFER : null}
+          onPromo={noop}
         />
       )}
     </CheckoutShell>

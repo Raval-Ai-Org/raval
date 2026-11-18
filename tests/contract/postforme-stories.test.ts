@@ -191,7 +191,7 @@ describe("publishing a Story", () => {
     );
     const [row] = db.rows("content_publications");
     expect(row.status).toBe("failed");
-    expect(row.last_error).toMatch(/did not identify every Story frame/);
+    expect(row.last_error).toMatch(/couldn't confirm every Story frame/);
     expect(row.frames.every((frame: { status: string }) => frame.status !== "published")).toBe(
       true,
     );

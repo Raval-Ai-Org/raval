@@ -22,6 +22,7 @@ import {
   MediaSafetyError,
 } from "@/server/guardrails/media-safety.server";
 import { randomUUID } from "node:crypto";
+import { normalizeReferenceImages } from "./image-reference.server";
 import { fetchWithRetry, upstreamDetail } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
 import { enforceBudget } from "@/server/ai/budget";
@@ -127,7 +128,10 @@ async function openRouterImage(req: ImageRequest): Promise<GeneratedImage> {
     n: 1,
   };
   if (req.references.length) {
-    body.input_references = req.references.map((url) => ({
+    // Any size, orientation or format a person uploaded is made readable
+    // first (upright, ≤2048 px, JPEG/PNG), so a photo never fails the render.
+    const readable = await normalizeReferenceImages(req.references);
+    body.input_references = readable.map((url) => ({
       type: "image_url",
       image_url: { url },
     }));

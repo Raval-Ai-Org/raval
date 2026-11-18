@@ -13,6 +13,7 @@ import {
 import { PROVIDER_PLATFORMS } from "@/lib/distribution-platforms";
 import { connectablePlatforms } from "@/lib/social/routing";
 import { composioConfigured } from "@/server/integrations/composio/gateway.server";
+import { postForMeUsable } from "@/server/social/postforme-health.server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,9 @@ export const GET = defineRoute({
   auth: "workspace",
   query: z.object({ workspaceId: z.string().optional() }),
   workspaceId: ({ query }) => query.workspaceId,
-  handler: ({ workspaceId, role }) => {
+  handler: async ({ workspaceId, role }) => {
     const provider = getDistributionProviderForWorkspace(workspaceId);
+    const postForMeReady = provider === "postforme" ? await postForMeUsable() : false;
     // On Post for Me, networks only Composio publishes (Pinterest) are listed
     // once they connect there; /api/sdr/oauth/start routes them the same way.
     const platforms =
@@ -30,6 +32,7 @@ export const GET = defineRoute({
         ? connectablePlatforms(PROVIDER_PLATFORMS.postforme, {
             composioReady: composioConfigured() && isIntegrationsEnabled(workspaceId),
             testing: isIntegrationsTesting(workspaceId),
+            postForMeReady,
           })
         : provider
           ? PROVIDER_PLATFORMS[provider]
@@ -40,6 +43,9 @@ export const GET = defineRoute({
       role,
       provider,
       platforms,
+      // Networks the first-choice connection serves right now. An account on
+      // the backup connection for one of these is offered a quick reconnect.
+      preferredPlatforms: postForMeReady ? PROVIDER_PLATFORMS.postforme : [],
     };
   },
 });

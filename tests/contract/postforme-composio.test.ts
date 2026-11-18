@@ -172,7 +172,7 @@ describe("Composio accounts in the Post for Me handlers", () => {
     );
     expect(out.status).toBe(200);
     expect(out.body.results[0].status).toBe("skipped");
-    expect(out.body.results[0].reason).toMatch(/Post for Me isn't answering/);
+    expect(out.body.results[0].reason).toMatch(/isn't available right now/);
     expect(deliver).not.toHaveBeenCalled();
   });
 

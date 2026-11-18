@@ -9,6 +9,7 @@
 // An existing subscriber changing plan pays nothing here: the change is made
 // in place and Stripe prorates it on the next invoice.
 
+import { promoLine, trialEndDate, type PromoOffer } from "@/lib/billing/promo";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { loadStripe, type Appearance, type Stripe } from "@stripe/stripe-js";
@@ -147,8 +148,10 @@ function OrderSummary({
   switching,
   onChangePlan,
   inPlace,
+  trial = null,
 }: {
   item: CheckoutItem;
+  trial?: PromoOffer | null;
   /** A plan change on a live subscription: Stripe prorates, nothing is due here. */
   inPlace: boolean;
   onIntervalChange: (interval: BillingInterval) => void;
@@ -201,16 +204,24 @@ function OrderSummary({
               <span className="tabular-nums">−{formatUsd(s.savings)}</span>
             </div>
           )}
+          {trial && (
+            <div className="flex justify-between font-medium text-[#218358] dark:text-[#3dd68c]">
+              <span>Trial: {promoLine(trial)}</span>
+              <span className="tabular-nums">{formatUsd(0)}</span>
+            </div>
+          )}
           <div className="flex items-end justify-between pt-1">
             <span className="text-[15px] font-semibold">{inPlace ? "New price" : "Due today"}</span>
             <span className="text-[28px] font-bold leading-none tracking-tight tabular-nums">
-              {formatUsd(s.due)}
+              {formatUsd(trial ? 0 : s.due)}
             </span>
           </div>
           <p className="text-right text-[11.5px] text-muted-foreground">
             {inPlace
               ? "The difference for this period is prorated on your next invoice."
-              : `${s.renews}. Tax may apply.`}
+              : trial
+                ? `Then ${formatUsd(s.due)} on ${trialEndDate(trial.days).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}. ${s.renews} on that date. Cancel anytime before. Tax may apply.`
+                : `${s.renews}. Tax may apply.`}
           </p>
         </div>
 
@@ -394,10 +405,12 @@ export function CardVisual({
 
 function PaymentForm({
   due,
+  trial = null,
   onPaid,
   sessionId,
 }: {
   due: number;
+  trial?: PromoOffer | null;
   onPaid: (sessionId: string) => void;
   sessionId: string;
 }) {
@@ -501,12 +514,23 @@ function PaymentForm({
           </>
         ) : (
           <>
-            Pay {formatUsd(due)} and launch <ArrowRight className="h-4 w-4" />
+            {trial ? `Start my ${trial.days}-day free trial` : `Pay ${formatUsd(due)} and launch`}{" "}
+            <ArrowRight className="h-4 w-4" />
           </>
         )}
       </CtaButton>
+      {trial && (
+        <p className="rounded-xl bg-foreground/[0.04] px-3 py-2.5 text-center text-[12px] leading-relaxed">
+          Nothing is charged today. Your card is billed {formatUsd(due)} on{" "}
+          {trialEndDate(trial.days).toLocaleDateString(undefined, {
+            day: "numeric",
+            month: "long",
+          })}{" "}
+          and then on the same date every period, unless you cancel in Plan &amp; billing first.
+        </p>
+      )}
       <p className="text-center text-[11.5px] leading-relaxed text-muted-foreground">
-        By paying you agree to the{" "}
+        By {trial ? "starting" : "paying"} you agree to the{" "}
         <a href="/terms" target="_blank" rel="noreferrer" className="underline">
           Terms
         </a>{" "}
@@ -562,6 +586,7 @@ export function PayStep({
   item,
   returnPath,
   subscribed,
+  promo = null,
   onIntervalChange,
   onChangePlan,
   onPaid,
@@ -575,13 +600,15 @@ export function PayStep({
   onChangePlan: () => void;
   onPaid: (sessionId: string) => void;
   onChanged: () => void;
+  /** A trial code the server accepted: nothing is due today. */
+  promo?: PromoOffer | null;
 }) {
   const changeInPlace = subscribed && item.kind === "plan";
   const [opened, setOpened] = useState<Opened | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(!changeInPlace);
-  const itemKey = `${item.kind}:${item.key}:${item.kind === "plan" ? item.interval : ""}`;
+  const itemKey = `${item.kind}:${item.key}:${item.kind === "plan" ? item.interval : ""}:${promo?.code ?? ""}`;
 
   useEffect(() => {
     if (changeInPlace) return;
@@ -600,6 +627,7 @@ export function PayStep({
             interval: item.kind === "plan" ? item.interval : undefined,
             returnPath,
             ui: "elements",
+            ...(promo ? { promoCode: promo.code } : {}),
           }),
         });
         const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -656,7 +684,7 @@ export function PayStep({
       <div className="checkout-rise rounded-[26px] border border-foreground/[0.07] bg-card p-5 shadow-[0_30px_60px_-40px_rgb(0_0_0/0.45)] sm:p-7">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h1 className="text-[22px] font-bold tracking-tight">
-            {changeInPlace ? "Confirm your new plan" : "Payment"}
+            {changeInPlace ? "Confirm your new plan" : promo ? "Start your free trial" : "Payment"}
           </h1>
           <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
             <Lock className="h-3 w-3" /> Encrypted by Stripe
@@ -675,7 +703,12 @@ export function PayStep({
             stripe={stripeFor(opened.publishableKey)}
             options={options}
           >
-            <PaymentForm due={summary.due} sessionId={opened.sessionId} onPaid={onPaid} />
+            <PaymentForm
+              due={summary.due}
+              trial={promo}
+              sessionId={opened.sessionId}
+              onPaid={onPaid}
+            />
           </CheckoutElementsProvider>
         )}
 
@@ -693,6 +726,7 @@ export function PayStep({
 
       <OrderSummary
         item={item}
+        trial={promo}
         switching={loading && !changeInPlace}
         inPlace={changeInPlace}
         onIntervalChange={onIntervalChange}

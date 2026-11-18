@@ -25,7 +25,7 @@ import {
 } from "@/lib/sdr.functions";
 import type { ConnectedAccount } from "@/lib/sdr.handlers";
 import { onConnectResult, openConnectWindow } from "@/lib/connectors/connect-window";
-import { SocialGrid } from "@/components/app/SocialGrid";
+import { SocialGrid, STEADIER } from "@/components/app/SocialGrid";
 import { DisconnectDialog } from "@/components/app/connectors/DisconnectDialog";
 import {
   DISTRIBUTION_PLATFORMS,
@@ -41,6 +41,7 @@ const RECONNECT_COPY: Record<string, string> = {
   all_pages_removed: "Every connected Page was removed.",
   access_revoked: "Access was revoked on the platform.",
   youtube_account_suspended: "YouTube suspended this channel — resolve it with YouTube first.",
+  steadier_connection: "Reconnect once for steadier posting.",
 };
 
 /** Platforms whose disconnect can't revoke the grant on the platform itself. */
@@ -167,7 +168,19 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
   };
 
   const platforms = (status?.platforms ?? []).map((id) => DISTRIBUTION_PLATFORMS[id]);
-  const visible = accounts.filter((account) => account.status !== "disconnected");
+  const preferred = new Set(status?.preferredPlatforms ?? []);
+  const visible = accounts
+    .filter((account) => account.status !== "disconnected")
+    // A working account on the backup connection, for a network the first
+    // choice serves: offer one reconnect (never named; it keeps posting).
+    .map((account) =>
+      account.provider === "composio" &&
+      account.status === "active" &&
+      preferred.has(account.platform) &&
+      !account.reconnectReason
+        ? { ...account, reconnectReason: STEADIER }
+        : account,
+    );
   const connectedPlatforms = new Set(visible.map((account) => account.platform));
   const addable = platforms.filter((platform) => !connectedPlatforms.has(platform.id));
   const pendingMeta = pendingPlatform ? metaFor(pendingPlatform) : null;

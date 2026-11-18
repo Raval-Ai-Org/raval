@@ -5,6 +5,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { persistAsset, signAssetPath } from "@/server/assets/persist.server";
+import { downloadAssetObject } from "@/server/assets/storage.server";
 import { isWorkspaceStoragePath } from "@/lib/workspace/storage-path";
 import {
   photoDesignCopy,
@@ -269,6 +270,62 @@ export const PHOTO_DESIGN_ADJUSTED =
   "The design was adjusted to fit your photos. Check it, or ask for a change to try another layout.";
 export const PHOTO_DESIGN_FITTED =
   "Your photo is shown fitted to the post size: the design couldn't frame it cleanly. Ask for a change to try another design.";
+
+/**
+ * The image model refused the design layer (a low balance, an outage): the
+ * piece is still made from the person's real photos. A layer this job already
+ * drew is used as loosely as it allows; with none, code lays the photos out at
+ * the post's size. Null only when the photos themselves can't be opened.
+ */
+export async function recoverPhotoDesign(args: {
+  client: SupabaseClient;
+  workspaceId: string;
+  jobId: string;
+  slot: string;
+  task: PhotoDesignTask;
+  width: number;
+  height: number;
+}): Promise<{ dataUrl: string; warning: string } | null> {
+  const { task } = args;
+  try {
+    if (task.layerPath) {
+      const stored = await downloadAssetObject(args.client, task.layerPath).catch(() => null);
+      if (stored?.data) {
+        const layerDataUrl = `data:image/png;base64,${Buffer.from(await stored.data.arrayBuffer()).toString("base64")}`;
+        const finished = await finishPhotoDesign({
+          ...args,
+          taskId: "recovered",
+          layerDataUrl,
+          // No more layers will be asked for: adapt what there is.
+          task: { ...task, attempts: Math.max(task.attempts, LAYER_RETRIES) },
+        });
+        if (finished.state === "ready")
+          return { dataUrl: finished.dataUrl, warning: finished.warning ?? PHOTO_DESIGN_FITTED };
+      }
+    }
+    const references = await resolveStudioReferences(args.client, args.workspaceId, task.assetIds);
+    const loaded = await loadDesignPhotos(args.client, references);
+    const photos = await Promise.all(
+      loaded.map((photo, i) =>
+        task.plan.screens?.[task.plan.order.indexOf(i)] ? cropToScreen(photo) : photo,
+      ),
+    );
+    const fitted = await composeFittedPhotos({
+      photos,
+      readings: task.readings,
+      plan: task.plan,
+      width: args.width,
+      height: args.height,
+    });
+    return {
+      dataUrl: `data:image/png;base64,${fitted.toString("base64")}`,
+      warning: PHOTO_DESIGN_FITTED,
+    };
+  } catch (error) {
+    console.warn("[studio] photo design recovery failed", error);
+    return null;
+  }
+}
 
 /** Lay the real photos into a finished layer, or say what to ask for next. */
 export async function finishPhotoDesign(args: {

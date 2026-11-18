@@ -28,6 +28,7 @@ import {
   History,
   Layers,
   LineChart,
+  Gift,
   Megaphone,
   Plug,
   Power,
@@ -56,6 +57,7 @@ type NavId =
   | "users"
   | "workspaces"
   | "plans"
+  | "promos"
   | "flags"
   | "announcements"
   | "usage"
@@ -157,6 +159,13 @@ const GROUPS: NavGroup[] = [
         label: "Plans & limits",
         href: "/admin/plans",
         icon: Layers,
+        permission: "entitlements.read",
+      },
+      {
+        id: "promos",
+        label: "Trial codes",
+        href: "/admin/promos",
+        icon: Gift,
         permission: "entitlements.read",
       },
       {

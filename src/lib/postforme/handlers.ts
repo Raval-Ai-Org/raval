@@ -74,8 +74,7 @@ export type HandlerResult<T = any> = { status: number; body: T };
 function socialApiErrorResponse(res: SocialApiResponse<unknown>) {
   const mapped = baseProviderErrorResponse(res);
   if (mapped.body.error.code === "PROVIDER_MISCONFIGURED") {
-    mapped.body.error.detail =
-      "Post for Me rejected the project API key. Check the server configuration.";
+    mapped.body.error.detail = "Publishing isn't set up on the server right now. We're on it.";
   }
   return mapped;
 }
@@ -171,6 +170,30 @@ export function distributionErrorResponse(e: unknown): HandlerResult {
     return { status: e.status, body: { error: { code: e.code, detail: e.message } } };
   }
   return socialApiTransportError(e);
+}
+
+/**
+ * Post for Me first (ADR-0042, as amended 2026-11-18): when a network has
+ * accounts on both connections, only the Post for Me ones are sent to, so a
+ * post never goes out twice. The backup connection's account is kept for when
+ * Post for Me has none (or isn't answering, so it listed none). A selection by
+ * account id is the person's choice and is left alone.
+ */
+export function preferPrimaryAccounts<
+  T extends { provider?: string | null; platform: string; platformUsername?: string | null },
+>(targets: T[], selection: { type: string }): T[] {
+  if (selection.type === "account") return targets;
+  // The same account connected twice (once through each connection) is one
+  // account: send it once, through the primary. A different account on the
+  // same network is its own and is still sent.
+  const handle = (t: T) =>
+    `${t.platform}:${(t.platformUsername ?? "").trim().toLowerCase().replace(/^@/, "")}`;
+  const primary = new Set(
+    targets.filter((t) => t.provider !== "composio" && t.platformUsername).map(handle),
+  );
+  return targets.filter(
+    (t) => t.provider !== "composio" || !t.platformUsername || !primary.has(handle(t)),
+  );
 }
 
 function fail(status: number, code: string, detail: string): HandlerResult {
@@ -688,7 +711,7 @@ function storyRowPatch(row: any, frames: FrameResult[], post: ProviderPost, now:
         target.frame == null,
     );
   const unresolvedMessage =
-    "Post for Me did not identify every Story frame. Check the account before creating another Story.";
+    "We couldn't confirm every Story frame went out. Check the account before posting another Story.";
   // Deleted upstream before anything went out: cancelled, like a post.
   const status =
     post.status === "cancelled" && outcome.sent === 0 && row.status !== "failed"
@@ -1107,15 +1130,21 @@ async function distribute(
       continue;
     }
 
-    let targets = resolveTargetAccounts(
-      accounts.filter((a) => a.platform === platform),
+    // One connection per network sends the post: the primary one when it has
+    // an account here, the backup only when it doesn't (or is answering for
+    // nobody). An account a person picked by id is always used.
+    let targets = preferPrimaryAccounts(
+      resolveTargetAccounts(
+        accounts.filter((a) => a.platform === platform),
+        args.selection,
+      ),
       args.selection,
     );
     if (targets.length === 0) {
       skip(
         id,
         postForMeError
-          ? `Post for Me isn't answering (${errorDetail(postForMeError)}). Reconnect ${label(platform)} in Settings → Social accounts to post through Mellox's own connection.`
+          ? `Posting to ${label(platform)} isn't available right now. Reconnect ${label(platform)} in Settings → Social accounts and try again.`
           : `No connected ${label(platform)} account for this selection`,
       );
       continue;

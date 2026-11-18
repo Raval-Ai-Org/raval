@@ -69,6 +69,7 @@ export type RateLimitTier =
   | "links-brief"
   | "links-checkout"
   | "billing-checkout"
+  | "billing-promo"
   | "billing-read"
   | "billing-request"
   | "billing-admin"
@@ -197,6 +198,8 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "links-checkout": { limit: 10, windowSeconds: 3600, label: "placement order" },
   // Opening a Stripe checkout session.
   "billing-checkout": { limit: 10, windowSeconds: 3600, label: "credit purchase" },
+  // Checking a trial code: a person types a few, a guesser is stopped.
+  "billing-promo": { limit: 12, windowSeconds: 3600, label: "trial code check" },
   "billing-read": { limit: 120, windowSeconds: 60, label: "billing" },
   // "Upgrade now" / "Ask the owner" requests: people, not scripts, send these.
   "billing-request": { limit: 20, windowSeconds: 3600, label: "upgrade request" },

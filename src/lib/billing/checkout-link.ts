@@ -10,6 +10,7 @@ import {
   type PaidPlanId,
 } from "@/lib/billing/catalog";
 import type { BillingBlock } from "@/lib/billing/present";
+import { normalizePromoCode } from "@/lib/billing/promo";
 
 export type CheckoutStep = "plan" | "pay" | "launch";
 export type CheckoutItem =
@@ -33,6 +34,8 @@ export type CheckoutLink = {
   /** No plan yet: there is no way back into the app without one. */
   required: boolean;
   sessionId: string | null;
+  /** A trial code the person entered (checked by the server before use). */
+  promo: string | null;
 };
 
 const PAID_KEYS: readonly string[] = [...PUBLIC_PLANS, "scale"];
@@ -72,6 +75,7 @@ export function checkoutHref(args: {
   from?: string;
   workspaceId?: string | null;
   required?: boolean;
+  promo?: string | null;
 }): string {
   const q = new URLSearchParams();
   const item = args.item ?? null;
@@ -94,6 +98,8 @@ export function checkoutHref(args: {
   q.set("from", safeReturnPath(args.from));
   if (args.workspaceId) q.set("ws", args.workspaceId);
   if (args.required) q.set("required", "1");
+  const promo = normalizePromoCode(args.promo);
+  if (promo) q.set("promo", promo);
   return `/checkout?${q.toString()}`;
 }
 
@@ -140,5 +146,6 @@ export function readCheckoutLink(params: URLSearchParams): CheckoutLink {
     workspaceId: ws && UUIDISH.test(ws) ? ws : null,
     required: params.get("required") === "1",
     sessionId,
+    promo: normalizePromoCode(params.get("promo")),
   };
 }

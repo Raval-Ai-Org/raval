@@ -12,7 +12,8 @@ import { toast } from "@/lib/toast";
 import { authedFetch } from "@/lib/authed-fetch";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ALL_WORKSPACES } from "@/lib/workspace/paths";
+import { supabase } from "@/integrations/supabase/client";
+import type { PromoOffer } from "@/lib/billing/promo";
 import {
   checkoutHref,
   readCheckoutLink,
@@ -67,6 +68,7 @@ export function CheckoutFlow() {
         from: merged.from,
         workspaceId: merged.workspaceId,
         required: merged.required,
+        promo: merged.promo,
       });
       const withSession =
         merged.step === "launch" && merged.sessionId
@@ -78,16 +80,41 @@ export function CheckoutFlow() {
     [link, router],
   );
 
+  // A trial code in the link: what it gives this account (the server decides).
+  const promoQuery = useQuery<PromoOffer, Error>({
+    queryKey: ["billing", "promo", link.promo],
+    enabled: Boolean(link.promo),
+    retry: false,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const response = await authedFetch("/api/billing/promo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: link.promo }),
+      });
+      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!response.ok)
+        throw new Error(String(body?.message ?? body?.error ?? "That code isn't valid."));
+      return body as unknown as PromoOffer;
+    },
+  });
+  const promo = link.promo && promoQuery.data ? promoQuery.data : null;
+
   const current = asPlan(data?.entitledPlan);
   const subscribed = Boolean(data && SUBSCRIBED.includes(data.status));
-  const leave = () => router.push(link.required && current === "free" ? ALL_WORKSPACES : link.from);
+  const locked = link.required && current === "free";
+  // With no plan there is nowhere in the app to go back to: Back signs out.
+  const leave = () => {
+    if (!locked) return router.push(link.from);
+    void supabase.auth.signOut().finally(() => router.replace("/login"));
+  };
 
   const back =
     link.step === "pay"
       ? { label: "Plans", onClick: () => go({ step: "plan", item: null }) }
       : link.step === "plan"
         ? {
-            label: link.required && current === "free" ? "Workspaces" : "Back to Mellox",
+            label: locked ? "Sign out" : "Back to Mellox",
             onClick: leave,
           }
         : null;
@@ -156,6 +183,7 @@ export function CheckoutFlow() {
         item={link.item}
         returnPath={link.from}
         subscribed={subscribed}
+        promo={link.item.kind === "plan" && !subscribed ? promo : null}
         onIntervalChange={(interval: BillingInterval) =>
           link.item?.kind === "plan" && go({ item: { ...link.item, interval }, interval }, true)
         }
@@ -179,6 +207,12 @@ export function CheckoutFlow() {
         askSent={askSent}
         busy={asking}
         balance={data.meters.credits.available}
+        promo={promo}
+        promoCode={link.promo}
+        promoChecking={promoQuery.isFetching}
+        promoError={link.promo && promoQuery.error ? promoQuery.error.message : null}
+        canUsePromo={current === "free" && !subscribed && !data.trial.used}
+        onPromo={(code) => go({ promo: code, view: "plans" }, true)}
         onPick={(item) =>
           go({ step: "pay", item, interval: item.kind === "plan" ? item.interval : link.interval })
         }

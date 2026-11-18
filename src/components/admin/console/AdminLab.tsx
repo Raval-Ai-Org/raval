@@ -114,6 +114,10 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/integrations": "integrations.read",
   "/api/admin/lookup": "lookup.read",
   "/api/admin/credits": "credits.grant",
+  "/api/admin/users/gift-credits": "credits.grant",
+  "/api/admin/users/gift-plan": "entitlements.override",
+  "/api/admin/users/access-pass": "entitlements.override",
+  "/api/admin/promos": "entitlements.read",
   "/api/admin/announcements": "announcements.manage",
 };
 

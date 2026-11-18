@@ -124,6 +124,7 @@ import { sourcePhotoWantsLogo } from "./source-photo.server";
 import {
   finishPhotoDesign,
   photoDesignReferences,
+  recoverPhotoDesign,
   preparePhotoDesign,
   PHOTO_DESIGN_FAILED,
   type PhotoDesignTask,
@@ -4564,6 +4565,62 @@ type MediaCheck =
   | { state: "success"; url?: string; dataUrl?: string; costUsd: number | null };
 
 /**
+ * A follow-up render was refused (a low balance, an outage) after this job
+ * already had a picture: keep that picture instead of failing the piece.
+ *   - a quality redo: the first render, already finished and reviewed;
+ *   - a photo design: the person's own photos, in the layer this job drew or
+ *     laid out by code at the post's size.
+ * Null when there is nothing to keep.
+ */
+async function recoverRefusedImage(
+  c: SupabaseClient,
+  row: JobRow,
+  task: ProviderTask,
+): Promise<{
+  dataUrl: string;
+  finished: boolean;
+  review: ImageReview | null;
+  warning?: string;
+} | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  if (task.firstRender) {
+    const first = task.firstRender;
+    // Our own unlinked asset, saved by this job before the redo.
+    const stored = await downloadAssetObject(
+      supabaseAdmin as unknown as SupabaseClient,
+      first.storagePath,
+    ).catch(() => null);
+    task.firstRender = undefined;
+    if (stored?.data)
+      return {
+        dataUrl: `data:image/png;base64,${Buffer.from(await stored.data.arrayBuffer()).toString("base64")}`,
+        finished: true,
+        review: first.review,
+      };
+  }
+  if (task.photoDesign) {
+    const size = (IMAGE_SIZE_BY_RATIO[task.ratio] ?? "1024x1280").split("x").map(Number);
+    const recovered = await recoverPhotoDesign({
+      client: c,
+      workspaceId: row.workspace_id,
+      jobId: row.id,
+      slot: task.slot,
+      task: task.photoDesign,
+      width: size[0] || 1024,
+      height: size[1] || 1280,
+    });
+    if (recovered)
+      return {
+        dataUrl: recovered.dataUrl,
+        finished: false,
+        review: null,
+        warning: recovered.warning,
+      };
+  }
+  return null;
+}
+
+/**
  * Models don't always return the shape asked for (3:4 for 4:5, a square for
  * 9:16): bring every finished model image to exactly the requested ratio.
  * A near miss is cover-cut; a picture far off the shape is shown whole over a
@@ -4997,7 +5054,16 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         });
         return;
       }
-      const check = await checkMediaTask(task);
+      let check = await checkMediaTask(task);
+      // Set when a refused follow-up render is replaced by a picture this job
+      // already has (the first render before a redo, or the person's photos
+      // laid out by code): it is saved as it is, with no second review.
+      let restored: {
+        dataUrl: string;
+        finished: boolean;
+        review: ImageReview | null;
+        warning?: string;
+      } | null = null;
       if (check.state === "pending") {
         if (task.checkErrors || task.checkErrorsSince) resetCheckErrors(task);
         return;
@@ -5068,15 +5134,26 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             return;
           }
         }
-        task.state = "failed";
-        task.failure = {
-          category:
-            check.code === "refusal" || check.code === "safety_unavailable" ? "safety" : "provider",
-          message: userSafeMessage(check.message, "The render failed. Please try again."),
-          retryable: check.retryable ?? true,
-        };
-        setMedia({ status: "failed", error: check.message });
-        return;
+        // Never lose a picture this job already has over a refused follow-up
+        // (a quality redo, a second design layer): a safety refusal still fails.
+        const safetyRefusal = check.code === "refusal" || check.code === "safety_unavailable";
+        if (task.kind === "image" && !safetyRefusal) {
+          restored = await recoverRefusedImage(c, row, task).catch(() => null);
+          if (restored)
+            console.warn("[studio] follow-up render refused; kept the picture", row.id, task.slot);
+        }
+        if (!restored) {
+          task.state = "failed";
+          task.failure = {
+            category: safetyRefusal ? "safety" : "provider",
+            message: userSafeMessage(check.message, "The render failed. Please try again."),
+            retryable: check.retryable ?? true,
+          };
+          setMedia({ status: "failed", error: check.message });
+          return;
+        }
+        if (restored.warning) warnings.push(restored.warning);
+        check = { state: "success", dataUrl: restored.dataUrl, costUsd: null };
       }
       stage = "save";
       await setStage(c, row.id, "save");
@@ -5179,27 +5256,31 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       // A meme remix: the words go on the picture as drawn, then it is shown
       // whole on the post's canvas (cropping would cut its boxes).
       const remixed =
-        task.meme && check.dataUrl ? await finishMemeRemix(check.dataUrl, task.meme) : null;
+        task.meme && check.dataUrl && !restored
+          ? await finishMemeRemix(check.dataUrl, task.meme)
+          : null;
       if (task.meme && !remixed)
         warnings.push(
           "The meme's words couldn't be added to the picture. Check it before posting.",
         );
-      let finalImage = remixed
-        ? await (async () => {
-            const meta = await sharp(remixed).metadata();
-            const canvas = sourcePhotoCanvas(
-              { width: meta.width ?? 0, height: meta.height ?? 0 },
-              task.ratio,
-            );
-            const bytes = canvas ? await fitWhole(remixed, canvas.width, canvas.height) : remixed;
-            return `data:image/${canvas ? "png" : "jpeg"};base64,${bytes.toString("base64")}`;
-          })()
-        : check.dataUrl && task.kind === "image"
-          ? await fitPortraitImage(check.dataUrl, task.ratio, {
-              coverOnly: !!task.photoDesign || task.slot === BACKDROP_SLOT,
-            })
-          : check.dataUrl;
-      if (task.photoDesign && finalImage) {
+      let finalImage = restored
+        ? restored.dataUrl
+        : remixed
+          ? await (async () => {
+              const meta = await sharp(remixed).metadata();
+              const canvas = sourcePhotoCanvas(
+                { width: meta.width ?? 0, height: meta.height ?? 0 },
+                task.ratio,
+              );
+              const bytes = canvas ? await fitWhole(remixed, canvas.width, canvas.height) : remixed;
+              return `data:image/${canvas ? "png" : "jpeg"};base64,${bytes.toString("base64")}`;
+            })()
+          : check.dataUrl && task.kind === "image"
+            ? await fitPortraitImage(check.dataUrl, task.ratio, {
+                coverOnly: !!task.photoDesign || task.slot === BACKDROP_SLOT,
+              })
+            : check.dataUrl;
+      if (task.photoDesign && finalImage && !restored) {
         const designed = await finishPhotoDesign({
           client: c,
           workspaceId: row.workspace_id,
@@ -5240,7 +5321,13 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         finalImage = designed.dataUrl;
         if (designed.warning) warnings.push(designed.warning);
       }
-      if (task.compose && finalImage && row.output?.visualTaste && row.output.artwork) {
+      if (
+        task.compose &&
+        finalImage &&
+        !restored &&
+        row.output?.visualTaste &&
+        row.output.artwork
+      ) {
         const art = await persistAsset({
           workspaceId: row.workspace_id,
           idempotencyKey: `studio-art:${row.id}:${task.slot}:${task.taskId}`,
@@ -5262,7 +5349,13 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         });
         finalImage = `data:image/jpeg;base64,${composed.toString("base64")}`;
       }
-      if (row.output?.visualTaste && finalImage && task.kind === "image" && task.logo) {
+      if (
+        row.output?.visualTaste &&
+        finalImage &&
+        !restored?.finished &&
+        task.kind === "image" &&
+        task.logo
+      ) {
         const placed = await placeBrandLogo(finalImage, task.logo.url, task.logo.corner);
         finalImage = placed.dataUrl;
         if (placed.placement?.skipped) warnings.push(LOGO_LEFT_OFF_NOTE);
@@ -5275,8 +5368,9 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         type: row.type,
         goal: row.input?.intent?.goal,
       });
-      let imageReview: ImageReview | null =
-        task.kind === "image" && finalImage && !boardFrame
+      let imageReview: ImageReview | null = restored
+        ? restored.review
+        : task.kind === "image" && finalImage && !boardFrame
           ? await reviewGeneratedImage(
               finalImage,
               (task.productHero
@@ -5355,7 +5449,8 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       const decision = creativeRedo(
         imageReview ? { ...imageReview, issues: artIssues } : null,
         reviewKind,
-        task.reviewAttempts ?? 0,
+        // A kept picture is never sent for another render.
+        restored ? Number.MAX_SAFE_INTEGER : (task.reviewAttempts ?? 0),
       );
       const hardNow = hardImageDefects(artIssues).length > 0;
       // The redo came back: keep the first picture if it was clearly better.
@@ -5433,7 +5528,7 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       }
       if (imageReview?.status === "warn")
         warnings.push(...imageReview.issues.map((issue) => `Visual review: ${issue}`));
-      if (task.kind === "image" && !imageReview && !boardFrame)
+      if (task.kind === "image" && !imageReview && !boardFrame && !restored)
         warnings.push("Visual review was unavailable. Check this artwork before publishing.");
       // The logo goes in a corner that is clear of words and the product
       // (measured, pickLogoCorner); with no clear corner it is left off.

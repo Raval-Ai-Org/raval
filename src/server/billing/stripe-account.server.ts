@@ -10,6 +10,7 @@ import {
   PAUSE,
   PLANS,
   TRIAL,
+  cr,
   VIDEO_PACKS,
   planRank,
   type BillingInterval,
@@ -28,6 +29,8 @@ import {
 } from "./grants.server";
 import { windowAfterCancel } from "@/lib/billing/cancel-window";
 import { grantMeter, clawbackMeter } from "./meters.server";
+import { markRedemption } from "./promo.server";
+import { TRIAL_MESSAGES } from "@/lib/billing/promo";
 import { projectStripeSubscription, shouldPreserveFreeWindow } from "./stripe-subscription-state";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
@@ -254,7 +257,8 @@ async function resumeOrReplacePlanCheckout(args: {
   userId: string;
   key: string;
   interval: BillingInterval | null;
-  trial: boolean;
+  /** "false", or "promo:<code id>" for a trial checkout. */
+  trial: string;
   ui: CheckoutUi;
 }): Promise<CheckoutOpened | null> {
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -309,7 +313,7 @@ async function resumeOrReplacePlanCheckout(args: {
 
     // Sessions created before this marker existed were regular checkouts.
     const recordedTrial = session.metadata?.mellox_checkout_trial ?? "false";
-    const trialMatches = recordedTrial === String(args.trial);
+    const trialMatches = recordedTrial === args.trial;
     const selectionMatches =
       intent.catalog_key === args.key && intent.interval === args.interval && trialMatches;
     const uiMatches = (session.ui_mode === "elements") === (args.ui === "elements");
@@ -343,6 +347,8 @@ export async function createAccountCheckout(args: {
   quantity: number;
   interval?: BillingInterval;
   trial?: boolean;
+  /** A trial code from Mellox: its days and credits, card still required. */
+  promoCode?: string;
   returnPath?: string;
   ui?: CheckoutUi;
 }): Promise<CheckoutOpened> {
@@ -364,9 +370,18 @@ export async function createAccountCheckout(args: {
   if (args.kind === "plan" && args.quantity !== 1) {
     throw new HttpError(400, "A subscription has one plan.");
   }
-  if (args.trial && (args.kind !== "plan" || args.key !== TRIAL.plan || account.trial_used)) {
-    throw new HttpError(409, "This trial is not available.");
+  // There is no Free plan and no open trial (ADR-0050): a trial starts only
+  // from a code Mellox gave out, checked here and claimed again at the webhook.
+  if (args.trial && !args.promoCode) {
+    throw new HttpError(409, "Trials start with a code from Mellox.");
   }
+  const promo = args.promoCode
+    ? await import("./promo.server").then(({ promoOfferFor }) =>
+        promoOfferFor(account, args.promoCode),
+      )
+    : null;
+  if (promo && args.kind !== "plan") throw new HttpError(400, "A trial code is used with a plan.");
+  const trialMarker = promo ? `promo:${promo.id}` : "false";
   if (!Number.isInteger(args.quantity) || args.quantity < 1 || args.quantity > 20) {
     throw new HttpError(400, "Invalid purchase quantity.");
   }
@@ -386,7 +401,7 @@ export async function createAccountCheckout(args: {
       .eq("id", account.id)
       .single();
     if (currentError || !current) throw new HttpError(503, "Could not check current subscription.");
-    if (current.provider_subscription_id || (args.trial && current.trial_used)) {
+    if (current.provider_subscription_id || (promo && current.trial_used)) {
       throw new HttpError(409, "This account already has a subscription or used its trial.");
     }
     const { error: expireError } = await admin
@@ -402,7 +417,7 @@ export async function createAccountCheckout(args: {
       userId: args.userId,
       key: args.key,
       interval,
-      trial: Boolean(args.trial),
+      trial: trialMarker,
       ui,
     });
     if (existing) return existing;
@@ -428,7 +443,7 @@ export async function createAccountCheckout(args: {
       userId: args.userId,
       key: args.key,
       interval,
-      trial: Boolean(args.trial),
+      trial: trialMarker,
       ui,
     });
     if (existing) return existing;
@@ -468,13 +483,24 @@ export async function createAccountCheckout(args: {
         client_reference_id: intentId,
         metadata: {
           mellox_checkout_intent: intentId,
-          mellox_checkout_trial: String(Boolean(args.trial)),
+          mellox_checkout_trial: trialMarker,
         },
         ...(mode === "subscription"
           ? {
               subscription_data: {
-                metadata: { mellox_checkout_intent: intentId },
-                ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
+                metadata: {
+                  mellox_checkout_intent: intentId,
+                  ...(promo ? { mellox_promo_code_id: promo.id } : {}),
+                },
+                ...(promo
+                  ? {
+                      trial_period_days: promo.days,
+                      // No card on file when the trial ends: stop, never bill.
+                      trial_settings: {
+                        end_behavior: { missing_payment_method: "cancel" as const },
+                      },
+                    }
+                  : {}),
               },
             }
           : {}),
@@ -1480,6 +1506,54 @@ async function planForSubscription(subscription: Stripe.Subscription): Promise<{
   };
 }
 
+/**
+ * Claim one use of the trial's code for this account and card. Refused (the
+ * code ran out, or this account or card already had a trial): the
+ * subscription is cancelled before anything is granted or charged, and the
+ * person picks a plan the normal way.
+ */
+async function claimPromoTrial(
+  subscription: Stripe.Subscription,
+  account: BillingAccount,
+  promoId: string,
+  trialEndsAt: string,
+): Promise<{ code: string; credits: number } | null> {
+  const { promoById, redeemPromo } = await import("./promo.server");
+  const promo = await promoById(promoId);
+  let fingerprint: string | null = null;
+  const method =
+    typeof subscription.default_payment_method === "string"
+      ? subscription.default_payment_method
+      : (subscription.default_payment_method?.id ?? null);
+  if (method) {
+    const pm = await stripe()
+      .paymentMethods.retrieve(method)
+      .catch(() => null);
+    fingerprint = pm?.card?.fingerprint ?? null;
+  }
+  const redeemed = promo
+    ? await redeemPromo({
+        codeId: promo.id,
+        accountId: account.id,
+        userId: account.owner_user_id,
+        subscriptionId: subscription.id,
+        fingerprint,
+        trialEndsAt,
+      })
+    : null;
+  if (promo && redeemed) return { code: promo.code, credits: promo.credits };
+  console.warn("[billing] trial code refused at start", { account: account.id, promo: promoId });
+  await stripe()
+    .subscriptions.cancel(subscription.id, { prorate: false, invoice_now: false })
+    .catch((cause) =>
+      console.error("[billing] could not cancel a refused trial", {
+        subscription: subscription.id,
+        message: cause instanceof Error ? cause.message : String(cause),
+      }),
+    );
+  return null;
+}
+
 async function syncSubscription(
   subscriptionIdValue: string,
   paidInvoiceId?: string,
@@ -1572,7 +1646,31 @@ async function syncSubscription(
       ? account.pause_started_at
       : now.toISOString()
     : null;
-  if (trialing) {
+  // A trial from a code runs on the trial tier; once it is paid, the plan.
+  const promoId = subscription.metadata?.mellox_promo_code_id || null;
+  changes.trial_tier = trialing && promoId ? "promo" : null;
+  if (trialing && promoId) {
+    const expiry = changes.trial_ends_at as string;
+    const promo = await claimPromoTrial(subscription, account, promoId, expiry);
+    if (!promo) return;
+    for (const [meter, amount] of [
+      ["credits", cr(promo.credits)],
+      ["pro_messages", TRIAL_MESSAGES.proMessages],
+      ["flash_messages", TRIAL_MESSAGES.flashMessages],
+    ] as const) {
+      await grantMeter({
+        accountId: account.id,
+        meter,
+        amount,
+        source: "promo",
+        restriction: "ai_only",
+        idempotencyKey: `promo-trial:${subscription.id}:${meter}`,
+        expiresAt: expiry,
+        providerRef: subscription.id,
+        reason: `Trial code ${promo.code}`,
+      });
+    }
+  } else if (trialing) {
     const expiry = changes.trial_ends_at as string;
     for (const [meter, amount] of [
       ["credits", TRIAL.credits],
@@ -1696,6 +1794,8 @@ async function syncSubscription(
   }
   const { error } = await admin.from("billing_accounts").update(changes).eq("id", account.id);
   if (error) throw new Error("Could not sync Stripe subscription.");
+  if (promoId && (active || canceled))
+    await markRedemption(subscription.id, active ? "converted" : "ended");
   if ((active || trialing) && subscription.metadata.mellox_checkout_intent) {
     const { error: consumeError } = await admin
       .from("checkout_intents")
