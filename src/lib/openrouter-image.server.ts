@@ -30,7 +30,11 @@ import { recordUsage } from "@/server/ai/metering";
 import { round6, unitPrice } from "@/server/ai/pricing";
 import { getRequestScope } from "@/server/request-context";
 import { log } from "@/server/observability/logger";
-import { markImageFundsOut } from "@/server/ai/image-funds.server";
+import {
+  kieImagesReady,
+  markImageFundsOut,
+  openRouterImagesPaused,
+} from "@/server/ai/image-funds.server";
 import { imageProvider, kieImage, kieServedModel } from "./kie-image.server";
 import {
   AiGatewayError,
@@ -335,18 +339,27 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
   // Billed per image: the workspace's monthly image quota and spend ceiling apply.
   if (!opts.budgeted) await enforceBudget("image");
 
-  const onKie = imageProvider() === "kie";
-  const candidates = (opts.model ? [opts.model] : [plan.model, ...plan.fallbacks])
-    // On KIE (temporary) a Recraft pick is drawn by Flare: KIE has no Recraft.
+  // KIE draws when it is chosen (IMAGE_PROVIDER=kie), or when OpenRouter is
+  // short of money and KIE can take over: a low balance never stops a picture
+  // that KIE can make.
+  let onKie = imageProvider() === "kie" || (kieImagesReady() && (await openRouterImagesPaused()));
+  const forKie = (list: string[]) =>
+    list
+      // KIE has no Recraft: a Recraft pick is drawn by Flare there.
+      .map(kieServedModel)
+      .filter((model, index, all) => all.indexOf(model) === index);
+  const limit = Math.max(1, Math.min(3, opts.maxAttempts ?? 3));
+  let candidates = (opts.model ? [opts.model] : [plan.model, ...plan.fallbacks])
     .map((model) => (onKie ? kieServedModel(model) : model))
     .filter((model, index, all) => all.indexOf(model) === index)
     .filter((model) => modelCanServe(model, { references, background: opts.background }))
-    .slice(0, Math.max(1, Math.min(3, opts.maxAttempts ?? 3)));
-  const send = transportOverride ?? (onKie ? kieImage : openRouterImage);
-  const provider = onKie ? "kie" : "openrouter";
+    .slice(0, limit);
+  let send = transportOverride ?? (onKie ? kieImage : openRouterImage);
+  let provider: "kie" | "openrouter" = onKie ? "kie" : "openrouter";
   let lastError: unknown;
   let attempt = 0;
-  for (const model of candidates) {
+  for (let index = 0; index < candidates.length; index++) {
+    const model = candidates[index];
     attempt += 1;
     const aspectRatio = aspectRatioFor(size, model);
     const key = `or:img:${await digest(
@@ -423,8 +436,19 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         code: error instanceof AiGatewayError ? error.code : undefined,
         message: upstreamDetail(error),
       });
-      if (!onKie && error instanceof AiGatewayError && error.code === "insufficient_credits")
+      if (!onKie && error instanceof AiGatewayError && error.code === "insufficient_credits") {
         await markImageFundsOut();
+        // OpenRouter is out of money: the same picture goes to KIE at once.
+        if (kieImagesReady()) {
+          onKie = true;
+          provider = "kie";
+          send = transportOverride ?? kieImage;
+          candidates = [...candidates.slice(0, index), ...forKie(candidates.slice(index))];
+          index -= 1;
+          log.warn("openrouter.image.kie_takeover", { model, attempt });
+          continue;
+        }
+      }
       if (isTerminal(error, model)) throw error;
     }
   }

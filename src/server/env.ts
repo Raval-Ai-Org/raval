@@ -34,6 +34,8 @@ const Schema = z.object({
   VIDEO_PROVIDER_FALLBACK: z.enum(["openrouter", "kie", "none"]).optional(),
   // Temporary: "kie" draws pictures on KIE while OpenRouter has no balance.
   IMAGE_PROVIDER: z.enum(["kie", "openrouter"]).optional(),
+  // KIE draws a picture OpenRouter can't pay for (default on with KIE_API_KEY); "none" = off.
+  IMAGE_PROVIDER_FALLBACK: z.enum(["kie", "none"]).optional(),
   IMAGE_MODEL_DEFAULT: z.string().optional(),
   IMAGE_MODEL_PREMIUM: z.string().optional(),
   IMAGE_MODEL_EDIT: z.string().optional(),

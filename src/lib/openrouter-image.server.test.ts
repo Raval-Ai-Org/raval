@@ -123,6 +123,7 @@ describe("OpenRouter image generation", () => {
   });
 
   it("stops at a failure another model would repeat (out of credits)", async () => {
+    vi.stubEnv("KIE_API_KEY", "");
     const calls = fakeImages({
       [IMAGE_RECRAFT]: new AiGatewayError(402, "no credits", "insufficient_credits"),
     });
@@ -130,6 +131,36 @@ describe("OpenRouter image generation", () => {
       code: "insufficient_credits",
     });
     expect(calls).toHaveLength(1);
+  });
+
+  it("hands a picture OpenRouter can't pay for to KIE instead of failing", async () => {
+    vi.stubEnv("KIE_API_KEY", "kie-test");
+    // No live balance read and no pause left by an earlier test: OpenRouter is tried first.
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const { clearImageFundsPause } = await import("@/server/ai/image-funds.server");
+    await clearImageFundsPause();
+    const calls = fakeImages({
+      [IMAGE_RECRAFT]: new AiGatewayError(402, "no credits", "insufficient_credits"),
+    });
+    let first = true;
+    restore?.();
+    restore = setImageTransport(async (req) => {
+      calls.push(req);
+      if (first) {
+        first = false;
+        throw new AiGatewayError(402, "no credits", "insufficient_credits");
+      }
+      return { b64: "iVBORw0KGgo=", mimeType: "image/png", model: req.model, costUsd: 0.03 };
+    });
+    const image = await asUser(() => generateImage({ prompt: "A post when money is short" }));
+    // Recraft on OpenRouter was refused; the same picture was drawn by Flare on KIE.
+    expect(calls.map((c) => c.model)).toEqual([IMAGE_RECRAFT, IMAGE_FLARE]);
+    expect(image.model).toBe(IMAGE_FLARE);
+    expect(usage.rows.map((r) => [r.provider, r.status ?? "ok"])).toEqual([
+      ["openrouter", "error"],
+      ["kie", "ok"],
+    ]);
+    await clearImageFundsPause();
   });
 
   it("goes on to Flare when Recraft refuses the request", async () => {

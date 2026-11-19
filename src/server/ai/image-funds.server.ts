@@ -87,13 +87,32 @@ async function liveBalance(): Promise<number | null> {
 }
 
 /**
- * True when a new picture would certainly be refused for credits: a 402 in the
- * last few minutes, or a live balance under the floor. Never throws.
+ * Whether KIE can draw a picture OpenRouter can't pay for (the 2026-11-19
+ * outage: $1.19 left on OpenRouter, 292 credits on KIE, and every picture
+ * refused by this file's own floor before any provider was asked). On by
+ * default when KIE_API_KEY is set; IMAGE_PROVIDER_FALLBACK=none turns it off.
+ */
+export function kieImagesReady(): boolean {
+  if (!process.env.KIE_API_KEY?.trim()) return false;
+  return process.env.IMAGE_PROVIDER_FALLBACK?.trim().toLowerCase() !== "none";
+}
+
+/**
+ * True when a new picture can't be drawn anywhere: OpenRouter is short of
+ * money and KIE can't take over. Studio refuses the job up front only then.
  */
 export async function imageFundsPaused(): Promise<boolean> {
-  // Pictures drawn on KIE (IMAGE_PROVIDER=kie, temporary) don't spend
-  // OpenRouter money, so its balance never pauses them.
+  // Pictures drawn on KIE (IMAGE_PROVIDER=kie) don't spend OpenRouter money.
   if (process.env.IMAGE_PROVIDER?.trim().toLowerCase() === "kie") return false;
+  if (kieImagesReady()) return false;
+  return openRouterImagesPaused();
+}
+
+/**
+ * True when OpenRouter would certainly refuse a picture for credits: a 402 in
+ * the last few minutes, or a live balance under the floor. Never throws.
+ */
+export async function openRouterImagesPaused(): Promise<boolean> {
   try {
     if (await cache.get(PAUSE_KEY)) {
       // A top-up lifts the pause at once instead of after five minutes.
