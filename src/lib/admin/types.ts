@@ -670,6 +670,32 @@ export type AdminAnnouncement = {
   status: "live" | "scheduled" | "ended" | "off";
 };
 
+/** A Trend Radar trend as the admin console shows it (ADR-0052). */
+export type AdminTrend = {
+  id: string;
+  title: string;
+  brief: string;
+  whatToMake: string;
+  doNots: string;
+  scope: "all" | "specific" | "micro";
+  industries: string[];
+  workspaceIds: string[];
+  languages: string[];
+  platforms: string[];
+  tags: string[];
+  links: string[];
+  media: { path: string; kind: "image" | "video"; caption: string | null; url: string | null }[];
+  allowMood: boolean;
+  priority: number;
+  status: "draft" | "live" | "archived";
+  startsAt: string;
+  endsAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  /** Worked out on the server: live now, scheduled, ended, draft or archived. */
+  state: "live" | "scheduled" | "ended" | "draft" | "archived";
+};
+
 /* ───────────────── analytics, integrations, lookup, credits ───────────────── */
 
 export type AdminAnalytics = {

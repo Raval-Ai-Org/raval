@@ -26,6 +26,7 @@ import {
   labSupportView,
   LAB_ANALYTICS,
   LAB_ANNOUNCEMENTS,
+  LAB_TRENDS,
   LAB_INTEGRATIONS,
   labLookup,
   LAB_FLAGS,
@@ -54,6 +55,7 @@ import { AbuseScreen } from "./AbuseScreen";
 import { AiControlsScreen } from "./AiControlsScreen";
 import { AnalyticsScreen } from "./AnalyticsScreen";
 import { AnnouncementsScreen } from "./AnnouncementsScreen";
+import { TrendsScreen } from "./TrendsScreen";
 import { EmergencyScreen } from "./EmergencyScreen";
 import { FlagsScreen } from "./FlagsScreen";
 import { HealthScreen } from "./HealthScreen";
@@ -119,6 +121,8 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/users/access-pass": "entitlements.override",
   "/api/admin/promos": "entitlements.read",
   "/api/admin/announcements": "announcements.manage",
+  "/api/admin/trends": "trends.manage",
+  "/api/admin/trends/media": "trends.manage",
 };
 
 function install(role: AdminRoleKey): () => void {
@@ -205,6 +209,16 @@ function install(role: AdminRoleKey): () => void {
         return post ? json({ key: "lab" }) : json(LAB_FLAGS);
       case "/api/admin/announcements":
         return post ? json({ id: "lab" }) : json(LAB_ANNOUNCEMENTS);
+      case "/api/admin/trends":
+        return post ? json({ id: "lab" }) : json(LAB_TRENDS);
+      case "/api/admin/trends/media":
+        return json({
+          path: "platform/trends/lab",
+          kind: "image",
+          caption: null,
+          stills: [],
+          url: null,
+        });
       default:
         // Every other route here is a change: pretend it worked.
         return json({ ok: true, id: "lab", suspended: true, sessionsEnded: 2 });
@@ -303,6 +317,9 @@ export function AdminLab() {
       break;
     case "announcements":
       screen = <AnnouncementsScreen />;
+      break;
+    case "trends":
+      screen = <TrendsScreen />;
       break;
     case "emergency":
       screen = <EmergencyScreen />;

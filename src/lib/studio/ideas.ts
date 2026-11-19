@@ -13,7 +13,7 @@ import type { GoalId } from "./jobs";
 import type { StudioContext } from "./prompts";
 
 export type IdeaSource =
-  "season" | "trend" | "competitor" | "gap" | "pillar" | "momentum" | "campaign";
+  "season" | "trend" | "competitor" | "gap" | "pillar" | "momentum" | "campaign" | "radar";
 
 export const IDEA_SOURCE_LABEL: Record<IdeaSource, string> = {
   season: "Timely",
@@ -23,6 +23,7 @@ export const IDEA_SOURCE_LABEL: Record<IdeaSource, string> = {
   pillar: "Brand pillar",
   momentum: "Momentum",
   campaign: "Campaign",
+  radar: "Trending now",
 };
 
 export type StudioIdea = {
@@ -85,6 +86,22 @@ export function collectSignals(
         90 - Math.min(40, Math.max(0, days - m.leadDays)) + (m.tags.includes("retail") ? 5 : 0),
       suggestedType: m.tags.includes("retail") ? "ad" : "social",
       goal: m.tags.includes("retail") ? "offer" : "engagement",
+    });
+  }
+
+  // Trend Radar (ADR-0052): what Mellox staff flagged as trending now for
+  // this brand. The strongest signal there is while it is live.
+  for (const t of (ctx.radar ?? []).slice(0, 3)) {
+    signals.push({
+      source: "radar",
+      headline: t.title,
+      detail: [t.brief, t.whatToMake && `Make: ${t.whatToMake}`]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 400),
+      weight: 95 + t.priority,
+      suggestedType: "image",
+      goal: "engagement",
     });
   }
 
@@ -443,6 +460,7 @@ export function sanitizeIdea(
     "pillar",
     "momentum",
     "campaign",
+    "radar",
   ];
   return {
     id: ideaId(type, title),

@@ -107,7 +107,17 @@ describe("pickSurpriseIdea", () => {
   it("never picks an offer the brand doesn't have, or an occasion that isn't close", () => {
     for (let i = 0; i < 40; i++) {
       const idea = pickSurpriseIdea({ seed: `s${i}` });
-      expect(["offer", "occasion"]).not.toContain(idea.id);
+      expect(["offer", "occasion", "trend"]).not.toContain(idea.id);
     }
+  });
+});
+
+describe("pickSurpriseIdea with a radar trend", () => {
+  it("often picks the trend while one reaches the brand", () => {
+    const picks = Array.from(
+      { length: 40 },
+      (_, i) => pickSurpriseIdea({ seed: `t${i}`, hasTrend: true }).id,
+    );
+    expect(picks.filter((id) => id === "trend").length).toBeGreaterThan(10);
   });
 });

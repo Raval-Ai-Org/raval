@@ -30,6 +30,7 @@ import { recordUsage } from "@/server/ai/metering";
 import { round6, unitPrice } from "@/server/ai/pricing";
 import { getRequestScope } from "@/server/request-context";
 import { log } from "@/server/observability/logger";
+import { markImageFundsOut } from "@/server/ai/image-funds.server";
 import {
   AiGatewayError,
   getOpenRouterKey,
@@ -362,6 +363,8 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         code: error instanceof AiGatewayError ? error.code : undefined,
         message: upstreamDetail(error),
       });
+      if (error instanceof AiGatewayError && error.code === "insufficient_credits")
+        await markImageFundsOut();
       if (error instanceof AiGatewayError && TERMINAL_CODES.has(error.code ?? "")) throw error;
     }
   }

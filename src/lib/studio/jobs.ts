@@ -147,6 +147,8 @@ export const ControlsSchema = z.object({
   productId: z.string().uuid().optional(),
   /** The person chose "No product": a product the brief names isn't picked for them. */
   noProduct: z.boolean().optional(),
+  /** A Trend Radar trend this piece is made for (platform_trends id, re-checked on the server). */
+  trendId: z.string().uuid().optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
   adFormat: z.string().max(40).optional(),
   /** Ads: what the ad is for (src/lib/studio/ad-objectives.ts). Absent: from the brief and goal. */

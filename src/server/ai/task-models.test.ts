@@ -97,7 +97,7 @@ describe("task model registry", () => {
     expect(planFor("studio.article").models[0]).toBe(PREMIUM);
     expect(planFor("studio.video.storyboard").models[0]).toBe(PREMIUM);
     expect(planFor("geo.agent.implement").models[0]).toBe(PREMIUM);
-    expect(planFor("studio.ideas")).toMatchObject({ models: [BUDGET, WRITER], effort: "none" });
+    expect(planFor("studio.ideas")).toMatchObject({ models: [WRITER, LUNA], effort: "none" });
     expect(planFor("chat").models).toEqual([WRITER, LUNA]);
     expect(planFor("competitors.updates").models).toEqual([LABELLER, LUNA]);
     expect(planFor("ai-generate.caption").models[0]).toBe(WRITER);
@@ -197,7 +197,7 @@ describe("task model registry", () => {
     expect(effectivePlan(planFor("competitors.updates"), true).models[0]).toBe(LABELLER);
     expect(effectivePlan(planFor("studio.transcribe"), true).models[0]).toBe(WORKHORSE);
     expect(effectivePlan(planFor("studio.ideas"), true)).toMatchObject({
-      models: [BUDGET, WRITER],
+      models: [WRITER, LUNA],
       effort: "none",
     });
     expect(effectivePlan(planFor("geo.agent.investigate"), true).effort).toBe("medium");

@@ -956,7 +956,27 @@ export const realPorts: AutopilotPorts = {
           detail: short(t.detail, 280),
         }),
       );
-      return { audience, competitors, market, trends } satisfies BrainLists;
+      // Trend Radar moments staff published for this brand lead the list
+      // (ADR-0052): the plan can point at them like any stored trend.
+      const radar: BrainEntry[] = (ctx.radar ?? [])
+        .filter((t) => !t.platforms.length || t.platforms.some((p) => platforms.includes(p)))
+        .slice(0, 3)
+        .map((t) => ({
+          name: short(`${t.title} (trending now, staff-picked)`, 120),
+          detail: short(
+            [t.brief, t.whatToMake && `Make: ${t.whatToMake}`, t.doNots && `Never: ${t.doNots}`]
+              .filter(Boolean)
+              .join(" "),
+            280,
+          ),
+        }))
+        .filter((e) => e.name && e.detail);
+      return {
+        audience,
+        competitors,
+        market,
+        trends: [...radar, ...trends].slice(0, 8),
+      } satisfies BrainLists;
     },
 
     async recentTitles(workspaceId) {

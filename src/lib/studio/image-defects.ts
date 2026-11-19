@@ -52,6 +52,7 @@ export const RUBRIC_KEYS = [
   "joke",
   "offer",
   "style",
+  "idea",
 ] as const;
 export type RubricKey = (typeof RUBRIC_KEYS)[number];
 export type RubricScores = Partial<Record<RubricKey, number>>;
@@ -67,6 +68,7 @@ export const RUBRIC_LINES: Record<RubricKey, string> = {
   joke: "joke: the meme reads in two seconds, the picture supports the punchline, the text sits where this format puts it",
   offer:
     "offer: the offer, who it is for and the action are clear in the first glance, with the action visible",
+  idea: "idea: built on one clear, memorable idea a top brand would post; stops the thumb (not a generic template or stock photo with a caption)",
   style:
     "style: painted in the brand's own world from its examples and style bible: same medium, rendering, palette, lighting and type treatment (composition may differ)",
 };
@@ -75,10 +77,19 @@ export const RUBRIC_LINES: Record<RubricKey, string> = {
 // `style` is only asked for (and so only counted) when the brand has a learned
 // style with examples; creativeScore skips a dimension that wasn't scored.
 const WEIGHTS: Record<ReviewKind, Partial<Record<RubricKey, number>>> = {
-  designed: { brief: 2, hierarchy: 2, legibility: 1.5, brand: 1.5, craft: 2, style: 2 },
+  designed: { brief: 2, hierarchy: 2, legibility: 1.5, brand: 1.5, craft: 2, idea: 1.5, style: 2 },
   native: { brief: 2, legibility: 1, brand: 1, craft: 2, style: 1 },
   meme: { brief: 1, legibility: 2, craft: 1, joke: 3, style: 0.5 },
-  sales: { brief: 1.5, hierarchy: 2, legibility: 2, brand: 1, craft: 1.5, offer: 3, style: 1.5 },
+  sales: {
+    brief: 1.5,
+    hierarchy: 2,
+    legibility: 2,
+    brand: 1,
+    craft: 1.5,
+    offer: 3,
+    idea: 1,
+    style: 1.5,
+  },
 };
 
 export function rubricFor(kind: ReviewKind, opts: { style?: boolean } = {}): RubricKey[] {

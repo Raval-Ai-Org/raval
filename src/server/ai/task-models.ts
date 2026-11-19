@@ -209,26 +209,30 @@ const REGISTRY: Record<string, TaskPlan> = {
   "studio.carousel": tier(CONVERSATION, "low", { maxTokens: 6_000 }),
   "studio.story": tier(WRITER, "low"),
   "studio.script": tier(WRITER, "medium"),
-  "studio.ad": tier(WRITER, "low"),
+  // Ads weigh three ideas before writing the winner (ADR-0052).
+  "studio.ad": tier(WRITER, "medium"),
   "studio.upload-captions": tier(WRITER, "medium"),
   "studio.captions": tier(WRITER, "low"),
   "studio.caption.edit": tier(CAREFUL, "low", { maxTokens: 1800 }),
   "studio.naturalize": tier(WRITER, "low"),
   // Reads the brand's own photos (faces, calm areas, colours) before a design.
   "studio.photo-read": tier(WORKHORSE, "low", { maxTokens: 2400 }),
-  "studio.hero.concept": tier(WRITER, "low", { maxTokens: 1500, temperature: 0.9 }),
+  // A product poster's own idea and headline (ADR-0052: the idea is what makes it).
+  "studio.hero.concept": tier(CONVERSATION, "low", { maxTokens: 1500, temperature: 0.9 }),
   // Hears a branded clip's sound for its captions (Gemini Flash takes audio).
   // Not used when a local whisper.cpp is configured.
   "studio.transcribe": tier(WORKHORSE, "low", { maxTokens: 6000, temperature: 0 }),
-  // Ideas and prompt help need no chain of thought: at "low" DeepSeek still
-  // spent 77% of its output (about 4,200 tokens a call) reasoning.
-  "studio.ideas": tier(BUDGET, "none", { temperature: 0.9 }),
-  "studio.prompt": tier(BUDGET, "none"),
+  // The idea is the most important creative step (ADR-0052): ideas and
+  // Surprise me moved off the budget model. Haiku turns reasoning off for
+  // the deck (many short ideas); Surprise me thinks a little first.
+  "studio.ideas": tier(WRITER, "none", { temperature: 0.9 }),
+  "studio.prompt": tier(WRITER, "low"),
   "studio.research": tier(WRITER, "medium"),
   "studio.trends": tier(WRITER, "low"),
   // The director (ADR-0051 round 3): a picture post's words and its whole image
   // prompt, in one call on the stronger writer. Videos keep the writer.
-  "studio.image.brief": tier(CONVERSATION, "low", { maxTokens: 4_000 }),
+  // ADR-0052: three concepts, a score and the winner's prompt in one call.
+  "studio.image.brief": tier(CONVERSATION, "low", { maxTokens: 5_000 }),
   "studio.video.brief": tier(WRITER, "low"),
   // The stronger writer, only where it pays off (ADR-0051): a draft whose
   // words drifted from the brief (brief-fit.ts), a carousel of 7+ slides, and

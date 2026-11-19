@@ -11,8 +11,10 @@ import {
 
 // The system prompt is the part every call pays for; these ceilings keep a
 // new rule from quietly doubling the bill (Round 5). Raise one only with a reason.
-// The post writer is brief-first and short (ADR-0051): about 4k, ceiling 5k.
-const SYSTEM_MAX_CHARS = { social: 9000, carousel: 10000, ad: 10000, image: 5000, meme: 12000 };
+// The post writer is brief-first (ADR-0051). ADR-0052 added the concept round
+// and the house craft (three ideas scored before one is written): about 7.5k,
+// ceiling 8k, roughly $0.002 more per post on Sonnet.
+const SYSTEM_MAX_CHARS = { social: 9000, carousel: 10000, ad: 10000, image: 8000, meme: 12000 };
 
 function base(category: string | null, goal = "awareness") {
   return {

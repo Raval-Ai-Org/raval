@@ -51,7 +51,7 @@ export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
   image: {
     sections: ["Idea", "Headline", "Supporting line", "Picture", "Caption idea"],
     guidance:
-      "'Headline' is the exact words set on the picture (2–6 words, punchy, no full sentence). 'Supporting line' is optional small text (under 10 words) or 'none'. 'Picture' is one or two sentences: what a real, believable post shows (the product in real use, the place, the people at work, the result, or a clean type-led design), concrete and specific to this brand. Never a surreal trick, a giant object or a visual metaphor. Say nothing about camera, lens, lighting or colours: the brand's look decides those. 'Caption idea' is the caption's angle and first line.",
+      "'Headline' is the exact words set on the picture (2–6 words, punchy, no full sentence). 'Supporting line' is optional small text (under 10 words) or 'none'. 'Picture' is one or two sentences: the one idea the picture is built on, concrete and specific to this brand: a believable scene with one twist that carries the message (a visual metaphor), the product as a dramatic hero, a symbolic object that stands for a service, the subject in front of giant type, or a real moment from the brand's world. Clear first for hiring, events and greetings. Say nothing about camera, lens, lighting or colours: the brand's look decides those. 'Caption idea' is the caption's angle and first line.",
   },
   ad: {
     sections: ["Offer", "For", "Angle", "Headline", "Supporting line", "Picture", "Button"],
@@ -158,6 +158,7 @@ const SOURCE_BOOST: Record<IdeaSource, number> = {
   gap: 5,
   pillar: 0,
   campaign: 20,
+  radar: 35,
 };
 
 function normalize(text: string): string {
@@ -200,6 +201,7 @@ export const SIGNAL_LABEL: Record<IdeaSource, string> = {
   pillar: "Your brand",
   momentum: "Working well",
   campaign: "Your campaign",
+  radar: "Trending now",
 };
 
 /** The slide count a person picked (3 to 10, default 6). */

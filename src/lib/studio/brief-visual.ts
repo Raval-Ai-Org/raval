@@ -241,7 +241,7 @@ export function preflightPictureBrief(args: {
   ]
     .filter(Boolean)
     .join("\n");
-  scene = (lead ? `${lead}\n${scene}` : scene).slice(0, 1600);
+  scene = (lead ? `${lead}\n${scene}` : scene).slice(0, 3400); // the director may write 2600 chars (ADR-0052): never cut it
 
   let headline = (args.headline ?? "")
     .replace(/\s+/g, " ")

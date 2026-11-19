@@ -21,7 +21,10 @@ describe("adImagePrompt", () => {
   it("asks for a finished ad with the layout, exact words and brand colours", () => {
     const prompt = adImagePrompt(base);
     expect(prompt).toContain("ready-to-run paid social ad for Brewly");
-    expect(prompt).toContain(base.format.layout);
+    // The writer's scene is the art direction (ADR-0052); the layout is only
+    // the starting point when there is no scene.
+    expect(prompt).toContain(base.scene);
+    expect(adImagePrompt({ ...base, scene: "" })).toContain(base.format.layout);
     expect(prompt).toContain('Headline: "Cold brew in 5 minutes"');
     expect(prompt).toContain('Button label: "Shop now"');
     expect(prompt).toContain("#0B3D2E, #F4C430");
@@ -38,11 +41,11 @@ describe("adImagePrompt", () => {
     expect(adImagePrompt({ ...base, ratio: "9:16" })).toContain("bottom 20% free of text");
   });
 
-  it("gets the same type rules and final check as posts, and the ad's job", async () => {
+  it("says the ad's job and keeps the words exact, with no template checklist", async () => {
     const { getAdObjective } = await import("@/lib/studio/ad-objectives");
     const prompt = adImagePrompt({ ...base, objective: getAdObjective("sales") });
     expect(prompt).toContain("This ad's job: sell");
-    expect(prompt).toContain("Type scale");
-    expect(prompt).toContain("QUALITY CHECK BEFORE FINALIZING");
+    expect(prompt).toContain("spelled exactly as written");
+    expect(prompt).not.toContain("QUALITY CHECK BEFORE FINALIZING");
   });
 });

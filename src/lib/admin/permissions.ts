@@ -42,6 +42,8 @@ export const PERMISSIONS = [
   "flags.manage",
   /** Write, schedule and end the messages shown to signed-in people. */
   "announcements.manage",
+  /** Post, publish and end Trend Radar trends that reach brands' Studio (ADR-0052). */
+  "trends.manage",
   /** Signups, activity, funnel and adoption, from stored rows. */
   "analytics.read",
   /** Connection state of social accounts and website connectors (never tokens). */
@@ -115,6 +117,7 @@ export const ROLE_PRESETS: Record<AdminRoleKey, AdminRolePreset> = {
       "flags.read",
       "flags.manage",
       "announcements.manage",
+      "trends.manage",
       "analytics.read",
       "integrations.read",
       "lookup.read",

@@ -1156,6 +1156,27 @@ benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
 - Free prompt benchmark: `vitest.bench.config.ts` (`tests/bench/`, cases in
   `evals/creative/`), no network.
 
+## Creative system and Trend Radar
+
+Decision record [ADR-0052](docs/adr/0052-creative-system-and-trend-radar.md),
+skill `creative-director`.
+
+- **One idea per picture.** `src/lib/studio/creative-system.ts` (pure) holds
+  the techniques (ids stored: add, never rename), `techniquesFor` (hiring,
+  greeting and event posts stay clear; launches, offers and brand posts get
+  big ideas; services a symbolic object), `HOUSE_CRAFT` and `CONCEPT_TEST`.
+  The director writes three concepts, scores them and writes the winner, in
+  one call. Text and service posts (`directPicture`) and ads go through it
+  too. This lifts ADR-0051's metaphor ban; the "no style menus" rule stays.
+- **Trend Radar** (`/admin/trends`, `trends.manage`). Trends live in
+  `platform_trends`, saved through `admin_trend_save`, with media under
+  `platform/trends/<key>/`. Customers read them only through
+  `live_trends_for`; matching is pure in `src/lib/trends/radar.ts`; `radarFor`
+  fills `ctx.radar`. A trend reaches the director and writers, ideas (`radar`),
+  Surprise me (`trend`), Autopilot brains and the campaign plan.
+  `RADAR_RULES`: the brand's own style, never the trend owner's art or logos,
+  no implied partnership. Trend pictures reach writers only, never a render.
+
 ## Studio: carousels, trends and content memory
 
 - **The director makes posts and carousels** ([ADR-0051](docs/adr/0051-brief-first-generation.md)

@@ -590,7 +590,12 @@ export type SurpriseIdeaId =
   | "faq"
   | "meet-the-brand"
   | "occasion"
-  | "offer";
+  | "offer"
+  | "trend"
+  | "founder-story"
+  | "service-object"
+  | "myth-truth"
+  | "brand-idea";
 
 export type SurpriseIdea = {
   id: SurpriseIdeaId;
@@ -631,6 +636,26 @@ export const SURPRISE_IDEAS: readonly SurpriseIdea[] = [
     id: "offer",
     line: "The brand's real current offer exactly as the brand context states it, made clear and inviting. Start the Idea with the offer itself.",
   },
+  {
+    id: "trend",
+    line: "A post that ties the brand to the trend in 'Timely signal' (from Mellox Trend Radar), with wit, in the brand's own world and about what it really sells. Never use the trend owner's logos, characters or artwork. Start the Idea with 'Trend post:'.",
+  },
+  {
+    id: "founder-story",
+    line: "A founder story: why the brand exists, told as one honest moment or decision (no invented names, dates or numbers; only what the brand context says). Start the Idea with 'Founder story:'.",
+  },
+  {
+    id: "service-object",
+    line: "One strong idea that shows what the brand's main product or service really gives its customers, through one symbolic object or a visual metaphor (for example a crane lifting a block for a builder's strength), with a bold headline.",
+  },
+  {
+    id: "myth-truth",
+    line: "A myth people in this market still believe, and the truth, told by the brand with confidence (only facts the brand context supports).",
+  },
+  {
+    id: "brand-idea",
+    line: "A big-idea brand post: the brand's core promise said through one memorable picture idea and a short, sharp headline, the way the best global brands post.",
+  },
 ];
 
 /**
@@ -644,13 +669,20 @@ export function pickSurpriseIdea(args: {
   hasOccasion?: boolean;
   physicalProduct?: boolean;
   recent?: readonly string[];
+  /** A Trend Radar trend reaches this brand now. */
+  hasTrend?: boolean;
 }): SurpriseIdea {
   const recent = new Set(args.recent?.slice(0, 2) ?? []);
   const pool = SURPRISE_IDEAS.filter((i) => {
     if (i.id === "offer" && !args.hasOffer) return false;
     if (i.id === "occasion" && !args.hasOccasion) return false;
+    if (i.id === "trend" && !args.hasTrend) return false;
     return !recent.has(i.id);
   });
+  // A Trend Radar trend that reaches this brand is the most timely post of
+  // all (ADR-0052): picked one time in two while it is live.
+  if (args.hasTrend && pool.some((i) => i.id === "trend") && hash(args.seed) % 2 === 0)
+    return SURPRISE_IDEAS.find((i) => i.id === "trend")!;
   // A close occasion is the most timely post there is.
   if (args.hasOccasion && pool.some((i) => i.id === "occasion") && hash(args.seed) % 3 === 0)
     return SURPRISE_IDEAS.find((i) => i.id === "occasion")!;
@@ -686,11 +718,11 @@ export function offeredPostStyles(args: {
 /** How each network's feed looks, in one line for the writer. */
 export const PLATFORM_FEEL: Record<StylePlatform, string> = {
   instagram:
-    "Instagram feed (4:5 portrait): visual first, the picture stops the thumb; few words, set big; it must look like a real post from a strong brand, never an ad stunt.",
+    "Instagram feed (4:5 portrait): visual first, the picture stops the thumb; one idea, few words, set big; it must look like a post from a top brand's feed, never a template.",
   facebook:
     "Facebook feed: clear and friendly, the message readable at a glance; a real photo or a clean graphic.",
   linkedin:
-    "LinkedIn feed: professional and clean; real people and real work, clear structured type, useful information; no gimmicks.",
+    "LinkedIn feed: professional and confident; one clear idea, real people and real work or a strong symbolic object, clear structured type, useful information.",
   tiktok:
     "TikTok photo post (vertical): native and casual, real photos, short bold text like a creator would add; never a polished ad.",
   pinterest:

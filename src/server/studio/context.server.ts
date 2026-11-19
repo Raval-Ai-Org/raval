@@ -3,6 +3,7 @@
 // what's scheduled, market and competitor signals, and upcoming moments.
 // Workspace data is cached briefly. Brand DNA is read from the database for the
 // job's own workspace; a request-supplied copy is only used when none is stored.
+import { radarFor } from "@/server/trends/radar.server";
 import { CONTEXT_CAPS, capBlock } from "@/lib/studio/caps";
 import "server-only";
 import { readHeroLook } from "@/lib/studio/product-hero/variety";
@@ -321,6 +322,16 @@ export async function loadStudioContext(
   const campaigns = campaignBlockText(campaignsNow);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
   const dna = (storedDna ?? brand ?? null) as BrandCtxDna | null;
+  // Trend Radar (ADR-0052): what Mellox staff flagged as trending now and
+  // that reaches this brand. One small read, cached a minute; never throws.
+  const radar = await radarFor(db, workspaceId, {
+    industry: snapshot.industry,
+    brandText: str((dna as Record<string, unknown> | null)?.industry) ?? null,
+    language: str(
+      ((dna as { look?: { writing?: { language?: unknown } } } | null)?.look?.writing?.language as
+        string | undefined) ?? null,
+    ),
+  });
   const brandText = serializeBrandContext(dna, {
     siteUrl: snapshot.website,
     maxCharsPerField: 320,
@@ -355,6 +366,7 @@ export async function loadStudioContext(
     lovedSamples: taste.lovedSamples,
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
+    radar,
     moments: upcomingMoments(new Date(), { limit: 4 }),
     campaignsNow: campaignsNow.map((c) => ({ name: c.name, phase: c.phase, purpose: c.purpose })),
   };

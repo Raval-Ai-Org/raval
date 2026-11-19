@@ -7,6 +7,10 @@
 // so no request waits on a render and the job survives navigation. Every write
 // goes through the caller's RLS client except asset storage (service role, in
 // persist.server.ts).
+import { radarForBrief } from "@/lib/trends/radar";
+import { signTrendMedia, trendPicturePaths } from "@/server/trends/media.server";
+import { techniqueById } from "@/lib/studio/creative-system";
+import { buildPostPlanPrompt } from "@/lib/studio/post-plan";
 import { humanizeOutput } from "@/lib/studio/humanize";
 import { naturalizeVariants } from "@/lib/studio/naturalize.server";
 import { copyIssue } from "@/lib/studio/copy-qa";
@@ -288,6 +292,7 @@ import {
 /** The media slot of a connected carousel's one background picture. */
 const BACKDROP_SLOT = "backdrop";
 import { messageForFailure, userSafeMessage } from "@/lib/user-errors";
+import { PICTURES_PAUSED } from "@/server/ai/image-funds.server";
 import {
   archetypeById,
   recentLayouts,
@@ -2367,7 +2372,11 @@ ${ctx.brandText}`,
         })()
       : null;
   const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
-  const logoAt = logoUrl ? (look?.logoCorner ?? logoCorner(builderSize)) : null;
+  // A director picture leaves clear space for a small logo at the top, the
+  // way the showcase posts carry it (ADR-0052); other paths keep their corner.
+  const logoAt = logoUrl
+    ? (look?.logoCorner ?? (picture ? ("top-left" as const) : logoCorner(builderSize)))
+    : null;
   // A catalogue product's single picture: the product cut out of its own
   // photo and staged as a poster (ADR-0040).
   if (
@@ -2625,8 +2634,11 @@ ${ctx.brandText}`,
         suppliedReferences.map((r) => r.url),
       ).urls
     : referenceAssets;
+  // Words are drawn at high quality (director posts and designed ads,
+  // ADR-0052): medium came out soft and misspelled.
   const renderQuality =
-    directedPost && !compose && look?.maxWords !== 0 && !!picture?.headline?.trim()
+    (directedPost && !compose && look?.maxWords !== 0 && !!picture?.headline?.trim()) ||
+    (designedAd && look?.maxWords !== 0)
       ? ("high" as const)
       : undefined;
   if (isVariationsRequest(input)) {
@@ -3171,9 +3183,28 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
     controls.referenceAssetIds?.length && !studioTextOnlyRevision(input)
       ? await resolveStudioReferences(client, job.workspace_id, controls.referenceAssetIds)
       : [];
+  // A piece made for a Trend Radar trend (ADR-0052): the writer also sees up
+  // to two of the trend's own pictures, as reference for the moment only (the
+  // picture is still made in the brand's style; the render never gets them).
+  const radarTrend = radarForBrief(ctx.radar, input.intent.brief, controls.trendId);
+  const trendRefs: StudioReference[] = radarTrend
+    ? await (async () => {
+        const paths = trendPicturePaths(radarTrend.media);
+        const signed = await signTrendMedia(paths, 900);
+        return paths
+          .filter((path) => signed.has(path))
+          .map((path) => ({
+            id: `trend:${radarTrend.id}`,
+            filename: path.split("/").pop() ?? "trend",
+            mimeType: "image/webp",
+            storagePath: path,
+            url: signed.get(path)!,
+          }));
+      })()
+    : [];
   const referenceImages =
     !mediaOnly && !studioTextOnlyRevision(input)
-      ? await studioReferenceImages(studioReferences)
+      ? await studioReferenceImages([...studioReferences, ...trendRefs])
       : undefined;
 
   let output: StudioJobOutput = { ...(parent?.output ?? {}) };
@@ -3931,6 +3962,64 @@ function chosenPostStyle(
   );
 }
 
+/**
+ * The director's plan for the picture of a text post (post-plan.ts): the
+ * concept, headline, lines and technique. Null when the call fails.
+ */
+async function directPicture(args: {
+  ctx: StudioContext;
+  input: CreateJobInput;
+  platforms: PlatformId[];
+  angle: Angle;
+  hook?: ReturnType<typeof pickHookStyle>;
+  briefRead?: BriefRead;
+  partial: { target: string; error: string }[];
+}): Promise<Record<string, unknown> | null> {
+  const built = buildPostPlanPrompt({
+    ctx: args.ctx,
+    intent: args.input.intent,
+    controls: { ...args.input.controls, platforms: args.platforms },
+    briefRead: args.briefRead,
+    angle: args.angle,
+    hook: args.hook,
+    refine: args.input.refine,
+  });
+  try {
+    const plan = (await runStructuredPrompt({
+      route: built.route,
+      system: built.system,
+      user: built.user,
+      schema: built.schema as never,
+      maxTokens: built.maxTokens,
+      temperature: built.temperature,
+      regenerate: true,
+    })) as Record<string, unknown>;
+    const concept = String(plan.concept ?? "").trim();
+    if (!concept) return null;
+    const lines = Array.isArray(plan.onImageLines)
+      ? (plan.onImageLines as unknown[])
+          .map((line) =>
+            String(line ?? "")
+              .replace(/^\s*(eyebrow|body|item|button)\s*:\s*/i, "")
+              .trim(),
+          )
+          .filter(Boolean)
+          .slice(0, 2)
+      : [];
+    const technique = techniqueById(String(plan.technique ?? ""));
+    return {
+      concept,
+      onImageText: String(plan.onImageText ?? "").trim(),
+      onImageLines: lines,
+      picturePurpose: String(plan.strategy ?? "").trim(),
+      ...(technique ? { technique: technique.id } : {}),
+    };
+  } catch (err) {
+    args.partial.push({ target: "picture", error: classify(err).message });
+    return null;
+  }
+}
+
 async function shapeOutput(args: {
   client: Db;
   job: JobRow;
@@ -3953,20 +4042,21 @@ async function shapeOutput(args: {
   switch (type) {
     case "social": {
       const { variants } = finalizeVariants(platforms, parsed as never);
-      // The picture written with the caption (only asked for when there is one).
-      const picture = parsed.picture as
-        { purpose?: string; scene?: string; headline?: string } | undefined;
-      return {
-        title,
-        variants,
-        ...(input.controls.includeImage && picture?.scene?.trim()
-          ? ({
-              concept: picture.scene.trim(),
-              onImageText: (picture.headline ?? "").trim(),
-              picturePurpose: (picture.purpose ?? "").trim(),
-            } as object)
-          : {}),
-      };
+      if (!input.controls.includeImage) return { title, variants };
+      // A text post with a picture: the picture is planned by the same
+      // director as an image post (ADR-0052), so service and text posts get a
+      // designed idea, not a generic scene. It fails open to the brief's own
+      // picture idea (preflightPictureBrief).
+      const picture = await directPicture({
+        ctx,
+        input,
+        platforms,
+        angle,
+        hook: args.hook,
+        briefRead: args.briefRead,
+        partial,
+      });
+      return { title, variants, ...(picture ?? {}) };
     }
     case "carousel": {
       const caption = String(parsed.caption ?? "");
@@ -4061,6 +4151,9 @@ async function shapeOutput(args: {
         title,
         ads: parsed.variants as StudioJobOutput["ads"],
         ...({ visualConcept: String(parsed.visualConcept ?? "") } as object),
+        ...(techniqueById(String(parsed.technique ?? ""))
+          ? ({ technique: techniqueById(String(parsed.technique))!.id } as object)
+          : {}),
         ...(parsed.onImage ? { adOnImage: parsed.onImage as StudioJobOutput["adOnImage"] } : {}),
         ...((parsed.search as StudioJobOutput["adSearch"])?.headlines?.length
           ? { adSearch: parsed.search as StudioJobOutput["adSearch"] }
@@ -4116,6 +4209,10 @@ async function shapeOutput(args: {
           // one of the offered styles, else the best fit; a revision keeps its own.
           ...(type === "image"
             ? { postStyle: chosenPostStyle(parsed.postStyle, args.briefRead, ctx, input).id }
+            : {}),
+          // The idea technique the director picked (creative-system.ts, ADR-0052).
+          ...(type === "image" && techniqueById(String(parsed.technique ?? ""))
+            ? { technique: techniqueById(String(parsed.technique))!.id }
             : {}),
           onImageText: String(parsed.onImageText ?? "").trim(),
           // Who the picture is for and what it must do (not shown).
@@ -5146,7 +5243,10 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           task.state = "failed";
           task.failure = {
             category: safetyRefusal ? "safety" : "provider",
-            message: userSafeMessage(check.message, "The render failed. Please try again."),
+            message:
+              check.code === "insufficient_credits"
+                ? PICTURES_PAUSED
+                : userSafeMessage(check.message, "The render failed. Please try again."),
             retryable: check.retryable ?? true,
           };
           setMedia({ status: "failed", error: check.message });

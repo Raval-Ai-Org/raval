@@ -123,6 +123,9 @@ export async function generateStudioIdeas(args: {
 
       const system = [
         "You are Mellox, a senior marketing strategist who knows this business well.",
+        signals.some((signal) => signal.source === "radar")
+          ? "A [radar] signal is a trend Mellox flagged as trending now for this brand: build at least one idea on it, about what this brand really sells, in its own world and with wit. Never use the trend owner's logos, characters or artwork, and never suggest a partnership."
+          : "",
         working
           ? "Where it fits, build an idea in a format or with an opening from 'What is working right now', and say in `brief` how the piece uses it. The topic still comes from a brand signal; a trend only shapes how it is told."
           : "",
@@ -137,7 +140,7 @@ export async function generateStudioIdeas(args: {
         "Use the brand's actual audience, positioning, voice and offer. Competitor angles must be fair and traceable to a supplied competitor fact. Do not suggest a holiday or platform unless the context supports its relevance.",
         "Use brand, customer, market, or competitor facts as the creative topic. Activity gaps and momentum may explain timing, but cannot be the only basis for an idea.",
         "Return STRICT JSON only.",
-        `Schema: {"ideas":[{"type": ${only ? `"${only}"` : "one of the format ids"}, "title": string, "why": string, "brief": string, "platforms": string[], "source": "season"|"trend"|"competitor"|"gap"|"pillar"|"momentum"|"campaign", "goal": "awareness"|"engagement"|"leads"|"launch"|"education"|"offer"}]}`,
+        `Schema: {"ideas":[{"type": ${only ? `"${only}"` : "one of the format ids"}, "title": string, "why": string, "brief": string, "platforms": string[], "source": "season"|"trend"|"competitor"|"gap"|"pillar"|"momentum"|"campaign"|"radar", "goal": "awareness"|"engagement"|"leads"|"launch"|"education"|"offer"}]}`,
       ]
         .filter(Boolean)
         .join("\n");

@@ -128,15 +128,22 @@ export async function writeStudioPrompt(args: {
       ? pickSurpriseIdea({
           seed: `${args.workspaceId}:${Date.now()}:${Math.random()}`,
           hasOccasion: picked?.source === "season",
+          hasTrend: signals.some((s) => s.source === "radar"),
           hasOffer: /\b(offer|discount|sale|% off|promo code|free shipping)\b/i.test(ctx.brandText),
         })
       : null;
+  // A Surprise post keeps only a real occasion, the brand's own campaign or a
+  // Trend Radar trend (ADR-0052); scraped trend and competitor signals made
+  // odd posts.
+  const radarSignal = signals.find((s) => s.source === "radar") ?? null;
   const signal =
-    surprise && surprise.id !== "occasion"
-      ? picked?.source === "campaign"
-        ? picked
-        : null
-      : picked;
+    surprise?.id === "trend"
+      ? radarSignal
+      : surprise && surprise.id !== "occasion"
+        ? picked?.source === "campaign"
+          ? picked
+          : null
+        : picked;
   const sparks = mode === "expand" ? [] : pickSparks(args.type);
   const platforms = args.controls?.platforms?.length
     ? args.controls.platforms
@@ -162,7 +169,7 @@ export async function writeStudioPrompt(args: {
       : media.images.length
         ? "Invent one fresh, specific idea built on the person's own photos or clips (see 'The person's own media')."
         : surprise
-          ? `Write this kind of post: ${surprise.line} Make it specific to the brand's real product or service and its real customers: a post a real customer would find useful or enjoy, the kind strong brands publish every week. Plain and real, never a gimmick.`
+          ? `Write this kind of post: ${surprise.line} Make it specific to the brand's real product or service and its real customers, and build it on one memorable idea, the kind the best brands post: clear, confident and worth stopping for.`
           : "Invent one fresh, specific idea for this brand, anchored on the timely signal when it fits.",
     ...(media.images.length
       ? [

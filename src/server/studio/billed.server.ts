@@ -33,6 +33,7 @@ import {
   settleCaptionEdit,
 } from "@/server/billing/creation.server";
 import { HttpError } from "@/server/http-error";
+import { imageFundsPaused, PICTURES_PAUSED } from "@/server/ai/image-funds.server";
 import { quoteStudioVideo, shortClipCreditsForRecap } from "./video-quote.server";
 import { MOTION_MAX_SECONDS, MOTION_MIN_SECONDS } from "@/lib/studio/motion/document";
 
@@ -104,6 +105,14 @@ export async function createBilledStudioJob(args: {
   background?: boolean;
 }): Promise<BilledStudioJob> {
   const { client, workspaceId, userId, role, input } = args;
+  // No OpenRouter money for pictures right now: say so at once, before any
+  // hold or writer spend, instead of failing the job ~40 s later. Videos run
+  // on KIE and are left alone.
+  const drawsPicture =
+    studioJobRenders(input) &&
+    input.type !== "video" &&
+    !(input.type === "story" && input.controls.storyMode === "video");
+  if (drawsPicture && (await imageFundsPaused())) throw new HttpError(503, PICTURES_PAUSED);
   // A piece about a catalogue product (ADR-0035) must name one of this
   // workspace's products, and is made with that product's own photos unless
   // the person chose photos themselves. A product the brief names is picked

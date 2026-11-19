@@ -44,6 +44,7 @@ import { diffPieces, pieceSignature, type CampaignStep } from "@/lib/campaigns/s
 import { isCampaignsEnabled, isAutopilotEnabled } from "@/lib/feature-flags";
 import { upcomingMoments } from "@/lib/studio/moments";
 import { trendLines } from "@/lib/studio/trends";
+import { RADAR_RULES, radarLines } from "@/lib/trends/radar";
 import { summarizeLearnings } from "@/lib/autopilot/learn";
 import type { PlatformId } from "@/lib/social-platforms";
 import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
@@ -803,7 +804,15 @@ export async function planCampaign(
         brief,
         pieces: plan.pieces,
         phases: plan.phases,
-        trendText: trendLines(ctx.socialTrends, channels as PlatformId[], 6),
+        trendText: [
+          ctx.radar?.length
+            ? `Moments trending now (staff-picked; tie a piece to one only if it fits the campaign). ${RADAR_RULES.join(" ")}
+${radarLines(ctx.radar, 3)}`
+            : "",
+          trendLines(ctx.socialTrends, channels as PlatformId[], 6),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         learnings,
         recentOpenings,
         brandText: wrapUntrusted(

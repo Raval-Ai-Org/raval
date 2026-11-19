@@ -30,6 +30,7 @@ import {
   LineChart,
   Gift,
   Megaphone,
+  Flame,
   Plug,
   Power,
   Search,
@@ -60,6 +61,7 @@ type NavId =
   | "promos"
   | "flags"
   | "announcements"
+  | "trends"
   | "usage"
   | "ai"
   | "jobs"
@@ -204,6 +206,13 @@ const GROUPS: NavGroup[] = [
         href: "/admin/announcements",
         icon: Megaphone,
         permission: "announcements.manage",
+      },
+      {
+        id: "trends",
+        label: "Trend Radar",
+        href: "/admin/trends",
+        icon: Flame,
+        permission: "trends.manage",
       },
       {
         id: "analytics",

@@ -136,6 +136,8 @@ describe("chatCompletion request body", () => {
   it("requires parameters and drops temperature for a JSON schema, never forces tools", async () => {
     const s = scripted([{ content: "{}" }, { content: null }]);
     restore = s.restore;
+    // An open-weight model first (studio.ideas itself is on Haiku since ADR-0052).
+    vi.stubEnv("AI_MODEL_STUDIO_IDEAS", `${BUDGET},${WRITER}`);
     await chatCompletion({
       route: "studio.ideas",
       messages: msgs,
@@ -145,7 +147,7 @@ describe("chatCompletion request body", () => {
         json_schema: { name: "x", strict: true, schema: { type: "object" } },
       },
     });
-    // studio.ideas runs on an open-weight model: full-precision hosts only.
+    // An open-weight model in the list: full-precision hosts only.
     expect(s.bodies[0].models).toEqual([BUDGET, WRITER]);
     expect(s.bodies[0].provider).toEqual({
       data_collection: "deny",
@@ -173,6 +175,7 @@ describe("chatCompletion request body", () => {
   it("turns reasoning off only when every model in the list accepts it", async () => {
     const s = scripted([{ content: "a" }, { content: "b" }]);
     restore = s.restore;
+    vi.stubEnv("AI_MODEL_STUDIO_IDEAS", `${BUDGET},${WRITER}`);
     await chatCompletion({ route: "studio.ideas", messages: msgs, noCache: true });
     expect(s.bodies[0].models).toEqual([BUDGET, WRITER]);
     expect(s.bodies[0].reasoning).toEqual({ effort: "none", exclude: true });

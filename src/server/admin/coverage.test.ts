@@ -89,6 +89,8 @@ describe("admin API structure", () => {
       "admin.jobs.cancel",
       "admin.jobs.nudge",
       "admin.announcements.save",
+      "admin.trends.save",
+      "admin.trends.media",
     ]) {
       expect(byName.get(name)?.write, name).toBe(true);
     }

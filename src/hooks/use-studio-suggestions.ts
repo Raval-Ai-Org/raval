@@ -41,6 +41,7 @@ const ICON = {
   pillar: "Brain",
   momentum: "Sparkles",
   campaign: "Calendar",
+  radar: "Sparkles",
 } as const;
 const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
   season: "green",
@@ -50,6 +51,7 @@ const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
   pillar: "violet",
   momentum: "indigo",
   campaign: "green",
+  radar: "rose",
 };
 
 function toSuggestion(idea: StudioIdea): StudioSuggestion {
