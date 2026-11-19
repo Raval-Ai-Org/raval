@@ -1,5 +1,10 @@
 // model-router.server.ts — picks the OpenRouter image model for a request.
-// GPT Image 2.5 Flare makes every picture and edit. Sunburst (about twice the
+// Recraft V4.1 (on test, 2026-11-19, $0.035 a picture) makes plain
+// text-to-image pictures. It takes no quality, background or several
+// references, so anything with a reference photo (carousel slides 2+, product
+// photos, revisions) or a transparent design layer goes to GPT Image 2.5
+// Flare, which is also Recraft's fallback. Rollback: IMAGE_MODEL_DEFAULT=
+// openai/gpt-image-2.5-flare. Sunburst (about twice the
 // price) is used only when a caller asks for "maximum" quality, or "high"
 // quality with strict brand precision: today only the product cutout, where
 // the real product's edges must survive (Mellox Lean). Prompt length and
@@ -21,13 +26,15 @@ export type ImageRoutingInput = {
   failureHistory?: Record<string, number>;
   benchmarkScores?: Record<string, number>;
   cachedModels?: string[];
+  /** A design layer laid over real photos: needs a transparent background. */
+  transparent?: boolean;
 };
 
 export type ImageModelPlan = {
   model: string;
   fallbacks: string[];
   reason: string;
-  route: "flare" | "sunburst" | "flare-edit" | "sunburst-edit";
+  route: "recraft" | "flare" | "sunburst" | "flare-edit" | "sunburst-edit";
 };
 
 type ModelCatalog = {
@@ -53,6 +60,12 @@ export type ImageModelConfigStatus = {
 // edit (with reference images), so the edit routes default to the same ids.
 export const IMAGE_FLARE = "openai/gpt-image-2.5-flare";
 export const IMAGE_SUNBURST = "openai/gpt-image-2.5-sunburst";
+export const IMAGE_RECRAFT = "recraft/recraft-v4.1";
+
+/** Recraft models take only prompt, aspect_ratio and n on the Images API. */
+export function isRecraftModel(model: string): boolean {
+  return /^recraft\//i.test(model);
+}
 
 const configured = (name: string, fallback: string) => process.env[name]?.trim() || fallback;
 
@@ -60,9 +73,10 @@ const configured = (name: string, fallback: string) => process.env[name]?.trim()
 // (cinematic, text-heavy, brand-critical), IMAGE_MODEL_EDIT and
 // IMAGE_MODEL_PREMIUM_EDIT. Each tier falls back to the other.
 function catalog(): ModelCatalog {
-  const defaultText = configured("IMAGE_MODEL_DEFAULT", IMAGE_FLARE);
+  const defaultText = configured("IMAGE_MODEL_DEFAULT", IMAGE_RECRAFT);
   const premiumText = configured("IMAGE_MODEL_PREMIUM", IMAGE_SUNBURST);
-  const defaultEdit = configured("IMAGE_MODEL_EDIT", defaultText);
+  // Edits never default to the text model: Recraft takes no reference set.
+  const defaultEdit = configured("IMAGE_MODEL_EDIT", IMAGE_FLARE);
   const premiumEdit = configured("IMAGE_MODEL_PREMIUM_EDIT", premiumText);
   return {
     defaultText,
@@ -70,7 +84,7 @@ function catalog(): ModelCatalog {
     fastText: defaultText,
     defaultEdit,
     premiumEdit,
-    fallbackText: [defaultText, premiumText],
+    fallbackText: [defaultText, defaultEdit, premiumText],
     fallbackEdit: [defaultEdit, premiumEdit],
   };
 }
@@ -93,7 +107,7 @@ export function getImageModelConfigStatus(): ImageModelConfigStatus {
   };
 }
 
-/** Flare only, even as a fallback (creation-point jobs). */
+/** The everyday tier only, even as a fallback (creation-point jobs). */
 export function routeStandardImageModel(input: ImageRoutingInput): ImageModelPlan {
   const models = catalog();
   return routeImageModel({ ...input, availableModels: [models.defaultText, models.defaultEdit] });
@@ -116,7 +130,9 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
     input.referenceAssets?.length ||
     input.editing ||
     input.taskType === "reference" ||
-    input.taskType === "editing",
+    input.taskType === "editing" ||
+    // Recraft can't draw a transparent layer: the edit tier (Flare) does.
+    input.transparent,
   );
   const maximum = wantsPremiumImage(input);
   const fast =
@@ -149,9 +165,17 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
 
   const candidates = [
     model,
-    ...(reference ? models.fallbackEdit : models.fallbackText),
-    maximum ? models.premiumText : models.fastText,
-  ].filter((candidate, index, all) => candidate && all.indexOf(candidate) === index);
+    // Premium falls back to Flare before Recraft: the closer match in quality.
+    ...(reference
+      ? models.fallbackEdit
+      : maximum
+        ? [models.defaultEdit, models.defaultText]
+        : models.fallbackText),
+    ...(reference ? [] : [maximum ? models.premiumText : models.fastText]),
+  ]
+    .filter((candidate, index, all) => candidate && all.indexOf(candidate) === index)
+    // A reference or transparent job never lands on Recraft, even as a fallback.
+    .filter((candidate) => !reference || !isRecraftModel(candidate));
   const available = input.availableModels?.length ? new Set(input.availableModels) : null;
   const usable = candidates.filter((candidate) => !available || available.has(candidate));
   const failureHistory = input.failureHistory ?? {};
@@ -178,8 +202,10 @@ export function routeImageModel(input: ImageRoutingInput): ImageModelPlan {
         : "flare-edit"
       : selected === models.premiumText
         ? "sunburst"
-        : selected === models.defaultText
-          ? "flare"
-          : route,
+        : isRecraftModel(selected)
+          ? "recraft"
+          : selected === models.defaultText || selected === models.defaultEdit
+            ? "flare"
+            : route,
   };
 }

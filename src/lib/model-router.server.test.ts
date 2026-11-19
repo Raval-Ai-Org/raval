@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   IMAGE_FLARE,
+  IMAGE_RECRAFT,
   IMAGE_SUNBURST,
   routeImageModel,
   wantsPremiumImage,
@@ -11,9 +12,13 @@ afterEach(() => {
 });
 
 describe("OpenRouter image model router", () => {
-  it("uses Flare for normal social generation, with Sunburst as its fallback", () => {
+  it("uses Recraft for normal social generation, falling back to Flare then Sunburst", () => {
     const plan = routeImageModel({ prompt: "A simple product tip for a social post" });
-    expect(plan).toMatchObject({ model: IMAGE_FLARE, route: "flare", fallbacks: [IMAGE_SUNBURST] });
+    expect(plan).toMatchObject({
+      model: IMAGE_RECRAFT,
+      route: "recraft",
+      fallbacks: [IMAGE_FLARE, IMAGE_SUNBURST],
+    });
     expect(plan.reason).toContain("default");
   });
 
@@ -25,20 +30,20 @@ describe("OpenRouter image model router", () => {
     expect(plan).toMatchObject({
       model: IMAGE_SUNBURST,
       route: "sunburst",
-      fallbacks: [IMAGE_FLARE],
+      fallbacks: [IMAGE_FLARE, IMAGE_RECRAFT],
     });
     // Wording alone never upgrades a request.
     expect(
       routeImageModel({
         prompt: "Cinematic editorial infographic with a bold headline and detailed typography",
       }).model,
-    ).toBe(IMAGE_FLARE);
+    ).toBe(IMAGE_RECRAFT);
   });
 
-  it("keeps Studio-length prompts on Flare (length never means premium)", () => {
+  it("keeps Studio-length prompts off premium (length never means premium)", () => {
     const studioPrompt = "Layout rules and the brand's look, line after line. ".repeat(220);
     expect(studioPrompt.length).toBeGreaterThan(10_000);
-    expect(routeImageModel({ prompt: studioPrompt }).model).toBe(IMAGE_FLARE);
+    expect(routeImageModel({ prompt: studioPrompt }).model).toBe(IMAGE_RECRAFT);
     expect(
       routeImageModel({ prompt: studioPrompt, hasReference: true, brandPrecision: "strict" }),
     ).toMatchObject({ model: IMAGE_FLARE, route: "flare-edit" });
@@ -67,6 +72,17 @@ describe("OpenRouter image model router", () => {
     ).toMatchObject({ model: IMAGE_SUNBURST, route: "sunburst-edit" });
     expect(wantsPremiumImage({ requiredQuality: "high" })).toBe(false);
     expect(wantsPremiumImage({ brandPrecision: "strict" })).toBe(false);
+  });
+
+  it("never sends a reference or transparent job to Recraft, even as a fallback", () => {
+    for (const plan of [
+      routeImageModel({ prompt: "Slide 2", hasReference: true }),
+      routeImageModel({ prompt: "Design layer", transparent: true }),
+      routeImageModel({ prompt: "Edit", editing: true, failureHistory: { [IMAGE_FLARE]: 9 } }),
+    ]) {
+      expect(plan.model).not.toBe(IMAGE_RECRAFT);
+      expect([plan.model, ...plan.fallbacks]).not.toContain(IMAGE_RECRAFT);
+    }
   });
 
   it("penalizes failing models and prefers a stronger available benchmark", () => {
