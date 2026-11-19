@@ -275,7 +275,8 @@ export function imageStyleInput(resolved: BrandLook): {
     fonts,
     maxWords: resolved.visual.textPlacement === "none" ? 0 : resolved.visual.textOnImage?.maxWords,
     logoCorner: resolved.visual.logo?.corner,
-    useLogo: resolved.visual.logo?.use,
+    // The logo is opt-in: only a person switching it on puts it on pictures.
+    useLogo: resolved.visual.logo?.use === true,
     composition: resolved.visual.composition?.trim() || undefined,
     mood: resolved.visual.mood?.trim() || undefined,
   };

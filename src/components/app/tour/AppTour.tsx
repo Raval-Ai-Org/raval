@@ -27,6 +27,9 @@ import {
   Wand,
   X,
   type LucideIcon,
+  Palette,
+  Gauge,
+  Flame,
 } from "@/components/icons";
 import {
   TOUR_FINISH,
@@ -49,6 +52,9 @@ const ICONS: Record<TourIcon, LucideIcon> = {
   visibility: Sparkles,
   settings: Settings,
   share: Share2,
+  inspo: Palette,
+  credits: Gauge,
+  streak: Flame,
 };
 
 /** Room between a lit control and the edge of its light. */

@@ -151,13 +151,17 @@ export async function writeStudioPrompt(args: {
   const working = trendLines(ctx.socialTrends, platforms, 5);
 
   // One of the brand's picture styles for this piece, rotating, so a run of
-  // posts uses the 2–3 styles the brand (or Mox) chose, never a random look.
+  // posts walks the brand's styles (or Mox's pool), skipping the latest ones.
   const { loadBrandLook } = await import("@/server/brand-look/resolve.server");
   const loaded = await loadBrandLook(args.workspaceId).catch(() => null);
   const styleIds = loaded?.look.pictureStyles?.ids ?? [];
   const pieceStyle = PICTURE_TYPES.has(args.type)
     ? pictureStyleById(
-        styleForPiece(styleIds, `${args.workspaceId}:${Date.now()}:${Math.random()}`),
+        styleForPiece(
+          styleIds,
+          `${args.workspaceId}:${Date.now()}:${Math.random()}`,
+          ctx.recent.map((r) => r.pictureStyle),
+        ),
       )
     : null;
 

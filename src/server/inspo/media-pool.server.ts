@@ -119,7 +119,7 @@ export async function pickInspoMediaFor(
   const pool = await loadInspoMediaPool(workspaceId);
   if (!pool.media.length) return null;
   const now = new Date();
-  const named = brief ? pickNamedMedia({ media: pool.media, brief, format, now }) : null;
+  const named = brief ? pickNamedMedia({ media: pool.media, uses: pool.uses, brief, format, now }) : null;
   if (named) return named;
   return pickRotationMedia({ ...pool, now, format, seed });
 }
@@ -132,7 +132,7 @@ export async function namedInspoMediaFor(
 ): Promise<RotationPick | null> {
   const pool = await loadInspoMediaPool(workspaceId);
   if (!pool.media.length) return null;
-  return pickNamedMedia({ media: pool.media, brief, format, now: new Date() });
+  return pickNamedMedia({ media: pool.media, uses: pool.uses, brief, format, now: new Date() });
 }
 
 /**

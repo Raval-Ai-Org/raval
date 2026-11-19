@@ -11,9 +11,22 @@ import type { BrandLookSpec, WritingStyle } from "@/lib/brand-look/spec";
 import { addExample, EXAMPLE_CHARS, MAX_EXAMPLES } from "@/lib/inspo/look";
 import { voiceSample } from "@/lib/inspo/voice-sample";
 import { cn } from "@/lib/utils";
-import { Block, EASE } from "./parts";
+import { Block, EASE, PickChip } from "./parts";
 import { FineTune, Row } from "./PostLook";
 import type { InspoHandlers, InspoView } from "./types";
+
+/** One tap sets the four tone sliders; a person can still fine-tune them. */
+const VOICES = [
+  { id: "friendly", label: "Friendly", tone: { casual: 75, playful: 60, detailed: 40, bold: 45 } },
+  { id: "expert", label: "Expert", tone: { casual: 30, playful: 20, detailed: 75, bold: 55 } },
+  { id: "bold", label: "Bold", tone: { casual: 60, playful: 45, detailed: 25, bold: 90 } },
+  { id: "playful", label: "Playful", tone: { casual: 85, playful: 90, detailed: 30, bold: 65 } },
+  {
+    id: "calm",
+    label: "Calm & premium",
+    tone: { casual: 35, playful: 15, detailed: 50, bold: 25 },
+  },
+] as const;
 
 export function Voice({
   view,
@@ -31,11 +44,27 @@ export function Voice({
   const sample = voiceSample(w, view.dna.brandName);
   const [draft, setDraft] = React.useState("");
   const examples = w.examples ?? [];
+  const activeVoice = VOICES.find((p) =>
+    (Object.keys(p.tone) as (keyof typeof p.tone)[]).every((k) => tone[k] === p.tone[k]),
+  )?.id;
+  const [adjust, setAdjust] = React.useState(false);
 
   return (
     <div className="space-y-4">
       {/* The sample line rewrites itself as the sliders move. */}
       <div className="relative overflow-hidden rounded-[28px] bg-[var(--ds-tile-bg)] p-5 ring-1 ring-[var(--ds-tile-border)] sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[13.5px] font-semibold tracking-tight">Sound like</span>
+          {VOICES.map((p, i) => (
+            <PickChip
+              key={p.id}
+              index={i}
+              on={activeVoice === p.id}
+              label={p.label}
+              onClick={() => set({ tone: { ...tone, ...p.tone } })}
+            />
+          ))}
+        </div>
         <div className="flex items-start gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-[13px] font-bold text-primary-foreground">
             {(view.dna.brandName || "M").slice(0, 1).toUpperCase()}
@@ -56,32 +85,55 @@ export function Voice({
             </AnimatePresence>
           </div>
         </div>
-        <div className="mt-6 grid gap-5 sm:grid-cols-2">
-          <ToneSlider
-            low="Formal"
-            high="Casual"
-            value={tone.casual}
-            onChange={(casual) => set({ tone: { ...tone, casual } })}
-          />
-          <ToneSlider
-            low="Serious"
-            high="Playful"
-            value={tone.playful}
-            onChange={(playful) => set({ tone: { ...tone, playful } })}
-          />
-          <ToneSlider
-            low="Short"
-            high="Detailed"
-            value={tone.detailed}
-            onChange={(detailed) => set({ tone: { ...tone, detailed } })}
-          />
-          <ToneSlider
-            low="Quiet"
-            high="Bold"
-            value={tone.bold}
-            onChange={(bold) => set({ tone: { ...tone, bold } })}
-          />
-        </div>
+        <button
+          type="button"
+          aria-expanded={adjust}
+          onClick={() => setAdjust((a) => !a)}
+          className={cn(
+            "mt-4 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground",
+            dsFocus,
+          )}
+        >
+          {adjust ? "Hide tone sliders" : "Adjust the tone"}
+        </button>
+        <AnimatePresence initial={false}>
+          {adjust && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.28, ease: EASE }}
+              className="overflow-hidden"
+            >
+              <div className="mt-4 grid gap-5 sm:grid-cols-2">
+                <ToneSlider
+                  low="Formal"
+                  high="Casual"
+                  value={tone.casual}
+                  onChange={(casual) => set({ tone: { ...tone, casual } })}
+                />
+                <ToneSlider
+                  low="Serious"
+                  high="Playful"
+                  value={tone.playful}
+                  onChange={(playful) => set({ tone: { ...tone, playful } })}
+                />
+                <ToneSlider
+                  low="Short"
+                  high="Detailed"
+                  value={tone.detailed}
+                  onChange={(detailed) => set({ tone: { ...tone, detailed } })}
+                />
+                <ToneSlider
+                  low="Quiet"
+                  high="Bold"
+                  value={tone.bold}
+                  onChange={(bold) => set({ tone: { ...tone, bold } })}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Block>
@@ -129,66 +181,66 @@ export function Voice({
         </div>
       </Block>
 
-      <Block label="Posts you love">
-        <div className="space-y-3">
-          <AnimatePresence initial={false}>
-            {examples.map((text) => (
-              <motion.div
-                key={text}
-                layout
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3, ease: EASE }}
-                className="group relative rounded-[18px] bg-[var(--ds-well-bg)] py-3 pl-4 pr-10 text-[13px] leading-relaxed"
-              >
-                <p className="line-clamp-4 whitespace-pre-line">{text}</p>
-                <button
-                  type="button"
-                  aria-label="Remove example"
-                  onClick={() => set({ examples: examples.filter((e) => e !== text) })}
-                  className={cn(
-                    "absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full text-muted-foreground opacity-60 transition hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground group-hover:opacity-100",
-                    dsFocus,
-                  )}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          {examples.length < MAX_EXAMPLES && (
-            <form
-              className="space-y-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const next = addExample(examples, draft);
-                if (next !== examples) set({ examples: next });
-                setDraft("");
-              }}
-            >
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                maxLength={EXAMPLE_CHARS}
-                rows={3}
-                placeholder="Paste a caption you wish you'd written"
-                className={cn(dsFocus, "ds-well w-full resize-none px-4 py-3 text-[13.5px]")}
-                aria-label="Example post"
-              />
-              <button
-                type="submit"
-                disabled={!draft.trim()}
-                className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
-              >
-                <Plus className="h-3.5 w-3.5" /> Add
-              </button>
-            </form>
-          )}
-        </div>
-      </Block>
-
       <FineTune>
+        <Row label="Posts you love (Mox copies their rhythm, never their words)">
+          <div className="space-y-3">
+            <AnimatePresence initial={false}>
+              {examples.map((text) => (
+                <motion.div
+                  key={text}
+                  layout
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3, ease: EASE }}
+                  className="group relative rounded-[18px] bg-[var(--ds-well-bg)] py-3 pl-4 pr-10 text-[13px] leading-relaxed"
+                >
+                  <p className="line-clamp-4 whitespace-pre-line">{text}</p>
+                  <button
+                    type="button"
+                    aria-label="Remove example"
+                    onClick={() => set({ examples: examples.filter((e) => e !== text) })}
+                    className={cn(
+                      "absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full text-muted-foreground opacity-60 transition hover:bg-[var(--ds-well-bg-hover)] hover:text-foreground group-hover:opacity-100",
+                      dsFocus,
+                    )}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {examples.length < MAX_EXAMPLES && (
+              <form
+                className="space-y-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const next = addExample(examples, draft);
+                  if (next !== examples) set({ examples: next });
+                  setDraft("");
+                }}
+              >
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  maxLength={EXAMPLE_CHARS}
+                  rows={3}
+                  placeholder="Paste a caption you wish you'd written"
+                  className={cn(dsFocus, "ds-well w-full resize-none px-4 py-3 text-[13.5px]")}
+                  aria-label="Example post"
+                />
+                <button
+                  type="submit"
+                  disabled={!draft.trim()}
+                  className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add
+                </button>
+              </form>
+            )}
+          </div>
+        </Row>
+
         <Row label="Always include">
           <ChipsInput
             values={w.hashtags?.always ?? []}

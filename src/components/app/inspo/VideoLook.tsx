@@ -113,16 +113,6 @@ export function VideoLook({
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
       <div className="min-w-0 space-y-4">
-        <BrandFace
-          creator={vid.creator}
-          people={people}
-          canEdit={canEdit}
-          onPick={(creator) => set({ creator })}
-          onUpload={(files) => handlers.upload(files, "person")}
-          onMore={() => emitAppEvent("open:ugc-studio", undefined)}
-          onRemove={() => set({ creator: undefined })}
-        />
-
         <Block
           label="Video styles"
           aside={
@@ -134,7 +124,7 @@ export function VideoLook({
           <p className="mb-3 text-xs text-muted-foreground">
             Every video plan Mox writes leans on these. None picked: Mox chooses per video.
           </p>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
             {VIDEO_KINDS.filter(
               (k) => k.id !== "motion-graphics" && !RETIRED_VIDEO_KINDS.includes(k.id),
             ).map((k, i) => (
@@ -149,155 +139,6 @@ export function VideoLook({
               />
             ))}
           </div>
-        </Block>
-
-        <Block
-          label="Creator video formats"
-          aside={
-            <span className="text-[11.5px] font-medium text-muted-foreground">
-              {formats.length ? `${formats.length} of ${MAX_FORMATS}` : `Up to ${MAX_FORMATS}`}
-            </span>
-          }
-        >
-          <p className="mb-3 text-xs text-muted-foreground">
-            They come first under &ldquo;For your brand&rdquo; in the creator studio.
-          </p>
-          <div className="mb-3 flex gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-            {UGC_FORMAT_GROUPS.map((g) => {
-              const on = g.id === group;
-              const picked = UGC_FORMATS.filter(
-                (f) => f.group === g.id && formats.includes(f.id),
-              ).length;
-              return (
-                <button
-                  key={g.id}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setGroup(g.id)}
-                  className={cn(
-                    "relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold transition-colors",
-                    on ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                    dsFocus,
-                  )}
-                >
-                  {on && (
-                    <motion.span
-                      layoutId="inspo-ugc-group"
-                      className="absolute inset-0 rounded-full bg-[var(--ds-well-bg)] ring-1 ring-primary/30"
-                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                    />
-                  )}
-                  <span className="relative">{g.label}</span>
-                  {picked > 0 && (
-                    <span className="relative grid size-[18px] place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                      {picked}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={group}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.22, ease: EASE }}
-              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-            >
-              {UGC_FORMATS.filter((f) => f.group === group).map((f) => {
-                const on = formats.includes(f.id);
-                const full = !on && formats.length >= MAX_FORMATS;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    aria-pressed={on}
-                    disabled={full}
-                    onClick={() => {
-                      const next = on ? formats.filter((x) => x !== f.id) : [...formats, f.id];
-                      set({ formats: next.length ? next : undefined });
-                    }}
-                    className={cn(
-                      "flex items-start gap-2.5 rounded-[16px] bg-[var(--ds-well-bg)] px-3 py-2.5 text-left ring-1 transition-all disabled:opacity-45",
-                      on ? "ring-2 ring-primary" : "ring-transparent hover:ring-primary/30",
-                      dsFocus,
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full ring-1 transition-colors",
-                        on
-                          ? "bg-primary text-primary-foreground ring-primary"
-                          : "ring-foreground/20",
-                      )}
-                    >
-                      {on && <Check className="h-3 w-3" />}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[12.5px] font-semibold">{f.label}</span>
-                      {f.hint && (
-                        <span className="block text-[11px] leading-snug text-muted-foreground">
-                          {f.hint}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </motion.div>
-          </AnimatePresence>
-        </Block>
-
-        <Block
-          label="Hook words"
-          aside={
-            <Switch
-              checked={hookOn}
-              onCheckedChange={(on) =>
-                set({ hookText: { ...vid.hookText, on: on ? undefined : false } })
-              }
-              aria-label="Words over the first seconds"
-            />
-          }
-        >
-          <p className="mb-3 text-xs text-muted-foreground">
-            Big words over the first seconds, so people stop scrolling.
-          </p>
-          {hookOn && (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {HOOK_TEXT_PRESETS.map((p) => {
-                const on = vid.hookText?.preset === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    aria-pressed={on}
-                    title={p.hint}
-                    onClick={() =>
-                      set({ hookText: { ...vid.hookText, preset: on ? undefined : p.id } })
-                    }
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-[16px] bg-[var(--ds-well-bg)] p-2 ring-1 transition-all hover:-translate-y-0.5",
-                      on ? "ring-2 ring-primary" : "ring-transparent hover:ring-primary/30",
-                      dsFocus,
-                    )}
-                  >
-                    <span className="grid h-14 w-full place-items-center overflow-hidden rounded-[10px] bg-foreground/85">
-                      <HookTextSample
-                        preset={p.id}
-                        text="Wait for it"
-                        size="sm"
-                        accent={palette.accent ?? palette.primary ?? undefined}
-                      />
-                    </span>
-                    <span className="text-[11.5px] font-semibold">{p.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </Block>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -427,6 +268,165 @@ export function VideoLook({
           </Block>
         </div>
 
+        <Block
+          label="Hook words"
+          aside={
+            <Switch
+              checked={hookOn}
+              onCheckedChange={(on) =>
+                set({ hookText: { ...vid.hookText, on: on ? undefined : false } })
+              }
+              aria-label="Words over the first seconds"
+            />
+          }
+        >
+          <p className="mb-3 text-xs text-muted-foreground">
+            Big words over the first seconds, so people stop scrolling.
+          </p>
+          {hookOn && (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {HOOK_TEXT_PRESETS.map((p) => {
+                const on = vid.hookText?.preset === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    title={p.hint}
+                    onClick={() =>
+                      set({ hookText: { ...vid.hookText, preset: on ? undefined : p.id } })
+                    }
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-[16px] bg-[var(--ds-well-bg)] p-2 ring-1 transition-all hover:-translate-y-0.5",
+                      on ? "ring-2 ring-primary" : "ring-transparent hover:ring-primary/30",
+                      dsFocus,
+                    )}
+                  >
+                    <span className="grid h-14 w-full place-items-center overflow-hidden rounded-[10px] bg-foreground/85">
+                      <HookTextSample
+                        preset={p.id}
+                        text="Wait for it"
+                        size="sm"
+                        accent={palette.accent ?? palette.primary ?? undefined}
+                      />
+                    </span>
+                    <span className="text-[11.5px] font-semibold">{p.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Block>
+
+        <BrandFace
+          creator={vid.creator}
+          people={people}
+          canEdit={canEdit}
+          onPick={(creator) => set({ creator })}
+          onUpload={(files) => handlers.upload(files, "person")}
+          onMore={() => emitAppEvent("open:ugc-studio", undefined)}
+          onRemove={() => set({ creator: undefined })}
+        />
+
+        <Block
+          label="Creator video formats"
+          aside={
+            <span className="text-[11.5px] font-medium text-muted-foreground">
+              {formats.length ? `${formats.length} of ${MAX_FORMATS}` : `Up to ${MAX_FORMATS}`}
+            </span>
+          }
+        >
+          <p className="mb-3 text-xs text-muted-foreground">
+            They come first under &ldquo;For your brand&rdquo; in the creator studio.
+          </p>
+          <div className="mb-3 flex gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+            {UGC_FORMAT_GROUPS.map((g) => {
+              const on = g.id === group;
+              const picked = UGC_FORMATS.filter(
+                (f) => f.group === g.id && formats.includes(f.id),
+              ).length;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setGroup(g.id)}
+                  className={cn(
+                    "relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold transition-colors",
+                    on ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                    dsFocus,
+                  )}
+                >
+                  {on && (
+                    <motion.span
+                      layoutId="inspo-ugc-group"
+                      className="absolute inset-0 rounded-full bg-[var(--ds-well-bg)] ring-1 ring-primary/30"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                    />
+                  )}
+                  <span className="relative">{g.label}</span>
+                  {picked > 0 && (
+                    <span className="relative grid size-[18px] place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                      {picked}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={group}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.22, ease: EASE }}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+            >
+              {UGC_FORMATS.filter((f) => f.group === group).map((f) => {
+                const on = formats.includes(f.id);
+                const full = !on && formats.length >= MAX_FORMATS;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    aria-pressed={on}
+                    disabled={full}
+                    onClick={() => {
+                      const next = on ? formats.filter((x) => x !== f.id) : [...formats, f.id];
+                      set({ formats: next.length ? next : undefined });
+                    }}
+                    className={cn(
+                      "flex items-start gap-2.5 rounded-[16px] bg-[var(--ds-well-bg)] px-3 py-2.5 text-left ring-1 transition-all disabled:opacity-45",
+                      on ? "ring-2 ring-primary" : "ring-transparent hover:ring-primary/30",
+                      dsFocus,
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full ring-1 transition-colors",
+                        on
+                          ? "bg-primary text-primary-foreground ring-primary"
+                          : "ring-foreground/20",
+                      )}
+                    >
+                      {on && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[12.5px] font-semibold">{f.label}</span>
+                      {f.hint && (
+                        <span className="block text-[11px] leading-snug text-muted-foreground">
+                          {f.hint}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </motion.div>
+          </AnimatePresence>
+        </Block>
+
         <FineTune>
           <Row label="Shots">
             <TextChips options={SHOTS} value={vid.shots} onChange={(shots) => set({ shots })} />
@@ -532,7 +532,7 @@ function KindCard({
         dsFocus,
       )}
     >
-      <span className="relative block aspect-[9/14] w-full overflow-hidden bg-foreground/90">
+      <span className="relative block aspect-[4/5] w-full overflow-hidden bg-foreground/90">
         {art && (
           <motion.span
             className="absolute inset-0"

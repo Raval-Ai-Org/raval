@@ -117,7 +117,7 @@ function MediaEditor({
   const listId = React.useId();
   return (
     <form
-      className="w-[300px] space-y-3.5"
+      className="w-full min-w-0 space-y-3.5"
       onSubmit={(e) => {
         e.preventDefault();
         onSave({ label: label.trim(), folder: folder.trim() || null, lifetime, chip });
@@ -173,7 +173,7 @@ function MediaEditor({
         )}
       </label>
       {!card.capture && (
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-[12px] font-semibold text-muted-foreground">It shows</span>
           <Segment
             label="It shows"
@@ -187,7 +187,7 @@ function MediaEditor({
           />
         </div>
       )}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-[12px] font-semibold text-muted-foreground">Keep it</span>
         <Segment
           label="Keep it"
@@ -355,7 +355,11 @@ function MediaTile({
             {canEdit && <Pencil className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="rounded-[22px] p-4">
+        <PopoverContent
+          align="start"
+          collisionPadding={12}
+          className="w-[min(340px,calc(100vw-1.5rem))] overflow-x-hidden rounded-[22px] p-4"
+        >
           <MediaEditor
             card={card}
             folders={folders}

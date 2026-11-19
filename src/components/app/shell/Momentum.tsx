@@ -68,6 +68,7 @@ export function StreakChipView({ m, className }: { m: Momentum; className?: stri
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-tour="streak"
           aria-label={`${streakLabel(m)}. See this week`}
           className={cn(
             "group inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",

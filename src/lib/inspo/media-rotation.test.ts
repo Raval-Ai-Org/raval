@@ -105,3 +105,28 @@ describe("remainingUses", () => {
     expect(left.get("p")).toBe(3);
   });
 });
+
+describe("named media rotates", () => {
+  it("gives a folder's least-used photos when the brief names it again", async () => {
+    const { pickNamedMedia } = await import("./media-rotation");
+    const media = ["a", "b", "c"].map((id) => ({
+      assetId: id,
+      kind: "image" as const,
+      purpose: "product" as const,
+      lifetime: "permanent" as const,
+      addedAt: "2026-11-01T00:00:00Z",
+      folder: "Launch event",
+    }));
+    const now = new Date("2026-11-19T00:00:00Z");
+    const first = pickNamedMedia({ media, brief: "our launch event", format: "image", now });
+    expect(first?.assetIds).toEqual(["a"]);
+    const again = pickNamedMedia({
+      media,
+      brief: "our launch event",
+      format: "image",
+      now,
+      uses: [{ assetId: "a", at: "2026-11-18T00:00:00Z" }],
+    });
+    expect(again?.assetIds).toEqual(["b"]);
+  });
+});

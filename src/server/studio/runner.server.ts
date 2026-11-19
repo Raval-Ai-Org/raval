@@ -109,6 +109,7 @@ import {
 } from "@/server/studio/video/finish.server";
 import { openingFrameForVideo } from "@/server/studio/video/opening-frame.server";
 import { wantsLogoInVideo } from "@/lib/studio/video/opening-frame";
+import { stylesForPiece } from "@/lib/brand-look/picture-styles";
 import { checkStudioVideo } from "@/server/studio/video/qa.server";
 import {
   collectSoundtrack,
@@ -1443,7 +1444,7 @@ function postBadgeCorner(
   brand: { logoUrl?: string | null } | null | undefined,
 ): LogoCorner | null {
   const look = ctx.style ? imageStyleInput(ctx.style) : null;
-  if (look?.useLogo === false || !brand?.logoUrl?.trim()) return null;
+  if (look?.useLogo !== true || !brand?.logoUrl?.trim()) return null;
   return look?.logoCorner ?? "bottom-right";
 }
 
@@ -1844,10 +1845,7 @@ async function startMedia(args: {
       throw new StudioJobError(404, "Making videos from your own clips isn't available here.");
     const look = ctx.style ? imageStyleInput(ctx.style) : null;
     // A video carries the logo only when the person asks for it.
-    const logoUrl =
-      look?.useLogo === false || !wantsLogoInVideo(input.intent.brief)
-        ? null
-        : brand?.logoUrl?.trim() || null;
+    const logoUrl = !wantsLogoInVideo(input.intent.brief) ? null : brand?.logoUrl?.trim() || null;
     const motion = videoMode === "recap" ? (input.controls.recapMotion ?? "camera") : undefined;
     const tasks: ProviderTask[] = [];
     if (motion === "ai") {
@@ -2338,11 +2336,17 @@ ${ctx.brandText}`,
   );
   // Not every post carries the logo (ADR-0048): the brand's own habit decides,
   // the same way on every retry of this piece.
+  // The logo is opt-in (Inspo → Post look), or asked for in the brief.
+  const askedLogo = wantsLogoInVideo(input.intent.brief);
+  const logoOn = askedLogo || styledLook?.useLogo === true;
   const look =
-    styledLook && !bibleWantsLogo(output.visualTaste?.direction, job.id)
+    styledLook &&
+    (!logoOn || (!askedLogo && !bibleWantsLogo(output.visualTaste?.direction, job.id)))
       ? { ...styledLook, useLogo: false }
-      : styledLook;
-  const logoUrl = look?.useLogo === false ? null : styled?.logoUrl?.trim() || null;
+      : styledLook
+        ? { ...styledLook, useLogo: true }
+        : null;
+  const logoUrl = logoOn && look?.useLogo !== false ? styled?.logoUrl?.trim() || null : null;
   // The check before the image model is called (brief-visual.ts, free): a
   // scene always exists (the writer's, else the brief's picture idea), the
   // headline is a short banner line, and no caption sentence is drawn.
@@ -3027,7 +3031,28 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           .trim(),
       }
     : loaded;
-  const style = await loadJobLook(job.workspace_id);
+  const loadedStyle = await loadJobLook(job.workspace_id);
+  // On "Let Mox decide" each piece gets ONE style from the brand's pool, away
+  // from the latest posts' styles; a revision keeps
+  // the whole pool and edits the render it has.
+  const pieceStyles =
+    loadedStyle && !input.refine
+      ? stylesForPiece(
+          loadedStyle.look.pictureStyles,
+          job.id,
+          base.recent.map((r) => r.pictureStyle),
+        )
+      : null;
+  const style =
+    loadedStyle && pieceStyles
+      ? {
+          ...loadedStyle,
+          look: {
+            ...loadedStyle.look,
+            pictureStyles: { ids: pieceStyles.ids, auto: pieceStyles.auto },
+          },
+        }
+      : loadedStyle;
   // Research is per-brief, so it cannot live in the 60s workspace context
   // cache. Most briefs skip it entirely and cost nothing.
   const ctx = await withLiveResearch(
@@ -3636,6 +3661,8 @@ ${source?.body ?? ""}`,
         ...(output.postStyle || output.artDirection
           ? { art_direction: output.postStyle || output.artDirection }
           : {}),
+        ...(pieceStyles?.picked ? { picture_style: pieceStyles.picked } : {}),
+        ...(radarTrend ? { trend_id: radarTrend.id } : {}),
         // The kind of post and the joke it told, so no later post repeats it (novelty.ts).
         ...(resolveCategory(input.intent) ? { category: resolveCategory(input.intent)!.id } : {}),
         ...(output.memeLayout ? { meme_layout: output.memeLayout } : {}),

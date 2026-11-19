@@ -573,3 +573,48 @@ export function PickTile({
     </motion.button>
   );
 }
+
+/** A small pick: a round swatch and a word, for choices that don't need a big tile. */
+export function PickChip({
+  on,
+  label,
+  art,
+  onClick,
+  index = 0,
+}: {
+  on: boolean;
+  label: string;
+  art?: string;
+  onClick: () => void;
+  index?: number;
+}) {
+  return (
+    <motion.button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, delay: Math.min(index, 10) * 0.03, ease: EASE }}
+      whileHover={{ y: -1.5 }}
+      whileTap={{ scale: 0.95 }}
+      className={cn(
+        "inline-flex h-9 items-center gap-2 rounded-full pl-1.5 pr-3.5 text-[12.5px] font-semibold ring-1 transition-[box-shadow,background-color]",
+        on
+          ? "bg-primary/12 ring-2 ring-primary shadow-[0_8px_22px_-14px_hsl(var(--primary)/0.9)]"
+          : "bg-[var(--ds-tile-bg)] ring-[var(--ds-tile-border)] hover:ring-primary/40",
+        !art && "pl-3.5",
+        dsFocus,
+      )}
+    >
+      {art && (
+        <span
+          aria-hidden
+          className="h-6 w-6 shrink-0 rounded-full ring-1 ring-black/10"
+          style={{ background: art }}
+        />
+      )}
+      {label}
+    </motion.button>
+  );
+}

@@ -33,8 +33,11 @@ function StyleTile({
   index,
   onToggle,
   size,
+  inMix = false,
 }: {
   style: PictureStyle;
+  /** On auto: this style is in the set Mox rotates. */
+  inMix?: boolean;
   /** 1-3 when picked, else 0. */
   order: number;
   index: number;
@@ -109,6 +112,15 @@ function StyleTile({
             ))}
           </span>
         )}
+        {inMix && !on && (
+          <motion.span
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute left-2 top-2 inline-flex h-5 items-center rounded-full bg-white/90 px-1.5 text-[10px] font-bold text-foreground shadow-sm ring-1 ring-black/5"
+          >
+            In Mox&apos;s mix
+          </motion.span>
+        )}
         <AnimatePresence>
           {on && (
             <motion.span
@@ -123,9 +135,11 @@ function StyleTile({
           )}
         </AnimatePresence>
       </span>
-      <span className="flex flex-col gap-0.5 px-3 py-2.5">
-        <span className="text-[13px] font-semibold leading-tight">{style.label}</span>
-        <span className="text-[11.5px] leading-snug text-muted-foreground">{style.line}</span>
+      <span className="flex flex-col gap-0.5 px-2.5 py-2">
+        <span className="text-[12.5px] font-semibold leading-tight">{style.label}</span>
+        <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+          {style.line}
+        </span>
       </span>
     </motion.button>
   );
@@ -181,6 +195,15 @@ export function PictureStylePicker({
               "radial-gradient(120% 140% at 0% 50%, hsl(var(--primary) / 0.22), transparent 60%)",
           }}
         />
+        {value.auto && !reduce && (
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+            initial={{ x: "-120%" }}
+            animate={{ x: "320%" }}
+            transition={{ duration: 2.4, repeat: Infinity, repeatDelay: 2.2, ease: "easeInOut" }}
+          />
+        )}
         <span className="relative grid h-16 w-16 shrink-0 place-items-center">
           <Mox pose="face" size={58} shadow={false} float={!reduce} alt="" />
         </span>
@@ -189,7 +212,7 @@ export function PictureStylePicker({
           <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">
             {autoCustom
               ? "Mox makes every picture in your own design, learned from your website and posts."
-              : "Mox picks the styles that suit your brand and rotates them, so every post feels fresh."}
+              : `Mox rotates ${autoStyles.length} styles that suit your brand, one per post, never the same look twice in a row. Pick your own below to lock them.`}
           </span>
           {autoCustom ? (
             <span className="mt-2 inline-flex h-6 items-center gap-1.5 rounded-full bg-white/80 pl-0.5 pr-2 text-[11px] font-semibold ring-1 ring-black/5 dark:bg-white/10">
@@ -289,7 +312,7 @@ export function PictureStylePicker({
 
       <div className="flex items-baseline justify-between gap-3 px-1 pt-1">
         <span className="text-[12px] font-semibold text-muted-foreground">
-          Or mix up to {MAX_PICTURE_STYLES} templates
+          Or lock your own: up to {MAX_PICTURE_STYLES} styles
         </span>
         {own.length > 0 && !customOn && (
           <span className="text-[11.5px] text-muted-foreground">
@@ -301,8 +324,8 @@ export function PictureStylePicker({
         className={cn(
           "grid gap-2.5",
           size === "lg"
-            ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-            : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4",
+            ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+            : "grid-cols-3 sm:grid-cols-4 xl:grid-cols-6",
         )}
       >
         {TEMPLATE_STYLES.map((s, i) => (
@@ -312,6 +335,7 @@ export function PictureStylePicker({
             index={i}
             size={size}
             order={own.indexOf(s.id) + 1}
+            inMix={value.auto && autoIds.includes(s.id)}
             onToggle={() => {
               const ids = toggleStyle(own, s.id);
               onChange(ids.length ? { auto: false, ids } : { auto: true, ids: [] });

@@ -79,6 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Create",
         icon: "create",
         target: { kind: "event", event: "open:create-launcher" },
+        tour: "create",
         rail: true,
         badge: "New",
       },

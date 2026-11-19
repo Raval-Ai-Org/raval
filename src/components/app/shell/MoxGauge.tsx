@@ -65,6 +65,7 @@ export function MoxGauge({
     <div className={cn("flex flex-col items-center", className)}>
       <button
         type="button"
+        data-tour="credits"
         onClick={() => emitAppEvent("open:usage")}
         aria-label={
           preview ? `This will use ${preview.label}. Open Plan & billing` : "Plan & billing"

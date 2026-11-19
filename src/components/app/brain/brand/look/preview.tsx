@@ -86,7 +86,7 @@ export function PostPreview({
   const s = sample(resolved, brandName);
   const placement = resolved.visual.textPlacement ?? "bottom";
   const corner = resolved.visual.logo?.corner ?? "bottom-right";
-  const showLogo = resolved.visual.logo?.use !== false && !!logoUrl;
+  const showLogo = resolved.visual.logo?.use === true && !!logoUrl;
   const tracking =
     t.tracking === "tight" ? "-0.03em" : t.tracking === "wide" ? "0.06em" : "-0.01em";
   return (

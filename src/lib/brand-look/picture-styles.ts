@@ -22,6 +22,13 @@ export const PICTURE_STYLE_IDS = [
   "colour-pop",
   "dark-premium",
   "editorial",
+  "type-wall",
+  "story-moment",
+  "event-poster",
+  "flat-lay",
+  "offer-deal",
+  "callouts",
+  "mono-accent",
   // The brand's own design, learned from its website and its own posts
   // (the style bible, ADR-0048). Exclusive: it never mixes with a template.
   "custom",
@@ -155,6 +162,69 @@ export const PICTURE_STYLES: readonly PictureStyle[] = [
     medium: "collage",
   },
   {
+    id: "type-wall",
+    label: "Word wall",
+    line: "One word repeated, the hero in front",
+    examples: ["/Home/wall/burger-1.webp", "/Home/wall/sunscreen-3.webp"],
+    direction:
+      "A type-pattern poster: one short brand word set huge and repeated or cropped across the whole background in the brand colour, the hero subject large and sharp in front of it, a small line and the logo. Bold, graphic, instantly recognisable.",
+    medium: "typographic",
+  },
+  {
+    id: "story-moment",
+    label: "Story moment",
+    line: "A cinematic scene with a twist",
+    examples: ["/Home/wall/milk-1.webp", "/Home/wall/marketing-that-moves.webp"],
+    direction:
+      "A cinematic story frame: one real moment with a person or the product, shot like a film still, with one visual twist that tells the story (a shadow of who they become, a reflection, a before-and-after in one frame). Moody light, a short headline in a calm area.",
+    medium: "photo",
+  },
+  {
+    id: "event-poster",
+    label: "Event & info",
+    line: "Dates, times and one clear graphic",
+    examples: ["/Home/wall/classes-3.webp", "/Home/wall/classes-1.webp"],
+    direction:
+      "An event or announcement poster: one bold graphic object in the brand colour as the hero, the event name huge, the exact dates, times and place set as clean labelled blocks on a strict grid. Only the details the brief gives, never invented ones.",
+    medium: "typographic",
+  },
+  {
+    id: "flat-lay",
+    label: "Top-down flat lay",
+    line: "Seen from above, neatly arranged",
+    examples: ["/Home/wall/classes-6.webp", "/Home/wall/burger-1.webp"],
+    direction:
+      "A top-down flat lay: the product and the real things that go with it arranged neatly from directly above on a designed surface in the brand colours, soft even light, a headline in the open space. Tidy, tactile and real.",
+    medium: "photo",
+  },
+  {
+    id: "offer-deal",
+    label: "Offer & deal",
+    line: "The offer as the hero",
+    examples: ["/Home/wall/finance-6.webp", "/Home/wall/burger-3.webp"],
+    direction:
+      "An offer post: the offer itself is the hero, set huge (or on a 3D tag, ticket or badge in the brand colour), one line on what you get and one clear next step. Only the offer the brief states, never an invented price, discount or deadline.",
+    medium: "mixed",
+  },
+  {
+    id: "callouts",
+    label: "Callouts",
+    line: "A hero with floating feature cards",
+    examples: ["/Home/wall/see-the-product.webp", "/Home/wall/marketing-that-moves.webp"],
+    direction:
+      "A callout post: a person or the product as the hero, with small floating cards, labels or product cut-outs around it that point at features or benefits, thin connector lines, a short headline on top. Clean, modern and easy to scan.",
+    medium: "mixed",
+  },
+  {
+    id: "mono-accent",
+    label: "Mono + one colour",
+    line: "Black and white with one brand accent",
+    examples: ["/Home/wall/build-2.webp", "/Home/wall/build-1.webp"],
+    direction:
+      "A monochrome post with one accent: a black-and-white photograph (architecture, product or person) with strong lines, and only the brand's accent colour on the headline and one graphic shape. Sharp, confident and high-end.",
+    medium: "photo",
+  },
+  {
     id: "custom",
     label: "Custom: your own look",
     line: "Made in your website's own design",
@@ -172,7 +242,10 @@ export const TEMPLATE_STYLES: readonly PictureStyle[] = PICTURE_STYLES.filter(
   (s) => s.id !== CUSTOM_STYLE,
 );
 
-export const MAX_PICTURE_STYLES = 3;
+export const MAX_PICTURE_STYLES = 5;
+
+/** How many styles Mox rotates through for a brand on auto. */
+export const AUTO_POOL_SIZE = 6;
 
 export function pictureStyleById(id: unknown): PictureStyle | null {
   return PICTURE_STYLES.find((s) => s.id === id) ?? null;
@@ -207,55 +280,62 @@ const RULES: Array<{ match: RegExp; styles: PictureStyleId[] }> = [
   {
     match:
       /\b(app|saas|software|platform|fintech|bank|wallet|crypto|ai|tech|startup|digital|web|agency|marketing)\b/i,
-    styles: ["app-showcase", "3d", "clean-type"],
+    styles: ["app-showcase", "3d", "callouts", "clean-type", "offer-deal", "story-moment"],
   },
   {
     match:
       /\b(food|burger|pizza|restaurant|cafe|coffee|bakery|drink|juice|dairy|milk|snack|grill|kitchen|catering)\b/i,
-    styles: ["product-hero", "big-idea", "bold-poster"],
+    styles: ["product-hero", "type-wall", "big-idea", "flat-lay", "bold-poster", "story-moment"],
   },
   {
     match: /\b(beauty|skin|skincare|cosmetic|makeup|hair|salon|spa|fragrance|perfume|sunscreen)\b/i,
-    styles: ["people", "product-hero", "colour-pop"],
+    styles: ["people", "product-hero", "type-wall", "colour-pop", "callouts", "flat-lay"],
   },
   {
     match: /\b(fashion|apparel|clothing|wear|shoes|jewel|jewelry|watch|luxury|boutique)\b/i,
-    styles: ["people", "dark-premium", "editorial"],
+    styles: ["people", "dark-premium", "editorial", "mono-accent", "callouts", "story-moment"],
   },
   {
     match:
       /\b(construction|real estate|property|architect|engineering|building|interior|furniture|home)\b/i,
-    styles: ["bold-poster", "editorial", "dark-premium"],
+    styles: ["bold-poster", "mono-accent", "editorial", "dark-premium", "big-idea", "callouts"],
   },
   {
     match: /\b(education|school|academy|course|class|tutor|ielts|training|coaching|university)\b/i,
-    styles: ["3d", "bold-poster", "clean-type"],
+    styles: ["3d", "event-poster", "bold-poster", "flat-lay", "clean-type", "story-moment"],
   },
   {
     match: /\b(health|clinic|medical|dental|pharma|fitness|gym|wellness|yoga)\b/i,
-    styles: ["people", "clean-type", "product-hero"],
+    styles: ["people", "clean-type", "product-hero", "story-moment", "callouts", "3d"],
   },
   {
     match: /\b(travel|hotel|tour|resort|airline|event|events|wedding)\b/i,
-    styles: ["big-idea", "editorial", "people"],
+    styles: ["big-idea", "editorial", "people", "event-poster", "story-moment", "mono-accent"],
   },
   {
     match: /\b(kids|toy|toys|pet|pets|game|gaming|sport|sports)\b/i,
-    styles: ["colour-pop", "illustrated", "big-idea"],
+    styles: ["colour-pop", "illustrated", "big-idea", "3d", "type-wall", "story-moment"],
   },
   {
     match: /\b(finance|insurance|legal|law|consult|consulting|accounting|b2b)\b/i,
-    styles: ["clean-type", "dark-premium", "3d"],
+    styles: ["clean-type", "dark-premium", "3d", "callouts", "offer-deal", "mono-accent"],
   },
 ];
 
-const FALLBACK: PictureStyleId[] = ["bold-poster", "product-hero", "clean-type"];
+const FALLBACK: PictureStyleId[] = [
+  "bold-poster",
+  "product-hero",
+  "clean-type",
+  "big-idea",
+  "callouts",
+  "story-moment",
+];
 
-/** Mox's pick: three styles that suit what the brand sells. Deterministic. */
+/** Mox's pool: the styles that suit what the brand sells, best first. Deterministic. */
 export function autoPictureStyles(facts: BrandFacts): PictureStyleId[] {
   const text = [facts.industry, facts.products, facts.brandName].filter(Boolean).join(" ");
   const hit = text ? RULES.find((r) => r.match.test(text)) : undefined;
-  return [...(hit?.styles ?? FALLBACK)];
+  return [...(hit?.styles ?? FALLBACK)].slice(0, AUTO_POOL_SIZE);
 }
 
 /** The old one-word medium a style list implies (first style wins). */
@@ -312,18 +392,57 @@ export function pictureStyleLines(
   ].join("\n");
 }
 
-/** Pick one of the brand's styles for one piece, rotating by seed and skipping the last used. */
-export function styleForPiece(
-  ids: readonly PictureStyleId[],
-  seed: string,
-  lastUsed?: string | null,
-): PictureStyleId | null {
-  if (!ids.length) return null;
-  const pool = ids.length > 1 ? ids.filter((id) => id !== lastUsed) : [...ids];
+function hash(seed: string): number {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) {
     h ^= seed.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  return pool[(h >>> 0) % pool.length] ?? null;
+  return h >>> 0;
+}
+
+/**
+ * Pick one of the brand's styles for one piece, rotating by seed and skipping
+ * the ones used lately (`recent`, newest first: a string or a list). With a
+ * pool of n styles the last n-1 are skipped, so a run of posts walks the
+ * whole pool before a style comes back.
+ */
+export function styleForPiece(
+  ids: readonly PictureStyleId[],
+  seed: string,
+  recent?: string | readonly (string | null | undefined)[] | null,
+): PictureStyleId | null {
+  if (!ids.length) return null;
+  const used = (typeof recent === "string" ? [recent] : (recent ?? [])).filter(
+    (x): x is string => !!x,
+  );
+  let pool = [...ids];
+  for (let keep = ids.length - 1; keep >= 1; keep--) {
+    const skip = new Set(used.slice(0, keep));
+    const left = ids.filter((id) => !skip.has(id));
+    if (left.length) {
+      pool = left;
+      break;
+    }
+  }
+  return pool[hash(seed) % pool.length] ?? null;
+}
+
+/**
+ * The styles one piece is told about. A brand on auto gets ONE style for the
+ * piece, chosen from Mox's pool and away from the latest posts, so posts move
+ * through many looks instead of the same three. A brand that picked its own
+ * styles keeps them all and the model picks the one that suits.
+ */
+export function stylesForPiece(
+  styles: { ids: readonly PictureStyleId[]; auto: boolean } | null | undefined,
+  seed: string,
+  recent: readonly (string | null | undefined)[] = [],
+): { ids: PictureStyleId[]; auto: boolean; picked: PictureStyleId | null } | null {
+  if (!styles?.ids.length) return null;
+  if (!styles.auto || isCustomStyles(styles.ids)) {
+    return { ids: [...styles.ids], auto: styles.auto, picked: null };
+  }
+  const picked = styleForPiece(styles.ids, seed, recent);
+  return { ids: picked ? [picked] : [...styles.ids], auto: true, picked };
 }

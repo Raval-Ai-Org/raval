@@ -615,7 +615,7 @@ export function buildImagePromptDetailed(args: {
   const brandFonts = (style?.fonts.length ? style.fonts : (brand?.fonts ?? []))
     .filter(Boolean)
     .slice(0, 3);
-  const hasLogo = style?.useLogo === false ? false : !!brand?.logoUrl;
+  const hasLogo = style?.useLogo === true && !!brand?.logoUrl;
   const corner = style?.logoCorner ?? logoCorner(size);
   const maxWords = style?.maxWords ?? 6;
 

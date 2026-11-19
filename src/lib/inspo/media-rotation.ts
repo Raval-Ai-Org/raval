@@ -168,6 +168,8 @@ export function pickNamedMedia(args: {
   brief: string;
   format: string;
   now: Date;
+  /** Earlier uses: a folder named again gives its least-used photos, not the same ones. */
+  uses?: readonly MediaUseRecord[];
 }): RotationPick | null {
   const want = NAMED_PER_FORMAT[args.format];
   if (!want || !args.brief.trim()) return null;
@@ -177,12 +179,27 @@ export function pickNamedMedia(args: {
     const added = Date.parse(m.addedAt);
     return !(Number.isFinite(added) && t - added > LIFETIME_RULES[m.lifetime].expiresDays * DAY);
   });
-  const hits = mediaForBrief(
+  const matched = mediaForBrief(
     fresh.map((m) => ({ assetId: m.assetId, kind: m.kind, folder: m.folder, label: m.label })),
     args.brief,
-    want,
+    24,
   );
-  if (!hits.length) return null;
+  if (!matched.length) return null;
+  // Every photo the brief names is fair game; the least used lead, so asking
+  // for "our launch photos" twice shows different ones.
+  const order = args.uses?.length
+    ? new Map(
+        rankMedia(
+          fresh.filter((m) => matched.some((h) => h.assetId === m.assetId)),
+          args.uses,
+        ).map((m, i) => [m.assetId, i]),
+      )
+    : null;
+  const hits = (
+    order
+      ? [...matched].sort((a, b) => (order.get(a.assetId) ?? 0) - (order.get(b.assetId) ?? 0))
+      : matched
+  ).slice(0, want);
   const folder = hits[0].folder?.trim();
   // Site art and photos aren't mixed in one picture: the first hit's kind leads.
   const byId = new Map(fresh.map((m) => [m.assetId, m]));

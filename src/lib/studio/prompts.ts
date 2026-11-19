@@ -84,6 +84,10 @@ export type StudioContext = {
     adFormat?: string | null;
     /** Pictures: the campaign layout it was staged on (art-direction.ts), so the next one differs. */
     artDirection?: string | null;
+    /** Pictures: the picture style it was made in (picture-styles.ts), so Mox rotates. */
+    pictureStyle?: string | null;
+    /** The Trend Radar trend it was made for, so the next piece takes another one. */
+    trendId?: string | null;
     /** The kind of post (categories.ts), a meme's layout and the joke or on-picture words it used. */
     category?: string | null;
     memeLayout?: string | null;

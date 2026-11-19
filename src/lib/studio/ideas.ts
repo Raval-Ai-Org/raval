@@ -91,7 +91,21 @@ export function collectSignals(
 
   // Trend Radar (ADR-0052): what Mellox staff flagged as trending now for
   // this brand. The strongest signal there is while it is live.
-  for (const t of (ctx.radar ?? []).slice(0, 3)) {
+  // A trend the brand's latest posts were already made for steps back, so
+  // the next one takes a different moment; one used in the last two posts
+  // waits its turn (it comes back once the others had theirs).
+  const trendUses = (id: string) => ctx.recent.filter((r) => r.trendId === id).length;
+  const justUsed = new Set(
+    ctx.recent
+      .slice(0, 2)
+      .map((r) => r.trendId)
+      .filter(Boolean),
+  );
+  const radar = (ctx.radar ?? [])
+    .map((t, i) => ({ t, i, uses: trendUses(t.id) }))
+    .sort((a, b) => a.uses - b.uses || a.i - b.i);
+  const fresh = radar.filter((x) => !justUsed.has(x.t.id));
+  for (const { t, uses } of (fresh.length ? fresh : radar).slice(0, 3)) {
     signals.push({
       source: "radar",
       headline: t.title,
@@ -99,7 +113,7 @@ export function collectSignals(
         .filter(Boolean)
         .join(" ")
         .slice(0, 400),
-      weight: 95 + t.priority,
+      weight: 95 + t.priority - Math.min(30, uses * 12),
       suggestedType: "image",
       goal: "engagement",
     });

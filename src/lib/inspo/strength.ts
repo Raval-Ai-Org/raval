@@ -19,7 +19,12 @@ export function styleSteps(args: {
   return [
     { id: "likes", label: "3 posts you like", done: likes >= 3, section: "board" },
     { id: "direction", label: "Learn my style", done: args.hasDirection, section: "board" },
-    { id: "vibe", label: "Pick a vibe", done: !!(v.medium || v.mood), section: "post" },
+    {
+      id: "vibe",
+      label: "Picture style",
+      done: !!(v.styles?.length || v.stylesAuto === true || v.medium || v.mood),
+      section: "post",
+    },
     {
       id: "colours",
       label: "Colours & fonts",

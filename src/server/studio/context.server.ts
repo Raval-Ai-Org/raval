@@ -202,6 +202,8 @@ async function loadWorkspaceSnapshot(
         structure: str(record(meta.carousel).structure),
         adFormat: str(meta.ad_format),
         artDirection: str(meta.art_direction),
+        pictureStyle: str(meta.picture_style),
+        trendId: str(meta.trend_id),
         category: str(meta.category),
         memeLayout: str(meta.meme_layout),
         memeFormat: str(meta.meme_format),
