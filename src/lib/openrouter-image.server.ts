@@ -31,6 +31,7 @@ import { round6, unitPrice } from "@/server/ai/pricing";
 import { getRequestScope } from "@/server/request-context";
 import { log } from "@/server/observability/logger";
 import { markImageFundsOut } from "@/server/ai/image-funds.server";
+import { imageProvider, kieImage, kieServedModel } from "./kie-image.server";
 import {
   AiGatewayError,
   getOpenRouterKey,
@@ -334,10 +335,15 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
   // Billed per image: the workspace's monthly image quota and spend ceiling apply.
   if (!opts.budgeted) await enforceBudget("image");
 
+  const onKie = imageProvider() === "kie";
   const candidates = (opts.model ? [opts.model] : [plan.model, ...plan.fallbacks])
+    // On KIE (temporary) a Recraft pick is drawn by Flare: KIE has no Recraft.
+    .map((model) => (onKie ? kieServedModel(model) : model))
+    .filter((model, index, all) => all.indexOf(model) === index)
     .filter((model) => modelCanServe(model, { references, background: opts.background }))
     .slice(0, Math.max(1, Math.min(3, opts.maxAttempts ?? 3)));
-  const send = transportOverride ?? openRouterImage;
+  const send = transportOverride ?? (onKie ? kieImage : openRouterImage);
+  const provider = onKie ? "kie" : "openrouter";
   let lastError: unknown;
   let attempt = 0;
   for (const model of candidates) {
@@ -351,7 +357,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     if (hit) {
       await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`], { stage: "output" });
       recordUsage({
-        provider: "openrouter",
+        provider,
         model,
         kind: "image",
         route,
@@ -375,7 +381,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               background: opts.background,
             });
             recordUsage({
-              provider: "openrouter",
+              provider,
               model,
               kind: "image",
               route,
@@ -390,7 +396,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
             return image;
           } catch (error) {
             recordUsage({
-              provider: "openrouter",
+              provider,
               model,
               kind: "image",
               route,
@@ -417,7 +423,7 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         code: error instanceof AiGatewayError ? error.code : undefined,
         message: upstreamDetail(error),
       });
-      if (error instanceof AiGatewayError && error.code === "insufficient_credits")
+      if (!onKie && error instanceof AiGatewayError && error.code === "insufficient_credits")
         await markImageFundsOut();
       if (isTerminal(error, model)) throw error;
     }
@@ -521,13 +527,19 @@ export async function startImageTask(opts: {
   });
   await enforceBudget("image");
   // Fail fast when the key is missing instead of parking a doomed task.
-  getOpenRouterKey();
+  if (imageProvider() === "kie") {
+    if (!process.env.KIE_API_KEY?.trim())
+      throw new AiGatewayError(503, "KIE_API_KEY is not set.", "missing_api_key");
+  } else getOpenRouterKey();
   // A restart on a model that can't do this job (Recraft with a reference or
   // a transparent layer) runs on the plan's own model instead.
-  const model =
+  const onKie = imageProvider() === "kie";
+  const served = (m: string) => (onKie ? kieServedModel(m) : m);
+  const model = served(
     opts.model && modelCanServe(opts.model, { references, background: opts.background })
       ? opts.model
-      : plan.model;
+      : plan.model,
+  );
   const taskId = `${IMAGE_TASK_PREFIX}${randomUUID()}`;
   const scope = getRequestScope();
   await inBackground(async () => {
@@ -587,7 +599,9 @@ export async function startImageTask(opts: {
     taskId,
     model,
     route: plan.route,
-    fallbacks: [plan.model, ...plan.fallbacks].filter((m) => m !== model),
+    fallbacks: [plan.model, ...plan.fallbacks]
+      .map(served)
+      .filter((m, index, all) => m !== model && all.indexOf(m) === index),
   };
 }
 

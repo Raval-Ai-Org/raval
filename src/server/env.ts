@@ -32,6 +32,8 @@ const Schema = z.object({
   OPENROUTER_WEBHOOK_SECRET: z.string().optional(),
   VIDEO_PROVIDER: z.enum(["kie", "openrouter"]).optional(),
   VIDEO_PROVIDER_FALLBACK: z.enum(["openrouter", "kie", "none"]).optional(),
+  // Temporary: "kie" draws pictures on KIE while OpenRouter has no balance.
+  IMAGE_PROVIDER: z.enum(["kie", "openrouter"]).optional(),
   IMAGE_MODEL_DEFAULT: z.string().optional(),
   IMAGE_MODEL_PREMIUM: z.string().optional(),
   IMAGE_MODEL_EDIT: z.string().optional(),

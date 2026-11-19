@@ -91,6 +91,9 @@ async function liveBalance(): Promise<number | null> {
  * last few minutes, or a live balance under the floor. Never throws.
  */
 export async function imageFundsPaused(): Promise<boolean> {
+  // Pictures drawn on KIE (IMAGE_PROVIDER=kie, temporary) don't spend
+  // OpenRouter money, so its balance never pauses them.
+  if (process.env.IMAGE_PROVIDER?.trim().toLowerCase() === "kie") return false;
   try {
     if (await cache.get(PAUSE_KEY)) {
       // A top-up lifts the pause at once instead of after five minutes.

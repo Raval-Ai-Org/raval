@@ -141,6 +141,15 @@ describe("OpenRouter image generation", () => {
     expect(image.model).toBe(IMAGE_FLARE);
   });
 
+  it("draws Recraft picks with Flare while images run on KIE", async () => {
+    vi.stubEnv("IMAGE_PROVIDER", "kie");
+    const calls = fakeImages();
+    const image = await asUser(() => generateImage({ prompt: "A post on KIE" }));
+    expect(calls.map((c) => c.model)).toEqual([IMAGE_FLARE]);
+    expect(usage.rows[0]).toMatchObject({ provider: "kie", model: IMAGE_FLARE });
+    expect(image.model).toBe(IMAGE_FLARE);
+  });
+
   it("keeps transparent design layers off Recraft", async () => {
     const calls = fakeImages();
     await asUser(() => generateImage({ prompt: "Design layer", background: "transparent" }));
