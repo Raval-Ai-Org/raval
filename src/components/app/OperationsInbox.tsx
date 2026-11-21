@@ -366,17 +366,17 @@ export function OperationsInbox() {
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex justify-end bg-black/30"
+      className="ds-scrim fixed inset-0 z-[70] flex justify-end p-0 sm:p-2"
       onClick={() => setOpen(false)}
     >
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby="ops-inbox-title"
-        className="flex h-full w-full max-w-[560px] flex-col border-l border-border bg-background shadow-2xl"
+        className="ds-sheet-r flex h-full w-full max-w-[560px] flex-col overflow-hidden max-sm:rounded-none sm:rounded-[var(--ds-pop-radius)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <header className="flex items-center justify-between gap-2 border-b border-border/50 px-5 py-4">
           <div>
             <h2 id="ops-inbox-title" className="text-[15px] font-semibold">
               Operations inbox
@@ -811,7 +811,7 @@ export function OperationsInbox() {
                       {a.run_id ? (
                         <button
                           type="button"
-                          className="mt-2 text-[12px] text-primary"
+                          className="mt-2 text-[12px] text-primary-ink"
                           onClick={() => {
                             setTab("runs");
                             void openRun(a.run_id!);
@@ -869,7 +869,7 @@ export function OperationsInbox() {
               <button
                 type="button"
                 onClick={() => setRunDetail(null)}
-                className="mb-2 text-[12px] text-primary"
+                className="mb-2 text-[12px] text-primary-ink"
               >
                 ← All runs
               </button>

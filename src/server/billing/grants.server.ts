@@ -1,13 +1,18 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ADDONS, PLANS, SIGNUP_GRANT, type Meter, type PlanId } from "@/lib/billing/catalog";
+import {
+  ADDONS,
+  PLANS,
+  SIGNUP_GRANT,
+  hasActivePlan,
+  type Meter,
+  type PlanId,
+} from "@/lib/billing/catalog";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { invalidateBillingAccount, type BillingAccount } from "./accounts.server";
 import { entitledPlanFor } from "./entitlements.server";
 import { clawbackMeter, grantMeter, rolloverMeter } from "./meters.server";
-import { CREATION_PLANS, CREATION_POLICY } from "@/lib/billing/creation";
-import { creationPolicyFor } from "./creation.server";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
 
@@ -44,6 +49,8 @@ export function nextMonthlyWindow(anchor: string, after: string): string {
 }
 
 export async function ensureSignupGrant(account: BillingAccount): Promise<void> {
+  // Pricing v4 has no Free plan and no sign-up credits.
+  if (SIGNUP_GRANT.credits <= 0) return;
   const expiresAt = new Date(
     new Date(account.created_at).getTime() + SIGNUP_GRANT.expiresInDays * 86_400_000,
   ).toISOString();
@@ -82,7 +89,11 @@ export async function ensureSignupGrant(account: BillingAccount): Promise<void> 
   });
 }
 
-/** New Free users can use their Flash allowance before the first cron tick. */
+/**
+ * Before pricing v4 a new Free account got its Flash allowance here. There is
+ * no Free plan now (nothing is granted without a plan), so this only moves the
+ * grant window along.
+ */
 export async function ensureInitialFreeGrant(account: BillingAccount): Promise<void> {
   if (
     account.status !== "free" ||
@@ -107,63 +118,54 @@ export async function ensureInitialFreeGrant(account: BillingAccount): Promise<v
   invalidateBillingAccount(account.id);
 }
 
+/** Idempotency-key prefix of plan grants under pricing v4 (ADR-0050). */
+export const CREDITS_POLICY = "credits_v4";
+
+/**
+ * One month of a plan: credits, Pro messages and the Flash fair-use counter
+ * (pricing v4, ADR-0050). No creation points, free videos or premium videos
+ * are granted any more; balances held from before v4 still spend. Unused plan
+ * credits roll over for `rolloverMonths` (capped at one month of credits) on
+ * every paid plan, monthly or yearly.
+ */
 export async function grantPlanWindow(args: {
   account: BillingAccount;
   plan: PlanId;
   windowStart: string;
   expiresAt: string;
+  /** Kept for callers from before v4; rollover now follows the plan. */
   annualRollover?: boolean;
   providerRef?: string;
 }): Promise<number> {
   const { account, plan, windowStart, expiresAt } = args;
-  const allowances = PLANS[plan].allowances;
-  let policy = "legacy";
-  if (plan !== "free") {
-    const { data, error } = await admin.rpc("creation_plan_window", {
-      p: { account_id: account.id, window_start: windowStart, expires_at: expiresAt },
-    });
-    if (error || !["legacy", CREATION_POLICY].includes(String(data)))
-      throw new Error("Could not prepare monthly creation allowance.");
-    policy = String(data);
-  }
-  const creation = policy === CREATION_POLICY && plan !== "free";
+  const def = PLANS[plan];
+  const allowances = def.allowances;
+  if (!hasActivePlan(plan)) return 0;
+  // A window already granted under the terms before v4 (a replayed webhook or
+  // cron tick) keeps them: never grant the same month twice.
+  const { data: earlier, error: earlierError } = await admin
+    .from("meter_grants")
+    .select("id")
+    .eq("account_id", account.id)
+    .eq("source", "plan")
+    .eq("period_start", windowStart)
+    .not("idempotency_key", "like", `${CREDITS_POLICY}:%`)
+    .limit(1);
+  if (earlierError) throw new Error("Could not check this month's plan grants.");
+  if (earlier?.length) return 0;
   const amounts: Array<[Meter, number]> = [
-    ["credits", creation ? CREATION_PLANS[plan].flexCredits : allowances.credits],
-    ["creation", creation ? CREATION_PLANS[plan].points : 0],
-    ["video", allowances.videoUnits],
-    ["premium_video", allowances.premiumVideos],
+    ["credits", allowances.credits],
     ["pro_messages", allowances.proMessages],
     ["flash_messages", allowances.flashMessages],
   ];
-  if (args.annualRollover) {
-    for (const [meter, cap] of amounts) {
-      // Free videos are per month: they never roll over.
-      if (meter === "credits" && cap > 0) {
-        let rolloverCap = cap;
-        if (creation && meter === "credits") {
-          const { data: old, error: oldError } = await admin
-            .from("meter_grants")
-            .select("id")
-            .eq("account_id", account.id)
-            .eq("source", "plan")
-            .eq("meter", "credits")
-            .gt("remaining", 0)
-            .gte("expires_at", windowStart)
-            .lt("period_start", windowStart)
-            .like("idempotency_key", "plan:%")
-            .limit(1);
-          if (oldError) throw new Error("Could not preserve previous rollover terms.");
-          if (old?.length) rolloverCap = allowances.credits;
-        }
-        await rolloverMeter({
-          accountId: account.id,
-          meter,
-          windowStart,
-          cap: rolloverCap,
-          expiresAt,
-        });
-      }
-    }
+  if (def.rolloverMonths > 0 && allowances.credits > 0) {
+    await rolloverMeter({
+      accountId: account.id,
+      meter: "credits",
+      windowStart,
+      cap: allowances.credits,
+      expiresAt,
+    });
   }
   let issued = 0;
   for (const [meter, amount] of amounts) {
@@ -176,7 +178,7 @@ export async function grantPlanWindow(args: {
       restriction: "ai_only",
       periodStart: windowStart,
       expiresAt,
-      idempotencyKey: `${creation ? CREATION_POLICY : "plan"}:${account.id}:${plan}:${meter}:${windowStart}`,
+      idempotencyKey: `${CREDITS_POLICY}:${account.id}:${plan}:${meter}:${windowStart}`,
       providerRef: args.providerRef,
     });
     if (!result.replayed) issued++;
@@ -201,17 +203,8 @@ export async function grantPlanUpgrade(args: {
   const fraction = Math.max(0, Math.min(1, (end - now.getTime()) / Math.max(1, end - start)));
   const old = PLANS[args.from].allowances;
   const next = PLANS[args.to].allowances;
-  const creation = await creationPolicyFor(args.account.id, now);
   for (const [meter, delta] of [
-    [
-      "credits",
-      creation
-        ? CREATION_PLANS[args.to].flexCredits - CREATION_PLANS[args.from].flexCredits
-        : next.credits - old.credits,
-    ],
-    ["creation", creation ? CREATION_PLANS[args.to].points - CREATION_PLANS[args.from].points : 0],
-    ["video", next.videoUnits - old.videoUnits],
-    ["premium_video", next.premiumVideos - old.premiumVideos],
+    ["credits", next.credits - old.credits],
     ["pro_messages", next.proMessages - old.proMessages],
     ["flash_messages", next.flashMessages - old.flashMessages],
   ] as const) {
@@ -242,7 +235,6 @@ export async function grantAddonWindow(args: {
     if (!addon || addon.availability !== "launch") continue;
     for (const [meter, perUnit] of [
       ["credits", addon.adds.credits ?? 0],
-      ["video", addon.adds.videoUnits ?? 0],
       ["pro_messages", addon.adds.proMessages ?? 0],
     ] as const) {
       const amount = perUnit * item.quantity;
@@ -282,7 +274,6 @@ export async function grantAddonUpgrade(args: {
     const extra = Math.max(0, item.quantity - (old.get(item.catalogKey) ?? 0));
     for (const [meter, perUnit] of [
       ["credits", addon.adds.credits ?? 0],
-      ["video", addon.adds.videoUnits ?? 0],
       ["pro_messages", addon.adds.proMessages ?? 0],
     ] as const) {
       const amount = Math.ceil(extra * perUnit * fraction);
@@ -328,13 +319,8 @@ export async function issueDueGrants(
       new Date(start) < new Date(account.current_period_end);
     const comped =
       account.comped_plan_id && account.comped_until && new Date(account.comped_until) > now;
-    if (plan === "free" && account.status !== "paused") {
-      grants += await grantPlanWindow({
-        account,
-        plan: "free",
-        windowStart: start,
-        expiresAt: next,
-      });
+    if (plan === "free") {
+      // No plan, nothing granted (pricing v4).
     } else if (withinPaidYear || comped) {
       grants += await grantPlanWindow({
         account,

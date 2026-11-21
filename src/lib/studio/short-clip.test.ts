@@ -1,3 +1,4 @@
+import { UNITS_PER_CREDIT } from "@/lib/billing/catalog";
 import { describe, expect, it } from "vitest";
 import { shortClipPlan, shortClipPrice } from "./short-clip";
 import { studioChargeFor, studioPriceLabel } from "./billing";
@@ -15,7 +16,7 @@ describe("short clips are paid in credits, longer videos in video credits", () =
     const input = video({ videoModelKey: "standard", durationSec: 8, referenceAssetIds: ["p"] });
     expect(shortClipPlan(input)).toMatchObject({ ugcKey: "standard", clips: 1 });
     expect(studioChargeFor({ type: "video", ...input.controls })).toBe("studio_short_clip");
-    expect(studioPriceLabel(input)).toBe("120 credits");
+    expect(studioPriceLabel(input)).toBe("8 credits");
   });
 
   it("keeps longer, Premium and preview videos on their old prices", () => {
@@ -38,7 +39,7 @@ describe("short clips are paid in credits, longer videos in video credits", () =
       referenceAssetIds: ["a", "b", "c", "d"],
     });
     expect(shortClipPlan(input)).toMatchObject({ clips: 4, seconds: 5 });
-    expect(studioPriceLabel(input)).toBe("240 credits");
+    expect(studioPriceLabel(input)).toBe("16 credits");
     expect(creationPointsFor(input)).toBe(shortClipPrice(shortClipPlan(input)!).points);
     // Premium animation stays on video credits.
     expect(
@@ -64,12 +65,14 @@ describe("short clips are paid in credits, longer videos in video credits", () =
 
   it("pays in creation points when that is the payment source", () => {
     const input = video({ videoModelKey: "draft", durationSec: 6, paymentSource: "creation" });
-    expect(studioPriceLabel(input)).toBe("5 creation points");
+    expect(studioPriceLabel(input)).toBe("10 creation points");
   });
 
   it("never charges less than the provider cost allows", () => {
-    expect(shortClipCredits({ ugcKey: "standard", resolution: "720p" })).toBe(120);
-    expect(shortClipCredits({ ugcKey: "draft", resolution: "1080p", clips: 2 })).toBe(160);
+    expect(shortClipCredits({ ugcKey: "standard", resolution: "720p" })).toBe(8 * UNITS_PER_CREDIT);
+    expect(shortClipCredits({ ugcKey: "draft", resolution: "1080p", clips: 2 })).toBe(
+      10 * UNITS_PER_CREDIT,
+    );
     // A pricier route lifts the price instead of losing money.
     const credits = shortClipCredits({
       ugcKey: "draft",

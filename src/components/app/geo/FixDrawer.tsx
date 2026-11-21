@@ -21,7 +21,7 @@ export function FixDrawer({ recipe, safety }: { recipe: FixRecipe; safety?: FixS
       <div className="mx-3 mb-3 rounded-2xl bg-background/70 p-3.5 ring-1 ring-border/50 dark:bg-black/30 dark:ring-white/[0.06]">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-foreground">
-            <Wand className="h-3.5 w-3.5 text-primary" strokeWidth={2.2} />
+            <Wand className="h-3.5 w-3.5 text-primary-ink" strokeWidth={2.2} />
             {recipe.title}
           </div>
           {safety && (

@@ -269,19 +269,56 @@ async function runGeoScanJob(job: ClaimedJob, nowIso: string, leased: boolean): 
   }
 }
 
+type ScheduleRole = "owner" | "admin" | "editor";
+
+/** The member a scheduled job acts for, while they are still an editor or above. */
+async function scheduleActor(
+  job: ClaimedJob,
+): Promise<{ userId: string; role: ScheduleRole } | null> {
+  if (!job.created_by) return null;
+  const { data, error } = await supabaseAdmin
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", job.workspace_id)
+    .eq("user_id", job.created_by)
+    .maybeSingle();
+  const role = (data as { role?: string } | null)?.role;
+  if (error || (role !== "owner" && role !== "admin" && role !== "editor")) return null;
+  return { userId: job.created_by, role };
+}
+
 async function runJob(job: ClaimedJob, nowIso: string, leased: boolean): Promise<boolean> {
   if (job.task_type === "geo-scan") return runGeoScanJob(job, nowIso, leased);
   // Lease columns exist only once the claim migration is applied.
   const release = leased ? LEASE_RELEASE : {};
   try {
-    const brandContext = await loadBrandContext(job.workspace_id);
-    const piece = await generateOne({
-      taskType: job.task_type,
-      channel: job.channel,
-      prompt: job.prompt,
-      brandContext,
-      jobTitle: job.title,
-    });
+    // A recurring draft is paid like the same piece made by hand: it is
+    // charged to the person who set it up, at their role, through the wallet
+    // (runMetered: hold → run → capture, released on failure). Nobody left to
+    // charge, or no balance, means no model call.
+    const actor = await scheduleActor(job);
+    if (!actor) throw new Error("The person who set up this schedule is no longer an editor.");
+    const { runMetered } = await import("@/server/billing/metered.server");
+    const { result: piece } = await runMetered(
+      {
+        workspaceId: job.workspace_id,
+        userId: actor.userId,
+        role: actor.role,
+        action: job.task_type === "content-gen" ? "article_standard" : "post_set",
+        idempotencyKey: `schedule:${job.id}:${job.next_run_at}`,
+        route: `schedule.${job.task_type}`,
+      },
+      async () => {
+        const brandContext = await loadBrandContext(job.workspace_id);
+        return generateOne({
+          taskType: job.task_type,
+          channel: job.channel,
+          prompt: job.prompt,
+          brandContext,
+          jobTitle: job.title,
+        });
+      },
+    );
 
     const kind = KIND_BY_TYPE[job.task_type] ?? "post";
     const { data: inserted, error: insErr } = await supabaseAdmin
@@ -322,12 +359,20 @@ async function runJob(job: ClaimedJob, nowIso: string, leased: boolean): Promise
     const msg = e instanceof Error ? e.message : String(e);
     console.error("scheduled job failed", job.id, msg);
     // Release the lease; the job retries on the next sweep after its lease.
+    // A refusal to charge (no balance, plan, or editor) waits for the next
+    // run instead of asking again every sweep.
+    const { BillingError } = await import("@/server/billing/errors");
+    const waitForNext = e instanceof BillingError || !job.created_by;
+    const next = waitForNext
+      ? computeNext(new Date(job.next_run_at), job.cadence as Cadence)
+      : null;
     await supabaseAdmin
       .from("scheduled_jobs")
       .update({
         last_run_at: nowIso,
         last_run_status: "error",
         last_run_error: msg.slice(0, 500),
+        ...(next ? { next_run_at: next.toISOString() } : {}),
         ...release,
       })
       .eq("id", job.id);

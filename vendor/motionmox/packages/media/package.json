@@ -1,0 +1,37 @@
+{
+  "name": "@motionmox/media",
+  "version": "4.0.542",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/media"
+  },
+  "author": "Jonny Burger <jonny@remotion.dev>, Hunain Ahmed <junaidhunain6@gmail.com>",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "type": "module",
+  "dependencies": {
+    "mediabunny": "1.64.0",
+    "@motionmox/core": "file:../core",
+    "zod": "4.6.7"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "keywords": [],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "description": "Experimental WebCodecs-based media tags",
+  "homepage": "https://remotion.dev/docs/media",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE.md"
+}

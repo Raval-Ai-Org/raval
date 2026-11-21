@@ -20,6 +20,7 @@ import { ConfirmAction } from "./ConfirmAction";
 import { ago, fmtDate, fmtDateTime } from "./format";
 import { Chip, Fact, textareaClass } from "./parts";
 import { hasPermission } from "@/lib/admin/permissions";
+import { UserActivity, UserGifts } from "./UserInsights";
 
 export function UserDetailScreen({ id }: { id: string }) {
   const queryClient = useQueryClient();
@@ -135,6 +136,17 @@ export function UserDetailScreen({ id }: { id: string }) {
           <Fact label="Workspaces">{user.workspaceCount}</Fact>
         </dl>
       </Tile>
+
+      {can("overview.read") && <UserActivity userId={user.id} />}
+
+      {!isSelf && (
+        <UserGifts
+          userId={user.id}
+          canCredits={can("credits.grant")}
+          canPlan={can("entitlements.override")}
+          onDone={() => void refresh()}
+        />
+      )}
 
       {(can("users.suspend") || can("users.sessions.revoke")) && (
         <>

@@ -1,6 +1,7 @@
 import type { Brief, Product, Script } from "./schemas";
 import { UGC_MODELS, type UgcModelKey } from "./models";
 import { MAX_VIDEO_DURATION } from "./duration";
+import { formatForRender } from "./formats/prompt";
 
 export type VideoGenerationTier = "draft" | "standard" | "premium" | "variations";
 
@@ -23,18 +24,16 @@ export type VideoRoute = {
   signals: string[];
 };
 
+// Only what a person asked for steers the model: the notes and the tone. The
+// format id and the script's own words are left out, so "storytelling" or a
+// line with "reaction" in it never routes a talking video to Cinematic.
 const textOf = (input: VideoRouteInput) =>
-  [
-    input.brief.instructions,
-    input.brief.format,
-    input.brief.tone,
-    input.script.hook,
-    ...input.script.scenes.map((scene) => `${scene.shot} ${scene.action} ${scene.dialogue}`),
-  ]
-    .join(" ")
-    .toLowerCase();
+  [input.brief.instructions, input.brief.tone].join(" ").toLowerCase();
 
-const hasAny = (text: string, words: string[]) => words.some((word) => text.includes(word));
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Whole words only: "quick" never matches inside "quickly", "action" never inside "reaction". */
+const hasAny = (text: string, words: string[]) =>
+  words.some((word) => new RegExp(`(^|[^a-z])${escape(word)}($|[^a-z])`).test(text));
 
 /** Whether a purpose can render a take this long (extra photos are trimmed, not refused). */
 function fits(key: UgcModelKey, durationSec: number, referenceCount: number): boolean {
@@ -99,12 +98,22 @@ export function routeVideo(input: VideoRouteInput, enabled: readonly UgcModelKey
     return { model: key, reason, strategy, signals };
   };
 
+  // A library format names the model that handles its cuts and cast best.
+  const format = formatForRender(input.brief, input.script);
+
   return (
     (realism &&
       choose(
         "premium",
         "Premium realism and human performance for a hero ad.",
         "premium realism",
+        "shot-plan-ready",
+      )) ||
+    (format &&
+      choose(
+        format.defaultModel,
+        `The ${format.label} format is made on the model that keeps its cuts, cast and phone look.`,
+        `format ${format.id}`,
         "shot-plan-ready",
       )) ||
     (cinematic &&

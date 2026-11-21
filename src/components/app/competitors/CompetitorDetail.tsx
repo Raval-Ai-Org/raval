@@ -107,7 +107,7 @@ export function CompetitorDetail({
             href={competitor.url ?? `https://${competitor.domain}`}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-primary"
+            className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-primary-ink"
           >
             {competitor.domain}
             <ExternalLink className="h-3 w-3" />
@@ -261,7 +261,7 @@ export function CompetitorDetail({
                           href={item.source}
                           target="_blank"
                           rel="noreferrer noopener"
-                          className="mt-1 inline-flex max-w-full items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-primary"
+                          className="mt-1 inline-flex max-w-full items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-primary-ink"
                         >
                           <span className="truncate">{item.source}</span>
                           <ExternalLink className="h-3 w-3 shrink-0" />

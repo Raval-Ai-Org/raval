@@ -221,7 +221,7 @@ export function LinksPanel({ workspaceId }: { workspaceId: string | null }) {
         <div className="flex flex-col items-center py-8 text-center sm:py-14">
           <Rise>
             <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-primary/12">
-              <Link2 className="h-7 w-7 text-primary" aria-hidden />
+              <Link2 className="h-7 w-7 text-primary-ink" aria-hidden />
             </span>
           </Rise>
           <Rise index={1}>
@@ -239,7 +239,7 @@ export function LinksPanel({ workspaceId }: { workspaceId: string | null }) {
                   key={label}
                   className="flex flex-col items-center gap-2 rounded-[20px] bg-foreground/[0.04] px-2 py-4"
                 >
-                  <span className="grid h-10 w-10 place-items-center rounded-full bg-background text-primary ring-1 ring-border/60 dark:bg-white/[0.06]">
+                  <span className="grid h-10 w-10 place-items-center rounded-full bg-background text-primary-ink ring-1 ring-border/60 dark:bg-white/[0.06]">
                     <Icon className="h-[18px] w-[18px]" strokeWidth={2.1} />
                   </span>
                   <span className="text-[11px] font-semibold text-muted-foreground">
@@ -355,7 +355,7 @@ export function LinksPanel({ workspaceId }: { workspaceId: string | null }) {
                 <button
                   type="button"
                   onClick={() => go("links")}
-                  className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary-ink hover:underline"
                 >
                   All links <ArrowRight className="h-3.5 w-3.5" />
                 </button>
@@ -496,7 +496,7 @@ function LinkCard({
               href={placement.publishedUrl}
               target="_blank"
               rel="noopener noreferrer nofollow"
-              className="flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground hover:text-primary"
+              className="flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground hover:text-primary-ink"
             >
               <span className="truncate">
                 {placement.publishedUrl.replace(/^https?:\/\/[^/]+/, "") || "/"}

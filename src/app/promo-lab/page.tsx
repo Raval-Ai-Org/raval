@@ -9,16 +9,22 @@ export const metadata: Metadata = {
 };
 
 /**
- * Development-only player for the 40-second product film, drawn with sample
- * data. `?record=1` hides the controls so `scripts/record-promo.mjs` can save
- * it frame by frame. No workspace or sign-in needed. Never served in production.
+ * Development-only player for the product films, drawn with sample data: the
+ * 40-second tour, or the 107-second "Meet Mox" with `?film=mox`. `?record=1`
+ * hides the controls so `scripts/record-promo.mjs` can save it frame by frame. No workspace or sign-in needed. Never served in production.
  */
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ record?: string }>;
+  searchParams: Promise<{ record?: string; film?: string }>;
 }) {
   if (process.env.NODE_ENV === "production") notFound();
-  const { record } = await searchParams;
-  return <PromoLab record={record === "1"} site={new URL(PRODUCTION_URL).host} />;
+  const { record, film } = await searchParams;
+  return (
+    <PromoLab
+      record={record === "1"}
+      film={film === "mox" ? "mox" : "tour"}
+      site={new URL(PRODUCTION_URL).host}
+    />
+  );
 }

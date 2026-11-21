@@ -3,7 +3,7 @@
 /**
  * The product showcase on the left of the sign-in screens.
  *
- * A dark aurora stage, in the same look as the public site's hero, that plays
+ * A bright Mox stage (Mellox 2.0: the app's lime → green → cyan backdrop) that plays
  * four short scenes of Mellox at work, drawn as
  * interface cards rather than a video: write a post on brand, get found in AI
  * answers, schedule the week, see what grew. Each scene runs ~6.5s and hands
@@ -16,7 +16,6 @@
 import { AnimatePresence, animate, motion, type TargetAndTransition } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import { BrandLogo, type BrandKey } from "@/components/brand/BrandLogo";
-import { AURORA, MelloxAurora } from "@/components/brand/MelloxAurora";
 import { ArrowUp, Calendar, Check, Sparkles, TrendingUp } from "@/components/icons";
 import { ease } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -24,17 +23,18 @@ import { cn } from "@/lib/utils";
 const SCENE_MS = 6500;
 const EASE = [...ease.emphasized] as [number, number, number, number];
 
-/* The public site's dark palette (see MelloxAurora). Dark in both app themes. */
-const INK = "text-white";
-const MUTED = "text-white/55";
-const {
-  lime: LIME,
-  onLime: ON_LIME,
-  purple: PURPLE,
-  blue: BLUE,
-  orange: ORANGE,
-  sky: SKY,
-} = AURORA;
+/* Mox's palette (styles.css --mox-*): white glass cards on the Mox backdrop,
+   the same in both app themes. */
+const INK = "text-[#16191b]";
+const MUTED = "text-[#16191b]/55";
+const LIME = "#c6f24e";
+const ON_LIME = "#16191b";
+const GREEN = "#2ee66b";
+const DEEP = "#0e7f6e";
+const CYAN = "#19d6e6";
+const BLUE = "#1e7bf5";
+const YELLOW = "#f2f23a";
+const GRAD = "linear-gradient(100deg, #d9f53a 0%, #9cf03f 28%, #3fe46e 58%, #1fd6c4 100%)";
 
 type SceneProps = { reduce: boolean };
 
@@ -59,14 +59,14 @@ export function AuthShowcase({ reduce }: { reduce: boolean }) {
   return (
     <div
       aria-hidden
-      className="absolute inset-3 isolate overflow-hidden rounded-[28px] text-white ring-1 ring-inset ring-white/[0.08]"
-      style={{ backgroundColor: SKY }}
+      className="absolute inset-3 isolate overflow-hidden rounded-[28px] text-[#16191b] ring-1 ring-inset ring-black/[0.04]"
+      style={{ backgroundImage: "var(--mox-backdrop)" }}
     >
-      <MelloxAurora reduce={reduce} />
+      <Glow reduce={reduce} />
 
-      <div className="relative flex h-full items-center justify-center px-10 pb-16">
+      <div className="relative flex h-full items-center justify-center px-4 pb-14 sm:px-10 sm:pb-16">
         <motion.div
-          className="relative w-full max-w-[468px]"
+          className="relative w-full max-w-[468px] origin-center scale-[0.62] sm:scale-[0.8] lg:scale-100"
           animate={reduce ? undefined : { y: [0, -6, 0] }}
           transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -104,32 +104,56 @@ export function AuthShowcase({ reduce }: { reduce: boolean }) {
 /* Stage                                                               */
 /* ------------------------------------------------------------------ */
 
+/** Soft white light drifting over the backdrop, so the stage breathes. */
+function Glow({ reduce }: { reduce: boolean }) {
+  const drift = (x: number[], y: number[], seconds: number) =>
+    reduce
+      ? {}
+      : {
+          animate: { x, y },
+          transition: { duration: seconds, repeat: Infinity, ease: "easeInOut" as const },
+        };
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0">
+      <motion.span
+        className="absolute -left-[12%] -top-[14%] size-[62%] rounded-full bg-white/55 blur-3xl"
+        {...drift([0, 40, 0], [0, 30, 0], 16)}
+      />
+      <motion.span
+        className="absolute -bottom-[18%] -right-[10%] size-[58%] rounded-full bg-white/40 blur-3xl"
+        {...drift([0, -36, 0], [0, -24, 0], 19)}
+      />
+      <span className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_45%,rgb(255_255_255/0.35),transparent_70%)]" />
+    </div>
+  );
+}
+
 function Progress({ index, reduce }: { index: number; reduce: boolean }) {
   return (
-    <div className="absolute inset-x-0 bottom-8 flex justify-center">
-      <div className="flex items-center gap-5 rounded-full bg-[#0b0d0e]/80 px-5 py-2.5 shadow-[0_18px_50px_-22px_rgba(0,0,0,0.9)] ring-1 ring-white/10 backdrop-blur-xl">
+    <div className="absolute inset-x-0 bottom-5 flex justify-center sm:bottom-8">
+      <div className="flex items-center gap-3 rounded-full bg-white/80 px-4 py-2.5 shadow-[0_18px_50px_-22px_rgb(14_60_40/0.55)] ring-1 ring-white/70 backdrop-blur-xl sm:gap-5 sm:px-5">
         {SCENES.map((s, i) => (
-          <div key={s.label} className="flex w-[64px] flex-col items-center gap-1.5">
+          <div key={s.label} className="flex w-[56px] flex-col items-center gap-1.5 sm:w-[64px]">
             <span
               className={cn(
                 "text-[11.5px] font-medium transition-colors duration-500",
-                i === index ? INK : "text-white/40",
+                i === index ? INK : "text-[#16191b]/40",
               )}
             >
               {s.label}
             </span>
-            <span className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/10">
+            <span className="relative h-[3px] w-full overflow-hidden rounded-full bg-black/[0.08]">
               {i === index && (
                 <motion.span
                   key={index}
                   className="absolute inset-y-0 left-0 rounded-full"
-                  style={{ background: LIME }}
+                  style={{ background: GRAD }}
                   initial={{ width: reduce ? "100%" : "0%" }}
                   animate={{ width: "100%" }}
                   transition={{ duration: reduce ? 0 : SCENE_MS / 1000, ease: "linear" }}
                 />
               )}
-              {i < index && <span className="absolute inset-0 rounded-full bg-white/30" />}
+              {i < index && <span className="absolute inset-0 rounded-full bg-[#16191b]/25" />}
             </span>
           </div>
         ))}
@@ -146,9 +170,9 @@ function Card({ className, children }: { className?: string; children: ReactNode
   return (
     <div
       className={cn(
-        // dark glass, like the website bar in the site's hero
-        "rounded-[20px] bg-[#0b0d0e]/85 ring-1 ring-white/10 backdrop-blur-xl",
-        "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_60px_-24px_rgba(0,0,0,0.95)]",
+        // white glass on the Mox backdrop
+        "rounded-[20px] bg-white/[0.88] ring-1 ring-white/80 backdrop-blur-xl",
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_24px_60px_-24px_rgba(14,60,40,0.45)]",
         className,
       )}
     >
@@ -234,7 +258,7 @@ function Logo({ name, size = 14 }: { name: BrandKey; size?: number }) {
   return (
     // Brand marks keep their own colours, so they sit on a small light disc.
     <span
-      className="grid shrink-0 place-items-center rounded-full bg-white/95 ring-1 ring-white/20"
+      className="grid shrink-0 place-items-center rounded-full bg-white ring-1 ring-black/[0.06] shadow-[0_2px_6px_-2px_rgba(0,0,0,0.2)]"
       style={{ width: size * 2, height: size * 2 }}
     >
       <BrandLogo name={name} brand size={size} />
@@ -259,7 +283,7 @@ function CreateScene({ reduce }: SceneProps) {
         <Card className="flex items-center gap-3 p-2.5 pl-3.5">
           <span
             className="grid size-7 shrink-0 place-items-center rounded-full"
-            style={{ background: `${LIME}26`, color: LIME }}
+            style={{ background: GRAD, color: ON_LIME }}
           >
             <Sparkles size={15} />
           </span>
@@ -267,7 +291,7 @@ function CreateScene({ reduce }: SceneProps) {
             {typed}
             {!done && (
               <motion.span
-                className="ml-px inline-block h-[15px] w-[1.5px] translate-y-[3px] bg-white"
+                className="ml-px inline-block h-[15px] w-[1.5px] translate-y-[3px] bg-[#16191b]"
                 animate={{ opacity: [1, 0, 1] }}
                 transition={{ duration: 0.9, repeat: Infinity }}
               />
@@ -280,7 +304,7 @@ function CreateScene({ reduce }: SceneProps) {
               reduce
                 ? { backgroundColor: LIME }
                 : {
-                    backgroundColor: done ? LIME : "#3a3f42",
+                    backgroundColor: done ? LIME : "#e7ebe8",
                     scale: done ? [1, 0.86, 1] : 1,
                   }
             }
@@ -294,18 +318,15 @@ function CreateScene({ reduce }: SceneProps) {
       <motion.div {...enter(reduce, 2.2, { opacity: 0, y: 22, scale: 0.97 }, 0.8)}>
         <Card className="p-3.5">
           <div className="flex items-center gap-2.5">
-            <span
-              className="size-8 rounded-full"
-              style={{ background: `linear-gradient(135deg, ${LIME}, #7fb33a)` }}
-            />
+            <span className="size-8 rounded-full" style={{ background: GRAD }} />
             <div className="flex-1 space-y-1.5">
-              <div className="h-2 w-24 rounded-full bg-white/[0.14]" />
-              <div className="h-2 w-14 rounded-full bg-white/[0.08]" />
+              <div className="h-2 w-24 rounded-full bg-black/[0.1]" />
+              <div className="h-2 w-14 rounded-full bg-black/[0.06]" />
             </div>
             <motion.span
               {...pop(reduce, 4.1)}
               className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium"
-              style={{ background: `${LIME}26`, color: LIME }}
+              style={{ background: `${GREEN}24`, color: DEEP }}
             >
               <Check size={12} /> On brand
             </motion.span>
@@ -325,7 +346,7 @@ function CreateScene({ reduce }: SceneProps) {
             ))}
           </p>
 
-          <div className="mt-3 flex items-center gap-1.5 border-t border-white/[0.08] pt-3">
+          <div className="mt-3 flex items-center gap-1.5 border-t border-black/[0.06] pt-3">
             {(["instagram", "linkedin", "x", "tiktok"] as BrandKey[]).map((p, i) => (
               <motion.span key={p} {...pop(reduce, 3.7 + i * 0.1)}>
                 <Logo name={p} size={13} />
@@ -357,29 +378,29 @@ function PostArt({ reduce }: { reduce: boolean }) {
     <div
       className="relative mt-3 aspect-[16/8] overflow-hidden rounded-[14px]"
       style={{
-        background: `radial-gradient(70% 90% at 50% 110%, ${LIME}40, transparent 70%), linear-gradient(140deg, #0a1410 0%, #0d1118 55%, #140f1c 100%)`,
+        background: `radial-gradient(70% 90% at 50% 110%, ${GREEN}40, transparent 70%), linear-gradient(140deg, #f6fbe6 0%, #e8faf1 55%, #e4f3fd 100%)`,
       }}
     >
       <motion.div
         className="absolute -left-6 top-6 size-28 rounded-full"
-        style={{ background: `radial-gradient(circle at 35% 35%, #eef8c4, ${LIME} 55%, #5e8a1c)` }}
+        style={{ background: `radial-gradient(circle at 35% 35%, #f7ffd6, ${LIME} 55%, ${GREEN})` }}
         {...float([0, -8, 0], 5)}
       />
       <motion.div
         className="absolute right-10 top-4 size-20 rounded-[28%] rotate-12"
-        style={{ background: `linear-gradient(160deg, #d9c2ec, ${PURPLE} 55%, #5b3a7c)` }}
+        style={{ background: `linear-gradient(160deg, #d5fbff, ${CYAN} 55%, ${DEEP})` }}
         {...float([0, 7, 0], 6)}
       />
       <motion.div
         className="absolute bottom-[-18px] left-[42%] h-20 w-32 rounded-full"
-        style={{ background: `linear-gradient(90deg, #3d7bf0, ${BLUE})`, opacity: 0.85 }}
+        style={{ background: `linear-gradient(90deg, ${CYAN}, ${BLUE})`, opacity: 0.85 }}
         {...float([0, -5, 0], 7)}
       />
       {!reduce && (
         <motion.div
           className="absolute inset-y-0 w-1/3"
           style={{
-            background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.22), transparent)",
+            background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.6), transparent)",
           }}
           initial={{ x: "-120%" }}
           animate={{ x: "360%" }}
@@ -415,7 +436,7 @@ function VisibilityScene({ reduce }: SceneProps) {
             <motion.span
               {...pop(reduce, 2.2)}
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-              style={{ background: `${LIME}26`, color: LIME }}
+              style={{ background: `${GREEN}24`, color: DEEP }}
             >
               <TrendingUp size={12} /> +24
             </motion.span>
@@ -426,8 +447,8 @@ function VisibilityScene({ reduce }: SceneProps) {
               <svg viewBox="0 0 116 116" className="size-full -rotate-90">
                 <defs>
                   <linearGradient id="auth-gauge" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor={LIME} />
-                    <stop offset="100%" stopColor="#7fb33a" />
+                    <stop offset="0%" stopColor="#d9f53a" />
+                    <stop offset="100%" stopColor={GREEN} />
                   </linearGradient>
                 </defs>
                 <circle
@@ -435,7 +456,7 @@ function VisibilityScene({ reduce }: SceneProps) {
                   cy="58"
                   r={R}
                   fill="none"
-                  stroke="rgba(255,255,255,0.09)"
+                  stroke="rgba(22,25,27,0.08)"
                   strokeWidth="9"
                 />
                 <motion.circle
@@ -482,10 +503,10 @@ function VisibilityScene({ reduce }: SceneProps) {
                         </span>
                       </motion.span>
                     </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.09]">
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/[0.07]">
                       <motion.div
                         className="h-full rounded-full"
-                        style={{ background: `linear-gradient(90deg, #7fb33a, ${LIME})` }}
+                        style={{ background: GRAD }}
                         initial={{ width: reduce ? `${e.value}%` : "0%" }}
                         animate={{ width: `${e.value}%` }}
                         transition={{ delay: 0.7 + i * 0.14, duration: 1.2, ease: EASE }}
@@ -506,7 +527,7 @@ function VisibilityScene({ reduce }: SceneProps) {
         <Card className="flex items-center gap-3 p-3">
           <span
             className="grid size-8 shrink-0 place-items-center rounded-xl"
-            style={{ background: `${LIME}26`, color: LIME }}
+            style={{ background: `${GREEN}24`, color: DEEP }}
           >
             <Sparkles size={15} />
           </span>
@@ -534,14 +555,14 @@ function VisibilityScene({ reduce }: SceneProps) {
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const POSTS: { day: number; slot: number; key: BrandKey; tint: string }[] = [
-  { day: 0, slot: 0, key: "instagram", tint: `${PURPLE}38` },
-  { day: 1, slot: 1, key: "linkedin", tint: `${BLUE}47` },
-  { day: 2, slot: 0, key: "x", tint: "rgba(255,255,255,0.1)" },
-  { day: 2, slot: 2, key: "tiktok", tint: `${LIME}2e` },
-  { day: 3, slot: 1, key: "instagram", tint: `${PURPLE}38` },
-  { day: 4, slot: 0, key: "linkedin", tint: `${BLUE}47` },
-  { day: 5, slot: 2, key: "youtube", tint: `${ORANGE}3d` },
-  { day: 6, slot: 1, key: "x", tint: "rgba(255,255,255,0.1)" },
+  { day: 0, slot: 0, key: "instagram", tint: `${CYAN}33` },
+  { day: 1, slot: 1, key: "linkedin", tint: `${BLUE}2e` },
+  { day: 2, slot: 0, key: "x", tint: "rgba(22,25,27,0.06)" },
+  { day: 2, slot: 2, key: "tiktok", tint: `${GREEN}33` },
+  { day: 3, slot: 1, key: "instagram", tint: `${CYAN}33` },
+  { day: 4, slot: 0, key: "linkedin", tint: `${BLUE}2e` },
+  { day: 5, slot: 2, key: "youtube", tint: `${YELLOW}66` },
+  { day: 6, slot: 1, key: "x", tint: "rgba(22,25,27,0.06)" },
 ];
 
 function PublishScene({ reduce }: SceneProps) {
@@ -554,9 +575,9 @@ function PublishScene({ reduce }: SceneProps) {
               <Calendar size={15} /> This week
             </span>
             <div className="flex gap-1">
-              <span className="size-1.5 rounded-full bg-white/20" />
-              <span className="size-1.5 rounded-full bg-white/20" />
-              <span className="size-1.5 rounded-full bg-white/20" />
+              <span className="size-1.5 rounded-full bg-black/15" />
+              <span className="size-1.5 rounded-full bg-black/15" />
+              <span className="size-1.5 rounded-full bg-black/15" />
             </div>
           </div>
 
@@ -567,23 +588,23 @@ function PublishScene({ reduce }: SceneProps) {
                 <span
                   className={cn(
                     "grid size-6 place-items-center rounded-full text-[11px] font-semibold",
-                    i === 2 ? "bg-[#cbe960] text-[#11170a]" : INK,
+                    i === 2 ? "bg-[#c6f24e] text-[#16191b]" : INK,
                   )}
                 >
                   {12 + i}
                 </span>
-                <div className="relative grid h-[150px] w-full grid-rows-3 gap-1.5 rounded-xl bg-white/[0.04] p-1">
+                <div className="relative grid h-[150px] w-full grid-rows-3 gap-1.5 rounded-xl bg-black/[0.03] p-1">
                   {[0, 1, 2].map((slot) => {
                     const post = POSTS.find((p) => p.day === i && p.slot === slot);
                     const order = post ? POSTS.indexOf(post) : 0;
                     return (
                       <div
                         key={slot}
-                        className="rounded-lg border border-dashed border-white/[0.09]"
+                        className="rounded-lg border border-dashed border-black/[0.08]"
                       >
                         {post && (
                           <motion.div
-                            className="flex h-full flex-col items-center justify-center gap-1 rounded-lg ring-1 ring-white/10 shadow-[0_6px_14px_-6px_rgba(0,0,0,0.8)]"
+                            className="flex h-full flex-col items-center justify-center gap-1 rounded-lg ring-1 ring-white/80 shadow-[0_6px_14px_-8px_rgba(14,60,40,0.45)]"
                             style={{ background: post.tint }}
                             {...(reduce
                               ? { initial: false as const }
@@ -599,7 +620,7 @@ function PublishScene({ reduce }: SceneProps) {
                                 })}
                           >
                             <Logo name={post.key} size={10} />
-                            <span className="h-1 w-3/5 rounded-full bg-white/20" />
+                            <span className="h-1 w-3/5 rounded-full bg-black/15" />
                           </motion.div>
                         )}
                       </div>
@@ -616,7 +637,7 @@ function PublishScene({ reduce }: SceneProps) {
         {...enter(reduce, 3.4, { opacity: 0, y: 18, scale: 0.95 }, 0.6)}
         className="absolute -bottom-6 left-1/2 z-10 -translate-x-1/2"
       >
-        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-full bg-[#14181a] py-2 pl-2 pr-4 text-[12.5px] font-medium text-white ring-1 ring-white/15 shadow-[0_14px_30px_-10px_rgba(0,0,0,0.9)]">
+        <div className="flex items-center gap-2.5 whitespace-nowrap rounded-full bg-[#16191b] py-2 pl-2 pr-4 text-[12.5px] font-medium text-white ring-1 ring-white/15 shadow-[0_14px_30px_-10px_rgba(14,60,40,0.6)]">
           <span
             className="grid size-6 place-items-center rounded-full"
             style={{ background: LIME, color: ON_LIME }}
@@ -660,7 +681,7 @@ function GrowScene({ reduce }: SceneProps) {
             <motion.span
               {...pop(reduce, 1.9)}
               className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11.5px] font-semibold"
-              style={{ background: `${LIME}26`, color: LIME }}
+              style={{ background: `${GREEN}24`, color: DEEP }}
             >
               <TrendingUp size={12} /> +38%
             </motion.span>
@@ -669,8 +690,8 @@ function GrowScene({ reduce }: SceneProps) {
           <svg viewBox="0 0 320 140" className="mt-4 h-[140px] w-full overflow-visible">
             <defs>
               <linearGradient id="auth-area" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={LIME} stopOpacity="0.55" />
-                <stop offset="100%" stopColor={LIME} stopOpacity="0" />
+                <stop offset="0%" stopColor={GREEN} stopOpacity="0.55" />
+                <stop offset="100%" stopColor={GREEN} stopOpacity="0" />
               </linearGradient>
             </defs>
             {[35, 70, 105].map((y) => (
@@ -680,7 +701,7 @@ function GrowScene({ reduce }: SceneProps) {
                 x2="320"
                 y1={y}
                 y2={y}
-                stroke="rgba(255,255,255,0.09)"
+                stroke="rgba(22,25,27,0.08)"
                 strokeDasharray="3 4"
               />
             ))}
@@ -694,7 +715,7 @@ function GrowScene({ reduce }: SceneProps) {
             <motion.path
               d={LINE}
               fill="none"
-              stroke={LIME}
+              stroke={GREEN}
               strokeWidth="2.5"
               strokeLinecap="round"
               initial={{ pathLength: reduce ? 1 : 0 }}
@@ -707,14 +728,14 @@ function GrowScene({ reduce }: SceneProps) {
                   cx="320"
                   cy="14"
                   r="6"
-                  fill={LIME}
+                  fill={GREEN}
                   style={{ transformBox: "fill-box", transformOrigin: "center" }}
                   initial={{ scale: 1, opacity: 0 }}
                   animate={{ scale: [1, 2.4], opacity: [0.7, 0] }}
                   transition={{ delay: 2.1, duration: 1.6, repeat: Infinity }}
                 />
               )}
-              <circle cx="320" cy="14" r="5" fill="#0b0d0e" stroke={LIME} strokeWidth="2.5" />
+              <circle cx="320" cy="14" r="5" fill="#ffffff" stroke={GREEN} strokeWidth="2.5" />
             </motion.g>
           </svg>
         </Card>
@@ -777,7 +798,7 @@ function MiniStat({
               className="w-[5px] origin-bottom rounded-full"
               style={{
                 height: `${h}%`,
-                background: i === bars.length - 1 ? LIME : "rgba(255,255,255,0.16)",
+                background: i === bars.length - 1 ? GREEN : "rgba(22,25,27,0.12)",
               }}
               initial={{ scaleY: reduce ? 1 : 0 }}
               animate={{ scaleY: 1 }}

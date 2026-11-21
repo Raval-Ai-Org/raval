@@ -14,8 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Crown, Lock, Wallet } from "@/components/icons";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { authedFetch } from "@/lib/authed-fetch";
-import { FEATURES, PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
-import { CREATION_PLANS } from "@/lib/billing/creation";
+import { FEATURES, PLANS, creditsOf } from "@/lib/billing/catalog";
 import {
   asPlan,
   formatMeter,
@@ -157,7 +156,9 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       ),
     enabled: data.isOwner,
   });
-  const paused = (brands.data?.brands ?? []).filter((brand) => brand.frozen_at);
+  const requests = Array.isArray(team.data?.requests) ? team.data.requests : [];
+  const allBrands = Array.isArray(brands.data?.brands) ? brands.data.brands : [];
+  const paused = allBrands.filter((brand) => brand.frozen_at);
   const cardSubscriber =
     data.isOwner &&
     !data.manual &&
@@ -198,13 +199,8 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
     );
   };
 
-  // Free credits are a one-time signup grant, so size the bar to it.
-  const creditTotal =
-    current === "free"
-      ? SIGNUP_GRANT.credits
-      : data.creation?.active
-        ? data.creation.flexCredits
-        : plan.allowances.credits;
+  // The bar is sized to the month's plan credits (none without a plan).
+  const creditTotal = plan.allowances.credits;
   const resets = data.period.nextGrantAt ? `Resets ${day(data.period.nextGrantAt)}` : null;
 
   return (
@@ -212,7 +208,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
       {/* Your plan */}
       <section className="ds-tile flex flex-col gap-5 bg-gradient-to-br from-primary/[0.09] via-transparent to-transparent p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="flex items-center gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary-ink">
             <Crown className="h-5 w-5" />
           </span>
           <div className="space-y-0.5">
@@ -254,7 +250,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           <h3 className="ds-label">Payment method</h3>
           <div className="ds-tile flex flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary-ink">
                 <Wallet className="h-4.5 w-4.5" />
               </span>
               {payment.isLoading ? (
@@ -303,44 +299,20 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
           )}
         </div>
         <div className="ds-tile space-y-5 p-5">
-          {!data.creation?.active && current !== "free" && (
-            <p className="text-xs text-muted-foreground">
-              Your current wallet balances keep their existing terms. At the next renewal, this plan
-              receives {CREATION_PLANS[current].points} protected creation points and{" "}
-              {CREATION_PLANS[current].flexCredits} wallet credits, with video and chat allowances
-              kept separate.
-            </p>
-          )}
-          {data.creation?.active && (
-            <div className="space-y-2">
-              <UsageBar
-                label="Creation points"
-                left={data.meters.creation.available}
-                total={Math.max(data.creation.monthlyPoints, data.meters.creation.available)}
-                note={`${formatNumber(data.meters.creation.available)} available of ${formatNumber(data.creation.monthlyPoints)} monthly points`}
-              />
-              <p className="text-xs text-muted-foreground">
-                One text post set uses 1 point. A standard AI image post uses 2. Three caption
-                improvements are included per paid creation. New artwork has its own price. Research
-                and chat cannot spend these points.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Up to {Math.floor(data.meters.creation.available / 2)} standard image posts
-                remaining, or a mix of formats. Creation points expire at the end of their grant
-                window.
-              </p>
-            </div>
-          )}
           <UsageBar
-            label={data.creation?.active ? "Wallet credits for extras" : "Credits available"}
+            label="Credits available"
             left={data.meters.credits.available}
             total={Math.max(creditTotal, data.meters.credits.available)}
             note={ofTotal(
-              formatNumber(data.meters.credits.available),
-              formatNumber(creditTotal),
+              formatNumber(creditsOf(data.meters.credits.available)),
+              formatNumber(creditsOf(creditTotal)),
               data.meters.credits.available <= creditTotal,
             )}
           />
+          <p className="text-xs text-muted-foreground">
+            One credit makes one image post. Text posts, captions, scripts and standard articles are
+            included. Video is priced per second. Unused plan credits roll over a month.
+          </p>
           {Object.values(data.meters).some((meter) => meter.held > 0) && (
             <div className="space-y-2 rounded-lg bg-secondary/50 p-3 text-[13px]">
               <p className="font-medium">Reserved for work in progress</p>
@@ -355,9 +327,9 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
               {workspaceId && <StopStudioJobsButton workspaceId={workspaceId} />}
             </div>
           )}
-          {(plan.allowances.videoUnits > 0 || data.meters.video.available > 0) && (
+          {data.meters.video.available > 0 && (
             <UsageBar
-              label="Video Credits"
+              label="Video credits from before (used first on videos)"
               left={data.meters.video.available}
               total={Math.max(plan.allowances.videoUnits, data.meters.video.available)}
               note={ofTotal(
@@ -392,10 +364,10 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
         </div>
       </section>
 
-      {data.isOwner && (team.data?.requests.length ?? 0) > 0 && (
+      {data.isOwner && requests.length > 0 && (
         <section className="space-y-2">
           <h3 className="ds-label">Requests from your team</h3>
-          {team.data!.requests.map((request) => (
+          {requests.map((request) => (
             <div
               key={request.id}
               className="ds-tile flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px]"
@@ -436,7 +408,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
             Your plan includes {formatNumber(data.limits.brands)}{" "}
             {data.limits.brands === 1 ? "brand" : "brands"}. Paused brands keep their data.
           </p>
-          {brands.data!.brands.map((brand) => (
+          {allBrands.map((brand) => (
             <div
               key={brand.id}
               className="ds-tile flex items-center justify-between gap-3 px-4 py-3 text-[13px]"
@@ -445,7 +417,7 @@ function Overview({ data, onDone }: { data: BillingView; onDone: () => void }) {
                 {brand.frozen_at ? (
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 ) : (
-                  <Check className="h-3.5 w-3.5 text-primary" />
+                  <Check className="h-3.5 w-3.5 text-primary-ink" />
                 )}
                 {brand.name}
               </span>
@@ -588,7 +560,7 @@ function RecentActivity() {
             <span
               className={cn(
                 "shrink-0 font-medium tabular-nums",
-                entry.amount > 0 ? "text-primary" : "text-foreground",
+                entry.amount > 0 ? "text-primary-ink" : "text-foreground",
               )}
             >
               {entry.kind === "hold" ? "" : entry.amount > 0 ? "+" : "−"}

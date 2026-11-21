@@ -21,6 +21,7 @@ import {
   upsertCompetitor,
 } from "./store.server";
 import { kickCompetitor, normalizeCompetitorDomain } from "./service.server";
+import { loadBackgroundAccount } from "@/server/background/account.server";
 import type { CompetitorView } from "@/lib/competitors/contracts";
 
 type Db = SupabaseClient<never>;
@@ -220,21 +221,26 @@ export async function bootstrapCompetitorsForWorkspace(args: {
       throw new Error("The scanned website does not match this workspace.");
     }
   }
+  // Tracking is what costs money on every later sweep, so a scan tracks no
+  // more than the plan includes (limits.competitors, at most 6); the rest stay
+  // suggestions a person can track. A failed read of the plan tracks nothing.
+  const account = await loadBackgroundAccount(args.workspaceId);
+  const cap = Math.max(0, Math.min(6, account?.limits.competitors ?? 0));
   if (!args.scanSeed) {
     const tracked = await loadOverview(args.supabase as never, args.workspaceId);
-    if (tracked.competitors.length < 6) {
+    if (tracked.competitors.length < cap) {
       await importBrandDnaCompetitors({
         db: args.supabase,
         workspaceId: args.workspaceId,
         userId: args.userId,
         resolveMissingUrls: true,
-        maxNewTracked: 6 - tracked.competitors.length,
+        maxNewTracked: cap - tracked.competitors.length,
       });
     }
   }
   let overview = await loadOverview(args.supabase as never, args.workspaceId);
   const available = webResearchAvailable();
-  if (overview.competitors.length >= 3) {
+  if (overview.competitors.length >= Math.min(3, cap)) {
     for (const competitor of overview.competitors
       .filter((entry) => entry.profileStatus === "pending")
       .slice(0, 6)) {
@@ -245,14 +251,14 @@ export async function bootstrapCompetitorsForWorkspace(args: {
 
   let searched = 0;
   let candidates = overview.suggestions;
-  if (candidates.length < 3 - overview.competitors.length) {
+  if (candidates.length < Math.max(3 - overview.competitors.length, 0)) {
     const result = await runDiscoveryForWorkspace(args);
     searched = result.searched;
     overview = await loadOverview(args.supabase as never, args.workspaceId);
     candidates = overview.suggestions;
   }
 
-  const slots = Math.max(0, 6 - overview.competitors.length);
+  const slots = Math.max(0, cap - overview.competitors.length);
   const selected = candidates
     .filter(
       (candidate) =>

@@ -25,6 +25,7 @@ import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.ser
 import { recordUsage } from "@/server/ai/metering";
 import { estimateTextCost, round6 } from "@/server/ai/pricing";
 import {
+  canTurnReasoningOff,
   effectivePlan,
   escalatedPlan,
   isOpenWeightModel,
@@ -78,7 +79,12 @@ const ANSWER_BUDGETS: Record<TokenTask, { default: number; max: number }> = {
   extraction: { default: 2_400, max: 8_192 },
 };
 /** Reasoning tokens count against max_tokens; this much is added per effort. */
-const REASONING_HEADROOM: Record<Effort, number> = { low: 2_048, medium: 6_144, high: 12_288 };
+const REASONING_HEADROOM: Record<Effort, number> = {
+  none: 0,
+  low: 2_048,
+  medium: 6_144,
+  high: 12_288,
+};
 /** The tiers' smallest completion limit (Gemini 3.x: 65,536). */
 const MAX_OUTPUT_TOKENS = 64_000;
 /** Answer cap while degraded past a spend ceiling (reasoning headroom still added). */
@@ -525,8 +531,14 @@ export function buildRequestBody(args: BodyArgs): Record<string, unknown> {
     },
   };
   if (args.plan.effort) {
+    // "none" only when every model in the list accepts it; one that insists
+    // on reasoning would answer 400, so the list thinks briefly instead.
+    const effort =
+      args.plan.effort === "none" && !args.plan.models.every(canTurnReasoningOff)
+        ? "low"
+        : args.plan.effort;
     body.reasoning = {
-      effort: args.plan.effort,
+      effort,
       ...(args.excludeReasoning ? { exclude: true } : {}),
     };
   }
@@ -565,6 +577,27 @@ export type OpenRouterUsage = {
   prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
   completion_tokens_details?: { reasoning_tokens?: number };
 };
+
+/**
+ * The token counts a usage row keeps, from OpenRouter's `usage` block:
+ * prompt-cache reads and writes and reasoning tokens are recorded so the
+ * prompt cache's real effect (and reasoning spend) is a measured figure.
+ */
+export function usageTokens(usage: OpenRouterUsage | undefined): {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+} {
+  return {
+    inputTokens: usage?.prompt_tokens,
+    outputTokens: usage?.completion_tokens,
+    cachedInputTokens: usage?.prompt_tokens_details?.cached_tokens,
+    cacheWriteTokens: usage?.prompt_tokens_details?.cache_write_tokens,
+    reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens,
+  };
+}
 
 /** USD for one completion: OpenRouter's own `usage.cost` when present, else our estimate. */
 export function completionCost(model: string, usage: OpenRouterUsage | undefined): number {
@@ -675,7 +708,8 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
     try {
       json = await sendCompletion(body, {
         route,
-        timeoutMs: opts.timeoutMs ?? CHAT_TIMEOUT_MS,
+        // A route's own limit (long designed output) can only lengthen the caller's.
+        timeoutMs: Math.max(opts.timeoutMs ?? CHAT_TIMEOUT_MS, plan.timeoutMs ?? 0),
         retries: opts.retries,
         retryOnTimeout: opts.retryOnTimeout,
       });
@@ -697,8 +731,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
         provider: "openrouter",
         model,
         route,
-        inputTokens: json?.usage?.prompt_tokens,
-        outputTokens: json?.usage?.completion_tokens,
+        ...usageTokens(json?.usage),
         estCostUsd: completionCost(model, json?.usage),
         status: "error",
         latencyMs: Date.now() - started,
@@ -717,8 +750,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       provider: "openrouter",
       model,
       route,
-      inputTokens: usage?.prompt_tokens,
-      outputTokens: usage?.completion_tokens,
+      ...usageTokens(usage),
       estCostUsd: costUsd,
       truncated,
       latencyMs: Date.now() - started,
@@ -918,7 +950,7 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
       route,
       workspaceId: scope.workspaceId ?? null,
       userId: scope.userId ?? null,
-      inputTokens: usage?.prompt_tokens,
+      ...usageTokens(usage),
       outputTokens: usage?.completion_tokens ?? Math.ceil(outputChars / 4),
       estCostUsd: completionCost(answered, usage),
       truncated: finishReason === "length",
@@ -959,8 +991,12 @@ export const LLM_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const LLM_MAX_IMAGES = 20;
 /** About ten minutes of the small mono MP3 Studio sends. */
 export const LLM_MAX_AUDIO_BYTES = 4 * 1024 * 1024;
-/** llmText callers assemble and cap their own prompts; this only stops abuse. */
-const PROMPT_MAX_INPUT_CHARS = 400_000;
+/**
+ * llmText and structured-prompt callers assemble and cap their own prompts;
+ * this only stops abuse. They must not get the chat budget (MAX_INPUT_CHARS):
+ * trimming cuts the end of the system prompt, which is where the JSON schema is.
+ */
+export const PROMPT_MAX_INPUT_CHARS = 400_000;
 
 function userContent(
   user: string,
@@ -1058,7 +1094,7 @@ export async function llmText(opts: LlmTextOpts): Promise<LlmTextResult> {
         }
       : undefined,
     noCache: !opts.cache,
-    timeoutMs: opts.timeoutMs ?? 60_000,
+    timeoutMs: opts.timeoutMs,
     retries: opts.retries,
     // A single long generation that timed out may already be billed; 429, 5xx
     // and 529 are still retried.
@@ -1130,7 +1166,11 @@ async function schemaPrompt<T>(opts: LlmJsonOpts<T>, schema: Record<string, unkn
     if (!isCutOff(error)) throw error;
     truncated = true;
     try {
-      text = (await call(Math.min((opts.maxTokens ?? 8_000) * 2, 32_000))).text;
+      // Retry above whatever ceiling the first call really had: the route's
+      // plan floor (e.g. 16k for a motion graphic) when it beats the caller's
+      // own, or the retry would pay again for the same cut-off.
+      const first = Math.max(opts.maxTokens ?? 8_000, planFor(opts.route).maxTokens ?? 0);
+      text = (await call(Math.min(first * 2, 32_000))).text;
     } catch (retryError) {
       if (!isCutOff(retryError)) throw retryError;
     }

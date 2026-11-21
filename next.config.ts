@@ -37,9 +37,21 @@ const CLARITY_HOSTS = [
   ),
 ];
 
+// Stripe's on-page checkout (/checkout, Elements-mode Checkout Sessions): the
+// origins Stripe documents for Stripe.js, its card and 3-D Secure frames, and
+// Google Pay inside the Express Checkout Element.
+const STRIPE = {
+  script: "https://js.stripe.com https://*.js.stripe.com https://pay.google.com",
+  frame:
+    "https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://pay.google.com",
+  // Stripe.js fetches the checkout font's stylesheet (`fonts.cssSrc` in PayStep).
+  connect:
+    "https://api.stripe.com https://merchant-ui-api.stripe.com https://*.stripe.com https://fonts.googleapis.com",
+};
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${CAPTCHA_ORIGIN}${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")}${CAPTCHA_ORIGIN} ${STRIPE.script}${isDev ? " 'unsafe-eval'" : ""}`,
   `worker-src 'self' blob: ${PDF_WORKER_CDN}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -47,8 +59,8 @@ const csp = [
   // Pexels/Unsplash/Coverr; avatars from Google.
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob: https:",
-  `connect-src 'self' https://accounts.google.com/gsi/ ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com${isDev ? " ws: http://localhost:*" : ""}`,
-  `frame-src 'self' https://accounts.google.com${CAPTCHA_ORIGIN}`,
+  `connect-src 'self' https://accounts.google.com/gsi/ ${supabaseOrigins().join(" ")} ${PDF_WORKER_CDN} ${CLARITY_HOSTS.join(" ")} https://c.bing.com ${STRIPE.connect}${isDev ? " ws: http://localhost:*" : ""}`,
+  `frame-src 'self' https://accounts.google.com${CAPTCHA_ORIGIN} ${STRIPE.frame}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -82,23 +94,58 @@ const nextConfig: NextConfig = {
     // list; this loads only the modules each file uses.
     optimizePackageImports: ["framer-motion"],
     ...(isDev ? { webpackMemoryOptimizations: true } : {}),
+    // Optional verification on small disks: skip Turbopack's build cache (~1 GB).
+    ...(process.env.MELLOX_BUILD_WITHOUT_CACHE === "true"
+      ? { turbopackFileSystemCacheForBuild: false }
+      : {}),
   },
   // A second dev server (e.g. a verification run next to your own) can build
   // into its own directory instead of fighting over .next.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   poweredByHeader: false,
   // Optional verification on small disks; normal development/deployment caching is unchanged.
-  ...(process.env.MELLOX_BUILD_WITHOUT_CACHE === "true"
-    ? {
-        webpack(config: Parameters<NonNullable<NextConfig["webpack"]>>[0]) {
-          config.cache = false;
-          return config;
-        },
-      }
-    : {}),
+  webpack(config: Parameters<NonNullable<NextConfig["webpack"]>>[0], { isServer }) {
+    // Optional verification on small disks; normal caching is unchanged.
+    if (process.env.MELLOX_BUILD_WITHOUT_CACHE === "true") config.cache = false;
+    // In a local checkout @motionmox/* are symlinks into vendor/, so webpack
+    // resolves them to vendor paths and `serverExternalPackages` no longer
+    // matches: it then tries to bundle MotionMox's own webpack and esbuild,
+    // which breaks the dev server for every page. Keep them external by name.
+    if (isServer) {
+      const external = /^@motionmox\/(bundler|renderer)(\/.*)?$/;
+      config.externals = [
+        ...(Array.isArray(config.externals)
+          ? config.externals
+          : config.externals
+            ? [config.externals]
+            : []),
+        ({ request }: { request?: string }, callback: (err?: Error, result?: string) => void) =>
+          request && external.test(request)
+            ? callback(undefined, `commonjs ${request}`)
+            : callback(),
+      ];
+    }
+    return config;
+  },
   // playwright-core drives the AI Visibility rendering fallback; typescript
   // parses proposed code changes. Both are large and must not be bundled.
-  serverExternalPackages: ["pdfjs-dist", "mammoth", "xlsx", "playwright-core", "typescript"],
+  // MotionMox's renderer and bundler spawn binaries and run webpack/rspack.
+  serverExternalPackages: [
+    "pdfjs-dist",
+    "mammoth",
+    "xlsx",
+    "playwright-core",
+    "typescript",
+    "@motionmox/renderer",
+    "@motionmox/bundler",
+  ],
+  // The compositor binaries are loaded by path, so tracing can't find them.
+  outputFileTracingIncludes: {
+    "/**": [
+      "./node_modules/@motionmox/compositor-linux-x64-gnu/**",
+      "./vendor/motionmox/packages/compositor-linux-x64-gnu/**",
+    ],
+  },
   images: {
     remotePatterns: [
       {

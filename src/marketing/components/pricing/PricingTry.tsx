@@ -11,8 +11,8 @@ export default function PricingTry() {
         <SectionHead
           icon={<FlaskConical size={32} strokeWidth={1.4} aria-hidden="true" />}
           label="Try it first"
-          title="Start free. See your brand through AI's eyes."
-          blurb="Two ways in. Pick the one that fits how much you want to test."
+          title="Try Growth for 7 days."
+          blurb="Run a real week of marketing on your own brand, or talk to us about a larger team."
           wide
         />
         <div className="px-try">
@@ -31,7 +31,10 @@ export default function PricingTry() {
                   </li>
                 ))}
               </ul>
-              <a href={APP_URL} className={`px-cta ${t.id === "free" ? "px-cta-lime" : "hero-cta"}`}>
+              <a
+                href={t.id === "enterprise" ? "/demo?interest=scale" : APP_URL}
+                className={`px-cta ${t.id === "trial" ? "px-cta-lime" : "hero-cta"}`}
+              >
                 {t.cta}
               </a>
             </article>

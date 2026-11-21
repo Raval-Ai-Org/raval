@@ -28,7 +28,6 @@ import {
   Send,
   ShieldCheck,
   Users,
-  Video,
   Wallet,
   X,
   type LucideIcon,
@@ -36,9 +35,12 @@ import {
 import {
   CREDIT_PACKS,
   FEATURES,
+  PACK_VALID_DAYS,
   PLANS,
-  SIGNUP_GRANT,
+  PUBLIC_PLANS,
   VIDEO_PACKS,
+  annualMonthlyUsd,
+  creditsOf,
   planAllows,
   planRank,
   type BillingInterval,
@@ -57,23 +59,21 @@ import {
   type BillingBlock,
 } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
-import { CREATION_PLANS } from "@/lib/billing/creation";
+import { planOutcomes } from "@/lib/billing/plan-economics";
 import { GhostButton, IntervalToggle, PrimaryButton } from "./billing-ui";
 import type { PurchaseKind } from "./use-billing-actions";
 
 export type UpgradeView = "plans" | "credits";
 export type UpgradeChoice = { kind: PurchaseKind; key: string; label: string; price: string };
 
-const PAID: PaidPlanId[] = ["starter", "growth", "agency", "scale"];
+/** The three plans on the cards, then Enterprise as a slim row. */
+const PAID: PaidPlanId[] = [...PUBLIC_PLANS, "scale"];
 
 const MODULE_ICON: Record<FeatureModule, LucideIcon> = {
-  Brand: Building2,
-  Assistant: MessageSquare,
-  Studio: PenLine,
-  "UGC video": Video,
-  "AI visibility": Eye,
-  Intelligence: Brain,
-  Distribution: Send,
+  Create: PenLine,
+  Autopilot: Send,
+  Brain: Brain,
+  Grow: Eye,
   Team: Users,
 };
 
@@ -180,8 +180,8 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
           <Promises
             items={[
               "Change or cancel any time",
+              "Unused credits roll over a month",
               "Keep everything you've made",
-              "Prices in US dollars",
             ]}
           />
         </>
@@ -193,7 +193,7 @@ export function UpgradeScreen(props: UpgradeScreenProps) {
           <button
             type="button"
             onClick={() => props.onViewChange("plans")}
-            className="inline-flex items-center justify-center gap-1 text-[13px] font-medium text-primary hover:underline"
+            className="inline-flex items-center justify-center gap-1 text-[13px] font-medium text-primary-ink hover:underline"
           >
             Get credits every month with a plan
             <ArrowRight className="h-3.5 w-3.5" />
@@ -216,7 +216,7 @@ function CheckoutNotice({ available }: { available: boolean }) {
       role={available ? undefined : "status"}
     >
       <ShieldCheck
-        className={cn("mt-0.5 h-4 w-4 shrink-0", available ? "text-primary" : "text-warning")}
+        className={cn("mt-0.5 h-4 w-4 shrink-0", available ? "text-primary-ink" : "text-warning")}
         strokeWidth={2.3}
       />
       <span>
@@ -244,7 +244,7 @@ function Glow() {
       <div className="absolute inset-0 bg-[radial-gradient(70%_100%_at_0%_0%,hsl(var(--primary)/0.16),transparent_70%)]" />
       <svg
         viewBox="0 0 200 200"
-        className="absolute -right-16 -top-24 h-72 w-72 text-primary"
+        className="absolute -right-16 -top-24 h-72 w-72 text-primary-ink"
         fill="none"
         stroke="currentColor"
       >
@@ -265,9 +265,9 @@ function Hero({
   const free = current === "free";
   let Icon: LucideIcon = Crown;
   let tag: string | null = null;
-  let title = free ? "Do more with Mellox" : "Get more room to grow";
+  let title = free ? "Choose your plan to start" : "Get more room to grow";
   let text = free
-    ? `Free gives you ${formatNumber(SIGNUP_GRANT.credits)} credits once. Paid plans start with ${CREATION_PLANS.starter.points} monthly creation points plus wallet credits for extras.`
+    ? `Every plan makes everything: posts, carousels, Stories, ads, articles and videos, with Autopilot, the four brains and AI visibility. From ${formatUsd(annualMonthlyUsd("starter"))} a month.`
     : "More brands, more credits and more of the tools that do the work for you.";
 
   const empty = block?.code === "insufficient_balance";
@@ -276,25 +276,20 @@ function Hero({
     empty && block?.needed
       ? `This needs ${formatMeter(meter, block.needed)}. You have ${formatMeter(meter, block.available ?? 0)} left. `
       : "";
-  const outOf =
-    meter === "creation"
-      ? "Your creation points are used"
-      : meter === "video"
-        ? "You're out of Video Credits"
-        : "You're out of credits";
+  const outOf = meter === "pro_messages" ? "You're out of Pro messages" : "You're out of credits";
 
   if (view === "credits") {
     Icon = Wallet;
     title = empty ? outOf : "Get more credits";
-    text = `${need}One-time packs. They never expire.`;
+    text = `${need}One-time top-ups for all your brands, valid for ${Math.round(PACK_VALID_DAYS / 30)} months.`;
   } else if (empty) {
     Icon = Bolt;
-    title = free && meter === "credits" ? "You've used your free credits" : outOf;
-    text = `${need}${meter === "creation" ? "Points refill at renewal. Choose Wallet credits in Studio to review an extra generation's price, or upgrade for more monthly points." : "Your plan allowance refills monthly. Packs add wallet credits for extra work."}`;
+    title = free ? "Choose a plan to keep creating" : outOf;
+    text = `${need}Your plan's credits refill every month and unused ones roll over a month. A top-up adds more right now.`;
   } else if (feature) {
     const min = FEATURES[feature].minPlan;
     Icon = featureIcon(feature);
-    tag = min === "scale" ? "On the Scale plan" : `On ${PLANS[min].label} and above`;
+    tag = min === "scale" ? "On Enterprise" : `On ${PLANS[min].label} and above`;
     title = `Unlock ${FEATURES[feature].label}`;
     text = FEATURES[feature].pitch;
   } else if (block?.code === "limit_reached" && block.limit === "brands") {
@@ -324,7 +319,7 @@ function Hero({
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <h3 className="text-[21px] font-semibold leading-tight tracking-tight">{title}</h3>
           {tag && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/12 px-2.5 py-0.5 text-[11.5px] font-semibold text-primary">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/12 px-2.5 py-0.5 text-[11.5px] font-semibold text-primary-ink">
               <Lock className="h-3 w-3" strokeWidth={2.4} aria-hidden />
               {tag}
             </span>
@@ -342,7 +337,7 @@ function Hero({
 
 function Tick() {
   return (
-    <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+    <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink">
       <Check className="h-2.5 w-2.5" strokeWidth={3} />
     </span>
   );
@@ -356,20 +351,22 @@ function perDay(yearUsd: number): string {
 /** What a plan gives every month, as short lines. */
 function planNumbers(plan: PlanId): Array<{ Icon: LucideIcon; main: string; note?: string }> {
   const def = PLANS[plan];
+  const made = planOutcomes(plan);
   return [
     {
       Icon: Bolt,
-      main: `${formatNumber(CREATION_PLANS[plan].points)} creation points a month`,
-      note: `up to ${formatNumber(Math.floor(CREATION_PLANS[plan].points / 2))} standard image posts, or a mix. Three caption edits per creation included.`,
+      main: `${formatNumber(creditsOf(def.allowances.credits))} credits a month`,
+      note: `≈ ${formatNumber(made.imagePosts)} image posts or ${formatNumber(made.videos)} 10-second videos`,
     },
     {
-      Icon: Wallet,
-      main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras`,
-      note: "Existing wallet balances keep their value. New allocation begins at renewal.",
+      Icon: PenLine,
+      main: "Unlimited text posts and publishing",
+      note: "captions, scripts and articles included",
     },
     {
-      Icon: Video,
-      main: `${formatMeter("video", def.allowances.videoUnits)} a month`,
+      Icon: MessageSquare,
+      main: `${formatNumber(def.allowances.proMessages)} Mellox Pro messages`,
+      note: "unlimited Flash chat",
     },
     {
       Icon: Building2,
@@ -404,7 +401,12 @@ function BuyButton({
   }
   if (!canBuy) {
     return askSent ? (
-      <p className={cn("grid place-items-center text-[13px] font-medium text-primary", className)}>
+      <p
+        className={cn(
+          "grid place-items-center text-[13px] font-medium text-primary-ink",
+          className,
+        )}
+      >
         Sent to the owner
       </p>
     ) : (
@@ -491,7 +493,7 @@ function PlanCard(
             <span>
               {formatUsd(price.billed)} a year · {perDay(price.billed)} a day
             </span>
-            <span className="rounded-full bg-primary/12 px-2 py-px font-semibold text-primary">
+            <span className="rounded-full bg-primary/12 px-2 py-px font-semibold text-primary-ink">
               Save {formatUsd(price.savings)}
             </span>
           </>
@@ -501,7 +503,7 @@ function PlanCard(
             <button
               type="button"
               onClick={() => onIntervalChange("year")}
-              className="font-medium text-primary hover:underline"
+              className="font-medium text-primary-ink hover:underline"
             >
               Save {formatUsd(yearlySaving)} with yearly
             </button>
@@ -514,7 +516,7 @@ function PlanCard(
       <ul className="mt-3.5 space-y-1.5 border-t border-border/50 pt-3.5 text-[13px]">
         {planNumbers(plan).map((row) => (
           <li key={row.main} className="flex items-center gap-2 whitespace-nowrap">
-            <row.Icon className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.2} />
+            <row.Icon className="h-3.5 w-3.5 shrink-0 text-primary-ink" strokeWidth={2.2} />
             <span className="text-[13px] font-semibold">{row.main}</span>
             {row.note && (
               <span className="truncate text-[12px] text-muted-foreground">· {row.note}</span>
@@ -564,9 +566,8 @@ function PlanStrip(props: UpgradeScreenProps & { plan: PaidPlanId }) {
           <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">{def.fit}</span>
         </p>
         <p className="text-[12.5px] text-muted-foreground">
-          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[def.id].points)} creation
-          points and {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account
-          manager
+          {formatNumber(def.brands)}+ brands · {formatNumber(creditsOf(def.allowances.credits))}+
+          credits a month · SSO, an SLA and a dedicated account manager
         </p>
       </div>
       <p className="text-[14px] font-semibold tabular-nums">
@@ -584,9 +585,9 @@ function Promises({ items }: { items: string[] }) {
       {items.map((item, index) => (
         <li key={item} className="flex items-center gap-1.5 text-[12px]">
           {index === 0 ? (
-            <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
+            <ShieldCheck className="h-3.5 w-3.5 text-primary-ink" aria-hidden />
           ) : (
-            <Check className="h-3 w-3 text-primary" strokeWidth={3} aria-hidden />
+            <Check className="h-3 w-3 text-primary-ink" strokeWidth={3} aria-hidden />
           )}
           {item}
         </li>
@@ -607,7 +608,7 @@ function CreditFacts({ balance }: { balance: number }) {
         </span>
       </span>
       <span className="text-[12.5px] text-muted-foreground">
-        Packs work across all your brands. Bigger packs include bonus credits.
+        Top-ups work across all your brands and stay valid for 12 months.
       </span>
     </div>
   );
@@ -684,7 +685,7 @@ function OwnerOnly({
     <div className="ds-well flex flex-wrap items-center justify-between gap-3 p-4 text-[13.5px]">
       <span>Only the account owner can buy this.</span>
       {askSent ? (
-        <span className="font-medium text-primary">Sent to the owner</span>
+        <span className="font-medium text-primary-ink">Sent to the owner</span>
       ) : (
         <PrimaryButton className="h-9" disabled={busy} onClick={onAsk}>
           Ask the owner
@@ -759,7 +760,7 @@ function PackGrid({
             <span className="block text-[14px] font-semibold tabular-nums">{row.title}</span>
             <span className="block text-[12px] text-muted-foreground">
               {row.price}
-              {row.bonus && <span className="font-medium text-primary"> · {row.bonus}</span>}
+              {row.bonus && <span className="font-medium text-primary-ink"> · {row.bonus}</span>}
             </span>
           </span>
         </button>
@@ -795,7 +796,7 @@ function PackAction({
             ? `Buy ${row.title} · ${row.price}`
             : "Payments unavailable"}
       </PrimaryButton>
-      <Promises items={["One-time payment", "Never expires", "Secure Stripe checkout"]} />
+      <Promises items={["One-time payment", "Valid for 12 months", "Secure Stripe checkout"]} />
     </div>
   );
 }
@@ -805,16 +806,20 @@ function PackAction({
 export type UpgradeWindowProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** No plan yet: the window can't be closed (pricing v4 has no Free plan). */
+  required?: boolean;
   /** Null while the plan is loading. */
   screen: UpgradeScreenProps | null;
 };
 
-export function UpgradeWindow({ open, onOpenChange, screen }: UpgradeWindowProps) {
+export function UpgradeWindow({ open, onOpenChange, screen, required }: UpgradeWindowProps) {
   return (
     <AppModalShell
       open={open}
       onOpenChange={onOpenChange}
-      title={screen?.view === "credits" ? "Get credits" : "Upgrade"}
+      disableClose={required}
+      hideClose={required}
+      title={required ? "Choose a plan" : screen?.view === "credits" ? "Get credits" : "Upgrade"}
       srDescription="Choose a plan or a credit pack."
       Icon={screen?.view === "credits" ? Wallet : Crown}
       size="xl"

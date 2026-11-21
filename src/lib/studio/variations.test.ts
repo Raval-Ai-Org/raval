@@ -1,3 +1,4 @@
+import { formatCredits } from "@/lib/billing/catalog";
 import { describe, expect, it } from "vitest";
 import type { StudioJob } from "./jobs";
 import {
@@ -34,9 +35,9 @@ describe("variations requests", () => {
   });
 
   it("are priced per picture from the catalog", () => {
-    expect(studioPriceLabel(request)).toBe(`${creditsFor("image_standard") * 3} credits`);
+    expect(studioPriceLabel(request)).toBe(formatCredits(creditsFor("image_standard") * 3));
     expect(studioPriceLabel({ ...request, controls: { platforms: [], variationCount: 2 } })).toBe(
-      `${creditsFor("image_standard") * 2} credits`,
+      formatCredits(creditsFor("image_standard") * 2),
     );
     expect(creationPointsFor(request)).toBe(6);
   });

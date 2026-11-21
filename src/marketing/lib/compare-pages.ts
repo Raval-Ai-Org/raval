@@ -104,8 +104,8 @@ export function rivalFaqs(r: Rival) {
     {
       q: `How does Mellox AI compare with ${name} on price?`,
       a: r.price
-        ? `${name} is ${r.price}. Mellox AI has a free plan and its Starter plan is $${starterPrice()} a month, with Growth, Agency and Scale plans above it. Check both pricing pages before you buy, because vendors change prices often.`
-        : `Mellox AI has a free plan and its Starter plan is $${starterPrice()} a month, with Growth, Agency and Scale plans above it. We have not listed a price for ${name} here, so check its pricing page for the current figure.`,
+        ? `${name} is ${r.price}. Mellox AI's Starter plan is $${starterPrice()} a month ($39 billed yearly), with Growth and Agency above it. Check both pricing pages before you buy, because vendors change prices often.`
+        : `Mellox AI's Starter plan is $${starterPrice()} a month ($39 billed yearly), with Growth and Agency above it. We have not listed a price for ${name} here, so check its pricing page for the current figure.`,
     },
     {
       q: `Does ${name} track how ChatGPT, Gemini and Perplexity describe a brand?`,

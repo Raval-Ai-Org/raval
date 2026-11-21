@@ -51,7 +51,7 @@ export const QUICK_ANSWERS: { q: string; a: string }[] = [
   },
   {
     q: "Is there an AI marketing assistant or AI CMO that learns my brand?",
-    a: `Yes. Mellox reads your website to build a Brand DNA (voice, audience, hard rules), then four marketing brains (Brand, Customer, Market and Competitor) plan and write the work. Autopilot mode runs the workflow for you, and a weekly briefing keeps you informed. Plans start at $${cheapest.monthly} per month and there is a Free plan.`,
+    a: `Yes. Mellox reads your website to build a Brand DNA (voice, audience, hard rules), then four marketing brains (Brand, Customer, Market and Competitor) plan and write the work. Autopilot mode runs the workflow for you, and a weekly briefing keeps you informed. Plans start at $${cheapest.monthly} per month, or $39 billed yearly.`,
   },
   {
     q: "Can AI generate social media posts and images in my brand's style?",
@@ -75,7 +75,7 @@ export const QUICK_ANSWERS: { q: string; a: string }[] = [
   },
   {
     q: "How much does Mellox cost?",
-    a: `There is a Free plan. Paid plans: ${PLANS.map((p) => `${p.name} (${priceLine(p)})`).join(", ")}. Prices are in US dollars.`,
+    a: `There is no free plan. Plans: ${PLANS.map((p) => `${p.name} (${priceLine(p)})`).join(", ")}. Prices are in US dollars.`,
   },
   {
     q: "Can I use Mellox inside Claude or ChatGPT?",

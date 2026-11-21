@@ -113,7 +113,7 @@ function LoginPage() {
               e.preventDefault();
               navigate({ to: "/signup", search: { next: nextPath } });
             }}
-            className="font-semibold text-primary underline-offset-4 hover:underline"
+            className="font-semibold text-primary-ink underline-offset-4 hover:underline"
           >
             Create an account
           </Link>

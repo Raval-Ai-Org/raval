@@ -11,10 +11,10 @@ Two things that work together:
 
 ## Flags
 
-| Flag | Default | Off means |
-| --- | --- | --- |
-| `FEATURE_FLAG_MEMORY_ENABLED` (`_WS_<id>`) | on | Settings section and account-menu entry hidden, RPCs 404, chat saves nothing, generators get no block |
-| `FEATURE_FLAG_CHAT_TOOLS_ENABLED` (`_WS_<id>`) | on | Chat is one plain reply with the older action tags |
+| Flag                                           | Default | Off means                                                                                             |
+| ---------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `FEATURE_FLAG_MEMORY_ENABLED` (`_WS_<id>`)     | on      | Settings section and account-menu entry hidden, RPCs 404, chat saves nothing, generators get no block |
+| `FEATURE_FLAG_CHAT_TOOLS_ENABLED` (`_WS_<id>`) | on      | Chat is one plain reply with the older action tags                                                    |
 
 A workspace also has its own switch (Settings → Memory → "Use memory"), which
 an admin sets.
@@ -25,15 +25,15 @@ an admin sets.
 
 `workspace_memories` (migration `20261014090000_workspace_memory.sql`):
 
-| Column | Meaning |
-| --- | --- |
-| `body` | One sentence, 1–500 characters |
-| `kind` | `rule`, `preference`, `fact`, `context` |
-| `topic` | `visual`, `voice`, `content`, `audience`, `business`, `other` |
-| `expires_at` | `NULL` = kept until removed; set = temporary |
-| `status` | `active`, or `removed` (kept as a marker) |
-| `source` | `chat`, `manual`, `import` (the background reader, the backfill) |
-| `fingerprint` | Normalised text; unique per workspace |
+| Column        | Meaning                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| `body`        | One sentence, 1–500 characters                                                                     |
+| `kind`        | `rule`, `preference`, `fact`, `context`                                                            |
+| `topic`       | `visual`, `voice`, `content`, `audience`, `business`, `other`                                      |
+| `expires_at`  | `NULL` = kept until removed; set = temporary                                                       |
+| `status`      | `active`, or `removed` (kept as a marker)                                                          |
+| `source`      | `chat`, `manual`, `import` (the reader, run from Brand DNA's "Sync from chat" click; the backfill) |
+| `fingerprint` | Normalised text; unique per workspace                                                              |
 
 Members read under RLS. Only the server writes.
 
@@ -99,11 +99,11 @@ The browser stores those on the assistant message's `metadata`
 
 ### The three kinds of tool
 
-| Kind | Examples | What happens when the model calls it |
-| --- | --- | --- |
-| Read | `list_content`, `get_pending_approvals`, `get_strategy`, `get_backlinks` | Runs now, as the person. Result is fenced as data. |
-| Change | `schedule_content`, `review_content`, `start_geo_scan` | Nothing runs. A row is stored in `chat_actions` and a button appears. |
-| Memory | `remember`, `update_memory`, `forget` | Runs now, through `applyMemoryOps`. |
+| Kind   | Examples                                                                 | What happens when the model calls it                                  |
+| ------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Read   | `list_content`, `get_pending_approvals`, `get_strategy`, `get_backlinks` | Runs now, as the person. Result is fenced as data.                    |
+| Change | `schedule_content`, `review_content`, `start_geo_scan`                   | Nothing runs. A row is stored in `chat_actions` and a button appears. |
+| Memory | `remember`, `update_memory`, `forget`                                    | Runs now, through `applyMemoryOps`.                                   |
 
 Plus `open_in_mellox`, which only offers a button to a place.
 

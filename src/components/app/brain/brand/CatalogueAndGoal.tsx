@@ -74,7 +74,7 @@ export function GoalPreview({ workspaceId }: { workspaceId: string | null | unde
   }, [workspaceId]);
   return (
     <div className="flex h-full flex-col gap-2">
-      <Target className="h-5 w-5 text-primary" />
+      <Target className="h-5 w-5 text-primary-ink" />
       <p className="line-clamp-3 text-[13px] leading-relaxed text-foreground/85">
         {goals === undefined ? "…" : goals ? goalLine(goals) : "Set what your marketing is for"}
       </p>

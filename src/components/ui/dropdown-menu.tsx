@@ -6,7 +6,16 @@ import { Check, ChevronRight, Circle } from "@/components/ui/gemini-icons";
 
 import { cn } from "@/lib/utils";
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
+const DropdownMenuModalContext = React.createContext(true);
+
+const DropdownMenu = ({
+  modal = true,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) => (
+  <DropdownMenuModalContext.Provider value={modal}>
+    <DropdownMenuPrimitive.Root modal={modal} {...props} />
+  </DropdownMenuModalContext.Provider>
+);
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
@@ -27,7 +36,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
   <DropdownMenuPrimitive.SubTrigger
     ref={ref}
     className={cn(
-      "flex min-w-0 cursor-default select-none items-center gap-2 [overflow-wrap:anywhere] rounded-lg px-2 py-1.5 text-sm outline-none focus:bg-surface-2 data-[state=open]:bg-surface-2 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      "flex min-w-0 cursor-default select-none items-center gap-2 [overflow-wrap:anywhere] rounded-xl px-2.5 py-2 text-[13.5px] font-medium outline-none focus:bg-[var(--ds-well-bg)] data-[state=open]:bg-[var(--ds-well-bg)] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
       inset && "pl-8",
       className,
     )}
@@ -43,6 +52,7 @@ const DropdownMenuSubContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
 >(({ className, sideOffset = 4, collisionPadding = 8, ...props }, forwardedRef) => {
+  const modal = React.useContext(DropdownMenuModalContext);
   const [content, setContent] = React.useState<HTMLDivElement | null>(null);
   const [overlapOffset, setOverlapOffset] = React.useState<number | null>(null);
   const setRef = React.useCallback(
@@ -94,10 +104,11 @@ const DropdownMenuSubContent = React.forwardRef<
       sideOffset={overlapOffset ?? sideOffset}
       collisionPadding={collisionPadding}
       className={cn(
-        "z-50 min-w-[8rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
+        "z-50 min-w-[8rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-[20px] border border-[var(--ds-card-border)] bg-[var(--ds-frame-bg)] shadow-[var(--ds-pop-shadow)] p-1.5 text-popover-foreground duration-200 ease-[cubic-bezier(0.34,1.36,0.64,1)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
         className,
       )}
       {...props}
+      data-modal={modal ? "true" : "false"}
     />
   );
 });
@@ -106,20 +117,24 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <DropdownMenuPrimitive.Portal>
-    <DropdownMenuPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 max-w-[calc(100vw-1rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overscroll-contain overflow-y-auto overflow-x-hidden rounded-2xl border border-border/70 bg-popover p-1.5 text-popover-foreground shadow-xl",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
-        className,
-      )}
-      {...props}
-    />
-  </DropdownMenuPrimitive.Portal>
-));
+>(({ className, sideOffset = 4, ...props }, ref) => {
+  const modal = React.useContext(DropdownMenuModalContext);
+  return (
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.Content
+        ref={ref}
+        sideOffset={sideOffset}
+        className={cn(
+          "z-50 max-w-[calc(100vw-1rem)] max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overscroll-contain overflow-y-auto overflow-x-hidden rounded-[20px] border border-[var(--ds-card-border)] bg-[var(--ds-frame-bg)] shadow-[var(--ds-pop-shadow)] p-1.5 text-popover-foreground duration-200 ease-[cubic-bezier(0.34,1.36,0.64,1)]",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-dropdown-menu-content-transform-origin)",
+          className,
+        )}
+        {...props}
+        data-modal={modal ? "true" : "false"}
+      />
+    </DropdownMenuPrimitive.Portal>
+  );
+});
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const DropdownMenuItem = React.forwardRef<
@@ -138,10 +153,10 @@ const DropdownMenuItem = React.forwardRef<
     ref={ref}
     data-variant={variant}
     className={cn(
-      "relative flex min-w-0 cursor-default select-none items-center gap-2 [overflow-wrap:anywhere] rounded-lg px-2.5 py-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+      "relative flex min-w-0 cursor-default select-none items-center gap-2 [overflow-wrap:anywhere] rounded-xl px-2.5 py-2 text-[13.5px] font-medium outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
       variant === "destructive"
         ? "text-danger focus:bg-danger-surface focus:text-danger"
-        : "focus:bg-surface-2 focus:text-foreground",
+        : "focus:bg-[var(--ds-well-bg)] focus:text-foreground",
       inset && "pl-8",
       className,
     )}
@@ -157,7 +172,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-lg py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-surface-2 focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-xl py-2 pl-8 pr-2 text-[13.5px] font-medium outline-none transition-colors focus:bg-[var(--ds-well-bg)] focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     checked={checked}
@@ -180,7 +195,7 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-lg py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-surface-2 focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-xl py-2 pl-8 pr-2 text-[13.5px] font-medium outline-none transition-colors focus:bg-[var(--ds-well-bg)] focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     {...props}

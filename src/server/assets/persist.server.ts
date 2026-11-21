@@ -24,7 +24,7 @@ import {
 } from "@/server/assets/image-metadata.server";
 
 const DATA_URL_RE = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i;
-export const MAX_ASSET_BYTES = 50 * 1024 * 1024;
+export const MAX_ASSET_BYTES = 200 * 1024 * 1024;
 export { ASSET_BUCKET };
 
 export type PersistAssetInput = {

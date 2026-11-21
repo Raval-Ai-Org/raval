@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { EmptyState } from "@/components/ui/empty-state";
 import { dsGhostBtn, dsIconBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { Link } from "@/lib/navigation";
-import { WORKSPACES_HOME } from "@/lib/workspace/paths";
+import { ALL_WORKSPACES } from "@/lib/workspace/paths";
 import { cn } from "@/lib/utils";
 import { clientHealth, type CcClient } from "@/lib/agency/command-center";
 import type { CommandCenter } from "./use-command-center";
@@ -190,7 +190,7 @@ export function ClientsView({
               </button>
             ))}
           </div>
-          <Link to={WORKSPACES_HOME} className={cn(dsPrimaryBtn, "h-8 px-3.5 text-[12.5px]")}>
+          <Link to={ALL_WORKSPACES} className={cn(dsPrimaryBtn, "h-8 px-3.5 text-[12.5px]")}>
             <Plus className="h-3.5 w-3.5" /> Add client
           </Link>
         </div>
@@ -203,7 +203,7 @@ export function ClientsView({
             title={cc.clients.length === 0 ? "No clients yet" : "No clients match"}
             action={
               cc.clients.length === 0 ? (
-                <Link to={WORKSPACES_HOME} className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}>
+                <Link to={ALL_WORKSPACES} className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}>
                   <Plus className="h-3.5 w-3.5" /> Add a client
                 </Link>
               ) : (

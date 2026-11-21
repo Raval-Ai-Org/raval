@@ -1,9 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Onboarding's goal, product, channel and first-post steps at /onboarding-lab
+ * Onboarding's product, no-website, language and finish screens at /onboarding-lab
  * (dev only, no sign-in, sample data). Checks the required-product gate, the
- * no-website path, that every button is a pill, the first-post states, and
+ * no-website path, that every button is a pill, the finish, and
  * that nothing scrolls sideways, at desktop and phone width.
  */
 
@@ -29,7 +29,7 @@ async function noSideScroll(page: Page) {
 async function everyButtonIsAPill(page: Page) {
   // Text buttons are pills; cards and tiles that happen to be <button>s are not.
   const square = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLButtonElement>("main button")]
+    [...document.querySelectorAll<HTMLButtonElement>("[data-ob-stage] main button")]
       .filter((b) => !b.className.includes("ds-tile") && b.offsetHeight > 0)
       .filter((b) => b.offsetHeight <= 48)
       .filter((b) => parseFloat(getComputedStyle(b).borderTopLeftRadius) < b.offsetHeight / 2 - 1)
@@ -45,24 +45,15 @@ for (const vp of VIEWPORTS) {
     test.use({ viewport: { width: vp.width, height: vp.height } });
     test.setTimeout(180_000);
 
-    test("goal step shows the live scan and the target fields", async ({ page }) => {
+    test("the old goal page now opens the one-tap goal question", async ({ page }) => {
       await openLab(page, "step=goals");
-      await expect(page.locator('main [role="status"]')).toContainText("northwind.example");
-      await expect(page.getByRole("radio", { name: /Grow my following/ })).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
-      await page.getByRole("button", { name: /Add a target/ }).click();
-      await expect(page.getByText("Where you are today")).toBeVisible();
-      await page.getByRole("button", { name: "More posts" }).click();
-      await expect(page.locator("output")).toHaveText("4");
-      await page.getByRole("button", { name: /Set my goal/ }).click();
-      await expect(last(page)).toHaveText("goals:continue");
+      await expect(page).toHaveURL(/step=ask&id=focus|id=focus/);
+      await expect(page.locator("[data-ob-stage]")).toBeVisible();
+      await expect(page.getByRole("radio", { name: /Grow my following/ })).toBeVisible();
       await noSideScroll(page);
-      await everyButtonIsAPill(page);
     });
 
-    test("no website: three answers, then on", async ({ page }) => {
+    test("no website: the basics, then every other part can be skipped", async ({ page }) => {
       await openLab(page, "step=manual");
       const next = page.getByRole("button", { name: /Continue/ });
       await expect(next).toBeDisabled();
@@ -70,10 +61,36 @@ for (const vp of VIEWPORTS) {
       await page
         .getByLabel("What you do, in one line")
         .fill("Small-batch coffee, delivered weekly");
-      await page.getByRole("radio", { name: "Services" }).click();
+      await page.getByRole("radio", { name: /Services/ }).click();
+      await expect(page.getByRole("complementary")).toContainText("Northwind");
       await next.click();
+      await expect(last(page)).toHaveText("part:category");
+      await page.getByRole("radio", { name: /Food & drink/ }).click();
+      await expect(page.getByRole("complementary")).toContainText("Food & drink");
+      await next.click();
+      await expect(last(page)).toHaveText("part:look");
+      await page.getByRole("button", { name: /Ocean/ }).click();
+      await expect(page.getByRole("button", { name: /Primary #0B3D91/ })).toBeVisible();
+      await page.getByRole("button", { name: "Bold" }).click();
+      await next.click();
+      await page.locator("form").getByRole("button", { name: "Skip for now" }).click();
+      await expect(last(page)).toHaveText("part:competitors");
+      await page.getByLabel("Competitor name").fill("Bean Bros");
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await expect(page.getByText("Mellox will look up their site")).toBeVisible();
+      await page.getByRole("button", { name: /Looks good/ }).click();
       await expect(last(page)).toHaveText("manual:continue");
       await noSideScroll(page);
+      await everyButtonIsAPill(page);
+    });
+
+    test("no website: a filled kit shows in the live card", async ({ page }) => {
+      await openLab(page, "step=manual&part=inspiration");
+      await expect(page.getByRole("complementary")).toContainText("Northwind Coffee");
+      await expect(page.getByLabel("Uploading")).toBeVisible();
+      await expect(page.getByRole("button", { name: /Uploading/ })).toBeDisabled();
+      await noSideScroll(page);
+      await everyButtonIsAPill(page);
     });
 
     test("an empty catalogue can't be passed until something is added", async ({ page }) => {
@@ -92,8 +109,9 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByText(/Found 1 product on northwind\.example/)).toBeVisible();
       await expect(page.getByRole("tab", { name: /Services · 1/ })).toBeVisible();
       await page.getByRole("tab", { name: /Services · 1/ }).click();
-      await expect(page.getByText("Office coffee service")).toBeVisible();
-      await expect(page.getByText("Cold Brew, 1 L")).toBeHidden();
+      // The list row and the detail panel both name the chosen service.
+      await expect(page.getByRole("heading", { name: "Office coffee service" })).toBeVisible();
+      await expect(page.getByText("Cold Brew, 1 L")).toHaveCount(0);
       await page.getByRole("tab", { name: /All/ }).click();
       await expect(page.getByText(/Small photo/)).toBeVisible();
       await page.getByRole("button", { name: "Remove all" }).click();
@@ -111,24 +129,24 @@ for (const vp of VIEWPORTS) {
       await noSideScroll(page);
     });
 
-    test("first posts: price before the click, then progress and retry", async ({ page }) => {
-      await openLab(page, "step=first");
-      await expect(page.getByRole("button", { name: /Make my first 3 posts/ })).toContainText(
-        "credits",
+    test("language: search and pick what Mox writes in", async ({ page }) => {
+      await openLab(page, "step=language");
+      const grid = page.getByRole("radiogroup", { name: "Content language" });
+      await page.getByRole("textbox", { name: "Search languages" }).fill("urdu");
+      await grid.getByRole("radio", { name: /Urdu/ }).first().click();
+      await expect(grid.getByRole("radio", { name: /Urdu/ }).first()).toHaveAttribute(
+        "aria-checked",
+        "true",
       );
-      await page.getByRole("button", { name: /Make my first 3 posts/ }).click();
-      await expect(last(page)).toHaveText("first:start");
+      await expect(page.getByRole("button", { name: /Continue/ })).toBeEnabled();
       await noSideScroll(page);
+    });
 
-      await openLab(page, "step=first-running");
-      await expect(page.getByRole("heading", { name: "Writing your first posts…" })).toBeVisible();
-      await expect(page.getByLabel("Ready")).toHaveCount(1);
-      await expect(page.getByText("They keep writing if you go on.")).toBeVisible();
-
-      await openLab(page, "step=first-failed");
-      await page.getByRole("button", { name: /Try again/ }).click();
-      await expect(last(page)).toHaveText("retry:1");
-      await expect(page.locator("main").getByRole("alert")).toContainText("run out of credits");
+    test("finish: no posts are made, press and hold to enter", async ({ page }) => {
+      await openLab(page, "step=finish");
+      await expect(page).toHaveURL(/step=done/);
+      await expect(page.getByText(/first 3 posts/i)).toHaveCount(0);
+      await expect(page.getByText("Hold to go in")).toBeVisible();
       await noSideScroll(page);
     });
   });

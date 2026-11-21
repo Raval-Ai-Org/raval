@@ -6,6 +6,10 @@ const lookTextFor = vi.fn();
 vi.mock("@/lib/ai", () => ({ runStructuredPrompt: (opts: unknown) => run(opts) }));
 vi.mock("@/server/brand-look/resolve.server", () => ({
   lookTextFor: (...args: unknown[]) => lookTextFor(...args),
+  loadBrandLook: async () => ({
+    look: { pictureStyles: { ids: ["bold-poster", "3d"], auto: true } },
+    dna: null,
+  }),
 }));
 vi.mock("@/server/guardrails/events", () => ({ logGuardrailEvent: vi.fn() }));
 vi.mock("./context.server", () => ({
@@ -42,7 +46,7 @@ beforeEach(() => {
 });
 
 describe("writeStudioPrompt", () => {
-  it("writes a fresh, uncached, sectioned prompt anchored on a live signal", async () => {
+  it("writes a fresh, uncached, sectioned prompt on a kind of post real brands publish", async () => {
     const out = await writeStudioPrompt({
       client: {},
       workspaceId: "00000000-0000-0000-0000-000000000001",
@@ -56,9 +60,14 @@ describe("writeStudioPrompt", () => {
     expect(call.route).toBe("studio.prompt");
     expect(call.noCache).toBe(true);
     expect(call.regenerate).toBe(true);
-    expect(call.system).toContain("Camera and composition");
-    expect(call.system).toContain("Invent one fresh");
-    expect(call.user).toContain("Cold brew searches are rising");
+    expect(call.system).toContain("Headline, Supporting line, Picture");
+    expect(call.system).not.toContain("Camera and composition");
+    expect(call.system).toMatch(/60–160 words/);
+    expect(call.system).toMatch(/'(Bold poster|3D render)' style/);
+    // Surprise me picks a real kind of post (post-styles.ts); a trend or
+    // competitor signal no longer drives the idea (ADR-0051).
+    expect(call.system).toContain("Write this kind of post");
+    expect(call.user).not.toContain("Cold brew searches are rising");
     expect(call.user).toContain("Meet our farmers");
     expect(call.user).toContain("Old idea");
     expect(call.user).toContain("Size: 4:5");
@@ -77,7 +86,7 @@ describe("writeStudioPrompt", () => {
       current: "Post about our new oat milk latte for rainy mornings",
     });
     const call = run.mock.calls[0][0];
-    expect(call.system).toContain("Keep their idea");
+    expect(call.system).toContain("keep its subject");
     expect(call.user).toContain("new oat milk latte for rainy mornings");
   });
 

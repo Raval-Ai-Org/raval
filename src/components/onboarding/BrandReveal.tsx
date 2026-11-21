@@ -475,7 +475,7 @@ function Card({
     >
       <header className="mb-4 flex items-center justify-between gap-3">
         <h2 id={id} className="inline-flex items-center gap-2 text-[13px] font-semibold">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-surface text-primary">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-surface text-primary-ink">
             <Icon className="h-3.5 w-3.5" aria-hidden />
           </span>
           {title}
@@ -601,7 +601,7 @@ function Guidance({ tone, items }: { tone: "do" | "dont"; items: string[] }) {
     <div className="rounded-xl border border-border bg-surface-2/60 p-4">
       <p className="flex items-center gap-2 text-[12px] font-semibold">
         {isDo ? (
-          <ThumbsUp className="h-3.5 w-3.5 text-primary" aria-hidden />
+          <ThumbsUp className="h-3.5 w-3.5 text-primary-ink" aria-hidden />
         ) : (
           <ThumbsDown className="h-3.5 w-3.5 text-danger" aria-hidden />
         )}

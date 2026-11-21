@@ -68,7 +68,8 @@ export function creationPointsFor(
           ? 6
           : 4;
     case "carousel":
-      return c.artworkMode === "full" ? 1 + 2 * (c.slideCount ?? 5) : 3;
+      // Every slide is designed by the image model (ADR-0051).
+      return 1 + 2 * (c.slideCount ?? 5);
     case "story":
       return c.storyMode === "video" ? (c.videoPreview ? 2 : null) : 1 + 2 * (c.frameCount ?? 3);
   }

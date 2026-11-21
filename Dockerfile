@@ -2,7 +2,12 @@ FROM node:22-bookworm-slim AS dependencies
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# MotionMox (Mellox's Remotion fork) is installed from file: links (ADR-0045).
+COPY vendor/motionmox ./vendor/motionmox
+COPY scripts/motionmox/materialize.mjs ./scripts/motionmox/materialize.mjs
+# npm links file: packages; Next only treats them as serverExternalPackages
+# when their real path is inside node_modules, so copy the links in.
+RUN npm ci && node scripts/motionmox/materialize.mjs
 
 FROM node:22-bookworm-slim AS builder
 
@@ -31,6 +36,21 @@ ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 RUN npm run build && node scripts/verify-clarity-build.mjs
+
+# whisper.cpp (MIT) for clip captions on this machine instead of the paid
+# studio.transcribe route (src/server/studio/clip-edit/transcribe.server.ts).
+FROM debian:bookworm-slim AS whisper
+# v1.8.x names the CLI target `whisper-cli` (v1.7.2 still called it `main`).
+ARG WHISPER_CPP_VERSION=v1.8.2
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch ${WHISPER_CPP_VERSION} https://github.com/ggml-org/whisper.cpp /src \
+  && cmake -S /src -B /src/build -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DCMAKE_BUILD_TYPE=Release \
+  && cmake --build /src/build --target whisper-cli -j \
+  && mkdir -p /opt/whisper \
+  && cp /src/build/bin/whisper-cli /opt/whisper/whisper-cli \
+  && curl -fsSL -o /opt/whisper/ggml-base.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
 FROM node:22-bookworm-slim AS runner
 
@@ -64,6 +84,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/vendor ./vendor
+# MotionMox: the compositions' bundle (built by prebuild) and its renderer.
+COPY --from=builder --chown=nextjs:nodejs /app/.motionmox-bundle ./.motionmox-bundle
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@motionmox ./node_modules/@motionmox
+ENV MOTIONMOX_BROWSER_EXECUTABLE=/usr/bin/chromium
+COPY --from=whisper /opt/whisper /opt/whisper
+ENV WHISPER_CPP_PATH=/opt/whisper/whisper-cli
+ENV WHISPER_MODEL_PATH=/opt/whisper/ggml-base.bin
 
 USER nextjs
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

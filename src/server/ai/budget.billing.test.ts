@@ -45,12 +45,12 @@ beforeEach(() => {
 afterEach(() => setBudgetDeps(null));
 
 describe("account safety budget", () => {
-  it("uses monthly-equivalent annual revenue for new creation-window accounts", async () => {
+  it("caps provider spend at 60% of the monthly price for yearly accounts too (v4)", async () => {
     mocked.enforcement.mockReturnValue("on");
     mocked.creation.mockResolvedValue(true);
     mocked.workspace.mockResolvedValue({ account: { id: "acct-1", billing_interval: "year" } });
     const result = await checkBudget("image", { workspaceId: "workspace-1" });
-    expect(result.limits?.monthlyUsd).toBe(74.5);
+    expect(result.limits?.monthlyUsd).toBe(89.4);
   });
   it("withholds new creation spending when provider usage is unavailable", async () => {
     mocked.enforcement.mockReturnValue("on");

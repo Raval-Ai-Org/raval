@@ -150,10 +150,13 @@ export const cache: CacheStore = {
 
   async get<T>(key: string): Promise<T | null> {
     const k = PREFIX + key;
-    const raw = await withRedis(
-      (r) => r.get(k),
-      () => memory.get(k),
-    );
+    // A write that failed over to this process's memory (a Redis hiccup) is
+    // still found here, instead of reading as missing from then on.
+    const raw =
+      (await withRedis(
+        (r) => r.get(k),
+        () => memory.get(k),
+      )) ?? memory.get(k);
     if (raw == null) return null;
     try {
       return JSON.parse(raw) as T;
@@ -168,6 +171,8 @@ export const cache: CacheStore = {
     await withRedis(
       async (r) => {
         await r.set(k, raw, { EX: Math.max(1, Math.round(ttlSeconds)) });
+        // An older copy left in memory from a Redis hiccup must not outlive this one.
+        memory.delete(k);
       },
       () => memory.set(k, raw, ttlSeconds),
     );

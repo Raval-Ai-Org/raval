@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import { emitAppEvent, onAppEvent } from "@/lib/app-events";
 import { getBrainOverview } from "@/lib/brain.functions";
+import { brainPath } from "@/lib/workspace/paths";
 import { newsSince, type BrainOverview } from "@/lib/brain/brain";
 import { generateStrategy, getStrategy, saveStrategy } from "@/lib/strategy.functions";
 import type { MarketingStrategy } from "@/lib/strategy/contracts";
@@ -96,17 +97,31 @@ export function useStrategyActions(workspaceId: string) {
     client.setQueryData(brainKeys.strategy(workspaceId), view);
     void client.invalidateQueries({ queryKey: brainKeys.overview(workspaceId) });
   };
+  // A strategy takes a while: it shows in the corner list, not a pop-up.
+  const strategyWork = (state: "working" | "done" | "failed") =>
+    emitAppEvent("work:update", {
+      id: `strategy:${workspaceId}`,
+      title: "Marketing strategy",
+      state,
+      step: "Writing it",
+      doneLabel: "Ready to review",
+      href: brainPath(workspaceId, "strategy"),
+    });
   const generate = useMutation({
     mutationFn: (note?: string) =>
       generateStrategy({
         data: { workspaceId, note: note?.trim() || undefined, idempotencyKey: crypto.randomUUID() },
       }),
+    onMutate: () => strategyWork("working"),
     onSuccess: (view) => {
       settle(view);
       emitAppEvent("billing:changed");
-      toast.success("Your strategy is ready to review");
+      strategyWork("done");
     },
-    onError: (error) => toast.error(message(error, "Couldn't write the strategy")),
+    onError: (error) => {
+      strategyWork("failed");
+      toast.error(message(error, "Couldn't write the strategy"));
+    },
   });
   const save = useMutation({
     mutationFn: (args: { strategy: MarketingStrategy; version: number; confirm: boolean }) =>

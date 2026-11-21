@@ -3,10 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   CREDIT_ACTIONS,
-  STUDIO_VIDEO_UNITS,
   creditsFor,
+  hasActivePlan,
+  videoCreditsFor,
   videoFeatureFor,
-  videoUnitsFor,
   type CreditAction,
   type FeatureKey,
   type Meter,
@@ -67,7 +67,7 @@ export async function beginDeferredMetered(args: {
   capture: (amount?: number) => Promise<void>;
   release: () => Promise<void>;
 }> {
-  if (!Number.isSafeInteger(args.amount) || args.amount < 1 || !args.idempotencyKey.trim()) {
+  if (!Number.isSafeInteger(args.amount) || args.amount < 0 || !args.idempotencyKey.trim()) {
     throw new HttpError(400, "Invalid deferred charge.");
   }
   const entitlements = await getEntitlements(args);
@@ -75,6 +75,20 @@ export async function beginDeferredMetered(args: {
   if (entitlements.role === "viewer") throw new SpendNotAllowedError();
   const mode = entitlements.enforcement;
   const feature = args.feature ?? null;
+  if (args.amount === 0) {
+    // Included in the plan: nothing is held, but the plan still has to allow it.
+    if (mode === "on") assertIncluded(entitlements, feature);
+    const noop = async () => {};
+    return {
+      accountId: entitlements.accountId,
+      chargeId: null,
+      holdId: null,
+      shadowDecision: "included",
+      mode,
+      capture: noop,
+      release: noop,
+    };
+  }
   const would = decision(entitlements, feature, args.meter, args.amount);
   const shadowArgs = {
     entitlements,
@@ -188,10 +202,11 @@ function price(
   feature: FeatureKey | null;
 } {
   if (action === "studio_video") {
+    // `quantity` is the number of DEFAULT_VIDEO_DURATION (10 s) blocks.
     return {
       actionName: action,
-      meter: "video",
-      amount: STUDIO_VIDEO_UNITS * quantity,
+      meter: "credits",
+      amount: videoCreditsFor("standard", 10 * quantity, "720p"),
       feature: "ugc",
     };
   }
@@ -206,10 +221,34 @@ function price(
   const video = action.video;
   return {
     actionName: `video_${video.ugcKey}`,
-    meter: "video",
-    amount: videoUnitsFor(video) * quantity,
+    meter: "credits",
+    amount:
+      videoCreditsFor(video.ugcKey, video.seconds, video.resolution, video.providerCostUsd) *
+      quantity,
     feature: videoFeatureFor(video.ugcKey, video.resolution),
   };
+}
+
+/**
+ * An included (zero-credit) action still needs an active plan, an unfrozen
+ * brand and the feature. There is no Free plan: with no plan nothing runs.
+ */
+function assertIncluded(entitlements: Entitlements, feature: FeatureKey | null): void {
+  if (entitlements.frozen) throw new BrandFrozenError();
+  if (!hasActivePlan(entitlements.entitledPlan)) {
+    throw new UpgradeRequiredError({
+      feature: feature ?? "studio",
+      requiredPlan: "starter",
+      currentPlan: entitlements.entitledPlan,
+    });
+  }
+  if (feature && !entitlements.features[feature].allowed) {
+    throw new UpgradeRequiredError({
+      feature,
+      requiredPlan: entitlements.features[feature].requiredPlan,
+      currentPlan: entitlements.entitledPlan,
+    });
+  }
 }
 
 function decision(
@@ -272,7 +311,7 @@ export async function runMetered<T>(
     throw new HttpError(400, "Invalid charge quantity or idempotency key.");
   }
   const priced = price(args.action, quantity);
-  if (!Number.isSafeInteger(priced.amount) || priced.amount <= 0) {
+  if (!Number.isSafeInteger(priced.amount) || priced.amount < 0) {
     throw new HttpError(400, "Invalid charge amount.");
   }
   const entitlements = await getEntitlements({
@@ -282,6 +321,21 @@ export async function runMetered<T>(
   });
   const mode = entitlements.enforcement;
   if (entitlements.role === "viewer") throw new SpendNotAllowedError();
+  if (priced.amount === 0) {
+    if (mode === "on") assertIncluded(entitlements, priced.feature);
+    const charge: MeteredCharge = {
+      id: null,
+      accountId: entitlements.accountId,
+      meter: priced.meter,
+      amount: 0,
+      mode,
+      setCapturedAmount() {},
+    };
+    const result = await runWithScope({ billingAccountId: entitlements.accountId }, () =>
+      run(charge),
+    );
+    return { result, balance: null, chargeId: null };
+  }
   const would = decision(entitlements, priced.feature, priced.meter, priced.amount);
   if (mode === "shadow" && would.code !== "would_charge") {
     await logShadow({

@@ -609,6 +609,15 @@ const SCENES: Scene[] = [
     },
   },
   {
+    id: "brief-meme",
+    label: "Brief · Meme picked",
+    make: () =>
+      session("image", "intent", {
+        brief: "A meme about waiting for the kettle on a Monday, our cold brew is the fix",
+        category: "meme",
+      }),
+  },
+  {
     id: "review-creation",
     label: "Review · Included caption edits",
     make: () => {
@@ -938,6 +947,20 @@ const SCENES: Scene[] = [
       }),
   },
   {
+    id: "brief-video-kind-needs-picture",
+    label: "Brief · Kind that needs a picture",
+    make: () =>
+      session("video", "intent", {
+        brief: "Our new oat-milk cold brew can",
+        controls: {
+          platforms: ["instagram"],
+          ratio: "9:16",
+          audio: true,
+          videoKind: "living-picture",
+        },
+      }),
+  },
+  {
     id: "brief-video-motion-post",
     label: "Brief · Motion post from a picture",
     make: () =>
@@ -953,6 +976,57 @@ const SCENES: Scene[] = [
           recapMotion: "camera",
         },
       }),
+  },
+  {
+    // A long video waiting as its storyboard (src/lib/studio/video/board.ts).
+    id: "storyboard",
+    label: "Review · Storyboard before the video",
+    make: () => {
+      const base = session("video", "review");
+      const frame = (bg: string, fg: string, words: string) => ({
+        kind: "image" as const,
+        ratio: "9:16",
+        status: "ready" as const,
+        url: art(720, 1280, bg, fg, words),
+      });
+      const job = {
+        ...base.job!,
+        output: {
+          ...base.job!.output,
+          storyboard: { status: "preview" as const },
+          media: [
+            { slot: "main", ...frame("#1d3b2a", "#c8f25a", "Drop on the can") },
+            { slot: "board:1", ...frame("#2b2418", "#f2d29a", "Into the sun") },
+            { slot: "board:2", ...frame("#14262e", "#a8e1f0", "Pour over ice") },
+            {
+              slot: "board:3",
+              kind: "image" as const,
+              ratio: "9:16",
+              status: "pending" as const,
+            },
+          ],
+          videoPlan: { ...LAB_VIDEO_PLAN, model: "premium", voice: true },
+        },
+      } as StudioJob;
+      return {
+        ...base,
+        controls: { ...base.controls, durationSec: 16, videoPreview: true },
+        job,
+        lastGood: job,
+      };
+    },
+    fixtures: { rows: ROWS.video, distribution: true },
+  },
+  {
+    // Create on the storyboard: Studio steps aside; opened again from the corner
+    // list it shows the video being made, never the storyboard.
+    id: "gen-video-from-storyboard",
+    label: "Generating · Video from its storyboard",
+    make: () => {
+      const board = SCENES.find((x) => x.id === "storyboard")!.make!();
+      const gen = session("video", "generating");
+      return { ...board, step: "generating", job: { ...gen.job!, stage: "render" } };
+    },
   },
   {
     id: "review-video-checked",
@@ -1578,6 +1652,7 @@ export function StudioLab() {
                 <ComposerBody
                   session={sessionData}
                   isMobile={device === "phone"}
+                  embedded={device !== "phone"}
                   fixtures={{ ideas: IDEAS, ...current.fixtures }}
                 />
               ) : null}

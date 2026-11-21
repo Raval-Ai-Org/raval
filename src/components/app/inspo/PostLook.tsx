@@ -1,6 +1,7 @@
 "use client";
 
-// Inspo → Post look: vibe, colours, fonts, pictures and logo, with a live
+// Inspo → Post look: picture style first, then colours, fonts, logo and a
+// small vibe row, with a live
 // post beside it. Writes the one look (`dna.look.visual`).
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -16,45 +17,10 @@ import type { BrandLook } from "@/lib/brand-look/resolve";
 import { paletteFromDnaColors } from "@/lib/brand-look/resolve";
 import type { BrandLookSpec, VisualStyle } from "@/lib/brand-look/spec";
 import { cn } from "@/lib/utils";
-import { Block, EASE, PickTile } from "./parts";
+import { PictureStylePicker } from "@/components/brand/PictureStylePicker";
+import { cleanStyleIds, effectiveStyles, mediumForStyles } from "@/lib/brand-look/picture-styles";
+import { Block, EASE, PickChip } from "./parts";
 import type { InspoHandlers, InspoView } from "./types";
-
-export const MEDIUMS: Array<{
-  value: NonNullable<VisualStyle["medium"]>;
-  label: string;
-  art: string;
-}> = [
-  {
-    value: "photo",
-    label: "Photo",
-    art: "radial-gradient(circle at 30% 30%, #fff8 0 18%, transparent 19%), linear-gradient(135deg, #8aa 0%, #345 100%)",
-  },
-  {
-    value: "illustration",
-    label: "Drawn",
-    art: "radial-gradient(circle at 70% 65%, #ffd166 0 26%, transparent 27%), radial-gradient(circle at 30% 35%, #ef476f 0 20%, transparent 21%), #f4f1de",
-  },
-  {
-    value: "3d",
-    label: "3D",
-    art: "radial-gradient(circle at 38% 34%, #fff 0 6%, #b9c6ff 22%, #5b6ee1 60%, #2b2f77 100%)",
-  },
-  {
-    value: "flat",
-    label: "Flat",
-    art: "linear-gradient(90deg, #264653 0 34%, #2a9d8f 34% 67%, #e9c46a 67% 100%)",
-  },
-  {
-    value: "collage",
-    label: "Collage",
-    art: "linear-gradient(115deg, #f2e9e4 0 40%, transparent 40%), linear-gradient(200deg, #c9ada7 0 45%, #4a4e69 45% 100%)",
-  },
-  {
-    value: "typographic",
-    label: "Type only",
-    art: "repeating-linear-gradient(180deg, #111 0 5px, transparent 5px 12px), #f6f6f6",
-  },
-];
 
 const ROLES = [
   ["primary", "Main"],
@@ -156,27 +122,33 @@ export function PostLook({
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 space-y-4">
-        <Block label="Vibe">
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {LOOK_PRESETS.map((preset, i) => (
-              <PickTile
-                key={preset.id}
-                index={i}
-                on={activePreset === preset.id}
-                label={preset.label}
-                art={preset.art}
-                onClick={() =>
-                  // A vibe sets the feel; colours and fonts already chosen stay.
-                  handlers.saveLook({
-                    ...spec,
-                    writing: { ...spec.writing, ...preset.writing },
-                    visual: { ...spec.visual, ...preset.visual },
-                    video: { ...spec.video, ...preset.video },
-                  })
-                }
-              />
-            ))}
-          </div>
+        <Block label="Picture style">
+          <PictureStylePicker
+            value={{
+              auto: v.stylesAuto === true || !cleanStyleIds(v.styles).length,
+              ids: cleanStyleIds(v.styles),
+            }}
+            autoIds={
+              effectiveStyles(
+                null,
+                { industry: dna.industry, products: dna.products, brandName: dna.brandName },
+                { ownDesign: !!view.taste?.active },
+              ).ids
+            }
+            customReady={!!view.taste?.active}
+            customPreview={
+              view.cards.find((c) => c.capture && !/mobile/i.test(c.label))?.thumbUrl ??
+              view.cards.find((c) => c.fromSite)?.thumbUrl ??
+              null
+            }
+            onChange={(next) =>
+              set(
+                next.auto
+                  ? { styles: undefined, stylesAuto: true, medium: undefined }
+                  : { styles: next.ids, stylesAuto: false, medium: mediumForStyles(next.ids) },
+              )
+            }
+          />
         </Block>
 
         <Block
@@ -305,69 +277,97 @@ export function PostLook({
           </div>
         </Block>
 
-        <Block label="Pictures">
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6">
-            {MEDIUMS.map((m, i) => (
-              <PickTile
-                key={m.value}
-                index={i}
-                on={v.medium === m.value}
-                label={m.label}
-                art={m.art}
-                onClick={() => set({ medium: v.medium === m.value ? undefined : m.value })}
-              />
-            ))}
-          </div>
-        </Block>
-
         <Block
           label="Logo"
           aside={
             <Switch
-              checked={v.logo?.use !== false}
+              checked={v.logo?.use === true}
               onCheckedChange={(use) => set({ logo: { ...v.logo, use } })}
               aria-label="Put the logo on pictures"
             />
           }
         >
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative grid h-24 w-24 grid-cols-2 gap-1.5 rounded-[18px] bg-[var(--ds-well-bg)] p-2">
-              {(["top-left", "top-right", "bottom-left", "bottom-right"] as const).map((corner) => {
-                const on = (v.logo?.corner ?? "bottom-right") === corner;
-                return (
-                  <button
-                    key={corner}
-                    type="button"
-                    aria-label={`Logo ${corner.replace("-", " ")}`}
-                    aria-pressed={on}
-                    disabled={v.logo?.use === false}
-                    onClick={() => set({ logo: { ...v.logo, corner } })}
-                    className={cn(
-                      "relative rounded-[10px] bg-[var(--ds-tile-bg)] transition-colors hover:bg-primary/20 disabled:opacity-40",
-                      dsFocus,
-                    )}
-                  >
-                    {on && (
-                      <motion.span
-                        layoutId="inspo-logo-corner"
-                        className="absolute inset-0 rounded-[10px] bg-primary"
-                        transition={{ type: "spring", stiffness: 420, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <Segmented
-              value={v.logo?.size}
-              disabled={v.logo?.use === false}
-              onChange={(size) => set({ logo: { ...v.logo, size } })}
-              options={[
-                { value: "small", label: "S" },
-                { value: "medium", label: "M" },
-                { value: "large", label: "L" },
-              ]}
-            />
+          <p className="mb-3 text-[12px] text-muted-foreground">
+            {v.logo?.use === true
+              ? "Your logo goes on pictures, placed by Mox where it covers no words."
+              : "Off: pictures carry no logo. Switch it on, or ask for the logo in a brief."}
+          </p>
+          <AnimatePresence initial={false}>
+            {v.logo?.use === true && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.28, ease: EASE }}
+                className="flex flex-wrap items-center gap-4 overflow-hidden"
+              >
+                <div className="relative grid h-20 w-20 grid-cols-2 gap-1.5 rounded-[18px] bg-[var(--ds-well-bg)] p-2">
+                  {(["top-left", "top-right", "bottom-left", "bottom-right"] as const).map(
+                    (corner) => {
+                      const on = (v.logo?.corner ?? "bottom-right") === corner;
+                      return (
+                        <button
+                          key={corner}
+                          type="button"
+                          aria-label={`Logo ${corner.replace("-", " ")}`}
+                          aria-pressed={on}
+                          disabled={v.logo?.use !== true}
+                          onClick={() => set({ logo: { ...v.logo, corner } })}
+                          className={cn(
+                            "relative rounded-[10px] bg-[var(--ds-tile-bg)] transition-colors hover:bg-primary/20 disabled:opacity-40",
+                            dsFocus,
+                          )}
+                        >
+                          {on && (
+                            <motion.span
+                              layoutId="inspo-logo-corner"
+                              className="absolute inset-0 rounded-[10px] bg-primary"
+                              transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                            />
+                          )}
+                        </button>
+                      );
+                    },
+                  )}
+                </div>
+                <Segmented
+                  value={v.logo?.size}
+                  disabled={v.logo?.use !== true}
+                  onChange={(size) => set({ logo: { ...v.logo, size } })}
+                  options={[
+                    { value: "small", label: "S" },
+                    { value: "medium", label: "M" },
+                    { value: "large", label: "L" },
+                  ]}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Block>
+
+        <Block label="Vibe">
+          <p className="-mt-2 mb-3 text-[12px] text-muted-foreground">
+            A quick starting feel. Your colours and fonts stay as they are.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {LOOK_PRESETS.map((preset, i) => (
+              <PickChip
+                key={preset.id}
+                index={i}
+                on={activePreset === preset.id}
+                label={preset.label}
+                art={preset.art}
+                onClick={() =>
+                  // A vibe sets the feel; colours and fonts already chosen stay.
+                  handlers.saveLook({
+                    ...spec,
+                    writing: { ...spec.writing, ...preset.writing },
+                    visual: { ...spec.visual, ...preset.visual },
+                    video: { ...spec.video, ...preset.video },
+                  })
+                }
+              />
+            ))}
           </div>
         </Block>
 

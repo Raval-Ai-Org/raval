@@ -1,0 +1,39 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/web-renderer"
+  },
+  "name": "@motionmox/web-renderer",
+  "version": "4.0.542",
+  "main": "dist/index.js",
+  "type": "module",
+  "author": "Remotion <jonny@remotion.dev>",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "dependencies": {
+    "@mediabunny/mp3-encoder": "1.64.0",
+    "@mediabunny/aac-encoder": "1.64.0",
+    "@mediabunny/flac-encoder": "1.64.0",
+    "@motionmox/licensing": "file:../licensing",
+    "@motionmox/core": "file:../core",
+    "mediabunny": "1.64.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    }
+  },
+  "keywords": [
+    "@motionmox/core",
+    "renderer",
+    "web"
+  ],
+  "description": "Render videos in the browser",
+  "homepage": "https://www.remotion.dev/docs/web-renderer/",
+  "private": true
+}

@@ -2,28 +2,30 @@
 
 // The plans on the public pricing page: the same cards as the upgrade window inside the product
 // (src/components/app/billing/UpgradeScreen.tsx), drawn from the same catalog with the same helpers, so the two
-// always show the same plans, prices and lines. Three cards side by side, the biggest plan as a row under them.
+// always show the same plans, prices and lines. Three cards side by side, Enterprise as a row under them.
 
 import {
   ArrowRight,
   Building2,
   Check,
   Columns2,
+  MessageSquare,
+  PenLine,
   ShieldCheck,
-  Video,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { PLANS, type BillingInterval, type PaidPlanId } from "@/lib/billing/catalog";
-import { formatMeter, formatNumber, formatUsd, planPrice } from "@/lib/billing/present";
-import { PAID_PLANS } from "@/marketing/lib/pricing";
-import { CREATION_PLANS } from "@/lib/billing/creation";
+import { PLANS, creditsOf, type BillingInterval, type PaidPlanId } from "@/lib/billing/catalog";
+import { planOutcomes } from "@/lib/billing/plan-economics";
+import { formatNumber, formatUsd, planPrice } from "@/lib/billing/present";
+import { PAID_PLANS, VALUE_ANCHOR } from "@/marketing/lib/pricing";
 import SectionHead from "./SectionHead";
 
 const APP_URL = "/signup";
-const CARDS = PAID_PLANS.slice(0, 3);
-const STRIP = PAID_PLANS[3];
+const CARDS = PAID_PLANS;
+/** Enterprise: a slim "Talk to us" row under the cards. */
+const STRIP: PaidPlanId = "scale";
 const FEATURED: PaidPlanId = "growth";
 
 /** A year's price as a daily figure: "$4.08". */
@@ -32,17 +34,23 @@ const perDay = (yearUsd: number) => `$${(yearUsd / 365).toFixed(2)}`;
 /** What a plan gives every month, as short lines. */
 function planNumbers(plan: PaidPlanId): { Icon: LucideIcon; main: string; note?: string }[] {
   const def = PLANS[plan];
+  const made = planOutcomes(plan);
   return [
     {
       Icon: Zap,
-      main: `${formatNumber(CREATION_PLANS[plan].points)} creation points a month`,
-      note: `up to ${formatNumber(Math.floor(CREATION_PLANS[plan].points / 2))} standard image posts, or a mix. Three short caption edits per paid social creation.`,
+      main: `${formatNumber(made.credits)} credits a month`,
+      note: `≈ ${formatNumber(made.imagePosts)} image posts or ${formatNumber(made.videos)} 10-second videos`,
     },
     {
-      Icon: Zap,
-      main: `${formatNumber(CREATION_PLANS[plan].flexCredits)} wallet credits for extras`,
+      Icon: PenLine,
+      main: "Unlimited text posts and publishing",
+      note: "captions, scripts and articles included",
     },
-    { Icon: Video, main: `${formatMeter("video", def.allowances.videoUnits)} a month` },
+    {
+      Icon: MessageSquare,
+      main: `${formatNumber(def.allowances.proMessages)} Mellox Pro messages`,
+      note: "unlimited Flash chat",
+    },
     {
       Icon: Building2,
       main: `${formatNumber(def.brands)} ${def.brands === 1 ? "brand" : "brands"}`,
@@ -134,10 +142,9 @@ function PlanCard({
   );
 }
 
-/** The biggest plan as one slim row under the three cards. */
-function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInterval }) {
+/** Enterprise as one slim row under the three cards: sold by talking to us. */
+function PlanStrip({ plan }: { plan: PaidPlanId }) {
   const def = PLANS[plan];
-  const price = planPrice(plan, interval);
   return (
     <article className="pp-strip" data-reveal>
       <div className="pp-strip-text">
@@ -146,25 +153,17 @@ function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInte
           <span>{def.fit}</span>
         </h3>
         <p>
-          {formatNumber(def.brands)} brands · {formatNumber(CREATION_PLANS[plan].points)} creation
-          points and {formatMeter("video", def.allowances.videoUnits)} a month · a dedicated account
-          manager
+          {formatNumber(def.brands)}+ brands · {formatNumber(creditsOf(def.allowances.credits))}+
+          credits a month · a dedicated account manager and an SLA
         </p>
       </div>
-      <p className="pp-strip-price" aria-live="polite">
-        {formatUsd(price.perMonth)}
-        <span>
-          {interval === "year"
-            ? ` a month equivalent · billed annually at ${formatUsd(price.billed)}`
-            : " a month · billed monthly"}
-        </span>
+      <p className="pp-strip-price">
+        Custom
+        <span> · volume pricing</span>
       </p>
       <div className="pp-strip-buttons">
         <a href="/demo?interest=scale" className="pp-talk">
           Talk to us
-        </a>
-        <a href={APP_URL} className="pp-buy">
-          Get {def.label}
         </a>
       </div>
     </article>
@@ -172,7 +171,8 @@ function PlanStrip({ plan, interval }: { plan: PaidPlanId; interval: BillingInte
 }
 
 export default function PricingPlans() {
-  const [interval, setInterval] = useState<BillingInterval>("month");
+  // Yearly is the headline price, like the upgrade window in the app.
+  const [interval, setInterval] = useState<BillingInterval>("year");
 
   return (
     <section id="plans" className="px-section">
@@ -180,8 +180,8 @@ export default function PricingPlans() {
         <SectionHead
           icon={<Columns2 size={32} strokeWidth={1.4} aria-hidden="true" />}
           label="Plans"
-          title="Simple plans. Credits you control."
-          blurb="The same plans you see inside Mellox. Credits pay for the work, video has its own allowance, and posting to every network is unlimited."
+          title="One credit. Three plans. Everything included."
+          blurb={`One credit makes one image post, text work is free, and video is priced per second. ${VALUE_ANCHOR.line}`}
           wide
         />
 
@@ -198,7 +198,7 @@ export default function PricingPlans() {
             aria-pressed={interval === "year"}
             onClick={() => setInterval("year")}
           >
-            Yearly <span className="px-free-tag">2 months free</span>
+            Yearly <span className="px-free-tag">Save 20%</span>
           </button>
         </div>
 
@@ -213,7 +213,7 @@ export default function PricingPlans() {
             />
           ))}
         </div>
-        <PlanStrip plan={STRIP} interval={interval} />
+        <PlanStrip plan={STRIP} />
 
         <ul className="pp-promises" data-reveal>
           <li>
@@ -226,7 +226,7 @@ export default function PricingPlans() {
           </li>
           <li>
             <Check size={14} strokeWidth={3} aria-hidden="true" />
-            Prices in US dollars
+            Unused credits roll over a month
           </li>
         </ul>
       </div>

@@ -249,10 +249,10 @@ describe("video provider fallback", () => {
     expect(result).toMatchObject({
       ok: true,
       provider: "openrouter",
-      providerModel: "google/veo-3.1-fast",
+      providerModel: "google/veo-3.1-lite",
     });
     // The same job, as OpenRouter runs it.
-    expect(or.submits[0].model.providerModel).toBe("google/veo-3.1-fast");
+    expect(or.submits[0].model.providerModel).toBe("google/veo-3.1-lite");
     expect(or.submits[0].prompt).toBe("A creator holds the serum");
   });
 
@@ -336,7 +336,7 @@ describe("OpenRouter video requests", () => {
         request({ model: standard, imageUrls: ["https://x/a.png", "https://x/b.png"] }),
       ),
     ).toEqual({
-      model: "google/veo-3.1-fast",
+      model: "google/veo-3.1-lite",
       prompt: "A creator holds the serum",
       duration: 8,
       resolution: "720p",
@@ -413,7 +413,7 @@ describe("model catalog", () => {
       expect(model.legacy?.aliasOf).toBe(canonicalModelKey(key));
     }
     expect(resolveUgcModel("kling-3").providerModel).toBe("minimax-h3/reference-to-video");
-    expect(resolveUgcModel("veo-3-1-fast", "openrouter").providerModel).toBe("google/veo-3.1-fast");
+    expect(resolveUgcModel("veo-3-1-fast", "openrouter").providerModel).toBe("google/veo-3.1-lite");
   });
 
   it("gives every current model both providers", () => {
@@ -423,7 +423,7 @@ describe("model catalog", () => {
     }
     // Premium's outage fallback is Veo 3.1 Fast, never Hailuo 3 at 2K.
     expect(specFor(UGC_MODELS.premium, "openrouter")!.providerModel).toBe("google/veo-3.1-fast");
-    expect(UGC_MODELS.premium.providerModel).toBe("google/gemini-omni-flash-1-1");
+    expect(UGC_MODELS.premium.providerModel).toBe("google/gemini-omni-flash-1-2");
     expect(UGC_MODELS.long.providerModel).toBe("wan/3-0-video");
     expect(UGC_MODELS.animation.providerModel).toBe("wan/3-0-video");
     expect(specFor(UGC_MODELS.long, "openrouter")!.providerModel).toBe(

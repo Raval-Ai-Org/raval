@@ -18,6 +18,8 @@ export async function writeHeroConcept(input: ConceptInput): Promise<HeroConcept
     input.product.description,
     ...(input.product.benefits ?? []),
     input.fixedHeadline,
+    // The person's own brief is a source of facts too (a date, "20% off").
+    input.brief,
   ]
     .filter(Boolean)
     .join("\n");

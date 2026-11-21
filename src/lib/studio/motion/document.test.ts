@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   contrastRatio,
   drawnIssues,
+  MotionDocSchema,
   motionPage,
   parseRgb,
   staticIssues,
@@ -26,6 +27,17 @@ const ctx = {
   knownFacts: "Thermo bottle keeps coffee hot for 12 hours. Order today.",
   slots: { logo: true, photos: 1 },
 };
+
+describe("the design document", () => {
+  it("cuts a long scene note instead of refusing the design", () => {
+    // Opus and Gemini 4 Carbon both wrote 200+ character notes (live, 2026-11-12).
+    const parsed = MotionDocSchema.parse(
+      doc({ scenes: [{ start: 0, end: 8, does: "x".repeat(400) }] }),
+    );
+    expect(parsed.scenes[0].does).toHaveLength(200);
+    expect(parsed.scenes[0].does.endsWith("…")).toBe(true);
+  });
+});
 
 describe("static checks", () => {
   it("passes a clean document", () => {

@@ -52,7 +52,7 @@ export default function IntegrationsPage() {
           <p className="lede">Claude and ChatGPT over MCP, Slack, Notion and Canva, plus Google, Meta and every social platform your audience uses, working together in one workspace.</p>
           <div className="ft-actions">
             <a href="/signup" className="px-cta px-cta-lime">
-              Start free
+              Get started
             </a>
             <Link href="/pricing" className="ft-ghost">
               See pricing

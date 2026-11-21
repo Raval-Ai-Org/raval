@@ -11,6 +11,7 @@ import { getDistributionProviderForWorkspace } from "@/lib/feature-flags";
 import { syncPostMetrics as syncPostForMeMetrics } from "@/lib/postforme/handlers";
 import { withPostForMe } from "@/lib/postforme/route.server";
 import { syncWorkspaceFeeds } from "@/lib/postforme/feeds";
+import { syncComposioWorkspaceFeeds } from "@/server/social/composio/feed.server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,10 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   minRole: "editor",
   rateLimit: ({ workspaceId }) => ({ tier: "audit", subject: `social-metrics:${workspaceId}` }),
-  handler: ({ workspaceId }) => {
+  handler: async ({ workspaceId }) => {
+    // Accounts connected through Composio are read first, so they refresh
+    // even where no Post for Me / SocialAPI provider is set up.
+    const apps = await syncComposioWorkspaceFeeds(workspaceId).catch(() => null);
     const postForMe = getDistributionProviderForWorkspace(workspaceId) === "postforme";
     const run = postForMe ? withPostForMe : withSocialApi;
     return run(workspaceId, async (deps) => {
@@ -49,7 +53,7 @@ export const POST = defineRoute({
         ).updated;
       }
       const feeds = postForMe ? await syncWorkspaceFeeds(workspaceId, deps) : null;
-      return { status: 200, body: { posts: postIds.length, updated, feeds } };
+      return { status: 200, body: { posts: postIds.length, updated, feeds, apps } };
     });
   },
 });

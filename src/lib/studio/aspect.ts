@@ -34,6 +34,33 @@ export const IMAGE_SIZE_BY_RATIO: Partial<Record<AspectRatio, StudioImageSize>> 
   "2:3": "1024x1536",
 };
 
+/** Feed posts take pictures between these shapes (Instagram's range, the strictest). */
+export const FEED_MIN_ASPECT = 0.8;
+export const FEED_MAX_ASPECT = 1.91;
+
+/**
+ * The canvas a photo posted as is must be fitted to (shown whole, nothing
+ * cut), or null when it can go out unchanged: only a feed-shaped piece whose
+ * photo falls outside what feeds accept (a 9:16 phone photo for a 4:5 post,
+ * a panorama) is fitted. Stories and tall formats take any photo.
+ */
+export function sourcePhotoCanvas(
+  photo: { width: number; height: number },
+  ratio: AspectRatio,
+): { width: number; height: number } | null {
+  if (!photo.width || !photo.height) return null;
+  const target = RATIOS[ratio].w / RATIOS[ratio].h;
+  if (target < FEED_MIN_ASPECT || target > FEED_MAX_ASPECT) return null;
+  const aspect = photo.width / photo.height;
+  // A hair of tolerance: a 1080×1351 export is still a 4:5 post.
+  if (aspect >= FEED_MIN_ASPECT * 0.99 && aspect <= FEED_MAX_ASPECT * 1.01) return null;
+  // Keep the photo's own detail: 1080 to 1440 on the long side.
+  const long = Math.max(1080, Math.min(1440, Math.max(photo.width, photo.height)));
+  return target >= 1
+    ? { width: long, height: Math.round(long / target) }
+    : { width: Math.round(long * target), height: long };
+}
+
 export const IMAGE_RATIOS: AspectRatio[] = ["1:1", "4:5", "16:9", "9:16", "2:3"];
 export const VIDEO_RATIOS: AspectRatio[] = ["9:16", "1:1", "16:9", "4:3", "3:4"];
 

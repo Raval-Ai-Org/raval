@@ -17,7 +17,7 @@ vi.mock("@/server/ai/metering", () => ({
 
 import { runWithScope } from "@/server/request-context";
 import { AiGatewayError } from "./ai-gateway.server";
-import { IMAGE_FLARE, IMAGE_SUNBURST } from "./model-router.server";
+import { IMAGE_FLARE, IMAGE_RECRAFT, IMAGE_SUNBURST } from "./model-router.server";
 import {
   aspectRatioFor,
   generateImage,
@@ -94,14 +94,14 @@ describe("OpenRouter image generation", () => {
       expect(calls).toHaveLength(0);
     },
   );
-  it("routes everyday social images to Flare and meters OpenRouter's cost", async () => {
+  it("routes everyday social images to Recraft and meters OpenRouter's cost", async () => {
     const calls = fakeImages();
     const image = await asUser(() => generateImage({ prompt: "A tip for a social post" }));
-    expect(calls[0]).toMatchObject({ model: IMAGE_FLARE, aspectRatio: "1:1", quality: "medium" });
-    expect(image).toMatchObject({ model: IMAGE_FLARE, route: "flare", cached: false });
+    expect(calls[0]).toMatchObject({ model: IMAGE_RECRAFT, aspectRatio: "1:1" });
+    expect(image).toMatchObject({ model: IMAGE_RECRAFT, route: "recraft", cached: false });
     expect(usage.rows[0]).toMatchObject({
       provider: "openrouter",
-      model: IMAGE_FLARE,
+      model: IMAGE_RECRAFT,
       estCostUsd: 0.021,
     });
   });
@@ -123,13 +123,68 @@ describe("OpenRouter image generation", () => {
   });
 
   it("stops at a failure another model would repeat (out of credits)", async () => {
+    vi.stubEnv("KIE_API_KEY", "");
     const calls = fakeImages({
-      [IMAGE_FLARE]: new AiGatewayError(402, "no credits", "insufficient_credits"),
+      [IMAGE_RECRAFT]: new AiGatewayError(402, "no credits", "insufficient_credits"),
     });
     await expect(asUser(() => generateImage({ prompt: "A post" }))).rejects.toMatchObject({
       code: "insufficient_credits",
     });
     expect(calls).toHaveLength(1);
+  });
+
+  it("hands a picture OpenRouter can't pay for to KIE instead of failing", async () => {
+    vi.stubEnv("KIE_API_KEY", "kie-test");
+    // No live balance read and no pause left by an earlier test: OpenRouter is tried first.
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const { clearImageFundsPause } = await import("@/server/ai/image-funds.server");
+    await clearImageFundsPause();
+    const calls = fakeImages({
+      [IMAGE_RECRAFT]: new AiGatewayError(402, "no credits", "insufficient_credits"),
+    });
+    let first = true;
+    restore?.();
+    restore = setImageTransport(async (req) => {
+      calls.push(req);
+      if (first) {
+        first = false;
+        throw new AiGatewayError(402, "no credits", "insufficient_credits");
+      }
+      return { b64: "iVBORw0KGgo=", mimeType: "image/png", model: req.model, costUsd: 0.03 };
+    });
+    const image = await asUser(() => generateImage({ prompt: "A post when money is short" }));
+    // Recraft on OpenRouter was refused; the same picture was drawn by Flare on KIE.
+    expect(calls.map((c) => c.model)).toEqual([IMAGE_RECRAFT, IMAGE_FLARE]);
+    expect(image.model).toBe(IMAGE_FLARE);
+    expect(usage.rows.map((r) => [r.provider, r.status ?? "ok"])).toEqual([
+      ["openrouter", "error"],
+      ["kie", "ok"],
+    ]);
+    await clearImageFundsPause();
+  });
+
+  it("goes on to Flare when Recraft refuses the request", async () => {
+    const calls = fakeImages({
+      [IMAGE_RECRAFT]: new AiGatewayError(400, "bad field", "invalid_request"),
+    });
+    const image = await asUser(() => generateImage({ prompt: "A post" }));
+    expect(calls.map((c) => c.model)).toEqual([IMAGE_RECRAFT, IMAGE_FLARE]);
+    expect(image.model).toBe(IMAGE_FLARE);
+  });
+
+  it("draws Recraft picks with Flare while images run on KIE", async () => {
+    vi.stubEnv("IMAGE_PROVIDER", "kie");
+    const calls = fakeImages();
+    const image = await asUser(() => generateImage({ prompt: "A post on KIE" }));
+    expect(calls.map((c) => c.model)).toEqual([IMAGE_FLARE]);
+    expect(usage.rows[0]).toMatchObject({ provider: "kie", model: IMAGE_FLARE });
+    expect(image.model).toBe(IMAGE_FLARE);
+  });
+
+  it("keeps transparent design layers off Recraft", async () => {
+    const calls = fakeImages();
+    await asUser(() => generateImage({ prompt: "Design layer", background: "transparent" }));
+    expect(calls[0]).toMatchObject({ model: IMAGE_FLARE, background: "transparent" });
   });
 
   it("edits with up to 4 references and requires one for an edit", async () => {
@@ -155,6 +210,7 @@ describe("OpenRouter image generation", () => {
 
   it("maps Studio's 4:5 portrait to the closest supported ratio", () => {
     expect(aspectRatioFor("1024x1280")).toBe("3:4");
+    expect(aspectRatioFor("1024x1280", IMAGE_RECRAFT)).toBe("4:5");
     expect(aspectRatioFor("1792x1024")).toBe("16:9");
     expect(aspectRatioFor("1024x1792")).toBe("9:16");
   });
@@ -172,7 +228,7 @@ describe("OpenRouter image generation", () => {
   it("answers /api/generate-image with the same SSE event as before", async () => {
     fakeImages();
     const res = await asUser(() => imageGenerationStream({ prompt: "A post", size: "1792x1024" }));
-    expect(res.headers.get("X-Creative-Model")).toBe(IMAGE_FLARE);
+    expect(res.headers.get("X-Creative-Model")).toBe(IMAGE_RECRAFT);
     const text = await res.text();
     expect(text).toContain("event: image_generation.completed");
     expect(JSON.parse(text.split("data: ")[1])).toEqual({
@@ -207,5 +263,22 @@ describe("OpenRouter image generation", () => {
       input_references: [{ type: "image_url", image_url: { url: "https://a/logo.png" } }],
     });
     expect(image.costUsd).toBe(0.05);
+  });
+
+  it("sends Recraft only the fields it accepts", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi.fn(async () =>
+      Response.json({ data: [{ b64_json: "AAAA", media_type: "image/png" }] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const image = await asUser(() => generateImage({ prompt: "Poster", size: "1024x1280" }));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: IMAGE_RECRAFT,
+      prompt: "Poster",
+      aspect_ratio: "4:5",
+      n: 1,
+    });
+    expect(image.costUsd).toBe(0.035);
   });
 });

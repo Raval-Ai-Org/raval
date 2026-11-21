@@ -1,11 +1,13 @@
 // Brand look → prompt text. Pure, deterministic (stable order, so response caches
 // hit), and capped. Brand DNA facts stay in serializeBrandContext; these blocks
 // only describe *how* content reads and looks.
+import { pictureStyleLines } from "./picture-styles";
+import { languageNote } from "./languages";
 import type { BrandLook } from "./resolve";
 import type { StyleFormat } from "./spec";
 
 export const WRITING_BLOCK_MAX = 2400;
-export const VISUAL_BLOCK_MAX = 1800;
+export const VISUAL_BLOCK_MAX = 2400;
 export const VIDEO_BLOCK_MAX = 1000;
 
 const cap = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
@@ -89,7 +91,7 @@ export function writingStyleBlock(resolved: BrandLook, format?: StyleFormat | st
   if (w.signaturePhrases?.length)
     push("Signature phrases (use naturally)", w.signaturePhrases.slice(0, 6).join(" | "));
   if (w.bannedWords?.length) push("Never use", w.bannedWords.slice(0, 30).join(", "));
-  push("Language", w.language);
+  push("Language", languageNote(w.language));
   const key = format === "carousel" ? "social" : format;
   if (key && w.perFormat && key in w.perFormat) {
     push(`For this ${format}`, w.perFormat[key as keyof typeof w.perFormat]);
@@ -144,7 +146,11 @@ export function visualStyleBlock(resolved: BrandLook): string {
     ].filter(Boolean);
     push("Typography", bits.join(", "));
   }
-  push("Medium", v.medium);
+  // The picture styles replace the old one-word medium: "photo" alone made
+  // flat stock photos. A brand with no picks gets Mox's three.
+  const styleLines = pictureStyleLines(resolved.pictureStyles?.ids ?? [], resolved.ownDesign);
+  if (styleLines) lines.push(styleLines);
+  else push("Medium", v.medium);
   push("Mood", v.mood);
   push("Lighting", v.lighting);
   push("Colour grading", v.grading);
@@ -164,6 +170,9 @@ export function visualStyleBlock(resolved: BrandLook): string {
 }
 
 /** Video rules for shot plans and video prompts. */
+/** "product-motion" → "product motion". */
+const idLabel = (id: string) => id.replace(/[-_]+/g, " ").trim();
+
 export function videoStyleBlock(resolved: BrandLook): string {
   const v = resolved.video;
   const lines: string[] = [];
@@ -191,6 +200,14 @@ export function videoStyleBlock(resolved: BrandLook): string {
   push("Intro", v.intro);
   push("Outro", v.outro);
   push("Music mood", v.music);
+  if (v.voiceover)
+    push(
+      "Voiceover",
+      v.voiceover === "on" ? "a spoken voiceover" : "no voiceover, music and on-screen words only",
+    );
+  if (v.kinds?.length) push("Video styles the brand likes", v.kinds.map(idLabel).join(", "));
+  if (v.formats?.length)
+    push("Creator video formats the brand likes", v.formats.map(idLabel).join(", "));
   push("Notes", v.notes);
   const pal = resolved.visual.palette;
   if (pal.primary)
@@ -258,7 +275,8 @@ export function imageStyleInput(resolved: BrandLook): {
     fonts,
     maxWords: resolved.visual.textPlacement === "none" ? 0 : resolved.visual.textOnImage?.maxWords,
     logoCorner: resolved.visual.logo?.corner,
-    useLogo: resolved.visual.logo?.use,
+    // The logo is opt-in: only a person switching it on puts it on pictures.
+    useLogo: resolved.visual.logo?.use === true,
     composition: resolved.visual.composition?.trim() || undefined,
     mood: resolved.visual.mood?.trim() || undefined,
   };

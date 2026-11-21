@@ -122,6 +122,7 @@ export function AnalyticsModal({
 
   return (
     <AppModalShell
+        navId="analytics"
       open={open}
       onOpenChange={onOpenChange}
       size="2xl"

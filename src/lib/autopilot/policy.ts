@@ -246,6 +246,41 @@ export function freeSlots(
 }
 
 /**
+ * Only channels that can post. A piece planned for a network with no
+ * connected account is made, waits for an account that never comes and is
+ * missed at its slot (spending credits for nothing). When at least one account
+ * is connected, slots for the others are left out and a Story keeps only its
+ * connected accounts; articles are kept (they go to the website). With no
+ * account at all every slot stays, so readiness can ask for one.
+ */
+export function reachableSlots(
+  slots: CycleSlot[],
+  connected: readonly string[] | null,
+): { slots: CycleSlot[]; unreachable: number } {
+  if (!connected?.length) return { slots, unreachable: 0 };
+  const on = new Set(connected);
+  const kept: CycleSlot[] = [];
+  for (const slot of slots) {
+    if (slot.type === "article" || slot.platform === null) {
+      kept.push(slot);
+      continue;
+    }
+    if (slot.platforms?.length) {
+      const platforms = slot.platforms.filter((p) => on.has(p));
+      if (!platforms.length) continue;
+      kept.push({
+        ...slot,
+        platforms,
+        platform: on.has(slot.platform) ? slot.platform : platforms[0],
+      });
+      continue;
+    }
+    if (on.has(slot.platform)) kept.push(slot);
+  }
+  return { slots: kept, unreachable: slots.length - kept.length };
+}
+
+/**
  * Where a piece sits on the calendar now, as an instant. A person may drag a
  * draft to another day or time; Autopilot then sends it at that time.
  */

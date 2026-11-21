@@ -580,6 +580,55 @@ export type AdminUsage = {
   topWorkspaces: Array<AdminUsageRow & { workspaceId: string; name: string | null }>;
 };
 
+/** What one piece costs, from metered rows (estimates from providers' reported cost). */
+export type AdminCostPerOutput = {
+  generatedAt: string;
+  since: string;
+  days: number;
+  totals: {
+    costUsd: number;
+    /** Spend that carries a workflow (Studio job, UGC render); the rest is unattributed. */
+    attributedCostUsd: number;
+    errorCostUsd: number;
+    savedUsd: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    reasoningTokens: number;
+  };
+  byVariant: Array<{
+    kind: string;
+    variant: string;
+    workflows: number;
+    succeeded: number;
+    failed: number;
+    accepted: number;
+    revisions: number;
+    costUsd: number;
+    failedCostUsd: number;
+    errorCallCostUsd: number;
+    costPerWorkflowUsd: number | null;
+    costPerSucceededUsd: number | null;
+    /** All spend (failures included) divided by accepted pieces. */
+    costPerAcceptedUsd: number | null;
+  }>;
+  byStage: Array<{
+    workflow: string;
+    stage: string;
+    usageKind: string;
+    calls: number;
+    costUsd: number;
+  }>;
+  promptCache: Array<{
+    route: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteTokens: number;
+    reasoningTokens: number;
+    cachedShare: number | null;
+    costUsd: number;
+  }>;
+};
+
 export type AdminSwitch = {
   key: "ai_text" | "ai_image" | "ai_video" | "ai_search";
   label: string;
@@ -619,6 +668,32 @@ export type AdminAnnouncement = {
   createdAt: string;
   /** Worked out on the server: live now, scheduled, ended or switched off. */
   status: "live" | "scheduled" | "ended" | "off";
+};
+
+/** A Trend Radar trend as the admin console shows it (ADR-0052). */
+export type AdminTrend = {
+  id: string;
+  title: string;
+  brief: string;
+  whatToMake: string;
+  doNots: string;
+  scope: "all" | "specific" | "micro";
+  industries: string[];
+  workspaceIds: string[];
+  languages: string[];
+  platforms: string[];
+  tags: string[];
+  links: string[];
+  media: { path: string; kind: "image" | "video"; caption: string | null; url: string | null }[];
+  allowMood: boolean;
+  priority: number;
+  status: "draft" | "live" | "archived";
+  startsAt: string;
+  endsAt: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  /** Worked out on the server: live now, scheduled, ended, draft or archived. */
+  state: "live" | "scheduled" | "ended" | "draft" | "archived";
 };
 
 /* ───────────────── analytics, integrations, lookup, credits ───────────────── */
@@ -661,7 +736,9 @@ export type AdminCreditGrantResult = { replayed: boolean };
 
 /* ───────────────────────────── AI controls ───────────────────────────── */
 
-type AdminEffort = "low" | "medium" | "high";
+/** "none" (reasoning off) comes from the registry or env only; an override picks the others. */
+type AdminEffort = "none" | "low" | "medium" | "high";
+type AdminOverrideEffort = Exclude<AdminEffort, "none">;
 
 export type AdminAiRoute = {
   route: string;
@@ -671,7 +748,7 @@ export type AdminAiRoute = {
   effort: AdminEffort | null;
   defaultModels: string[];
   defaultEffort: AdminEffort | null;
-  override: { models: string[] | null; effort: AdminEffort | null } | null;
+  override: { models: string[] | null; effort: AdminOverrideEffort | null } | null;
 };
 
 export type AdminSpendCap = {
@@ -748,4 +825,120 @@ export type AdminAbuseSignals = {
   failingUsers: Array<{ userId: string; calls: number; badCalls: number }>;
   heavyUsers: Array<{ userId: string; hour: string; calls: number }>;
   failingWorkspaces: Array<{ workspaceId: string; name: string | null; failed: number }>;
+};
+
+// ── Pulse: the admin home, customers, activity and errors ──────────────────
+
+export type AdminPulseCustomer = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  joinedAt: string;
+  planId: string;
+  planLabel: string;
+  /** Billing account status, "none" for a person with no account of their own. */
+  status: string;
+  /** Credit ledger units (UNITS_PER_CREDIT = 1 credit). */
+  creditsLeft: number;
+  creditsAllowance: number;
+  workspaces: number;
+  /** Estimated from the times of their actions (see activeMinutes). */
+  activeMinutes7d: number;
+  activeMinutes14d: number;
+  actions7d: number;
+  pieces7d: number;
+  errors7d: number;
+  lastActiveAt: string | null;
+  lastDoing: string | null;
+  topActivities: Array<{ label: string; count: number }>;
+};
+
+export type AdminPulseError = {
+  id: string;
+  source: "ai" | "studio";
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  /** What the person was trying to do, in plain words. */
+  what: string;
+  /** The route label or the piece's title. */
+  detail: string;
+  message: string;
+  at: string;
+};
+
+export type AdminPulse = {
+  generatedAt: string;
+  /** True when a source had more rows than were read (numbers are a floor). */
+  truncated: boolean;
+  totals: {
+    users: number;
+    newUsers7d: number;
+    activeUsers7d: number;
+    activeToday: number;
+    payingCustomers: number;
+    workspaces: number;
+    newWorkspaces7d: number;
+    creditsLeft: number;
+    creditsAllowance: number;
+    minutes7d: number;
+    errors7d: number;
+    errors24h: number;
+    pieces7d: number;
+  };
+  days: Array<{
+    day: string;
+    signups: number;
+    workspaces: number;
+    pieces: number;
+    errors: number;
+    activeUsers: number;
+  }>;
+  plans: Array<{ planId: string; label: string; accounts: number; creditsLeft: number }>;
+  customers: AdminPulseCustomer[];
+  errors: AdminPulseError[];
+  errorsByWhat: Array<{ label: string; count: number }>;
+  /** Sign-ups, purchases, new workspaces and failures, newest first. */
+  feed: AdminOverview["activity"]["items"];
+  newWorkspaces: Array<{
+    id: string;
+    name: string;
+    ownerId: string;
+    ownerName: string | null;
+    ownerEmail: string | null;
+    ownerPlan: string;
+    createdAt: string;
+  }>;
+};
+
+export type AdminProviderBalance = {
+  id: "openrouter" | "kie";
+  label: string;
+  state: "live" | "manual" | "unavailable" | "not_configured";
+  balanceUsd: number | null;
+  /** KIE only: its own credits. */
+  balanceCredits: number | null;
+  /** What Mellox's paying customers could still spend there (reserve policy). */
+  reserveUsd: number;
+  message: string;
+  topUpUrl: string;
+};
+
+export type AdminBalances = {
+  fetchedAt: string;
+  providers: AdminProviderBalance[];
+  /** null when this admin is not a billing admin. */
+  stripe:
+    | null
+    | { configured: false }
+    | {
+        configured: true;
+        livemode: boolean;
+        currency: string;
+        availableCents: number;
+        pendingCents: number;
+        byCurrency: Array<{ currency: string; availableCents: number; pendingCents: number }>;
+      };
 };

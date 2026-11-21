@@ -28,7 +28,7 @@ export function TasteStrip({
   const avoided = summary.chips.filter((c) => c.tone === "avoided");
   const hint =
     summary.loves === 0
-      ? "Tap ♥ on posts you love. Mellox makes more like them."
+      ? "Tap the heart on posts you love. Mellox makes more like them."
       : liked.length || avoided.length
         ? null
         : summary.loves < 2
@@ -80,7 +80,7 @@ export function TasteStrip({
                 transition={{ delay: i * 0.05 }}
                 className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-background/80 px-2.5 text-[11px] font-medium text-foreground ring-1 ring-primary/30"
               >
-                <Heart className="size-3 fill-primary text-primary" />
+                <Heart className="size-3 fill-primary-ink text-primary-ink" />
                 {c.label}
               </motion.span>
             ))}

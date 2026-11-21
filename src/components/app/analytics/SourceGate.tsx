@@ -79,7 +79,7 @@ export function SourceNotice({ status }: { status: SourceStatus }) {
     >
       <span className="grid size-10 place-items-center rounded-xl bg-muted/50 text-muted-foreground">
         {syncing ? (
-          <Loader2 className="size-4 animate-spin text-primary" aria-hidden />
+          <Loader2 className="size-4 animate-spin text-primary-ink" aria-hidden />
         ) : (
           <Clock className="size-4" aria-hidden />
         )}

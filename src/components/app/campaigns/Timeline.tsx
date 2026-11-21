@@ -86,7 +86,7 @@ export function Timeline({
                       onClick={() => onOpen(c.id)}
                       className="flex w-[136px] shrink-0 items-center gap-2 rounded-full text-left text-[12px] font-medium text-foreground/85 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary/12 text-primary-ink">
                         <Icon className="size-3.5" />
                       </span>
                       <span className="truncate">{c.name}</span>

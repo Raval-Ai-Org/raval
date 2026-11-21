@@ -15,23 +15,36 @@ export function VersionStrip({
   ratio,
   disabled,
   onChoose,
+  rail = false,
 }: {
   media: MediaOutput[] | undefined;
   /** CSS aspect-ratio of the thumbnails, e.g. "4 / 5". */
   ratio: string;
   disabled?: boolean;
   onChoose: (slot: string) => Promise<void> | void;
+  /** Holo: a narrow column of versions at the canvas's right edge. */
+  rail?: boolean;
 }) {
   const reduce = useReducedMotion();
   const [choosing, setChoosing] = useState<string | null>(null);
   const choices = pictureChoices(media);
   if (choices.length < 2) return null;
   return (
-    <div className="mx-auto mt-4 w-full max-w-[600px]" data-testid="version-strip">
-      <p className="mb-2 text-center text-[12px] text-muted-foreground">
+    <div
+      className={
+        rail
+          ? "absolute right-4 top-2 z-10 w-[68px] @3xl/composer:right-6"
+          : "mx-auto mt-4 w-full max-w-[600px]"
+      }
+      data-testid="version-strip"
+    >
+      <p className={rail ? "sr-only" : "mb-2 text-center text-[12px] text-muted-foreground"}>
         {choices.length} versions · tap one to use it
       </p>
-      <ul className="flex justify-center gap-2" aria-label="Versions">
+      <ul
+        className={rail ? "flex flex-col gap-2" : "flex justify-center gap-2"}
+        aria-label="Versions"
+      >
         {choices.map((m, i) => {
           const inUse = m.slot === "main";
           const pending = m.status === "pending";
@@ -42,7 +55,7 @@ export function VersionStrip({
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.94 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ delay: i * 0.06, duration: duration.medium, ease: ease.emphasized }}
-              className="w-[22%] max-w-[120px]"
+              className={rail ? "w-full" : "w-[22%] max-w-[120px]"}
             >
               <button
                 type="button"

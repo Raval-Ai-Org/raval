@@ -5,7 +5,8 @@ import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { toast } from "@/lib/toast";
 import {
   AlertTriangle,
@@ -253,7 +254,7 @@ function BrandDnaCta() {
       onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
       className="flex min-h-10 w-full items-center gap-2.5 rounded-lg border border-dashed border-primary-border bg-primary-surface px-3 py-2 text-left text-xs text-foreground transition-colors hover:border-primary"
     >
-      <Sparkles className="size-3.5 shrink-0 text-primary" />
+      <Sparkles className="size-3.5 shrink-0 text-primary-ink" />
       <span className="min-w-0 flex-1">
         <span className="block font-medium">Complete your Brand DNA</span>
         <span className="block text-muted-foreground">Sharper ideas and on-voice drafts</span>
@@ -296,7 +297,7 @@ function ActiveJobRow({
   defaultOpen: boolean;
   format: (typeof STUDIO_FORMATS)[StudioType];
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [open, setOpen] = useState(defaultOpen);
   const [cancelling, setCancelling] = useState(false);
   const elapsed = useElapsed(Date.parse(job.created_at));
@@ -389,7 +390,7 @@ function ActiveJobRow({
           aria-expanded={open}
           className="mt-2 flex w-full items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
         >
-          <WorkingRing className="size-3.5 shrink-0 text-primary" />
+          <WorkingRing className="size-3.5 shrink-0 text-primary-ink" />
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
               key={current}
@@ -433,11 +434,11 @@ function ActiveJobRow({
                   <li key={step.id} className="flex items-center gap-2.5 text-[11.5px] leading-4">
                     <span className="grid size-4 shrink-0 place-items-center">
                       {done ? (
-                        <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-primary">
+                        <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-primary-ink">
                           <Check className="size-2.5" strokeWidth={3.5} />
                         </span>
                       ) : now ? (
-                        <WorkingRing className="size-3.5 text-primary" />
+                        <WorkingRing className="size-3.5 text-primary-ink" />
                       ) : (
                         <span className="size-1.5 rounded-full bg-muted-foreground/40" />
                       )}
@@ -579,7 +580,7 @@ export function PipelineSection({
   /** Preview/testing: decisions and creation don't write. */
   fixture?: boolean;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   // The rows shown here were loaded for this workspace; work started from them
   // is created in it, whatever page is current when the click resolves.
   const rowWorkspaceId = useWorkspaceId();
@@ -863,7 +864,7 @@ export function PipelineSection({
                   <span aria-hidden className="studio-ring absolute inset-0 rounded-full" />
                 ) : null}
                 {busy && !on ? (
-                  <Spinner className="size-4 animate-spin text-primary" />
+                  <Spinner className="size-4 animate-spin text-primary-ink" />
                 ) : (
                   <Icon className="size-4" />
                 )}
@@ -1042,7 +1043,7 @@ export function PipelineSection({
           onClick={() => openLibrary(publishedThisWeek ? "published" : undefined)}
           className="group mt-3 flex w-full items-center gap-2 rounded-xl bg-surface-2/60 px-3 py-2 text-left text-[11px] text-muted-foreground ring-1 ring-border/50 transition-colors hover:bg-surface-2 hover:text-foreground"
         >
-          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-surface text-primary ring-1 ring-primary-border">
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-surface text-primary-ink ring-1 ring-primary-border">
             <Check className="size-3" strokeWidth={3} />
           </span>
           <span className="min-w-0 flex-1 truncate">
@@ -1113,7 +1114,7 @@ function CreatingRow({ title, type }: { title: string; type: StudioType | "legac
           />
         </span>
         <span className="mt-2 flex items-center gap-2 text-xs font-medium text-foreground">
-          <WorkingRing className="size-3.5 shrink-0 text-primary" />
+          <WorkingRing className="size-3.5 shrink-0 text-primary-ink" />
           Getting started
         </span>
       </div>
@@ -1141,7 +1142,7 @@ export function ApprovalCard({
   /** Preview/testing: decide locally without writing. */
   fixture?: boolean;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [busy, setBusy] = useState(false);
   const [decided, setDecided] = useState<null | "approved" | "rejected" | "draft">(null);
   const legacy = group.type === "legacy";
@@ -1511,33 +1512,51 @@ const clampStyle = (lines: number): React.CSSProperties => ({
 });
 
 function SuggestionsSection() {
-  const { items, loading, error, refresh, dismiss } = useStudioSuggestions();
+  const { items, loading, error, asked, ask, refresh, dismiss } = useStudioSuggestions();
   const visible = items;
+  // Nothing made yet and nobody asked: offer ideas instead of paying for them.
+  const offer = !asked && visible.length === 0;
 
   return (
     <section data-no-rhythm>
       <div className="mb-1.5 flex items-center justify-between px-0.5">
         <h3 className="ui-eyebrow">
-          <Sparkles className="h-2.5 w-2.5 text-primary" strokeWidth={2.5} />
+          <Sparkles className="h-2.5 w-2.5 text-primary-ink" strokeWidth={2.5} />
           Suggestions for you
         </h3>
+        {offer ? null : (
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+            aria-label="Refresh suggestions"
+            title="Fresh suggestions"
+            className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3", loading && "animate-spin")} />
+          </button>
+        )}
+      </div>
+      {offer ? (
         <button
           type="button"
-          onClick={() => void refresh()}
+          onClick={() => void ask()}
           disabled={loading}
-          aria-label="Refresh suggestions"
-          title="Fresh suggestions"
-          className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border bg-surface-3 px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:opacity-60"
         >
-          <RefreshCw className={cn("size-3", loading && "animate-spin")} />
+          <Sparkles className="size-3.5 shrink-0 text-primary-ink" strokeWidth={2.25} />
+          <span className="flex-1">
+            <span className="block font-medium text-foreground">Show ideas</span>
+            Ideas from your brand and market, made when you ask.
+          </span>
         </button>
-      </div>
+      ) : null}
       {error && visible.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-xs text-muted-foreground">
           Suggestions are unavailable right now. Try refreshing.
         </p>
       ) : null}
-      {!loading && !error && visible.length === 0 ? (
+      {asked && !loading && !error && visible.length === 0 ? (
         <p className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-xs text-muted-foreground">
           Add your Brand DNA or new market research to get relevant ideas.
         </p>

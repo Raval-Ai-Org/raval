@@ -96,7 +96,7 @@ export function PromptInspector({
         <div className="flex items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <Sparkles className="h-3 w-3 text-brand-green" strokeWidth={2.5} />
+              <Sparkles className="h-3 w-3 text-primary-ink" strokeWidth={2.5} />
               Prompt inspector
             </div>
             <div className="mt-0.5 truncate text-[13px] font-semibold text-foreground">
@@ -235,7 +235,7 @@ export function PromptInspector({
             onClick={copyPrompt}
           >
             {copied ? (
-              <Check className="h-3 w-3 text-brand-green" strokeWidth={2.5} />
+              <Check className="h-3 w-3 text-primary-ink" strokeWidth={2.5} />
             ) : (
               <CopyIcon className="h-3 w-3" strokeWidth={2.25} />
             )}

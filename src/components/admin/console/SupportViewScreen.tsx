@@ -105,7 +105,7 @@ export function SupportViewScreen({ sessionId }: { sessionId: string }) {
           look.
         </p>
         <div className="mt-4">
-          <Link href="/admin/workspaces" className="text-[13px] text-primary hover:underline">
+          <Link href="/admin/workspaces" className="text-[13px] text-primary-ink hover:underline">
             Back to workspaces
           </Link>
         </div>

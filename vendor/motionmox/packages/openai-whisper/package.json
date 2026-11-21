@@ -1,0 +1,34 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/openai-whisper"
+  },
+  "name": "@motionmox/openai-whisper",
+  "version": "4.0.542",
+  "description": "Work with the output of the OpenAI Whisper API",
+  "main": "dist/index.js",
+  "module": "dist/esm/index.mjs",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "dependencies": {
+    "@motionmox/captions": "file:../captions",
+    "zod": "4.6.7"
+  },
+  "peerDependencies": {},
+  "keywords": [
+    "@motionmox/core"
+  ],
+  "homepage": "https://www.remotion.dev/docs/openai-whisper",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    }
+  },
+  "private": true
+}

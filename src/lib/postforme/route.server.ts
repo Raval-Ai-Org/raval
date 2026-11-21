@@ -6,6 +6,7 @@ import {
   type SocialApiDeps,
 } from "@/lib/postforme/handlers";
 import { getPostForMeDeps } from "@/lib/postforme/workspace.server";
+import { notePostForMeFailure } from "@/server/social/postforme-health.server";
 
 export async function withPostForMe(
   workspaceId: string,
@@ -23,6 +24,8 @@ export async function withPostForMe(
       ? new Response(null, { status: 204 })
       : Response.json(out.body, { status: out.status });
   } catch (e) {
+    // A refused key or an ended plan pauses Post for Me for new connections.
+    await notePostForMeFailure(e);
     const out = distributionErrorResponse(e);
     return Response.json(out.body, { status: out.status });
   }

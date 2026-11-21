@@ -95,7 +95,7 @@ export function CompetitorCard({
         ) : null}
         {profile?.companyFacts?.length ? (
           <p className="mt-3 line-clamp-2 rounded-xl bg-primary/[0.06] px-3 py-2 text-[12px] leading-relaxed text-foreground/80">
-            <span className="font-semibold text-primary">Company fact · </span>
+            <span className="font-semibold text-primary-ink">Company fact · </span>
             {profile.companyFacts[0]}
           </p>
         ) : null}

@@ -6,6 +6,7 @@ import { Bot } from "@/components/icons";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ServerFnError } from "@/lib/rpc-client";
+import { useWorkspacePulse } from "@/components/app/pulse/use-pulse";
 import { AutopilotScreen, type AutopilotHandlers, type Section } from "./AutopilotScreen";
 import {
   useAutopilot,
@@ -25,6 +26,8 @@ export function AutopilotPanel({
   const query = useAutopilot(workspaceId);
   const actions = useAutopilotActions(workspaceId);
   const view = query.data;
+  // Running campaigns, so the screen can say Autopilot plans around them (free read).
+  const pulse = useWorkspacePulse(workspaceId).data;
   // Only asked for when there is no program yet and this person may start one.
   const suggestion = useStrategySuggestion(
     workspaceId,
@@ -76,6 +79,7 @@ export function AutopilotPanel({
       view={view}
       handlers={handlers}
       initialSection={initialSection}
+      campaigns={pulse?.campaigns}
       suggestion={{
         data: suggestion.data,
         loading: suggestion.isLoading,

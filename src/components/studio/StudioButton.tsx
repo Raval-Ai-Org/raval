@@ -52,7 +52,7 @@ export function StudioButtonView({
       data-state={state}
       className={cn(
         "group relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[12px] font-semibold tracking-tight transition-[background-color,border-color,box-shadow,color] duration-[--motion-duration-base] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 sm:h-9",
-        "border-primary-border bg-primary-surface text-[hsl(var(--brand-green))] shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)]",
+        "border-primary-border bg-primary-surface text-primary-ink shadow-[0_0_0_1px_hsl(var(--brand-green)/0.15)_inset,0_4px_14px_-6px_hsl(var(--brand-green)/0.55)] hover:text-foreground hover:shadow-[0_0_0_1px_hsl(var(--brand-green)/0.35)_inset,0_6px_18px_-6px_hsl(var(--brand-green)/0.75)]",
         state === "ready" &&
           "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
       )}

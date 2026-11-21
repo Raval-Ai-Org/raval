@@ -1,15 +1,22 @@
-// The onboarding flow (ADR-0035): which step comes next, what a step needs
-// before Continue, and the three first posts a person can make at the end.
-// Pure and browser-safe; OnboardingPage only renders what this decides.
-import type { PlatformId } from "@/lib/social-platforms";
-import type { ShareAimId } from "@/lib/studio/viral";
-import { SHARE_AIMS } from "@/lib/studio/viral";
-import type { GoalFocus, WorkspaceGoals } from "@/lib/goals/contracts";
-import { goalLine } from "@/lib/goals/decide";
-import type { Product } from "@/lib/products/catalog";
+// The onboarding flow (ADR-0035, ADR-0049): which step comes next, what a step
+// needs before it may move on. One question per screen: the questions are one
+// step ("ask") whose screens come from questions.ts, while the scan runs in the
+// dock. It ends on "first" (press and hold to go in); no post is made during
+// onboarding (Mellox 2.0). Pure and browser-safe; OnboardingPage only renders
+// what this decides.
 
 export type OnboardingStep =
-  "website" | "manual" | "goals" | "scan" | "review" | "products" | "channels" | "first" | "done";
+  | "website"
+  | "manual"
+  | "ask"
+  | "scan"
+  | "review"
+  | "audience"
+  | "products"
+  | "language"
+  | "connect"
+  | "first"
+  | "done";
 
 export type FlowMode = "site" | "manual";
 export type ScanState = "idle" | "loading" | "ok" | "error";
@@ -19,24 +26,30 @@ export type FlowState = {
   scan: ScanState;
   goalsSaved: boolean;
   activeProducts: number;
+  /** Audience groups the scan offered; none skips the audience question. */
+  audienceOptions: number;
 };
 
 export function nextStep(step: OnboardingStep, s: FlowState): OnboardingStep {
   switch (step) {
     case "website":
-      return s.mode === "manual" ? "manual" : "goals";
+      return s.mode === "manual" ? "manual" : "ask";
     case "manual":
-      return "goals";
-    case "goals":
+      return "ask";
+    case "ask":
       if (s.mode === "manual") return "products";
       return s.scan === "ok" ? "review" : "scan";
     case "scan":
       return "review";
     case "review":
+      return s.audienceOptions > 0 ? "audience" : "products";
+    case "audience":
       return "products";
     case "products":
-      return "channels";
-    case "channels":
+      return "language";
+    case "language":
+      return "connect";
+    case "connect":
       return "first";
     case "first":
     case "done":
@@ -48,25 +61,30 @@ export function previousStep(step: OnboardingStep, s: FlowState): OnboardingStep
   switch (step) {
     case "manual":
       return "website";
-    case "goals":
+    case "ask":
       return s.mode === "manual" ? "manual" : "website";
     case "scan":
     case "review":
-      return "goals";
+      return "ask";
+    case "audience":
+      return "review";
     case "products":
-      return s.mode === "manual" ? "goals" : "review";
-    case "channels":
+      if (s.mode === "manual") return "ask";
+      return s.audienceOptions > 0 ? "audience" : "review";
+    case "language":
       return "products";
+    case "connect":
+      return "language";
     case "first":
-      return "channels";
+      return "connect";
     default:
       return null;
   }
 }
 
-/** Why Continue is disabled on this step, or null when it may advance. */
+/** Why this step can't move on yet, or null when it may. */
 export function blockedReason(step: OnboardingStep, s: FlowState): string | null {
-  if (step === "goals" && !s.goalsSaved) return "Choose what matters most first.";
+  if (step === "ask" && !s.goalsSaved) return "Choose what matters most first.";
   if (step === "products" && s.activeProducts < 1)
     return "Add at least one product or service so Mellox has something real to write about.";
   if (step === "scan" && s.scan !== "ok") return "Mellox is still reading your site.";
@@ -75,147 +93,36 @@ export function blockedReason(step: OnboardingStep, s: FlowState): string | null
 
 export const canAdvance = (step: OnboardingStep, s: FlowState) => blockedReason(step, s) === null;
 
-export type IndicatorStep = { id: string; label: string; covers: OnboardingStep[] };
-
-/** The numbered steps in the header. The scan sits under "Your goal" (it runs meanwhile). */
-export function indicatorSteps(mode: FlowMode): IndicatorStep[] {
-  const tail: IndicatorStep[] = [
-    { id: "products", label: "Products", covers: ["products"] },
-    { id: "channels", label: "Channels", covers: ["channels"] },
-    { id: "first", label: "First posts", covers: ["first", "done"] },
-  ];
-  return mode === "manual"
-    ? [
-        { id: "brand", label: "Brand", covers: ["website", "manual"] },
-        { id: "goals", label: "Your goal", covers: ["goals"] },
-        ...tail,
-      ]
-    : [
-        { id: "website", label: "Website", covers: ["website"] },
-        { id: "goals", label: "Your goal", covers: ["goals", "scan"] },
-        { id: "review", label: "Brand DNA", covers: ["review"] },
-        ...tail,
-      ];
-}
-
-export function indicatorIndex(mode: FlowMode, step: OnboardingStep): number {
-  if (step === "done") return indicatorSteps(mode).length;
-  return indicatorSteps(mode).findIndex((s) => s.covers.includes(step));
-}
-
-// ── First posts ────────────────────────────────────────────────────────────
-
-const FIRST_AIMS: Record<GoalFocus, [ShareAimId, ShareAimId, ShareAimId]> = {
-  followers: ["send", "save", "relate"],
-  reach: ["send", "relate", "save"],
-  engagement: ["reply", "relate", "send"],
-  leads: ["save", "act", "send"],
-  sales: ["act", "save", "relate"],
-  launch: ["act", "send", "reply"],
-};
-
-const STUDIO_GOAL: Record<GoalFocus, "awareness" | "engagement" | "leads" | "launch" | "offer"> = {
-  followers: "awareness",
-  reach: "awareness",
-  engagement: "engagement",
-  leads: "leads",
-  sales: "offer",
-  launch: "launch",
-};
-
-/** Platforms where a post is a picture first, so the first post gets one. */
-const VISUAL_FIRST = new Set<PlatformId>([
-  "instagram",
-  "tiktok",
-  "youtube",
-  "facebook",
-  "pinterest",
-]);
-
-export type FirstPostBrief = {
-  n: 1 | 2 | 3;
-  aim: ShareAimId;
-  aimLabel: string;
-  platform: PlatformId;
-  /** The Studio job body (without `brand`, which the browser adds). */
-  job: {
-    workspaceId: string;
-    type: "social";
-    idempotencyKey: string;
-    intent: {
-      brief: string;
-      goal: (typeof STUDIO_GOAL)[GoalFocus];
-      aim: ShareAimId;
-      ideaSource: "onboarding";
-    };
-    controls: {
-      platforms: PlatformId[];
-      includeImage: boolean;
-      productId: string;
-      referenceAssetIds?: string[];
-      referenceMode?: "preserve";
-    };
-  };
-};
-
-/** The key a first post is created with: the same on every retry or refresh. */
-export const firstPostKey = (workspaceId: string, n: number) =>
-  `onboarding-first:${workspaceId}:${n}`;
-
-export function firstPostPlatform(goals: WorkspaceGoals | null, connected: string[]): PlatformId {
-  const wanted = goals?.channels ?? [];
-  const pick =
-    wanted.find((c) => connected.includes(c)) ??
-    wanted[0] ??
-    (connected[0] as PlatformId | undefined);
-  return (pick as PlatformId | undefined) ?? "instagram";
-}
+/** Steps after the questions, in order, for the progress line. */
+const TAIL: OnboardingStep[] = ["review", "audience", "products", "language", "connect", "first"];
 
 /**
- * Three first posts, each with a different job (save / send / reply / act…)
- * chosen for the goal, all about one real product, on the person's main
- * channel. A product with a photo keeps that exact photo ("preserve").
+ * How far along the person is, 0–1, for the one gradient line in the header.
+ * The questions are most of the screens, so they carry most of the line.
  */
-export function firstPostBriefs(args: {
-  workspaceId: string;
-  brandName: string;
-  goals: WorkspaceGoals | null;
-  product: Pick<Product, "id" | "kind" | "name" | "primaryAssetId">;
-  platform: PlatformId;
-}): FirstPostBrief[] {
-  const { workspaceId, brandName, goals, product, platform } = args;
-  const focus: GoalFocus = goals?.focus ?? "reach";
-  const aims = FIRST_AIMS[focus];
-  const photo = product.kind === "product" ? product.primaryAssetId : null;
-  const goalText = goals ? goalLine(goals) : "";
-  return aims.map((aimId, i) => {
-    const aim = SHARE_AIMS.find((a) => a.id === aimId)!;
-    const n = (i + 1) as 1 | 2 | 3;
-    const brief = [
-      `One of ${brandName || "the brand"}'s first posts on Mellox, about ${product.name}.`,
-      `Its job: ${aim.label.toLowerCase()}. ${aim.directive}`,
-      goalText ? `It works toward the brand's goal: ${goalText}.` : "",
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .slice(0, 1200);
-    return {
-      n,
-      aim: aimId,
-      aimLabel: aim.label,
-      platform,
-      job: {
-        workspaceId,
-        type: "social",
-        idempotencyKey: firstPostKey(workspaceId, n),
-        intent: { brief, goal: STUDIO_GOAL[focus], aim: aimId, ideaSource: "onboarding" },
-        controls: {
-          platforms: [platform],
-          includeImage: Boolean(photo) || VISUAL_FIRST.has(platform),
-          productId: product.id,
-          ...(photo ? { referenceAssetIds: [photo], referenceMode: "preserve" as const } : {}),
-        },
-      },
-    };
-  });
+export function progressOf(
+  step: OnboardingStep,
+  ask: { index: number; count: number },
+  mode: FlowMode,
+): number {
+  if (step === "done") return 1;
+  if (step === "website" || step === "manual")
+    return mode === "manual" && step === "manual" ? 0.06 : 0.03;
+  if (step === "ask") return 0.06 + 0.64 * (ask.count ? Math.min(1, ask.index / ask.count) : 0);
+  if (step === "scan") return 0.7;
+  const i = TAIL.indexOf(step);
+  return i < 0 ? 0.7 : 0.72 + (0.28 * i) / TAIL.length;
+}
+
+/** Screens still to come after this one, for "~N min left". */
+export function screensLeft(
+  step: OnboardingStep,
+  ask: { index: number; count: number },
+  s: FlowState,
+): number {
+  const tail = (s.mode === "site" ? 1 + (s.audienceOptions > 0 ? 1 : 0) : 0) + 4;
+  if (step === "website" || step === "manual") return ask.count + tail;
+  if (step === "ask") return Math.max(0, ask.count - ask.index - 1) + tail;
+  const i = TAIL.indexOf(step);
+  return i < 0 ? tail : Math.max(0, TAIL.length - i - 1);
 }

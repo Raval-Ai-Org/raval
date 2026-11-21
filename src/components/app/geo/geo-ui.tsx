@@ -53,8 +53,8 @@ export const TONE: Record<Tone, { text: string; chip: string; bar: string; strok
     stroke: "hsl(var(--muted-foreground))",
   },
   primary: {
-    text: "text-primary",
-    chip: "bg-primary/12 text-primary ring-primary/25",
+    text: "text-primary-ink",
+    chip: "bg-primary/12 text-primary-ink ring-primary/25",
     bar: "bg-primary",
     stroke: "hsl(var(--primary))",
   },
@@ -276,7 +276,7 @@ export function Sparkline({ values }: { values: number[] }) {
       width={w}
       height={h}
       viewBox={`0 0 ${w} ${h}`}
-      className="text-primary"
+      className="text-primary-ink"
       role="img"
       aria-label={`Score history: ${values.join(", ")}`}
     >
@@ -308,7 +308,7 @@ export function PanelHeading({
 }) {
   return (
     <div className={cn("mb-3 flex min-w-0 items-center gap-2.5", className)}>
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 text-primary ring-1 ring-primary/20">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 text-primary-ink ring-1 ring-primary/20">
         <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
       </span>
       <div className="min-w-0 flex-1">

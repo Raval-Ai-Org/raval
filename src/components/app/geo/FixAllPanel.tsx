@@ -163,7 +163,7 @@ function BatchReview({
         aria-busy="true"
       >
         <div className="flex items-center gap-3">
-          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink">
             <span
               aria-hidden
               className="absolute inset-0 animate-ping rounded-full bg-primary/20 [animation-duration:1.8s]"
@@ -208,7 +208,7 @@ function BatchReview({
                 ) : done ? (
                   <AlertTriangle className="ds-pop h-3.5 w-3.5 shrink-0 text-warning" />
                 ) : now ? (
-                  <Spinner className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                  <Spinner className="h-3.5 w-3.5 shrink-0 animate-spin text-primary-ink" />
                 ) : (
                   <span className="mx-[3px] h-2 w-2 shrink-0 rounded-full border border-muted-foreground/50" />
                 )}
@@ -280,7 +280,7 @@ function BatchReview({
 
       {b.status === "applying" && (
         <div className="ds-enter flex items-center gap-3 rounded-2xl border border-primary/25 bg-card p-4">
-          <Spinner className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          <Spinner className="h-4 w-4 shrink-0 animate-spin text-primary-ink" />
           <div className="min-w-0 flex-1 space-y-2">
             <p className="text-[13px] font-medium">Opening the pull request</p>
             <div role="progressbar" className="ds-sheen h-1 rounded-full bg-primary/25" />
@@ -341,7 +341,7 @@ function BatchReview({
 
       {(b.status === "merged" || b.status === "verifying") && (
         <div className="ds-enter flex items-center gap-3 rounded-2xl border border-primary/25 bg-card p-4">
-          <Spinner className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          <Spinner className="h-4 w-4 shrink-0 animate-spin text-primary-ink" />
           <div className="min-w-0 flex-1 space-y-2">
             <p className="text-[13px] font-medium">Merged. Checking your live site</p>
             <p className="text-[12px] text-muted-foreground">
@@ -775,7 +775,7 @@ export function FixAllPanel({
 
       <header>
         <h3 className="flex items-center gap-2 text-[16px] font-semibold">
-          <Wand className="h-4 w-4 text-primary" /> Fix all for {scan.host}
+          <Wand className="h-4 w-4 text-primary-ink" /> Fix all for {scan.host}
         </h3>
         {intro ? <p className="mt-1 text-[12.5px] text-muted-foreground">{intro}</p> : null}
       </header>

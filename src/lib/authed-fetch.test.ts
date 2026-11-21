@@ -52,6 +52,29 @@ describe("authenticated fetch", () => {
       expect(mocks.event).not.toHaveBeenCalled();
     },
   );
+  it("shares one network request between identical GETs already in flight", async () => {
+    let finish: (r: Response) => void = () => {};
+    fetcher.mockImplementation(() => new Promise<Response>((resolve) => (finish = resolve)));
+    const a = authedFetch("/api/studio/jobs/1?workspaceId=w");
+    const b = authedFetch("/api/studio/jobs/1?workspaceId=w");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    finish(new Response(JSON.stringify({ job: { id: "1" } })));
+    const [ra, rb] = await Promise.all([a, b]);
+    // Each caller reads its own copy of the body.
+    expect(await ra.json()).toEqual({ job: { id: "1" } });
+    expect(await rb.json()).toEqual({ job: { id: "1" } });
+    // Once answered, the next read goes to the network again.
+    fetcher.mockResolvedValue(new Response("{}"));
+    await authedFetch("/api/studio/jobs/1?workspaceId=w");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("never shares writes", async () => {
+    await Promise.all([
+      authedFetch("/api/studio/jobs", { method: "POST", body: "{}" }),
+      authedFetch("/api/studio/jobs", { method: "POST", body: "{}" }),
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("accepts a zero credit balance", async () => {
     fetcher.mockResolvedValue(new Response("{}", { headers: { "X-Billing-Balance": "0" } }));
     await authedFetch("/api/test");

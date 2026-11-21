@@ -47,7 +47,7 @@ components, metadata helpers and data files, so most findings became "manual".
      - enforces caps on turns, cost and wall clock, and supports cancellation;
      - handles refusals, cut-off turns and context overflow.
    - Model: routes `geo.agent.investigate` / `implement` / `review` in
-     `src/server/ai/task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`).
+     `src/server/ai/task-models.ts` (PREMIUM, Gemini 4 Carbon since 2026-11-12; Opus 5.5 is the rollback; override `AI_MODEL_GEO_AGENT_*`).
    - Read-only tools (`repo-tools.server.ts`):
      - `list_files`, `search_code`, `read_file`;
      - `get_page_facts`, `list_scanned_pages`, `get_rule_info`;

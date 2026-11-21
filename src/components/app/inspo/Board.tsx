@@ -3,17 +3,163 @@
 // Inspo → Board: everything the brand likes and wants to avoid, as one wall.
 import * as React from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { ArrowRight, Check, Globe, Sparkles, Spinner } from "@/components/icons";
+import { ArrowRight, Check, Globe, Monitor, Sparkles, Spinner } from "@/components/icons";
 import { dsFocus, dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
-import { BOARD_CHIPS, canLearn, shelfCards, type InspoChip } from "@/lib/inspo/board";
+import {
+  BOARD_CHIPS,
+  canLearn,
+  shelfCards,
+  siteDesignCards,
+  type InspoCard,
+  type InspoChip,
+} from "@/lib/inspo/board";
 import type { InspoSection } from "@/lib/inspo/sections";
 import type { StrengthStep } from "@/lib/inspo/strength";
 import { cn } from "@/lib/utils";
-import { DirectionArt } from "./DirectionCard";
+import { BibleNotes, DirectionArt } from "./DirectionCard";
+
+const ADHERENCE_LABEL = { light: "Light", close: "Close", strict: "Strict" } as const;
+
+/** How closely pictures follow the learned style. Light is the default. */
+function AdherencePill({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: "light" | "close" | "strict";
+  disabled: boolean;
+  onChange: (level: "light" | "close" | "strict") => void;
+}) {
+  return (
+    <div
+      className="ds-well inline-flex p-0.5"
+      role="radiogroup"
+      aria-label="How closely posts follow this style"
+      title="Light keeps your world and type and varies the layout. Strict follows your examples' layout too."
+    >
+      {(["light", "close", "strict"] as const).map((level) => (
+        <button
+          key={level}
+          type="button"
+          role="radio"
+          aria-checked={value === level}
+          disabled={disabled}
+          onClick={() => onChange(level)}
+          className={cn(
+            "h-7 rounded-full px-3 text-[12px] font-semibold transition-colors",
+            value === level
+              ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
+              : "text-muted-foreground hover:text-foreground",
+            dsFocus,
+          )}
+        >
+          {ADHERENCE_LABEL[level]}
+        </button>
+      ))}
+    </div>
+  );
+}
 import { CardWall, EASE, InspoCardView, InspoDrop, StrengthRing, UploadCardView } from "./parts";
 import type { InspoHandlers, InspoView } from "./types";
 
 type Filter = "all" | "like" | "avoid";
+
+/**
+ * "Your website's design": the screenshots Mox took of the brand's own site
+ * (the whole page, its hero, sections and artwork), shown as they are. With
+ * the Custom look every picture follows this design.
+ */
+function SiteDesignStrip({
+  cards,
+  following,
+  canEdit,
+  onRemove,
+}: {
+  cards: InspoCard[];
+  following: boolean;
+  canEdit: boolean;
+  onRemove: (card: InspoCard) => void;
+}) {
+  if (!cards.length) return null;
+  return (
+    <div
+      className="rounded-[28px] bg-[var(--ds-tile-bg)] p-4 ring-1 ring-[var(--ds-tile-border)] sm:p-5"
+      data-testid="inspo-site-design"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="flex items-center gap-2 text-[14px] font-semibold">
+            <Monitor className="h-4 w-4 text-muted-foreground" /> Your website&rsquo;s design
+          </span>
+          <span className="block text-[12px] text-muted-foreground">
+            {following
+              ? "Mox makes your pictures in this design: its world, art, type and layout."
+              : "Screenshots of your site. Mox learns your design from them."}
+          </span>
+        </div>
+        {following && (
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary/12 px-3 text-[11.5px] font-semibold ring-1 ring-primary/25">
+            <Check className="h-3.5 w-3.5" /> Custom look on
+          </span>
+        )}
+      </div>
+      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+        {cards.map((card, i) => (
+          <motion.figure
+            key={card.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: Math.min(i, 8) * 0.04, ease: EASE }}
+            className={cn(
+              "group relative shrink-0 overflow-hidden rounded-[18px] bg-[var(--ds-well-bg)] ring-1 ring-[var(--ds-tile-border)]",
+              card.capture ? "h-56 w-40" : "h-56 w-72",
+            )}
+          >
+            {card.thumbUrl && (
+              <a
+                href={card.url ?? card.thumbUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={dsFocus}
+              >
+                <img
+                  src={card.thumbUrl}
+                  alt={card.label}
+                  loading="lazy"
+                  decoding="async"
+                  className={cn(
+                    "size-full transition-[object-position] duration-[2400ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    card.capture
+                      ? "object-cover object-top group-hover:object-bottom"
+                      : "object-cover object-top",
+                  )}
+                />
+              </a>
+            )}
+            <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pb-2 pt-6 text-[11px] font-semibold text-white">
+              <span className="block truncate">
+                {card.capture ? "Whole page" : card.label.split(" · ").pop()}
+              </span>
+            </figcaption>
+            {canEdit && !card.capture && (
+              <button
+                type="button"
+                aria-label="Don't use this screenshot"
+                onClick={() => onRemove(card)}
+                className={cn(
+                  "absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/45 text-[13px] font-semibold text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100",
+                  dsFocus,
+                )}
+              >
+                ×
+              </button>
+            )}
+          </motion.figure>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Price({ credits }: { credits: number }) {
   return (
@@ -38,7 +184,8 @@ export function Board({
   const [addAs, setAddAs] = React.useState<InspoChip>("like");
   const taste = view.taste;
   const canEdit = !!taste?.canEdit;
-  const board = shelfCards(view.cards, "board");
+  const site = siteDesignCards(view.cards);
+  const board = shelfCards(view.cards, "board").filter((c) => !c.siteShot);
   const shown = filter === "all" ? board : board.filter((c) => c.chip === filter);
   const uploads = view.uploads.filter((u) => u.chip === "like" || u.chip === "avoid");
   const thumbs = board.filter((c) => c.kind === "image" && c.thumbUrl).map((c) => c.thumbUrl!);
@@ -119,7 +266,7 @@ export function Board({
                 </motion.li>
               ))
             ) : (
-              <li className="flex items-center gap-2 text-[12.5px] font-medium text-primary">
+              <li className="flex items-center gap-2 text-[12.5px] font-medium text-primary-ink">
                 <Check className="h-4 w-4" /> All set
               </li>
             )}
@@ -127,7 +274,8 @@ export function Board({
         </div>
       </div>
 
-      {/* Learning the style: the one paid step, always a person's click. */}
+      {/* Learning the style starts by itself after Love/Avoid uploads; the
+          buttons stay for a re-learn by hand. */}
       {taste?.available !== false && (
         <div className="flex flex-wrap items-center gap-2">
           {learning ? (
@@ -137,7 +285,7 @@ export function Board({
               className="inline-flex h-10 items-center gap-2 rounded-full bg-primary/12 px-4 text-[13px] font-semibold ring-1 ring-primary/25"
               role="status"
             >
-              <Spinner className="h-4 w-4 animate-spin text-primary" />
+              <Spinner className="h-4 w-4 animate-spin text-primary-ink" />
               {taste?.running?.stage === "capturing"
                 ? "Reading your site…"
                 : "Learning your style…"}
@@ -146,12 +294,14 @@ export function Board({
             <>
               <button
                 type="button"
-                className={cn(dsPrimaryBtn, "h-10 px-4 text-[13px]")}
+                className={cn(taste?.active ? dsGhostBtn : dsPrimaryBtn, "h-10 px-4 text-[13px]")}
                 disabled={!canEdit || !canLearn(view.cards) || !!view.busy}
                 onClick={handlers.learn}
                 data-testid="inspo-learn"
+                title="Mox learns by itself after you add pictures. Press this to learn again now."
               >
-                <Sparkles className="h-4 w-4" /> Learn my style{" "}
+                <Sparkles className="h-4 w-4" />{" "}
+                {taste?.active ? "Update from board" : "Learn my style"}{" "}
                 <Price credits={taste?.learnPrice ?? 0} />
               </button>
               {view.dna.websiteUrl && (
@@ -166,6 +316,13 @@ export function Board({
                 </button>
               )}
             </>
+          )}
+          {taste?.active && !taste.draft && (
+            <AdherencePill
+              value={taste.adherence}
+              disabled={!canEdit || !!view.busy}
+              onChange={handlers.setAdherence}
+            />
           )}
           {taste?.active && !taste.draft && (
             <span className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--ds-well-bg)] pl-3 pr-1 text-[12.5px] font-medium">
@@ -187,6 +344,18 @@ export function Board({
         </div>
       )}
 
+      <SiteDesignStrip
+        cards={site}
+        following={
+          !!taste?.active &&
+          (view.look.visual?.stylesAuto === true ||
+            !view.look.visual?.styles?.length ||
+            view.look.visual.styles[0] === "custom")
+        }
+        canEdit={canEdit}
+        onRemove={handlers.remove}
+      />
+
       <AnimatePresence>
         {taste?.draft && (
           <motion.div
@@ -197,21 +366,48 @@ export function Board({
             className="rounded-[28px] bg-[var(--ds-tile-bg)] p-4 ring-1 ring-primary/30 sm:p-5"
             data-testid="inspo-directions"
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-[14px] font-semibold">Pick your style</span>
-              <button
-                type="button"
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                disabled={!canEdit || !!view.busy}
-                onClick={handlers.useDirection}
-              >
-                {view.busy === "direction" ? (
-                  <Spinner className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="block text-[14px] font-semibold">
+                  {taste.auto ? "In use — Mellox picked this from your site" : "Pick your style"}
+                </span>
+                {taste.auto && (
+                  <span className="block text-[12px] text-muted-foreground">
+                    Your posts already follow it. Keep it, pick another, or stop.
+                  </span>
                 )}
-                Use this
-              </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <AdherencePill
+                  value={taste.adherence}
+                  disabled={!canEdit || !!view.busy}
+                  onChange={handlers.setAdherence}
+                />
+                {taste.auto && (
+                  <button
+                    type="button"
+                    className={cn(dsGhostBtn, "h-9 px-4 text-[13px]")}
+                    disabled={!canEdit || !!view.busy}
+                    onClick={handlers.stopDirection}
+                  >
+                    Stop
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                  disabled={!canEdit || !!view.busy}
+                  onClick={handlers.useDirection}
+                  data-testid="inspo-use-direction"
+                >
+                  {view.busy === "direction" ? (
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  {taste.auto ? "Keep this" : "Use this"}
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {taste.draft.profile.directions.map((d, i) => {
@@ -240,8 +436,9 @@ export function Board({
                     />
                     <div className="mt-2.5 flex items-center justify-between gap-2 px-1 text-[13px] font-semibold">
                       <span className="truncate">{d.name}</span>
-                      {on && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                      {on && <Check className="h-4 w-4 shrink-0 text-primary-ink" />}
                     </div>
+                    <BibleNotes profile={taste.draft!.profile} index={i} />
                   </motion.button>
                 );
               })}

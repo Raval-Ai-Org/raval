@@ -35,8 +35,13 @@ import {
   captionBox,
   captionColours,
   speechShare,
+  type Cue,
 } from "@/lib/studio/captions";
-import { judgeFaces, judgeLayer } from "@/lib/studio/photo-design/checks";
+import type { MotionMoxElementId } from "@/lib/studio/motionmox/elements";
+import { planMotionMox, wantsDesignedOpening } from "@/lib/studio/motionmox/plan";
+import { groundSpec, type MotionMoxSegment } from "@/lib/studio/motionmox/spec";
+import { OVERLAY_SECONDS } from "@/lib/studio/clip-edit";
+import { judgeFaces, judgeLayer, lenientWindows } from "@/lib/studio/photo-design/checks";
 import {
   findRegions,
   layerOverlay,
@@ -115,6 +120,11 @@ export type ClipEditTask = {
   emphasisSeed: string;
   /** "Brand my clips": captions of what is said (on unless turned off). */
   captions?: boolean;
+  /**
+   * What MotionMox animates in (src/lib/studio/motionmox/elements.ts): the
+   * person's chips, else what their brief asks for. Absent when MotionMox is off.
+   */
+  motionElements?: MotionMoxElementId[];
   /**
    * A motion post (src/lib/studio/video/kinds.ts): the photos are a finished
    * post that already carries its words, so no design is laid over them and
@@ -247,9 +257,11 @@ async function openingOverlay(
     brief: task.brief,
     brandColours: task.brand.colours,
     layout: "overlay",
+    keepBottomClear: captionBand,
   });
   const reference = await asDataUrl(hero);
   let feedback: string | undefined;
+  let last: { design: Uint8Array; mask: Float32Array } | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const prompt = [
       designLayerPrompt({
@@ -298,8 +310,25 @@ async function openingOverlay(
         .toBuffer();
     console.warn("[clip-edit] opening design rejected", faces.reason);
     feedback = `${faces.reason} ${faces.feedback}`;
+    last = { design, mask };
   }
-  return null;
+  // Last chance: keep the second layer if enough footage still shows, with
+  // every face area cleared of the design. Else no opening design at all.
+  if (!last) return null;
+  const { regions } = findRegions(last.mask, canvas.width, canvas.height);
+  if (!lenientWindows(plan, regions, canvas)) return null;
+  for (const box of plan.avoid) {
+    const x0 = Math.max(0, Math.floor((box.x - box.w * 0.15) * canvas.width));
+    const x1 = Math.min(canvas.width, Math.ceil((box.x + box.w * 1.15) * canvas.width));
+    const y0 = Math.max(0, Math.floor((box.y - box.h * 0.15) * canvas.height));
+    const y1 = Math.min(canvas.height, Math.ceil((box.y + box.h * 1.15) * canvas.height));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) last.mask[y * canvas.width + x] = 1;
+  }
+  return sharp(Buffer.from(layerOverlay(last.design, last.mask, plan.key)), {
+    raw: { width: canvas.width, height: canvas.height, channels: 4 },
+  })
+    .png()
+    .toBuffer();
 }
 
 /** The end card: a designed still built around real frames or photos. Null if it can't be made. */
@@ -336,7 +365,14 @@ async function endCard(
         task.ratio,
         references,
       );
-      const composed = await composePhotoDesign({ layer, photos, readings, plan });
+      // The second layer is the last: use what it left rather than drop the card.
+      const composed = await composePhotoDesign({
+        layer,
+        photos,
+        readings,
+        plan,
+        lenient: attempt === 1,
+      });
       if (composed.ok)
         return sharp(composed.png)
           .resize(canvas.width * 2, canvas.height * 2, { fit: "cover" })
@@ -350,16 +386,16 @@ async function endCard(
   return null;
 }
 
-/** The caption track for the joined video, or null (with a plain warning) when there is none. */
-async function captionTrack(
+const CAPTIONS_SKIPPED = "Captions were left out: the speech couldn't be heard clearly.";
+
+/** What is said in the joined video, as timed cues, or null (with a plain warning) when there is nothing to show. */
+async function heardCues(
   task: ClipEditTask,
   dir: string,
   joined: string,
   total: number,
-  canvas: { width: number; height: number },
   warnings: string[],
-): Promise<{ list: string; y: number } | null> {
-  const skipped = "Captions were left out: the speech couldn't be heard clearly.";
+): Promise<Cue[] | null> {
   try {
     const silences = await audioSilences(joined, total);
     if (speechShare(total, silences) < MIN_SPEECH_SHARE) return null;
@@ -367,13 +403,32 @@ async function captionTrack(
     const segments = transcript ? believableSegments(transcript.segments, total, silences) : [];
     const cues = buildCues(segments, task.ratio, total);
     if (!cues.length) {
-      warnings.push(skipped);
+      warnings.push(CAPTIONS_SKIPPED);
       return null;
     }
     if (!captionsDrawable(cues)) {
       warnings.push("Captions were left out: this language can't be drawn yet.");
       return null;
     }
+    return cues;
+  } catch (error) {
+    console.warn("[clip-edit] captions failed", error instanceof Error ? error.message : error);
+    warnings.push(CAPTIONS_SKIPPED);
+    return null;
+  }
+}
+
+/** The caption track for the joined video (FFmpeg path), or null when there is none. */
+async function captionTrack(
+  task: ClipEditTask,
+  dir: string,
+  cues: Cue[] | null,
+  total: number,
+  canvas: { width: number; height: number },
+  warnings: string[],
+): Promise<{ list: string; y: number } | null> {
+  if (!cues?.length) return null;
+  try {
     const box = captionBox(task.ratio, canvas);
     const { blank, images } = await renderCaptionImages({
       dir,
@@ -391,7 +446,7 @@ async function captionTrack(
     return { list, y: box.y };
   } catch (error) {
     console.warn("[clip-edit] captions failed", error instanceof Error ? error.message : error);
-    warnings.push(skipped);
+    warnings.push(CAPTIONS_SKIPPED);
     return null;
   }
 }
@@ -419,16 +474,21 @@ async function siteReel(args: ClipEditArgs, dir: string): Promise<string> {
   const device = siteDevice(meta.width);
   const { screen } = siteFrame(canvas, device);
   // The page at the screen's width, cut to the screens the reel can reach.
-  const scaled = Math.round((meta.height * screen.w) / meta.width);
-  const pageHeight = Math.min(scaled, screen.h * MAX_SITE_SCREENS);
+  const scaled = Math.max(1, Math.round((meta.height * screen.w) / meta.width));
+  // A capture shorter than the screen is extended with its own last row, so
+  // the screen is always full.
+  const pageHeight = Math.max(screen.h, Math.min(scaled, screen.h * MAX_SITE_SCREENS));
   const page = join(dir, "site-page.png");
   await sharp(source, { limitInputPixels: 120_000_000 })
-    .resize(screen.w, scaled)
+    .resize(screen.w, scaled, { fit: "fill" })
+    .extend({ bottom: Math.max(0, pageHeight - scaled), extendWith: "copy" })
     .extract({ left: 0, top: 0, width: screen.w, height: pageHeight })
     .png()
     .toFile(page);
-  const stops = siteStops(pageHeight, screen.h);
-  if (!stops.length) throw new Error("The page is too short to scroll.");
+  // Too short to scroll: the reel holds on the page, then moves the little
+  // it can (or not at all), instead of failing.
+  const found = siteStops(pageHeight, screen.h);
+  const stops = found.length ? found : [0, Math.max(0, pageHeight - screen.h)];
   const { segments, total } = siteTimeline(stops);
   const frame = join(dir, "site-frame.png");
   await writeFile(frame, await siteFramePng({ canvas, device, colours: task.brand.colours ?? [] }));
@@ -629,6 +689,10 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
     const clips: string[] = [];
     /** Each piece's real length, for the transitions between them. */
     const lengths: number[] = [];
+    /** The same pieces as MotionMox draws them (a recap photo is a still it pushes into). */
+    const segments: MotionMoxSegment[] = [];
+    const motionMox = task.motionElements !== undefined;
+    const asked = task.motionElements ?? [];
     const stills: DesignPhoto[] = [];
     const warnings: string[] = [];
     let readings: PhotoReading[] = [];
@@ -670,6 +734,12 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
         });
         clips.push(out);
         lengths.push(piece.seconds);
+        segments.push({
+          kind: "video",
+          src: `clip-${piece.index}.mp4`,
+          seconds: piece.seconds,
+          sound: task.mode === "brand" && probes[piece.index].probe.hasAudio,
+        });
         stills.push(
           await asPhoto(
             await grabFrame(
@@ -697,6 +767,14 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
         await stillClip({ image, output: out, ...canvas, seconds });
         clips.push(out);
         lengths.push(seconds);
+        segments.push({
+          kind: "image",
+          src: `photo-${index}.png`,
+          seconds,
+          // The photo is already cut around its focus point (coverAt).
+          focus: { x: 0.5, y: 0.5 },
+          zoom: 1.08,
+        });
         stills.push(
           await asPhoto(await coverAt(photo, readings[index].focus, canvas.width, canvas.height)),
         );
@@ -707,13 +785,30 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
     // The opening design over the start, judged on the first frame.
     const wantCaptions = task.mode === "brand" && task.captions !== false && talky;
     // A motion post already carries its own words: nothing is laid over it.
+    // MotionMox animating the headline itself needs no designed opening.
     let overlayPath: string | null = null;
-    if (!task.post) {
-      const overlay = await openingOverlay(task, stills[0], readings[0], canvas, wantCaptions);
-      if (!overlay) throw new Error("The opening design kept covering the footage.");
+    const makeOpening = async () => {
+      const overlay = await openingOverlay(
+        task,
+        stills[0],
+        readings[0],
+        canvas,
+        wantCaptions,
+      ).catch((error: unknown) => {
+        console.warn("[clip-edit] opening design failed", error);
+        return null;
+      });
+      if (!overlay) {
+        // The video is still made, just without the designed opening.
+        warnings.push(
+          "The opening design was left out: it kept covering the footage. Ask for a change to try again.",
+        );
+        return;
+      }
       overlayPath = join(dir, "overlay.png");
       await writeFile(overlayPath, overlay);
-    }
+    };
+    if (!task.post && (!motionMox || wantsDesignedOpening(asked))) await makeOpening();
     await beat();
 
     const card = await endCard(task, stills.slice(0, 3), readings.slice(0, 3), canvas);
@@ -724,16 +819,20 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
       await stillClip({ image, output: out, ...canvas, seconds: END_CARD_SECONDS, zoom: 1.04 });
       clips.push(out);
       lengths.push(END_CARD_SECONDS);
+      segments.push({ kind: "image", src: "end.png", seconds: END_CARD_SECONDS, zoom: 1.04 });
     } else warnings.push("The closing card couldn't be made, so the video ends on your footage.");
     await beat();
 
+    // Joined by FFmpeg either way: it is the timeline captions are heard on,
+    // and the video that goes out if MotionMox can't draw this one.
     const joined = join(dir, "joined.mp4");
     const fade = transitionFor(lengths);
+    const transition = pickTransition(task.emphasisSeed, task.mode);
     await joinWithTransitions({
       directory: dir,
       clips,
       durations: lengths,
-      transition: pickTransition(task.emphasisSeed, task.mode),
+      transition,
       seconds: fade,
       output: joined,
     });
@@ -742,11 +841,10 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
 
     // Captions of what is said, timed on the finished timeline. Nobody
     // talking means no transcript is asked for at all.
-    let captions: { list: string; y: number } | null = null;
-    if (wantCaptions) {
-      captions = await captionTrack(task, dir, joined, total, canvas, warnings);
-      await beat();
-    }
+    const wantHeard =
+      wantCaptions || (motionMox && task.mode === "brand" && talky && asked.includes("captions"));
+    const cues = wantHeard ? await heardCues(task, dir, joined, total, warnings) : null;
+    if (wantHeard) await beat();
     let logo: { path: string; x: number; y: number } | null = null;
     if (task.logo) {
       const layers = await logoLayers(stills[0].bytes, task.logo.url, task.logo.corner);
@@ -761,6 +859,75 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
       }
     }
     const finished = join(dir, "finished.mp4");
+    const meta = {
+      ...(task.motion ? { recap_motion: task.motion } : {}),
+      source_asset_ids: task.mode === "brand" ? task.clipAssetIds : task.photoAssetIds,
+      source_preserved: task.motion !== "ai",
+    };
+
+    // MotionMox draws the video with the asked-for elements animated in. If
+    // it can't, the FFmpeg path below makes the same video, as before.
+    if (motionMox) {
+      try {
+        const {
+          spec: planned,
+          allowedText,
+          notes,
+        } = planMotionMox({
+          canvas,
+          segments,
+          endCard: !!card,
+          transition,
+          transitionSeconds: fade,
+          copy: task.post ? [] : task.copy,
+          endCopy: task.endCopy,
+          brief: task.brief,
+          brandName: task.brand.brandName,
+          asked,
+          overlay: overlayPath ? "overlay.png" : null,
+          overlaySeconds: OVERLAY_SECONDS,
+          captions: (cues ?? []).map((c) => ({
+            start: c.start,
+            end: c.end,
+            lines: c.lines,
+            emphasis: c.emphasis,
+          })),
+          logo: logo ? "logo.png" : null,
+          colours: task.brand.colours,
+          font: task.brand.fonts?.[0] ?? null,
+        });
+        const { spec, dropped } = groundSpec(planned, allowedText);
+        if (dropped.length) console.warn("[clip-edit] motionmox dropped", dropped.slice(0, 4));
+        const { renderMotionMox } = await import("../motionmox/render.server");
+        const drawn = await renderMotionMox({ spec, dir, onProgress: () => void beat() });
+        await beat();
+        // The sound is brought to -14 LUFS the same way as before.
+        await brandVideo({
+          input: drawn,
+          output: finished,
+          overlay: null,
+          logo: null,
+          captions: null,
+          loudness: sound,
+        });
+        return await saveVideo(args, finished, [...warnings, ...notes], {
+          ...meta,
+          renderer: "motionmox",
+          motion_elements: asked,
+          ...(spec.captions.length ? { captions: true } : {}),
+        });
+      } catch (error) {
+        console.warn(
+          "[clip-edit] motionmox failed, using ffmpeg",
+          error instanceof Error ? error.message : error,
+        );
+        if (!task.post && !overlayPath) await makeOpening();
+      }
+    }
+
+    const captions = wantCaptions
+      ? await captionTrack(task, dir, cues, total, canvas, warnings)
+      : null;
     await brandVideo({
       input: joined,
       output: finished,
@@ -771,9 +938,8 @@ export async function renderClipEdit(args: ClipEditArgs): Promise<ClipEditResult
     });
 
     return await saveVideo(args, finished, warnings, {
-      ...(task.motion ? { recap_motion: task.motion } : {}),
-      source_asset_ids: task.mode === "brand" ? task.clipAssetIds : task.photoAssetIds,
-      source_preserved: task.motion !== "ai",
+      ...meta,
+      ...(motionMox ? { renderer: "ffmpeg" } : {}),
       ...(captions ? { captions: true } : {}),
     });
   } catch (error) {

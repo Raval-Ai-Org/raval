@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
 import { ANGLES, buildTextPrompt, emptyContext } from "./prompts";
 import {
+  animateOpen,
+  animateStyles,
   carriedPlatforms,
   repurposeBrief,
   repurposeOpen,
@@ -150,5 +152,81 @@ describe("starting from a finished job", () => {
   it("offers nothing for a job that hasn't finished or saved a post", () => {
     expect(repurposeSourceFromJob({ ...job, status: "running" })).toBeNull();
     expect(repurposeSourceFromJob({ ...job, content_item_ids: [] })).toBeNull();
+  });
+});
+
+describe("Home → Animate", () => {
+  const style = (kind: string) => animateStyles().find((t) => t.videoKind === kind)!;
+
+  it("offers every picture video, all as videos", () => {
+    const styles = animateStyles();
+    expect(styles.length).toBeGreaterThanOrEqual(4);
+    expect(styles.every((s) => s.type === "video" && s.animate && s.videoKind)).toBe(true);
+  });
+
+  it("starts from the post when the picture has one, with the person's words last", () => {
+    const open = animateOpen({
+      picture: { assetId: "a1", ratio: "1:1", postId: "p1", title: "Summer", type: "ad" },
+      target: style("living-picture"),
+      note: "  add   a slow water splash ",
+    });
+    expect(open.sourceContentId).toBe("p1");
+    expect(open.referenceAssetIds).toEqual(["a1"]);
+    expect(open.referenceMode).toBe("preserve");
+    expect(open.ratio).toBe("1:1");
+    expect(open.brief.endsWith("add a slow water splash")).toBe(true);
+    expect(open.extraControls?.videoKind).toBe("living-picture");
+  });
+
+  it("keeps an uploaded picture without a source post", () => {
+    const open = animateOpen({
+      picture: { assetId: "a2", type: "script" },
+      target: style("motion-post"),
+    });
+    expect(open.sourceContentId).toBeUndefined();
+    expect(open.sourceLabel).toBeUndefined();
+    expect(open.type).toBe("video");
+    expect(open.referenceAssetIds).toEqual(["a2"]);
+    expect(open.extraControls).toMatchObject({ videoMode: "recap", recapMotion: "camera" });
+  });
+
+  it("keeps an end frame only for a style that ends on its picture", () => {
+    const kept = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("living-picture"),
+      endFrame: { assetId: "b2" },
+    });
+    expect(kept.extraControls?.endFrameAssetId).toBe("b2");
+    expect(kept.brief).toContain("closing frame");
+    const story = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("brand-story"),
+      endFrame: { assetId: "b2" },
+    });
+    expect(story.extraControls?.endFrameAssetId).toBeUndefined();
+    // The same picture at both ends is just the default return.
+    const same = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("product-motion"),
+      endFrame: { assetId: "a1" },
+    });
+    expect(same.extraControls?.endFrameAssetId).toBeUndefined();
+  });
+
+  it("uses the shape and length picked on the canvas", () => {
+    const open = animateOpen({
+      picture: { assetId: "a1", ratio: "9:16", type: "image" },
+      target: style("living-picture"),
+      ratio: "16:9",
+      durationSec: 8,
+    });
+    expect(open.ratio).toBe("16:9");
+    expect(open.durationSec).toBe(8);
+    const motion = animateOpen({
+      picture: { assetId: "a1", type: "image" },
+      target: style("motion-post"),
+      durationSec: 8,
+    });
+    expect(motion.durationSec).toBeUndefined();
   });
 });

@@ -35,10 +35,10 @@ const TONE: Record<ScoreTone, { text: string; bg: string; soft: string; stroke: 
     stroke: "stroke-success",
   },
   primary: {
-    text: "text-primary",
+    text: "text-primary-ink",
     bg: "bg-primary",
     soft: "bg-primary/12",
-    stroke: "stroke-primary",
+    stroke: "stroke-primary-ink",
   },
   warning: {
     text: "text-warning",

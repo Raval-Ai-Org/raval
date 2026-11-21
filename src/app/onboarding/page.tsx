@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/seo";
+import { PlanGate } from "@/components/auth/PlanGate";
 import { SessionGate } from "@/components/auth/SessionGate";
 import { LegacyAppRedirect } from "@/components/workspace/LegacyAppRedirect";
 
@@ -16,7 +17,9 @@ export const metadata: Metadata = pageMetadata({
 export default function Page() {
   return (
     <SessionGate>
-      <LegacyAppRedirect />
+      <PlanGate>
+        <LegacyAppRedirect />
+      </PlanGate>
     </SessionGate>
   );
 }

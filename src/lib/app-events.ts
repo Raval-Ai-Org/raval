@@ -29,6 +29,8 @@ export type AppEventMap = {
   /** Open Plan & billing, optionally on a tab. */
   "open:usage": { tab?: "overview" | "plans" | "topup" | "prices" | "history" } | undefined;
   "billing:changed": { balance?: number } | undefined;
+  /** What the thing being set up will cost (the sidebar gauge shows it); null clears it. */
+  "credits:preview": { credits?: number; videoUnits?: number; label: string } | null | undefined;
   "billing:blocked": {
     code: string;
     feature?: string;
@@ -53,6 +55,29 @@ export type AppEventMap = {
   /** Analytics data or insights changed (sync finished, insight refreshed, Google connected). */
   "analytics:changed": undefined;
   "gen:queue:changed": undefined;
+
+  // ── Shell ───────────────────────────────────────────────────────────
+  /** A full window opened or closed; the sidebar highlights its row (nav.ts id). */
+  "shell:window": { id: string; open: boolean };
+  /** A sidebar row was pressed: every window on the canvas steps aside for it. */
+  "shell:leave": undefined;
+  /**
+   * Background work that isn't a Studio piece (a strategy, a campaign plan…)
+   * shows in the corner list (GeneratingPanel) instead of a pop-up. Send the
+   * same id again with the new state; `href` is where a press on the row goes,
+   * `ugcProjectId` opens that Creator video instead.
+   */
+  "work:update": {
+    id: string;
+    title: string;
+    state: "working" | "done" | "failed";
+    step?: string;
+    doneLabel?: string;
+    href?: string;
+    ugcProjectId?: string;
+  };
+  /** "Run in background" on a Creator video: its window steps aside, the render goes on. */
+  "ugc:minimize": undefined;
 
   // ── Chat ────────────────────────────────────────────────────────────
   /** Put text in the chat composer; `focus` defaults to true. */
@@ -121,10 +146,21 @@ export type AppEventMap = {
   "open:ai-visibility": undefined;
   /** UGC Video Ads studio, optionally on one ad project. */
   "open:ugc-studio":
-    | { projectId?: string; source?: import("@/lib/studio/script-video").ScriptVideoSource }
+    | {
+        projectId?: string;
+        source?: import("@/lib/studio/script-video").ScriptVideoSource;
+        /** Opened from Create: its Back returns there. */
+        fromCreate?: boolean;
+      }
     | undefined;
-  /** The "Create" launcher: pick a category (Video/Picture/Text/Ads), then a format. */
-  "open:create-launcher": undefined;
+  /**
+   * The "Create" launcher: pick a starting point, then a format. `back` is the
+   * place a Back press came from (a Studio session id, "animate", "ugc"), so
+   * Create reopens on the list that place was picked from.
+   */
+  "open:create-launcher": { back?: string } | undefined;
+  /** Home → Animate: pick a Library picture and a way to move it. */
+  "open:animate": { fromCreate?: boolean } | undefined;
   "open:client-portal": undefined;
   "open:command-bar": undefined;
   /** Opens Brain → Competitors. */
@@ -145,6 +181,8 @@ export type AppEventMap = {
   "open:publish": undefined;
   "open:rename": undefined;
   "open:schedule": undefined;
+  /** The "Start here" checklist (Mellox 2.0), from the top bar or after onboarding. */
+  "open:start-here": undefined;
   /**
    * Settings, optionally on a section. "analytics" and "website" are older
    * names: both open Connectors (on Google Analytics / the website connectors).
@@ -160,6 +198,7 @@ export type AppEventMap = {
           | "assistants"
           | "agents"
           | "memory"
+          | "language"
           | "preferences";
         connector?: string;
       }
@@ -204,6 +243,17 @@ type ReceivedDetail<K extends AppEventName> = undefined extends AppEventMap[K]
 export type AppEvent<K extends AppEventName> = CustomEvent<ReceivedDetail<K>>;
 export type AppEventHandler<K extends AppEventName> = (event: AppEvent<K>) => void;
 
+const appEventListeners = new Map<AppEventName, Set<EventListener>>();
+const pendingOpenEvents = new Map<
+  AppEventName,
+  { event: CustomEvent<unknown>; workspaceId: string | null }
+>();
+
+function activeWorkspaceId(): string | null {
+  if (typeof window.location === "undefined") return null;
+  return window.location.pathname.match(/^\/w\/([^/]+)\/app(?:\/|$)/)?.[1] ?? null;
+}
+
 // Events whose payload may be omitted take an optional detail argument.
 type DetailArgs<K extends AppEventName> = undefined extends AppEventMap[K]
   ? [detail?: AppEventMap[K]]
@@ -211,21 +261,51 @@ type DetailArgs<K extends AppEventName> = undefined extends AppEventMap[K]
 
 export function emitAppEvent<K extends AppEventName>(name: K, ...args: DetailArgs<K>): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(name, { detail: args[0] }));
+  const event = new CustomEvent(name, { detail: args[0] });
+  if (name.startsWith("open:") && !appEventListeners.get(name)?.size) {
+    pendingOpenEvents.set(name, {
+      event: event as CustomEvent<unknown>,
+      workspaceId: activeWorkspaceId(),
+    });
+  }
+  if (name === "workspace:changed") {
+    const workspaceId = (args[0] as AppEvent<"workspace:changed">["detail"])?.id;
+    for (const [pendingName, pending] of pendingOpenEvents) {
+      if (!workspaceId || pending.workspaceId !== workspaceId)
+        pendingOpenEvents.delete(pendingName);
+    }
+  }
+  window.dispatchEvent(event);
 }
 
 export function addAppEventListener<K extends AppEventName>(
   name: K,
   handler: AppEventHandler<K>,
 ): void {
-  window.addEventListener(name, handler as EventListener);
+  const listener = handler as EventListener;
+  window.addEventListener(name, listener);
+  const listeners = appEventListeners.get(name) ?? new Set<EventListener>();
+  listeners.add(listener);
+  appEventListeners.set(name, listeners);
+
+  const pending = pendingOpenEvents.get(name);
+  if (pending && pending.workspaceId === activeWorkspaceId()) {
+    pendingOpenEvents.delete(name);
+    window.dispatchEvent(pending.event);
+  } else if (pending) {
+    pendingOpenEvents.delete(name);
+  }
 }
 
 export function removeAppEventListener<K extends AppEventName>(
   name: K,
   handler: AppEventHandler<K>,
 ): void {
-  window.removeEventListener(name, handler as EventListener);
+  const listener = handler as EventListener;
+  window.removeEventListener(name, listener);
+  const listeners = appEventListeners.get(name);
+  listeners?.delete(listener);
+  if (!listeners?.size) appEventListeners.delete(name);
 }
 
 /** Subscribe outside React; returns the unsubscribe function. */

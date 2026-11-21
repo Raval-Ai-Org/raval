@@ -184,7 +184,7 @@ export function JobsScreen() {
                   <td className={td}>
                     <Link
                       href={`/admin/workspaces/${job.workspaceId}`}
-                      className="text-primary hover:underline"
+                      className="text-primary-ink hover:underline"
                     >
                       Open
                     </Link>

@@ -2,7 +2,7 @@
 // already write (ai_usage_events). Costs are the providers' reported cost per
 // call: an estimate, labelled that way in the console, not an invoice.
 import "server-only";
-import type { AdminUsage } from "@/lib/admin/types";
+import type { AdminCostPerOutput, AdminUsage } from "@/lib/admin/types";
 import { adminRpc } from "./db.server";
 
 type Num = number | string | null;
@@ -66,6 +66,66 @@ export async function getUsage(days: number): Promise<AdminUsage> {
       workspaceId: r.workspace_id,
       name: r.name,
       calls: n(r.calls),
+      costUsd: n(r.cost_usd),
+    })),
+  };
+}
+
+type Row = Record<string, Num | string | boolean>;
+const nOrNull = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+
+/** Cost per Studio job / UGC render, per stage, and prompt-cache read share per route. */
+export async function getCostPerOutput(days: number): Promise<AdminCostPerOutput> {
+  const raw = await adminRpc<{
+    generated_at: string;
+    since: string;
+    totals: Row;
+    by_variant: Row[];
+    by_stage: Row[];
+    prompt_cache: Row[];
+  }>("admin_cost_per_output", { p_days: days }, "Cost per piece is unavailable.");
+  return {
+    generatedAt: raw.generated_at,
+    since: raw.since,
+    days,
+    totals: {
+      costUsd: n(raw.totals.cost_usd),
+      attributedCostUsd: n(raw.totals.attributed_cost_usd),
+      errorCostUsd: n(raw.totals.error_cost_usd),
+      savedUsd: n(raw.totals.saved_usd),
+      inputTokens: n(raw.totals.input_tokens),
+      cachedInputTokens: n(raw.totals.cached_input_tokens),
+      reasoningTokens: n(raw.totals.reasoning_tokens),
+    },
+    byVariant: (raw.by_variant ?? []).map((r) => ({
+      kind: String(r.kind),
+      variant: String(r.variant ?? "unknown"),
+      workflows: n(r.workflows),
+      succeeded: n(r.succeeded),
+      failed: n(r.failed),
+      accepted: n(r.accepted),
+      revisions: n(r.revisions),
+      costUsd: n(r.cost_usd),
+      failedCostUsd: n(r.failed_cost_usd),
+      errorCallCostUsd: n(r.error_call_cost_usd),
+      costPerWorkflowUsd: nOrNull(r.cost_per_workflow_usd),
+      costPerSucceededUsd: nOrNull(r.cost_per_succeeded_usd),
+      costPerAcceptedUsd: nOrNull(r.cost_per_accepted_usd),
+    })),
+    byStage: (raw.by_stage ?? []).map((r) => ({
+      workflow: String(r.workflow),
+      stage: String(r.stage),
+      usageKind: String(r.usage_kind),
+      calls: n(r.calls),
+      costUsd: n(r.cost_usd),
+    })),
+    promptCache: (raw.prompt_cache ?? []).map((r) => ({
+      route: String(r.route),
+      inputTokens: n(r.input_tokens),
+      cachedInputTokens: n(r.cached_input_tokens),
+      cacheWriteTokens: n(r.cache_write_tokens),
+      reasoningTokens: n(r.reasoning_tokens),
+      cachedShare: nOrNull(r.cached_share),
       costUsd: n(r.cost_usd),
     })),
   };

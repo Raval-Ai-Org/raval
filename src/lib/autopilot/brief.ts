@@ -115,11 +115,35 @@ const withDetail = (e: BrainEntry) =>
  * each brain adds, one labelled line each, so the writer knows who it is for
  * and what it has to do before choosing a word.
  */
+const STAGE_JOB: Record<string, string> = {
+  attract:
+    "Where the reader is: they don't know the brand yet. Earn attention with their situation, not the product's features; no hard sell.",
+  convince:
+    "Where the reader is: they know the brand and are weighing it. Build trust: show how it works, answer the doubt that holds them back, prove it with what the brand really has.",
+  convert:
+    "Where the reader is: ready to decide. Make the offer and the one next step unmistakable; say who it is for and why now (only a true reason).",
+  keep: "Where the reader is: already a customer. Help them get more from it and give them a reason to come back or bring a friend.",
+};
+
+/** The stage's job plus what the strategy says there (pure, short). */
+export function stageLine(stage: unknown, message: unknown): string | null {
+  const job = typeof stage === "string" ? STAGE_JOB[stage] : undefined;
+  if (!job) return null;
+  const said =
+    typeof message === "string" && message.trim()
+      ? ` The strategy's message here: ${message.trim()}`
+      : "";
+  return `${job}${said}`;
+}
+
 export function creativeBrief(args: {
   title: string;
   brief: string;
   aim?: unknown;
   pillar?: unknown;
+  /** The funnel stage the week's shape gave this piece, and the strategy's message for it. */
+  stage?: unknown;
+  stageMessage?: unknown;
   use: BrainUse;
   maxChars?: number;
 }): string {
@@ -134,6 +158,7 @@ export function creativeBrief(args: {
     use.audience &&
       `Written for one group of customers: ${withDetail(use.audience)} Speak to their situation in their words; everyone else is a bonus.`,
     typeof args.pillar === "string" && args.pillar.trim() && `Brand theme: ${args.pillar.trim()}`,
+    stageLine(args.stage, args.stageMessage),
     use.market &&
       `What is happening in the market (context, not a claim to repeat): ${withDetail(use.market)}`,
     use.competitor &&

@@ -1,6 +1,13 @@
 import "server-only";
 
-import { ADDONS, CREDIT_PACKS, PLANS, VIDEO_PACKS, type PlanId } from "@/lib/billing/catalog";
+import {
+  ADDONS,
+  PLANS,
+  VIDEO_PACKS,
+  creditPackFor,
+  formatCredits,
+  type PlanId,
+} from "@/lib/billing/catalog";
 import { buildOverviewActivity, type AdminOverviewActivityItem } from "@/lib/admin/activity";
 import type { AdminOverview } from "@/lib/admin/types";
 import { emailsFor, showEmail } from "./audit-read.server";
@@ -40,6 +47,7 @@ type JobRow = {
   title: string | null;
   type: string;
   updated_at: string;
+  error: { message?: unknown } | null;
 };
 type AnnouncementRow = {
   id: string;
@@ -89,7 +97,7 @@ async function loadSources(now: Date) {
       .limit(SOURCE_LIMIT),
     adminDb
       .from("studio_jobs")
-      .select("id,created_by,title,type,updated_at")
+      .select("id,created_by,title,type,updated_at,error")
       .eq("status", "failed")
       .gte("updated_at", since)
       .order("updated_at", { ascending: false })
@@ -162,8 +170,8 @@ function catalogLabel(key: string): string {
   const plan = PLANS[key as PlanId];
   if (plan) return `${plan.label} plan`;
   if (key in ADDONS) return ADDONS[key as keyof typeof ADDONS].label;
-  const creditPack = CREDIT_PACKS.find((pack) => pack.key === key);
-  if (creditPack) return `${creditPack.credits.toLocaleString()} credit pack`;
+  const creditPack = creditPackFor(key);
+  if (creditPack) return `${formatCredits(creditPack.credits)} pack`;
   const videoPack = VIDEO_PACKS.find((pack) => pack.key === key);
   if (videoPack) return `${videoPack.videoUnits / 100} Video Credit pack`;
   return key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -264,7 +272,14 @@ export async function getOverviewActivity(
       id: `job:${job.id}`,
       kind: "job_failed",
       title: `${job.title?.trim() || job.type.replaceAll("_", " ")} failed`,
-      detail: `${person(job.created_by)} may need assistance`,
+      detail: [
+        `${person(job.created_by)} may need assistance`,
+        typeof job.error?.message === "string" && job.error.message.trim()
+          ? shortText(job.error.message, 90)
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       occurredAt: job.updated_at,
       href: "/admin/jobs",
       amountUsd: null,

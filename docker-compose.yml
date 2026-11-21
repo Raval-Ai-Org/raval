@@ -33,11 +33,27 @@ services:
       NODE_ENV: production
       PORT: "3000"
       REDIS_URL: redis://:${REDIS_PASSWORD:?set in .env}@redis:6379/0
+      # Local open-source models (services/local-ai, docs/local-ai.md); every
+      # call fails open to the paid path, so the app never waits on it.
+      LOCAL_AI_URL: http://local-ai:8090
     depends_on:
       redis:
         condition: service_healthy
     expose:
       - "3000"
+    logging: *logging
+
+  local-ai:
+    build:
+      context: ./services/local-ai
+    image: mellox-local-ai:${APP_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      LOCAL_AI_TOKEN: ${LOCAL_AI_TOKEN:-}
+    # Never published: only the app reaches it on this network.
+    expose:
+      - "8090"
+    mem_limit: 3g
     logging: *logging
 
   redis:

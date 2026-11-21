@@ -3,9 +3,17 @@
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
 import { PlanLock } from "@/components/app/billing/billing-ui";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { matchCommands, type ChatCommand } from "@/lib/chat/commands";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUp,
   Check,
@@ -49,6 +57,8 @@ type Props = {
   onModelChange: (id: string) => void;
   placeholder: string;
   hero?: boolean;
+  /** One line with the tools beside it; grows once a person writes (Home's dock). */
+  slim?: boolean;
   /** Extra control next to "Add files" (the Autopilot switch). */
   toolbarSlot?: React.ReactNode;
   /** Shown in place of the text box and its toolbar (Autopilot, while it is on). */
@@ -74,6 +84,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     onModelChange,
     placeholder,
     hero,
+    slim,
     toolbarSlot,
     cover,
     autopilot,
@@ -99,6 +110,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
   const shellRef = useRef<HTMLDivElement>(null);
+  // Slim: one line with the tools beside it until a person starts writing.
+  const [writing, setWriting] = useState(false);
+  const isSlim = Boolean(slim) && !covered && !writing && !value && attachments.length === 0;
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
@@ -110,7 +124,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
     const max = hero ? 260 : 220;
     ta.style.height = `${Math.min(ta.scrollHeight, max)}px`;
     ta.style.overflowY = ta.scrollHeight > max ? "auto" : "hidden";
-  }, [value, hero, covered]);
+  }, [value, hero, covered, isSlim]);
 
   const model = CHAT_MODELS.find((m) => m.id === modelId) ?? CHAT_MODELS[0];
   const billing = useEntitlements();
@@ -125,6 +139,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
       ref={shellRef}
       data-tour="chat"
       className={cn("mx-composer group/composer", hero && "mx-composer--hero")}
+      data-slim={isSlim ? "" : undefined}
+      onBlur={(e) => {
+        // Leaving the box entirely folds it back; moving to its own tools doesn't.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setWriting(false);
+      }}
       data-autopilot={autopilot && autopilot !== "off" ? autopilot : undefined}
       data-covered={covered ? "" : undefined}
       onDragEnter={(e) => {
@@ -199,6 +218,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
 
           <textarea
             ref={textareaRef}
+            onFocus={() => setWriting(true)}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
@@ -298,7 +318,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
             </ul>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-2.5 pb-2.5 sm:flex-nowrap sm:group-data-[slim]/composer:shrink-0 sm:group-data-[slim]/composer:pb-0 sm:group-data-[slim]/composer:pl-0 sm:group-data-[slim]/composer:pr-2">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -365,7 +385,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
                         {lock ? (
                           <PlanLock plan={lock} />
                         ) : m.id === model.id ? (
-                          <Check className="size-4 text-primary" />
+                          <Check className="size-4 text-primary-ink" />
                         ) : null}
                       </DropdownMenuItem>
                     );
@@ -419,16 +439,44 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(function ChatC
   );
 });
 
-/** The text box and its toolbar, fading in when the box is handed back. */
+/**
+ * The text box and its toolbar, fading in when the box is handed back. Its
+ * height follows the content with an ease, so the slim pill opens into the
+ * full box (and new lines grow it) instead of jumping a frame.
+ */
 function ComposerBody({ children }: { children: React.ReactNode }) {
+  const inner = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    setHeight(el.offsetHeight);
+    const ro = new ResizeObserver(() => setHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: duration.base }}
-      className="flex flex-col"
+      // The height is a plain CSS transition between measured pixel values
+      // (a Motion height animation from "auto" can stall and leave the box
+      // invisible). clip, not hidden, with a margin: edge focus rings show.
+      style={{
+        height: height ?? undefined,
+        transition:
+          reduce || height === null ? undefined : "height 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+      }}
+      className="rounded-[inherit] [overflow-clip-margin:6px] [overflow:clip]"
     >
-      {children}
+      <div
+        ref={inner}
+        className="flex flex-col sm:group-data-[slim]/composer:flex-row sm:group-data-[slim]/composer:items-center"
+      >
+        {children}
+      </div>
     </motion.div>
   );
 }

@@ -8,6 +8,10 @@ import {
 } from "@/lib/studio/jobs";
 import { writeStudioPrompt } from "@/server/studio/prompt-writer.server";
 import { runMetered } from "@/server/billing/metered.server";
+import { pickInspoMediaFor } from "@/server/inspo/media-pool.server";
+
+/** Formats where Write it for me may suggest one of the brand's own Inspo photos. */
+const MEDIA_TYPES = new Set(["image", "carousel", "social"]);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -21,6 +25,8 @@ const Body = z.object({
   goal: IntentSchema.shape.goal,
   controls: ControlsSchema.partial().optional(),
   avoid: z.array(z.string().max(160)).max(30).optional(),
+  category: IntentSchema.shape.category,
+  recentCategories: z.array(z.string().max(24)).max(6).optional(),
 });
 
 /** "Write it for me": a detailed, timely description for a Studio format. */
@@ -32,6 +38,22 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   rateLimit: "generate",
   handler: async ({ body, workspaceId, userId, role, request, supabase }) => {
+    // The brand's own Media first: photos the person's words name (a folder
+    // or label), else now and then a rotation pick
+    // (src/lib/inspo/media-rotation.ts). Picked BEFORE writing, so the brief
+    // is written around what the photos really show. Only a suggestion: the
+    // composer shows them and the person can remove them before Generate.
+    const c = body.controls;
+    const media =
+      MEDIA_TYPES.has(body.type) &&
+      !c?.referenceAssetIds?.length &&
+      !c?.productId &&
+      !c?.sourceVideoAssetIds?.length
+        ? await pickInspoMediaFor(workspaceId, body.type, crypto.randomUUID(), body.current)
+        : null;
+    const controls = media
+      ? { ...c, referenceAssetIds: media.assetIds, referenceMode: "design" as const }
+      : c;
     const metered = await runMetered(
       {
         workspaceId,
@@ -50,12 +72,14 @@ export const POST = defineRoute({
           current: body.current,
           template: body.template,
           goal: body.goal,
-          controls: body.controls,
+          controls,
           avoid: body.avoid,
+          category: body.category,
+          recentCategories: body.recentCategories,
         }),
     );
     return Response.json(
-      metered.result,
+      media ? { ...metered.result, media } : metered.result,
       metered.balance === null
         ? undefined
         : {

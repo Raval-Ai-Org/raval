@@ -118,6 +118,8 @@ export type SdrStatus = {
   provider: DistributionProvider | null;
   /** Platforms the active provider can publish to. */
   platforms: DistributionPlatformId[];
+  /** Networks the first-choice connection serves right now. */
+  preferredPlatforms?: string[];
 };
 
 const DISABLED_STATUS: SdrStatus = {

@@ -7,10 +7,10 @@ import {
   FEATURES,
   PLAN_ORDER,
   PLANS,
-  SIGNUP_GRANT,
-  SOFT_LIMIT_RATIO,
   VIDEO_UNITS_PER_VC,
   annualMonthlyUsd,
+  creditsOf,
+  formatCredits,
   planRank,
   type AddonDef,
   type BillingInterval,
@@ -19,7 +19,6 @@ import {
   type PaidPlanId,
   type PlanId,
 } from "./catalog";
-import { CREATION_PLANS } from "./creation";
 
 /**
  * The plain words the server sends with a 402. The browser shows an Upgrade /
@@ -87,7 +86,11 @@ export const METER_LABEL: Record<Meter, string> = {
   premium_video: "Premium videos",
 };
 
-/** One meter amount in plain words: "1,200 credits", "3.5 videos". */
+/**
+ * One meter amount in plain words: "150 credits", "3.5 video credits". Credit
+ * amounts are ledger units (UNITS_PER_CREDIT to a credit), like every balance
+ * and price the server sends.
+ */
 export function formatMeter(meter: Meter | string, amount: number): string {
   if (meter === "creation")
     return `${formatNumber(amount)} creation ${amount === 1 ? "point" : "points"}`;
@@ -99,7 +102,7 @@ export function formatMeter(meter: Meter | string, amount: number): string {
   if (meter === "pro_messages") return `${n} Pro ${amount === 1 ? "message" : "messages"}`;
   if (meter === "flash_messages") return `${n} chat ${amount === 1 ? "message" : "messages"}`;
   if (meter === "premium_video") return `${n} premium ${amount === 1 ? "video" : "videos"}`;
-  return `${n} ${amount === 1 ? "credit" : "credits"}`;
+  return formatCredits(amount);
 }
 
 /** Price shown on a plan card for the chosen billing interval. */
@@ -175,15 +178,14 @@ export function planForMeter(current: PlanId, meter: string, needed: number): Pa
   for (const plan of PLAN_ORDER.slice(planRank(current) + 1)) {
     const a = PLANS[plan].allowances;
     const monthly =
-      meter === "creation"
-        ? CREATION_PLANS[plan].points
-        : meter === "video"
-          ? a.videoUnits
-          : meter === "pro_messages"
-            ? a.proMessages
-            : meter === "flash_messages"
-              ? a.flashMessages
-              : a.credits;
+      meter === "creation" || meter === "video" || meter === "premium_video"
+        ? // Legacy meters: nothing is granted on them any more, credits pay.
+          a.credits
+        : meter === "pro_messages"
+          ? a.proMessages
+          : meter === "flash_messages"
+            ? a.flashMessages
+            : a.credits;
     if (monthly >= needed) return plan as PaidPlanId;
   }
   return null;
@@ -245,40 +247,21 @@ export function suggestedPlan(block: BillingBlock | null, current: PlanId): Paid
 export type FreeNudge = { id: "empty" | "low" | "ending"; title: string; text: string };
 
 /**
- * What to tell someone on Free about their one-time credits, if anything:
- * they're gone, nearly gone, or about to end. Every figure is the real one.
+ * Pricing v4 has no Free plan: an account without a plan is asked to choose
+ * one. Kept for callers that still ask; every figure is the real one.
  */
 export function freeNudge(args: {
   credits: number;
-  /** When the earliest credits end (ISO), if they do. */
   nextExpiry: string | null;
   now?: Date;
 }): FreeNudge | null {
-  const monthly = formatNumber(CREATION_PLANS.starter.points);
-  if (args.credits <= 0) {
-    return {
-      id: "empty",
-      title: "You've used your free credits",
-      text: `A plan starts with ${monthly} creation points every month, plus wallet credits for extras.`,
-    };
-  }
-  if (args.credits <= SIGNUP_GRANT.credits * (1 - SOFT_LIMIT_RATIO)) {
-    return {
-      id: "low",
-      title: `${formatNumber(args.credits)} free ${args.credits === 1 ? "credit" : "credits"} left`,
-      text: `A plan gives you ${monthly} every month.`,
-    };
-  }
-  const ends = args.nextExpiry ? Date.parse(args.nextExpiry) : NaN;
-  const days = Math.ceil((ends - (args.now ?? new Date()).getTime()) / 86_400_000);
-  if (Number.isFinite(days) && days >= 0 && days <= 5) {
-    return {
-      id: "ending",
-      title: days <= 1 ? "Your free credits end tomorrow" : `Your free credits end in ${days} days`,
-      text: `Use them now, or get ${monthly} every month with a plan.`,
-    };
-  }
-  return null;
+  if (args.credits > 0) return null;
+  const starter = PLANS.starter;
+  return {
+    id: "empty",
+    title: "Choose a plan to start",
+    text: `Starter gives you ${formatCredits(starter.allowances.credits)} every month, from ${formatUsd(annualMonthlyUsd("starter"))} a month.`,
+  };
 }
 
 /** Plain words for a ledger row ("Premium article", "Monthly allowance"). */
@@ -286,7 +269,7 @@ export function ledgerLabel(entry: { kind: string; action: string | null; meter:
   if (entry.action && entry.action in CREDIT_ACTIONS) {
     return CREDIT_ACTIONS[entry.action as keyof typeof CREDIT_ACTIONS].label;
   }
-  if (entry.action?.startsWith("video_")) return "Video";
+  if (entry.action?.startsWith("video_") || entry.action?.startsWith("ugc_")) return "Video";
   if (entry.action === "studio_video") return "Studio video";
   if (entry.action?.endsWith("studio_short_clip")) return "Short video clip";
   if (entry.action === "backlink_order") return "Backlink order";
@@ -323,7 +306,7 @@ export function blockHeadline(block: BillingBlock): string {
         : `This needs the ${PLANS[plan].label} plan`;
     }
     case "insufficient_balance":
-      return `Not enough ${block.meter === "creation" ? "creation points" : block.meter === "video" ? "Video Credits" : block.meter === "pro_messages" ? "Pro messages" : "credits"} left`;
+      return `Not enough ${block.meter === "pro_messages" ? "Pro messages" : "credits"} left`;
     case "limit_reached":
       return `You've reached your ${LIMIT_LABEL[block.limit ?? ""] ?? "plan"} limit`;
     case "brand_frozen":
@@ -333,4 +316,55 @@ export function blockHeadline(block: BillingBlock): string {
     default:
       return "This needs a plan change";
   }
+}
+
+export type WalletTone = "ok" | "low" | "empty";
+
+/**
+ * What the wallet shows: the credit balance, how full it is against the
+ * month's allowance, and its tone. Shared by the top-bar pill and Mox's gauge
+ * so the two always agree. `credits`, `reserved` and `allowance` are ledger
+ * units (compare them with prices); `shown` is whole credits to print. Low is
+ * 20% of the allowance or less; empty is nothing left.
+ */
+export function walletView(data: {
+  entitledPlan: unknown;
+  isOwner?: boolean;
+  meters: { credits: { available: number; held: number }; creation?: { available: number } };
+  creation?: { active?: boolean } | null;
+}): {
+  plan: PlanId;
+  free: boolean;
+  credits: number;
+  /** Whole credits to print. */
+  shown: number;
+  /** Legacy creation points; always null since pricing v4. */
+  points: number | null;
+  reserved: number;
+  allowance: number;
+  /** 0..1 of the month's allowance left. */
+  fill: number;
+  tone: WalletTone;
+  canUpgrade: boolean;
+} {
+  const plan = asPlan(data.entitledPlan);
+  const credits = data.meters.credits.available;
+  const reserved = data.meters.credits.held;
+  const allowance = PLANS[plan].allowances.credits;
+  const shown = creditsOf(credits);
+  const tone: WalletTone =
+    shown <= 0 ? "empty" : allowance > 0 && credits / allowance <= 0.2 ? "low" : "ok";
+  const fill = allowance > 0 ? Math.max(0, Math.min(1, credits / allowance)) : credits > 0 ? 1 : 0;
+  return {
+    plan,
+    free: plan === "free",
+    credits,
+    shown,
+    points: null,
+    reserved,
+    allowance,
+    fill,
+    tone,
+    canUpgrade: Boolean(data.isOwner) && plan !== "scale",
+  };
 }

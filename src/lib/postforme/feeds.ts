@@ -30,7 +30,7 @@ export type FeedAccount = {
 
 export type FeedSyncResult = { accounts: number; posts: number; failed: number };
 
-type FeedEntry = {
+export type FeedEntry = {
   platform?: string;
   platform_post_id?: string;
   platform_url?: string;
@@ -53,9 +53,21 @@ export async function syncAccountFeed(
     query: { limit: FEED_POSTS_PER_ACCOUNT },
   });
   if (res.status !== 200) throw new Error(`feed read failed (${res.status})`);
-  const entries = (res.data?.data ?? []).filter(
-    (e) => typeof e?.platform_post_id === "string" && e.platform_post_id,
-  );
+  return storeFeedEntries(account, res.data?.data ?? [], deps);
+}
+
+/**
+ * Store one account's feed entries (any provider: Post for Me's feed, or a
+ * Composio network read by src/server/social/composio/feed.server.ts).
+ * Posts Mellox published are linked to their content item. Returns how many
+ * posts were stored.
+ */
+export async function storeFeedEntries(
+  account: FeedAccount,
+  raw: FeedEntry[],
+  deps: { db: Db; now?: () => number },
+): Promise<number> {
+  const entries = raw.filter((e) => typeof e?.platform_post_id === "string" && e.platform_post_id);
   const now = new Date(deps.now?.() ?? Date.now()).toISOString();
 
   // Which of these Mellox published: by the network's post id or our provider post id.

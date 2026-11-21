@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { isInternalMessage } from "@/lib/user-errors";
 import { AlertTriangle, RefreshCw, type LucideIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { Mox } from "@/components/brand/mox/Mox";
+import { MoxFace, type MoxMood } from "@/components/brand/mox/MoxFace";
 
 type Size = "sm" | "md";
 
@@ -30,9 +32,15 @@ export function EmptyState({
   action,
   secondaryAction,
   size = "md",
+  mox,
   className,
 }: {
   icon?: LucideIcon;
+  /**
+   * Mox's face for a full surface (Mellox 2.0). Defaults to "happy" at "md";
+   * pass false to keep only the icon. "sm" shows the icon alone.
+   */
+  mox?: MoxMood | false;
   title: ReactNode;
   /** One sentence. If there is nothing worth saying, leave it out. */
   description?: ReactNode;
@@ -43,6 +51,7 @@ export function EmptyState({
   className?: string;
 }) {
   const compact = size === "sm";
+  const mood = compact || mox === false ? null : (mox ?? "happy");
   return (
     <div
       className={cn(
@@ -51,11 +60,27 @@ export function EmptyState({
         className,
       )}
     >
-      {Icon ? (
+      {mood ? (
+        <span aria-hidden className="ds-rise relative mb-1 inline-grid">
+          {mood === "happy" ? (
+            // The full 3D render, Holo style ("Your inbox is waiting").
+            <Mox pose="wave" size={112} alt="" />
+          ) : (
+            <span className="mox-float">
+              <MoxFace mood={mood} size={92} track />
+            </span>
+          )}
+          {Icon ? (
+            <span className="ds-grad-pill absolute -bottom-1 -right-2 grid size-8 place-items-center rounded-full text-[var(--mox-ink)] ring-4 ring-background">
+              <Icon className="size-4" />
+            </span>
+          ) : null}
+        </span>
+      ) : Icon ? (
         <span
           aria-hidden
           className={cn(
-            "grid shrink-0 place-items-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15",
+            "grid shrink-0 place-items-center rounded-full bg-primary/10 text-primary-ink ring-1 ring-primary/15",
             compact ? "size-9" : "size-14",
           )}
         >
@@ -66,8 +91,8 @@ export function EmptyState({
       <div className={cn("max-w-sm", compact ? "space-y-1" : "space-y-1.5")}>
         <p
           className={cn(
-            "font-semibold tracking-tight text-foreground",
-            compact ? "text-sm" : "text-lg",
+            "tracking-tight text-foreground",
+            compact ? "text-sm font-semibold" : "text-[20px] font-bold tracking-[-0.02em]",
           )}
         >
           {title}
@@ -133,6 +158,7 @@ export function ErrorState({
       size={size}
       className={className}
       icon={AlertTriangle}
+      mox="sad"
       title={offline ? "You're offline" : title}
       description={
         <>

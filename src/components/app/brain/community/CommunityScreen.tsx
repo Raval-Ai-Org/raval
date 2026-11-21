@@ -373,7 +373,7 @@ function ThreadCard({
             </span>
             {when && <span>· {when}</span>}
             {t.status === "replied" && (
-              <span className="inline-flex items-center gap-0.5 text-primary">
+              <span className="inline-flex items-center gap-0.5 text-primary-ink">
                 · <Check className="h-3 w-3" /> Replied
               </span>
             )}
@@ -502,7 +502,7 @@ function ThreadCard({
               title={saved ? "Remove from saved" : "Save"}
               className={cn(
                 "grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-[var(--ds-well-bg)]",
-                saved ? "text-primary" : "text-muted-foreground",
+                saved ? "text-primary-ink" : "text-muted-foreground",
                 dsFocus,
               )}
               onClick={() => handlers.setStatus(t.id, saved ? "new" : "saved")}

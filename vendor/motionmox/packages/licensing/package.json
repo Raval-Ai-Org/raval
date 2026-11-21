@@ -1,0 +1,27 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/licensing"
+  },
+  "name": "@motionmox/licensing",
+  "version": "4.0.542",
+  "description": "Manage your Remotion.pro license",
+  "main": "dist",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "dependencies": {},
+  "homepage": "https://www.remotion.dev/docs/licensing",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    }
+  },
+  "private": true
+}

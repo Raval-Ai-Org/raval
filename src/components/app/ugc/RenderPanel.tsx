@@ -10,6 +10,7 @@ import {
   Copy,
   Download,
   Megaphone,
+  Minus,
   Pencil,
   RefreshCw,
   Save,
@@ -63,6 +64,7 @@ export function useRenderProgress(
       try {
         const next = await ugcApi.getRender(workspaceId, id);
         if (cancelled) return;
+        if (!next?.status) throw new Error("No render in the answer");
         setRender(next);
         if (!ACTIVE_RENDER_STATUSES.includes(next.status)) {
           settledRef.current?.(next);
@@ -301,6 +303,17 @@ export function RenderPanel({
             </motion.div>
           ) : null}
 
+          {active ? (
+            <Button
+              size="sm"
+              className="studio-cta w-full rounded-full"
+              title="Keeps going. The corner list tells you when it's ready."
+              onClick={() => emitAppEvent("ugc:minimize")}
+            >
+              <Minus aria-hidden /> Run in background
+            </Button>
+          ) : null}
+
           {active && (render.status === "queued" || render.status === "submitting") ? (
             <Button
               variant="ghost"
@@ -404,7 +417,7 @@ function ActionTile({
       disabled={disabled || loading}
       className="flex flex-col items-center gap-1.5 rounded-2xl bg-[var(--ds-well-bg)] px-2 py-3 text-[11.5px] font-medium transition-colors hover:bg-primary/15 disabled:opacity-50"
     >
-      <span className="grid size-8 place-items-center rounded-full bg-background text-primary">
+      <span className="grid size-8 place-items-center rounded-full bg-background text-primary-ink">
         {loading ? (
           <span className="size-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         ) : (
@@ -431,7 +444,7 @@ function StageTrack({ stageIndex }: { stageIndex: number }) {
                 current
                   ? "bg-primary text-primary-foreground"
                   : done
-                    ? "bg-primary/15 text-primary"
+                    ? "bg-primary/15 text-primary-ink"
                     : "bg-[var(--ds-well-bg)] text-muted-foreground",
               )}
               aria-current={current ? "step" : undefined}

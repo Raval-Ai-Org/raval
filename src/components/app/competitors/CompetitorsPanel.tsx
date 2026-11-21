@@ -270,7 +270,7 @@ function Panel({ workspaceId }: { workspaceId: string }) {
             }
             action={
               bootstrapping ? (
-                <Spinner className="h-5 w-5 animate-spin text-primary" />
+                <Spinner className="h-5 w-5 animate-spin text-primary-ink" />
               ) : (
                 findButton()
               )

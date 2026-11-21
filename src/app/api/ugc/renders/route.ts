@@ -17,8 +17,8 @@ import { BrandFrozenError, UpgradeRequiredError } from "@/server/billing/errors"
 import { beginDeferredMetered } from "@/server/billing/metered.server";
 import { saveUgcBillingLink } from "@/server/billing/ugc-async.server";
 import {
+  videoCreditsFor,
   videoFeatureFor,
-  videoUnitsFor,
   type UgcModelKey,
   type VideoResolution,
 } from "@/lib/billing/catalog";
@@ -74,12 +74,9 @@ export const POST = defineRoute({
     }
     const model = render.model as UgcModelKey;
     const resolution = render.resolution as VideoResolution;
-    const units = videoUnitsFor({
-      ugcKey: model,
-      seconds: render.durationSec,
-      resolution,
-      providerCostUsd,
-    });
+    // Pricing v4: priced per second in credits, the routed provider's cost a floor.
+    const units = videoCreditsFor(model, render.durationSec, resolution, providerCostUsd);
+    const action = `ugc_${model}`;
     const feature = videoFeatureFor(model, resolution);
     let charge;
     try {
@@ -87,8 +84,8 @@ export const POST = defineRoute({
         workspaceId,
         userId,
         role,
-        actionName: `video_${model}`,
-        meter: "video",
+        actionName: action,
+        meter: "credits",
         amount: units,
         feature,
         idempotencyKey: body.idempotencyKey,
@@ -107,8 +104,8 @@ export const POST = defineRoute({
           workspace_id: workspaceId,
           hold_id: charge.holdId,
           charge_id: charge.chargeId,
-          charge_key: `${userId}:video_${model}:${body.idempotencyKey}`,
-          action: `video_${model}`,
+          charge_key: `${userId}:${action}:${body.idempotencyKey}`,
+          action,
           units,
           mode: charge.mode,
           shadow_decision: charge.shadowDecision,
@@ -120,6 +117,6 @@ export const POST = defineRoute({
       throw error;
     }
     kickRender(render.id);
-    return Response.json({ render, created, videoUnits: units }, { status: 201 });
+    return Response.json({ render, created, credits: units }, { status: 201 });
   },
 });

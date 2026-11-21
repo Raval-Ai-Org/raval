@@ -10,19 +10,30 @@ describe("routeSocialPlatform", () => {
     }
   });
 
-  it("sends every network Composio signs in to without our own app to Composio", () => {
-    for (const p of ["instagram", "facebook", "pinterest", "linkedin", "youtube"]) {
-      expect(routeSocialPlatform(p, ready).provider).toBe("composio");
+  it("puts every network Post for Me serves on Post for Me first", () => {
+    for (const p of ["instagram", "facebook", "linkedin", "youtube"]) {
+      expect(routeSocialPlatform(p, ready).provider).toBe("postforme");
     }
   });
 
-  it("falls back to Post for Me while Composio is off or the app is still being tested", () => {
-    expect(routeSocialPlatform("instagram", { composioReady: false, testing: true }).provider).toBe(
-      "postforme",
-    );
-    expect(routeSocialPlatform("instagram", { composioReady: true, testing: false }).provider).toBe(
-      "postforme",
-    );
+  it("uses the backup only for Pinterest, or while Post for Me is down", () => {
+    expect(routeSocialPlatform("pinterest", ready).provider).toBe("composio");
+    const down = { ...ready, postForMeReady: false };
+    for (const p of ["instagram", "facebook", "pinterest", "linkedin", "youtube"]) {
+      expect(routeSocialPlatform(p, down).provider).toBe("composio");
+    }
+    // X, Threads and TikTok have no backup: they stay put.
+    expect(routeSocialPlatform("threads", down).provider).toBe("postforme");
+  });
+
+  it("keeps Post for Me while the backup is off or the app is still being tested", () => {
+    const down = { postForMeReady: false };
+    expect(
+      routeSocialPlatform("instagram", { ...down, composioReady: false, testing: true }).provider,
+    ).toBe("postforme");
+    expect(
+      routeSocialPlatform("instagram", { ...down, composioReady: true, testing: false }).provider,
+    ).toBe("postforme");
   });
 });
 

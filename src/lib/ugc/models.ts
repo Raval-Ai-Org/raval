@@ -83,7 +83,7 @@ export type ProviderVideoSpec = {
 export type UgcModel = {
   key: AnyUgcModelKey;
   /** Prompt adapter family (src/lib/ugc/prompt-adapters.ts). */
-  family: "veo" | "seedance" | "gemini" | "minimax" | "kling" | "grok" | "wan";
+  family: "veo" | "seedance" | "gemini" | "minimax" | "kling" | "grok" | "grok-video" | "wan";
   displayName: string;
   tier: "draft" | "standard" | "premium";
   description: string;
@@ -250,15 +250,38 @@ const KIE_GROK_I2V: ProviderVideoSpec = {
   pricing: credits("video", { "480p": 12, "720p": 24 }),
 };
 
+// Grok Imagine Video 1.5 preview (docs.kie.ai/market/grok-imagine/1-5-preview):
+// a full video model, not a photo animator. Text, one reference picture or an
+// exact first (and last) frame; speech and sound always on. Measured
+// 2026-11-12: 36 credits for 8 s at 720p (4.5/s, $0.0225/s, 40% under Veo 3.1
+// Fast), with the scripted line spoken word for word and the action done.
+// KIE lists 480p from 2.4/s. Prompts are cut to 4,096 characters
+// (`fitVideoPrompt`).
+const KIE_GROK_VIDEO_15: ProviderVideoSpec = {
+  model: "grok-imagine-video-1-5-preview",
+  durations: [4, 6, 8],
+  aspectRatios: ["9:16", "16:9"],
+  resolutions: ["480p", "720p"],
+  defaultResolution: "720p",
+  nativeAudio: true,
+  spokenDialogue: true,
+  images: { mode: "references", max: 1 },
+  pricing: credits("second", { "480p": 2.4, "720p": 4.5 }),
+};
+
 const ENTRIES: Record<UgcModelKey, Entry> = {
   standard: {
     key: "standard",
-    family: "veo",
+    family: "grok-video",
     displayName: "Standard",
     tier: "standard",
     description:
       "Realistic creators with lip-synced speech and your product in the shot. The best value for UGC ads.",
-    providers: { kie: KIE_VEO_FAST, openrouter: OR_VEO_FAST },
+    // Grok Imagine 1.5 on KIE (was Veo 3.1 Fast, cost review 2026-11-12). The
+    // rollback is `family: "veo"` with `kie: KIE_VEO_FAST, openrouter: OR_VEO_FAST`.
+    // OpenRouter's Veo 3.1 Lite stands in only when KIE refuses: the cheapest
+    // OpenRouter model that still speaks the lines.
+    providers: { kie: KIE_GROK_VIDEO_15, openrouter: OR_VEO_LITE },
     enabledByDefault: true,
   },
   draft: {
@@ -278,21 +301,25 @@ const ENTRIES: Record<UgcModelKey, Entry> = {
     description: "The most realistic people and product shots, for hero ads.",
     providers: {
       kie: {
-        model: "google/gemini-omni-flash-1-1",
+        // Gemini Omni 1.2 Flash (docs.kie.ai/market/google/gemini-omni-flash-1-2):
+        // ranks above 1.1 on Artificial Analysis and costs less. It takes 3-15 s;
+        // the clip plan keeps the lengths 1.1 had.
+        model: "google/gemini-omni-flash-1-2",
         durations: [4, 6, 8, 10],
         aspectRatios: ["9:16", "16:9"],
         resolutions: ["720p", "1080p"],
         defaultResolution: "1080p",
         nativeAudio: true,
         spokenDialogue: true,
-        // Up to 7 quota units; images use 1 each. With a first frame (a
-        // picture brought to life, a chained clip) it opens on that exact
-        // frame instead; references and a first frame never mix.
-        images: { mode: "references", max: 7 },
-        // About $0.0525/s at any resolution up to 1080p (cost review
-        // 2026-11-03). Verify on kie.ai/pricing (UGC_PRICE_PREMIUM_<RES>_CREDITS);
-        // the task's own creditsConsumed is what is metered.
-        pricing: credits("second", { "720p": 10.5, "1080p": 10.5 }),
+        // Up to 6 reference images on 1.2. With a first frame (a picture
+        // brought to life, a chained clip) it opens on that exact frame
+        // instead; references and a first frame never mix.
+        images: { mode: "references", max: 6 },
+        // Measured 2026-11-12: 72 credits for 8 s at 720p (9/s, $0.045);
+        // kie.ai/pricing lists 1080p at 10/s. 1.1 was 10.5/s at both. The
+        // task's own creditsConsumed is what is metered
+        // (UGC_PRICE_PREMIUM_<RES>_CREDITS overrides the estimate).
+        pricing: credits("second", { "720p": 9, "1080p": 10 }),
       },
       // Gemini Omni isn't on OpenRouter. Veo 3.1 Fast is the outage fallback:
       // about the same price, never Hailuo 3 at 2K ($0.13/s).

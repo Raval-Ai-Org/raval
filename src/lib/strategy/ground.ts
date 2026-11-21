@@ -235,7 +235,10 @@ export function toAutopilotStrategy(s: MarketingStrategy): AutopilotStrategy {
     summary: `${s.positioning.statement} ${s.goal.summary}`.trim().slice(0, 400),
     audience,
     voice: s.voice.slice(0, 160),
-    pillars: s.pillars.slice(0, 5).map((p) => ({ title: p.title, detail: p.detail })),
+    pillars: s.pillars
+      .slice(0, 5)
+      .map((p) => ({ title: p.title, detail: p.detail, share: p.share })),
+    messages: s.messages,
   };
 }
 

@@ -4,8 +4,8 @@ import { authedFetch } from "@/lib/authed-fetch";
 
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const CLIP_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
-export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
-export const MAX_CLIP_BYTES = 50 * 1024 * 1024;
+export const MAX_PHOTO_BYTES = 100 * 1024 * 1024;
+export const MAX_CLIP_BYTES = 200 * 1024 * 1024;
 
 export type UploadedMedia = { id: string; filename: string; url?: string };
 

@@ -92,7 +92,7 @@ export function FixImpactView({
   return (
     <Tile className="ds-enter">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink">
           <BarChart className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">

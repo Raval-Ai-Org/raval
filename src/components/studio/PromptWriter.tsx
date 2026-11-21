@@ -7,14 +7,16 @@ import { creditsFor } from "@/lib/billing/catalog";
 // wrote), reveals it into the box, and remembers what it gave so the next
 // click brings something new.
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { toast } from "@/lib/toast";
-import { RefreshCw, Sparkles, Wand2 } from "@/components/icons";
+import { Dices, RefreshCw, Sparkles, Wand2 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
 import { readBrandPayload, studioApi, type WrittenPrompt } from "@/lib/studio/client";
 import { getTemplate } from "@/lib/studio/templates";
-import { updateSession, type StudioSession } from "@/lib/studio/session-store";
+import { categoryById } from "@/lib/studio/categories";
+import { getSession, updateSession, type StudioSession } from "@/lib/studio/session-store";
 
 const HISTORY_LIMIT = 30;
 
@@ -31,6 +33,29 @@ function readHistory(workspaceId: string): string[] {
   }
 }
 
+const categoriesKey = (workspaceId: string) => `studio:written-categories:${workspaceId}`;
+
+/** The categories this browser was given lately, newest first (an automatic pick rotates). */
+function readCategories(workspaceId: string): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(categoriesKey(workspaceId)) ?? "[]");
+    return Array.isArray(raw)
+      ? raw.filter((x): x is string => typeof x === "string").slice(0, 6)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberCategory(workspaceId: string, id: string) {
+  try {
+    const next = [id, ...readCategories(workspaceId).filter((x) => x !== id)].slice(0, 6);
+    localStorage.setItem(categoriesKey(workspaceId), JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
 function remember(workspaceId: string, items: (string | null)[]) {
   try {
     const next = [...items.filter((x): x is string => !!x), ...readHistory(workspaceId)];
@@ -44,11 +69,11 @@ function remember(workspaceId: string, items: (string | null)[]) {
 }
 
 const STATUS = [
-  "Checking what's trending",
   "Reading your brand",
+  "Checking what's working now",
   "Finding a fresh angle",
-  "Writing the details",
-  "Polishing your prompt",
+  "Writing it sharp",
+  "Checking it reads right",
 ];
 
 export type PromptWriterState = {
@@ -60,7 +85,7 @@ export type PromptWriterState = {
 };
 
 export function usePromptWriter(session: StudioSession): PromptWriterState {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [busy, setBusy] = useState(false);
   const [statusIndex, setStatusIndex] = useState(0);
   const [result, setResult] = useState<WrittenPrompt | null>(null);
@@ -91,21 +116,25 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
   const isStarter = !!template && brief === template.starter.trim();
   const hasOwnIdea = brief.length >= 12 && !isOurs && !isStarter;
 
+  // "Surprise me" (was "Write it for me"): a fresh, random, on-brand idea
+  // each press; with the person's own words it sharpens them instead.
   const label = busy
-    ? "Writing…"
+    ? "Thinking…"
     : isOurs
-      ? "Try another"
+      ? "Another idea"
       : hasOwnIdea
-        ? "Improve it"
-        : "Write it for me";
+        ? "Sharpen it"
+        : "Surprise me";
 
   const write = async () => {
     if (busy) return;
     const previous = {
       brief: session.brief,
+      category: session.category,
       goal: session.goal,
       ideaId: session.ideaId,
       ideaSource: session.ideaSource,
+      controls: session.controls,
     };
     setBusy(true);
     try {
@@ -117,6 +146,8 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
         template: session.template,
         goal: session.goal,
         controls: session.controls,
+        category: session.category,
+        recentCategories: readCategories(session.workspaceId),
         avoid: [
           ...(result ? [result.title, result.signal ?? ""] : []),
           ...readHistory(session.workspaceId),
@@ -126,6 +157,7 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
       });
       if (!alive.current) return;
       remember(session.workspaceId, [written.title, written.signal]);
+      if (written.category) rememberCategory(session.workspaceId, written.category);
 
       // Reveal the prompt into the box, a few characters at a time.
       const full = written.prompt;
@@ -139,16 +171,35 @@ export function usePromptWriter(session: StudioSession): PromptWriterState {
           if (!alive.current) return;
         }
       }
+      // Inspo photos suggested with the prompt join only a box with none yet.
+      const latest = getSession(session.id)?.controls ?? session.controls;
+      const media =
+        written.media?.assetIds.length && !latest.referenceAssetIds?.length ? written.media : null;
       updateSession(session.id, {
+        ...(media
+          ? {
+              controls: {
+                ...latest,
+                referenceAssetIds: media.assetIds,
+                referenceMode: "design" as const,
+                photoFidelity: "exact" as const,
+              },
+            }
+          : {}),
         brief: full,
+        // The category it was written as is selected, so the post is made as that kind.
+        ...(written.category ? { category: written.category } : {}),
         goal: session.goal ?? written.goal,
         ideaId: undefined,
         ideaSource: undefined,
         error: null,
       });
       setResult(written);
+      const kind = categoryById(written.category)?.label;
       toast.success("Your prompt is ready", {
-        description: written.title,
+        description: [kind ? `${kind} · ${written.title}` : written.title, media?.reason]
+          .filter(Boolean)
+          .join(" "),
         action: {
           label: "Undo",
           onClick: () => {
@@ -198,8 +249,9 @@ export function WriteForMeButton({
   writer: PromptWriterState;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
-  const Icon = writer.label === "Try another" ? RefreshCw : Wand2;
+  const reduce = useReducedMotionSafe();
+  const Icon =
+    writer.label === "Sharpen it" ? Wand2 : writer.label === "Another idea" ? RefreshCw : Dices;
   return (
     <motion.button
       type="button"
@@ -219,7 +271,14 @@ export function WriteForMeButton({
           className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/35 to-transparent opacity-0 transition-[left,opacity] duration-700 group-hover:left-[120%] group-hover:opacity-100"
         />
       ) : null}
-      <Icon className={cn("relative size-3.5", writer.busy && "animate-spin")} />
+      <motion.span
+        className="relative"
+        animate={writer.busy && !reduce ? { rotate: [0, 180, 360] } : { rotate: 0 }}
+        transition={writer.busy ? { duration: 0.9, repeat: Infinity, ease: "easeInOut" } : {}}
+        whileHover={reduce || writer.busy ? undefined : { rotate: [0, -18, 14, 0] }}
+      >
+        <Icon className="size-3.5" />
+      </motion.span>
       <span className="relative">
         {writer.label} · {creditsFor("ideas")} credits
       </span>
@@ -229,7 +288,7 @@ export function WriteForMeButton({
 
 /** Covers the description box while writing. */
 export function WritingOverlay({ writer }: { writer: PromptWriterState }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <AnimatePresence>
       {writer.busy ? (

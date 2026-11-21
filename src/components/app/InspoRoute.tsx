@@ -11,6 +11,7 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { parseInspoSection } from "@/lib/inspo/sections";
 import { inspoPath, workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute } from "@/lib/shell/history";
 
 const InspoPanel = lazy(() =>
   import("@/components/app/inspo/InspoPanel").then((m) => ({ default: m.InspoPanel })),
@@ -23,9 +24,10 @@ function Inner() {
   const section = parseInspoSection(params.get("s"));
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Inspo"
       Icon={Palette}

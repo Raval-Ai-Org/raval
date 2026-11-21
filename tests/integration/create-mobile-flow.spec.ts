@@ -30,25 +30,29 @@ for (const { width, height } of [
       }),
     ).toBe(true);
 
+    // The creator (UGC) video and the product video are on the first screen.
+    await expect(dialog.getByRole("button", { name: /^AI creator video/ })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /^Product video/ })).toBeVisible();
+
+    // Every group is a different starting point with its own formats.
     for (const [category, format] of [
-      ["Video", "Creator video ad"],
-      ["Picture", "Image post"],
-      ["Text", "Social post"],
+      ["Social posts", "Image post"],
+      ["Ads", "Creator video ad"],
+      ["More to make", "Edit my clips"],
     ]) {
       await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
       await expect(dialog.getByRole("button", { name: new RegExp(`^${format}`) })).toBeVisible();
-      const back = dialog.getByRole("button", { name: "Back to all categories" });
+      const back = dialog.getByRole("button", { name: "Back one step" });
       const backBox = await back.boundingBox();
       expect(backBox?.height).toBeGreaterThanOrEqual(43.5);
       await back.click();
       await expect(dialog.getByRole("button", { name: new RegExp(`^${category}`) })).toBeVisible();
     }
 
-    for (const category of ["Stories", "Ads"]) {
-      await dialog.getByRole("button", { name: new RegExp(`^${category}`) }).click();
-      await expect(page.getByText("Choose a workspace first").first()).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "Back to all categories" })).toHaveCount(0);
-    }
+    // Picking a format opens it (the lab has no workspace, so it says so).
+    await dialog.getByRole("button", { name: /^Social posts/ }).click();
+    await dialog.getByRole("button", { name: /^Story/ }).click();
+    await expect(page.getByText("Choose a workspace first").first()).toBeVisible();
 
     await dialog.getByRole("button", { name: "Close dialog" }).click();
     await expect(dialog).toHaveCount(0);

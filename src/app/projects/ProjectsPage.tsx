@@ -1,5 +1,6 @@
 "use client";
 
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { useNavigate, Link } from "@/lib/navigation";
 import { useServerFn } from "@/lib/use-server-fn";
 import { useEffect, useMemo, useState } from "react";
@@ -25,12 +26,15 @@ import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { brandRoom } from "@/lib/workspace/brand-room";
 import { DeleteWorkspaceDialog } from "@/components/workspace/DeleteWorkspaceDialog";
 import { normalizeDomain, toWebsiteUrl } from "@/lib/workspace/domain";
-import { onboardingPath, workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
+import {
+  ALL_WORKSPACES,
+  onboardingPath,
+  soleWorkspaceLanding,
+  workspacePath,
+} from "@/lib/workspace/paths";
 import { readLastWorkspace } from "@/lib/workspace/last-opened";
 import { Logo } from "@/components/brand/Logo";
-import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
-import { AURORA, MelloxAurora } from "@/components/brand/MelloxAurora";
-import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
+import { AppFrame } from "@/components/app/shell/AppFrame";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -84,6 +88,24 @@ type Workspace = WorkspaceSummary;
 export type ClientStatus = Workspace["clientStatus"];
 
 /** The tag on a project card, from what is actually going on in it. */
+/** The placeholder name a "No website" brand has until the kit names it. */
+const BLANK_DRAFT_NAME = "New brand";
+
+/** An unfinished brand: setup was started but never finished. */
+export function isUnfinished(w: Pick<Workspace, "onboarded" | "duplicateOf">): boolean {
+  return !w.onboarded && !w.duplicateOf;
+}
+
+/** The person's own untouched "No website" draft, if there is one. */
+function blankDraft(existing: Workspace[]): Workspace | null {
+  return (
+    existing
+      .filter((w) => w.isOwner && isUnfinished(w) && !w.websiteUrl && !w.domain)
+      .filter((w) => w.name.trim() === BLANK_DRAFT_NAME)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+  );
+}
+
 function projectTag(w: Workspace): { label: string; dot: string } {
   if (w.clientStatus === "paused") return { label: "Paused", dot: "bg-zinc-400" };
   if (!w.onboarded) return { label: "Finish setup", dot: "bg-amber-500" };
@@ -167,6 +189,19 @@ function ProjectsPage() {
     };
   }, [ensureWorkspace, navigate, sessionAttempt]);
 
+  // One brand goes straight in (soleWorkspaceLanding): the list is only for
+  // choosing, and with one workspace there is nothing to choose. The search
+  // is read once, before ?add= is cleared below.
+  const [landingSearch] = useState(() =>
+    typeof window === "undefined" ? "?all=1" : window.location.search,
+  );
+  const landing = workspacesQuery.data
+    ? soleWorkspaceLanding(workspacesQuery.data, landingSearch)
+    : null;
+  useEffect(() => {
+    if (landing) navigate({ to: landing, replace: true });
+  }, [landing, navigate]);
+
   const openProject = (w: Workspace) => {
     navigate({ to: openHref(w) });
   };
@@ -175,7 +210,8 @@ function ProjectsPage() {
    * A new brand always starts in onboarding (goal, products, first posts). A
    * create that returned an existing workspace (same brand domain) opens it instead.
    */
-  const afterCreate = (result: CreateWorkspaceOutcome) => {
+  const afterCreate = (result: CreateWorkspaceOutcome, opts?: { manual?: boolean }) => {
+    if (result.resumed) toast.message("Picking up where you left off");
     if (!result.created) {
       toast.message(`You already have ${result.domain || result.name}`, {
         description: "Opening the existing workspace instead of creating a duplicate.",
@@ -184,7 +220,7 @@ function ProjectsPage() {
       navigate({ to: existing ? openHref(existing) : workspacePath(result.id) });
       return;
     }
-    navigate({ to: onboardingPath(result.id) });
+    navigate({ to: onboardingPath(result.id, opts?.manual ? { start: "manual" } : undefined) });
   };
 
   const signOut = async () => {
@@ -207,16 +243,20 @@ function ProjectsPage() {
     document.getElementById("your-brands")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // A brand is a finished setup; an unfinished one waits in its own row.
+  const finished = useMemo(() => workspaces.filter((w) => !isUnfinished(w)), [workspaces]);
+  const unfinished = useMemo(() => workspaces.filter((w) => isUnfinished(w)), [workspaces]);
+  const reduce = useReducedMotionSafe();
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return workspaces.filter((w) => {
+    return finished.filter((w) => {
       if (statusFilter === "attention" && w.health === "healthy") return false;
       if (statusFilter === "setup" && w.onboarded) return false;
       if (statusFilter === "paused" && w.clientStatus !== "paused") return false;
       if (!q) return true;
       return [w.name, w.domain, w.websiteUrl, w.industry].some((v) => v?.toLowerCase().includes(q));
     });
-  }, [workspaces, query, statusFilter]);
+  }, [finished, query, statusFilter]);
 
   const handleRename = async (id: string, name: string) => {
     try {
@@ -266,78 +306,68 @@ function ProjectsPage() {
   }
 
   return (
-    <div
-      data-mellox-app
-      className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background text-foreground"
-    >
-      {sessionReady && <BillingPanel />}
+    <AppFrame>
+      <div
+        className="group/projects relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground"
+        // The bar is clear over the colour wash and only frosts once the page moves.
+        onScroll={(e) =>
+          e.currentTarget.toggleAttribute("data-scrolled", e.currentTarget.scrollTop > 8)
+        }
+      >
+        {sessionReady && <BillingPanel />}
 
-      <ProjectsStage>
-        {/* Top bar */}
-        <header className="relative z-10 flex h-14 items-center justify-between gap-3 px-4 sm:px-5">
-          <Link
-            to={WORKSPACES_HOME}
-            aria-label="Mellox AI home"
-            className="flex h-9 shrink-0 items-center"
-          >
-            <Logo height={30} />
-          </Link>
-          <div className="flex items-center gap-2 sm:gap-3">
-            {sessionReady && <WalletPill />}
-            <AgencyHqPill
-              waiting={workspaces.reduce(
-                (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
-                0,
-              )}
-            />
-            <AccountMenu
-              email={userEmail}
-              name={userName}
-              avatarUrl={userAvatar}
-              onSignOut={signOut}
-            />
-          </div>
-        </header>
+        <ProjectsStage>
+          {/* Top bar */}
+          <header className="sticky top-0 z-20 flex h-16 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 group-data-[scrolled]/projects:border-[var(--ds-card-border)] group-data-[scrolled]/projects:bg-[var(--ds-frame-bg)]/80 group-data-[scrolled]/projects:backdrop-blur-xl items-center justify-between gap-3 px-4 sm:px-5">
+            <Link
+              to={ALL_WORKSPACES}
+              aria-label="Mellox home"
+              className="flex h-9 shrink-0 items-center"
+            >
+              <Logo height={30} />
+            </Link>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {sessionReady && <WalletPill />}
+              <AgencyHqPill
+                waiting={workspaces.reduce(
+                  (n, w) => n + w.pendingApprovals + w.draftCount + w.failedCount,
+                  0,
+                )}
+              />
+              <AccountMenu
+                email={userEmail}
+                name={userName}
+                avatarUrl={userAvatar}
+                onSignOut={signOut}
+              />
+            </div>
+          </header>
 
-        {/* Hero */}
-        <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
-          <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-            className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]"
-          >
-            {loading ? (
-              <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
-            ) : workspaceListFailed ? (
-              "Your workspaces couldn't load"
-            ) : workspaces.length === 0 ? (
-              copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
-            ) : (
-              copy.returningHeadline(userEmail ? userEmail.split("@")[0] : undefined)
-            )}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15, duration: 0.4 }}
-            className="mt-2 text-[14px] text-muted-foreground"
-          >
-            {workspaceListFailed
-              ? workspaceRouteMissing
-                ? "Please try again in a moment."
-                : "Please try again."
-              : workspaces.length === 0
-                ? copy.firstSubhead
-                : copy.returningSubhead}
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto mt-8 w-full max-w-xl"
+          {/* Hero: Mox's world (the same 3D scene as onboarding), Mox on the
+              left of the picture and everything you do on the right. */}
+          <ProjectsHero
+            reduce={reduce}
+            eyebrow={finished.length === 0 ? "Let's meet your brand" : "Your brands"}
+            title={
+              loading || landing ? (
+                <span className="mx-loader__label">{`Loading your ${copy.nounPlural}…`}</span>
+              ) : workspaceListFailed ? (
+                "Your workspaces couldn't load"
+              ) : finished.length === 0 ? (
+                copy.firstHeadline(userName ? userName.split(" ")[0] : undefined)
+              ) : (
+                copy.returningHeadline(userName ? userName.split(" ")[0] : undefined)
+              )
+            }
+            subtitle={
+              workspaceListFailed
+                ? workspaceRouteMissing
+                  ? "Please try again in a moment."
+                  : "Please try again."
+                : finished.length === 0
+                  ? copy.firstSubhead
+                  : copy.returningSubhead
+            }
           >
             {workspaceListFailed ? (
               <ErrorState
@@ -372,136 +402,144 @@ function ProjectsPage() {
                 showBrandList();
               }}
             />
-          </motion.div>
-        </section>
-      </ProjectsStage>
+          </ProjectsHero>
 
-      {/* Projects panel — only shown when at least one client exists */}
-      {!loading && workspaces.length > 0 && (
-        <section
-          id="your-brands"
-          className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-4 px-5 pb-12 pt-8"
-        >
-          <div>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[12px] font-medium text-foreground">
-                  {copy.sectionTitle}
-                </span>
-                <span className="text-[12px] text-muted-foreground">
-                  {workspaces.length} {workspaces.length === 1 ? copy.noun : copy.nounPlural}
-                </span>
-                <BrandPlaces />
-                <select
-                  aria-label="Filter by status"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                  className={PILL_SELECT}
-                >
-                  <option value="all">All</option>
-                  <option value="attention">Needs attention</option>
-                  <option value="setup">Finish setup</option>
-                  <option value="paused">Paused</option>
-                </select>
-              </div>
+          {!loading && !landing && unfinished.length > 0 && (
+            <UnfinishedSetups
+              items={unfinished}
+              reduce={reduce}
+              onContinue={openProject}
+              onDiscard={(w) => setDeleteTarget(w)}
+            />
+          )}
+        </ProjectsStage>
 
-              <div className="flex w-full items-center gap-2 sm:w-auto">
-                <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-surface-2/80 px-3 ring-1 ring-border/60 focus-within:ring-2 focus-within:ring-ring/55 sm:flex-none">
-                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={copy.searchPlaceholder}
-                    className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground sm:w-56"
-                  />
+        {/* Projects panel — only shown when at least one client exists */}
+        {!loading && !landing && finished.length > 0 && (
+          <section
+            id="your-brands"
+            className="relative z-10 mx-auto w-full max-w-6xl scroll-mt-20 px-5 pb-12 pt-4"
+          >
+            <div>
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[12px] font-medium text-foreground">
+                    {copy.sectionTitle}
+                  </span>
+                  <span className="text-[12px] text-muted-foreground">
+                    {finished.length} {finished.length === 1 ? copy.noun : copy.nounPlural}
+                  </span>
+                  <BrandPlaces />
+                  <select
+                    aria-label="Filter by status"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                    className={PILL_SELECT}
+                  >
+                    <option value="all">All</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="paused">Paused</option>
+                  </select>
                 </div>
-                <Button
-                  onClick={() => setDialogOpen(true)}
-                  className="btn-aura h-9 shrink-0 gap-1.5 rounded-full px-3.5 text-[13px]"
-                >
-                  <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New</span>
-                </Button>
-              </div>
-            </div>
 
-            {filtered.length === 0 ? (
-              <div className="grid place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2/60 px-6 py-12 text-center">
-                <Search className="h-5 w-5 text-muted-foreground" />
-                <p className="mt-2 text-[13px] text-muted-foreground">
-                  No {copy.nounPlural} match {query ? `"${query}"` : "this filter"}
-                </p>
-                <button
-                  onClick={() => {
-                    setQuery("");
-                    setStatusFilter("all");
-                  }}
-                  className="mt-3 text-[12px] font-medium text-foreground underline-offset-4 hover:underline"
-                >
-                  Clear search
-                </button>
-              </div>
-            ) : (
-              <motion.div
-                layout
-                className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3"
-              >
-                <AnimatePresence initial={false}>
-                  {filtered.map((w, i) => (
-                    <ProjectCard
-                      key={w.id}
-                      workspace={w}
-                      index={i}
-                      lastOpened={w.id === lastOpened}
-                      duplicateOfName={
-                        w.duplicateOf
-                          ? (workspaces.find((x) => x.id === w.duplicateOf)?.name ?? null)
-                          : null
-                      }
-                      onOpen={() => openProject(w)}
-                      onRename={() => setRenameTarget(w)}
-                      onDelete={w.isOwner ? () => setDeleteTarget(w) : undefined}
-                      onStatusChange={(s) => handleStatus(w.id, s)}
+                <div className="flex w-full items-center gap-2 sm:w-auto">
+                  <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-surface-2/80 px-3 ring-1 ring-border/60 focus-within:ring-2 focus-within:ring-ring/55 sm:flex-none">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={copy.searchPlaceholder}
+                      className="h-full w-full min-w-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground sm:w-56"
                     />
-                  ))}
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </div>
-        </section>
-      )}
+                  </div>
+                  <Button
+                    onClick={() => setDialogOpen(true)}
+                    className="btn-aura h-9 shrink-0 gap-1.5 rounded-full px-3.5 text-[13px]"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New</span>
+                  </Button>
+                </div>
+              </div>
 
-      {loading && (
-        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
-          <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="mx-skel aspect-[16/10] rounded-[var(--ds-radius-tile)]"
-                style={{ ["--mx-skel-delay" as string]: `${i * 0.12}s` }}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+              {filtered.length === 0 ? (
+                <div className="grid place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2/60 px-6 py-12 text-center">
+                  <Search className="h-5 w-5 text-muted-foreground" />
+                  <p className="mt-2 text-[13px] text-muted-foreground">
+                    No {copy.nounPlural} match {query ? `"${query}"` : "this filter"}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setQuery("");
+                      setStatusFilter("all");
+                    }}
+                    className="mt-3 text-[12px] font-medium text-foreground underline-offset-4 hover:underline"
+                  >
+                    Clear search
+                  </button>
+                </div>
+              ) : (
+                <motion.div
+                  layout
+                  className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  <AnimatePresence initial={false}>
+                    {filtered.map((w, i) => (
+                      <ProjectCard
+                        key={w.id}
+                        workspace={w}
+                        index={i}
+                        lastOpened={w.id === lastOpened}
+                        duplicateOfName={
+                          w.duplicateOf
+                            ? (workspaces.find((x) => x.id === w.duplicateOf)?.name ?? null)
+                            : null
+                        }
+                        onOpen={() => openProject(w)}
+                        onRename={() => setRenameTarget(w)}
+                        onDelete={w.isOwner ? () => setDeleteTarget(w) : undefined}
+                        onStatusChange={(s) => handleStatus(w.id, s)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </div>
+          </section>
+        )}
 
-      <ProjectsFoot />
+        {(loading || landing) && (
+          <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="mx-skel aspect-[16/10] rounded-[var(--ds-radius-tile)]"
+                  style={{ ["--mx-skel-delay" as string]: `${i * 0.12}s` }}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-      {/* Rename dialog */}
-      <RenameDialog
-        workspace={renameTarget}
-        onClose={() => setRenameTarget(null)}
-        onSave={handleRename}
-      />
+        <ProjectsFoot />
 
-      {/* Delete confirmation — typed CONFIRM, server-side, owner only */}
-      <DeleteWorkspaceDialog
-        workspace={deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        onDeleted={(id) => {
-          if (lastOpened === id) setLastOpened(null);
-        }}
-      />
-    </div>
+        {/* Rename dialog */}
+        <RenameDialog
+          workspace={renameTarget}
+          onClose={() => setRenameTarget(null)}
+          onSave={handleRename}
+        />
+
+        {/* Delete confirmation — typed CONFIRM, server-side, owner only */}
+        <DeleteWorkspaceDialog
+          workspace={deleteTarget}
+          onOpenChange={(o) => !o && setDeleteTarget(null)}
+          onDeleted={(id) => {
+            if (lastOpened === id) setLastOpened(null);
+          }}
+        />
+      </div>
+    </AppFrame>
   );
 }
 
@@ -625,7 +663,7 @@ function AccountMenu({
           </div>
           <div className="text-[12px] text-muted-foreground truncate max-w-full">{email}</div>
           <button
-            onClick={() => navigate({ to: WORKSPACES_HOME })}
+            onClick={() => navigate({ to: ALL_WORKSPACES })}
             className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-[12px] font-medium text-foreground transition hover:bg-muted"
           >
             <UserCircle2 className="h-3.5 w-3.5" /> Manage your account
@@ -651,7 +689,7 @@ function AccountMenu({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2.5 rounded-lg py-2 text-[13px]"
-            onSelect={() => navigate({ to: WORKSPACES_HOME })}
+            onSelect={() => navigate({ to: ALL_WORKSPACES })}
           >
             <Settings className="h-4 w-4 text-muted-foreground" /> Settings
           </DropdownMenuItem>
@@ -727,48 +765,61 @@ export function ProjectCard({
     >
       <button
         onClick={onOpen}
-        className="group/thumb relative block w-full rounded-[var(--ds-radius-tile)] text-left transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-0.5 hover:shadow-[var(--ds-tile-shadow-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        aria-label={`Open ${workspace.name || domain || "project"}`}
+        className="group/thumb relative block w-full rounded-[24px] text-left transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-1 hover:shadow-[0_24px_50px_-26px_rgb(15_60_40/0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2 ring-1 ring-border/60">
-          {/* Monochrome canvas — becomes colorful on hover */}
-          <div className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-0 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--foreground)/0.06),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--foreground)/0.05),transparent_55%)]" />
-          <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100 bg-[radial-gradient(circle_at_20%_15%,hsl(var(--brand-green)/0.12),transparent_60%),radial-gradient(circle_at_85%_90%,hsl(var(--brand-blue)/0.08),transparent_55%)]" />
-          {/* Faint grid */}
-          <div
-            className="absolute inset-0 opacity-[0.06] transition-opacity duration-500 group-hover:opacity-[0.04]"
-            style={{
-              backgroundImage:
-                "linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)",
-              backgroundSize: "22px 22px",
-            }}
+        {/* Mellox 2.0: every brand gets its own soft Mox-palette cover. */}
+        <div
+          className="relative aspect-[16/10] w-full overflow-hidden rounded-[24px] ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
+          style={{ backgroundImage: coverFor(workspace.name || domain || "") }}
+        >
+          <span
+            aria-hidden
+            className="absolute -right-10 -top-12 size-44 rounded-full bg-white/45 blur-2xl transition-transform dark:bg-white/20 duration-700 group-hover/thumb:-translate-x-6 group-hover/thumb:translate-y-4"
+          />
+          <span
+            aria-hidden
+            className="absolute -bottom-14 -left-10 size-40 rounded-full bg-white/30 blur-2xl transition-transform dark:bg-white/10 duration-700 group-hover/thumb:translate-x-6"
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-t from-black/0 to-black/0 dark:from-black/30 dark:to-black/0"
           />
 
-          {/* Site screenshot (monochrome) */}
+          {/* The site in a small browser window, when a screenshot exists. */}
           {screenshotUrl && (
-            <img
-              src={screenshotUrl}
-              alt=""
-              loading="lazy"
-              draggable={false}
-              onLoad={(e) => {
-                // mshots returns a ~400x300 WordPress placeholder while generating.
-                // Real screenshots come back at 720px wide — require that to avoid showing the placeholder.
-                const img = e.currentTarget;
-                if (img.naturalWidth >= 600) setShotOk(true);
-              }}
-              onError={() => setShotOk(false)}
+            <div
               className={cn(
-                "absolute inset-0 h-full w-full object-cover object-top transition-all duration-500",
-                "opacity-0 duration-700 group-hover/thumb:scale-[1.015]",
-                shotOk && "opacity-100",
+                "absolute inset-x-[10%] -bottom-[6%] top-[20%] overflow-hidden rounded-t-[14px] bg-white shadow-[0_18px_40px_-18px_rgb(0_0_0/0.45)] transition-[transform,opacity] duration-500 group-hover/thumb:-translate-y-1.5",
+                shotOk ? "opacity-100" : "pointer-events-none opacity-0",
               )}
-            />
+            >
+              <div className="flex h-5 items-center gap-1 border-b border-black/5 px-2">
+                <span className="size-1.5 rounded-full bg-black/15" />
+                <span className="size-1.5 rounded-full bg-black/15" />
+                <span className="size-1.5 rounded-full bg-black/15" />
+              </div>
+              <img
+                src={screenshotUrl}
+                alt=""
+                loading="lazy"
+                draggable={false}
+                onLoad={(e) => {
+                  // mshots returns a ~400x300 WordPress placeholder while generating.
+                  // Real screenshots come back at 720px wide — require that to avoid showing the placeholder.
+                  const img = e.currentTarget;
+                  if (img.naturalWidth >= 600) setShotOk(true);
+                }}
+                onError={() => setShotOk(false)}
+                className="h-full w-full object-cover object-top"
+              />
+            </div>
           )}
 
-          {/* Brand mark when no screenshot — clean monochrome lockup */}
+          {/* No screenshot: the brand's mark on a glass tile. */}
           {!shotOk && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-full bg-background ring-1 ring-border/70 shadow-sm">
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="grid size-[4.5rem] place-items-center overflow-hidden rounded-[22px] bg-white/85 shadow-[0_14px_30px_-14px_rgb(0_0_0/0.4),inset_0_1px_0_rgb(255_255_255/0.9)] backdrop-blur transition-transform duration-500 group-hover/thumb:-rotate-6 group-hover/thumb:scale-110">
                 {faviconUrl && (
                   <img
                     src={faviconUrl}
@@ -776,21 +827,18 @@ export function ProjectCard({
                     onLoad={() => setFaviconOk(true)}
                     onError={() => setFaviconOk(false)}
                     className={cn(
-                      "h-7 w-7 object-contain transition-opacity",
-                      faviconOk ? "opacity-100" : "opacity-0 absolute",
+                      "h-9 w-9 object-contain transition-opacity",
+                      faviconOk ? "opacity-100" : "absolute opacity-0",
                     )}
                     draggable={false}
                   />
                 )}
                 {!faviconOk && (
-                  <span className="text-[13px] font-semibold tracking-tight text-foreground/80">
+                  <span className="text-[22px] font-bold tracking-[-0.03em] text-[var(--mox-ink)]">
                     {initials}
                   </span>
                 )}
               </div>
-              <span className="font-display text-[18px] leading-none tracking-tight text-foreground/80">
-                {domain || workspace.name}
-              </span>
             </div>
           )}
 
@@ -798,7 +846,7 @@ export function ProjectCard({
           {(() => {
             const tag = projectTag(workspace);
             return (
-              <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2 py-0.5 text-[10.5px] font-semibold text-neutral-900 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)]">
+              <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-neutral-900 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.45)]">
                 <span className={cn("h-1.5 w-1.5 rounded-full", tag.dot)} />
                 {tag.label}
               </span>
@@ -806,21 +854,27 @@ export function ProjectCard({
           })()}
           {workspace.duplicateOf && (
             <span
-              className="absolute right-2.5 top-2.5 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-medium text-amber-700 backdrop-blur dark:text-amber-300"
+              className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-500/40 bg-amber-50/95 px-2.5 py-1 text-[11px] font-semibold text-amber-700"
               title={`Same website as ${duplicateOfName ?? "another workspace"}. Review and delete the copy you don't need.`}
             >
               Possible duplicate
             </span>
           )}
           {!workspace.duplicateOf && lastOpened && (
-            <span className="absolute right-2.5 top-2.5 inline-flex items-center rounded-full bg-black/55 px-2 py-0.5 text-[10.5px] font-semibold text-white backdrop-blur">
+            <span className="absolute right-3 top-3 inline-flex items-center rounded-full bg-[var(--mox-ink)]/85 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
               Last opened
             </span>
           )}
+          <span
+            aria-hidden
+            className="absolute bottom-3 right-3 inline-flex h-8 translate-y-1 items-center gap-1 rounded-full bg-white px-3 text-[12px] font-bold text-[var(--mox-ink)] opacity-0 shadow-[0_8px_20px_-10px_rgb(0_0_0/0.5)] transition-all duration-300 group-hover/thumb:translate-y-0 group-hover/thumb:opacity-100 [@media(hover:none)]:hidden"
+          >
+            Open <ArrowRight className="h-3.5 w-3.5" />
+          </span>
         </div>
       </button>
 
-      <div className="flex items-center gap-2.5 px-1 pt-2.5">
+      <div className="flex items-center gap-2.5 px-1 pt-3">
         <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <div className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2 text-[11px] font-semibold text-foreground ring-1 ring-border/60">
             {faviconUrl && (
@@ -907,6 +961,20 @@ export function ProjectCard({
   );
 }
 
+/** Soft Mox-palette covers; each brand keeps the same one (picked from its name). */
+const COVERS = [
+  "linear-gradient(135deg,#ecfbb4 0%,#9ef0c2 55%,#a3e6f5 100%)",
+  "linear-gradient(135deg,#d2f8e6 0%,#94e2f0 58%,#b3cdff 100%)",
+  "linear-gradient(135deg,#f5f9ad 0%,#c6f24e 48%,#62e8a3 100%)",
+  "linear-gradient(135deg,#dbf6ff 0%,#a3dbff 52%,#bdf4d4 100%)",
+  "linear-gradient(135deg,#eaffd9 0%,#b8f5a8 50%,#80e1d3 100%)",
+];
+function coverFor(seed: string): string {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COVERS[h % COVERS.length];
+}
+
 /** This workspace's own numbers — never aggregated with another workspace. */
 function WorkspaceMetrics({ workspace: w }: { workspace: Workspace }) {
   const items = [
@@ -984,7 +1052,7 @@ function BrandPlaces() {
           {" · "}
           <button
             type="button"
-            className="font-medium text-primary underline-offset-2 hover:underline"
+            className="font-medium text-primary-ink underline-offset-2 hover:underline"
             onClick={() => openBrandUpgrade(room.used, room.max)}
           >
             Upgrade
@@ -1004,7 +1072,7 @@ export function PasteLinkBar({
 }: {
   existing: Workspace[];
   initialUrl?: string | null;
-  onCreated: (result: CreateWorkspaceOutcome) => void;
+  onCreated: (result: CreateWorkspaceOutcome, opts?: { manual?: boolean }) => void;
   onOpenAdvanced: () => void;
   onManage?: () => void;
 }) {
@@ -1057,6 +1125,31 @@ export function PasteLinkBar({
     }
   };
 
+  // No website: create the brand without one and go straight to the brand kit,
+  // so nothing is scanned. The kit's brand name replaces this placeholder.
+  const startManual = async () => {
+    if (saving) return;
+    // An untouched "No website" draft is reopened, never doubled.
+    const draft = blankDraft(existing);
+    if (draft) {
+      onCreated(
+        { id: draft.id, created: true, resumed: true, domain: null, name: draft.name },
+        { manual: true },
+      );
+      return;
+    }
+    if (brands.full) {
+      openBrandUpgrade();
+      return;
+    }
+    try {
+      const result = await create({ name: "New brand", websiteUrl: null });
+      onCreated(result, { manual: true });
+    } catch (error) {
+      handleCreateError(error, brands.refuse, "Couldn't create project");
+    }
+  };
+
   const onPasteShortcut = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -1082,7 +1175,7 @@ export function PasteLinkBar({
           onClick={onPasteShortcut}
           aria-label="Paste from clipboard"
           title="Paste from clipboard"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground group-focus-within:text-primary"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground group-focus-within:text-primary-ink"
         >
           <Globe className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </button>
@@ -1097,6 +1190,21 @@ export function PasteLinkBar({
           placeholder="Paste your website link"
           className="!mt-0 h-11 min-w-0 flex-1 bg-transparent px-1 text-[15px] tracking-tight text-foreground outline-none placeholder:text-muted-foreground/70"
         />
+
+        {!url.trim() && (
+          <button
+            type="button"
+            onClick={() => void startManual()}
+            disabled={saving}
+            data-testid="no-website"
+            title="Set up your brand by hand, no scan"
+            className="!mt-0 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 text-[13px] font-medium text-foreground/80 transition hover:border-border hover:bg-secondary hover:text-foreground disabled:opacity-60"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+            <span className="sm:hidden">No site?</span>
+            <span className="hidden sm:inline">No website?</span>
+          </button>
+        )}
 
         <button
           type="submit"
@@ -1316,25 +1424,176 @@ function RenameDialog({
 }
 
 /**
- * The top of the page: the public site's hero sky behind the top bar, the
- * heading and the website bar. The `dark` class gives everything inside the
- * dark theme's colours, so it reads the same in both app themes.
+ * The top of the Projects page: Mox's world (the same 3D scene as onboarding),
+ * Mox on the left of the picture and the heading and website bar on the
+ * right; on narrow screens the picture sits on top. Presentational.
  */
-export function ProjectsStage({ children }: { children: React.ReactNode }) {
-  const reduce = useReducedMotionSafe();
+export function ProjectsHero({
+  eyebrow,
+  title,
+  subtitle,
+  reduce,
+  children,
+}: {
+  eyebrow: React.ReactNode;
+  title: React.ReactNode;
+  subtitle: React.ReactNode;
+  reduce: boolean;
+  children: React.ReactNode;
+}) {
+  const rise = (delay: number) =>
+    reduce
+      ? { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.2 } }
+      : {
+          initial: { opacity: 0, y: 14 },
+          animate: { opacity: 1, y: 0 },
+          transition: { delay, duration: 0.6, ease: [0.22, 1, 0.36, 1] as const },
+        };
   return (
-    <div className="relative z-10 px-2 pt-2 sm:px-3 sm:pt-3">
-      <div
-        className="dark relative isolate overflow-hidden rounded-[28px] text-foreground ring-1 ring-inset ring-white/[0.08]"
-        style={{ backgroundColor: AURORA.sky }}
+    <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-4 pt-1 sm:px-5 sm:pb-6">
+      <motion.div
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: reduce ? 0.2 : 0.75, ease: [0.22, 1, 0.36, 1] }}
+        className="projects-world"
+        data-testid="projects-world"
       >
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <MelloxAurora reduce={reduce} />
+        <motion.img
+          src="/brand/mox/onboarding/world-day.webp"
+          alt=""
+          aria-hidden
+          draggable={false}
+          initial={reduce ? false : { scale: 1.08 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+          className="projects-world__img"
+        />
+        <div aria-hidden className="projects-world__scrim" />
+        {!reduce && <Fireflies />}
+        <div className="projects-world__content">
+          <motion.p
+            {...rise(0.2)}
+            className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[rgb(22_25_27/0.55)]"
+          >
+            {eyebrow}
+          </motion.p>
+          <motion.h1
+            {...rise(0.28)}
+            className="mt-2 text-[30px] font-bold leading-[1.05] tracking-[-0.035em] text-[#16191b] sm:text-[40px]"
+          >
+            {title}
+          </motion.h1>
+          <motion.p
+            {...rise(0.36)}
+            className="mt-2 text-[14px] leading-relaxed text-[rgb(22_25_27/0.7)]"
+          >
+            {subtitle}
+          </motion.p>
+          <motion.div {...rise(0.46)} className="mt-6 w-full max-w-xl">
+            {children}
+          </motion.div>
         </div>
-        {children}
+      </motion.div>
+    </section>
+  );
+}
+
+/** A few slow lights over Mox's world. Decoration only. */
+function Fireflies() {
+  const dots = [
+    { left: "8%", top: "22%", d: 0 },
+    { left: "24%", top: "62%", d: 1.4 },
+    { left: "38%", top: "30%", d: 2.6 },
+    { left: "55%", top: "18%", d: 0.8 },
+    { left: "71%", top: "70%", d: 2 },
+    { left: "88%", top: "34%", d: 3.2 },
+  ];
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      {dots.map((p, i) => (
+        <span
+          key={i}
+          className="projects-firefly"
+          style={{ left: p.left, top: p.top, animationDelay: `${p.d}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Setups that were started but never finished. They are not brands yet, so
+ * they sit in their own quiet row: carry on, or let it go (owner, typed
+ * confirmation, same delete as a brand).
+ */
+export function UnfinishedSetups({
+  items,
+  reduce,
+  onContinue,
+  onDiscard,
+}: {
+  items: Workspace[];
+  reduce: boolean;
+  onContinue: (w: Workspace) => void;
+  onDiscard: (w: Workspace) => void;
+}) {
+  return (
+    <div
+      role="region"
+      aria-label="Unfinished setups"
+      className="relative z-10 mx-auto -mt-1 w-full max-w-6xl px-4 pb-2 sm:px-5"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-[12px] font-medium text-muted-foreground">Not finished yet</span>
+        <AnimatePresence initial={false}>
+          {items.map((w, i) => {
+            const label = w.name.trim() === BLANK_DRAFT_NAME ? "Brand without a website" : w.name;
+            return (
+              <motion.div
+                key={w.id}
+                layout
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                transition={{ delay: reduce ? 0 : 0.5 + i * 0.05, duration: 0.35 }}
+                className="flex h-10 items-center gap-1 rounded-full border border-border/70 bg-card/90 pl-1 pr-1 shadow-[0_8px_24px_-18px_hsl(var(--foreground)/0.5)] backdrop-blur"
+              >
+                <button
+                  type="button"
+                  onClick={() => onContinue(w)}
+                  className="inline-flex h-8 items-center gap-2 rounded-full pl-2 pr-3 text-[13px] font-medium text-foreground transition hover:bg-secondary"
+                >
+                  <span className="size-2 rounded-full bg-amber-500" aria-hidden />
+                  <span className="max-w-[180px] truncate">{label}</span>
+                  <span className="text-muted-foreground">· Continue</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+                {w.isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => onDiscard(w)}
+                    aria-label={`Discard ${label}`}
+                    title="Discard"
+                    className="grid size-8 place-items-center rounded-full text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </div>
   );
+}
+
+/**
+ * The top of the page (Mellox 2.0): the top bar, Mox, the heading and the
+ * website bar, on the frame's own white window and aurora.
+ */
+export function ProjectsStage({ children }: { children: React.ReactNode }) {
+  return <div className="relative z-10">{children}</div>;
 }
 
 const FOOT_LINKS = [
@@ -1347,25 +1606,18 @@ const FOOT_LINKS = [
 ] as const;
 
 /**
- * The foot of the page: the public site's aurora and wordmark on a dark panel
- * (dark in both app themes, like the sign-in showcase), then a quiet row of
- * links. Decoration and links only; it starts nothing.
+ * The foot of the page: Mox's gradient with the wordmark rising out of it,
+ * then a quiet row of links. Decoration and links only; it starts nothing.
  */
 export function ProjectsFoot() {
-  const reduce = useReducedMotionSafe();
   return (
     <footer className="relative z-10 mx-auto mt-auto w-full max-w-6xl px-5 pb-6 pt-6">
-      <div
-        className="relative isolate h-[280px] overflow-hidden rounded-[28px] text-white ring-1 ring-inset ring-white/[0.08] sm:h-[320px]"
-        style={{ backgroundColor: AURORA.sky }}
-      >
-        <MelloxAurora reduce={reduce} />
-
+      <div className="ds-backdrop relative isolate h-[260px] overflow-hidden rounded-[26px] text-[var(--mox-ink)] sm:h-[300px]">
         <div className="relative flex flex-col items-center px-6 pt-10 text-center sm:pt-12">
-          <p className="font-display text-[26px] leading-[1.1] tracking-tight sm:text-[34px]">
-            Don&apos;t just rank. <span style={{ color: AURORA.lime }}>Be recommended.</span>
+          <p className="text-[26px] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[34px]">
+            Don&apos;t just rank. Be recommended.
           </p>
-          <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-white/60">
+          <p className="mt-3 max-w-md text-[13.5px] font-medium leading-relaxed text-[var(--mox-ink)]/70">
             Everything your marketing needs, in one workspace.
           </p>
         </div>
@@ -1376,7 +1628,7 @@ export function ProjectsFoot() {
           className="absolute inset-x-0 bottom-0 translate-y-[24%] select-none text-center font-display text-[clamp(72px,17vw,210px)] font-semibold leading-none tracking-[0.12em]"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 62%, transparent 90%)",
+              "linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.2) 62%, transparent 90%)",
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
             color: "transparent",
@@ -1387,7 +1639,7 @@ export function ProjectsFoot() {
       </div>
 
       <div className="mt-4 flex flex-col items-center justify-between gap-3 px-1 text-[12px] text-muted-foreground sm:flex-row">
-        <span>&copy; {new Date().getFullYear()} Mellox AI</span>
+        <span>&copy; {new Date().getFullYear()} Mellox</span>
         <nav
           aria-label="Footer"
           className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1"

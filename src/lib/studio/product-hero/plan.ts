@@ -72,6 +72,7 @@ export function planProductHero(args: {
     texture,
     ingredients,
     recent: looks,
+    productName: args.product.name,
   });
   const kept = stagingById(args.keepStaging);
   const staging =
@@ -96,7 +97,9 @@ export function planProductHero(args: {
     occasion,
     recent: looks,
   });
-  const support = supportLine(args.product.description);
+  // A poster with the brief's own message takes its support line from the
+  // concept writer (the brief's facts), never the product's description.
+  const support = topic.id === "the-brief" ? null : supportLine(args.product.description);
   return {
     staging,
     texture,

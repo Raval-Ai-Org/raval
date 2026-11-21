@@ -15,3 +15,5 @@ tests
 # Unit tests under src/ import shared fixtures, and next build type-checks them.
 !tests/fixtures
 *.md
+# MotionMox keeps Remotion's licence and its own notes (ADR-0045).
+!vendor/motionmox/**/*.md

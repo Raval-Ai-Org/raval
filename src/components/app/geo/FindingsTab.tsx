@@ -279,7 +279,7 @@ function FindingItem({
             <button
               type="button"
               onClick={() => onOpen(finding)}
-              className="text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
+              className="text-[11.5px] font-medium text-primary-ink underline-offset-2 hover:underline"
             >
               View evidence
             </button>
@@ -287,7 +287,7 @@ function FindingItem({
               <button
                 type="button"
                 onClick={() => onOpen(finding)}
-                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
+                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-primary-ink underline-offset-2 hover:underline"
               >
                 <Wand className="h-3 w-3" /> Fix with AI Agent
               </button>
@@ -610,7 +610,7 @@ export function FindingsTab({
           <button
             type="button"
             onClick={() => onFilterChange({})}
-            className="font-medium text-primary underline-offset-2 hover:underline"
+            className="font-medium text-primary-ink underline-offset-2 hover:underline"
           >
             Show all findings
           </button>

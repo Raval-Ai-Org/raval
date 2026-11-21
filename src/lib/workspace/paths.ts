@@ -4,6 +4,9 @@
 
 export const WORKSPACES_HOME = "/projects";
 
+/** The workspace list itself, shown even when there is only one workspace. */
+export const ALL_WORKSPACES = `${WORKSPACES_HOME}?all=1`;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isWorkspaceId(value: unknown): value is string {
@@ -114,13 +117,26 @@ export function inWorkspace(workspaceId: string, path: string): string {
   return `/w/${workspaceId}/app${rest}`;
 }
 
+/**
+ * Chat with no conversation open (Mellox 2.0): Home is the bento, this is the
+ * empty thread with the conversations list beside it.
+ *   chatPath(id) → /w/<id>/app?view=chat
+ */
+export function chatPath(workspaceId: string): string {
+  return `${workspacePath(workspaceId)}?view=chat`;
+}
+
 export function conversationPath(workspaceId: string, conversationId: string): string {
   return workspacePath(workspaceId, `chat/${encodeURIComponent(conversationId)}`);
 }
 
-export function onboardingPath(workspaceId: string): string {
+/**
+ * `start: "manual"` opens onboarding on the brand kit (no website, no scan),
+ * for a brand created from "No website?" on the projects page.
+ */
+export function onboardingPath(workspaceId: string, opts?: { start?: "manual" }): string {
   if (!isWorkspaceId(workspaceId)) throw new Error("onboardingPath: invalid workspace id");
-  return `/w/${workspaceId}/onboarding`;
+  return `/w/${workspaceId}/onboarding${opts?.start === "manual" ? "?start=manual" : ""}`;
 }
 
 /** The workspace id in a canonical path, or null. */
@@ -189,4 +205,27 @@ export function resolveLegacyAppLink(pathname: string, search: string): LegacyTa
     params.set("tab", LEGACY_TABS[section]);
   }
   return { kind: "workspace", href: workspacePath(explicit, "", params.toString()) };
+}
+
+/**
+ * Where landing on Mellox goes (sign-in, the site root, a bare /projects):
+ * the person's only workspace, straight in (or its setup), so one brand never
+ * sees the list. Two or more, none, or an explicit list request (?all, ?add)
+ * stay on the list. This is not a "last workspace" fallback: with one
+ * workspace there is nothing to choose.
+ */
+export function soleWorkspaceLanding(
+  workspaces: readonly { id: string; onboarded: boolean }[],
+  search: string,
+): string | null {
+  const params = new URLSearchParams(search);
+  if (params.has("all") || params.has("add")) return null;
+  // A brand counts once its setup is finished; an abandoned setup never keeps
+  // someone with one real brand on the list.
+  const finished = workspaces.filter((w) => w.onboarded);
+  if (finished.length === 1)
+    return isWorkspaceId(finished[0].id) ? workspacePath(finished[0].id) : null;
+  if (finished.length > 1 || workspaces.length !== 1) return null;
+  const only = workspaces[0];
+  return isWorkspaceId(only.id) ? onboardingPath(only.id) : null;
 }

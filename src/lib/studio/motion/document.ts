@@ -27,7 +27,9 @@ export const MotionDocSchema = z.object({
       z.object({
         start: z.number().min(0),
         end: z.number().min(0),
-        does: z.string().max(200),
+        // A note for the review screen only. Models often write a longer one;
+        // it is cut, never a reason to throw the whole design away.
+        does: z.string().transform((text) => (text.length > 200 ? `${text.slice(0, 199)}…` : text)),
       }),
     )
     .min(1)

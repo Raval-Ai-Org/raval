@@ -218,7 +218,9 @@ describe("planVerdict", () => {
 describe("budget and timing", () => {
   it("blocks on credits and on videos separately", () => {
     const base = { usedCredits: 0, usedVideos: 0, creditCap: 5, videoCap: 0 };
-    expect(budgetVerdict({ ...base, type: "social" })).toEqual({ ok: false, reason: "credits" });
+    expect(budgetVerdict({ ...base, type: "image" })).toEqual({ ok: false, reason: "credits" });
+    // Text posts are included, so they never hit the credit cap.
+    expect(budgetVerdict({ ...base, type: "social", creditCap: 0 })).toEqual({ ok: true });
     expect(budgetVerdict({ ...base, type: "video", creditCap: 1000 })).toEqual({
       ok: false,
       reason: "videos",

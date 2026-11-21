@@ -10,7 +10,8 @@ import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { resolveLook, type BrandLook } from "@/lib/brand-look/resolve";
 import { applyVisualTaste } from "@/lib/brand-visuals/apply";
 import { loadGenerationVisualSnapshot } from "@/server/brand-visuals/service.server";
-import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
+import { ProfileSchema, type VisualSnapshot } from "@/lib/brand-visuals/contracts";
+import { ownDesignLine } from "@/lib/brand-visuals/bible";
 
 export type LoadedLook = {
   visualTaste?: VisualSnapshot | null;
@@ -29,6 +30,35 @@ export function invalidateLookCache(workspaceId: string) {
 
 const admin = () => supabaseAdmin as unknown as SupabaseClient;
 
+/**
+ * The brand's own learned design in words (the active style direction from
+ * Inspo's site or post read), or null. One small read by the verified
+ * workspace id; a missing table or a failed read is "no design", never an error.
+ */
+async function loadOwnDesign(workspaceId: string): Promise<string | null> {
+  try {
+    const settings = await admin()
+      .from("brand_visual_settings")
+      .select("active_profile_id")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    const id = (settings.data as { active_profile_id?: string | null } | null)?.active_profile_id;
+    if (!id) return null;
+    const row = await admin()
+      .from("brand_visual_profiles")
+      .select("profile")
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .eq("status", "approved")
+      .maybeSingle();
+    const parsed = ProfileSchema.safeParse((row.data as { profile?: unknown } | null)?.profile);
+    if (!parsed.success) return null;
+    return ownDesignLine(parsed.data.directions[parsed.data.selected]);
+  } catch {
+    return null;
+  }
+}
+
 export async function loadBrandLook(
   workspaceId: string,
   opts: { dna?: Record<string, unknown> | null; includeVisualTaste?: boolean } = {},
@@ -44,8 +74,9 @@ export async function loadBrandLook(
     };
   };
   if (opts.dna !== undefined) {
+    const ownDesign = await loadOwnDesign(workspaceId);
     return withVisualTaste({
-      look: resolveLook(opts.dna as never),
+      look: resolveLook(opts.dna as never, { ownDesign }),
       dna: opts.dna ?? null,
     });
   }
@@ -53,9 +84,12 @@ export async function loadBrandLook(
   if (hit && Date.now() - hit.at < TTL_MS) {
     return withVisualTaste(hit.value);
   }
-  const stored = await readBrandDna(admin(), workspaceId).catch(() => null);
+  const [stored, ownDesign] = await Promise.all([
+    readBrandDna(admin(), workspaceId).catch(() => null),
+    loadOwnDesign(workspaceId),
+  ]);
   const dna = stored?.dna ?? null;
-  const value: LoadedLook = { look: resolveLook(dna as never), dna };
+  const value: LoadedLook = { look: resolveLook(dna as never, { ownDesign }), dna };
   cache.set(workspaceId, { at: Date.now(), value });
   return withVisualTaste(value);
 }

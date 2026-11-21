@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({ chat: vi.fn() }));
 vi.mock("@/lib/ai-gateway.server", () => ({
   chatCompletion: mocks.chat,
   AiGatewayError: class extends Error {},
+  PROMPT_MAX_INPUT_CHARS: 400_000,
 }));
 vi.mock("@/server/guardrails/events", () => ({ logGuardrailEvent: vi.fn() }));
 import { runStructuredPrompt } from "./run.server";
@@ -31,4 +32,16 @@ it("shows the source photo to the caption model, including during a JSON repair"
       image_url: { url: "data:image/webp;base64,aGVsbG8=" },
     });
   }
+});
+
+it("gives code-built prompts the large input budget, not the chat one", async () => {
+  mocks.chat.mockResolvedValueOnce({ choices: [{ message: { content: '{"title":"T"}' } }] });
+  await runStructuredPrompt({
+    route: "studio.image.brief",
+    system: "S".repeat(11_000),
+    user: "U".repeat(19_000),
+    schema: z.object({ title: z.string() }),
+  });
+  // The 16k chat budget cut the schema off the end of the system prompt.
+  expect(mocks.chat.mock.calls[0][0].inputChars).toBe(400_000);
 });

@@ -17,6 +17,7 @@ import {
   listR2WorkspaceAssetPaths,
   removeAssetObjects,
   signStoragePaths,
+  stableSigning,
   uploadAssetObject,
 } from "./storage.server";
 
@@ -187,5 +188,43 @@ describe("private R2 and legacy Supabase storage", () => {
     expect(() => isR2StorageEnabled()).toThrow("match");
     vi.stubEnv("R2_ENDPOINT", "https://attacker.example");
     expect(() => isR2StorageEnabled()).toThrow("match");
+  });
+});
+
+describe("stableSigning", () => {
+  const hour = 3600;
+  const t = Date.UTC(2026, 10, 18, 12, 0, 0);
+
+  it("gives the same link inside one window, a new one in the next", () => {
+    const a = stableSigning(hour, t + 5_000);
+    const b = stableSigning(hour, t + 59 * 60_000);
+    const c = stableSigning(hour, t + 61 * 60_000);
+    expect(a).toEqual(b);
+    expect(c.signingDate.getTime()).toBe(t + hour * 1000);
+  });
+
+  it("is always valid for at least the asked time from now, never past 7 days", () => {
+    for (const ttl of [1, 60, 900, 3600, 86_400, 604_000, 604_800]) {
+      for (const offset of [0, 1_000, 1_799_000, 3_599_000]) {
+        const now = t + offset;
+        const { signingDate, expiresIn } = stableSigning(ttl, now);
+        expect(signingDate.getTime()).toBeLessThanOrEqual(now);
+        expect(signingDate.getTime() + expiresIn * 1000).toBeGreaterThanOrEqual(
+          now + ttl * 1000 - 999,
+        );
+        expect(expiresIn).toBeLessThanOrEqual(604_800);
+      }
+    }
+  });
+
+  it("signs R2 links with the window and a matching browser cache time", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(t + 10 * 60_000);
+    await signStoragePaths(db, [r2]);
+    vi.useRealTimers();
+    const [, command, options] = mocks.sign.mock.calls[0];
+    expect(options.signingDate.getTime()).toBe(t);
+    expect(options.expiresIn).toBe(2 * hour);
+    expect(command.input.ResponseCacheControl).toBe(`private, max-age=${2 * hour}`);
   });
 });

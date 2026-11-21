@@ -8,6 +8,8 @@ import {
   requestMarketSignalsCollection,
 } from "@/lib/market-signals-collection.server";
 import { analyzeMarketCollection } from "@/lib/market-intelligence.server";
+import { marketBrainGate } from "@/lib/background/gate";
+import { loadBackgroundAccount } from "@/server/background/account.server";
 
 export type MarketBrainScheduleConfig = {
   workspaceId: string;
@@ -15,13 +17,17 @@ export type MarketBrainScheduleConfig = {
   location?: string | null;
 };
 
-const DAILY_COLLECTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
-/** A workspace nobody has used for a week is re-collected weekly, not daily. */
-const IDLE_COLLECTION_INTERVAL_MS = 7 * DAILY_COLLECTION_INTERVAL_MS;
-const ACTIVE_WINDOW_MS = 7 * DAILY_COLLECTION_INTERVAL_MS;
+/**
+ * Weekly, as the plan sells it (marketBrainWeeklyBrands), and only while a
+ * person uses the workspace (marketBrainGate, src/lib/background/gate.ts).
+ * It used to run daily for any workspace with a metered call in the week,
+ * which cron jobs' own calls kept true with nobody there.
+ */
+const WEEKLY_COLLECTION_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 const PENDING_RETRY_INTERVAL_MS = 10 * 60 * 1000;
 const STALE_PENDING_MS = 40 * 60 * 1000;
 const MARKET_BRAIN_TASK_TYPE = "market-brain";
+// The stored title is the schedule's lookup key; it stays as it was.
 const MARKET_BRAIN_TITLE = "Market Brain daily collection";
 
 type MarketBrainJob = {
@@ -84,12 +90,12 @@ export async function ensureMarketBrainSchedule(
     const next =
       existing.active && new Date(existing.next_run_at).getTime() > Date.now()
         ? existing.next_run_at
-        : nextRunAt(DAILY_COLLECTION_INTERVAL_MS);
+        : nextRunAt(WEEKLY_COLLECTION_INTERVAL_MS);
     const { error } = await supabaseAdmin
       .from("scheduled_jobs")
       .update({
         active: true,
-        cadence: "daily",
+        cadence: "weekly",
         next_run_at: next,
         meta: { ...existingMeta, ...meta } as never,
       })
@@ -103,9 +109,9 @@ export async function ensureMarketBrainSchedule(
     title: MARKET_BRAIN_TITLE,
     task_type: MARKET_BRAIN_TASK_TYPE,
     agent: "mellox",
-    cadence: "daily",
+    cadence: "weekly",
     timezone: "UTC",
-    next_run_at: nextRunAt(DAILY_COLLECTION_INTERVAL_MS),
+    next_run_at: nextRunAt(WEEKLY_COLLECTION_INTERVAL_MS),
     last_run_status: "scheduled",
     meta: meta as never,
   });
@@ -122,22 +128,6 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
-}
-
-/**
- * True when a member did something in the workspace this week (any metered
- * call made by a person; cron work carries no user). A failed read counts as
- * active, so a hiccup never makes a used workspace's market data go stale.
- */
-async function recentlyUsed(workspaceId: string): Promise<boolean> {
-  const { count, error } = await supabaseAdmin
-    .from("ai_usage_events")
-    .select("id", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId)
-    .not("user_id", "is", null)
-    .gte("created_at", new Date(Date.now() - ACTIVE_WINDOW_MS).toISOString());
-  if (error) return true;
-  return (count ?? 0) > 0;
 }
 
 async function runMarketBrainJob(job: MarketBrainJob): Promise<"completed" | "pending" | "failed"> {
@@ -206,6 +196,22 @@ export async function runDueMarketBrainCollections(
 
   let ran = 0;
   for (const job of jobs) {
+    // Frozen, paused, not in the plan, or nobody there: no search, no model
+    // call; look again in a week.
+    const gate = marketBrainGate(await loadBackgroundAccount(job.workspace_id));
+    if (!gate.run) {
+      const { error: skipError } = await supabaseAdmin
+        .from("scheduled_jobs")
+        .update({
+          last_run_status: "skipped",
+          last_run_error: `Skipped: ${gate.reason}`,
+          next_run_at: nextRunAt(gate.retryMs),
+          ...(leased ? { locked_at: null, locked_by: null } : {}),
+        })
+        .eq("id", job.id);
+      if (skipError) throw new Error(skipError.message);
+      continue;
+    }
     let status: "completed" | "pending" | "failed" = "failed";
     let errorMessage: string | null = null;
     try {
@@ -220,11 +226,7 @@ export async function runDueMarketBrainCollections(
     }
 
     const pending = status === "pending";
-    const interval = pending
-      ? PENDING_RETRY_INTERVAL_MS
-      : (await recentlyUsed(job.workspace_id))
-        ? DAILY_COLLECTION_INTERVAL_MS
-        : IDLE_COLLECTION_INTERVAL_MS;
+    const interval = pending ? PENDING_RETRY_INTERVAL_MS : gate.intervalMs;
     const { error: updateError } = await supabaseAdmin
       .from("scheduled_jobs")
       .update({

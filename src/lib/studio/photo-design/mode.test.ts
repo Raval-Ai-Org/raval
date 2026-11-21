@@ -1,3 +1,4 @@
+import { formatCredits } from "@/lib/billing/catalog";
 import { describe, expect, it } from "vitest";
 import { resolvePhotoMode } from "./mode";
 import { studioChargeFor, studioPriceLabel } from "../billing";
@@ -69,8 +70,8 @@ describe("photo design pricing", () => {
 
   it("shows the design price when words are asked for on a kept photo", () => {
     expect(studioPriceLabel({ ...base, intent: { brief: 'add the headline "Open now"' } })).toBe(
-      `${creditsFor("photo_design")} credits`,
+      formatCredits(creditsFor("photo_design")),
     );
-    expect(studioPriceLabel(base)).toBe(`${creditsFor("post_set")} credits`);
+    expect(studioPriceLabel(base)).toBe("Included");
   });
 });

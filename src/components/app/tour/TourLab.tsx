@@ -9,10 +9,14 @@ import { cn } from "@/lib/utils";
 import { AppTour } from "./AppTour";
 
 const SIDEBAR: { tour: string; label: string }[] = [
+  { tour: "create", label: "Create" },
   { tour: "library", label: "Library" },
   { tour: "brain", label: "Brain" },
+  { tour: "inspo", label: "Inspo" },
   { tour: "analytics", label: "Analytics" },
+  { tour: "calendar", label: "Calendar" },
   { tour: "campaigns", label: "Campaigns" },
+  { tour: "communities", label: "Communities" },
   { tour: "visibility", label: "AI Visibility" },
 ];
 
@@ -52,7 +56,7 @@ export function TourLab() {
             : "hidden",
         )}
       >
-        <div className="px-2 py-3 text-[13px] font-semibold">Mellox AI</div>
+        <div className="px-2 py-3 text-[13px] font-semibold">Mellox</div>
         {SIDEBAR.map((item) => (
           <button
             key={item.tour}
@@ -65,6 +69,12 @@ export function TourLab() {
             {item.label}
           </button>
         ))}
+        <div
+          data-tour="credits"
+          className="mx-2 rounded-2xl bg-[var(--ds-well-bg)] px-3 py-2 text-[12px]"
+        >
+          371 credits
+        </div>
         <div
           data-tour="account"
           className="mt-auto border-t border-border/50 px-2 py-3 text-[13px]"
@@ -97,6 +107,13 @@ export function TourLab() {
               className="h-8 rounded-md border border-primary/40 px-2.5 text-[12px] font-semibold"
             >
               Studio
+            </button>
+            <button
+              type="button"
+              data-tour="streak"
+              className="h-8 rounded-full border px-3 text-[12px] font-semibold"
+            >
+              3 day streak
             </button>
             <button
               type="button"

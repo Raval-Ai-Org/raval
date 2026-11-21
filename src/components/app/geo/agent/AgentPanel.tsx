@@ -224,7 +224,7 @@ function ActivityLog({ events }: { events: AgentEventView[] }) {
         <button
           type="button"
           onClick={() => setAll((v) => !v)}
-          className="mt-1 text-[11.5px] font-medium text-primary underline-offset-2 hover:underline"
+          className="mt-1 text-[11.5px] font-medium text-primary-ink underline-offset-2 hover:underline"
         >
           {all ? "Show recent only" : `Show all ${events.length} steps`}
         </button>
@@ -767,7 +767,7 @@ export function AgentPanel({
   const header = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/15 text-primary">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/15 text-primary-ink">
           <Bot className="h-4 w-4" />
         </span>
         <div className="min-w-0">

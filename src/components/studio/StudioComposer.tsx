@@ -3,6 +3,7 @@
 import { Spinner } from "@/components/icons";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
@@ -10,12 +11,14 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronLeft,
   LayoutTemplate,
   Minus,
   Repeat2,
   Sparkles,
   Wand2,
   X,
+  SlidersHorizontal,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -23,25 +26,29 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useIsMobile } from "@/hooks/use-mobile";
 import { rememberStudioType } from "@/hooks/use-studio";
 import { emitAppEvent } from "@/lib/app-events";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { duration, ease, spring } from "@/lib/motion";
 import { isActiveJob } from "@/lib/studio/jobs";
 import { readBrandPayload, studioApi } from "@/lib/studio/client";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
-import { studioChargeFor, studioPriceLabel } from "@/lib/studio/billing";
+import {
+  carouselCredits,
+  studioChargeFor,
+  studioPriceLabel,
+  studioVideoCredits,
+} from "@/lib/studio/billing";
 import { shortClipPlan, shortClipPrice } from "@/lib/studio/short-clip";
 import type { CreditAction } from "@/lib/billing/catalog";
-import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
 import { useBriefProduct, withProductPhotos } from "./ProductAndFormat";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { CostChip } from "@/components/app/CostChip";
 import { UpgradePrompt } from "@/components/app/billing/UpgradePrompt";
-import { studioVideoUnits } from "@/lib/ugc/duration";
+import { closeOnlyFromSidebar, useCanvasHost, useShellWindow } from "@/lib/shell/window";
+import { WindowErrorBoundary } from "@/components/ui/window-error-boundary";
 import type { StudioIdea } from "@/lib/studio/ideas";
 import { GOALS } from "@/lib/studio/jobs";
-import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
-import { PLATFORMS } from "@/lib/social-platforms";
 import { countBlanks, getTemplate } from "@/lib/studio/templates";
 import {
   applyTemplate,
@@ -49,15 +56,23 @@ import {
   cancelSession,
   chooseType,
   closeSession,
+  focusSession,
   generate,
+  getActiveSessionId,
   getSession,
   minimizeSession,
+  needsVideoQuote,
   toggleMaximize,
   updateSession,
   useStudioStore,
   type StudioSession,
 } from "@/lib/studio/session-store";
+import { needsStoryboard, withStoryboard } from "@/lib/studio/video/board";
 import { ControlsPanel, PlatformControls } from "./ControlsPanel";
+import { AdObjectivePicker, ProductPicker, useStudioProducts } from "./ProductAndFormat";
+import { PostCanvasSettings } from "./PostCanvasSettings";
+import { SourceClips } from "./SourceClips";
+import { canvasPickers, missingFor, startFor } from "@/lib/studio/start";
 import {
   AttachButtons,
   DropHint,
@@ -67,9 +82,8 @@ import {
   usePromptMedia,
 } from "./PromptMedia";
 import { GenerationProgress } from "./GenerationProgress";
-import { IdeasPanel } from "./IdeasPanel";
+import { VideoCanvasSettings } from "./VideoCanvasSettings";
 import { ReviewPanel, type ReviewRow } from "./ReviewPanel";
-import { PreviewSkeleton } from "./previews/PreviewSkeleton";
 import { usePromptWriter, WriteForMeButton, WritingOverlay, WrittenNote } from "./PromptWriter";
 import { ScriptPreview } from "./previews/ScriptPreview";
 import { BeatPills, TemplateGallery } from "./TemplateGallery";
@@ -112,11 +126,10 @@ export function StudioComposer() {
     if (session && billing && !session.pendingKey && !session.job) {
       const controls = { ...session.controls };
       let changed = false;
-      if (
-        !controls.paymentSourceExplicit &&
-        controls.paymentSource !== (billing.creation?.active ? "creation" : "credits")
-      ) {
-        controls.paymentSource = billing.creation?.active ? "creation" : "credits";
+      // Pricing v4: one currency. Everything pays in credits.
+      if (controls.paymentSource !== "credits") {
+        controls.paymentSource = "credits";
+        controls.paymentSourceExplicit = undefined;
         changed = true;
       }
       if (
@@ -140,11 +153,50 @@ export function StudioComposer() {
     minimizeSession(id);
   };
 
-  const fullScreen = !!session && (isMobile || session.window === "maximized");
+  // Desktop (Holo): the composer is a page drawn inside the canvas, never a
+  // pop-up over it: the sidebar stays in view and usable, and it leaves at
+  // once when a person goes somewhere else.
+  const host = useCanvasHost(!!session && !isMobile);
+  const inCanvas = Boolean(host);
+  const waiting = !!session && !isMobile && host === undefined;
+  const fullScreen = !!session && !inCanvas && (isMobile || session.window === "maximized");
+  // A sidebar press leaves Studio: work in progress (or a typed brief) goes to
+  // the corner list / dock, an empty page simply closes.
+  useShellWindow("create", !!session, () => {
+    const s = sessionId ? getSession(sessionId) : undefined;
+    if (!s) return;
+    const keeps =
+      !!s.pendingKey ||
+      !!(s.job && isActiveJob(s.job)) ||
+      (s.step === "intent" && s.brief.trim().length > 0 && !s.lastGood);
+    setExitTo(keeps ? "dock" : "close");
+    closeSession(s.id);
+  });
+
+  const contentProps = {
+    onPointerDownOutside: (e: Event) => (inCanvas ? closeOnlyFromSidebar(e) : e.preventDefault()),
+    onInteractOutside: (e: Event) => {
+      if (inCanvas) closeOnlyFromSidebar(e);
+    },
+    onEscapeKeyDown: (e: KeyboardEvent) => {
+      // Escape inside a field shouldn't close the whole composer.
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
+        e.preventDefault();
+        return;
+      }
+      // From full screen, Escape first returns to the window.
+      if (session && fullScreen && !isMobile) {
+        e.preventDefault();
+        toggleMaximize(session.id);
+      }
+    },
+  };
 
   return (
     <DialogPrimitive.Root
       open={!!session}
+      modal={!inCanvas}
       onOpenChange={(v) => {
         if (v || !session) return;
         const keeps =
@@ -155,90 +207,108 @@ export function StudioComposer() {
         closeSession(session.id);
       }}
     >
-      <AnimatePresence custom={exitTo}>
-        {session ? (
-          <DialogPrimitive.Portal forceMount>
-            <DialogPrimitive.Overlay asChild>
-              <motion.div
-                className={cn(
-                  "fixed inset-0 z-50 transition-[background-color,backdrop-filter] duration-[--motion-duration-slow]",
-                  fullScreen ? "bg-background" : "bg-black/45 backdrop-blur-[6px]",
-                )}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: duration.slow } }}
-                transition={{ duration: duration.base }}
-              />
-            </DialogPrimitive.Overlay>
-            <div
-              className={cn(
-                "pointer-events-none fixed inset-0 z-50 grid place-items-center transition-[padding] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
-                fullScreen ? "p-0" : "p-4",
-              )}
-            >
-              <DialogPrimitive.Content
-                asChild
-                aria-describedby={undefined}
-                onPointerDownOutside={(e) => e.preventDefault()}
-                onEscapeKeyDown={(e) => {
-                  // Escape inside a field shouldn't close the whole composer.
-                  const t = e.target as HTMLElement | null;
-                  if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
-                    e.preventDefault();
-                    return;
-                  }
-                  // From full screen, Escape first returns to the window.
-                  if (!isMobile && session.window === "maximized") {
-                    e.preventDefault();
-                    toggleMaximize(session.id);
-                  }
-                }}
+      {host ? (
+        session ? (
+          <DialogPrimitive.Portal forceMount container={host}>
+            <DialogPrimitive.Content asChild aria-describedby={undefined} {...contentProps}>
+              <div
+                key={session.id}
+                data-modal="false"
+                data-canvas-window
+                className="ds-canvas ds-enter isolate absolute inset-0 flex flex-col overflow-hidden outline-none"
               >
-                <motion.div
-                  key={session.id}
-                  custom={exitTo}
-                  variants={{
-                    initial: { opacity: 0, y: 18, scale: 0.97 },
-                    open: { opacity: 1, y: 0, scale: 1 },
-                    exit: (to: "dock" | "close") =>
-                      to === "dock"
-                        ? {
-                            opacity: 0,
-                            scale: 0.3,
-                            x: isMobile ? 0 : "36vw",
-                            y: "42vh",
-                            transition: { duration: duration.slow + 0.06, ease: ease.accelerate },
-                          }
-                        : {
-                            opacity: 0,
-                            y: 16,
-                            scale: 0.975,
-                            transition: { duration: duration.base, ease: ease.accelerate },
-                          },
-                  }}
-                  initial="initial"
-                  animate="open"
-                  exit="exit"
-                  transition={spring.surface}
-                  className={cn(
-                    "pointer-events-auto relative flex flex-col overflow-hidden bg-surface-3 outline-none",
-                    "transition-[width,height,border-radius,box-shadow] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
-                    fullScreen
-                      ? "h-dvh w-screen rounded-none"
-                      : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
-                  )}
-                >
+                {/* A crash stays in Studio; the piece keeps being made on the server. */}
+                <WindowErrorBoundary resetKey={session.id} onClose={() => closeSession(session.id)}>
                   <ComposerBody
                     session={session}
                     isMobile={isMobile}
-                    onMinimize={() => toDock(session.id)}
+                    embedded
+                    onMinimize={() => minimizeSession(session.id)}
                   />
-                </motion.div>
-              </DialogPrimitive.Content>
-            </div>
+                </WindowErrorBoundary>
+              </div>
+            </DialogPrimitive.Content>
           </DialogPrimitive.Portal>
-        ) : null}
-      </AnimatePresence>
+        ) : null
+      ) : (
+        <AnimatePresence custom={exitTo}>
+          {session && !waiting ? (
+            <DialogPrimitive.Portal forceMount>
+              <DialogPrimitive.Overlay asChild>
+                <motion.div
+                  className={cn(
+                    "fixed inset-0 z-50 transition-[background-color,backdrop-filter] duration-[--motion-duration-slow]",
+                    fullScreen ? "bg-background" : "bg-black/45 backdrop-blur-[6px]",
+                  )}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: duration.slow } }}
+                  transition={{ duration: duration.base }}
+                />
+              </DialogPrimitive.Overlay>
+              <div
+                className={cn(
+                  "pointer-events-none fixed inset-0 z-50 grid place-items-center transition-[padding] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
+                  fullScreen ? "p-0" : "p-4",
+                )}
+              >
+                <DialogPrimitive.Content asChild aria-describedby={undefined} {...contentProps}>
+                  <motion.div
+                    key={session.id}
+                    custom={exitTo}
+                    data-modal="true"
+                    variants={{
+                      initial: { opacity: 0, y: 18, scale: 0.97 },
+                      open: { opacity: 1, y: 0, scale: 1 },
+                      exit: (to: "dock" | "close") =>
+                        to === "dock"
+                          ? {
+                              opacity: 0,
+                              scale: 0.3,
+                              x: isMobile ? 0 : "36vw",
+                              y: "42vh",
+                              transition: { duration: duration.slow + 0.06, ease: ease.accelerate },
+                            }
+                          : {
+                              opacity: 0,
+                              y: 16,
+                              scale: 0.975,
+                              transition: { duration: duration.base, ease: ease.accelerate },
+                            },
+                    }}
+                    initial="initial"
+                    animate="open"
+                    exit="exit"
+                    transition={spring.surface}
+                    className={cn(
+                      "ds-canvas pointer-events-auto relative flex flex-col overflow-hidden outline-none",
+                      "transition-[width,height,border-radius,box-shadow] duration-[--motion-duration-slow] ease-[--motion-ease-emphasized]",
+                      fullScreen
+                        ? "h-dvh w-screen rounded-none"
+                        : "h-[min(88dvh,860px)] w-[min(94vw,1180px)] rounded-[22px] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.55)] ring-1 ring-border/70",
+                    )}
+                  >
+                    {/* A crash stays in Studio; the piece keeps being made on the server. */}
+                    <WindowErrorBoundary
+                      resetKey={session.id}
+                      onClose={() => {
+                        setExitTo("dock");
+                        closeSession(session.id);
+                      }}
+                    >
+                      <ComposerBody
+                        session={session}
+                        isMobile={isMobile}
+                        onMinimize={() => toDock(session.id)}
+                      />
+                    </WindowErrorBoundary>
+                  </motion.div>
+                </DialogPrimitive.Content>
+              </div>
+            </DialogPrimitive.Portal>
+          ) : null}
+        </AnimatePresence>
+      )}
     </DialogPrimitive.Root>
   );
 }
@@ -248,14 +318,22 @@ export function ComposerBody({
   isMobile,
   fixtures,
   onMinimize,
+  embedded = false,
 }: {
   session: StudioSession;
   isMobile: boolean;
   fixtures?: ComposerFixtures;
   onMinimize?: () => void;
+  /** On the canvas (Holo): a page, not a window, so no window buttons. */
+  embedded?: boolean;
 }) {
   const format = STUDIO_FORMATS[session.type];
   const [cancelling, setCancelling] = useState(false);
+  // Holo: extras (ideas, templates) slide in from the right, never stack in the page.
+  const [drawer, setDrawer] = useState(false);
+  // The side panel runs the full height of the composer, over the header too,
+  // so it is drawn into this layer rather than inside the step's page.
+  const [panelHost, setPanelHost] = useState<HTMLDivElement | null>(null);
   const stepIndex = Math.max(
     0,
     STEPS.findIndex((s) => s.id === session.step),
@@ -267,7 +345,7 @@ export function ComposerBody({
   // layout reflows so container-query changes don't visibly jump.
   const [resizing, setResizing] = useState(false);
   const resize = () => {
-    if (isMobile) return;
+    if (isMobile || embedded) return;
     setResizing(true);
     toggleMaximize(session.id);
     window.setTimeout(() => setResizing(false), 360);
@@ -290,31 +368,57 @@ export function ComposerBody({
   };
 
   return (
-    <div className="@container/composer flex h-full min-h-0 flex-col">
+    <div className="@container/composer relative flex h-full min-h-0 flex-col">
       <header
-        className="relative z-10 flex h-14 shrink-0 select-none items-center gap-2 border-b border-border/60 bg-surface-3 px-3 @3xl/composer:gap-3 @3xl/composer:px-5"
+        className={cn(
+          "relative z-10 flex h-16 shrink-0 select-none items-center gap-2 px-3 @3xl/composer:gap-2.5 @3xl/composer:px-5",
+          // Review on a wide screen: the side panel runs the full height (Holo),
+          // so the header floats over the picture side only.
+          session.step === "review" &&
+            "@5xl/composer:absolute @5xl/composer:left-0 @5xl/composer:right-[380px] @5xl/composer:top-0",
+        )}
         onDoubleClick={(e) => {
           // Standard window behaviour: double-click empty header space to maximize.
           if ((e.target as HTMLElement).closest("button, a, input, textarea, [role='tab']")) return;
           resize();
         }}
       >
-        {session.step === "review" && !session.pendingKey ? (
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="size-11 rounded-full lg:size-8"
-            onClick={() => backToBrief(session.id)}
-            aria-label="Back to description"
-            title="Back to description"
-          >
-            <ArrowLeft />
-          </Button>
-        ) : null}
+        {/* Back is always there, so nobody is ever stuck on this page. */}
+        <button
+          type="button"
+          onClick={() => {
+            // While a piece is being made (or changed), Back leaves it running
+            // in the background; the corner list follows it.
+            if (working || session.pendingKey) return minimize();
+            // One step out: a finished piece is already in the Library.
+            if (session.step === "review") return closeSession(session.id);
+            // A typed brief is kept in the dock; an empty one is simply closed.
+            closeSession(session.id);
+            emitAppEvent("open:create-launcher", { back: session.id });
+          }}
+          aria-label={
+            working || session.pendingKey
+              ? "Back, keep making it in the background"
+              : session.step === "review"
+                ? "Close"
+                : "Back to formats"
+          }
+          title={
+            working || session.pendingKey
+              ? "Keeps going in the background"
+              : session.step === "review"
+                ? "Close, it is saved in your Library"
+                : "Back to formats"
+          }
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 lg:min-h-9"
+        >
+          <ArrowLeft className="size-4" />
+          <span className="hidden @3xl/composer:inline">Back</span>
+        </button>
         {session.step === "intent" ? (
           <TypeSwitcher session={session} />
         ) : (
-          <span className="flex shrink-0 items-center gap-2 rounded-full bg-surface-2/80 py-1 pl-1 pr-3 ring-1 ring-border/60">
+          <span className="flex shrink-0 items-center gap-2 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] py-1 pl-1 pr-3 shadow-[var(--ds-card-shadow)]">
             <TypeGlyph type={session.type} size="sm" className="rounded-full" />
             <span className="hidden text-xs font-medium text-foreground sm:inline">
               {format.label}
@@ -331,32 +435,45 @@ export function ComposerBody({
             transition={{ duration: duration.base, ease: ease.standard }}
           >
             {/* line-clamp, not truncate: the narrow-screen rule in styles.css lets `truncate` wrap, and a wrapped title spills out of the header. */}
-            <DialogPrimitive.Title className="line-clamp-1 break-all text-sm font-semibold tracking-tight text-foreground">
+            <DialogPrimitive.Title className="line-clamp-1 break-all text-sm font-semibold tracking-tight text-foreground @4xl/composer:sr-only">
               {title}
             </DialogPrimitive.Title>
           </motion.div>
         </AnimatePresence>
 
-        <StepIndicator index={stepIndex} working={working} />
+        <StepIndicator
+          index={stepIndex}
+          working={working}
+          onDescribe={
+            session.step === "review" && !working ? () => backToBrief(session.id) : undefined
+          }
+        />
 
         <TooltipProvider delayDuration={300}>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <WindowButton
-              onClick={minimize}
-              label={working ? "Minimize — keeps going" : "Minimize"}
-            >
-              <Minus />
-            </WindowButton>
-            {!isMobile ? (
-              <WindowButton onClick={resize} label={maximized ? "Exit full screen" : "Full screen"}>
-                {maximized ? <Minimize2 /> : <Maximize2 />}
-              </WindowButton>
-            ) : null}
-            <DialogPrimitive.Close asChild>
-              <WindowButton label="Close">
-                <X />
-              </WindowButton>
-            </DialogPrimitive.Close>
+          <div className="flex min-w-0 flex-1 shrink-0 items-center justify-end gap-0.5 @max-4xl/composer:flex-none">
+            {embedded ? null : (
+              <>
+                <WindowButton
+                  onClick={minimize}
+                  label={working ? "Minimize — keeps going" : "Minimize"}
+                >
+                  <Minus />
+                </WindowButton>
+                {!isMobile ? (
+                  <WindowButton
+                    onClick={resize}
+                    label={maximized ? "Exit full screen" : "Full screen"}
+                  >
+                    {maximized ? <Minimize2 /> : <Maximize2 />}
+                  </WindowButton>
+                ) : null}
+                <DialogPrimitive.Close asChild>
+                  <WindowButton label="Close">
+                    <X />
+                  </WindowButton>
+                </DialogPrimitive.Close>
+              </>
+            )}
           </div>
         </TooltipProvider>
 
@@ -404,6 +521,9 @@ export function ComposerBody({
             <IntentStep
               session={session}
               isMobile={isMobile}
+              drawerOpen={drawer}
+              onDrawerChange={setDrawer}
+              panelHost={panelHost}
               fixtureIdeas={fixtures?.ideas}
               onPickIdea={pickIdea}
             />
@@ -412,7 +532,7 @@ export function ComposerBody({
               <GenerationProgress
                 session={session}
                 cancelling={cancelling}
-                onMinimize={minimize}
+                onBackground={minimize}
                 onCancel={async () => {
                   setCancelling(true);
                   await cancelSession(session.id);
@@ -429,16 +549,31 @@ export function ComposerBody({
           ) : null}
         </motion.div>
       </div>
+      <div
+        ref={setPanelHost}
+        className="pointer-events-none absolute inset-0 z-30 [&>*]:pointer-events-auto"
+      />
     </div>
   );
 }
 
 /** Describe → Generate → Review, with a sliding highlight on the current step. */
-function StepIndicator({ index, working }: { index: number; working: boolean }) {
+function StepIndicator({
+  index,
+  working,
+  onDescribe,
+}: {
+  index: number;
+  working: boolean;
+  /** From a finished piece, the Describe pill goes back to its brief. */
+  onDescribe?: () => void;
+}) {
   const reduce = useReducedMotion();
   return (
     <ol
-      className="relative hidden items-center rounded-full bg-surface-2/80 p-1 ring-1 ring-border/60 @4xl/composer:flex"
+      // In the row's flow, between two flex-1 spacers: centred when there is
+      // room, and never drawn over the Back and format pills when there isn't.
+      className="hidden shrink-0 items-center gap-0.5 rounded-full bg-[var(--ds-well-bg)] p-1 @4xl/composer:flex"
       aria-label="Steps"
     >
       {STEPS.map((s, i) => {
@@ -449,10 +584,19 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
             aria-current={state === "current" ? "step" : undefined}
             className="relative flex h-7 items-center gap-1.5 px-3 text-xs"
           >
+            {s.id === "intent" && onDescribe ? (
+              <button
+                type="button"
+                onClick={onDescribe}
+                aria-label="Back to description"
+                title="Change the description"
+                className="absolute inset-0 rounded-full transition-colors hover:bg-[var(--ds-card-bg)]"
+              />
+            ) : null}
             {state === "current" ? (
               <motion.span
                 layoutId="composer-step"
-                className="absolute inset-0 rounded-full bg-surface-3 shadow-1 ring-1 ring-border/70"
+                className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[0_4px_14px_-6px_rgb(0_0_0/0.18)]"
                 transition={
                   reduce ? { duration: 0 } : { duration: duration.medium, ease: ease.emphasized }
                 }
@@ -461,15 +605,15 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
             <span
               className={cn(
                 "relative grid size-4 place-items-center rounded-full text-[9px] font-semibold tabular-nums transition-colors duration-[--motion-duration-slow]",
-                state === "done" && "bg-primary text-primary-foreground",
-                state === "current" && "bg-foreground text-background",
+                state === "done" && "bg-[var(--mox-green)] text-white",
+                state === "current" && "[background:var(--mox-gradient)] text-[var(--mox-ink)]",
                 state === "todo" && "text-muted-foreground ring-1 ring-border-strong",
               )}
             >
               {state === "done" ? (
                 <Check className="size-2.5" strokeWidth={3.5} />
               ) : state === "current" && working && s.id === "generating" ? (
-                <span className="size-1.5 animate-pulse rounded-full bg-background" />
+                <span className="size-1.5 animate-pulse rounded-full bg-white" />
               ) : (
                 i + 1
               )}
@@ -478,7 +622,7 @@ function StepIndicator({ index, working }: { index: number; working: boolean }) 
               className={cn(
                 "relative transition-colors",
                 state === "current"
-                  ? "font-medium text-foreground"
+                  ? "font-semibold text-foreground"
                   : state === "done"
                     ? "text-foreground/70"
                     : "text-muted-foreground",
@@ -553,102 +697,35 @@ function TypeSwitcher({ session }: { session: StudioSession }) {
   );
 }
 
-/** A live preview of what the brief will produce; it follows every setting. */
-function WhatYoullGet({ session }: { session: StudioSession }) {
-  const c = session.controls;
-  const template = getTemplate(session.template);
-  const count = c.platforms.length;
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-  useEffect(() => {
-    if (count < 2 || paused) return;
-    const t = window.setInterval(() => setIndex((i) => (i + 1) % count), 3200);
-    return () => window.clearInterval(t);
-  }, [count, paused]);
-  const active = count ? index % count : 0;
-  const platform = c.platforms[active];
-
-  return (
-    <section
-      data-no-rhythm
-      aria-label="Preview"
-      className={`studio-tone-${session.type} shrink-0 overflow-hidden rounded-2xl bg-surface-3 pb-3 shadow-1 ring-1 ring-border/70`}
-    >
-      <p className="ui-eyebrow px-4 pt-3.5">Preview</p>
-      <div
-        onMouseEnter={() => setPaused(true)}
-        onMouseLeave={() => setPaused(false)}
-        className="studio-canvas relative mx-3 mt-3 flex h-[360px] items-center justify-center overflow-hidden rounded-xl ring-1 ring-border/60"
-      >
-        <div aria-hidden className="studio-aurora studio-aurora-soft" />
-        <div className="relative flex w-[520px] shrink-0 origin-center scale-[0.62] justify-center">
-          <PreviewSkeleton
-            session={session}
-            stageIndex={-1}
-            platform={platform}
-            template={template}
-          />
-        </div>
-      </div>
-      {count > 1 ? (
-        <div
-          className="mt-2.5 flex justify-center gap-1.5"
-          role="tablist"
-          aria-label="Preview platform"
-        >
-          {c.platforms.map((p, i) => {
-            const on = i === active;
-            return (
-              <button
-                key={p}
-                type="button"
-                role="tab"
-                aria-selected={on}
-                aria-label={PLATFORMS[p].label}
-                title={PLATFORMS[p].label}
-                onClick={() => {
-                  setIndex(i);
-                  setPaused(true);
-                }}
-                className={cn(
-                  "grid place-items-center rounded-[10px] p-[2px] ring-2 transition-[box-shadow,opacity,transform] duration-[--motion-duration-fast]",
-                  on ? "ring-primary" : "scale-90 ring-transparent hover:scale-100",
-                )}
-              >
-                <PlatformAppIcon platform={p} size={26} />
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 export function IntentStep({
   session,
   isMobile,
-  onPickIdea,
-  fixtureIdeas,
+  drawerOpen = false,
+  onDrawerChange,
+  panelHost,
 }: {
   session: StudioSession;
   isMobile: boolean;
-  onPickIdea: (idea: StudioIdea) => void;
+  /** Kept for callers; ideas are no longer offered in the composer. */
+  onPickIdea?: (idea: StudioIdea) => void;
   fixtureIdeas?: StudioIdea[];
+  /** Holo's side panel: options, ideas and templates. */
+  drawerOpen?: boolean;
+  onDrawerChange?: (open: boolean) => void;
+  /** Where the side panel is drawn: the whole composer, header included. */
+  panelHost?: HTMLElement | null;
 }) {
   const format = STUDIO_FORMATS[session.type];
+  // Each way of starting asks for its own thing (clips, photos, a page...).
+  const start = startFor(session.type, session.controls);
+  const missing = missingFor(session.type, session.controls);
+  const canvas = canvasPickers(session.type, session.controls);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const ready = session.brief.trim().length >= 3;
+  const ready = session.brief.trim().length >= 3 && !missing;
   const busy =
     !!session.pendingKey ||
     Boolean(session.uploadingReference) ||
-    Boolean(
-      (session.type === "video" ||
-        (session.type === "story" && session.controls.storyMode === "video")) &&
-      !session.controls.videoPreview &&
-      session.controls.videoModelKey &&
-      !session.controls.videoQuote,
-    );
+    (needsVideoQuote(session.type, session.controls) && !session.controls.videoQuote);
   const template = getTemplate(session.template);
   const blanks = countBlanks(session.brief);
   const hasBrand = useMemo(() => !!readBrandPayload(session.workspaceId), [session.workspaceId]);
@@ -660,21 +737,106 @@ export function IntentStep({
   }, [session.id, session.type, isMobile]);
 
   const submit = () => {
-    if (ready && !busy && !writer.busy)
-      void generate(session.id, { kind: session.lastGood ? "regenerate" : "generate" });
+    if (!ready || busy || writer.busy) return;
+    const id = session.id;
+    // Holo: Generate hands the piece to the corner list at once and gets out
+    // of the way: nobody waits on a loading page. It is made on the server;
+    // the list shows it ("Starting…" until the server answers) and opens it
+    // when ready. A refusal checked before sending (price still loading, a
+    // photo uploading) never starts, so the page stays to say why.
+    const started = generate(id, { kind: session.lastGood ? "regenerate" : "generate" });
+    if (getSession(id)?.pendingKey) minimizeSession(id);
+    void started.then(() => {
+      const s = getSession(id);
+      if (!s || (!s.error && !s.billing)) return;
+      // Refused by the server (credits, plan, a bad brief): bring the page
+      // back only if nothing else is open, otherwise say so with a button.
+      const active = getActiveSessionId();
+      if (!active || active === id) return focusSession(id);
+      toast.error(s.billing ? "That piece needs more credits." : (s.error ?? "It didn't start."), {
+        action: { label: "Open", onClick: () => focusSession(id) },
+      });
+    });
   };
 
-  const backToFormats = () => {
-    // A typed brief is kept in the dock; an empty one is simply closed.
-    closeSession(session.id);
-    emitAppEvent("open:create-launcher");
-  };
+  // On a desktop the extra choices live in Holo's side panel; on a phone
+  // they stay in the page. Ideas are not offered here: Write it for me
+  // writes a fresh idea from the brand's own signals.
+  const sidePanel = !isMobile;
+  const openPanel = () => onDrawerChange?.(true);
+  const goalLabel = GOALS.find((g) => g.id === session.goal)?.label;
+  // Post kinds are retired (ADR-0051): the brief decides what a post is.
+  const categoryLabel: string | undefined = undefined;
+  const { data: catalogue } = useStudioProducts(session.workspaceId);
+  const productLabel = catalogue?.find((p) => p.id === session.controls.productId)?.name;
+  const showProduct = !canvas.product && session.type !== "script" && !session.sourceScript;
+  const options = (
+    <>
+      {showProduct ? (
+        <PanelSection index={0}>
+          <ProductPicker
+            workspaceId={session.workspaceId}
+            type={session.type}
+            value={session.controls.productId}
+            showEmpty
+            // "None" also stops a product the brief names being picked.
+            onChange={(productId) =>
+              updateSession(session.id, {
+                controls: {
+                  ...session.controls,
+                  productId,
+                  noProduct: productId ? undefined : true,
+                },
+              })
+            }
+          />
+        </PanelSection>
+      ) : null}
 
+      {!session.sourceScript ? (
+        <PanelSection index={1}>
+          <p className="mb-2 text-xs font-medium text-foreground">Goal</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Goal">
+            {GOALS.map((g) => (
+              <ChipButton
+                key={g.id}
+                selected={session.goal === g.id}
+                onClick={() =>
+                  updateSession(session.id, {
+                    goal: session.goal === g.id ? undefined : g.id,
+                  })
+                }
+              >
+                {session.goal === g.id ? (
+                  <Check className="size-3 text-primary-ink" strokeWidth={3} />
+                ) : null}
+                {g.label}
+              </ChipButton>
+            ))}
+          </div>
+        </PanelSection>
+      ) : null}
+
+      <PanelSection index={3}>
+        <ControlsPanel session={session} disabled={busy} />
+      </PanelSection>
+
+      {!session.sourceScript ? (
+        <PanelSection index={4}>
+          <TemplateGallery session={session} textareaRef={textarea} title="Start from a template" />
+        </PanelSection>
+      ) : null}
+    </>
+  );
+
+  // Holo's canvas: one narrow column on the canvas (the idea, then a few small
+  // options), one gradient pill in the corner. Nothing is drawn before it is
+  // made; ideas and templates wait in a drawer.
   return (
-    <div className="flex h-full flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-y-auto @5xl/composer:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] @5xl/composer:overflow-hidden">
-        <div className="min-w-0 p-5 @3xl/composer:p-8 @5xl/composer:overflow-y-auto">
-          <div className="studio-stagger mx-auto min-w-0 max-w-2xl space-y-7">
+    <div className="relative flex h-full flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+        <div className="mx-auto w-full max-w-[560px] px-5 pb-32 pt-3 @3xl/composer:pt-10">
+          <div className="studio-stagger min-w-0 space-y-6">
             {session.sourceScript ? (
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">Make your video</h2>
@@ -699,18 +861,31 @@ export function IntentStep({
               <div>
                 <label
                   htmlFor="studio-brief"
-                  className="block text-xl font-semibold tracking-tight text-foreground"
+                  className="block text-center text-[24px] font-bold tracking-[-0.03em] text-foreground"
                 >
-                  Describe your{" "}
-                  <span className={`studio-gradient-text studio-tone-${session.type}`}>
-                    {format.noun}
-                  </span>
+                  {start ? start.lead : "Describe your"}{" "}
+                  <span className="ds-grad-text">{start ? start.word : format.noun}</span>
                 </label>
+                {start?.steps ? (
+                  <ol
+                    className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground"
+                    data-testid="studio-start-steps"
+                  >
+                    {start.steps.map((step, i) => (
+                      <li key={step} className="inline-flex items-center gap-1.5">
+                        <span className="grid size-5 place-items-center rounded-full bg-[var(--ds-well-bg)] text-[11px] font-bold text-foreground">
+                          {i + 1}
+                        </span>
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
 
                 <div
                   {...media.dropProps}
                   className={cn(
-                    "relative mt-4 rounded-2xl border bg-surface-3 shadow-1 transition-[border-color,box-shadow]",
+                    "relative mt-5 rounded-[20px] border bg-[var(--ds-card-bg)] shadow-[var(--ds-card-shadow)] transition-[border-color,box-shadow]",
                     "focus-within:border-primary-border focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_22px_50px_-22px_hsl(var(--primary)/0.5)]",
                     session.error ? "border-danger-border" : "border-input",
                   )}
@@ -722,7 +897,7 @@ export function IntentStep({
                       className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground"
                       data-testid="studio-source-strip"
                     >
-                      <Repeat2 className="size-3.5 text-primary" />
+                      <Repeat2 className="size-3.5 text-primary-ink" />
                       <span className="min-w-0 flex-1 truncate">
                         Made from{" "}
                         <span className="font-medium text-foreground">
@@ -761,7 +936,7 @@ export function IntentStep({
                     </div>
                   ) : session.ideaId ? (
                     <div className="flex items-center gap-2 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
-                      <Sparkles className="size-3.5 text-primary" />
+                      <Sparkles className="size-3.5 text-primary-ink" />
                       <span className="flex-1">From a suggested idea</span>
                       <button
                         type="button"
@@ -791,7 +966,7 @@ export function IntentStep({
                         submit();
                       }
                     }}
-                    placeholder={format.placeholder}
+                    placeholder={start?.placeholder ?? format.placeholder}
                     rows={isMobile ? 4 : 5}
                     maxLength={4000}
                     readOnly={writer.busy}
@@ -814,7 +989,7 @@ export function IntentStep({
                         onClick={() => emitAppEvent("open:brand-dna", { tab: "essentials" })}
                         className="inline-flex items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
                       >
-                        <Sparkles className="size-3.5 text-primary" />
+                        <Sparkles className="size-3.5 text-primary-ink" />
                         Add Brand DNA
                       </button>
                     ) : null}
@@ -841,98 +1016,262 @@ export function IntentStep({
 
             {!session.sourceScript ? <PhotoUse media={media} /> : null}
 
-            <PlatformControls session={session} disabled={busy} />
-
-            {!session.sourceScript ? (
-              <div>
-                <p className="mb-2 text-xs font-medium text-foreground">Goal</p>
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Goal">
-                  {GOALS.map((g) => (
-                    <ChipButton
-                      key={g.id}
-                      selected={session.goal === g.id}
-                      onClick={() =>
-                        updateSession(session.id, {
-                          goal: session.goal === g.id ? undefined : g.id,
-                        })
-                      }
-                    >
-                      {session.goal === g.id ? (
-                        <Check className="size-3 text-primary" strokeWidth={3} />
-                      ) : null}
-                      {g.label}
-                    </ChipButton>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <ControlsPanel session={session} disabled={busy} />
-
-            {!session.sourceScript ? (
-              <div className="@5xl/composer:hidden">
-                <IdeasPanel
-                  workspaceId={session.workspaceId}
-                  type={session.type}
-                  selectedId={session.ideaId}
-                  onPick={onPickIdea}
-                  limit={3}
-                  fixtureIdeas={fixtureIdeas}
-                />
-              </div>
-            ) : null}
-
-            {/* Templates are a starting point for those who want one: last. */}
-            {!session.sourceScript ? (
-              <TemplateGallery
-                session={session}
-                textareaRef={textarea}
-                title="Or start from a template"
+            {/* What this start needs, on the page, not in the side panel. */}
+            {canvas.source ? (
+              <SourceClips
+                key={session.workspaceId}
+                workspaceId={session.workspaceId}
+                controls={session.controls}
+                set={(patch) =>
+                  updateSession(session.id, { controls: { ...session.controls, ...patch } })
+                }
+                disabled={busy}
+                fixedMode
               />
             ) : null}
+            {canvas.product ? (
+              <ProductPicker
+                workspaceId={session.workspaceId}
+                type={session.type}
+                value={session.controls.productId}
+                onChange={(productId) =>
+                  updateSession(session.id, {
+                    controls: {
+                      ...session.controls,
+                      productId,
+                      noProduct: productId ? undefined : true,
+                    },
+                  })
+                }
+              />
+            ) : null}
+            {canvas.adObjective ? (
+              <AdObjectivePicker
+                value={session.controls.adObjective}
+                onChange={(adObjective) =>
+                  updateSession(session.id, { controls: { ...session.controls, adObjective } })
+                }
+              />
+            ) : null}
+
+            <PlatformControls session={session} disabled={busy} />
+
+            <VideoCanvasSettings session={session} media={media} disabled={busy} />
+            <PostCanvasSettings session={session} disabled={busy} />
+
+            {sidePanel ? (
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <PanelChip
+                  icon={<SlidersHorizontal />}
+                  label="Options"
+                  hint={
+                    [productLabel, goalLabel, categoryLabel].filter(Boolean).join(" · ") ||
+                    (showProduct ? "Product, goal, kind of post" : "Goal, kind of post")
+                  }
+                  onClick={openPanel}
+                />
+              </div>
+            ) : (
+              options
+            )}
           </div>
         </div>
-
-        <aside className="studio-stagger hidden flex-col gap-6 border-l border-border/60 bg-surface-1 p-5 @5xl/composer:flex @5xl/composer:overflow-y-auto">
-          <WhatYoullGet session={session} />
-          {!session.sourceScript ? (
-            <IdeasPanel
-              workspaceId={session.workspaceId}
-              type={session.type}
-              selectedId={session.ideaId}
-              onPick={onPickIdea}
-              limit={4}
-              fixtureIdeas={fixtureIdeas}
-            />
-          ) : null}
-        </aside>
       </div>
 
-      <footer className="flex items-center gap-3 border-t border-border bg-surface-3 px-4 py-3 @3xl/composer:px-6">
-        {!session.job && !session.lastGood ? (
-          <Button variant="ghost" size="sm" onClick={backToFormats}>
-            <ArrowLeft />
-            Back
+      {sidePanel
+        ? portalInto(
+            panelHost,
+            <AnimatePresence>
+              {!drawerOpen ? (
+                <PanelHandle
+                  key="studio-panel-handle"
+                  marked={!!categoryLabel || !!session.goal || !!session.controls.productId}
+                  onOpen={openPanel}
+                />
+              ) : null}
+            </AnimatePresence>,
+          )
+        : null}
+
+      {portalInto(
+        panelHost,
+        <AnimatePresence>
+          {drawerOpen ? (
+            <motion.div
+              key="studio-panel-shade"
+              aria-hidden
+              onClick={() => onDrawerChange?.(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-20 bg-[var(--ds-canvas-bg)]/40 backdrop-blur-[6px]"
+            />
+          ) : null}
+          {drawerOpen ? (
+            <motion.aside
+              key="studio-panel"
+              id="studio-drawer"
+              aria-label="Options and ideas"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%", transition: { duration: duration.base, ease: ease.accelerate } }}
+              transition={spring.surface}
+              className="absolute bottom-0 right-0 top-0 z-30 flex w-[min(100%,380px)] flex-col border-l border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] shadow-[-30px_0_80px_-40px_rgb(0_0_0/0.35)]"
+            >
+              <div className="flex flex-col gap-3 px-5 pb-3 pt-3.5">
+                <button
+                  type="button"
+                  onClick={() => onDrawerChange?.(false)}
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] py-1.5 pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5"
+                >
+                  <ArrowLeft className="size-4" />
+                  Back
+                </button>
+                <div>
+                  <h2 className="text-[17px] font-bold tracking-tight">
+                    <span className="ds-grad-text">{format.label}</span> options
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    All optional. Mellox fills in whatever you leave.
+                  </p>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-5 [scrollbar-width:thin]">
+                {sidePanel ? options : null}
+              </div>
+              <div className="px-5 pb-5 pt-2">
+                <Button
+                  onClick={() => onDrawerChange?.(false)}
+                  size="lg"
+                  className="studio-cta w-full rounded-full"
+                >
+                  Done
+                </Button>
+              </div>
+            </motion.aside>
+          ) : null}
+        </AnimatePresence>,
+      )}
+
+      {/* Holo: the price and one gradient pill float in the corner. */}
+      <footer className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-3 px-4 pb-4 @3xl/composer:px-6 @3xl/composer:pb-5">
+        <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/85 p-1.5 pl-3 shadow-[0_18px_40px_-20px_rgb(0_0_0/0.35)] backdrop-blur-xl">
+          {missing ? (
+            <span
+              role="status"
+              className="text-xs font-semibold text-foreground"
+              data-testid="studio-missing"
+            >
+              {missing}
+            </span>
+          ) : null}
+          <StudioPrice session={session} />
+          <Button
+            onClick={submit}
+            disabled={!ready || busy || writer.busy}
+            size="lg"
+            className="studio-cta rounded-full px-6"
+          >
+            {busy ? <Spinner className="animate-spin" aria-hidden /> : <Wand2 />}
+            {session.uploadingReference
+              ? "Uploading photo…"
+              : busy
+                ? "Starting…"
+                : needsStoryboard({ type: session.type, controls: session.controls })
+                  ? "Plan the storyboard"
+                  : session.lastGood
+                    ? "Generate again"
+                    : "Generate"}
           </Button>
-        ) : null}
-        <StudioPrice session={session} />
-        <Button
-          onClick={submit}
-          disabled={!ready || busy || writer.busy}
-          size="lg"
-          className="studio-cta"
-        >
-          {busy ? <Spinner className="animate-spin" aria-hidden /> : <Wand2 />}
-          {session.uploadingReference
-            ? "Uploading photo…"
-            : busy
-              ? "Starting…"
-              : session.lastGood
-                ? "Generate again"
-                : "Generate"}
-        </Button>
+        </div>
       </footer>
     </div>
+  );
+}
+
+/** One block of the options panel: fades up in order when the panel opens. */
+function PanelSection({ index, children }: { index: number; children: React.ReactNode }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.28,
+        ease: ease.emphasized,
+        delay: reduce ? 0 : 0.06 + index * 0.05,
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Draw into `host` when it exists (the composer's full-height layer), else in place. */
+function portalInto(host: HTMLElement | null | undefined, node: React.ReactNode) {
+  return host ? createPortal(node, host) : node;
+}
+
+/**
+ * Holo's side-panel handle: a slim tab centred on the canvas's right edge.
+ * It opens the options panel from wherever the person is on the page, and
+ * carries a dot when something is already set inside (a goal, a product).
+ */
+function PanelHandle({ marked, onOpen }: { marked: boolean; onOpen: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 12, transition: { duration: duration.fast } }}
+      transition={spring.surface}
+      style={{ y: "-50%" }}
+      className="absolute right-0 top-1/2 z-20"
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label="Open options and ideas"
+        aria-controls="studio-drawer"
+        title="Options and ideas"
+        className={cn(
+          "group relative flex h-14 w-7 items-center justify-center rounded-l-2xl border border-r-0 border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/90 text-muted-foreground shadow-[-10px_0_30px_-16px_rgb(0_0_0/0.35)] backdrop-blur-xl transition-[width,color] duration-200 hover:w-9 hover:text-foreground focus-visible:w-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
+          marked && "panel-handle-nudge",
+        )}
+      >
+        <ChevronLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
+        {marked ? (
+          <span
+            aria-hidden
+            className="absolute right-1.5 top-2 size-1.5 rounded-full [background:var(--mox-gradient)]"
+          />
+        ) : null}
+      </button>
+    </motion.div>
+  );
+}
+
+/** A small pill on the canvas that opens the side panel on one tab. */
+function PanelChip({
+  icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group inline-flex h-10 items-center gap-2 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-3 pr-4 text-[13px] font-semibold text-foreground shadow-[var(--ds-card-shadow)] transition hover:-translate-y-px [&_svg]:size-4 [&_svg]:text-[var(--mox-green)]"
+    >
+      {icon}
+      {label}
+      {hint ? <span className="font-medium text-muted-foreground">· {hint}</span> : null}
+    </button>
   );
 }
 
@@ -943,21 +1282,8 @@ function StudioPrice({ session }: { session: StudioSession }) {
   const product = useBriefProduct(session);
   const controls = withProductPhotos(session, product);
   const { videoMode, recapMotion } = session.controls;
-  // The brand's own clips (and camera-move recaps) use no video provider.
-  const ownFootage =
-    session.type === "video" &&
-    (videoMode === "brand" ||
-      videoMode === "site" ||
-      (videoMode === "recap" && recapMotion !== "ai"));
-  const quotedVideo = Boolean(
-    (session.type === "video" ||
-      (session.type === "story" && session.controls.storyMode === "video")) &&
-    !ownFootage &&
-    // Animated recap photos are priced per photo, without a model quote.
-    videoMode !== "recap" &&
-    !session.controls.videoPreview &&
-    session.controls.videoModelKey,
-  );
+  // Same rule Generate waits on: own footage and recaps are never quoted.
+  const quotedVideo = needsVideoQuote(session.type, session.controls);
   const quoteSignature = JSON.stringify([
     session.controls.videoModelKey,
     session.controls.durationSec,
@@ -991,6 +1317,26 @@ function StudioPrice({ session }: { session: StudioSession }) {
     // The quote is invalidated only by settings that change the provider price.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, quotedVideo, quoteSignature, session.controls.videoQuote?.hash]);
+  // A long or premium video is made as its storyboard first: Generate costs
+  // the storyboard; the video's own price shows on the storyboard's Create.
+  if (needsStoryboard({ type: session.type, controls: session.controls }))
+    return session.controls.paymentSource === "creation" ? (
+      <span
+        data-slot="cost-chip"
+        className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground"
+      >
+        Storyboard ·{" "}
+        {studioPriceLabel({
+          type: session.type,
+          controls: withStoryboard(session.type, session.controls),
+        })}
+      </span>
+    ) : (
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">Storyboard</span>
+        <CostChip announce action="video_storyboard" />
+      </span>
+    );
   if (quotedVideo)
     return (
       <span data-slot="cost-chip" className="ml-auto text-xs text-muted-foreground">
@@ -1038,18 +1384,25 @@ function StudioPrice({ session }: { session: StudioSession }) {
     videoResolution: session.controls.videoResolution,
   });
   const clip = charge === "studio_short_clip" ? shortClipPlan({ ...session, controls }) : null;
-  if (clip) return <CostChip credits={shortClipPrice(clip).credits} className="ml-auto shrink-0" />;
+  if (clip)
+    return (
+      <CostChip announce credits={shortClipPrice(clip).credits} className="ml-auto shrink-0" />
+    );
+  if (charge === "carousel")
+    return (
+      <CostChip
+        announce
+        credits={carouselCredits({ ...session.controls, ...controls })}
+        className="ml-auto shrink-0"
+      />
+    );
   return charge === "studio_video" ? (
     <CostChip
-      videoUnits={studioVideoUnits(
-        // Animated recap photos are five seconds each, whatever length was picked.
-        videoMode === "recap"
-          ? (session.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS
-          : session.controls.durationSec,
-      )}
+      announce
+      credits={studioVideoCredits(session.type, { ...session.controls, videoMode })}
       className="ml-auto shrink-0"
     />
   ) : (
-    <CostChip action={charge as CreditAction} className="ml-auto shrink-0" />
+    <CostChip announce action={charge as CreditAction} className="ml-auto shrink-0" />
   );
 }

@@ -224,7 +224,7 @@ export type BlogDesign = {
   cardTitleClass: string;
   metaClass: string;
   linkClass: string;
-  /** One class that colours links inside an article ("text-primary"). */
+  /** One class that colours links inside an article ("text-primary-ink"). */
   accentClass: string;
   headerBarClass: string;
   brandClass: string;
@@ -254,7 +254,7 @@ export function defaultDesign(args: {
         muted: "text-muted-foreground",
         border: "border-border",
         card: "bg-card",
-        accent: "text-primary",
+        accent: "text-primary-ink",
         strong: "hover:text-foreground",
       }
     : {

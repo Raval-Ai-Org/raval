@@ -1,12 +1,17 @@
+"use client";
+
+import { useEffect } from "react";
 import { Bolt, Video } from "@/components/icons";
-import { CREDIT_ACTIONS, type CreditAction } from "@/lib/billing/catalog";
-import { formatNumber, formatVideos } from "@/lib/billing/present";
+import { emitAppEvent } from "@/lib/app-events";
+import { CREDIT_ACTIONS, formatCreditPrice, type CreditAction } from "@/lib/billing/catalog";
+import { formatVideos } from "@/lib/billing/present";
 import { cn } from "@/lib/utils";
 
 /**
- * The price on a paid button: "12 credits" or "1 video". Charged only when the
- * action succeeds. Pass `videoUnits` for video, `credits` for a price worked
- * out elsewhere (a short video clip); otherwise a catalog action.
+ * The price on a paid button: "1 credit", "30 credits". Charged only when the
+ * action succeeds. `credits` is a price worked out elsewhere (a video), in
+ * ledger units; otherwise a catalog action. An action included in every plan
+ * shows "Free". `videoUnits` is only for balances held from before pricing v4.
  */
 export function CostChip({
   action,
@@ -14,6 +19,8 @@ export function CostChip({
   videoUnits,
   credits: fixedCredits,
   free,
+  compact,
+  announce,
   className,
 }: {
   action?: CreditAction;
@@ -22,13 +29,33 @@ export function CostChip({
   credits?: number;
   /** Included in the plan (first scan, scheduled refresh): shows "Free". */
   free?: boolean;
+  /** Holo-style "⚡12" on a Create pill; the full price stays in the title. */
+  compact?: boolean;
+  /** The price of what is being set up right now: the sidebar gauge shows it. */
+  announce?: boolean;
   className?: string;
 }) {
+  const units =
+    fixedCredits ?? (action ? Math.ceil(CREDIT_ACTIONS[action].credits * quantity) : undefined);
+  const included = free || units === 0;
+  const announced =
+    typeof videoUnits === "number"
+      ? { videoUnits, label: `${formatVideos(videoUnits)} video credits` }
+      : !included && units !== undefined
+        ? { credits: units, label: formatCreditPrice(units) }
+        : null;
+  const key = announce && announced ? announced.label : null;
+  useEffect(() => {
+    if (!key || !announced) return;
+    emitAppEvent("credits:preview", announced);
+    return () => emitAppEvent("credits:preview", null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the label
+  }, [key]);
   const base =
     "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10.5px] font-medium tabular-nums leading-4 text-muted-foreground";
-  if (free) {
+  if (included) {
     return (
-      <span data-slot="cost-chip" className={cn(base, "bg-primary/12 text-primary", className)}>
+      <span data-slot="cost-chip" className={cn(base, "bg-primary/12 text-primary-ink", className)}>
         Free
       </span>
     );
@@ -46,12 +73,17 @@ export function CostChip({
       </span>
     );
   }
-  if (!action && fixedCredits === undefined) return null;
-  const credits = fixedCredits ?? Math.ceil(CREDIT_ACTIONS[action!].credits * quantity);
+  if (units === undefined) return null;
+  const label = formatCreditPrice(units);
   return (
-    <span data-slot="cost-chip" className={cn(base, className)} title="Charged only if it works">
+    <span
+      data-slot="cost-chip"
+      className={cn(base, className)}
+      title={`${label}. Charged only if it works`}
+      aria-label={compact ? label : undefined}
+    >
       <Bolt className="h-3 w-3 shrink-0" aria-hidden />
-      {formatNumber(credits)} {credits === 1 ? "credit" : "credits"}
+      {compact ? label.split(" ")[0] : label}
     </span>
   );
 }

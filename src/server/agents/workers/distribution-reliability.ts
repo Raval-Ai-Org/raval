@@ -3,7 +3,7 @@
 // Goal: identify and explain publication delivery problems WITHOUT making any
 // change. Autonomy L0/L1: it reads typed, workspace-scoped evidence, derives
 // findings deterministically (so the evaluation suite can pin them), asks the
-// economy model for plain-language hypotheses when available, and records
+// economy model for plain-language hypotheses only when a run asks (explain: true), and records
 // findings for a human. It never publishes, reconnects, retries, cancels or
 // edits delivery state — it has no tool that could.
 import "server-only";
@@ -234,9 +234,11 @@ export const distributionReliabilityWorker: WorkerDefinition = {
     };
     const findings = analyzeDeliveryEvidence(evidence);
 
-    // Optional: plain-language hypotheses from the economy model. The
-    // deterministic findings stand on their own if this fails.
-    if (findings.length && ctx.input.explain !== false) {
+    // Every finding already carries written hypotheses (above), so the
+    // scheduled tick makes no model call. The economy model's wording is
+    // only added when a run asks for it (explain: true); the findings stand
+    // on their own if it fails.
+    if (findings.length && ctx.input.explain === true) {
       try {
         const { runStructuredPrompt } = await import("@/lib/ai/run.server");
         const out = await runStructuredPrompt({

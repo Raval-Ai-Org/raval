@@ -423,3 +423,84 @@ export function readSpreadsheet(data: unknown): { id: string; url: string } | nu
   }
   return null;
 }
+
+// ── Google Ads: keywords from the brand's own site ────────────────────────
+
+/** Keywords added to a new ad group, at most. */
+export const ADS_KEYWORDS_MAX = 15;
+
+export function googleAdsKeywordIdeasArgs(
+  customerId: string,
+  url: string,
+): Record<string, unknown> {
+  return {
+    customer_id: customerId,
+    url_seed: { url },
+    page_size: 60,
+    include_adult_keywords: false,
+  };
+}
+
+/** Characters Google refuses in a keyword. */
+const KEYWORD_BAD = /[!@%^*()=+;,<>?|{}[\]~`"\\]/;
+
+/**
+ * The ideas Google returned, best first (monthly searches), cleaned to what a
+ * keyword may be. Only what Google itself suggested for the site — Mellox
+ * invents no keyword.
+ */
+export function readKeywordIdeas(data: unknown, max = ADS_KEYWORDS_MAX): string[] {
+  let value: unknown = data;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  const top = record(value);
+  const inner = top?.data;
+  const parsedInner =
+    typeof inner === "string"
+      ? (() => {
+          try {
+            return JSON.parse(inner) as unknown;
+          } catch {
+            return null;
+          }
+        })()
+      : inner;
+  const candidates = [top?.results, record(parsedInner)?.results, parsedInner, value];
+  const list = (candidates.find((c) => Array.isArray(c)) as unknown[] | undefined) ?? [];
+  const ideas: Array<{ text: string; searches: number }> = [];
+  for (const raw of list) {
+    const idea = record(raw);
+    const text = typeof idea?.text === "string" ? idea.text.trim().toLowerCase() : "";
+    if (!text || text.length > 80 || text.split(/\s+/).length > 10 || KEYWORD_BAD.test(text))
+      continue;
+    const metrics = record(idea?.keywordIdeaMetrics ?? idea?.keyword_idea_metrics);
+    const s = metrics?.avgMonthlySearches ?? metrics?.avg_monthly_searches;
+    const searches = typeof s === "string" ? Number(s) : typeof s === "number" ? s : 0;
+    ideas.push({ text, searches: Number.isFinite(searches) ? searches : 0 });
+  }
+  const seen = new Set<string>();
+  return ideas
+    .sort((a, b) => b.searches - a.searches)
+    .filter((i) => !seen.has(i.text) && !!seen.add(i.text))
+    .slice(0, max)
+    .map((i) => i.text);
+}
+
+/** Phrase-match keywords for one ad group. The campaign itself stays paused. */
+export function googleAdsKeywordArgs(
+  customerId: string,
+  adGroup: string,
+  keywords: string[],
+): Record<string, unknown> {
+  return {
+    customer_id: customerId,
+    operations: keywords.slice(0, ADS_KEYWORDS_MAX).map((text) => ({
+      create: { ad_group: adGroup, status: "ENABLED", keyword: { text, match_type: "PHRASE" } },
+    })),
+  };
+}

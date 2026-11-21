@@ -130,29 +130,53 @@ export async function uploadAssetObject(
   );
 }
 
+const MAX_SIGNED_SECONDS = 604800;
+const SIGNING_WINDOW_SECONDS = 3600;
+
+/**
+ * A signed link that stays byte-identical for a window (at most an hour), so
+ * the browser can reuse a picture it already downloaded instead of fetching
+ * it again on every page view. The link is signed at the start of the window
+ * and lives `ttl + window`, so it is always valid for at least `ttl` seconds
+ * from now and never longer than 7 days. Pure.
+ */
+export function stableSigning(
+  ttlSeconds: number,
+  nowMs = Date.now(),
+): { signingDate: Date; expiresIn: number } {
+  const window = Math.min(SIGNING_WINDOW_SECONDS, ttlSeconds, MAX_SIGNED_SECONDS - ttlSeconds);
+  if (window <= 0) return { signingDate: new Date(nowMs), expiresIn: ttlSeconds };
+  const start = Math.floor(nowMs / 1000 / window) * window;
+  return { signingDate: new Date(start * 1000), expiresIn: ttlSeconds + window };
+}
+
 export async function signAssetObject(
   path: string,
   ttlSeconds = 3600,
   downloadFilename?: string,
 ): Promise<string> {
   if (!isR2AssetPath(path)) throw new Error("Invalid R2 asset path");
-  if (!Number.isInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > 604800) {
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > MAX_SIGNED_SECONDS) {
     throw new Error("Signed URL lifetime must be between 1 second and 7 days");
   }
   const config = r2Config();
   if (!config) throw new Error("R2 storage is not configured");
+  const { signingDate, expiresIn } = stableSigning(ttlSeconds);
   return getSignedUrl(
     r2Client(config),
     new GetObjectCommand({
       Bucket: config.bucket,
       Key: path,
+      // Asset paths are written once per asset id, so the browser may keep
+      // the file for as long as this link can be issued.
+      ResponseCacheControl: `private, max-age=${expiresIn}`,
       ...(downloadFilename
         ? {
             ResponseContentDisposition: `attachment; filename="${downloadFilename.replace(/["\\\r\n]/g, "_")}"`,
           }
         : {}),
     }),
-    { expiresIn: ttlSeconds },
+    { expiresIn, signingDate },
   );
 }
 

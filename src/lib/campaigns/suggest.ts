@@ -34,8 +34,8 @@ const GOAL_TYPE: Record<string, string> = {
   sales: "social-proof",
   launch: "product-launch",
   followers: "teach",
-  reach: "memes",
-  engagement: "memes",
+  reach: "showcase",
+  engagement: "teach",
 };
 
 function typeForMoment(name: string): string {
@@ -142,7 +142,7 @@ export function suggestCampaigns(input: SuggestInput, limit = 6): CampaignSugges
     });
   }
 
-  for (const type of ["behind-scenes", "teach", "memes"]) {
+  for (const type of ["behind-scenes", "teach", "showcase"]) {
     if (out.length >= limit) break;
     if (has(type, null) || out.some((s) => s.type === type)) continue;
     const playbook = playbookById(type)!;

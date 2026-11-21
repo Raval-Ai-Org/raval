@@ -7,7 +7,47 @@ export type MeasuredPiece = {
   platform: string | null;
   contentType: string | null;
   views: number;
+  /** What people did beyond watching, when the network reports it (never guessed). */
+  saves?: number;
+  shares?: number;
+  comments?: number;
+  /** What the week's shape gave the piece: its aim and opening (shape.ts). */
+  aim?: string | null;
+  hook?: string | null;
 };
+
+/**
+ * Actions per 1,000 views: a send is worth two, a save or a comment one.
+ * Null when the network reported none of them (left out, never 0).
+ */
+export function actionRate(p: MeasuredPiece): number | null {
+  if (p.saves == null && p.shares == null && p.comments == null) return null;
+  if (p.views <= 0) return null;
+  const acts = (p.saves ?? 0) + (p.shares ?? 0) * 2 + (p.comments ?? 0);
+  return (acts / p.views) * 1000;
+}
+
+const AIM_LABEL: Record<string, string> = {
+  relate: "posts people recognise themselves in",
+  send: "posts made to be sent",
+  save: "posts made to be saved",
+  reply: "posts that ask for a reply",
+  act: "posts that ask for one step",
+};
+
+function rateGroups(pieces: MeasuredPiece[], key: (p: MeasuredPiece) => string | null | undefined) {
+  const groups = new Map<string, number[]>();
+  for (const piece of pieces) {
+    const k = key(piece);
+    const rate = actionRate(piece);
+    if (!k || rate == null) continue;
+    groups.set(k, [...(groups.get(k) ?? []), rate]);
+  }
+  return [...groups.entries()]
+    .filter(([, rates]) => rates.length >= 2)
+    .map(([name, rates]) => ({ name, avg: rates.reduce((a, b) => a + b, 0) / rates.length }))
+    .sort((a, b) => b.avg - a.avg);
+}
 
 const LABEL: Record<string, string> = {
   linkedin: "LinkedIn",
@@ -63,6 +103,14 @@ export function summarizeLearnings(pieces: MeasuredPiece[]): string[] {
     const top = LABEL[formats[0].name] ?? formats[0].name;
     const low = LABEL[formats[formats.length - 1].name] ?? formats[formats.length - 1].name;
     out.push(`${top.charAt(0).toUpperCase()}${top.slice(1)} do better than ${low}.`);
+  }
+
+  // Reach is not the whole story: which kind of post people save, send and
+  // answer (measured, two posts per group at least).
+  const aims = rateGroups(measured, (p) => p.aim);
+  if (aims.length >= 2 && aims[0].avg >= aims[aims.length - 1].avg * 1.3 && aims[0].avg > 0) {
+    const label = AIM_LABEL[aims[0].name] ?? aims[0].name;
+    out.splice(1, 0, `Measured: ${label} get the most saves, sends and comments per view.`);
   }
   return out.slice(0, 3);
 }

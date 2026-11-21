@@ -191,7 +191,7 @@ describe("publishing a Story", () => {
     );
     const [row] = db.rows("content_publications");
     expect(row.status).toBe("failed");
-    expect(row.last_error).toMatch(/did not identify every Story frame/);
+    expect(row.last_error).toMatch(/couldn't confirm every Story frame/);
     expect(row.frames.every((frame: { status: string }) => frame.status !== "published")).toBe(
       true,
     );
@@ -229,7 +229,7 @@ describe("publishing a Story", () => {
     const out = await publish(deps);
     expect(out.body.results[0]).toMatchObject({
       status: "skipped",
-      reason: expect.stringMatching(/frames could not be updated/i),
+      reason: expect.stringMatching(/could not be updated/i),
     });
     expect(provider.find("POST /posts")).toHaveLength(0);
   });

@@ -15,6 +15,8 @@ import { ServerFnError } from "@/lib/rpc-client";
 export type CreateWorkspaceOutcome = {
   id: string;
   created: boolean;
+  /** The person's own untouched "No website" draft was reopened. */
+  resumed?: boolean;
   domain: string | null;
   name: string;
 };

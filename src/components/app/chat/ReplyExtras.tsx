@@ -121,7 +121,7 @@ export function MemoryChip({
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
-          <Brain className="size-3.5 text-primary" />
+          <Brain className="size-3.5 text-primary-ink" />
           Memory updated
           <ChevronDown
             className={cn("size-3.5 opacity-60 transition-transform", open && "rotate-180")}
@@ -205,7 +205,7 @@ export function ActionCard({ action, onRun }: { action: ChatActionView; onRun: (
             {action.state === "failed" ? (
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             ) : (
-              <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+              <Check className="mt-0.5 size-3.5 shrink-0 text-primary-ink" />
             )}
             {action.note}
           </p>
@@ -219,7 +219,7 @@ export function ActionCard({ action, onRun }: { action: ChatActionView; onRun: (
           </span>
         ) : action.state === "done" ? (
           <span className="mx-pill-btn">
-            <Check className="size-3.5 text-primary" />
+            <Check className="size-3.5 text-primary-ink" />
             Done
           </span>
         ) : action.state === "failed" ? (

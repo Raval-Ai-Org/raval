@@ -22,6 +22,16 @@ describe("Studio render recovery", () => {
     ).toBe(true);
   });
 
+  it("gives a picture its full bounded call before treating it as lost", () => {
+    const task = (minutes: number) => ({
+      kind: "image" as const,
+      taskId: "or-img:1",
+      startedAt: now - minutes * 60_000,
+    });
+    expect(studioProviderTaskIsTimedOut(task(6), now)).toBe(false);
+    expect(studioProviderTaskIsTimedOut(task(8), now)).toBe(true);
+  });
+
   it("does not mark a job stale while an accepted provider task is pending", () => {
     expect(
       studioJobIsStale(

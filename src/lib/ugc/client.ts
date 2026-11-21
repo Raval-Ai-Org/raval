@@ -66,7 +66,26 @@ const q = (workspaceId: string) => `workspaceId=${encodeURIComponent(workspaceId
 
 export type ReferenceUpload = ReferenceImageView & { width: number; height: number };
 
+export type CustomCreatorInput = {
+  name: string;
+  look: string;
+  gender: "woman" | "man" | "person";
+  age: string;
+  setting: string;
+};
+
 export const ugcApi = {
+  /** "Create your own creator": one paid photo, saved as one of the brand's people. */
+  createCreator(workspaceId: string, input: CustomCreatorInput) {
+    return call<{ person: { assetId: string; url: string | null; name: string } }>(
+      "/api/ugc/creators",
+      {
+        method: "POST",
+        workspaceId,
+        body: JSON.stringify({ workspaceId, idempotencyKey: crypto.randomUUID(), ...input }),
+      },
+    ).then((r) => r.person);
+  },
   models(workspaceId: string) {
     return call<{ models: ModelView[]; defaultModel: string; allowance: AllowanceView }>(
       `/api/ugc/models?${q(workspaceId)}`,
@@ -152,6 +171,18 @@ export const ugcApi = {
       headers: { "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({ workspaceId, mode: "rewrite", instruction, durationSec }),
     });
+  },
+  /** The storyboard before the video: drawn once per script, free to show again. */
+  storyboard(workspaceId: string, id: string, aspectRatio: string, idempotencyKey: string) {
+    return call<{ key: string; frames: Record<string, string>; reused: boolean }>(
+      `/api/ugc/projects/${id}/storyboard`,
+      {
+        method: "POST",
+        workspaceId,
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ workspaceId, aspectRatio }),
+      },
+    );
   },
   uploadReference(workspaceId: string, file: File) {
     const form = new FormData();

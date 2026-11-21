@@ -57,9 +57,13 @@ export function assignMedia(
   playbook: Playbook,
   pieces: readonly CampaignPiece[],
   media: readonly CampaignMedia[],
+  inspo?: InspoExtra,
 ): CampaignPiece[] {
   if (!media.length) {
-    return pieces.map((p) => (p.edited ? p : { ...p, mediaIds: [], mediaMode: "none" }));
+    const bare = pieces.map((p) =>
+      p.edited ? p : { ...p, mediaIds: [], mediaMode: "none" as const },
+    );
+    return inspo ? withInspoMedia(bare, inspo) : bare;
   }
   const used = new Map<string, number>();
   let previous = new Set<string>();
@@ -75,7 +79,7 @@ export function assignMedia(
     return picked;
   };
 
-  return pieces.map((piece) => {
+  const placed = pieces.map((piece): CampaignPiece => {
     if (piece.edited) return piece;
     const roles = phaseOf(playbook, piece.phase).media;
     let mediaIds: string[] = [];
@@ -103,6 +107,65 @@ export function assignMedia(
     }
     previous = new Set(mediaIds);
     return { ...piece, mediaIds, mediaMode };
+  });
+  return inspo ? withInspoMedia(placed, inspo) : placed;
+}
+
+/**
+ * The brand's own Inspo photos (Inspo → Media), offered to a campaign as well
+ * as the photos uploaded for it. They go only on some pieces that have no
+ * photo of their own: every `every`-th picture piece, never two in a row, and
+ * each photo at most its `remaining` uses (temporary ones less than
+ * permanent, src/lib/inspo/media-rotation.ts).
+ */
+export type InspoExtra = {
+  media: readonly CampaignMedia[];
+  remaining: ReadonlyMap<string, number>;
+  every?: number;
+};
+
+const INSPO_FORMATS = new Set(["image", "social", "carousel"]);
+
+export function withInspoMedia(
+  pieces: readonly CampaignPiece[],
+  inspo: InspoExtra,
+): CampaignPiece[] {
+  const photos = inspo.media.filter((m) => m.kind === "image");
+  if (!photos.length) return [...pieces];
+  const left = new Map(inspo.remaining);
+  const every = Math.max(2, inspo.every ?? 3);
+  let eligible = 0;
+  let lastHad = false;
+  return pieces.map((piece) => {
+    const fits =
+      !piece.edited &&
+      piece.mediaMode === "none" &&
+      INSPO_FORMATS.has(piece.format) &&
+      (piece.format !== "social" || PICTURE_PLATFORMS.has(piece.platform));
+    if (!fits) {
+      lastHad = piece.mediaIds.length > 0;
+      return piece;
+    }
+    eligible += 1;
+    if (lastHad || eligible % every !== 0) {
+      lastHad = false;
+      return piece;
+    }
+    const pick = [...photos]
+      .filter((m) => (left.get(m.assetId) ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          (left.get(b.assetId) ?? 0) - (left.get(a.assetId) ?? 0) ||
+          a.assetId.localeCompare(b.assetId),
+      )
+      .slice(0, piece.format === "carousel" ? 2 : 1);
+    if (!pick.length) {
+      lastHad = false;
+      return piece;
+    }
+    for (const m of pick) left.set(m.assetId, (left.get(m.assetId) ?? 0) - 1);
+    lastHad = true;
+    return { ...piece, mediaIds: pick.map((m) => m.assetId), mediaMode: "design" as const };
   });
 }
 

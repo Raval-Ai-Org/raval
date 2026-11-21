@@ -128,3 +128,63 @@ export function withResearchSources(
   if (!lines.length) return markdown;
   return `${markdown.trimEnd()}\n\n## Sources\n\n${lines.join("\n")}\n`;
 }
+
+/**
+ * The joke a piece told: a meme's lines, else the words set on the picture.
+ * Stored on the post (meta.joke) so no later post tells it again.
+ */
+export function outputJoke(output: StudioJobOutput): string {
+  const lines = (output.onImageLines ?? []).map((l) => l.trim()).filter(Boolean);
+  if (lines.length) return lines.join(" / ").slice(0, 200);
+  return (output.onImageText ?? "").trim().slice(0, 200);
+}
+
+function wordSet(value: string): Set<string> {
+  return new Set(tokens(value));
+}
+
+/** Share of the shorter text's words found in the other: short lines need words, not phrases. */
+function overlap(a: string, b: string): number {
+  const left = wordSet(a);
+  const right = wordSet(b);
+  if (!left.size || !right.size) return 0;
+  let common = 0;
+  for (const w of left) if (right.has(w)) common++;
+  return common / Math.min(left.size, right.size);
+}
+
+/**
+ * Catch a joke, punchline or on-picture line the workspace already used, in
+ * any format. Memes are short, so a few shared words already make a repeat.
+ */
+export function findRepeatedJoke(
+  output: StudioJobOutput,
+  recent: StudioContext["recent"],
+): { title: string; joke: string } | null {
+  const joke = outputJoke(output);
+  if (tokens(joke).length < 2) return null;
+  const punchline = (output.onImageLines ?? []).at(-1) ?? "";
+  for (const item of recent) {
+    const past = item.joke?.trim();
+    if (!past || tokens(past).length < 2) continue;
+    const same = joke.toLowerCase() === past.toLowerCase();
+    const lastPast = past.split(" / ").at(-1) ?? "";
+    const samePunchline = tokens(punchline).length >= 3 && overlap(punchline, lastPast) >= 0.8;
+    if (same || samePunchline || overlap(joke, past) >= 0.7 || similarity(joke, past) >= 0.6)
+      return { title: item.title, joke: past };
+  }
+  return null;
+}
+
+/**
+ * The meme layouts the last posts used, newest first, so the next meme is
+ * built on another one.
+ */
+export function recentMemeLayouts(recent: StudioContext["recent"], limit = 2): string[] {
+  const out: string[] = [];
+  for (const item of recent) {
+    if (item.memeLayout && !out.includes(item.memeLayout)) out.push(item.memeLayout);
+    if (out.length >= limit) break;
+  }
+  return out;
+}

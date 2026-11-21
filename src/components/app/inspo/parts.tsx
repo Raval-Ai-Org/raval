@@ -8,6 +8,7 @@ import {
   Check,
   Heart,
   ImagePlus,
+  Palette,
   Play,
   ShoppingBag,
   ThumbsDown,
@@ -29,13 +30,15 @@ export const CHIP_ICON: Record<InspoChip, React.ComponentType<{ className?: stri
   avoid: ThumbsDown,
   product: ShoppingBag,
   person: User,
+  element: Palette,
 };
 
 const CHIP_TONE: Record<InspoChip, string> = {
-  like: "bg-primary/15 text-foreground ring-primary/30 [&_svg]:text-primary",
+  like: "bg-primary/15 text-foreground ring-primary/30 [&_svg]:text-primary-ink",
   avoid: "bg-destructive/12 text-destructive ring-destructive/25",
   product: "bg-[var(--ds-tile-bg)] text-foreground ring-[var(--ds-tile-border)]",
   person: "bg-[var(--ds-tile-bg)] text-foreground ring-[var(--ds-tile-border)]",
+  element: "bg-[var(--ds-tile-bg)] text-foreground ring-[var(--ds-tile-border)]",
 };
 
 export function ChipPill({ chip, className }: { chip: InspoChip; className?: string }) {
@@ -115,7 +118,7 @@ export function StrengthRing({
             fill="none"
             strokeWidth={6}
             strokeLinecap="round"
-            className="stroke-primary"
+            className="stroke-primary-ink"
             strokeDasharray={c}
             initial={{ strokeDashoffset: c }}
             animate={{ strokeDashoffset: c * (1 - score / 100) }}
@@ -131,13 +134,54 @@ export function StrengthRing({
         <div
           className={cn(
             "text-[12px] font-semibold",
-            score >= 80 ? "text-primary" : score >= 45 ? "text-foreground/70" : "text-warning",
+            score >= 80 ? "text-primary-ink" : score >= 45 ? "text-foreground/70" : "text-warning",
           )}
         >
           {level}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A tiny designed post for empty states: a sunlit photo, a Mox-gradient
+ * headline card and an ink quote card. Drawn with CSS only, no images.
+ */
+export function MiniPost({ variant }: { variant: number }) {
+  if (variant === 1)
+    return (
+      <span className="relative flex size-full flex-col justify-between p-2 [background:var(--mox-gradient)]">
+        <span className="h-1.5 w-5 rounded-full bg-[var(--mox-ink)]/70" />
+        <span className="space-y-1">
+          <span className="block h-2 w-[85%] rounded-full bg-[var(--mox-ink)]" />
+          <span className="block h-2 w-[60%] rounded-full bg-[var(--mox-ink)]" />
+          <span className="mt-1.5 block h-3 w-8 rounded-full bg-white/90" />
+        </span>
+      </span>
+    );
+  if (variant === 2)
+    return (
+      <span className="relative flex size-full flex-col justify-end gap-1 bg-[#14171a] p-2">
+        <span className="absolute left-2 top-1 font-serif text-[28px] leading-none text-[#9cf03f]">
+          &ldquo;
+        </span>
+        <span className="block h-1.5 w-[80%] rounded-full bg-white/80" />
+        <span className="block h-1.5 w-[55%] rounded-full bg-white/50" />
+        <span className="mt-1 flex items-center gap-1">
+          <span className="size-2.5 rounded-full bg-[#1fd6c4]" />
+          <span className="h-1 w-6 rounded-full bg-white/40" />
+        </span>
+      </span>
+    );
+  return (
+    <span className="relative block size-full overflow-hidden bg-[linear-gradient(180deg,#ffd9a8_0%,#ff9e7a_55%,#c85d6b_100%)]">
+      <span className="absolute right-2 top-2.5 size-5 rounded-full bg-[#fff4c9] shadow-[0_0_14px_4px_rgb(255_244_201/0.7)]" />
+      <span className="absolute -left-3 bottom-4 h-10 w-16 rounded-[50%] bg-[#7a3e5a]" />
+      <span className="absolute -right-4 bottom-2 h-12 w-16 rounded-[50%] bg-[#4f2a48]" />
+      <span className="absolute inset-x-0 bottom-0 h-5 bg-[linear-gradient(0deg,rgb(0_0_0/0.45),transparent)]" />
+      <span className="absolute bottom-1.5 left-2 h-1 w-8 rounded-full bg-white/85" />
+    </span>
   );
 }
 
@@ -253,15 +297,7 @@ export function InspoDrop({
                 {src ? (
                   <img src={src} alt="" className="size-full object-cover" decoding="async" />
                 ) : (
-                  <span
-                    className="block size-full"
-                    style={{
-                      background:
-                        i === 1
-                          ? "linear-gradient(160deg, hsl(var(--primary)/0.55), hsl(var(--primary)/0.15))"
-                          : "linear-gradient(160deg, var(--ds-well-bg-hover), var(--ds-well-bg))",
-                    }}
-                  />
+                  <MiniPost variant={i} />
                 )}
               </motion.span>
             );
@@ -270,7 +306,7 @@ export function InspoDrop({
       )}
       <div className={cn("min-w-0", compact && "flex flex-1 items-center gap-3")}>
         {compact && (
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary transition-transform group-hover:scale-105">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/15 text-primary-ink transition-transform group-hover:scale-105">
             <ImagePlus className="h-5 w-5" />
           </span>
         )}
@@ -290,7 +326,7 @@ export function InspoDrop({
         type="file"
         hidden
         multiple
-        accept={`${ACCEPT_ATTRIBUTE},.mov`}
+        accept={`${ACCEPT_ATTRIBUTE},image/*,.mov,.heic,.heif,.jfif,.avif,.tif,.tiff`}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
@@ -342,6 +378,7 @@ export function InspoCardView({
   onChip,
   onRemove,
   onUse,
+  onLifetime,
 }: {
   card: InspoCard;
   chips: InspoChip[];
@@ -349,6 +386,8 @@ export function InspoCardView({
   onChip: (chip: InspoChip) => void;
   onRemove: () => void;
   onUse?: () => void;
+  /** Own media only: switch between kept always and only for a while. */
+  onLifetime?: () => void;
 }) {
   return (
     <motion.figure
@@ -371,8 +410,32 @@ export function InspoCardView({
           </span>
         )}
       </figcaption>
+      {onLifetime && (
+        <button
+          type="button"
+          disabled={!canEdit}
+          onClick={onLifetime}
+          aria-label={
+            card.lifetime === "temporary"
+              ? "Used for a while. Keep it always instead"
+              : "Kept always. Use it only for a while instead"
+          }
+          title={
+            card.lifetime === "temporary"
+              ? "For now: used a couple of times while it's fresh"
+              : "Always: comes back now and then"
+          }
+          className={cn(
+            "absolute right-2 top-2 inline-flex h-6 items-center rounded-full px-2 text-[11px] font-semibold text-white backdrop-blur transition-colors",
+            card.lifetime === "temporary" ? "bg-amber-500/70" : "bg-black/40 hover:bg-black/55",
+            dsFocus,
+          )}
+        >
+          {card.lifetime === "temporary" ? "For now" : "Always"}
+        </button>
+      )}
       {canEdit && (
-        <div className="absolute inset-x-2 bottom-2 flex translate-y-2 items-center justify-between gap-1 opacity-0 transition-all duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100">
+        <div className="absolute inset-x-1.5 bottom-1.5 flex translate-y-2 items-center justify-between gap-1 opacity-0 sm:inset-x-2 sm:bottom-2 transition-all duration-300 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100">
           <div className="flex rounded-full bg-black/45 p-0.5 backdrop-blur-md">
             {chips.map((chip) => {
               const Icon = CHIP_ICON[chip];
@@ -400,12 +463,14 @@ export function InspoCardView({
               <button
                 type="button"
                 onClick={onUse}
+                aria-label="Use in Studio"
                 className={cn(
-                  "inline-flex h-8 items-center gap-1 rounded-full bg-primary px-3 text-[12px] font-semibold text-primary-foreground shadow-sm transition-transform hover:scale-[1.04]",
+                  "inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full bg-primary px-2 text-[12px] font-semibold text-primary-foreground shadow-sm transition-transform hover:scale-[1.04] sm:px-3",
                   dsFocus,
                 )}
               >
-                <Wand className="h-3.5 w-3.5" /> Use
+                <Wand className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Use</span>
               </button>
             )}
             <PinButton aria-label="Remove" onClick={onRemove} className="size-8">
@@ -505,6 +570,51 @@ export function PickTile({
           )}
         </AnimatePresence>
       </span>
+    </motion.button>
+  );
+}
+
+/** A small pick: a round swatch and a word, for choices that don't need a big tile. */
+export function PickChip({
+  on,
+  label,
+  art,
+  onClick,
+  index = 0,
+}: {
+  on: boolean;
+  label: string;
+  art?: string;
+  onClick: () => void;
+  index?: number;
+}) {
+  return (
+    <motion.button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, delay: Math.min(index, 10) * 0.03, ease: EASE }}
+      whileHover={{ y: -1.5 }}
+      whileTap={{ scale: 0.95 }}
+      className={cn(
+        "inline-flex h-9 items-center gap-2 rounded-full pl-1.5 pr-3.5 text-[12.5px] font-semibold ring-1 transition-[box-shadow,background-color]",
+        on
+          ? "bg-primary/12 ring-2 ring-primary shadow-[0_8px_22px_-14px_hsl(var(--primary)/0.9)]"
+          : "bg-[var(--ds-tile-bg)] ring-[var(--ds-tile-border)] hover:ring-primary/40",
+        !art && "pl-3.5",
+        dsFocus,
+      )}
+    >
+      {art && (
+        <span
+          aria-hidden
+          className="h-6 w-6 shrink-0 rounded-full ring-1 ring-black/10"
+          style={{ background: art }}
+        />
+      )}
+      {label}
     </motion.button>
   );
 }

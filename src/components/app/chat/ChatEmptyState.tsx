@@ -12,7 +12,6 @@ import {
   X,
   type LucideIcon,
 } from "@/components/icons";
-import { Logo } from "@/components/brand/Logo";
 import {
   buildStarters,
   starterFacts,
@@ -20,7 +19,7 @@ import {
   type StarterSource,
 } from "@/lib/chat/starters";
 import type { WorkspacePulse } from "@/lib/pulse/pulse";
-import { duration, ease, spring } from "@/lib/motion";
+import { duration, ease } from "@/lib/motion";
 
 export type Starter = {
   /** Sent as-is. */
@@ -65,18 +64,14 @@ export function ChatGreeting({
       transition={{ duration: duration.xslow, ease: ease.emphasized }}
       className="flex shrink-0 flex-col items-center px-4 text-center"
     >
-      <motion.span
-        initial={reducedMotion ? false : { scale: 0.6, rotate: -30, opacity: 0 }}
-        animate={{ scale: 1, rotate: 0, opacity: 1 }}
-        transition={{ ...spring.control, delay: 0.05 }}
-        className="mb-4 grid size-12 place-items-center [@media(max-height:500px)]:hidden"
-      >
-        <Logo height={40} markOnly />
-      </motion.span>
       <h2 className="mx-greeting [@media(max-height:500px)]:text-xl">
         <span>
           {greeting ?? "Hello"}
-          {first ? `, ${first}` : ""}
+          {first ? (
+            <>
+              , <span className="ds-grad-text">{first}</span>
+            </>
+          ) : null}
         </span>
       </h2>
       <p className="mt-2 text-[15px] text-muted-foreground [@media(max-height:500px)]:mt-1 [@media(max-height:500px)]:text-xs">
@@ -124,7 +119,7 @@ export function ChatStarters({
         }}
       >
         <div className="mx-ideas__head">
-          <Icon className="size-4 text-primary" />
+          <Icon className="size-4 text-primary-ink" />
           <span>{group.label}</span>
           <button
             type="button"
@@ -176,7 +171,7 @@ export function ChatStarters({
             }}
             className="mx-starter group min-w-0 justify-center last:col-span-2 sm:last:col-auto"
           >
-            <Icon className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+            <Icon className="size-4 text-muted-foreground transition-colors group-hover:text-primary-ink" />
             {g.label}
           </button>
         );

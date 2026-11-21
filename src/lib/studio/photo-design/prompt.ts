@@ -6,6 +6,7 @@
 import { CRAFT_RULES } from "../art-direction";
 import { TYPE_SYSTEM, verbatimTextBlock } from "../creative-knowledge";
 import type { Box } from "./read";
+import { overlayById, overlayPromptLines } from "./overlays";
 import type { PhotoDesignPlan } from "./plan";
 
 export type PhotoDesignBrand = {
@@ -88,6 +89,7 @@ export function designLayerPrompt(args: {
           "LAYOUT — PHOTO FULL-BLEED: the real photo fills the whole canvas behind your design.",
           `Paint the entire background ${key}: one solid colour, no texture, gradient, noise, shadow or vignette in it. Draw only the design on top: headline, a brand colour band or panel, frame lines, ribbons, badges, small shapes.`,
           "Keep at least 55% of the canvas as the key colour so the photo stays the hero; hold the design to the edges and one calm area.",
+          ...(overlayById(plan.treatment) ? overlayPromptLines(overlayById(plan.treatment)!) : []),
           plan.avoid.length
             ? `People's faces are here — keep every element clear of them:\n${plan.avoid.map((box) => `- ${describeBox(box)}`).join("\n")}`
             : "",

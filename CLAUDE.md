@@ -41,6 +41,60 @@ from older training data), React 19, TypeScript strict, Tailwind v4, Supabase.
   is shown by its app icon (`PlatformAppIcon`, `src/components/brand/`), and picked
   from `PlatformLogoGrid` (`studio-ui.tsx`), never as a row of text names. Never restyle the
   public landing page (`src/app/page.tsx`) as part of app UI work.
+- **Mellox 2.0 / Mox** ([ADR-0044](docs/adr/0044-mellox-2-mox.md)): app screens
+  sit in `AppFrame`: sidebar and top bar on plain white, every screen on
+  `AppCanvas` (Holo's rounded canvas with a soft Mox wash), light by default.
+  Big `AppModalShell` windows fill the canvas column (Back pill, title pill).
+  The sidebar is four short groups; Share lives only in the top bar, the
+  balance only in `MoxGauge`, the top bar's corner shows the plan.
+  Create is Holo's "choose a method" card grid (`CreateLauncher`): nine cards,
+  3×3, one screen with no scroll; Image post, Carousel and Story open straight
+  away (never hidden in a "Social posts" group); Home's
+  Swipe ideas / Blog ideas open `IdeaSwipeDeck` (a pick only fills a brief);
+  `GeneratingPanel` floats on the canvas while pieces are made. On desktop the Studio composer fills the canvas too (`useEmbedRect`), as a page, not a window: Back pill, step pills, no window buttons, one narrow centred column (prompt, platforms, then the shape on the canvas: size, slides, Story frames — `PostCanvasSettings`, videos `VideoCanvasSettings` — and one Options pill); the right side panel (Holo) is one list, no tabs: product or service first (big cards with "None"), goal, the format's own settings (no kind of post: kinds are retired, ADR-0051), templates. No ideas there: Surprise me writes the idea; nothing is drawn before it is made; Generate floats bottom right. A finished picture shows alone ("Show as post" brings the mock back), tools under it, versions down the right edge. `.studio-cta` is the Mox gradient pill. Big windows on the canvas are non-modal (`src/lib/shell/window.ts`): the sidebar stays usable, a sidebar press closes the window, and `shell:window` keeps the sidebar highlight right. Surfaces with sections use `SurfaceLayout` top tabs, never a second sidebar. Mox is
+  the guide (`Mox` renders, `MoxFace` moods in `src/components/brand/mox/`).
+  Mox's gradient only on the canvas wash, the primary pill, progress bars, the
+  visor and headline words. The sidebar is data (`src/lib/shell/nav.ts`).
+  Generate closes Studio: the piece is made on the server and `GeneratingPanel`
+  (the corner list, phones too) follows it and opens it. Back is always one
+  step out. On desktop the top bar sits on the canvas; route windows (Brain,
+  Inspo…) pass `routed` to `AppModalShell` so a sidebar press goes straight
+  to the place pressed.
+  A sidebar press emits `shell:leave`: every canvas window steps aside
+  (`useShellWindow(id, open, close)`), so nothing is left open over the new
+  place; `useBodyPointerGuard` clears a `pointer-events: none` Radix left on
+  <body>. Long background work that isn't a Studio piece (strategy, campaign
+  plan) sends `work:update` to the corner list instead of a toast. Home has its own
+  Autopilot card (`HomeAutopilot`); the message box is never covered.
+  Home's message box is `ChatComposer slim`: a one-line pill with its tools
+  beside it, growing once a person writes; it sits under the cards, never on them.
+  Home is `HomeBento` above the message box (`/home-lab`); its cards only open
+  existing places via `useOpenCreate`. It scrolls on into `HomeExplore`:
+  Make anything (each card with quick picks to an exact format), Creator
+  videos, the brain tiles with "To finish" / "Lately" (Brain overview rows
+  only), Plan and grow, and Ask Mox (fills the box, never sends). Pure rules
+  in `src/lib/home/explore.ts`; the moving pictures (`HomeMotion`, `home-*`
+  keyframes) are decoration and never show a number. Chat has its own entry (`chatPath`).
+  A solid primary fill (`bg-primary text-primary-foreground`) paints the Mox
+  gradient with ink text (rule at the end of `styles.css`); never draw a flat
+  neon-lime pill, tick or ring. Sidebar rows may carry a `badge`
+  ("New" / "Beta") in `nav.ts`.
+  **Momentum** (Holo's streak and "improves with every piece"): the top bar's
+  `StreakChip`, whose popover also holds the level (no meter in the top bar)
+  (`shell/Momentum.tsx`, pure `src/lib/home/momentum.ts`, levels
+  `MOMENTUM_LEVELS`, add never reorder). Counted only from finished Studio
+  jobs that aren't revisions, read in the free pulse (`made`); a failed read
+  shows nothing, never a zero streak. It only reads and opens Create.
+  **Animate** (Home → Most popular, `open:animate`, `studio/AnimateFlow.tsx`):
+  pick a Library picture, then a motion style; `animateOpen` (repurpose.ts)
+  opens the video draft with the picture kept. Nothing is made or charged
+  until Generate.
+- **Content language:** what Mox writes in, an English label in
+  `dna.look.writing.language` (`src/lib/brand-look/languages.ts`), chosen in
+  onboarding's Language step and Settings → Language, reaching generators only
+  through `lookTextFor`. The app's own text stays English. A label that needs
+  more than its name (Roman Urdu: Latin letters) adds its note in
+  `languageNote`.
 - **Background work:** no queue service — job rows with leases claimed via
   SKIP LOCKED RPCs, advanced by pg_cron → `/api/public/hooks/*` and `after()`.
 
@@ -55,7 +109,11 @@ Decision record [ADR-0014](docs/adr/0014-canonical-workspaces.md).
     `useOptionalWorkspaceId()` (`src/components/workspace/WorkspaceProvider.tsx`).
   - `workspace:last-opened` is a highlight only.
   - Never fall back to "first/newest/last" workspace.
-- **Home is `/projects`.** Sign-in and app roots land there.
+- **Home is `/projects`.** Sign-in and app roots land there. A person with exactly
+  one workspace goes straight into it (`soleWorkspaceLanding`, `paths.ts`): its
+  app, or its onboarding if unfinished. That is the only workspace, not a
+  "first/newest" pick; links meant to show the list use `ALL_WORKSPACES`
+  (`?all=1`).
 - **Create, list and delete** only go through
   `src/server/workspaces/service.server.ts`:
   - create uses the idempotent, domain-deduplicated
@@ -80,23 +138,28 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 
 - **No Anthropic API.** Text, vision, tool use and images all go through
   OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
-  `anthropic/claude-opus-5.5` (and Sonnet / Haiku 5.5) via OpenRouter.
+  Sonnet / Haiku 5.5 via OpenRouter; `anthropic/claude-opus-5.5` is kept only
+  as the premium rollback (`OPUS`).
 - **The model comes from the route label.** `src/server/ai/task-models.ts`
   maps every metering `route` to a plan (models + fallbacks, reasoning effort,
   token ceiling, escalation, degraded plan). Tiers, each the cheapest model
-  that does its kind of work well (cost review 2026-11-03):
-  - PREMIUM Opus 5.5: only rare, high-stakes work (GEO Engineer and fixes,
+  that does its kind of work well (cost reviews 2026-11-03 and 2026-11-12,
+  [docs/ai-cost/model-swap-2026-11-12.md](docs/ai-cost/model-swap-2026-11-12.md)):
+  - PREMIUM Gemini 4 Carbon (was Opus 5.5; half the price, scores higher):
+    only rare, high-stakes work (GEO Engineer and fixes,
     experiment code, published articles, video storyboards, escalations);
   - ANALYST GPT-6.1 Sol: Brand DNA, strategy, audience groups, campaign plans;
-  - CONVERSATION Sonnet 5.5: Mellox Pro chat and Coach;
-  - SUMMARY GPT-6.1 Terra: briefings and small structured jobs, and
-    WORKHORSE's fallback (a fallback never costs more than its primary);
-  - WORKHORSE Gemini 3.8 Flash: everything people see from Studio, chat,
-    pictures and audio, Market Brain;
-  - BUDGET DeepSeek V4.1 Flash and LABELLER GLM-5.3 Flash: text-only
-    internal work and labelling;
-  - CAREFUL Haiku 5.5 (safety checks, caption edits), LUNA GPT-6 Luna,
-    ECONOMY Gemini 3.1 Flash-Lite (files, audience scores).
+  - CONVERSATION Sonnet 5.5: Mellox Pro chat, Coach, Creator scripts and the
+    Studio director (picture posts and carousels, ADR-0051 round 3);
+  - WRITER Haiku 5.5 (also SUMMARY, CAREFUL, ECONOMY): every text writer
+    people see (Studio copy, Flash chat, plans, briefings), safety checks,
+    caption edits, image text and audience scores; GPT-6 Luna is its spare;
+  - WORKHORSE Gemini 3.8 Flash: only what needs eyes or ears (image and
+    video QA, photo reads, transcription) and second safety reads;
+  - BUDGET DeepSeek V4.1 Flash 1017 and LABELLER GLM-5.3 Flash: text-only
+    internal work and labelling. Effort `none` (ideas, prompt help) turns
+    reasoning off only where every model in the list accepts it
+    (`canTurnReasoningOff`); Gemini and GLM refuse it.
     A new `route:` label needs an entry (a test enforces it). Override per
     route with `AI_MODEL_<ROUTE_KEY>` / `AI_EFFORT_<ROUTE_KEY>`; that is also
     the instant rollback for a route.
@@ -106,8 +169,19 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
   only (Opus rejects forced tools), and meters the model that actually
   answered from `usage.cost`. The tool loop replays `reasoning_details`
   unchanged and is append-only.
-- **Images:** GPT Image 2.5 Flare (default) / Sunburst (premium), routed by
-  `src/lib/model-router.server.ts`, env `IMAGE_MODEL_*`.
+- **Images:** GPT Image 2.5 Flare makes every picture; Sunburst only for
+  `requiredQuality: "maximum"` or "high" with strict brand precision (the
+  product cutout), never because a prompt is long or uses a word
+  (`wantsPremiumImage`, `src/lib/model-router.server.ts`, env `IMAGE_MODEL_*`).
+  Must-follow notes (revision, fix list, "no words", visual rules) go first
+  through `fitImagePrompt` so the 10k cut never drops them. A hard defect
+  (`hardImageDefects`) or a rubric score under `REDO_BELOW` with concrete
+  fixes (`creativeRedo`, ADR-0047) earns one automatic re-render at Mellox's
+  cost, never more; `keepFirstRender` keeps the better of the two (hard redos
+  too). The review checks exactly the words the prompt sent (`sentWords`).
+  A carousel's slides are designed by the image model one by one, each anchored
+  on slide 1 (ADR-0051); only seamless or the brand's own photos are drawn by code.
+  Image spend is metered as `studio.image.*` labels.
 - **Video (still KIE):** `VIDEO_PROVIDER=kie` with automatic fallback to
   OpenRouter (`VIDEO_PROVIDER_FALLBACK`) only on out-of-credits, auth or
   model-unavailable — never on an unknown outcome. Catalog keys
@@ -115,8 +189,12 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
   Studio-only `animation`) in `src/lib/ugc/models.ts`; old keys are
   read-only aliases. Dropping KIE is the checklist in ADR-0026.
   - Every key runs on KIE ([ADR-0043](docs/adr/0043-video-categories-and-motion.md)):
-    Premium is Gemini Omni Flash, Long and `animation` are Wan 3.0. A
-    fallback never costs more than its primary. A composed video may name a
+    Standard is Grok Imagine 1.5 (prompts fitted to 4,096 characters by
+    `fitVideoPrompt`), Draft is Veo 3.1 Lite, Premium is Gemini Omni Flash 1.2,
+    Long and `animation` are Wan 3.0. A
+    fallback never costs more than its primary, except Standard and Premium,
+    where no cheaper OpenRouter model speaks the lines (Veo Lite / Fast, only
+    during a KIE refusal). A composed video may name a
     model per clip (`clips[].model`).
   - `VIDEO_MAX_USD_PER_JOB` (default $5) refuses a quote over the cap before
     anything is held.
@@ -171,8 +249,33 @@ Brand Styles and the Brand Kit are gone — never add them back).
     Product, Person) through `POST /api/brand-visuals/upload`; Post look,
     Video look and Voice write `dna.look` via `tidyLook`. No new table.
   - "Learn my style" is the existing paid analysis with the price on the
-    button; a direction is used only after "Use this". Style strength and the
-    voice sample are pure and free.
+    button; Board uploads (Love / Avoid) also start it by themselves, once,
+    5 s after the last batch (`queueLearn` in `InspoPanel`, the person's own
+    upload is the click). Style strength and the voice sample are pure and free. The first
+    read of the brand's site is the included one and starts by itself after
+    the Brand DNA scan or when an editor first opens Inspo (no profile, no job
+    yet, `startIncludedSiteRead`); every repeat is a click with its price.
+  - **Style bible** ([ADR-0048](docs/adr/0048-brand-style-bible.md),
+    `src/lib/brand-visuals/bible.ts`): the read writes a direction's world,
+    type signature, composition, signatures, recurring subject and anchor
+    examples from the brand's own posts, its site's artwork and a homepage
+    overview; `groundProfile` keeps only what the pictures it saw support (a
+    recurring subject needs two of the brand's own pictures). With nothing
+    active and no visual look of its own, the strongest direction is used by
+    itself (`auto`, "Mellox picked this"); Inspo offers Keep this / Stop and
+    Light (default) / Close / Strict. A person's save always wins and clears
+    `auto`. Pictures get it only through `compileVisualSnapshot`
+    (`bibleRules` + `pickAnchors`, two of four slots for the examples); the
+    review adds a `style` score and `off-style:` earns the one redo.
+    Round 8 also learns the register, the series `frame`, building blocks
+    (`COMPONENT_KINDS`), text density and the logo habit: `bibleWantsLogo`
+    decides per piece whether the logo is placed (not every post has it), and
+    rich brands and every campaign piece get an eyebrow, body, items and a
+    button set verbatim (`wantsSupportingLines`). New rounds: the
+    `brand-style-training` skill.
+  - Creator (UGC) videos pick from the Brand DNA catalogue first
+    (`ugcProductFromCatalogue`, `src/lib/ugc/from-catalogue.ts`): the
+    product's stored facts and its own photo assets, no second page read.
   - Brand DNA keeps one Inspo tile; `?t=look` / `?t=assets` / `/brand-kit`
     land in Inspo. `dna.assets` is not edited any more.
 - **One scan fills three brains.** A Brand DNA scan (`BrandDnaSurface`) then
@@ -220,6 +323,9 @@ generators get no memory block. Chat tools off: chat is one plain reply.
 - **Chat saves by itself and says so.** `remember` / `update_memory` / `forget`
   run in the reply, and the reply carries a "Memory updated" note with Undo and
   Manage. Never bring back an approval step or a pop-up for saving.
+- **No background reader** (Mellox Lean, 2026-11): chat no longer sends every
+  few turns to `memory-extract`. The reader (`src/lib/memory-sync.ts`) runs
+  only from Brand DNA's "Sync from chat", a person's click.
 - **Chat reads by itself; a change is always a button**
   (`src/server/chat/tools.server.ts`). Reads are the allow-list
   `CHAT_READ_TOOLS` (every one `write: false`; a test enforces it). Anything in
@@ -255,10 +361,33 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
 [ADR-0035](docs/adr/0035-goals-and-product-catalog.md).
 
 - **The flow is data.** `src/lib/onboarding/flow.ts` (pure) decides the steps:
-  website → goal (asked while the scan runs) → Brand DNA → products → channels
-  → first posts. "I don't have a website" swaps the scan for three questions.
-  New projects always start in onboarding. `/onboarding-lab` renders every new
+  website → goal (asked while the scan runs) → Brand DNA → language → products
+  → channels → finish. "I don't have a website" swaps the scan for the brand
+  kit (`ManualBrandStep`, pure `src/lib/onboarding/manual-brand.ts`): basics,
+  category, look (logo, colours, tone), inspiration (Inspo Love references) and
+  competitors, only the basics required; `manualDnaFields` is the one mapping
+  into Brand DNA and never fills a skipped field. New projects always start in onboarding. It ends with
+  press-and-hold (`HoldToEnter`) and the visor cinematic (`VisorTransition`),
+  then `StartHereModal` on Home. The finish is the big visor Mox and one
+  small hold pill, no visible words (header hidden); it goes in by itself
+  after 6 s. Products show Holo-style: a list on the left, the chosen one on
+  the right (`ProductRow` / `ProductDetail`), never empty photo boxes. `/onboarding-lab` renders every new
   step with sample data (`tests/integration/onboarding-lab.spec.ts`).
+- **One question per screen** (ADR-0049, Native-style): after the website,
+  `askScreens` (`src/lib/onboarding/questions.ts`, pure) asks role, team,
+  goal, activity, rhythm, channels, Autopilot approval, tone, emoji, caption
+  length, a look swipe deck (real wall posts) and, once per account, where
+  they heard of Mellox (`profiles.signup_source`). A tap answers and moves on;
+  Mox story screens sit between. Answers map only through `answers.ts`
+  (`answersToLook` → `dna.look`, `answersToProfile` → `dna.profile` and the
+  "Who runs it" line, `answersToGoals` → `decideGoals`, approval → Autopilot's
+  proposed mode); never overwrite a value a person set. The shell
+  (`components/onboarding/ask/Stage.tsx`) never scrolls: the primary pill is
+  always in the dock, and the scan runs in `ScanDock`, where the four brains
+  fill from real scan progress (`src/lib/onboarding/brains.ts`). Art is
+  `public/brand/mox/onboarding/*` (`art.ts`, written by
+  `scripts/generate-onboarding-art.mjs`, paid: ask before running it).
+  `/onboarding-lab?step=ask&id=<screen>` + `tests/integration/onboarding-ask.spec.ts`.
 - **Goals are the person's numbers** (`workspace_goals`).
   - Pure rules are in `src/lib/goals/`, the server in `src/server/goals/`, the
     RPC in `src/server/fns/goals.ts`.
@@ -312,10 +441,9 @@ Full reference: [docs/onboarding.md](docs/onboarding.md), decision record
   stored per post; `recentLayouts` keeps the next concept off the latest two
   (left out of `archetypeMenu`, refused in `shapeOutput`, excluded in
   `pickArchetype`). A revision keeps its layout.
-- **First posts are a person's click.** Three ordinary Studio jobs through the
-  metered route, with the price on the button. Keys are fixed per post
-  (`onboarding-first:<workspaceId>:<n>`), so nothing is made or charged twice.
-  A 402 never blocks finishing setup.
+- **Onboarding makes no posts** (Mellox 2.0). The finish (`FinishStep`) shows
+  what Mox learned and press-and-hold; posts are made later, on a person's
+  click, through the normal metered Studio route.
 - Editing after onboarding: Brain → Brand → **Products** and **Goal** tiles.
 
 ## App tour (a new person's first look around)
@@ -449,7 +577,7 @@ record [ADR-0010](docs/adr/0010-ai-visibility-geo-intelligence.md).
   - `service.server.ts`;
   - RPC `src/server/fns/geo-agent.ts`, UI `geo/agent/AgentPanel.tsx`.
     Models: routes `geo.agent.investigate` / `implement` / `review` in
-    `task-models.ts` (Opus 5.5; override `AI_MODEL_GEO_AGENT_*`). Rules:
+    `task-models.ts` (PREMIUM, Gemini 4 Carbon; override `AI_MODEL_GEO_AGENT_*`). Rules:
   - **Ownership first:** no proposal, batch or run unless
     `src/lib/connectors/ownership.ts` verified the repository builds that host
     (`assertSourceOwnsHost`).
@@ -703,13 +831,16 @@ worker skips that workspace. `AGENTS_DISABLED` and a workspace's paused agents p
   (`tests/integration/autopilot-lab.spec.ts`). Home lays out by container
   width (`@container`), and uses the CSS `ds-enter` fade, not staggered
   JavaScript animation, so nothing is ever left half-drawn.
-- **It lives in the chat message box, not the sidebar** (`autopilot/composer/`:
-  presentational `AutopilotDeck`, wired by `useComposerAutopilot`). Off, it is
-  one switch in the box's toolbar; on, the deck covers the box in a new chat
-  and the top bar shows `AutopilotBeacon`. Typing always hands the box back.
-  The full view loads only while the deck shows and the proposal is asked for
-  only after a person flips the switch. Never add a sidebar entry back; link to
-  the full screen with `autopilotPath(id, section)`.
+- **It has its own area on Home, never the message box** (`autopilot/home/`:
+  presentational `AutopilotHomeCard`, wired by `HomeAutopilot`, under the top
+  cards). Off, it invites a person into the five-step setup
+  (`AutopilotWizard`: Goal → Channels → Rhythm → Approval → Ready, every answer
+  proposed); on, it shows the flow, the next pieces, what waits and the places
+  it works with (Calendar, Campaigns, Inspo, Library; `autopilot/flow.tsx`).
+  Never cover or restyle the message box for Autopilot again: other chats get
+  only a toolbar pill that opens it (`useComposerAutopilot`, hidden on Home),
+  and the top bar shows `AutopilotBeacon`. Never add a sidebar entry back;
+  link to the full screen with `autopilotPath(id, section)`.
 - **More than posts.** A program's `automations` (`AUTOMATIONS` in
   `contracts.ts`) are the extra jobs, each a switch under Settings → Also:
   - `geo_scan`, `repurpose` and `weekly_report` (`WEEKLY_AUTOMATIONS`) become
@@ -796,7 +927,10 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
   `webSearchMany` in `src/server/research/web-search.server.ts`. It is a
   quality ladder — Tavily, then Firecrawl, then the legacy DuckDuckGo scrape —
   and it never throws: no sources is a fact, not an error. Never add another
-  search path.
+  search path. When Tavily says it is out of credits (432/433), refuses the
+  key or rate-limits, the gateway pauses it for every server
+  (`tavilyPausedReason`, 30 / 5 min) and the ladder skips it; the shared
+  trends refresh waits a day after a failed or thin read.
 - **Tavily lives in one file.** `src/lib/tavily-gateway.server.ts` is the only
   place that reads `TAVILY_API_KEY` or talks to `api.tavily.com`; the key goes
   in a header, never a URL or a log. Any user-supplied domain or URL passes
@@ -825,6 +959,10 @@ Decision record [ADR-0022](docs/adr/0022-tavily-web-intelligence.md).
     them, because tracking is what costs money on every later sweep.
   - **Updates are deduped by fingerprint** (unique index), and the recency
     window is derived from `updates_checked_at`, never a fixed sweep.
+  - **A failed profile is never retried by itself** (`profileDue`): it keeps
+    its reason on screen and "Research again" retries. A plan with no sweeps
+    gets the first profile only, not the news sweep
+    ([docs/ai-cost/tavily-volume-2026-11-12.md](docs/ai-cost/tavily-volume-2026-11-12.md)).
   - Background work is leased (`claim_competitor_jobs`) and advanced by the
     **existing** `competitor-watch` cron hook — do not add a cron job.
 
@@ -877,12 +1015,33 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   reviewed script's words reach their clip exactly.
 - **Story kinds chain** (each clip opens on the last frame of the one
   before); mood clips run in parallel and dissolve.
+- **Long and premium videos are storyboarded first** (`needsStoryboard`,
+  `src/lib/studio/video/board.ts`): 16 s+ or Premium/Cinematic/Long in
+  Studio, Creator videos of 15 s+ with 4+ scenes. The person reads every
+  scene with three drawn key frames (`StoryboardView`, priced
+  `video_storyboard`) and only "Create video"
+  spends on the render, made from exactly that plan. Short clips skip it;
+  Autopilot and campaign steps are not forced.
 - **Bad videos are never delivered.** Every storyboarded video is checked
   (`checks.ts`, `qa.server.ts`, route `studio.video.qa`); one redo at
   Mellox's cost, then the job fails and nothing is charged. Never turn a
   failed check into a warning.
-- A video from a post opens on the whole post (`frameForVideo`, never
-  cropped) and ends on the exact post.
+- A video from a post opens on the post made the video's shape, never on
+  bars (`openingFrameFit`, `src/lib/studio/video/opening-frame.ts`;
+  `openingFrameForVideo`): the same shape or a thin edge is zoomed; any other
+  shape (a square post in a 9:16 Reel or Story) is recreated by the image
+  model (`studio.image.reframe`, at Mellox's cost) and checked before any
+  video spend (shape, no bars, a vision read); one retry, then the post
+  leads as a reference. A person's own photo is never redrawn (shown whole).
+  It ends on that frame. QA fails a video whose frames sit on bars
+  (`looksLetterboxed`, measured) or that the judge scores low on `framing`.
+- **A video carries the logo only when the person asks** (`wantsLogoInVideo`):
+  the post's corner badge is cleared from the opening frame and the video
+  model is told none; "no logo" always wins.
+- **The logo never covers words on a picture** (`pickLogoCorner`,
+  `src/lib/studio/logo-corner.ts`): each corner is measured before the logo
+  is placed; a busy brand corner moves to the calmest one, and with every
+  corner busy the logo is left off with a note.
 - Premium video is sold from Starter (`video_premium`); Cinematic stays
   Agency and up.
 - **Premium videos are a monthly quota** (meter `premium_video`,
@@ -895,8 +1054,8 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   music ducked under the voice at -14 LUFS. It fails open, never fails a
   video. Off with `VIDEO_SOUNDTRACK_ENABLED=false`.
 - **Motion graphics: the model designs, code checks and draws**
-  (`src/lib/studio/motion/`, `src/server/studio/motion/`). Opus (route
-  `studio.motion.compose`) writes one HTML/SVG + CSS document; `staticIssues`
+  (`src/lib/studio/motion/`, `src/server/studio/motion/`). The PREMIUM model
+  (route `studio.motion.compose`) writes one HTML/SVG + CSS document; `staticIssues`
   refuses scripts, outside addresses and words the brand never said;
   Chromium draws it offline and `drawnIssues` checks the words, safe area,
   size, contrast and end hold; FFmpeg encodes it. One retry with the reasons,
@@ -904,9 +1063,157 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
   placed by code. Craft rules and layouts live in `principles.ts`, never in
   the prompt only. Priced `motion_graphics`.
 
+## Creator (UGC) video ads
+
+- **One Holo-style screen** (`components/app/ugc/CreatorComposer.tsx`,
+  presentational; data in `UgcStudio.tsx`): pick a creator on the left; the
+  product, script, emotion, place, platform and length on the right; Generate
+  floats bottom right. "Create" / "Your videos" pills on top. No step wizard;
+  never bring back product → brief → ideas → script → generate.
+- **The product comes from Brand DNA** (`listProducts` →
+  `ugcProductFromCatalogue`). The composer never reads a product page;
+  "Add product" opens Brain → Brand → Products.
+- **Creators** (`src/lib/ugc/creators.ts`, pure): written personas of
+  original, fictional people, never photos of real people (no Instagram, no
+  Arcads or other licensed actors). Ids are stored on
+  `brief.creator.characterId` and the brand look: add, never rename.
+  - Photos are generated once by `scripts/generate-creator-portraits.mjs`
+    into `public/creators/<id>.jpg`, which also rewrites
+    `creator-photos.ts`; `CreatorFace` shows the photo, else the drawn
+    `CreatorPortrait`. Creators with a photo are listed and suggested first.
+    The photo is the first reference image for a multi-reference model
+    (`stockCreatorAsset`, stored once per workspace).
+  - `suggestCreators` picks "For your brand" from industry, audience and
+    products (string work, no model call).
+  - The brand's own people are Inspo "Person" assets
+    (`brief.creator.personAssetId`), re-checked on the server; the ones read
+    from its website lead the list.
+  - "Create your own" (`POST /api/ugc/creators`, charged `image_standard`)
+    makes one photo of an original person from a description
+    (`creatorPhotoPrompt`) and saves it as a Person. `customCreatorProblem`
+    refuses lookalike or celebrity wording before anything is spent.
+- **Brand face:** `look.video.creator` (Inspo → Video look, or "Use always"
+  in the composer) is used when a brief names no creator
+  (`withBrandCreator`). It doesn't make the look `customized`.
+- **A typed script is free** (`scriptFromText`, `src/lib/ugc/script-text.ts`);
+  only "Write it for me" spends (`ugc_concepts`), and it writes **one**
+  script (never a pick of ideas); a person edits it or asks for a new one. An untouched written script
+  keeps its shots.
+- **Formats are data** ([ADR-0046](docs/adr/0046-creator-video-formats.md),
+  [docs/studio/ugc-formats.md](docs/studio/ugc-formats.md),
+  `src/lib/ugc/formats/`): 30 kinds of Reel (interviews, skits, talking,
+  reviews, lifestyle), each with beats, cast, camera, sound, places, twists
+  and a gold example prompt. Ids are stored: add, never rename; old brief
+  formats are aliases. The composer opens on the format grid
+  (`FormatPicker`, Auto first), the one step before the single screen.
+  - `buildFormatVideoPrompt` writes every prompt as real phone footage, "not
+    an advertisement", with a timed shot list; split screens only where the
+    format uses one. `pickVariant` rotates place, twist and hook per brand.
+  - Scripts are written by Sonnet 5.5 (`ugc.concepts`) to `craftRules`;
+    `formatScriptIssues` decides what's wrong, the model only writes words.
+  - Two-person formats: the pick is the lead (`leadRole`), the second is the
+    person's pick or `pickPartner`.
+  - **Hook text is drawn by code** (`src/lib/ugc/hook-text.ts`, nine
+    Instagram-style presets, ids stored), on the finished video by
+    `overlayHookText` before it is stored; it fails open. Never ask a video
+    model to draw words.
+- `/layout-lab?scene=ugc-formats|ugc-create|ugc-empty` renders the composer
+  with sample data (`tests/integration/script-video-flow.spec.ts`).
+
+## Marketing knowledge, creative review and memes (Round 5)
+
+Decision record [ADR-0047](docs/adr/0047-marketing-knowledge-and-creative-review.md),
+sources [docs/studio/marketing-knowledge.md](docs/studio/marketing-knowledge.md),
+benchmark [docs/studio/round5-benchmark.md](docs/studio/round5-benchmark.md).
+
+- **Code picks the knowledge, the model applies it.** `knowledgeFor` /
+  `knowledgeRule` (`src/lib/studio/knowledge/`, pure) give a piece at most one
+  framework, its awareness stage, at most three skills and its industry,
+  ≤1,800 characters, deterministic. Studio writers read it only through
+  `craftRule` in `prompts.ts`; add a framework, skill or industry there, never
+  in one prompt. Native kinds get no framework and no selling skills. A skill
+  never adds a fact.
+- **Layouts are a shortlist** (about 8, `archetypeMenu` `shortlist`, the
+  industry's first). `prompt-size.test.ts` caps each system prompt; brain
+  blocks are capped in `src/lib/studio/caps.ts`.
+- **The picture review scores** by kind (`rubricFor`, `reviewKindOf`).
+- **Memes** are concepted by Sonnet (`studio.meme.concept`, replaces the image
+  brief for memes): three ideas, a critique, one pick from a code shortlist of
+  real templates (`memes/select.ts`, `public/memes`, generated by
+  `scripts/memes/import-memegen.mjs`, never hand-edit `templates.generated.ts`)
+  or an original scene. `classic` = the template with words drawn by code
+  (Anton in `public/fonts`, no image cost); `remix` = the image model redraws
+  the scene in the brand's world with no words, code draws the words; never
+  remix a real person. Words are checked against the boxes (`memeLineIssues`,
+  one retry, then an original scene). Flag `FEATURE_FLAG_MEME_TEMPLATES_ENABLED`
+  (with `_WS_<id>`), on unless `false`. `meta.meme_format` / `meta.meme_mode`
+  keep the next meme on another template.
+- **Sync:** strategy pillar `share` and a funnel stage per Autopilot slot
+  (`pillarSequence`, `AIM_STAGE`, `stageLine`); `syncProgramStrategy` syncs
+  the goal; the campaign block carries the key message, exact offer, big idea
+  and tag; learnings use saves, sends and comments per view (`actionRate`,
+  two posts per group, missing numbers left out).
+- Free prompt benchmark: `vitest.bench.config.ts` (`tests/bench/`, cases in
+  `evals/creative/`), no network.
+
+## Creative system and Trend Radar
+
+Decision record [ADR-0052](docs/adr/0052-creative-system-and-trend-radar.md),
+skill `creative-director`.
+
+- **One idea per picture.** `src/lib/studio/creative-system.ts` (pure) holds
+  the techniques (ids stored: add, never rename), `techniquesFor` (hiring,
+  greeting and event posts stay clear; launches, offers and brand posts get
+  big ideas; services a symbolic object), `HOUSE_CRAFT` and `CONCEPT_TEST`.
+  The director writes three concepts, scores them and writes the winner, in
+  one call. Text and service posts (`directPicture`) and ads go through it
+  too. This lifts ADR-0051's metaphor ban; the "no style menus" rule stays.
+- **Trend Radar** (`/admin/trends`, `trends.manage`). Trends live in
+  `platform_trends`, saved through `admin_trend_save`, with media under
+  `platform/trends/<key>/`. Customers read them only through
+  `live_trends_for`; matching is pure in `src/lib/trends/radar.ts`; `radarFor`
+  fills `ctx.radar`. A trend reaches the director and writers, ideas (`radar`),
+  Surprise me (`trend`), Autopilot brains and the campaign plan.
+  `RADAR_RULES`: the brand's own style, never the trend owner's art or logos,
+  no implied partnership. Trend pictures reach writers only, never a render.
+
 ## Studio: carousels, trends and content memory
 
-- **A carousel is one story, drawn by code.** Pure core in
+- **The director makes posts and carousels** ([ADR-0051](docs/adr/0051-brief-first-generation.md)
+  round 3). One strong writer does what Claude does when it calls the image
+  model itself: `buildPostPlanPrompt` (`src/lib/studio/post-plan.ts`, route
+  `studio.image.brief`, Sonnet 5.5) writes the headline, at most two
+  supporting lines and the whole image prompt as plain prose (`concept`);
+  `postImagePrompt` (`visual-prompts.server.ts`) adds only the exact words
+  (`verbatimTextBlock`), the canvas and the logo corner. Carousels: the
+  writer (`studio.carousel`, Sonnet 5.5) returns one `look` for the series
+  (`output.carouselLook`) and every slide's `visual` as its image prompt;
+  `carouselSlidePrompt` with `look` is the look, that prompt, the exact words
+  and the canvas. **Never add style recipes, layout menus, type tables,
+  checklists or a "BRAND STYLE highest priority" block back to these
+  prompts**: a side-by-side test on the same model (2026-11-17) showed they
+  made every post a template and changed the person's words. The brand's own
+  look reaches the director as short guidance only (`lookGuidance`).
+  - **No copied pictures.** Director posts and slides attach only photos the
+    person chose (or the render being revised) and, for slides 2+, slide 1.
+    Style anchors and Library loves are not attached to them.
+  - **Words are drawn at high quality** (`ProviderTask.quality`, kept on every
+    restart); a picture with no words stays medium.
+  - `readBrief` (`brief-read.ts`, pure) still reads the brief once
+    (`output.briefRead`); `briefFitIssues` (free) still checks the words and
+    gets one rewrite on `studio.plan.escalate`. Angle and opening are picked
+    only for planned pieces (Autopilot); a person's post gets `BRIEF_ANGLE`.
+    A product is never attached to hiring, greeting, event and other
+    non-selling briefs, and a product poster keeps the brief's own message.
+  - `post-styles.ts` (native styles, ids stored) no longer reaches the post
+    or slide prompts; `pickSurpriseIdea` still picks what Surprise me writes.
+- **Carousels are designed per slide** (ADR-0051). Slide 1 starts first; the
+  others wait on it (`anchor`) and take it as their first reference, so the
+  set shares one look. Priced 1 credit for the cover plus ¾ credit per extra
+  slide, rounded up to a half credit (6 slides = 5 credits; `carouselCredits`,
+  `studioCreditUnits`); prices show halves (`formatCreditPrice`).
+  Model slides aren't edited as text in review: the edit chat redraws them.
+- **A drawn carousel is one story.** Seamless and own-photo carousels are drawn by code. Pure core in
   `src/lib/studio/carousel/`: `story.ts` (structure, a role per slide,
   `normalizeSlides`, `carouselStoryIssue`), `design.ts` (look per brand,
   colourway and motif per carousel, readable themes), `SlideArt.tsx` (the one
@@ -1017,8 +1324,51 @@ Full reference: [docs/studio/video.md](docs/studio/video.md), decision record
 - Lessons from studied reference posts are distilled into these modules and
   [docs/studio/reference-study-2026-10.md](docs/studio/reference-study-2026-10.md).
   `Post Training/` is never committed or shipped; never name a brand from it.
+  How to use or add a recipe (layouts, ad layouts, words on a person's own
+  photo `photo-design/overlays.ts`, openings): the `studio-design-recipes`
+  skill (`.claude/skills/`).
 - `src/lib/studio/playbook.ts` is the steady layer (how each platform and
   format works); review it when a platform changes.
+- **Picture styles** (`src/lib/brand-look/picture-styles.ts`, ids stored on
+  `dna.look.visual.styles`: add, never rename): up to three, or "Let Mox
+  decide" (`stylesAuto`, `autoPictureStyles` from industry and products).
+  Chosen in onboarding (`StylesScreen`, replaced the swipe deck) and Inspo →
+  Post look (`PictureStylePicker`). There is no "Photo" medium choice any more.
+  Surprise me rotates them per piece (`styleForPiece`).
+- **Surprise me** (was "Write it for me", `PromptWriter`): a 60–160 word brief
+  (`PROMPT_BLUEPRINTS`) that says WHAT, never camera or lighting. With no media
+  of the person's own it sees the top of the brand's site capture
+  (`loadSiteGlance`); it may use Media named in the brief (`mediaForBrief`).
+  Every brief passes `briefIssues` (free) and gets one rewrite with the reasons.
+- **Copy QA** (`src/lib/studio/copy-qa.ts`, pure): generic AI phrasing and
+  on-picture words over 12 get one more take in the runner's loop, then the
+  draft is kept (soft, never fails a piece). The person's own words are theirs.
+  The catalogue block carries each product's benefits and real page, and
+  writers send people to that page; never invent a link.
+- **Retired kinds:** meme and before/after (`RETIRED_CATEGORIES`, the memes
+  playbook, `RETIRED_VIDEO_KINDS`) are no longer offered or picked; Auto picks
+  designed kinds only. Their ids stay readable for old posts.
+- **Kinds are retired** (ADR-0051): `resolveCategory` always returns null,
+  there is no picker and nothing picks one; the brief decides what a post is.
+  The list below stays only so old posts' ids still read.
+- **A post had a kind** (`src/lib/studio/categories.ts`, pure; ids stored on
+  `intent.category`: add, never rename): sale, product, launch, meme,
+  relatable, trend, tips, myth, before/after, proof, behind the scenes,
+  storytime, this-or-that, quote, local, aesthetic, list, UGC. Picked in the
+  Options panel (`CategoryPicker`, Auto first; Auto never makes a meme,
+  `NEVER_AUTO`), by a template
+  (`TEMPLATE_CATEGORY`) or by Write it for me (`pickCategory`, never the last
+  two). It steers every writer (`categorySection`), the visual brief and the
+  image prompt: `register: "native"` kinds (meme, POV, UGC…) are made like a
+  real phone post with no ad polish; a meme picks a `MEME_LAYOUTS` layout and
+  its exact lines are set verbatim. A carousel follows the kind's structure.
+  A meme may be made on a real template (ADR-0047, below) or as an original
+  scene; an original scene never shows a real person.
+- **No joke twice.** A post stores `meta.category`, `meta.meme_layout` and
+  `meta.joke` (`outputJoke`); every writer sees taken jokes in
+  `memorySection`, the next meme skips the last two layouts
+  (`recentMemeLayouts`), and `findRepeatedJoke` (`novelty.ts`) sends a
+  repeat back once with the reason.
 - **New idea, same brand** (`src/lib/studio/memory.ts`): the opening style
   rotates (`pickHookStyle`), used openings are listed and checked
   (`findRepeatedOpening`), and published copy is offered as a voice reference
@@ -1038,8 +1388,15 @@ with `_WS_<id>`), on unless `false`.
   more". The image model draws a design layer with key-colour windows
   (`src/lib/studio/photo-design/`); code places the real photos
   (`src/server/studio/photo-design/compose.server.ts`).
-- **No template fallback.** A layer that fails the pure checks (`checks.ts`)
-  is asked for once more with the reason, then the piece fails plainly.
+- **A photo design is always made.** A layer that fails the pure checks
+  (`checks.ts`) is asked for once more with the reason; if that fails too, the
+  windows it did leave are used (`lenientWindows`, faces kept clear of the
+  design), else code lays the photos out at the post size
+  (`composeFittedPhotos`: whole over a blurred copy, or a grid), with a
+  warning. Every model image is brought to the exact ratio asked
+  (`fitPortraitImage`), and a "Post as is" photo outside the feed range
+  (4:5 to 1.91:1) is shown whole on the post canvas (`sourcePhotoCanvas`,
+  `fitWhole`). Never crop or redraw the photo to fit.
 - **The model never draws a logo or a person**; only the real logo, placed by
   code.
 - `resolvePhotoMode` decides the mode once, before pricing. "Post as is" with
@@ -1061,6 +1418,30 @@ with `_WS_<id>`), on unless `false`.
     failure leaves captions out, never the video;
   - the brand's own sound is brought to -14 LUFS.
 
+## MotionMox (animated elements on people's own clips and photos)
+
+Full reference: [docs/studio/motionmox.md](docs/studio/motionmox.md), decision
+record [ADR-0045](docs/adr/0045-motionmox.md). Flag
+`FEATURE_FLAG_MOTIONMOX_ENABLED` (with `_WS_<id>`), on unless `false`.
+
+- **MotionMox is Mellox's modified fork of Remotion** (`vendor/motionmox`,
+  packages `@motionmox/*`; the full fork is cloned outside the repo). It is
+  renamed and patched only by `scripts/motionmox/rename.mjs`, built with
+  `build.mjs`, copied in with `sync.mjs`. Never hand-edit `vendor/motionmox`.
+- **The licence stays:** Remotion's `LICENSE.md`, copyright and `NOTICE` are
+  never removed. Free License while Mellox has 3 or fewer people; past that a
+  Company License. Never sell or offer MotionMox to customers as a tool.
+- **Code shapes, MotionMox draws.** `planMotionMox` (`src/lib/studio/motionmox/`)
+  decides the elements; `groundSpec` drops words that aren't in the approved
+  copy, the brand's name or the person's quoted words. The model never writes
+  a composition or a spec; a price or button nobody wrote is left out with a note.
+- Element ids (`elements.ts`) are stored on jobs (`controls.motionElements`):
+  add, never rename.
+- Renders are offline (loopback only), one at a time, from a bundle built once
+  (`npm run motionmox:bundle`). If MotionMox fails, the FFmpeg path makes the
+  same video (`renderer` in the asset's metadata). No new cron job, no new price.
+- Live check: `tests/live/motionmox.live.ts` (behind `MOTIONMOX_LIVE_AI=yes`).
+
 ## Library and taste (hearts teach Mellox)
 
 Decision record [ADR-0038](docs/adr/0038-library-taste.md). Flag
@@ -1070,6 +1451,11 @@ hearts, RPCs answer 404, no prompt block, no lean.
 - **Nothing is cropped.** Library tiles are masonry at each piece's true shape
   (`src/lib/library-grid.ts`, `src/components/app/library/`), pictures
   `object-contain`. Never go back to fixed-ratio `object-cover` tiles.
+- **Bulk uploads** (Library → Upload, `library/LibraryUpload.tsx`; Inspo's
+  board and media): up to 100 files a pick, four at a time, one summary
+  toast. Photos up to 100 MB, videos 200 MB (Inspo videos 300 MB). Every
+  upload route uses the `upload` rate tier, never `generate`. The bucket cap
+  is raised by migration `20261109120000_raise_asset_upload_limit.sql`.
 - **One reaction per piece per brand** (`content_reactions`, `love` / `less`,
   shared by the team). A post's subject is its `group_id`; a post's picture
   belongs to its post.
@@ -1157,23 +1543,47 @@ verify.server.ts`, through `safeFetch`) is deliberately conservative: a bot
 ## Billing and credits
 
 Status and next steps: [docs/billing/PROGRESS.md](docs/billing/PROGRESS.md); decision
-record ADR-0027.
+records ADR-0027 and [ADR-0050](docs/adr/0050-pricing-v4.md) (pricing v4).
 
 - **Catalog** `src/lib/billing/catalog.ts` is the only source of prices, plans, limits
   and feature gates (browser-safe). Never put a price anywhere else.
+- **Pricing v4: no Free plan, one credit.** Starter $49 / Growth $149 / Agency $399
+  (yearly $39 / $119 / $319 a month), 150 / 500 / 1,500 credits, Enterprise is "Talk
+  to us". `free` is only the locked no-plan state (`hasActivePlan`): `AppShell`'s
+  `BillingPanel requirePlan` shows a picker that can't be closed. 1 credit = 1 image
+  post = 30 ledger units (`UNITS_PER_CREDIT`, `cr()`, `formatCredits(units)`);
+  text work is included (0 credits: no hold, but `assertIncluded` still checks the
+  plan). Video is credits per second (`videoCreditsFor`). Never add a Free plan,
+  creation points or Video Credits back; old balances only spend down.
+  Margins are code (`plan-economics.ts`, its test is the floor).
+- **No plan, no app.** `PlanGate` (`src/components/auth/PlanGate.tsx`, `/api/billing/access`,
+  `src/server/billing/access.server.ts`) sends a signed-in person with no plan to `/checkout`
+  before `/projects`, `/start`, onboarding or any workspace draws; members of a paid brand and
+  billing admins go in. A new brand needs a plan (`createWorkspace` answers 402).
+- **Trial codes are the only way in without paying first** (migration
+  `20261118120000_promo_trials.sql`, pure `src/lib/billing/promo.ts`, server
+  `src/server/billing/promo.server.ts`, staff page `/admin/promos`). A code gives N days and
+  N credits, still needs a card (Stripe `trial_period_days`, cancel if no card at the end), and
+  the plan picked is charged when the trial ends, then every period on that date. While it runs
+  the account is on the **trial tier** (`applyTrialTier`: `TRIAL_FEATURES` only, one brand, one
+  seat, no video). One trial per account and per card (`redeem_promo_code`, claimed at the
+  webhook, never at checkout); a refused claim cancels the subscription before anything is
+  granted. There is no open trial any more: `trial: true` without a code is refused.
+- **Staff access passes** (`giftAccessPass`, `/api/admin/users/access-pass`): a plan or the
+  trial tier (`comped_tier = 'trial'`) for 1–90 days with credits that end with it, no card,
+  no renewal (`next_grant_at` cleared). Never over a card subscription.
 - **One wallet per owner** (`billing_accounts`), shared across their brands; meters
-  `credits`, `video` (100 units = 1 video), `pro_messages`, `flash_messages`.
+  `credits`, `pro_messages`, `flash_messages` (legacy `video` / `premium_video` /
+  `creation` balances only spend down).
 - **Paid user actions go through `runMetered` / `beginDeferredMetered`**
   (`src/server/billing/metered.server.ts`): hold → run → capture, release on failure.
   Included work uses `requireBillingFeature` / `requireWithinLimit`. Background jobs
   use `beginAsyncCharge` → `link(kind, rowId)` (`async-charges.server.ts`) and settle
   from the job's own status; add new kinds to `billing_async_links` and `outcomeFor`.
-- **Short clips use credits, not Video Credits.** One AI clip of 8 s or less on
-  Economy or Standard (a picture brought to life, each animated recap photo, an
-  8 s video or video Story) is `studio_short_clip`: `SHORT_CLIP_CREDITS` in the
-  catalog, decided by the pure `shortClipPlan` (`src/lib/studio/short-clip.ts`),
-  also payable in creation points. Longer, Premium, Cinematic and UGC renders
-  stay on Video Credits.
+- **Short clips** (8 s or less on Economy or Standard: a picture brought to life,
+  each animated recap photo, an 8 s video or video Story) are `studio_short_clip`:
+  `SHORT_CLIP_CREDITS`, decided by the pure `shortClipPlan`
+  (`src/lib/studio/short-clip.ts`). Everything else, UGC included, is per second.
 - Notices go through `notify()` (`src/server/billing/notify.server.ts`, deduped per
   window); email only via `src/server/notify/email.server.ts` (Resend).
 - Tracked prompts: `src/server/geo/tracked-prompts.server.ts`, run from the existing
@@ -1182,10 +1592,19 @@ record ADR-0027.
   with a `code`; the client shows a toast with a button, never an automatic pop-up.
 - **Social publishing never costs credits** on any plan (Post for Me); only a hidden
   monthly fair-use cap (`postsFairUse`).
-- **Payments:** Stripe later. Until then "Upgrade now" creates a
-  `billing_purchase_requests` row and an admin activates it at `/admin`
-  (`src/server/billing/manual.server.ts`, keyed by operation id, append-only audit).
-  Admins: `BILLING_ADMIN_USER_IDS`.
+- **Payments are Stripe, on Mellox's own page.** Every Upgrade / Plans / Buy press
+  (`open:upgrade`, `useBillingActions().purchase`) goes to the full-screen
+  `/checkout` (Plan → Payment → Launch, `src/components/checkout/`, links only
+  through `checkoutHref` in `src/lib/billing/checkout-link.ts`), never a window in
+  the canvas and never a new tab. Payment is an Elements-mode Checkout Session
+  (`ui: "elements"` on `/api/billing/checkout`, `STRIPE_PUBLISHABLE_KEY`); Launch
+  only says "active" after `/api/billing/checkout/status` does. A subscriber's
+  plan change is made in place (prorated). Purchasing opens only when
+  `npm run billing:stripe-readiness` passes (every catalog price mapped in
+  `billing_price_map`: after a price change run `billing:stripe-sync`). No
+  invented reviews or fake countdowns on it. `/checkout-lab` shows every scene.
+  Manual `billing_purchase_requests` (`/admin`, `manual.server.ts`) remain for
+  admins (`BILLING_ADMIN_USER_IDS`).
 
 ## Website source connectors (GitHub)
 
@@ -1317,6 +1736,27 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   - The weekly report adds the measured lead count and the week's community
     threads (`growthFacts` in `autopilot/ports.server.ts`); a missing part is
     left out. Shopify, Klaviyo and Drive are `later`.
+- **Every connected app is put to work.** `src/lib/integrations/uses.ts` lists
+  what each app does and the place it happens; the connector's opened view
+  shows it as "Use it now" once connected (`connectors/AppUses.tsx`). Add an
+  app's uses there when its workflow ships.
+  - Composio social accounts (Instagram, Facebook, YouTube, Pinterest) fill
+    `social_account_posts` like Post for Me's feed (`src/lib/social/composio/feed.ts`,
+    pure; `src/server/social/composio/feed.server.ts`), from the existing
+    sdr-reconcile sweep, Analytics' Refresh and once after connecting.
+    LinkedIn isn't read: its API doesn't list a member's posts.
+  - Google Ads (GAQL, last 30 days per campaign) and HubSpot (new contacts,
+    30 days vs the 30 before) are kept on `integration_accounts.metadata.report`
+    (pure `src/lib/integrations/reports.ts`, `reports.server.ts`) and shown in
+    Analytics → Ads & leads. No new table, no cron job.
+  - A Studio ad sent to Google Ads also gets phrase keywords Google itself
+    suggests for the landing page (`readKeywordIdeas`); the campaign stays paused.
+  - `completeConnect` waits for Composio to leave `INITIATED` before deciding,
+    so a good sign-in is never stored as an error.
+  - Canva's Magic Layers is a preview API Canva never serves to public apps
+    (Composio): on Composio a carousel goes straight to the editable rebuild,
+    and a single picture opens whole with Canva's own Magic Layers as the way to
+    split it. Don't promise editable text for a single picture.
 - **Agents are names for work that exists** (`src/lib/agents/roster.ts`, pure):
   each has a place, needs, Autopilot automations, control-plane workers and
   chat reads. `getAgents` (`src/server/fns/agents.ts`) works out the state from
@@ -1425,11 +1865,57 @@ UI `src/components/admin/console/`, API `src/app/api/admin/**` (except the older
   pass `skipCapacityReconcile`.
 - The billing console is `/admin/billing` and has its own checks; leave it alone
   unless a billing task says otherwise.
+- **The rail is grouped** (`AdminShell`): "Every day" (Overview, Customers,
+  Activity, Errors, Revenue) is always open; People, Product, System and Admin
+  team fold away. Those five pages read one free pulse (`/api/admin/pulse`,
+  pure rules `src/lib/admin/pulse.ts`) built from stored rows: plan per
+  person, credits left, active time (estimated from action times, labelled so),
+  what they did and their errors. Balances (OpenRouter, KIE, Stripe for billing
+  admins) are read live only on open or "Fetch balances" (`/api/admin/balances`).
 - `/admin-lab` (development only, never served in production) renders the real
   screens in the real shell with sample data from `AdminLab.fixtures.ts`, typed
   against `src/lib/admin/types.ts`; `?s=<section>&role=<role>` shows any role. Use it
   for visual checks (no sign-in needed); add sample data there when you add a screen.
 - DB checks: `tests/db/admin-foundation.test.ts`, `tests/db/admin-entitlement-overrides.test.ts`.
+
+## Mellox Lean (cost)
+
+- **Background work spends only as the plan sells it** (`src/lib/background/gate.ts`,
+  pure; account facts `src/server/background/account.server.ts`):
+  - Market Brain runs weekly;
+  - competitor sweeps are spaced by `competitorSweepsPerWeek`;
+  - community refresh is weekly, on Growth and up.
+  - Frozen, paused, not-in-plan and 14-day-inactive workspaces get nothing and
+    are checked again in a week. A cron job's own calls never count as activity.
+  - A scan tracks at most `limits.competitors` (6 at most); the rest stay
+    suggestions.
+  - Opportunity scans need a running Autopilot program.
+  - Scheduled jobs are charged through `runMetered`.
+- **Nothing paid on load:**
+  - no silent Brand DNA scan;
+  - no idea prefetch on hover or idle; the Studio rail only shows ideas
+    already made (`cachedOnly`, a free cache read) and asks the model on a
+    "Show ideas" click, never again after a save;
+  - clarify only for a bare request (`shouldAskClarify`);
+  - the agents tick makes no model call unless asked (`explain: true`).
+- **Cost per piece is measured, not guessed** ([docs/ai-cost/cost-optimization-2026-11.md](docs/ai-cost/cost-optimization-2026-11.md)):
+  provider calls inside a Studio job or UGC render are metered against it
+  (`withWorkflow`, `src/server/request-context.ts`; `setStage` sets the stage),
+  with prompt-cache and reasoning tokens (`usageTokens`). A new long-running
+  workflow wraps its work in `withWorkflow`. Report: `admin_cost_per_output`
+  (`GET /api/admin/usage/cost`), failures counted into each accepted piece.
+- **A video create with an unknown outcome is never resubmitted blindly.**
+  The KIE callback URL names the render (signed, `signRenderRef`); the engine
+  waits `UNKNOWN_SUBMIT_GRACE_MS` for the callback to `adopt` the task before
+  paying for another. Definite refusals keep the quick retry.
+- **Local AI sidecar** ([docs/local-ai.md](docs/local-ai.md), `services/local-ai/`,
+  client `src/server/local-ai/client.server.ts`, flag
+  `FEATURE_FLAG_LOCAL_AI_ENABLED` + `LOCAL_AI_URL`):
+  - open-source models at $0, metered as provider `local`;
+  - every call fails open to the paid path;
+  - product cut-outs try BiRefNet-lite before the image model, and
+    `judgeCutout` still decides;
+  - licences in `services/local-ai/LICENSES.md`; never rembg's default model.
 
 ## Verifying work
 

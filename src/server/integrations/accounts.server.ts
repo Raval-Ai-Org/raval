@@ -16,6 +16,7 @@
 // (from the existing sdr-reconcile hook) re-reads each account every 6 hours,
 // and the action guard flips an account the moment a call is refused.
 import "server-only";
+import { after } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { recordAudit } from "@/server/audit.server";
@@ -269,6 +270,34 @@ async function ownedBy(account: ComposioAccount, workspaceId: string): Promise<b
   return mine.some((a) => a.id === account.id);
 }
 
+/** Composio states that mean "still finishing the sign-in". */
+const PENDING_STATES = new Set(["INITIATED", "INITIALIZING"]);
+
+function firstRead(workspaceId: string, app: string, accountId: string) {
+  const work = async () => {
+    try {
+      if (["instagram", "facebook", "youtube", "pinterest"].includes(app)) {
+        const { syncComposioWorkspaceFeeds } = await import("@/server/social/composio/feed.server");
+        await syncComposioWorkspaceFeeds(workspaceId, { onlyNeverRead: true });
+      } else if (app === "googleads" || app === "hubspot") {
+        const { refreshAppReport } = await import("./reports.server");
+        await refreshAppReport(accountId);
+      }
+    } catch (error) {
+      console.warn(
+        "[integrations] first read failed",
+        accountId,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  };
+  try {
+    after(work);
+  } catch {
+    // Outside a request (tests): the sweep reads it instead.
+  }
+}
+
 export async function completeConnect(args: {
   state: string;
   connectedAccountId: string;
@@ -290,7 +319,13 @@ export async function completeConnect(args: {
     throw new HttpError(400, "This connection doesn't match what Mellox started. Try again.");
   }
 
-  const account = await getAccount(args.connectedAccountId);
+  // Composio often still says INITIATED for a moment after the sign-in window
+  // returns. Wait for it to settle instead of calling a good sign-in a failure.
+  let account = await getAccount(args.connectedAccountId);
+  for (let n = 0; n < 8 && PENDING_STATES.has(account.status); n++) {
+    await new Promise((resolve) => setTimeout(resolve, 750 + n * 250));
+    account = await getAccount(args.connectedAccountId);
+  }
   const app = integrationApp(row.app);
   const owned = account.toolkit === row.toolkit && (await ownedBy(account, state.workspaceId));
   if (!owned) {
@@ -346,6 +381,11 @@ export async function completeConnect(args: {
       error instanceof Error ? error.message : error,
     );
   }
+
+  // Put the new connection to work straight away: what a social account
+  // posted, and the Google Ads / HubSpot numbers, are read once now so
+  // Analytics isn't empty until the next sweep. A failure waits for the sweep.
+  firstRead(state.workspaceId, row.app, row.id);
 
   const replaces = (row.metadata as { replaces?: string } | null)?.replaces;
   if (replaces) {

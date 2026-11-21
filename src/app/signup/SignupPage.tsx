@@ -135,7 +135,7 @@ function SignupPage() {
               e.preventDefault();
               navigate({ to: "/login", search: { next: nextPath } });
             }}
-            className="font-semibold text-primary underline-offset-4 hover:underline"
+            className="font-semibold text-primary-ink underline-offset-4 hover:underline"
           >
             Sign in
           </Link>
@@ -251,7 +251,7 @@ function SignupPage() {
             type="button"
             onClick={onResendConfirmation}
             disabled={resendLoading || emailLoading || googleLoading || !captcha.ready}
-            className="mt-3 text-xs font-semibold text-primary underline-offset-4 hover:underline disabled:opacity-50"
+            className="mt-3 text-xs font-semibold text-primary-ink underline-offset-4 hover:underline disabled:opacity-50"
           >
             {resendLoading ? (
               <span className="inline-flex items-center gap-1.5">

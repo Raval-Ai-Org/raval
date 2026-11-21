@@ -1,0 +1,43 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/sdk"
+  },
+  "name": "@motionmox/sdk",
+  "version": "4.0.542",
+  "description": "Experimental primitives for building MotionMox authoring interfaces",
+  "main": "dist/index.cjs",
+  "types": "dist/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "type": "module",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "dependencies": {
+    "@motionmox/player": "file:../player",
+    "@motionmox/studio-shared": "file:../studio-shared",
+    "@motionmox/core": "file:../core"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    }
+  },
+  "keywords": [
+    "@motionmox/core",
+    "canvas",
+    "timeline"
+  ],
+  "homepage": "https://www.remotion.dev/docs/sdk",
+  "private": true
+}

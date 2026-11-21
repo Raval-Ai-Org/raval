@@ -64,6 +64,7 @@ export function AiVisibilityDialog({ workspaceId }: { workspaceId: string | null
 
   return (
     <AppModalShell
+        navId="visibility"
       open={open}
       onOpenChange={setOpen}
       size="xl"

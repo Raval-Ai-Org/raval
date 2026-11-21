@@ -9,6 +9,7 @@ import { Bot } from "@/components/icons";
 import { PageLoader } from "@/components/ui/page-loader";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute } from "@/lib/shell/history";
 
 const AutopilotPanel = lazy(() =>
   import("@/components/app/autopilot/AutopilotPanel").then((m) => ({
@@ -26,9 +27,10 @@ export default function AutopilotRoute() {
   const workspaceId = useOptionalWorkspaceId();
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Autopilot"
       Icon={Bot}

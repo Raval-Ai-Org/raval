@@ -8,8 +8,9 @@
 //             the model can never add a trend of its own
 //   store     one row, scope 'global', in social_trend_snapshots
 //
-// Refreshed every few days by the existing run-schedules cron hook, claimed by
-// compare-and-set so overlapping runs collect once. Generators only ever READ
+// Refreshed every three days by the existing run-schedules cron hook, claimed
+// by compare-and-set so overlapping runs collect once; a failed or thin read
+// waits a day, and nothing runs while web search is paused. Generators only ever READ
 // the stored row: a brief never triggers a search (src/lib/research/triggers.ts
 // still decides that, per brief, for facts).
 //
@@ -30,6 +31,7 @@ import {
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 import { runWithScope } from "@/server/request-context";
 import { webResearchAvailable, webSearchMany } from "@/server/research/web-search.server";
+import { tavilyPausedReason } from "@/lib/tavily-gateway.server";
 
 const SCOPE = "global";
 const ROUTE = "studio.trends";
@@ -37,8 +39,11 @@ const ROUTE = "studio.trends";
 const REFRESH_MS = 3 * 86_400_000;
 /** A collector that died holds its claim this long at most. */
 const CLAIM_MS = 15 * 60_000;
-/** After a failed collection, wait before trying again. */
-const RETRY_MS = 6 * 3_600_000;
+/**
+ * After a failed or thin collection, wait a day before trying again. Each try
+ * is up to 16 searches; at six hours a stuck run cost 64 searches a day.
+ */
+const RETRY_MS = 24 * 3_600_000;
 const READ_TTL_MS = 10 * 60_000;
 const MIN_TRENDS = 4;
 
@@ -158,7 +163,9 @@ async function collect(now: Date): Promise<{ sources: WebSource[]; trends: Socia
     perHost: 2,
     route: ROUTE,
   });
-  if (sources.length < 8) {
+  // Nothing at all means search itself is failing: a second pass would only
+  // fail eight more times. Thin news (some, not enough) is worth widening.
+  if (sources.length > 0 && sources.length < 8) {
     // News coverage is thin some weeks; guides and studies carry the same facts.
     const more = await webSearchMany(queries(now), {
       topic: "general",
@@ -221,6 +228,9 @@ export async function refreshSocialTrendsIfDue(
   const backingOff =
     current.status === "failed" && now.getTime() - Date.parse(current.updated_at ?? "") < RETRY_MS;
   if (!opts.force && (!due || backingOff)) return "fresh";
+  // Search is paused (credits used up, key refused): the free fallback can't
+  // carry a trends read, so wait rather than spend a claim and a failure.
+  if (!opts.force && (await tavilyPausedReason())) return "fresh";
 
   // Claim: only one collector moves the row out of its unclaimed state.
   const staleClaim = new Date(now.getTime() - CLAIM_MS).toISOString();

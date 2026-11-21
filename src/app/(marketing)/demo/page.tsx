@@ -108,7 +108,7 @@ export default async function DemoPage({ searchParams }: { searchParams: Promise
               </div>
 
               <p className="dm-alt" data-reveal>
-                Prefer to look around first? <a href="/signup">Start free</a>, no credit card required, or
+                Prefer to look around first? <a href="/signup">Get started</a>, or
                 read the <Link href="/docs">docs</Link> and <Link href="/pricing">pricing</Link>.
               </p>
             </div>

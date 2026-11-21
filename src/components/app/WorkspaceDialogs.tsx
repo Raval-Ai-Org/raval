@@ -15,6 +15,7 @@ import { Pencil, Info, Settings2 } from "@/components/ui/gemini-icons";
 import {
   Bot,
   Brain,
+  Globe,
   Monitor,
   Moon,
   Plug,
@@ -27,6 +28,10 @@ import { AgentsPanel } from "@/components/app/agents/AgentsPanel";
 import { MemoryPanel } from "@/components/app/memory/MemoryPanel";
 import { useMemoryAvailable } from "@/components/app/memory/use-memory";
 import { useTheme } from "@/hooks/use-theme";
+import { useBrandDna } from "@/hooks/use-brand-dna";
+import { LanguageGrid } from "@/components/onboarding/LanguageStep";
+import { contentLanguageOf, withLanguage } from "@/lib/brand-look/languages";
+import { tidyLook } from "@/lib/inspo/look";
 import { cn } from "@/lib/utils";
 import {
   GroupLabel,
@@ -40,7 +45,7 @@ import { ConnectorsGallery } from "@/components/app/connectors/ConnectorsGallery
 import { McpConnector } from "@/components/app/connectors/McpConnector";
 
 type SettingsSection =
-  "accounts" | "connectors" | "assistants" | "agents" | "memory" | "preferences";
+  "accounts" | "connectors" | "assistants" | "agents" | "memory" | "language" | "preferences";
 
 type SettingsTarget = { section: SettingsSection; connector: string | null };
 
@@ -53,6 +58,7 @@ function targetFor(value: string | null | undefined): SettingsTarget | null {
     value === "assistants" ||
     value === "agents" ||
     value === "memory" ||
+    value === "language" ||
     value === "preferences"
     ? { section: value, connector: null }
     : null;
@@ -340,13 +346,31 @@ const SETTINGS_NAV: SurfaceNavItem<SettingsSection>[] = [
   { id: "assistants", label: "AI assistants", icon: Bot },
   { id: "agents", label: "Agents", icon: Wand },
   { id: "memory", label: "Memory", icon: Brain },
+  { id: "language", label: "Language", icon: Globe },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
 
+/** The brand's content language, kept on the look (the app stays in English). */
+function ContentLanguage({ workspaceId }: { workspaceId: string }) {
+  const { dna, save } = useBrandDna(workspaceId);
+  const value = contentLanguageOf(dna.look);
+  return (
+    <LanguageGrid
+      value={value}
+      listClassName="max-h-[52dvh]"
+      onChange={(language) => {
+        if (language === value) return;
+        save({ look: tidyLook(withLanguage(dna.look ?? {}, language)) });
+        toast.success(`Mox will write in ${language}.`);
+      }}
+    />
+  );
+}
+
 const THEMES = [
-  { id: "system", label: "System", icon: Monitor },
   { id: "light", label: "Light", icon: Sun },
   { id: "dark", label: "Dark", icon: Moon },
+  { id: "system", label: "System", icon: Monitor },
 ] as const;
 
 function SettingsDialog({
@@ -442,6 +466,11 @@ function SettingsDialog({
               )}
             </SurfacePage>
           )}
+          {section === "language" && (
+            <SurfacePage title="Language" subtitle="What Mox writes your posts in" width="narrow">
+              {workspaceId ? <ContentLanguage workspaceId={workspaceId} /> : noWorkspace}
+            </SurfacePage>
+          )}
           {section === "preferences" && (
             <SurfacePage title="Preferences" width="narrow">
               <GroupLabel>Theme</GroupLabel>
@@ -464,7 +493,7 @@ function SettingsDialog({
                           : "border-border/50 bg-surface-3 text-muted-foreground hover:text-foreground dark:border-white/[0.06] dark:bg-white/[0.035]",
                       )}
                     >
-                      <Icon className={cn("h-5 w-5", selected && "text-primary")} />
+                      <Icon className={cn("h-5 w-5", selected && "text-primary-ink")} />
                       {t.label}
                     </button>
                   );

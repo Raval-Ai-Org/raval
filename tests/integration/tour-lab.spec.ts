@@ -52,9 +52,11 @@ for (const vp of VIEWPORTS) {
         "autopilot",
         "studio",
         "library",
-        "brain",
-        "analytics",
         "calendar",
+        "communities",
+        "brain",
+        "inspo",
+        "analytics",
         "visibility",
         "account",
         "share",
@@ -125,7 +127,7 @@ for (const vp of VIEWPORTS) {
 
     test("a part that is switched off is left out", async ({ page }) => {
       await openLab(page, "?step=0&autopilot=off");
-      await expect(page.getByTestId("tour-count")).toHaveText("1 of 9");
+      await expect(page.getByTestId("tour-count")).toHaveText("1 of 11");
       await page.getByRole("button", { name: "Next", exact: true }).click();
       await expect(page.getByTestId("app-tour")).toHaveAttribute("data-step", "studio");
     });

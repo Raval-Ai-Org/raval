@@ -3,6 +3,7 @@
 // Pure. The single shape every generator consumes (BrandLook). A field the look
 // sets wins; a field it leaves empty comes from Brand DNA (colours, fonts,
 // voice, logo, rules), so the look tracks later Brand DNA edits automatically.
+import { effectiveStyles, type PictureStyleId } from "./picture-styles";
 import { normalizeHex, parseLook } from "./spec";
 import type { StylePalette, VideoStyle, VisualStyle, WritingStyle } from "./spec";
 
@@ -14,6 +15,8 @@ export type ResolveDna = {
   colors?: Array<{ name?: string; hex: string }> | null;
   fonts?: string[] | null;
   logoUrl?: string | null;
+  industry?: string | null;
+  products?: string | null;
   /** The stored look (BrandLookSpec); anything else is ignored. */
   look?: unknown;
 };
@@ -24,6 +27,14 @@ export type BrandLook = {
   video: VideoStyle;
   rules: { do: string | null; dont: string | null };
   logoUrl: string | null;
+  /** The picture styles every picture is made in (own picks, else Mox's). */
+  pictureStyles: { ids: PictureStyleId[]; auto: boolean };
+  /**
+   * The brand's own learned design in words (its style bible's world, type
+   * and recurring subject), when Mox has read its site or posts. With Custom
+   * picture style it replaces the template styles in every picture prompt.
+   */
+  ownDesign?: string | null;
   /** Something beyond plain Brand DNA facts was set (tone, image look, video…). */
   customized: boolean;
 };
@@ -72,13 +83,17 @@ export function lookReady(look: BrandLook): boolean {
   return !!(
     look.visual.palette.primary &&
     look.visual.typography?.heading &&
-    look.visual.medium &&
+    (look.visual.medium || look.pictureStyles?.ids.length) &&
     look.visual.mood?.trim()
   );
 }
 
-export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
+export function resolveLook(
+  dna: ResolveDna | null | undefined,
+  opts: { ownDesign?: string | null } = {},
+): BrandLook {
   const d = dna ?? {};
+  const ownDesign = opts.ownDesign?.trim() || null;
   const spec = parseLook(d.look);
 
   const palette = compact({
@@ -103,6 +118,34 @@ export function resolveLook(dna: ResolveDna | null | undefined): BrandLook {
     video: spec.video ?? {},
     rules: { do: d.doRules?.trim() || null, dont: d.dontRules?.trim() || null },
     logoUrl: d.logoUrl || null,
-    customized: !!(spec.writing || spec.visual || spec.video),
+    pictureStyles: effectiveStyles(
+      spec.visual,
+      {
+        industry: typeof d.industry === "string" ? d.industry : null,
+        products: typeof d.products === "string" ? d.products : null,
+        brandName: d.brandName ?? null,
+      },
+      { ownDesign: !!ownDesign },
+    ),
+    ownDesign,
+    // The brand's creator alone is a choice of person, not a style, and how
+    // often its own media is used is a rotation setting, not a look. A
+    // learned design of its own is a look.
+    customized: !!(
+      spec.writing ||
+      visualStyled(spec.visual) ||
+      videoStyled(spec.video) ||
+      ownDesign
+    ),
   };
+}
+
+function visualStyled(visual: VisualStyle | undefined): boolean {
+  if (!visual) return false;
+  return Object.entries(visual).some(([key, value]) => key !== "ownMedia" && value !== undefined);
+}
+
+function videoStyled(video: VideoStyle | undefined): boolean {
+  if (!video) return false;
+  return Object.entries(video).some(([key, value]) => key !== "creator" && value !== undefined);
 }

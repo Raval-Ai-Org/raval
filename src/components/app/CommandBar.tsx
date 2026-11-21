@@ -139,6 +139,9 @@ export function CommandBar() {
       onClick={() => setOpen(false)}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command menu"
         className="w-full max-w-xl overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl animate-scale-in"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -172,7 +175,7 @@ export function CommandBar() {
                   <Zap className="h-3.5 w-3.5" />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-[10.5px] font-semibold uppercase tracking-wider text-primary">
+                  <span className="block text-[10.5px] font-semibold uppercase tracking-wider text-primary-ink">
                     Ask Mellox AI
                   </span>
                   <span className="block truncate text-[13px] font-medium text-foreground">

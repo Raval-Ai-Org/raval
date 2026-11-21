@@ -1,10 +1,10 @@
-import { Logo } from "@/components/brand/Logo";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { cn } from "@/lib/utils";
 
 /**
- * The Mellox loading mark: the logo inside a turning lime ring. Pure CSS
- * (styles.css `.mx-loader`), so it moves from the first paint — before the
- * page's JavaScript has loaded — and keeps moving with reduced motion.
+ * The Mellox loading mark: Mox, thinking, inside a turning ring. The ring is
+ * pure CSS (styles.css `.mx-loader`), so it moves from the first paint —
+ * before the page's JavaScript has loaded — and keeps moving with reduced motion.
  */
 export function MelloxLoader({ size = 56, className }: { size?: number; className?: string }) {
   return (
@@ -12,7 +12,7 @@ export function MelloxLoader({ size = 56, className }: { size?: number; classNam
       <span className="mx-loader__ring" />
       <span className="mx-loader__glow" />
       <span className="mx-loader__mark">
-        <Logo height={Math.round(size * 0.42)} markOnly />
+        <MoxFace mood="thinking" size={Math.round(size * 0.62)} />
       </span>
     </span>
   );

@@ -121,6 +121,13 @@ export const VisualSchema = z.object({
   medium: z
     .enum(["photo", "illustration", "3d", "flat", "collage", "typographic", "mixed"])
     .optional(),
+  /**
+   * Up to three picture styles (picture-styles.ts ids). Unknown ids are
+   * dropped where they are read (`cleanStyleIds`), never refused here.
+   */
+  styles: z.array(z.string().max(40)).max(3).optional(),
+  /** Mox picks the styles from what the brand sells (the default). */
+  stylesAuto: z.boolean().optional(),
   mood: short(200).optional(),
   lighting: short(160).optional(),
   grading: short(160).optional(),
@@ -150,6 +157,12 @@ export const VisualSchema = z.object({
     .optional(),
   avoid: list(12, 120).optional(),
   notes: short(600).optional(),
+  /**
+   * How often the brand's own Inspo media (product shots, people, clips) are
+   * put on a new piece by themselves (src/lib/inspo/media-rotation.ts). Absent
+   * means "sometimes". A person's own pick in Studio always stands.
+   */
+  ownMedia: z.enum(["rarely", "sometimes", "often"]).optional(),
 });
 export type VisualStyle = z.infer<typeof VisualSchema>;
 
@@ -172,6 +185,31 @@ export const VideoSchema = z.object({
   outro: short(200).optional(),
   music: short(160).optional(),
   notes: short(600).optional(),
+  /** Video kinds the brand likes (src/lib/studio/video/kinds.ts ids), for Auto to lean on. */
+  kinds: list(4, 40).optional(),
+  /** Creator (UGC) formats the brand likes (src/lib/ugc/formats ids), shown first. */
+  formats: list(6, 40).optional(),
+  /** The brand's hook words on Creator videos: a preset id from src/lib/ugc/hook-text.ts. */
+  hookText: z
+    .object({
+      on: z.boolean().optional(),
+      preset: short(24).optional(),
+    })
+    .optional(),
+  /** Spoken voiceover on made videos (absent: the kind decides). */
+  voiceover: z.enum(["on", "off"]).optional(),
+  /**
+   * The brand's own creator for every Creator (UGC) video: a ready-made
+   * creator id (src/lib/ugc/creators.ts) or one of the brand's people (an
+   * Inspo "Person" asset). Not a style: it doesn't make the look "customized".
+   */
+  creator: z
+    .object({
+      id: short(40).optional(),
+      personAssetId: z.string().uuid().optional(),
+      name: short(60).optional(),
+    })
+    .optional(),
 });
 export type VideoStyle = z.infer<typeof VideoSchema>;
 

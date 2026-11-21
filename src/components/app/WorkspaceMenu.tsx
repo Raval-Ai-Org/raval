@@ -9,10 +9,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ErrorState } from "@/components/ui/empty-state";
 import { ArrowLeft, Check, Gift, Plus, Search, LayoutGrid, LogOut } from "@/components/brand/icons";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
-import { PLANS, SIGNUP_GRANT } from "@/lib/billing/catalog";
+import { PLANS } from "@/lib/billing/catalog";
 import { asPlan, formatNumber, nextPlan } from "@/lib/billing/present";
 import { useWorkspaces, workspaceLabel, type WorkspaceSummary } from "@/hooks/use-workspaces";
-import { workspacePath, WORKSPACES_HOME } from "@/lib/workspace/paths";
+import { workspacePath, ALL_WORKSPACES } from "@/lib/workspace/paths";
 import { signOutAndRedirect } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { WorkspaceLogo } from "./WorkspaceLogo";
@@ -65,7 +65,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
   // The real account balance (shared by all the owner's brands).
   const plan = asPlan(billing.data?.entitledPlan);
   const credits = billing.data?.meters.credits.available ?? 0;
-  const allowance = plan === "free" ? SIGNUP_GRANT.credits : PLANS[plan].allowances.credits;
+  const allowance = PLANS[plan].allowances.credits;
   const leftPct = allowance > 0 ? Math.max(0, Math.min(100, (credits / allowance) * 100)) : 0;
   const low = leftPct <= 20;
   const canUpgrade = Boolean(billing.data?.isOwner && nextPlan(plan));
@@ -82,7 +82,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
         <button
           onClick={() => {
             setOpen(false);
-            navigate({ to: WORKSPACES_HOME });
+            navigate({ to: ALL_WORKSPACES });
           }}
           className="group flex w-full items-center gap-2 border-b border-border/60 px-3 py-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
           aria-label="Back to workspaces dashboard"
@@ -206,9 +206,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
                   <WorkspaceLogo name={name} websiteUrl={w.websiteUrl} size={28} />
 
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{name}</span>
-                  {active && (
-                    <Check className="h-3.5 w-3.5 text-[hsl(var(--brand-green))]" aria-hidden />
-                  )}
+                  {active && <Check className="h-3.5 w-3.5 text-primary-ink" aria-hidden />}
                 </button>
               );
             })}
@@ -218,7 +216,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           <button
             onClick={() => {
               setOpen(false);
-              navigate({ to: WORKSPACES_HOME });
+              navigate({ to: ALL_WORKSPACES });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-secondary/70 hover:text-foreground"
           >
@@ -230,7 +228,7 @@ export function WorkspaceMenu({ workspaceName, workspaceId, trigger }: Props) {
           <button
             onClick={() => {
               setOpen(false);
-              navigate({ to: WORKSPACES_HOME });
+              navigate({ to: ALL_WORKSPACES });
             }}
             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           >

@@ -20,7 +20,6 @@ import {
   ThumbsDown,
   Video as VideoIcon,
   Wand2,
-  X,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { DownloadAssetButton } from "@/components/app/DownloadAssetButton";
@@ -56,7 +55,8 @@ import {
 import { openComposer, openJob } from "@/lib/studio/session-store";
 import type { Reaction, TasteView } from "@/lib/taste/contracts";
 import { LibraryTile, type TileAction } from "./library/LibraryTile";
-import { Masonry, PILL_SELECT, PILL_TRACK, PillTabs, PinGridSkeleton, SearchPill } from "./pins";
+import { LibraryUpload } from "./library/LibraryUpload";
+import { Masonry, PILL_SELECT, PILL_TRACK, PinGridSkeleton, SearchPill } from "./pins";
 import { TasteStrip } from "./library/TasteStrip";
 import { useLibraryTaste, type ReactTarget } from "./library/useLibraryTaste";
 
@@ -105,6 +105,8 @@ const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
 ];
 
 const SELECT = PILL_SELECT;
+const BACK_PILL =
+  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] pl-2.5 pr-3.5 text-[13px] font-semibold shadow-[var(--ds-card-shadow)] transition hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55";
 
 const SEEN_KEY = "library:last-seen";
 
@@ -124,6 +126,24 @@ function fullDate(iso: string | null | undefined): string {
 
 function dayStamp() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * The last Library read per workspace, kept for this tab. Opening the Library
+ * again shows it at once and refreshes behind it, instead of a blank
+ * "Loading…" every time. Signed links last an hour; older copies are dropped.
+ */
+type LibrarySnapshot = {
+  at: number;
+  assets: Media[];
+  groups: Group[];
+  thumbs: Record<string, string>;
+};
+const SNAPSHOT_TTL_MS = 45 * 60_000;
+const librarySnapshots = new Map<string, LibrarySnapshot>();
+function freshSnapshot(workspaceId: string | null): LibrarySnapshot | null {
+  const snap = workspaceId ? librarySnapshots.get(workspaceId) : undefined;
+  return snap && Date.now() - snap.at < SNAPSHOT_TTL_MS ? snap : null;
 }
 
 /** The workspace this library belongs to (from the route). */
@@ -202,10 +222,13 @@ export function LibraryPage({
   const workspaceId = useWorkspaceId();
   const fixtures = !!fixtureGroups || !!fixtureAssets;
   const [tab, setTab] = useState<LibraryTab>(initialTab);
-  const [assets, setAssets] = useState<Media[]>(fixtureAssets ?? []);
-  const [groups, setGroups] = useState<Group[]>(fixtureGroups ?? []);
-  const [thumbs, setThumbs] = useState<Record<string, string>>(fixtureThumbs ?? {});
-  const [loading, setLoading] = useState(!fixtures);
+  const snapshot = fixtures ? null : freshSnapshot(workspaceId);
+  const [assets, setAssets] = useState<Media[]>(fixtureAssets ?? snapshot?.assets ?? []);
+  const [groups, setGroups] = useState<Group[]>(fixtureGroups ?? snapshot?.groups ?? []);
+  const [thumbs, setThumbs] = useState<Record<string, string>>(
+    fixtureThumbs ?? snapshot?.thumbs ?? {},
+  );
+  const [loading, setLoading] = useState(!fixtures && !snapshot);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [format, setFormat] = useState<StudioType | "all">("all");
@@ -276,7 +299,8 @@ export function LibraryPage({
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // With a recent copy on screen, refresh quietly behind it.
+    if (!freshSnapshot(workspaceId)) setLoading(true);
     setError(null);
     try {
       const [assetRes, posts] = await Promise.all([
@@ -298,28 +322,30 @@ export function LibraryPage({
       if (!assetRes.ok) throw new Error(payload.error || "Could not load your library");
       if (posts.error) throw new Error(posts.error.message);
       if (version !== loadVersion.current) return;
-      setAssets(
-        (payload.assets ?? []).map((asset) => ({
-          ...normalizeLibraryAsset({
-            id: asset.id,
-            title: asset.name,
-            media_url: asset.url,
-            kind: asset.type,
-            status: asset.status,
-            created_at: asset.createdAt,
-            updated_at: asset.updatedAt,
-            workspace_id: asset.workspaceId,
-            channel: asset.platform,
-            mime_type: asset.mimeType,
-            metadata: asset.metadata,
-            source: "generated",
-          }),
-          thumbnailUrl: asset.thumbnailUrl ?? asset.url,
-          postId: asset.postId ?? null,
-        })),
-      );
+      const nextAssets: Media[] = (payload.assets ?? []).map((asset) => ({
+        ...normalizeLibraryAsset({
+          id: asset.id,
+          title: asset.name,
+          media_url: asset.url,
+          kind: asset.type,
+          status: asset.status,
+          created_at: asset.createdAt,
+          updated_at: asset.updatedAt,
+          workspace_id: asset.workspaceId,
+          channel: asset.platform,
+          mime_type: asset.mimeType,
+          metadata: asset.metadata,
+          source: "generated",
+        }),
+        thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+        postId: asset.postId ?? null,
+      }));
+      setAssets(nextAssets);
       const rows = (posts.data ?? []) as ContentRow[];
-      setGroups(groupRows(rows));
+      const nextGroups = groupRows(rows);
+      setGroups(nextGroups);
+      // Posts and media show as soon as they are read; thumbnails follow.
+      setLoading(false);
       const paths = [
         ...new Set(
           rows
@@ -330,6 +356,12 @@ export function LibraryPage({
       const signed = paths.length ? await getSignedAssetUrls(workspaceId, paths) : {};
       if (version !== loadVersion.current) return;
       setThumbs(signed);
+      librarySnapshots.set(workspaceId, {
+        at: Date.now(),
+        assets: nextAssets,
+        groups: nextGroups,
+        thumbs: signed,
+      });
     } catch (cause) {
       if (version !== loadVersion.current) return;
       console.error("Library query failed", cause);
@@ -340,9 +372,11 @@ export function LibraryPage({
 
   useEffect(() => {
     if (!fixtures) {
-      setAssets([]);
-      setGroups([]);
-      setThumbs({});
+      // Another workspace's copy is never shown here.
+      const snap = freshSnapshot(workspaceId);
+      setAssets(snap?.assets ?? []);
+      setGroups(snap?.groups ?? []);
+      setThumbs(snap?.thumbs ?? {});
       setSelected(null);
     }
     void load();
@@ -628,28 +662,23 @@ export function LibraryPage({
     selected && taste.available ? (taste.reactions[selected.subject] ?? null) : undefined;
 
   return (
-    <div className="@container/library flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <div className="@container/library flex h-full min-h-0 flex-col overflow-hidden text-foreground">
       {/* ── Header ── */}
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/50 bg-background/60 px-3 backdrop-blur-xl @3xl/library:px-5">
-        {/* Back only when drilled into an item; the X closes the window. */}
-        {selected ? (
+      <header className="flex h-16 shrink-0 items-center gap-2 px-3 @3xl/library:px-5">
+        {/* Holo: one Back pill. In an item it returns to the boards; otherwise it leaves. */}
+        {selected || onClose ? (
           <button
             type="button"
-            onClick={() => setSelected(null)}
-            aria-label="Back to library"
-            title="Back to library"
-            className="grid size-9 shrink-0 place-items-center rounded-full text-foreground/80 transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
+            onClick={() => (selected ? setSelected(null) : onClose?.())}
+            aria-label={selected ? "Back to library" : "Close library"}
+            title={selected ? "Back to library" : "Back"}
+            className={BACK_PILL}
           >
             <ArrowLeft className="size-4" />
+            Back
           </button>
         ) : null}
-        <span
-          aria-hidden
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20"
-        >
-          <LayoutGrid className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
+        <div className={cn("min-w-0 flex-1", !selected && "[&>*]:sr-only")}>
           {selected ? (
             <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <button
@@ -685,6 +714,9 @@ export function LibraryPage({
             <RefreshCw className={loading ? "animate-spin" : undefined} />
           </Button>
         ) : null}
+        {!selected ? (
+          <LibraryUpload workspaceId={fixtures ? null : workspaceId} onDone={() => void load()} />
+        ) : null}
         <Button
           size="sm"
           className="studio-cta hidden rounded-full @2xl/library:inline-flex"
@@ -696,17 +728,6 @@ export function LibraryPage({
           <Wand2 />
           Create
         </Button>
-        {onClose ? (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close library"
-            title="Close (Esc)"
-            className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55"
-          >
-            <X className="size-4" />
-          </button>
-        ) : null}
       </header>
 
       {selected ? (
@@ -735,29 +756,62 @@ export function LibraryPage({
       ) : (
         <>
           {/* ── Toolbar ── */}
-          <div className="shrink-0 border-b border-border/50 px-3 py-3 @3xl/library:px-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <PillTabs
-                label="Library filter"
-                layoutId="library-tab"
-                value={tab}
-                onChange={setTab}
-                tabs={tabs.map((t) => ({
-                  id: t.id,
-                  label: t.label,
-                  count: loading ? null : t.count,
-                  icon:
-                    t.id === "loved" ? (
-                      <Heart
-                        className={cn(
-                          "size-3.5",
-                          tab === "loved" ? "fill-primary text-primary" : "text-current",
-                        )}
-                      />
-                    ) : undefined,
-                }))}
-              />
-
+          <div className="mx-auto w-full max-w-[1280px] shrink-0 px-3 pb-3 pt-1 @3xl/library:px-8">
+            <h2 className="text-[24px] font-bold tracking-[-0.03em]">Library</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              {loading ? "Loading…" : summary}
+            </p>
+            {/* Holo's boards: one card chip per shelf. */}
+            <div
+              role="tablist"
+              aria-label="Library filter"
+              className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"
+            >
+              {tabs.map((t) => {
+                const on = tab === t.id;
+                const Icon =
+                  t.id === "loved"
+                    ? Heart
+                    : t.id === "posts"
+                      ? FileText
+                      : t.id === "media"
+                        ? ImageIcon
+                        : LayoutGrid;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setTab(t.id)}
+                    className={cn(
+                      "flex h-12 shrink-0 items-center gap-2.5 rounded-2xl border pl-1.5 pr-4 text-left transition duration-200",
+                      on
+                        ? "border-[var(--mox-green)]/50 bg-[var(--ds-card-bg)] shadow-[0_10px_24px_-14px_rgb(46_230_107/0.8)]"
+                        : "border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/70 hover:-translate-y-px hover:bg-[var(--ds-card-bg)]",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-9 place-items-center rounded-xl",
+                        on
+                          ? "ds-grad-pill text-[var(--mox-ink)]"
+                          : "bg-[var(--ds-well-bg)] text-foreground/70",
+                      )}
+                    >
+                      <Icon className={cn("size-4", t.id === "loved" && on && "fill-current")} />
+                    </span>
+                    <span className="leading-tight">
+                      <span className="block text-[13px] font-semibold">{t.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {loading ? "…" : `${t.count} ${t.count === 1 ? "item" : "items"}`}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <SearchPill
                 ref={searchRef}
                 value={query}
@@ -853,7 +907,7 @@ export function LibraryPage({
           </div>
 
           {/* ── Results ── */}
-          <main className="min-h-0 flex-1 overflow-y-auto p-3 @3xl/library:p-5">
+          <main className="mx-auto min-h-0 w-full max-w-[1280px] flex-1 overflow-y-auto px-3 pb-6 pt-1 @3xl/library:px-8">
             {taste.available && taste.summary && !loading && !error ? (
               <div className="mb-3">
                 <TasteStrip
@@ -877,7 +931,7 @@ export function LibraryPage({
                 <EmptyState
                   icon={Heart}
                   title="Nothing loved yet"
-                  description="Tap ♥ on a post you love. Mellox makes more like it."
+                  description="Tap the heart on a post you love. Mellox makes more like it."
                   action={
                     <Button variant="outline" onClick={() => setTab("all")}>
                       See everything
@@ -1009,7 +1063,10 @@ function ListRow({
         <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <span className="truncate">{item.title}</span>
           {loved ? (
-            <Heart aria-label="Loved" className="size-3.5 shrink-0 fill-primary text-primary" />
+            <Heart
+              aria-label="Loved"
+              className="size-3.5 shrink-0 fill-primary-ink text-primary-ink"
+            />
           ) : null}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">

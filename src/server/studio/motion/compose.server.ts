@@ -176,6 +176,12 @@ async function design(system: string, user: string): Promise<MotionDoc | null> {
     fallback: null,
   });
   const parsed = MotionDocSchema.safeParse(raw);
+  if (!parsed.success && raw) {
+    // Which fields were wrong, so a model that keeps missing one is visible.
+    log.warn("studio.motion.unusable_doc", {
+      issues: parsed.error.issues.slice(0, 6).map((i) => `${i.path.join(".")}: ${i.message}`),
+    });
+  }
   return parsed.success ? parsed.data : null;
 }
 

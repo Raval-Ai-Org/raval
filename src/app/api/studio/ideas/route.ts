@@ -14,6 +14,8 @@ const Body = z.object({
   dismissed: z.array(z.string().max(160)).max(30).optional(),
   refresh: z.boolean().optional(),
   limit: z.number().int().min(2).max(8).optional(),
+  /** Only what is already made: never a model call (the rail's free first look). */
+  cachedOnly: z.boolean().optional(),
 });
 
 /** Fresh, signal-anchored ideas for what to create next. */
@@ -25,8 +27,8 @@ export const POST = defineRoute({
   workspaceId: ({ body }) => body.workspaceId,
   rateLimit: "generate",
   handler: async ({ body, workspaceId, userId, role, supabase }) => {
-    // This endpoint is also called on mount and after saving content. Suggestions
-    // are included: browsing and saving must never create a wallet reservation.
+    // Suggestions are included: asking must never create a wallet reservation.
+    // A `cachedOnly` look (the Studio rail opening) never calls a model.
     await requireBillingFeature({ workspaceId, userId, role, feature: "studio", spending: true });
     return generateStudioIdeas({
       client: supabase,
@@ -36,6 +38,7 @@ export const POST = defineRoute({
       dismissed: body.dismissed,
       refresh: body.refresh,
       limit: body.limit,
+      cachedOnly: body.cachedOnly,
     });
   },
 });

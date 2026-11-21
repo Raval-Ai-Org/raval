@@ -1,7 +1,12 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { videoUnitsFor, type UgcModelKey, type VideoResolution } from "@/lib/billing/catalog";
+import {
+  videoCreditsFor,
+  videoUnitsFor,
+  type UgcModelKey,
+  type VideoResolution,
+} from "@/lib/billing/catalog";
 import { isUgcModelKey } from "@/lib/ugc/models";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { HttpError } from "@/server/http-error";
@@ -53,12 +58,21 @@ export async function settleUgcBilling(row: RenderRow): Promise<void> {
   const succeeded = row.status === "succeeded";
   const actualUnits =
     succeeded && isUgcModelKey(row.model_key)
-      ? videoUnitsFor({
-          ugcKey: row.model_key as UgcModelKey,
-          seconds: row.duration_sec,
-          resolution: row.resolution as VideoResolution,
-          providerCostUsd: row.actual_cost_usd ?? undefined,
-        })
+      ? link.action.startsWith("ugc_")
+        ? // Pricing v4: held in credits.
+          videoCreditsFor(
+            row.model_key as UgcModelKey,
+            row.duration_sec,
+            row.resolution as VideoResolution,
+            row.actual_cost_usd ?? undefined,
+          )
+        : // A render held on the legacy Video Credit meter before v4.
+          videoUnitsFor({
+            ugcKey: row.model_key as UgcModelKey,
+            seconds: row.duration_sec,
+            resolution: row.resolution as VideoResolution,
+            providerCostUsd: row.actual_cost_usd ?? undefined,
+          })
       : link.units;
   if (actualUnits > link.units) {
     // The user accepted the quoted maximum. Never capture more than was held;
@@ -88,7 +102,7 @@ export async function settleUgcBilling(row: RenderRow): Promise<void> {
       account_id: link.account_id,
       workspace_id: link.workspace_id,
       action: link.action,
-      meter: "video",
+      meter: link.action.startsWith("ugc_") ? "credits" : "video",
       amount: capturedUnits,
       decision: "would_charge",
       idempotency_key: `ugc:${row.id}`,

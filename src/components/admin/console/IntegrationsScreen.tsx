@@ -131,7 +131,7 @@ export function IntegrationsScreen() {
                     <td className={td}>
                       <Link
                         href={`/admin/workspaces/${row.workspaceId}`}
-                        className="text-primary hover:underline"
+                        className="text-primary-ink hover:underline"
                       >
                         Open
                       </Link>

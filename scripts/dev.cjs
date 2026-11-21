@@ -19,6 +19,12 @@ try {
   console.warn("[dev] Could not check available disk space:", error.message);
 }
 
+// A build that stopped halfway may have left MotionMox copied in
+// (local-build.mjs): put the links to vendor/motionmox back first.
+spawnSync(process.execPath, [path.resolve(__dirname, "motionmox/local-build.mjs"), "restore"], {
+  stdio: "inherit",
+});
+
 const maxOldSpaceOption = "--max-old-space-size=4096";
 const inheritedOptions = process.env.NODE_OPTIONS?.trim();
 const nextBin = path.resolve(__dirname, "../node_modules/next/dist/bin/next");

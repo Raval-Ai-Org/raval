@@ -23,25 +23,45 @@ import { routingOverrideFor } from "@/server/platform/routing-overrides.server";
 /* ─────────────────────────── tiers (one-line swaps) ─────────────────────────── */
 
 // Each tier is the cheapest model that does its kind of work well (cost
-// review 2026-11-03, prices from OpenRouter /api/v1/models). Opus stays where
-// the work is rare and high-stakes: code in customer repos, published
-// articles, video storyboards.
-export const PREMIUM = "anthropic/claude-opus-5.5";
-/** Analysis and structured reading (Brand DNA, strategy); reads images. Half Opus's price. */
+// reviews 2026-11-03 and 2026-11-12; prices from OpenRouter /api/v1/models,
+// quality from the Artificial Analysis Intelligence Index v5).
+/**
+ * Rare, high-stakes work: code in customer repos, published articles, video
+ * storyboards, motion graphics, escalations. Gemini 4 Carbon scores above
+ * Opus 5.5 (index 60.0 vs 59.1) at half its price ($2/$10 vs $4/$20), and in
+ * the 2026-11-12 side-by-side its storyboards passed every check at about a
+ * fifth of Opus's cost. Opus stays one override away (`OPUS`).
+ */
+export const PREMIUM = "google/gemini-4-carbon";
+/** The previous premium model: kept selectable as the rollback (`AI_MODEL_<ROUTE>`). */
+export const OPUS = "anthropic/claude-opus-5.5";
+/** Analysis and structured reading (Brand DNA, strategy); reads images. */
 export const ANALYST = "openai/gpt-6.1-sol";
-/** Conversation with tools (Mellox Pro chat, Coach). */
+/** Conversation with tools (Mellox Pro chat, Coach, Creator scripts). */
 export const CONVERSATION = "anthropic/claude-sonnet-5.5";
-/** Summaries and small structured jobs. A quarter of Opus's price. */
-export const SUMMARY = "openai/gpt-6.1-terra";
+/**
+ * Every text writer people see (Studio copy, Flash chat, plans, briefings) and
+ * the small careful jobs; reads pictures. Scores above Gemini 3.8 Flash (index
+ * 36.5 vs 30.9) at an eighth of its price (cost review 2026-11-12). It takes
+ * no `temperature`: Claude's default sampling already varies its answers.
+ */
+export const WRITER = "anthropic/claude-haiku-5.5";
+/** Summaries and small structured jobs (was GPT-6.1 Terra, ten times the price). */
+export const SUMMARY = WRITER;
+/** Safety checks, caption edits, "Write it for me". */
+export const CAREFUL = WRITER;
+/** Image text reads and audience scores (was Gemini 3.1 Flash-Lite: dearer, index 6.2). */
+export const ECONOMY = WRITER;
+/** Pictures, video frames and sound: the vision checks and transcription. */
 export const WORKHORSE = "google/gemini-3.8-flash";
-/** Text-only internal work (ideas, competitor reads). Full-precision hosts only. */
-export const BUDGET = "deepseek/deepseek-v4.1-flash";
+/**
+ * Text-only internal work (ideas, competitor reads). The 1017 snapshot is half
+ * V4.1 Flash's price at the same index. Full-precision hosts only.
+ */
+export const BUDGET = "deepseek/deepseek-v4.1-flash-1017";
 /** Labelling and yes/no sorting. Full-precision hosts only. */
 export const LABELLER = "z-ai/glm-5.3-flash";
-/** Small careful jobs that may read a picture (safety checks, caption edits). */
-export const CAREFUL = "anthropic/claude-haiku-5.5";
 export const LUNA = "openai/gpt-6-luna";
-export const ECONOMY = "google/gemini-3.1-flash-lite";
 
 /**
  * Open-weight models are served by many hosts, some of them 4-bit copies that
@@ -52,37 +72,48 @@ export function isOpenWeightModel(model: string): boolean {
   return /^(deepseek|z-ai|qwen|moonshotai|minimax|xiaomi|meta-llama|mistralai)\//.test(model);
 }
 
-/** What each tier falls back to when its providers fail (OpenRouter `models`). */
+/**
+ * Models that accept `reasoning.effort: "none"` (checked live on OpenRouter,
+ * 2026-11-12). Gemini 3.8 Flash, GLM-5.3 Flash and MiniMax M3.1 Flash answer
+ * 400 "Reasoning is mandatory"; Opus rejects disabled thinking.
+ */
+export function canTurnReasoningOff(model: string): boolean {
+  return /^(deepseek\/|anthropic\/claude-haiku-|openai\/gpt-6-luna)/.test(model);
+}
+
+/**
+ * What each tier falls back to when its providers fail (OpenRouter `models`).
+ * Keyed by model id: WRITER, SUMMARY, CAREFUL and ECONOMY are one model.
+ */
 const FALLBACKS: Record<string, string[]> = {
   [PREMIUM]: [WORKHORSE],
   [ANALYST]: [WORKHORSE],
   [CONVERSATION]: [WORKHORSE],
-  [SUMMARY]: [WORKHORSE],
   // A fallback should not cost more than the model it stands in for.
-  [WORKHORSE]: [SUMMARY],
-  [BUDGET]: [WORKHORSE],
-  [LABELLER]: [ECONOMY],
-  [CAREFUL]: [ECONOMY],
-  [LUNA]: [ECONOMY],
-  [ECONOMY]: [LUNA],
+  [WRITER]: [LUNA],
+  [WORKHORSE]: [WRITER],
+  [BUDGET]: [WRITER],
+  [LABELLER]: [LUNA],
+  [LUNA]: [WRITER],
 };
 
 /** Past a workspace's spend ceiling each tier steps down one. */
 const DEGRADE_TO: Record<string, string> = {
-  [PREMIUM]: WORKHORSE,
-  [ANALYST]: WORKHORSE,
-  [CONVERSATION]: WORKHORSE,
-  [SUMMARY]: WORKHORSE,
-  [WORKHORSE]: ECONOMY,
-  [BUDGET]: ECONOMY,
+  [PREMIUM]: WRITER,
+  [ANALYST]: WRITER,
+  [CONVERSATION]: WRITER,
+  // Already the cheapest that does the work: only the effort steps down.
+  [WRITER]: WRITER,
+  // Pictures and sound need it (nothing cheaper hears audio).
+  [WORKHORSE]: WORKHORSE,
+  [BUDGET]: BUDGET,
   [LABELLER]: LABELLER,
-  [CAREFUL]: ECONOMY,
   [LUNA]: LUNA,
-  [ECONOMY]: ECONOMY,
 };
 
-export type Effort = "low" | "medium" | "high";
-const EFFORTS: readonly Effort[] = ["low", "medium", "high"];
+/** "none" turns reasoning off where every model in the plan allows it (`canTurnReasoningOff`). */
+export type Effort = "none" | "low" | "medium" | "high";
+const EFFORTS: readonly Effort[] = ["none", "low", "medium", "high"];
 
 export type TaskPlan = {
   /** [primary, ...fallbacks], sent as OpenRouter `models`. */
@@ -92,6 +123,12 @@ export type TaskPlan = {
   /** Output ceiling; must cover reasoning + the answer. */
   maxTokens?: number;
   temperature?: number;
+  /**
+   * How long one call may take when the caller sets no limit. Long designed
+   * output (code, motion graphics, storyboards) on a reasoning model can run
+   * past the gateway's 60 s default.
+   */
+  timeoutMs?: number;
   /** A documented rule the caller applies through `escalatedPlan`. */
   escalate?: { when: string; models: string[]; effort?: Effort };
   /** Used once the workspace is past its spend ceiling. */
@@ -131,80 +168,96 @@ const REGISTRY: Record<string, TaskPlan> = {
   "brand-extract.search": tier(ECONOMY, "low"),
   "brand-visuals.analyze": tier(ANALYST, "medium", { maxTokens: 6_000 }),
 
-  "memory-extract": tier(WORKHORSE, "low"),
+  "memory-extract": tier(WRITER, "low"),
   "file-extract": tier(ECONOMY, "low", {
     escalate: toTier("the first read came back thin (THIN_TEXT_CHARS)", WORKHORSE, "low"),
   }),
 
   // Chat: "mellox-flash" is `chat`, "mellox-pro" is `chat.pro`.
-  chat: tier(WORKHORSE, "low", { maxTokens: 6_000 }),
-  "chat.pro": tier(CONVERSATION, "low", {
-    maxTokens: 8_000,
-    escalate: {
-      when: "chat-intent classifies the turn as strategy/analysis",
-      models: withFallbacks(PREMIUM),
-      effort: "medium",
-    },
-  }),
-  "chat.research": tier(WORKHORSE, "medium"),
+  chat: tier(WRITER, "low", { maxTokens: 6_000 }),
+  // No escalation: every Pro turn is Sonnet (Mellox Lean). The old rule sent
+  // turns a heuristic called "strategy" to Opus.
+  "chat.pro": tier(CONVERSATION, "low", { maxTokens: 8_000 }),
+  "chat.research": tier(WRITER, "medium"),
   "chat.history-summary": tier(LUNA, "low"),
   // tool_choice is always "auto" (Opus rejects forced tools; see the gateway).
-  clarify: tier(WORKHORSE, "low"),
+  clarify: tier(WRITER, "low"),
 
   // Content generation.
-  "content.regenerate": tier(WORKHORSE, "medium"),
-  "content.generateBatch": tier(WORKHORSE, "medium"),
-  "content.generateNextPost": tier(WORKHORSE, "medium"),
-  "content.planCalendar": tier(WORKHORSE, "medium"),
-  "social.multi": tier(WORKHORSE, "medium"),
-  "ai-generate": tier(WORKHORSE, "medium", {
+  "content.regenerate": tier(WRITER, "medium"),
+  "content.generateBatch": tier(WRITER, "medium"),
+  "content.generateNextPost": tier(WRITER, "medium"),
+  "content.planCalendar": tier(WRITER, "medium"),
+  "social.multi": tier(WRITER, "medium"),
+  "ai-generate": tier(WRITER, "medium", {
     escalate: toTier("long-form output over ~1,500 words", PREMIUM, "medium"),
   }),
-  "ai-generate.*": tier(WORKHORSE, "medium", {
+  "ai-generate.*": tier(WRITER, "medium", {
     escalate: toTier("long-form output over ~1,500 words", PREMIUM, "medium"),
   }),
 
   // Studio. Articles go live on customer sites and must pass the GEO gate.
-  "studio.article": tier(PREMIUM, "medium"),
-  "studio.article.standard": tier(WORKHORSE, "medium", { maxTokens: 9000 }),
-  "studio.social": tier(WORKHORSE, "medium"),
-  "studio.carousel": tier(WORKHORSE, "medium"),
-  "studio.story": tier(WORKHORSE, "medium"),
-  "studio.script": tier(WORKHORSE, "medium"),
-  "studio.ad": tier(WORKHORSE, "medium"),
-  "studio.upload-captions": tier(WORKHORSE, "medium"),
-  "studio.captions": tier(WORKHORSE, "medium"),
+  "studio.article": tier(PREMIUM, "medium", { timeoutMs: 240_000 }),
+  "studio.article.standard": tier(WRITER, "medium", { maxTokens: 9000 }),
+  // The high-volume Studio writers think briefly (Mellox Lean): reasoning is
+  // billed as output, and the structured schema, shapeOutput and grounding
+  // checks catch a bad answer. Scripts and articles keep medium.
+  "studio.social": tier(WRITER, "low"),
+  // The director (ADR-0051 round 3): the carousel's look and every slide's
+  // image prompt. A side-by-side test showed the planner is what makes a
+  // picture native or a template, so it runs on the stronger writer.
+  "studio.carousel": tier(CONVERSATION, "low", { maxTokens: 6_000 }),
+  "studio.story": tier(WRITER, "low"),
+  "studio.script": tier(WRITER, "medium"),
+  // Ads weigh three ideas before writing the winner (ADR-0052).
+  "studio.ad": tier(WRITER, "medium"),
+  "studio.upload-captions": tier(WRITER, "medium"),
+  "studio.captions": tier(WRITER, "low"),
   "studio.caption.edit": tier(CAREFUL, "low", { maxTokens: 1800 }),
-  "studio.naturalize": tier(WORKHORSE, "low"),
+  "studio.naturalize": tier(WRITER, "low"),
   // Reads the brand's own photos (faces, calm areas, colours) before a design.
   "studio.photo-read": tier(WORKHORSE, "low", { maxTokens: 2400 }),
-  "studio.hero.concept": tier(WORKHORSE, "low", { maxTokens: 1500, temperature: 0.9 }),
+  // A product poster's own idea and headline (ADR-0052: the idea is what makes it).
+  "studio.hero.concept": tier(CONVERSATION, "low", { maxTokens: 1500, temperature: 0.9 }),
   // Hears a branded clip's sound for its captions (Gemini Flash takes audio).
   // Not used when a local whisper.cpp is configured.
   "studio.transcribe": tier(WORKHORSE, "low", { maxTokens: 6000, temperature: 0 }),
-  "studio.ideas": tier(BUDGET, "low", { temperature: 0.9 }),
-  "studio.prompt": tier(BUDGET, "low"),
-  "studio.research": tier(WORKHORSE, "medium"),
-  "studio.trends": tier(WORKHORSE, "low"),
-  // The visual brief a picture or video is made from (buildVisualBriefPrompt).
-  "studio.image.brief": tier(WORKHORSE, "medium"),
-  "studio.video.brief": tier(WORKHORSE, "medium"),
+  // The idea is the most important creative step (ADR-0052): ideas and
+  // Surprise me moved off the budget model. Haiku turns reasoning off for
+  // the deck (many short ideas); Surprise me thinks a little first.
+  "studio.ideas": tier(WRITER, "none", { temperature: 0.9 }),
+  "studio.prompt": tier(WRITER, "low"),
+  "studio.research": tier(WRITER, "medium"),
+  "studio.trends": tier(WRITER, "low"),
+  // The director (ADR-0051 round 3): a picture post's words and its whole image
+  // prompt, in one call on the stronger writer. Videos keep the writer.
+  // ADR-0052: three concepts, a score and the winner's prompt in one call.
+  "studio.image.brief": tier(CONVERSATION, "low", { maxTokens: 5_000 }),
+  "studio.video.brief": tier(WRITER, "low"),
+  // The stronger writer, only where it pays off (ADR-0051): a draft whose
+  // words drifted from the brief (brief-fit.ts), a carousel of 7+ slides, and
+  // the rewritten prompt for a picture that failed review. Haiku does the rest.
+  "studio.plan.escalate": tier(CONVERSATION, "low", { maxTokens: 4_000 }),
+  // A meme's concept (buildMemeConceptPrompt): three ideas, a critique and the
+  // pick, on a real template or an original scene. Humour needs the stronger
+  // writer; it replaces the image brief for memes, it never adds a call.
+  "studio.meme.concept": tier(CONVERSATION, "low", { maxTokens: 2_500 }),
   // A new AI video's storyboard (buildVideoStoryboardPrompt): one text call,
   // and where a video's story and consistency are won, so the premium tier.
-  "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000 }),
+  "studio.video.storyboard": tier(PREMIUM, "medium", { maxTokens: 6_000, timeoutMs: 240_000 }),
   // A motion graphic's whole HTML/SVG + CSS document (src/lib/studio/motion/);
   // code checks it and draws it, so one careful call is the whole design.
-  "studio.motion.compose": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
+  "studio.motion.compose": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 300_000 }),
   // Scores a finished video's sampled frames; code decides (src/lib/studio/video/checks.ts).
   "studio.video.qa": tier(WORKHORSE, "low", { maxTokens: 1_200 }),
-  "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 350 }),
+  "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "campaign-generation": tier(ANALYST, "low"),
   // Campaigns (ADR-0039): the words for a laid-out campaign, and the brief
   // the designer's "Write it for me" fills in.
   "campaign.plan": tier(ANALYST, "medium", { maxTokens: 12_000 }),
   "campaign.write": tier(CAREFUL, "low"),
-  "schedule.*": tier(WORKHORSE, "medium"),
+  "schedule.*": tier(WRITER, "medium"),
 
   // Marketing Coach and Market Brain.
   coach: tier(CONVERSATION, "low", {
@@ -222,9 +275,9 @@ const REGISTRY: Record<string, TaskPlan> = {
       effort: "high",
     },
   }),
-  "coach.research": tier(WORKHORSE, "low"),
-  "coach.trends": tier(WORKHORSE, "low"),
-  "market-intelligence": tier(WORKHORSE, "medium", { maxTokens: 10_000 }),
+  "coach.research": tier(WRITER, "low"),
+  "coach.trends": tier(WRITER, "low"),
+  "market-intelligence": tier(WRITER, "medium", { maxTokens: 10_000 }),
 
   "analytics/insights": tier(BUDGET, "medium"),
   "analytics/insights-auto": tier(BUDGET, "low"),
@@ -237,11 +290,11 @@ const REGISTRY: Record<string, TaskPlan> = {
   "competitors.updates": tier(LABELLER, "low"),
   // Community Intelligence: label and summarise supplied threads; draft one reply.
   "community.classify": tier(LABELLER, "low", { maxTokens: 4_000 }),
-  "community.reply": tier(WORKHORSE, "low", { maxTokens: 2_000 }),
+  "community.reply": tier(WRITER, "low", { maxTokens: 2_000 }),
   // Autopilot: a week's plan over fixed slots, and a relevance read of
   // signals that were already collected.
-  "autopilot.plan": tier(WORKHORSE, "medium"),
-  "autopilot.strategy": tier(WORKHORSE, "low"),
+  "autopilot.plan": tier(WRITER, "medium"),
+  "autopilot.strategy": tier(WRITER, "low"),
   // The workspace marketing strategy, written from all four brains (ADR-0032).
   "strategy.generate": tier(ANALYST, "medium", { maxTokens: 12_000 }),
   "autopilot.opportunities": tier(LABELLER, "low"),
@@ -252,15 +305,15 @@ const REGISTRY: Record<string, TaskPlan> = {
   "audience.twins": tier(ANALYST, "low", { maxTokens: 6_000 }),
   "audience.score": tier(ECONOMY, "low", { maxTokens: 1_200 }),
   "audience.react": tier(ECONOMY, "low", { maxTokens: 2_400, temperature: 0.8 }),
-  "audience.synthesize": tier(WORKHORSE, "low", { maxTokens: 2_400 }),
-  "audience.variants": tier(WORKHORSE, "medium", { maxTokens: 3_000, temperature: 0.9 }),
+  "audience.synthesize": tier(WRITER, "low", { maxTokens: 2_400 }),
+  "audience.variants": tier(WRITER, "medium", { maxTokens: 3_000, temperature: 0.9 }),
 
   // GEO. Probes mirror real answer engines: each model in GEO_PROBE_MODELS is
   // asked separately (see geoProbeModels), never as a fallback chain.
   "geo.probe": { models: ["perplexity/sonar"] },
-  "geo.fix.propose": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
-  "geo.fix.batch": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
-  "geo.cms.fix": tier(WORKHORSE, "medium", {
+  "geo.fix.propose": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 240_000 }),
+  "geo.fix.batch": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 240_000 }),
+  "geo.cms.fix": tier(WRITER, "medium", {
     escalate: toTier("validation or grounding rejected the first output", PREMIUM, "medium"),
   }),
   // The GEO Engineer's stages keep their existing efforts.
@@ -274,18 +327,20 @@ const REGISTRY: Record<string, TaskPlan> = {
 
   // Proof Engine.
   "experiments.hypotheses": tier(SUMMARY, "low"),
-  "experiments.values": tier(WORKHORSE, "medium"),
-  "experiments.integration": tier(PREMIUM, "medium", { maxTokens: 16_000 }),
+  "experiments.values": tier(WRITER, "medium"),
+  "experiments.integration": tier(PREMIUM, "medium", { maxTokens: 16_000, timeoutMs: 240_000 }),
 
   // Backlink Growth.
   "links-topical-fit": tier(LABELLER, "low"),
   "links-relevance-pick": tier(BUDGET, "low"),
   "links-profile": tier(BUDGET, "low"),
-  "links-article-brief": tier(WORKHORSE, "medium"),
+  "links-article-brief": tier(WRITER, "medium"),
 
   // UGC video ads.
   "ugc.product.extract": tier(BUDGET, "low"),
-  "ugc.concepts": tier(WORKHORSE, "medium"),
+  // Story, comedy timing and natural speech are the product here (ADR-0046):
+  // Sonnet writes Creator video scripts. AI_MODEL_UGC_CONCEPTS rolls it back.
+  "ugc.concepts": tier(CONVERSATION, "medium", { maxTokens: 10_000 }),
   "ugc.notes": tier(BUDGET, "low"),
 
   // Safety review: the economy read clears ordinary media; anything it would
@@ -316,12 +371,31 @@ export const NON_MODEL_ROUTES: readonly string[] = [
   "audience.run",
   "ugc/renders:create",
   "ugc/projects:concepts",
+  "ugc/projects:storyboard",
+  "ugc/creators:create",
   "market/trends",
   "generate-image",
   "studio/jobs:advance",
   "video",
   "studio.video.voice",
   "studio.video.music",
+  // Image and video spend labels (ImageMeterRoute, studio.video.clip): metered
+  // per picture or clip, never a text model call.
+  "studio.image.render",
+  "studio.image.rerender",
+  "studio.image.version",
+  "studio.image.backdrop",
+  "studio.image.slide",
+  "studio.image.edit",
+  "studio.image.cutout",
+  "studio.image.design",
+  "studio.image.storyboard",
+  "studio.image.reframe",
+  "studio.video.clip",
+  // The local open-source sidecar (src/server/local-ai): $0, never a model plan.
+  "studio.image.ocr",
+  "studio.image.aesthetic",
+  "guardrails.local-safety",
   // Prefixes of labels built at runtime.
   "cron.*",
   "agent.*",
@@ -469,7 +543,7 @@ export function geoProbeModels(): string[] {
 
 /** Every model the registry uses, which is all an admin override may choose from. */
 export function knownModels(): Set<string> {
-  const out = new Set<string>([PREMIUM, WORKHORSE, ECONOMY, ...Object.keys(FALLBACKS)]);
+  const out = new Set<string>([PREMIUM, OPUS, WORKHORSE, ECONOMY, ...Object.keys(FALLBACKS)]);
   for (const list of Object.values(FALLBACKS)) for (const model of list) out.add(model);
   for (const plan of Object.values(REGISTRY)) {
     for (const model of plan.models) out.add(model);

@@ -1,7 +1,8 @@
 // Checks a finished Studio video before anyone sees it. Pure and
 // browser-safe: the server measures the file (FFmpeg) and asks a vision model
-// to score sampled frames; this module alone decides what passes, which clips
-// are made again, and when a video is not delivered at all.
+// to score sampled frames; this module decides what needs a free repair and
+// which file-level defects cannot be delivered at all. A safety-cleared video
+// with only an unresolved visual concern is delivered with a review warning.
 //
 // The rule: a bad clip is never shown as finished. One round of re-making is
 // on Mellox; a video that still fails ends plainly and costs the person nothing.
@@ -81,7 +82,11 @@ export function qaFrameTimes(plan: ClipPlan): { time: number; clip: number; labe
   return out;
 }
 
-const score = z.coerce.number().min(0).max(10).catch(5);
+// A malformed individual score is a checker outage, not evidence that the
+// clip is bad. `checkStudioVideo` already fails open when the whole review is
+// unavailable; keep the same rule for one bad field so a flaky judge cannot
+// discard an otherwise usable render.
+const score = z.coerce.number().min(0).max(10).catch(10);
 
 /** What the judge returns; it only scores, code decides. */
 export const VideoJudgeSchema = z.object({
@@ -92,6 +97,8 @@ export const VideoJudgeSchema = z.object({
         sameSubject: score,
         clean: score,
         followsPlan: score,
+        /** Fills the frame: no bars, borders, picture-in-picture or stuck corner badge. */
+        framing: score.optional(),
         problem: z.string().max(240).catch(""),
       }),
     )
@@ -102,6 +109,32 @@ export const VideoJudgeSchema = z.object({
 });
 
 export type VideoJudge = z.infer<typeof VideoJudgeSchema>;
+
+/**
+ * Provider audio is required only when Mellox has no completed soundtrack to
+ * lay under the picture. Video models occasionally return a valid silent
+ * clip; rejecting it before the ready voice or music is mixed turns a
+ * recoverable audio gap into a full video-generation failure.
+ */
+export function requiresSourceAudio(opts: {
+  requested: boolean;
+  soundtrackAvailable: boolean;
+}): boolean {
+  return opts.requested && !opts.soundtrackAvailable;
+}
+
+/**
+ * A completed, safety-cleared video can be delivered with a review warning
+ * when only the visual judge remains unhappy after its bounded repair. Broken
+ * media (duration, dead frames, resolution or required audio) is never
+ * treated as a usable result.
+ */
+export function canDeliverWithVisualWarning(
+  failures: readonly ClipFailure[],
+  technicalFailures: readonly ClipFailure[],
+): boolean {
+  return failures.length > 0 && technicalFailures.length === 0;
+}
 
 /** Which clips the judge's scores fail, with the reason in plain words. */
 export function visualFailures(
@@ -118,6 +151,11 @@ export function visualFailures(
       out.push({ clip, reason: `The person, product or place changes in this clip.${problem}` });
     else if (row.clean < PASS_SCORE)
       out.push({ clip, reason: `Something looks wrong (warped, melting or garbled).${problem}` });
+    else if ((row.framing ?? 10) < PASS_SCORE)
+      out.push({
+        clip,
+        reason: `The picture doesn't fill the frame cleanly (bars, borders, a picture inside a picture or a stuck corner badge).${problem}`,
+      });
     else if (row.followsPlan < PASS_SCORE - 2)
       out.push({ clip, reason: `The clip doesn't show what was planned.${problem}` });
   }
@@ -129,6 +167,18 @@ export function visualFailures(
   if (kind === "living-picture" && (judge.sourceFaithful ?? 10) < PASS_SCORE)
     out.push({ clip: 0, reason: "The post's picture, words or product changed." });
   return out;
+}
+
+/** Said when the measured frames sit on bars (see `letterboxedVideo`). */
+export const LETTERBOX_REASON =
+  "The video sits on blurred bars instead of filling the frame. Fill the whole frame edge to edge.";
+
+/**
+ * The measured framing check: a video whose frames sit on bars fails its
+ * first clip (where the bars come from), so the redo starts there.
+ */
+export function framingFailures(letterboxed: boolean): ClipFailure[] {
+  return letterboxed ? [{ clip: 0, reason: LETTERBOX_REASON }] : [];
 }
 
 export type RedoPlan = { clips: number[]; notes: Record<number, string> } | null;

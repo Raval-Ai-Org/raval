@@ -4,6 +4,7 @@
 // kernel verified membership and role; project rows go through the caller's
 // RLS client, render rows and reservations through the worker store.
 import "server-only";
+import { HOOK_TEXT_PRESET_IDS } from "@/lib/ugc/hook-text";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -23,6 +24,15 @@ import { buildModelPrompt } from "@/lib/ugc/prompt-adapters";
 import { styleBlockFor, ugcStyleNotes } from "@/lib/brand-look/prompt";
 import { loadBrandLook } from "@/server/brand-look/resolve.server";
 import { routeVideo } from "@/lib/ugc/router";
+import { stockCreator } from "@/lib/ugc/creators";
+import {
+  creatorFormatSettings,
+  formatForRender,
+  pickPartner,
+  type FormatVariant,
+} from "@/lib/ugc/formats";
+import { log } from "@/server/observability/logger";
+import { stockCreatorAsset } from "./creator-photo.server";
 import {
   ACTIVE_RENDER_STATUSES,
   BriefSchema,
@@ -30,6 +40,7 @@ import {
   ProductSchema,
   ScriptSchema,
   type AllowanceView,
+  type Brief,
   type Concept,
   type ProjectSummary,
   type ProjectView,
@@ -58,16 +69,21 @@ import {
 import { routedVideoProvider } from "./providers/routed.server";
 import type { RenderRow } from "./store";
 import { RENDER_COLS, supabaseUgcStore } from "./store.supabase.server";
+import { signRenderRef } from "./webhook.server";
 
 const WORKER = `ugc-${process.pid}-${randomUUID().slice(0, 8)}`;
 const RESERVATION_TTL_SECONDS = 2 * 60 * 60;
 
 /** Kie callbacks only reach a public HTTPS app with a signing key configured. */
-export function kieCallbackUrl(): string | undefined {
-  if (!process.env.KIE_WEBHOOK_HMAC_KEY?.trim()) return undefined;
+export function kieCallbackUrl(renderId?: string): string | undefined {
+  const key = process.env.KIE_WEBHOOK_HMAC_KEY?.trim();
+  if (!key) return undefined;
   const app = getAppUrl();
   if (!/^https:\/\//i.test(app) || /localhost|127\.0\.0\.1/i.test(app)) return undefined;
-  return `${app}/api/public/hooks/kie`;
+  const url = `${app}/api/public/hooks/kie`;
+  // Naming the render lets a task whose create call timed out be found by its
+  // callback instead of being paid for twice (engine `adopt`).
+  return renderId ? `${url}?render=${renderId}&ref=${signRenderRef(renderId, key)}` : url;
 }
 
 export const renderEngine = createRenderEngine({
@@ -100,8 +116,28 @@ export const renderEngine = createRenderEngine({
   },
   store: supabaseUgcStore,
   provider: routedVideoProvider,
-  callbackUrl: kieCallbackUrl,
+  callbackUrl: (row) => kieCallbackUrl(row.id),
   onTerminal: settleUgcBilling,
+  // Reels-style hook text (src/lib/ugc/hook-text.ts), drawn by code on the finished video.
+  drawHookText: async (video, cues, row) => {
+    let dataUrl = video.dataUrl;
+    if (!dataUrl) {
+      const { safeFetch } = await import("@/server/safe-fetch");
+      const response = await safeFetch(video.videoUrl, {
+        timeoutMs: 30_000,
+        maxBytes: 120 * 1024 * 1024,
+        onOverflow: "error",
+      });
+      if (!response.ok) return null;
+      dataUrl = `data:video/mp4;base64,${Buffer.from(response.bytes).toString("base64")}`;
+    }
+    const { overlayHookText } = await import("@/server/studio/video/finish.server");
+    const accent = (row.settings.hookText as { accent?: unknown } | undefined)?.accent;
+    return overlayHookText(dataUrl, cues, {
+      font: "Montserrat",
+      ...(typeof accent === "string" ? { accent } : {}),
+    });
+  },
 });
 
 /** Advance one render right after the response is sent (Vercel/Node after()). */
@@ -162,6 +198,13 @@ const BRAND_FIELDS = [
   "websiteUrl",
 ] as const;
 
+const CUSTOMER_FIELDS = [
+  ["painPoints", "customerPainPoints"],
+  ["objections", "customerObjections"],
+  ["buyingTriggers", "customerBuyingTriggers"],
+  ["jobsToBeDone", "customerJobsToBeDone"],
+] as const;
+
 /** Keep only the Brand DNA fields the ad engine uses, size-capped. */
 export function brandSnapshot(brand: Record<string, unknown> | undefined): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -170,6 +213,15 @@ export function brandSnapshot(brand: Record<string, unknown> | undefined): Recor
     const v = brand[key];
     if (typeof v === "string" && v.trim()) out[key] = v.trim().slice(0, 1200);
     else if (Array.isArray(v)) out[key] = v.filter((x) => typeof x === "string").slice(0, 10);
+  }
+  // The customer's own words (Brand DNA's customer block): what hurts, what
+  // holds them back and what makes them buy are what a creator video is built on.
+  const customer = brand.customer;
+  if (customer && typeof customer === "object" && !Array.isArray(customer)) {
+    for (const [field, key] of CUSTOMER_FIELDS) {
+      const v = (customer as Record<string, unknown>)[field];
+      if (typeof v === "string" && v.trim()) out[key] = v.trim().slice(0, 600);
+    }
   }
   return out;
 }
@@ -296,19 +348,38 @@ async function workspaceBrand(db: UserSupabaseClient, workspaceId: string) {
   return brandSnapshot(stored?.dna);
 }
 
+/**
+ * The plan a Creator video follows, the same blocks every Studio piece gets
+ * (`loadStudioContext`): the confirmed strategy, running campaigns, the goal
+ * and the audience groups, all by the verified workspace id. Each part fails
+ * open to "" so a missing brain never stops a script.
+ */
+async function creatorPlanText(workspaceId: string): Promise<string> {
+  const safe = (p: Promise<string>) => p.catch(() => "");
+  const parts = await Promise.all([
+    safe(import("@/server/strategy/context.server").then((m) => m.strategyBlockFor(workspaceId))),
+    safe(import("@/server/campaigns/context.server").then((m) => m.campaignBlockFor(workspaceId))),
+    safe(import("@/server/goals/context.server").then((m) => m.goalBlockFor(workspaceId))),
+    safe(import("@/server/audience/context.server").then((m) => m.audienceBlockFor(workspaceId))),
+  ]);
+  return parts.filter((t) => t.trim()).join("\n\n");
+}
+
 export async function projectContext(db: UserSupabaseClient, workspaceId: string, id: string) {
   const row = await loadProjectRow(db, workspaceId, id);
   const brief = BriefSchema.parse(row.brief ?? {});
-  const [{ data: ws }, brand, style, memoryText] = await Promise.all([
+  const [{ data: ws }, brand, style, memoryText, planText] = await Promise.all([
     db.from("workspaces").select("industry, audience").eq("id", workspaceId).maybeSingle(),
     workspaceBrand(db, workspaceId),
     projectLook(workspaceId),
     // What the team told Mellox to remember (ADR-0033). "" when off or unset.
     import("@/server/memory/context.server").then((m) => m.memoryBlockFor(workspaceId, "text")),
+    creatorPlanText(workspaceId),
   ]);
   return {
     row,
     memoryText,
+    planText,
     product: ProductSchema.parse(row.product ?? {}),
     brief,
     style,
@@ -323,6 +394,47 @@ export async function projectContext(db: UserSupabaseClient, workspaceId: string
 }
 
 /**
+ * What this brand's Creator videos used lately (with the caller's own client):
+ * openings not to repeat, and per format the variants to rotate past. Never
+ * throws; a failed read just means nothing to avoid.
+ */
+export async function recentCreatorWork(
+  db: UserSupabaseClient,
+  workspaceId: string,
+): Promise<{ hooks: string[]; variants: Record<string, FormatVariant[]> }> {
+  const out = { hooks: [] as string[], variants: {} as Record<string, FormatVariant[]> };
+  try {
+    const { data } = await db
+      .from("ugc_projects")
+      .select("script, concepts")
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false })
+      .limit(15);
+    for (const row of (data ?? []) as Array<{ script: unknown; concepts: unknown }>) {
+      const scripts = [
+        row.script,
+        ...(Array.isArray(row.concepts)
+          ? row.concepts.map((c) => (c as { script?: unknown })?.script)
+          : []),
+      ];
+      for (const raw of scripts) {
+        const parsed = ScriptSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const s = parsed.data;
+        if (s.hook && !out.hooks.includes(s.hook)) out.hooks.push(s.hook);
+        if (s.format && s.variant) (out.variants[s.format] ??= []).push(s.variant);
+      }
+    }
+  } catch (error) {
+    log.warn("ugc.recent_work.unavailable", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+  out.hooks = out.hooks.slice(0, 20);
+  return out;
+}
+
+/**
  * The brand's look for a UGC project (by the verified workspace id). Never
  * throws — no look just means Brand DNA only.
  */
@@ -332,6 +444,62 @@ async function projectLook(workspaceId: string) {
     return loaded.look.customized ? loaded : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * A brief with no creator picked follows the brand's own creator
+ * (`look.video.creator`, Inspo / the creator picker). Never throws.
+ */
+async function withBrandCreator(workspaceId: string, brief: Brief): Promise<Brief> {
+  brief = await withBrandHookText(workspaceId, brief);
+  if (brief.creator.characterId || brief.creator.personAssetId) return brief;
+  try {
+    const chosen = (await loadBrandLook(workspaceId)).look.video.creator;
+    if (chosen?.id && stockCreator(chosen.id)) {
+      const stock = stockCreator(chosen.id)!;
+      return {
+        ...brief,
+        creator: {
+          ...brief.creator,
+          characterId: stock.id,
+          gender: stock.gender,
+          age: stock.age,
+          vibe: stock.vibe,
+        },
+      };
+    }
+    if (chosen?.personAssetId)
+      return { ...brief, creator: { ...brief.creator, personAssetId: chosen.personAssetId } };
+  } catch {
+    // No look: the brief's own creator settings stand.
+  }
+  return brief;
+}
+
+/**
+ * The brand's hook words (Inspo → Video look): a brief with no preset of its
+ * own uses the brand's, and the brand can switch hook words off. A person's
+ * choice in the composer always stands. Never throws.
+ */
+async function withBrandHookText(workspaceId: string, brief: Brief): Promise<Brief> {
+  if (brief.hookText.preset) return brief;
+  try {
+    const hook = (await loadBrandLook(workspaceId)).look.video.hookText;
+    const preset = (HOOK_TEXT_PRESET_IDS as readonly string[]).includes(hook?.preset ?? "")
+      ? (hook!.preset as Brief["hookText"]["preset"])
+      : undefined;
+    if (!preset && hook?.on !== false) return brief;
+    return {
+      ...brief,
+      hookText: {
+        ...brief.hookText,
+        ...(preset ? { preset } : {}),
+        ...(hook?.on === false ? { enabled: false } : {}),
+      },
+    };
+  } catch {
+    return brief;
   }
 }
 
@@ -595,7 +763,23 @@ export async function startRender(
   const ctx = await projectContext(db, input.workspaceId, input.projectId);
   if (!ctx.script)
     throw new HttpError(400, "Choose a concept and finish the script before generating.");
-  const refs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
+  const brief = await withBrandCreator(input.workspaceId, ctx.brief);
+  const productRefs = await ownedImageAssetIds(input.workspaceId, input.referenceAssetIds);
+  // One of the brand's own people as the creator: re-checked against this workspace.
+  // A ready-made creator with a photo sends that photo, so every video shows the same face.
+  const person = brief.creator.personAssetId
+    ? ((await ownedImageAssetIds(input.workspaceId, [brief.creator.personAssetId]))[0] ?? null)
+    : brief.creator.characterId
+      ? await stockCreatorAsset(input.workspaceId, brief.creator.characterId)
+      : null;
+  // A library format (ADR-0046). Its second person is the one picked, else a
+  // ready-made creator code picks to contrast with the lead, seeded by the project.
+  const format = formatForRender(brief, ctx.script);
+  const partnerId =
+    format?.roles.length === 2
+      ? (brief.creator.partnerId ?? pickPartner(brief.creator.characterId, input.projectId).id)
+      : undefined;
+  const partner = partnerId ? await stockCreatorAsset(input.workspaceId, partnerId) : null;
   const requestedModel = isUgcModelKey(input.model) ? input.model : "auto";
   const entitlements = await getEntitlements({
     workspaceId: input.workspaceId,
@@ -621,11 +805,11 @@ export async function startRender(
   const route = routeVideo(
     {
       product: ctx.product,
-      brief: ctx.brief,
+      brief,
       script: ctx.script,
-      platform: ctx.brief.platform,
+      platform: brief.platform,
       durationSec: input.durationSec,
-      referenceCount: refs.length,
+      referenceCount: productRefs.length + (person ? 1 : 0) + (partner ? 1 : 0),
       brand: ctx.brand,
       requestedModel,
     },
@@ -635,6 +819,15 @@ export async function startRender(
     throw new HttpError(400, "No suitable video model is available.");
   // Validated against the provider that will run it (VIDEO_PROVIDER).
   const model = activeModel(route.model);
+  // The person photo goes first, only to a model that takes several references;
+  // a first-frame model opens on the product and the creator is described instead.
+  const withPerson = !!person && model.images?.mode === "references" && model.images.max >= 2;
+  // The second person's photo comes right after the first, on a model with room for both.
+  const withPartner = withPerson && !!partner && partner !== person && model.images!.max >= 3;
+  const people = [person, ...(withPartner ? [partner] : [])].filter((id): id is string => !!id);
+  const refs = withPerson
+    ? [...people, ...productRefs.filter((id) => !people.includes(id))]
+    : productRefs.filter((id) => id !== person);
   const imageCount = usableImageCount(model, refs.length);
   const settings = {
     model: model.key,
@@ -685,7 +878,7 @@ export async function startRender(
     typeof ctx.brand.voice === "string" && ctx.brand.voice.trim() ? ctx.brand.voice : undefined;
   const prompt = buildModelPrompt({
     product: ctx.product,
-    brief: ctx.brief,
+    brief,
     script: ctx.script,
     model,
     durationSec: settings.durationSec,
@@ -693,6 +886,18 @@ export async function startRender(
     imageCount,
     brandVoice,
     styleNotes: ctx.styleNotes || undefined,
+    creatorImage: withPerson,
+    partnerImage: withPartner,
+    partnerId,
+    seed: input.projectId,
+  });
+  const formatSettings = creatorFormatSettings({
+    brief,
+    script: ctx.script,
+    format,
+    durationSec: settings.durationSec,
+    seed: input.projectId,
+    accent: ctx.style?.look.visual.palette.accent ?? ctx.style?.look.visual.palette.primary,
   });
 
   let inserted;
@@ -725,6 +930,7 @@ export async function startRender(
         estCredits: estimate.credits,
         videoUnits: estimate.units,
         routing: { reason: route.reason, signals: route.signals, strategy: route.strategy },
+        ...formatSettings,
       },
       prompt,
       reservation_id: reservation.id,
@@ -906,4 +1112,172 @@ export async function getAllowance(workspaceId: string): Promise<AllowanceView> 
 
 export function modelCatalog() {
   return { models: enabledModels(), defaultModel: defaultModelKey() };
+}
+
+/* ── Storyboard before a Creator video (src/lib/studio/video/board.ts) ── */
+
+const STORYBOARD_SOURCE = "ugc-storyboard";
+
+export type CreatorStoryboardView = {
+  key: string;
+  /** Drawn frames by slot (`board:0`…), signed for an hour. */
+  frames: Record<string, string>;
+  /** True when these frames were drawn before and nothing was charged. */
+  reused: boolean;
+};
+
+function creatorFramePrompt(args: {
+  scene: import("@/lib/studio/video/board").BoardScene;
+  creatorLook: string;
+  productName: string;
+  setting: string;
+}): string {
+  return [
+    `A single frame of real phone footage for a short creator video, scene ${args.scene.number}: ${args.scene.action}`,
+    args.scene.camera ? `Camera: ${args.scene.camera}.` : "",
+    args.creatorLook ? `The creator: ${args.creatorLook}. The same person in every frame.` : "",
+    args.productName
+      ? `The product, ${args.productName}, exactly as in the product reference.`
+      : "",
+    args.setting && args.setting !== "auto" ? `Place: ${args.setting}.` : "",
+    "Natural light, handheld vertical phone video, real and unpolished, not an advertisement. No words, captions, logos, subtitles or interface.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Frames already drawn for exactly this script (no charge to show them again). */
+async function storedCreatorFrames(
+  workspaceId: string,
+  projectId: string,
+  key: string,
+): Promise<Record<string, string>> {
+  const db = supabaseAdmin as unknown as SupabaseClient;
+  const { data } = await db
+    .from("assets")
+    .select("storage_path, metadata")
+    .eq("workspace_id", workspaceId)
+    .eq("status", "ready")
+    .is("deleted_at", null)
+    .eq("metadata->>source", STORYBOARD_SOURCE)
+    .eq("metadata->>project_id", projectId)
+    .eq("metadata->>board_key", key);
+  const rows = ((data ?? []) as Array<{ storage_path: string | null; metadata: Json }>).filter(
+    (row) => isWorkspaceStoragePath(row.storage_path, workspaceId),
+  );
+  const signed = await signPaths(rows.map((row) => row.storage_path as string));
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const slot = (row.metadata as Record<string, unknown> | null)?.slot;
+    const url = signed.get(row.storage_path as string);
+    if (typeof slot === "string" && url) out[slot] = url;
+  }
+  return out;
+}
+
+/**
+ * The storyboard of a Creator video before it is made: the saved script's
+ * scenes (code, free) and one low-quality frame per picked scene with the
+ * creator's photo and the product's photo as references. Drawn once per
+ * script: the same script shows its stored frames again for nothing.
+ * `charge` runs only when new frames are drawn.
+ */
+export async function creatorStoryboard(
+  db: UserSupabaseClient,
+  input: { workspaceId: string; projectId: string; aspectRatio: string },
+  charge: (draw: () => Promise<Record<string, string>>) => Promise<Record<string, string>>,
+): Promise<CreatorStoryboardView> {
+  const { boardFromCreatorScript, creatorBoardKey } = await import("@/lib/studio/video/board");
+  const ctx = await projectContext(db, input.workspaceId, input.projectId);
+  if (!ctx.script) throw new HttpError(400, "Write what the creator says first.");
+  const board = boardFromCreatorScript(ctx.script);
+  const key = `${creatorBoardKey(board)}-${input.aspectRatio.replace(":", "x")}`;
+  const stored = await storedCreatorFrames(input.workspaceId, input.projectId, key);
+  const wanted = board.scenes.filter((scene) => scene.frameSlot);
+  if (wanted.every((scene) => stored[scene.frameSlot!]))
+    return { key, frames: stored, reused: true };
+
+  const brief = await withBrandCreator(input.workspaceId, ctx.brief);
+  const stock = brief.creator.characterId ? stockCreator(brief.creator.characterId) : null;
+  const person = brief.creator.personAssetId
+    ? ((await ownedImageAssetIds(input.workspaceId, [brief.creator.personAssetId]))[0] ?? null)
+    : brief.creator.characterId
+      ? await stockCreatorAsset(input.workspaceId, brief.creator.characterId)
+      : null;
+  const productRefs = await ownedImageAssetIds(
+    input.workspaceId,
+    (ctx.row.reference_asset_ids ?? []).slice(0, 1),
+  );
+  const paths = await assetPaths(input.workspaceId, [...(person ? [person] : []), ...productRefs]);
+  const signed = await signPaths([...paths.values()].map((p) => p.path));
+  const references = [...paths.values()]
+    .map((p) => signed.get(p.path))
+    .filter((url): url is string => !!url);
+  const size: "1792x1024" | "1024x1024" | "1024x1792" =
+    input.aspectRatio === "16:9"
+      ? "1792x1024"
+      : input.aspectRatio === "1:1"
+        ? "1024x1024"
+        : "1024x1792";
+
+  const frames = await charge(async () => {
+    const { generateImage } = await import("@/lib/openrouter-image.server");
+    const { persistAsset } = await import("@/server/assets/persist.server");
+    const drawn: Record<string, string> = { ...stored };
+    await Promise.all(
+      wanted
+        .filter((scene) => !stored[scene.frameSlot!])
+        .map(async (scene) => {
+          try {
+            const image = await generateImage({
+              prompt: creatorFramePrompt({
+                scene,
+                creatorLook: stock?.look ?? "",
+                productName: ctx.product.name,
+                setting: brief.creator.setting,
+              }),
+              size,
+              quality: "low",
+              meterRoute: "studio.image.storyboard",
+              routing: references.length
+                ? { referenceAssets: references, editing: true }
+                : undefined,
+            });
+            const saved = await persistAsset({
+              workspaceId: input.workspaceId,
+              idempotencyKey: `${STORYBOARD_SOURCE}:${input.projectId}:${key}:${scene.frameSlot}`,
+              dataUrl: `data:image/png;base64,${image.b64}`,
+              assetType: "image",
+              filename: `storyboard-${input.projectId.slice(0, 8)}-${scene.number}`,
+              metadata: {
+                source: STORYBOARD_SOURCE,
+                project_id: input.projectId,
+                board_key: key,
+                slot: scene.frameSlot,
+              },
+            });
+            if (saved.ok && saved.asset.storage_path) {
+              const url =
+                saved.asset.public_url ??
+                (await signStoragePath(
+                  supabaseAdmin as unknown as SupabaseClient,
+                  saved.asset.storage_path,
+                  3600,
+                ));
+              if (url) drawn[scene.frameSlot!] = url;
+            }
+          } catch (error) {
+            // One frame that couldn't be drawn leaves its card plain; the plan still shows.
+            log.warn("ugc.storyboard.frame_failed", {
+              projectId: input.projectId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+    );
+    if (Object.keys(drawn).length === Object.keys(stored).length)
+      throw new HttpError(502, "The storyboard frames couldn't be drawn. Try again.");
+    return drawn;
+  });
+  return { key, frames, reused: false };
 }

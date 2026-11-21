@@ -43,9 +43,22 @@ export type VideoEnding =
   /** A card drawn by code with the brand's logo and exact words. */
   | "end-card";
 
+/** The headings the composer groups kinds under, in order. */
+export type VideoKindGroupId = "post" | "product" | "story" | "reach" | "words";
+
+export const VIDEO_KIND_GROUPS: readonly { id: VideoKindGroupId; label: string }[] = [
+  { id: "post", label: "From your post" },
+  { id: "product", label: "Show the product" },
+  { id: "story", label: "Tell a story" },
+  { id: "reach", label: "Mood and B-roll" },
+  { id: "words", label: "Words and offers" },
+];
+
 export type VideoKind = {
   id: VideoKindId;
   label: string;
+  /** The composer heading this kind sits under. */
+  group: VideoKindGroupId;
   /** One plain line for the composer card. */
   hint: string;
   join: VideoJoin;
@@ -72,6 +85,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "living-picture",
     label: "Bring a post to life",
+    group: "post",
     hint: "Your post, gently moving",
     // Longer takes continue from the exact last frame and settle back on the post.
     join: "chain",
@@ -93,6 +107,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "product-motion",
     label: "Animate the product",
+    group: "product",
     hint: "Your product in motion, no people",
     join: "chain",
     people: "none",
@@ -111,6 +126,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "motion-post",
     label: "Motion post",
+    group: "post",
     hint: "Smooth moves over your post, no AI",
     join: "code",
     people: "none",
@@ -124,6 +140,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "product-showcase",
     label: "Product showcase",
+    group: "product",
     hint: "Close-ups and reveals of one product",
     join: "chain",
     people: "hands",
@@ -142,6 +159,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "brand-story",
     label: "Short story",
+    group: "story",
     hint: "A tiny story with one person and one place",
     join: "chain",
     people: "cast",
@@ -160,6 +178,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "how-it-works",
     label: "How it works",
+    group: "story",
     hint: "Three to five clear steps",
     join: "chain",
     people: "hands",
@@ -177,6 +196,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "before-after",
     label: "Before and after",
+    group: "story",
     hint: "One clear change, then the result",
     join: "chain",
     people: "optional",
@@ -194,6 +214,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "mood-broll",
     label: "Mood",
+    group: "reach",
     hint: "The feeling of your brand, shot by shot",
     join: "cut",
     people: "optional",
@@ -211,6 +232,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "product-demo",
     label: "Product demo",
+    group: "product",
     hint: "Hands show what it does, one feature at a time",
     join: "chain",
     people: "hands",
@@ -228,7 +250,8 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   },
   {
     id: "broll-hook",
-    label: "B-roll with a hook",
+    label: "Beautiful shots, one line",
+    group: "reach",
     hint: "Aesthetic shots of your world, one line of text on top",
     // Quick, separate shots joined with cuts: the Reels format where the
     // words carry the message and the footage carries the feeling.
@@ -250,6 +273,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
   {
     id: "offer-teaser",
     label: "Offer",
+    group: "words",
     hint: "Moving shots, then your offer in exact words",
     join: "chain",
     people: "optional",
@@ -268,6 +292,7 @@ export const VIDEO_KINDS: readonly VideoKind[] = [
     // code (src/server/studio/motion/, ADR-0043). No video model.
     id: "motion-graphics",
     label: "Motion graphics",
+    group: "words",
     hint: "Animated type and shapes, words always exact",
     join: "code",
     people: "none",
@@ -303,6 +328,9 @@ const TEMPLATE_KIND: Record<string, VideoKindId> = {
   "video-unboxing": "product-showcase",
   "video-demo": "product-demo",
   "video-broll-hook": "broll-hook",
+  // One line on screen over phone-native footage: the meme and trend Reels (categories.ts).
+  "video-meme-reel": "broll-hook",
+  "video-trend-remix": "brand-story",
 };
 
 export function kindForTemplate(template: string | undefined): VideoKindId | null {
@@ -311,10 +339,15 @@ export function kindForTemplate(template: string | undefined): VideoKindId | nul
 
 // Narrow on purpose: "handmade", "made with love", "bring it to life" or
 // "the result" must never turn a product video into a tutorial or a story.
-const HOW = /\b(how to|how it works|step[- ]by[- ]step|steps|tutorial|recipe|process)\b/i;
+const HOW =
+  /\b(how to|how it works|step[- ]by[- ]step|steps|tutorial|recipe|process|explain\w*|what (we|it) does)\b/i;
 const BEFORE = /\b(before (and|&) after|transformation|makeover|glow[- ]up)\b/i;
-const OFFER = /\b(sale|discount|offer|deal|% ?off|promo|coupon|free shipping|limited time)\b/i;
-const MOOD = /\b(mood|vibe|atmosphere|ambien\w*|tour)\b/i;
+/** Exact words that end the video on a card: an offer, or an opening or giveaway with its date. */
+const OFFER =
+  /\b(sale|discount|offer|deal|% ?off|promo|coupon|free shipping|limited time|grand opening|giveaway)\b/i;
+const MOOD = /\b(mood|vibe|atmosphere|ambien\w*|tour|behind the scenes|bts)\b/i;
+/** A product revealed and shown off (the Unboxing and Product reveal templates). */
+const SHOWCASE = /\b(unbox\w*|reveal\w*|showcase|close-?ups?|launch\w*|introduc\w*)\b/i;
 /** The Reels format: aesthetic footage with a line of text over it. */
 const BROLL =
   /\b(b-?roll|aesthetic|text (on|over)|with (a )?text|pov|things (you|nobody|no one)|reasons (to|why)|tips?)\b/i;
@@ -343,6 +376,9 @@ export type KindSource = {
  * The kind a video is made as when the person left "Auto". A post's picture
  * comes alive; a carousel moves by code; otherwise the brief decides.
  */
+/** Kinds no longer offered in pickers (ids kept so old videos read). */
+export const RETIRED_VIDEO_KINDS: readonly VideoKindId[] = ["before-after"];
+
 export function pickVideoKind(
   brief: string,
   source: KindSource = {},
@@ -355,10 +391,13 @@ export function pickVideoKind(
   if (source.picture) return source.product ? "product-motion" : "living-picture";
   if (source.script) return "brand-story";
   if (OFFER.test(brief)) return "offer-teaser";
-  if (BEFORE.test(brief)) return "before-after";
+  // Before/after is retired from Auto (2026-11, like the post kind): such a
+  // brief is made as a product demo, which shows the change honestly.
+  if (BEFORE.test(brief)) return "product-demo";
   if (DEMO.test(brief)) return "product-demo";
   if (HOW.test(brief)) return "how-it-works";
   if (ANIMATE.test(brief)) return "product-motion";
+  if (SHOWCASE.test(brief)) return "product-showcase";
   if (BROLL.test(brief)) return "broll-hook";
   if (STORY.test(brief)) return "brand-story";
   if (MOOD.test(brief)) return "mood-broll";
@@ -366,8 +405,14 @@ export function pickVideoKind(
   return "product-motion";
 }
 
-/** A chosen kind that can't run without its source falls back to one that can (never a cast story). */
+/**
+ * A chosen kind that can't run as a new AI video falls back to one that can
+ * (never a cast story): a kind drawn by code (a motion post, a motion graphic
+ * left over after switching back to new footage) becomes a living picture,
+ * and a kind that needs a picture with none to start from animates the product.
+ */
 export function usableKind(kind: VideoKindId, source: KindSource): VideoKindId {
+  if (videoKind(kind).join === "code") kind = "living-picture";
   const spec = videoKind(kind);
   if (!spec.needsSource || source.picture || source.carousel) return kind;
   return "product-motion";

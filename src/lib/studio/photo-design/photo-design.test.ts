@@ -11,7 +11,9 @@ import {
 } from "./geometry";
 import { groundRead, NEUTRAL_READING, type PhotoReading } from "./read";
 import { photoDesignCopy, pickKeyColour, planPhotoDesign } from "./plan";
-import { judgeFaces, judgeLayer } from "./checks";
+import { judgeFaces, judgeLayer, lenientWindows } from "./checks";
+import { sourcePhotoCanvas } from "../aspect";
+import type { PhotoDesignPlan } from "./plan";
 import { blendPrompt, designLayerPrompt } from "./prompt";
 
 /** An RGBA canvas filled with one colour. */
@@ -372,5 +374,105 @@ describe("prompts", () => {
     const prompt = blendPrompt({ plan, brand, brief: "event recap" });
     expect(prompt).toContain("recognisably the same");
     expect(prompt).not.toContain(plan.key.hex);
+  });
+});
+
+describe("lenientWindows", () => {
+  const region = (area: number, width: number, height: number, id: number) => ({
+    id,
+    area,
+    cx: 0,
+    cy: 0,
+    angle: 0,
+    width,
+    height,
+  });
+  const size = { width: 100, height: 100 };
+  const plan = {
+    layout: "windows" as const,
+    order: [0, 1, 2],
+    shapes: ["landscape", "portrait", "square"] as PhotoDesignPlan["shapes"],
+  };
+
+  it("fills the windows there are when the layer left fewer than the photos", () => {
+    const out = lenientWindows(plan, [region(3000, 75, 40, 1), region(900, 30, 30, 2)], size);
+    expect(out).toEqual({ windows: [0, 1], placed: 2 });
+  });
+
+  it("uses the largest windows when the layer left too many", () => {
+    const out = lenientWindows(
+      { ...plan, order: [0], shapes: ["square"] },
+      [region(3000, 50, 60, 1), region(900, 30, 30, 2), region(800, 30, 30, 3)],
+      size,
+    );
+    expect(out).toEqual({ windows: [0], placed: 1 });
+  });
+
+  it("gives up only when there is no usable window", () => {
+    expect(lenientWindows(plan, [], size)).toBeNull();
+    expect(lenientWindows(plan, [region(200, 10, 20, 1)], size)).toBeNull();
+  });
+
+  it("keeps an overlay while a fifth of the photo shows", () => {
+    const overlay = {
+      ...plan,
+      layout: "overlay" as const,
+      order: [0],
+      shapes: ["square"] as PhotoDesignPlan["shapes"],
+    };
+    expect(lenientWindows(overlay, [region(2500, 50, 50, 1)], size)).not.toBeNull();
+    expect(lenientWindows(overlay, [region(1000, 30, 30, 1)], size)).toBeNull();
+  });
+});
+
+describe("fitPhoto on odd sizes", () => {
+  it("never crops past the photo's edge", () => {
+    for (const [w, h] of [
+      [1001, 1001],
+      [1001, 3],
+      [3, 1001],
+      [1080, 1921],
+      [777, 555],
+    ])
+      for (const focus of [0, 0.37, 0.5, 0.99, 1])
+        for (const [rw, rh] of [
+          [500.5, 625.5],
+          [1024, 1280],
+          [33, 900],
+        ]) {
+          const t = fitPhoto(
+            { width: w, height: h },
+            { cx: 0, cy: 0, angle: 0, width: rw, height: rh },
+            {
+              x: focus,
+              y: focus,
+            },
+          );
+          expect(t.crop.left).toBeGreaterThanOrEqual(0);
+          expect(t.crop.top).toBeGreaterThanOrEqual(0);
+          expect(t.crop.left + t.crop.width).toBeLessThanOrEqual(w);
+          expect(t.crop.top + t.crop.height).toBeLessThanOrEqual(h);
+        }
+  });
+});
+
+describe("sourcePhotoCanvas", () => {
+  it("fits a tall phone photo for a 4:5 feed post", () => {
+    expect(sourcePhotoCanvas({ width: 1080, height: 1920 }, "4:5")).toEqual({
+      width: 1152,
+      height: 1440,
+    });
+  });
+  it("leaves a photo the feed accepts unchanged", () => {
+    expect(sourcePhotoCanvas({ width: 1080, height: 1350 }, "4:5")).toBeNull();
+    expect(sourcePhotoCanvas({ width: 1080, height: 1351 }, "4:5")).toBeNull();
+    expect(sourcePhotoCanvas({ width: 1600, height: 900 }, "1:1")).toBeNull();
+  });
+  it("fits a panorama and leaves Stories alone", () => {
+    expect(sourcePhotoCanvas({ width: 4000, height: 1000 }, "1:1")).toEqual({
+      width: 1440,
+      height: 1440,
+    });
+    expect(sourcePhotoCanvas({ width: 1080, height: 1920 }, "9:16")).toBeNull();
   });
 });

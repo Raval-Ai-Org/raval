@@ -51,7 +51,13 @@
     ".next-proof/types/**/*.ts",
     ".next-proof/dev/types/**/*.ts",
     ".next-proofbuild/types/**/*.ts",
-    ".next-proofbuild/dev/types/**/*.ts"
+    ".next-proofbuild/dev/types/**/*.ts",
+    ".next-alt/types/**/*.ts",
+    ".next-alt/dev/types/**/*.ts",
+    ".next-overlay-audit/types/**/*.ts",
+    ".next-overlay-audit/dev/types/**/*.ts",
+    ".next-motionmox/types/**/*.ts",
+    ".next-motionmox/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

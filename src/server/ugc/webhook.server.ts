@@ -25,6 +25,28 @@ export function callbackTaskId(body: unknown): string | null {
   return typeof id === "string" && /^[A-Za-z0-9_-]{6,128}$/.test(id) ? id : null;
 }
 
+/**
+ * The render a callback URL names, signed with the same key, so a callback for
+ * a task whose create call timed out can find its render (engine `adopt`).
+ * Kie's own signature still has to verify the task id.
+ */
+export function signRenderRef(renderId: string, key: string): string {
+  return createHmac("sha256", key).update(`ugc-render:${renderId}`).digest("base64url");
+}
+
+const RENDER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The render id from a callback URL's `render` + `ref`, only when the signature matches. */
+export function verifiedRenderRef(url: URL, key: string | undefined): string | null {
+  const renderId = url.searchParams.get("render");
+  const ref = url.searchParams.get("ref");
+  if (!key || !renderId || !ref || !RENDER_ID_RE.test(renderId)) return null;
+  const expected = Buffer.from(signRenderRef(renderId, key));
+  const provided = Buffer.from(ref);
+  if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) return null;
+  return renderId;
+}
+
 export function signKieCallback(taskId: string, timestamp: string, key: string): string {
   return createHmac("sha256", key).update(`${taskId}.${timestamp}`).digest("base64");
 }

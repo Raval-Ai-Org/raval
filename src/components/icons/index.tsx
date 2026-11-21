@@ -136,8 +136,44 @@ export * from "./glyphs";
 export * from "./social";
 // Campaigns (ADR-0039): the campaign kinds' marks, lucide until bespoke glyphs exist.
 export { Flag, Handshake, MapPin, Smile, Snowflake } from "lucide-react";
+// Studio's "Surprise me" (random idea) button, lucide until a bespoke glyph exists.
+export { Dices } from "lucide-react";
 // Studio motion graphics (ADR-0043), lucide until a bespoke glyph exists.
 export { Shapes } from "lucide-react";
+// Admin console: the Stripe balance card, lucide until a bespoke glyph exists.
+export { CreditCard } from "lucide-react";
+// Studio post categories (categories.ts), lucide until bespoke glyphs exist.
+export {
+  Ban,
+  Columns2,
+  Flame,
+  Laugh,
+  ListOrdered,
+  Package,
+  Quote,
+  Scale,
+  Smartphone,
+  Vote,
+} from "lucide-react";
+// Onboarding's brand categories (no-website setup), lucide until bespoke glyphs exist.
+export {
+  Baby,
+  Briefcase,
+  Car,
+  Dumbbell,
+  Gem,
+  GraduationCap,
+  Laptop,
+  Leaf,
+  Paintbrush,
+  PawPrint,
+  Plane,
+  Shirt,
+  Sofa,
+  Stethoscope,
+  Store,
+  UtensilsCrossed,
+} from "lucide-react";
 export { type IconProps, ICON_STROKE, createIcon } from "./icon-base";
 
 import {

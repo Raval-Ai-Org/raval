@@ -272,7 +272,7 @@ See [ADR-0013](adr/0013-geo-coding-agent-and-repo-ownership.md).
 
 **From a finding, "Fix with AI Agent"** starts a run (`geo_agent_runs`):
 1. **Investigate.** The agent (routes `geo.agent.*` in
-   `src/server/ai/task-models.ts`, Opus 5.5 through OpenRouter) uses read-only
+   `src/server/ai/task-models.ts`, PREMIUM Gemini 4 Carbon through OpenRouter) uses read-only
    tools: list/search/read repository files, the scan's page facts, the list
    of scanned pages, the rule and framework playbook, and the live page via
    the SSRF-guarded fetcher.

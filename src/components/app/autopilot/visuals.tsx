@@ -172,7 +172,7 @@ export function Timeline({ events }: { events: AutopilotView["events"] }) {
                 bad
                   ? "bg-destructive/15 text-destructive"
                   : e.actor === "user"
-                    ? "bg-primary/15 text-primary"
+                    ? "bg-primary/15 text-primary-ink"
                     : "bg-secondary text-muted-foreground",
               )}
             >

@@ -1,10 +1,17 @@
 // What a Studio job costs, shared by the jobs route (which charges it) and the
 // composer (which shows it on the Generate button). Browser-safe.
-import { creditsFor, creditsForVideoUnits, type CreditAction } from "@/lib/billing/catalog";
+import {
+  cr,
+  creditsFor,
+  formatCredits,
+  videoCreditsFor,
+  type CreditAction,
+  type UgcModelKey,
+} from "@/lib/billing/catalog";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
-import type { CreateJobInput, StudioJob } from "./jobs";
-import { studioVideoUnits } from "@/lib/ugc/duration";
+import type { CreateJobInput, StudioControls, StudioJob } from "./jobs";
 import { creationPriceLabel } from "@/lib/billing/creation";
+import { DEFAULT_STUDIO_VIDEO_MODEL } from "./video/kinds";
 import {
   VARIATION_TARGET,
   isVariationsRequest,
@@ -14,6 +21,39 @@ import {
 import { isPhotoDesignType, withResolvedPhotoMode } from "./photo-design/mode";
 import { RECAP_AI_SECONDS } from "./clip-edit";
 import { shortClipPlan, shortClipPrice } from "./short-clip";
+
+/** Credits for one extra designed carousel slide (the cover is 1 credit). */
+export const CAROUSEL_SLIDE_CREDITS = 0.75;
+
+/**
+ * A carousel's price (ADR-0051): every slide is designed by the image model at
+ * high quality, so it is 1 credit for the cover plus ¾ credit per extra slide,
+ * rounded up to a half credit (6 slides = 5 credits). Slides still drawn by
+ * code (connected slides, the brand's own photos) cost 1 credit.
+ */
+export function carouselCredits(controls: {
+  slideCount?: number;
+  seamless?: boolean;
+  referenceAssetIds?: string[];
+  referenceMode?: string;
+}): number {
+  const drawnByCode =
+    !!controls.seamless ||
+    (!!controls.referenceAssetIds?.length && (controls.referenceMode ?? "preserve") === "preserve");
+  if (drawnByCode) return cr(1);
+  const slides = Math.min(10, Math.max(3, Math.round(controls.slideCount ?? 6)));
+  return cr(Math.ceil((1 + (slides - 1) * CAROUSEL_SLIDE_CREDITS) * 2) / 2);
+}
+
+/** Credit units a Studio action costs, with a carousel priced per slide. */
+export function studioCreditUnits(
+  action: StudioCharge,
+  controls: Parameters<typeof carouselCredits>[0],
+  quantity = 1,
+): number {
+  if (action === "carousel") return carouselCredits(controls) * quantity;
+  return creditsFor(action as CreditAction) * quantity;
+}
 
 /** "studio_short_clip": an AI clip of 8 s or less, in credits (src/lib/studio/short-clip.ts). */
 export type StudioCharge = CreditAction | "studio_video" | "studio_short_clip";
@@ -114,11 +154,11 @@ export function studioChargeFor(args: {
     return args.regenerate ? "post_regenerate" : "post_set";
   switch (args.type) {
     case "video":
-      return args.videoPreview ? "image_post" : "studio_video";
+      return args.videoPreview ? "video_storyboard" : "studio_video";
     case "story":
       return args.storyMode === "video"
         ? args.videoPreview
-          ? "image_post"
+          ? "video_storyboard"
           : "studio_video"
         : "story";
     case "image":
@@ -166,26 +206,47 @@ export function studioPriceLabel(
     const plan = shortClipPlan(input);
     const quoted =
       input.controls.videoQuote?.meter === "credits" ? input.controls.videoQuote.units : null;
-    if (plan) return `${quoted ?? shortClipPrice(plan).credits} credits`;
+    if (plan) return formatCredits(quoted ?? shortClipPrice(plan).credits);
   }
-  // Animated recap photos are five seconds each, whatever length was picked.
-  const animated =
-    input.type === "video" && input.controls.videoMode === "recap"
-      ? studioVideoUnits((input.controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS)
-      : null;
   if (action === "studio_video") {
-    // The quote's meter says what pays: a free video or credits.
-    const quote = animated == null ? input.controls.videoQuote : undefined;
+    // The quote's meter says what pays: a video held from before v4, or credits.
+    const recap = input.type === "video" && input.controls.videoMode === "recap";
+    const quote = recap ? undefined : input.controls.videoQuote;
     if (quote?.meter === "video") return "Free video";
     if (quote?.meter === "premium_video")
       return quote.premiumLeft != null && quote.premiumMonthly
         ? `Premium video · ${quote.premiumLeft} of ${quote.premiumMonthly} left`
         : "Premium video";
-    if (quote?.meter === "credits") return `${quote.units.toLocaleString("en-US")} credits`;
-    const units = animated ?? studioVideoUnits(input.controls.durationSec);
-    return `${creditsForVideoUnits(units).toLocaleString("en-US")} credits`;
+    if (quote?.meter === "credits") return formatCredits(quote.units);
+    return formatCredits(studioVideoCredits(input.type, input.controls));
   }
-  return `${creditsFor(action as CreditAction) * (variations ? variationCount(input.controls) : 1)} credits`;
+  const units = studioCreditUnits(
+    action,
+    input.controls,
+    variations ? variationCount(input.controls) : 1,
+  );
+  return units === 0 ? "Included" : formatCredits(units);
+}
+
+/**
+ * The catalog price of a Studio AI video in ledger units, before the server's
+ * provider-cost floor: the per-second rate for its model and length. Animated
+ * recap photos are RECAP_AI_SECONDS each, whatever length was picked.
+ */
+export function studioVideoCredits(
+  type: StudioType,
+  controls: Pick<
+    StudioControls,
+    "videoModelKey" | "durationSec" | "videoResolution" | "videoMode" | "referenceAssetIds"
+  >,
+): number {
+  const model = (controls.videoModelKey ?? DEFAULT_STUDIO_VIDEO_MODEL) as UgcModelKey;
+  const resolution = controls.videoResolution === "1080P" ? "1080p" : "720p";
+  const seconds =
+    type === "video" && controls.videoMode === "recap"
+      ? Math.max(1, controls.referenceAssetIds?.length ?? 0) * RECAP_AI_SECONDS
+      : (controls.durationSec ?? 10);
+  return videoCreditsFor(model, seconds, resolution);
 }
 
 /** A social post whose optional image failed must not cost the image bundle price. */

@@ -45,6 +45,9 @@ export const POST = defineRoute({
         userId,
         role,
         input: body,
+        // Studio follows the job by polling; never hold this request open
+        // for the whole generation.
+        background: true,
       });
       return Response.json(
         { job },

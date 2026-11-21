@@ -311,6 +311,8 @@ export type ClipPromptOptions = {
   chained: boolean;
   /** Clip 1 opens on the brand's finished post picture (the first image). */
   fromPicture?: boolean;
+  /** The person asked for the logo; otherwise no corner badge is kept or added. */
+  keepLogo?: boolean;
   /** A product photo is among the images. */
   productPhoto?: boolean;
   audio: boolean;
@@ -373,7 +375,9 @@ export function clipPrompt(sb: VideoStoryboard, index: number, opts: ClipPromptO
       ? "FIRST FRAME: the first image is the last frame of the clip before this one. Start on exactly that frame and carry straight on: the same people, product, place, light and camera position. Do not restart, re-introduce or repeat anything."
       : "",
     index === 0 && opts.fromPicture
-      ? "SOURCE PICTURE: the first image is the brand's approved post. Open on exactly this picture as the first frame: the same composition, product, colours, people and any words or logo in it. Bring it to life; do not redesign it. Words and logos stay perfectly still."
+      ? opts.keepLogo
+        ? "SOURCE PICTURE: the first image is the brand's approved post, already at this video's shape. Open on exactly this picture as the first frame: the same composition, product, colours, people and any words or logo in it. Bring it to life; do not redesign it. Words and logos stay perfectly still."
+        : "SOURCE PICTURE: the first image is the brand's approved post, already at this video's shape. Open on exactly this picture as the first frame: the same composition, product, colours, people and any words in it. Bring it to life; do not redesign it. Words and the product's label stay perfectly still. It fills the whole frame: never add bars, borders, a corner logo badge or a watermark."
       : "",
     `THE STORY: ${sb.logline}`,
     bible.length

@@ -75,6 +75,11 @@ async function searchTavily(query: string, opts: WebSearchOptions): Promise<WebS
   }));
 }
 
+async function tavilyPaused(): Promise<boolean> {
+  const { tavilyPausedReason } = await import("@/lib/tavily-gateway.server");
+  return Boolean(await tavilyPausedReason());
+}
+
 async function searchFirecrawl(query: string, opts: WebSearchOptions): Promise<WebSource[]> {
   const { firecrawlSearch } = await import("@/lib/firecrawl-gateway.server");
   const results = await firecrawlSearch(query, { limit: opts.limit ?? 8 });
@@ -135,7 +140,11 @@ export async function webSearch(query: string, opts: WebSearchOptions = {}): Pro
   if (!trimmed) return [];
 
   const providers: Array<[string, () => Promise<WebSource[]>]> = [];
-  if (tavilyEnabled()) providers.push(["tavily", () => searchTavily(trimmed, opts)]);
+  // A paused Tavily (credits used up, key refused, rate limited) is skipped
+  // outright: the next rung answers instead of a logged failure per query.
+  if (tavilyEnabled() && !(await tavilyPaused())) {
+    providers.push(["tavily", () => searchTavily(trimmed, opts)]);
+  }
   if (firecrawlEnabled()) providers.push(["firecrawl", () => searchFirecrawl(trimmed, opts)]);
   providers.push(["duckduckgo", () => searchDuckDuckGo(trimmed, opts)]);
 

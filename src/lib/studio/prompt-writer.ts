@@ -5,11 +5,12 @@
 // they can be tested.
 import type { IdeaSignal, IdeaSource } from "./ideas";
 import type { StudioType } from "./formats";
+import { genericPhrases } from "./copy-qa";
 import type { GoalId, StudioControls } from "./jobs";
 
 /** Leaves headroom under IntentSchema's 4000-char brief limit. */
-export const PROMPT_MAX_CHARS = 3800;
-export const PROMPT_MIN_CHARS = 320;
+export const PROMPT_MAX_CHARS = 1600;
+export const PROMPT_MIN_CHARS = 100;
 
 /**
  * "fresh": nothing written yet — invent the whole idea.
@@ -24,116 +25,60 @@ export type PromptBlueprint = {
   guidance: string;
 };
 
+/**
+ * Short, sharp briefs (2026-11). The old blueprints asked for 250–550 words
+ * with camera, lens, lighting and colour sections; those overrode the brand's
+ * own look, style bible and Studio's layout library and made generic stock
+ * pictures. A brief now says WHAT the piece is (the idea, the exact words,
+ * the one picture idea); HOW it looks comes from the brand and Studio.
+ */
 export const PROMPT_BLUEPRINTS: Record<StudioType, PromptBlueprint> = {
   social: {
-    sections: [
-      "Idea",
-      "Why now",
-      "Opening line",
-      "What to say",
-      "Story or example",
-      "Voice",
-      "Ending",
-      "Image idea",
-      "Hashtags",
-    ],
+    sections: ["Idea", "Opening line", "Message", "Ending", "Picture"],
     guidance:
-      "A social post people stop scrolling for. 'Opening line' is the exact first line (under 15 words, specific, no clichés). 'What to say' is 3–5 bullet points of the actual message. 'Story or example' gives one concrete moment or example. 'Ending' is the exact closing line with one clear next step. 'Image idea' describes an optional matching visual in one or two sentences. 'Hashtags' suggests 3–5 relevant tags.",
+      "'Opening line' is the exact first line (under 12 words, specific, no cliché). 'Message' is 2–3 short bullet points. 'Ending' is the exact last line with one next step. 'Picture' is one sentence: the single thing the picture shows.",
   },
   carousel: {
-    sections: [
-      "Idea",
-      "Why now",
-      "Slide 1",
-      "Middle slides",
-      "Last slide",
-      "Design look",
-      "Caption",
-    ],
+    sections: ["Idea", "Cover", "Slides", "Last slide", "Caption"],
     guidance:
-      "A swipeable carousel. 'Slide 1' is the cover headline (under 8 words, readable in two seconds: a sharp question, one surprising figure from the context, a bold claim the slides prove, or a specific outcome) plus a short subline. 'Middle slides' lists each slide on its own line as 'Slide N: heading — one sentence of detail', 4–8 slides. 'Last slide' is the recap plus a save/follow prompt. 'Design look' covers colours, typography feel, layout style and one recurring visual motif, with a poster-grade cover and inside slides that keep one grid. 'Caption' is 2–3 sentences to post with it.",
+      "'Cover' is the exact cover headline (under 8 words, one sharp promise, question or number from the context) and a short subline. 'Slides' lists only the inside slides, between the cover and the last slide, one per line as 'Slide N: heading — one short line', numbered from Slide 2; write exactly the number of inside slides Settings gives (the total minus the cover and the last slide), never more, and never name a different slide count anywhere. 'Last slide' is the takeaway and one action. 'Caption' is one or two sentences.",
   },
   story: {
-    sections: ["Idea", "Why now", "Frame 1", "Middle frames", "Last frame", "Reply prompt"],
+    sections: ["Idea", "Frame 1", "Middle frames", "Last frame"],
     guidance:
-      "A short Instagram or Facebook Story of 1 to 5 vertical frames. 'Frame 1' is the hook in under 8 words. 'Middle frames' lists each frame on its own line as 'Frame N: big headline (under 9 words), one short supporting line'. 'Last frame' is one clear next step (reply, link in bio, book). 'Reply prompt' is the question people answer by replying. Never mention link, poll or music stickers: they can't be added when posting through Mellox.",
+      "1 to 5 vertical frames. 'Frame 1' is the hook (under 8 words). 'Middle frames' lists 'Frame N: headline (under 9 words) — one short line'. 'Last frame' is one next step (reply, link in bio, visit). Never mention link, poll or music stickers.",
   },
   image: {
-    sections: [
-      "Idea",
-      "Why now",
-      "Scene",
-      "Main subject",
-      "Camera and composition",
-      "Lighting",
-      "Colours",
-      "Mood and style",
-      "Details and props",
-      "Avoid",
-      "Caption idea",
-    ],
+    sections: ["Idea", "Headline", "Supporting line", "Picture", "Caption idea"],
     guidance:
-      "A detailed image-generation brief a photographer or art director could shoot from. Be concrete and visual: materials, textures, time of day, lens feel (e.g. 50mm, shallow depth of field), angle, framing, light direction and quality, a palette that fits the brand. Build it on one scroll-stopping idea (a surprise of scale, an unexpected material, a striking pose, or the product in a world made of its own ingredients) and say where a short headline would sit relative to the subject. 'Avoid' lists things that would ruin it (e.g. clutter, stock-photo poses, invented labels). 'Caption idea' is the angle and first line for the caption.",
+      "'Headline' is the exact words set on the picture (2–6 words, punchy, no full sentence). 'Supporting line' is optional small text (under 10 words) or 'none'. 'Picture' is one or two sentences: the one idea the picture is built on, concrete and specific to this brand: a believable scene with one twist that carries the message (a visual metaphor), the product as a dramatic hero, a symbolic object that stands for a service, the subject in front of giant type, or a real moment from the brand's world. Clear first for hiring, events and greetings. Say nothing about camera, lens, lighting or colours: the brand's look decides those. 'Caption idea' is the caption's angle and first line.",
   },
   ad: {
-    sections: [
-      "What we're promoting",
-      "Who it's for",
-      "The problem it solves",
-      "Why now",
-      "Three angles to test",
-      "Headline ideas",
-      "Main text points",
-      "Visual",
-      "Button text",
-    ],
+    sections: ["Offer", "For", "Angle", "Headline", "Supporting line", "Picture", "Button"],
     guidance:
-      "A paid social ad brief. 'Three angles to test' gives three clearly different approaches (e.g. pain, outcome, proof), one line each. 'Headline ideas' gives 3 headlines under 40 characters. 'Main text points' lists what the ad copy must say. 'Visual' describes the ad image in concrete detail sized for a feed: one hero and its scale, the set, the light and lens, and a calm area for the platform's text. 'Button text' suggests one short call to action. Use only offers, prices and deadlines that exist in the context; otherwise describe the offer generally.",
+      "'Offer' is what is promoted, only as the brand states it. 'For' is the customer in a few words. 'Angle' is the one reason to act now (pain, outcome or proof). 'Headline' is the exact words on the ad (under 6 words). 'Supporting line' is under 12 words. 'Picture' is one sentence: the hero and the idea, no camera or colour notes. 'Button' is 1–3 words.",
   },
   video: {
-    sections: [
-      "Idea",
-      "Why now",
-      "Length and format",
-      "Scene by scene",
-      "Camera movement",
-      "Lighting and colour",
-      "Mood and pacing",
-      "Sound",
-      "Caption idea",
-    ],
+    sections: ["Idea", "Shots", "Sound", "Caption idea"],
     guidance:
-      "An AI-generated video brief matching the selected length (10–60 seconds by default). 'Scene by scene' lists enough shots to cover the full selected duration on their own lines as 'Shot N (0–2s): what we see and what moves'. Describe real, filmable visuals: subject, action, setting, textures. 'Camera movement' names the moves (push-in, orbit, slow pan, handheld). 'Sound' suggests music or ambient sound. No on-screen text inside the footage. 'Caption idea' is the post caption angle and first line.",
+      "'Shots' lists enough shots to fill the selected length, each on its own line as 'Shot N (0–2s): what we see and what moves', real filmable visuals, one camera move each. No on-screen text inside the footage. 'Sound' is one line. 'Caption idea' is the caption's first line.",
   },
   script: {
-    sections: [
-      "Idea",
-      "Why now",
-      "Who's on camera",
-      "Opening (first 2 seconds)",
-      "Scenes",
-      "On-screen text",
-      "Ending",
-      "Style and pacing",
-      "Caption idea",
-    ],
+    sections: ["Idea", "Hook", "Scenes", "Ending", "Caption idea"],
     guidance:
-      "A Reel / TikTok / Shorts script plan. 'Opening' is the exact first spoken line or on-screen hook. 'Scenes' lists each scene on its own line as 'Scene N (time): say — show'. 'On-screen text' lists the text overlays. 'Ending' is the exact closing line and next step. Keep it filmable on a phone by a small team.",
+      "'Hook' is the exact first spoken line or on-screen text. 'Scenes' lists 'Scene N (time): say — show'. 'Ending' is the exact closing line and next step. Filmable on a phone by a small team.",
   },
   article: {
     sections: [
       "Working title",
       "Who it's for",
-      "What they're searching for",
-      "Why now",
-      "Main keywords",
+      "Search intent",
+      "Keywords",
       "Outline",
-      "Examples and proof to include",
       "Questions to answer",
-      "Ending",
     ],
     guidance:
-      "A blog article brief that ranks and gets quoted by AI answers. 'What they're searching for' states the search intent in plain words. 'Main keywords' lists 4–6 phrases. 'Outline' lists 5–8 section headings, each with one line on what it covers. 'Examples and proof to include' names concrete examples, steps or comparisons (no invented statistics). 'Questions to answer' lists 3–5 real questions for an FAQ. 'Ending' says how to close and what to invite the reader to do.",
+      "'Search intent' is one plain sentence. 'Keywords' lists 4–6 phrases. 'Outline' lists 5–8 headings, each with one line. 'Questions to answer' lists 3–5 real questions. No invented statistics.",
   },
 };
 
@@ -142,7 +87,6 @@ const STORY_SPARKS = [
   "open with a surprising contrast between what people expect and what's true",
   "build it around one tiny, specific behind-the-scenes moment",
   "frame it as a myth most people still believe, then the truth",
-  "use a before-and-after transformation",
   "tell it through a customer's everyday situation",
   "make it a quick, genuinely useful how-to",
   "take a clear, friendly stance people will want to agree or argue with",
@@ -183,7 +127,6 @@ const MOTION_SPARKS = [
   "a steady glide from wide to detail",
 ];
 
-const VISUAL_TYPES = new Set<StudioType>(["image", "ad", "carousel", "social"]);
 const MOTION_TYPES = new Set<StudioType>(["video", "script"]);
 
 export type Random = () => number;
@@ -192,10 +135,13 @@ function pick<T>(items: readonly T[], random: Random): T {
   return items[Math.floor(random() * items.length) % items.length];
 }
 
-/** Creative directions for this call: a story device, plus a look or motion where it applies. */
+/**
+ * Creative directions for this call: a story device, plus motion for video.
+ * Pictures get no random visual direction any more: a random "golden hour"
+ * or "flat-lay" fought the brand's own look and made stock-looking posts.
+ */
 export function pickSparks(type: StudioType, random: Random = Math.random): string[] {
   const sparks = [pick(STORY_SPARKS, random)];
-  if (VISUAL_TYPES.has(type)) sparks.push(`Visual direction: ${pick(VISUAL_SPARKS, random)}`);
   if (MOTION_TYPES.has(type)) {
     sparks.push(`Visual direction: ${pick(VISUAL_SPARKS, random)}`);
     sparks.push(`Camera: ${pick(MOTION_SPARKS, random)}`);
@@ -212,6 +158,7 @@ const SOURCE_BOOST: Record<IdeaSource, number> = {
   gap: 5,
   pillar: 0,
   campaign: 20,
+  radar: 35,
 };
 
 function normalize(text: string): string {
@@ -254,7 +201,57 @@ export const SIGNAL_LABEL: Record<IdeaSource, string> = {
   pillar: "Your brand",
   momentum: "Working well",
   campaign: "Your campaign",
+  radar: "Trending now",
 };
+
+/** The slide count a person picked (3 to 10, default 6). */
+export function slideTotal(count: number | undefined): number {
+  return Math.max(3, Math.min(10, Math.round(count ?? 6)));
+}
+
+/** "6 in total: the cover, 4 inside slides and the last slide". */
+export function carouselSlidesLine(count: number | undefined): string {
+  const total = slideTotal(count);
+  const inside = total - 2;
+  return `${total} in total: the cover, ${inside} inside ${inside === 1 ? "slide" : "slides"} and the last slide`;
+}
+
+const SLIDE_LINE = /^\s*(?:[-*•]\s*)?slide\s+(\d+)\s*[:.)\-–—]\s*/i;
+
+/**
+ * Keep a carousel brief to the slide count the person picked: the 'Slides'
+ * section holds the inside slides only, numbered from 2. Extra lines are
+ * dropped and the rest renumbered; a short list is left for the writer to fill.
+ * Pure, so the brief in the box always matches the stepper.
+ */
+export function fitBriefSlides(prompt: string, count: number | undefined): string {
+  const total = slideTotal(count);
+  const inside = total - 2;
+  let kept = 0;
+  const out: string[] = [];
+  for (const line of prompt.split("\n")) {
+    const m = SLIDE_LINE.exec(line);
+    if (!m) {
+      out.push(line);
+      continue;
+    }
+    if (kept >= inside) continue;
+    kept += 1;
+    const number = String(kept + 1);
+    out.push(line.replace(SLIDE_LINE, (whole) => whole.replace(m[1], number)));
+  }
+  // A slide count written in the text that disagrees with the stepper is corrected.
+  return out
+    .join("\n")
+    .replace(/\b(\d{1,2})([- ])(slides?)\b/gi, (whole, n: string, sep: string, word: string) =>
+      Number(n) === total ? whole : `${total}${sep}${word}`,
+    );
+}
+
+/** How many 'Slide N' lines a brief lists. */
+export function briefSlideLines(prompt: string): number {
+  return prompt.split("\n").filter((line) => SLIDE_LINE.test(line)).length;
+}
 
 /** Plain-language settings the prompt should respect. */
 export function describeSettings(
@@ -269,7 +266,7 @@ export function describeSettings(
     parts.push(
       `Length: ${c.durationSec ?? (type === "video" || (type === "story" && c.storyMode === "video") ? 10 : 30)} seconds`,
     );
-  if (type === "carousel") parts.push(`Slides: ${c.slideCount ?? 6}`);
+  if (type === "carousel") parts.push(`Slides: ${carouselSlidesLine(c.slideCount)}`);
   if (type === "article") parts.push(`Length: ${c.length ?? "standard"}`);
   if (c.includeImage) parts.push("Include an image");
   if (c.tone) parts.push(`Voice: ${c.tone}`);
@@ -305,3 +302,84 @@ export const PROMPT_GOALS: GoalId[] = [
   "education",
   "offer",
 ];
+
+/* ───────────────────────── the brief's QA pass (free) ───────────────────────── */
+
+/** Sections whose text is set on the picture, and the most words each may have. */
+const ON_PICTURE: Record<string, number> = { headline: 7, cover: 10, "frame 1": 9, hook: 16 };
+
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * What is wrong with a written brief, in plain words the writer can fix, or
+ * [] when it passes. Pure: no model call. `known` is everything the brand and
+ * the person really said; a figure that isn't in it is invented.
+ */
+export function briefIssues(args: {
+  prompt: string;
+  type: StudioType;
+  known: string;
+  brandName?: string | null;
+  /** A carousel's slide count from the stepper. */
+  slideCount?: number;
+}): string[] {
+  const issues: string[] = [];
+  const text = args.prompt ?? "";
+  const lower = text.toLowerCase();
+  const blueprint = PROMPT_BLUEPRINTS[args.type];
+  const labels = new Map<string, string>();
+  let current: string | null = null;
+  for (const line of text.split("\n")) {
+    const m = /^\s*([A-Za-z][A-Za-z0-9 '’]{0,30}):\s*(.*)$/.exec(line);
+    if (m && blueprint.sections.some((s) => s.toLowerCase() === m[1].trim().toLowerCase())) {
+      current = m[1].trim().toLowerCase();
+      labels.set(current, m[2].trim());
+    } else if (current && line.trim()) {
+      labels.set(current, `${labels.get(current) ?? ""} ${line.trim()}`.trim());
+    }
+  }
+  const missing = blueprint.sections.filter((s) => !labels.get(s.toLowerCase()));
+  if (missing.length) issues.push(`Missing sections: ${missing.join(", ")}.`);
+
+  if (args.type === "carousel") {
+    const inside = slideTotal(args.slideCount) - 2;
+    const listed = briefSlideLines(text);
+    if (listed > inside)
+      issues.push(
+        `'Slides' lists ${listed} slides but the carousel has ${inside} inside slides (${slideTotal(args.slideCount)} in total with the cover and the last slide). List exactly ${inside}.`,
+      );
+  }
+
+  const words = countWords(text);
+  if (args.type !== "article" && words > 200)
+    issues.push(`Too long (${words} words). Keep it under 160 words: one idea, said once.`);
+
+  const found = genericPhrases(lower);
+  if (found.length) issues.push(`Generic phrases to replace with specifics: ${found.join(", ")}.`);
+
+  for (const [label, max] of Object.entries(ON_PICTURE)) {
+    const value = labels.get(label);
+    if (value && countWords(value.replace(/[—–-].*$/, "")) > max)
+      issues.push(`'${label}' is set on the picture and must be ${max} words or fewer.`);
+  }
+
+  // Figures (prices, percentages, counts) must come from the brand or the person.
+  const known = (args.known ?? "").toLowerCase();
+  const figures = [
+    ...new Set(text.match(/(?:[$€£₹]|rs\.?\s?)?\d[\d,.]*\s?(?:%|k\b|x\b|off\b)?/gi) ?? []),
+  ]
+    .map((f) => f.trim())
+    .filter((f) => /\d{2,}|%|[$€£₹]|off/i.test(f))
+    .filter((f) => !/^(?:19|20)\d{2}$/.test(f))
+    .filter(
+      (f) =>
+        !known.includes(f.toLowerCase().replace(/\s+/g, "")) && !known.includes(f.toLowerCase()),
+    );
+  if (figures.length)
+    issues.push(
+      `These figures aren't in the brand facts or the person's words; remove them or describe it without a number: ${figures.slice(0, 4).join(", ")}.`,
+    );
+  return issues;
+}

@@ -37,9 +37,24 @@ export const StrategySchema = z.object({
   voice: z.string().trim().max(160),
   pillars: z
     .array(
-      z.object({ title: z.string().trim().min(2).max(60), detail: z.string().trim().max(200) }),
+      z.object({
+        title: z.string().trim().min(2).max(60),
+        detail: z.string().trim().max(200),
+        /** Share of posts (%), from the confirmed strategy; absent: equal turns. */
+        share: z.number().min(0).max(100).optional(),
+      }),
     )
     .max(5),
+  /** What to say at each stage (confirmed strategy's messages); absent on older programs. */
+  messages: z
+    .object({
+      attract: z.string().trim().max(240),
+      convince: z.string().trim().max(240),
+      convert: z.string().trim().max(240),
+      keep: z.string().trim().max(240),
+    })
+    .partial()
+    .optional(),
 });
 export type Strategy = z.infer<typeof StrategySchema>;
 

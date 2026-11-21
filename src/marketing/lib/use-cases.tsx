@@ -129,11 +129,11 @@ export const USE_CASES: UseCase[] = [
       { feature: "ai-visibility", title: "Get recommended early", text: "Track the questions your customers ask AI and fix what stops you being named." },
     ],
     plans: ["starter", "growth"],
-    planNote: "Start on the Free plan with no card, then upgrade when you are publishing every week.",
+    planNote: "Start on Starter, or try Growth for 7 days, then move up when you add brands.",
     faqs: [
       {
         q: "Is there a free plan?",
-        a: "Yes. The Free plan gives you 100 credits to spend (one time), 1 brand with a Brand DNA scan, 5 tracked AI prompts, 1 site scan of up to 25 pages and 30 Mellox Flash chat messages. No card needed.",
+        a: "No. Plans start at $39 a month billed yearly, with 150 credits a month (about 150 image posts or 5 creator videos) and unlimited text posts and publishing. You can try Growth for 7 days first.",
       },
       { q: "Can I invite my co-founder or a teammate?", a: "Yes, on any plan. Team members see drafts, approvals and live updates together in the same workspace." },
       {

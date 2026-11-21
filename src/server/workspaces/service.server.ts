@@ -18,10 +18,12 @@ import { normalizeDomain } from "@/lib/workspace/domain";
 import { mayRestoreFreeScan } from "@/lib/workspace/brand-room";
 import { HttpError } from "@/server/http-error";
 import { optionalWorkspaceEntitlements } from "@/server/billing/readiness.server";
-import { LimitReachedError } from "@/server/billing/errors";
+import { LimitReachedError, UpgradeRequiredError } from "@/server/billing/errors";
 import { listR2WorkspaceAssetPaths, removeAssetObjects } from "@/server/assets/storage.server";
 
 export const DELETE_CONFIRMATION = "CONFIRM";
+/** The placeholder name a "No website" brand has until the kit names it. */
+export const BLANK_DRAFT_NAME = "New brand";
 const STORAGE_BUCKET = "generated-assets";
 
 // Generated types lag new RPCs/tables until `npm run db:types` runs against the
@@ -32,6 +34,8 @@ export type CreateWorkspaceResult = {
   id: string;
   /** false → an existing workspace was returned (same brand domain or replayed request). */
   created: boolean;
+  /** true → the person's own untouched "No website" draft was reopened instead of a new one. */
+  resumed?: boolean;
   domain: string | null;
   name: string;
 };
@@ -42,8 +46,37 @@ export async function createOrGetWorkspace(args: {
   websiteUrl: string | null;
   idempotencyKey: string | null;
 }): Promise<CreateWorkspaceResult> {
+  // "No website" never piles up empty brands: an untouched draft of this
+  // person's (no site, still the placeholder name, setup not finished) is
+  // reopened instead. Typing a brand name in the kit ends the draft.
+  if (!args.websiteUrl && args.name.trim() === BLANK_DRAFT_NAME) {
+    const { data: draft } = await admin
+      .from("workspaces")
+      .select("id, name")
+      .eq("owner_id", args.userId)
+      .eq("name", BLANK_DRAFT_NAME)
+      .is("website_url", null)
+      .is("domain", null)
+      .is("onboarded_at", null)
+      .is("duplicate_of", null)
+      .is("frozen_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (draft?.id)
+      return {
+        id: draft.id as string,
+        created: true,
+        resumed: true,
+        domain: null,
+        name: BLANK_DRAFT_NAME,
+      };
+  }
   const entitlements = await optionalWorkspaceEntitlements({ userId: args.userId });
   const enforcing = entitlements?.enforcement === "on";
+  // No Free plan (ADR-0050): a new brand needs a plan (or a trial) behind it.
+  if (enforcing && entitlements.entitledPlan === "free")
+    throw new UpgradeRequiredError({ requiredPlan: "starter", currentPlan: "free" });
   const { data, error } = await admin.rpc(
     enforcing ? "create_billed_workspace_for_user" : "create_workspace_for_user",
     {

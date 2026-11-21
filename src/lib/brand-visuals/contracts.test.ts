@@ -90,7 +90,7 @@ describe("visual taste decisions", () => {
     )
       .flat()
       .reverse();
-    const selected = analysisReferences(sources);
+    const selected = analysisReferences(sources, 8);
     expect(selected).toHaveLength(8);
     expect(new Set(selected.map((s) => s.region.page)).size).toBe(4);
     expect(selected[0].region).toMatchObject({ page: 0, top: 0 });
@@ -164,13 +164,13 @@ describe("visual taste decisions", () => {
     expect(directionRules({ ...direction, lockTheme: true })).toContain("do not rotate");
     expect(ProfileSchema.safeParse({ directions: [] }).success).toBe(false);
   });
-  it("a still video preview consumes image credits; making the video uses its own meter", () => {
-    expect(studioChargeFor({ type: "video", videoPreview: true })).toBe("image_post");
+  it("a video preview is the priced storyboard; making the video uses its own meter", () => {
+    expect(studioChargeFor({ type: "video", videoPreview: true })).toBe("video_storyboard");
     expect(studioChargeFor({ type: "video", videoPreview: false })).toBe("studio_video");
     expect(studioChargeFor({ type: "video" })).toBe("studio_video");
     expect(studioChargeFor({ type: "story", storyMode: "video" })).toBe("studio_video");
     expect(studioChargeFor({ type: "story", storyMode: "video", videoPreview: true })).toBe(
-      "image_post",
+      "video_storyboard",
     );
   });
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,22 +22,13 @@ export function MelloxPulse({ active, className }: { active: boolean; className?
         animate={active ? { rotate: 360 } : { rotate: 0 }}
         transition={active ? { duration: 2.4, ease: "linear", repeat: Infinity } : {}}
       />
+      {/* Mellox 2.0: Mox himself, thinking while a reply is written. */}
       <motion.span
-        className="mx-pulse__core relative grid size-[18px] place-items-center"
-        animate={active ? { scale: [1, 0.86, 1] } : { scale: 1 }}
+        className="mx-pulse__core relative grid place-items-center"
+        animate={active ? { scale: [1, 0.92, 1] } : { scale: 1 }}
         transition={active ? { duration: 1.6, ease: "easeInOut", repeat: Infinity } : {}}
       >
-        <svg viewBox="0 0 24 24" className="size-full" fill="none">
-          <path
-            d="M12 2.5c.5 4.9 2.6 7 7.5 7.5-4.9.5-7 2.6-7.5 7.5-.5-4.9-2.6-7-7.5-7.5 4.9-.5 7-2.6 7.5-7.5Z"
-            fill="currentColor"
-          />
-          <path
-            d="M19 15.5c.2 2 1 2.8 3 3-2 .2-2.8 1-3 3-.2-2-1-2.8-3-3 2-.2 2.8-1 3-3Z"
-            fill="currentColor"
-            opacity=".55"
-          />
-        </svg>
+        <MoxFace mood={active ? "thinking" : "happy"} size={24} />
       </motion.span>
     </span>
   );

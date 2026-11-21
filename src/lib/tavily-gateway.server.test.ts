@@ -5,7 +5,9 @@ import { cache } from "@/server/cache/store";
 import { runWithScope } from "@/server/request-context";
 import {
   TavilyGatewayError,
+  resetTavilyPause,
   setTavilyTransport,
+  tavilyPausedReason,
   tavilyExtract,
   tavilySearch,
 } from "./tavily-gateway.server";
@@ -21,7 +23,8 @@ beforeEach(() => {
   process.env.TAVILY_CACHE_BUST = String(Math.random());
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await resetTavilyPause();
   delete process.env.TAVILY_API_KEY;
   setTavilyTransport(null);
   setUsageSink(async () => {});
@@ -256,5 +259,52 @@ describe("cache isolation", () => {
     await tavilySearch(query, { maxResults: 4 });
     expect(transport).toHaveBeenCalledTimes(1);
     void cache;
+  });
+});
+
+describe("pause after a refusal a retry can't fix", () => {
+  it("stops calling Tavily once it says the credits are used up", async () => {
+    enable();
+    const failing = vi.fn(async () => {
+      throw new TavilyGatewayError(402, "Web research is out of credits.", "out_of_credits");
+    });
+    setTavilyTransport(failing);
+    await expect(tavilySearch(`credits ${Math.random()}`)).rejects.toMatchObject({
+      code: "out_of_credits",
+    });
+    expect(await tavilyPausedReason()).toBe("out_of_credits");
+
+    const next = vi.fn(async () => searchResponse(["https://p.example.com"]));
+    setTavilyTransport(next);
+    await expect(tavilySearch(`credits ${Math.random()}`)).rejects.toMatchObject({
+      code: "paused",
+    });
+    await expect(tavilyExtract(["https://example.com/a"])).rejects.toMatchObject({
+      code: "paused",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("pauses on a refused key and on a rate limit", async () => {
+    enable();
+    for (const code of ["auth", "rate_limited"]) {
+      await resetTavilyPause();
+      setTavilyTransport(async () => {
+        throw new TavilyGatewayError(503, "no", code);
+      });
+      await expect(tavilySearch(`${code} ${Math.random()}`)).rejects.toMatchObject({ code });
+      expect(await tavilyPausedReason()).toBe(code);
+    }
+  });
+
+  it("does not pause on an ordinary provider error, and spends nothing while paused", async () => {
+    enable();
+    setTavilyTransport(async () => {
+      throw new TavilyGatewayError(502, "boom", "provider_error");
+    });
+    await expect(tavilySearch(`boom ${Math.random()}`)).rejects.toMatchObject({
+      code: "provider_error",
+    });
+    expect(await tavilyPausedReason()).toBeNull();
   });
 });

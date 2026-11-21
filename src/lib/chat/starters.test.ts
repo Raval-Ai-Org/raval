@@ -93,6 +93,7 @@ describe("starters from the workspace pulse", () => {
     campaigns: [{ id: "c1", name: "Spring launch", phase: "Build-up", keyDate: null, waiting: 2 }],
     products: ["Oat latte kit"],
     goal: { focus: "sales" as const, label: "Sell more" },
+    made: null,
   };
 
   it("names the running campaign, a catalogue product, the goal and what waits", () => {

@@ -73,7 +73,7 @@ export function CommandPalette({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 p-4 pt-[12vh] backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-start justify-center ds-scrim p-4 pt-[12vh]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -87,7 +87,7 @@ export function CommandPalette({
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="ds-window w-full max-w-xl overflow-hidden border border-border/70"
+            className="ds-pop w-full max-w-xl overflow-hidden"
           >
             <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3.5">
               <Search className="h-4 w-4 text-muted-foreground" />

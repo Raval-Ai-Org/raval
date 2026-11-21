@@ -15,6 +15,7 @@ import {
   type CampaignsTab,
 } from "@/components/app/campaigns/types";
 import { campaignsPath, workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute, stepTo } from "@/lib/shell/history";
 
 const CampaignsPanel = lazy(() =>
   import("@/components/app/campaigns/CampaignsPanel").then((m) => ({ default: m.CampaignsPanel })),
@@ -42,9 +43,10 @@ function Inner() {
   const tab = readTab(params);
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Campaigns"
       Icon={Megaphone}
@@ -64,13 +66,13 @@ function Inner() {
               router.replace(campaignsPath(workspaceId, { tab: next }), { scroll: false })
             }
             onMode={(next) =>
-              router.push(
+              stepTo(
+                router,
                 next.kind === "new"
                   ? campaignsPath(workspaceId, { v: "new", type: next.type, c: next.editId })
                   : next.kind === "campaign"
                     ? campaignsPath(workspaceId, { c: next.id })
                     : campaignsPath(workspaceId, { tab }),
-                { scroll: false },
               )
             }
           />

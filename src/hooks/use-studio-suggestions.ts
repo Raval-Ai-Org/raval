@@ -41,6 +41,7 @@ const ICON = {
   pillar: "Brain",
   momentum: "Sparkles",
   campaign: "Calendar",
+  radar: "Sparkles",
 } as const;
 const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
   season: "green",
@@ -50,6 +51,7 @@ const ACCENT: Record<StudioIdea["source"], StudioSuggestionAccent> = {
   pillar: "violet",
   momentum: "indigo",
   campaign: "green",
+  radar: "rose",
 };
 
 function toSuggestion(idea: StudioIdea): StudioSuggestion {
@@ -73,39 +75,60 @@ function toSuggestion(idea: StudioIdea): StudioSuggestion {
   };
 }
 
+/**
+ * The Studio rail's ideas. Opening the rail only looks at ideas already made
+ * (the shared server cache, free); a new model pass happens only when a
+ * person presses "Show ideas" or refresh. Nothing reloads by itself after
+ * content changes: that used to start a paid model call every time a piece
+ * was saved.
+ */
 export function useStudioSuggestions() {
   const workspaceId = useOptionalWorkspaceId();
   const [ideas, setIdeas] = useState<StudioIdea[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  /** A person asked for ideas (a model pass may have run). */
+  const [asked, setAsked] = useState(false);
   const request = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
 
   const load = useCallback(
-    async (refresh = false) => {
+    async (mode: "peek" | "ask" | "refresh") => {
       const id = ++request.current;
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
       if (!workspaceId) {
         setIdeas([]);
         setLoading(false);
         return;
       }
+      if (mode !== "peek") setAsked(true);
       setLoading(true);
       setError(false);
       try {
         const dismissed = readDismissed(workspaceId);
-        const result = await studioApi.ideas({
-          workspaceId,
-          brand: readBrandPayload(workspaceId),
-          dismissed: dismissed.map((item) => item.title).slice(-30),
-          limit: 8,
-          refresh,
-        });
+        const result = await studioApi.ideas(
+          {
+            workspaceId,
+            brand: readBrandPayload(workspaceId),
+            dismissed: dismissed.map((item) => item.title).slice(-30),
+            limit: 8,
+            refresh: mode === "refresh",
+            cachedOnly: mode === "peek",
+          },
+          controller.signal,
+        );
         if (id !== request.current) return;
         const hidden = new Set(dismissed.map((item) => item.id));
         setIdeas(result.ideas.filter((idea) => !hidden.has(idea.id)));
       } catch {
-        if (id === request.current) setError(true);
+        if (id === request.current && !controller.signal.aborted && mode !== "peek") setError(true);
       } finally {
-        if (id === request.current) setLoading(false);
+        if (id === request.current) {
+          setLoading(false);
+          inFlight.current = null;
+        }
       }
     },
     [workspaceId],
@@ -113,16 +136,18 @@ export function useStudioSuggestions() {
 
   useEffect(() => {
     setIdeas([]);
-    void load();
-    const onChange = () => void load();
-    const onBrandChange = () => void load(true);
+    setAsked(false);
+    void load("peek");
+    // New Brand DNA makes the old ideas stale: clear them and wait for a click.
+    const onBrandChange = () => {
+      inFlight.current?.abort();
+      setIdeas([]);
+      setAsked(false);
+    };
     addAppEventListener("brand-dna:saved", onBrandChange);
-    addAppEventListener("content:changed", onChange);
-    addAppEventListener("geo:audit-complete", onChange);
     return () => {
       removeAppEventListener("brand-dna:saved", onBrandChange);
-      removeAppEventListener("content:changed", onChange);
-      removeAppEventListener("geo:audit-complete", onChange);
+      inFlight.current?.abort();
     };
   }, [load]);
 
@@ -142,5 +167,13 @@ export function useStudioSuggestions() {
     [ideas, workspaceId],
   );
 
-  return { items: ideas.map(toSuggestion), loading, error, refresh: () => load(true), dismiss };
+  return {
+    items: ideas.map(toSuggestion),
+    loading,
+    error,
+    asked,
+    ask: () => load("ask"),
+    refresh: () => load("refresh"),
+    dismiss,
+  };
 }

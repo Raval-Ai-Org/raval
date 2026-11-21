@@ -207,7 +207,7 @@ describe("AI controls", () => {
         `select public.admin_route_override_set($1,'engineering','brand-extract',$2,$3,$4,$5,$6,$7)`,
         [ADMIN, models, effort, REASON, ...meta()],
       );
-    await set(["google/gemini-3.1-flash-lite"], "low");
+    await set(["openai/gpt-6-luna"], "low");
     let { rows } = await db.query(`select * from public.model_route_overrides`);
     expect(rows).toHaveLength(1);
     await set(null, null);

@@ -2,24 +2,20 @@
 // credit or video hold, shared by the jobs route (a person pressing Generate)
 // and Autopilot (the worker, acting as a stored member). Same price either way.
 import "server-only";
+import { NON_SELLING, readBrief } from "@/lib/studio/brief-read";
 import {
   studioChargeFor,
+  studioCreditUnits,
   studioJobRenders,
+  studioVideoCredits,
   studioTextOnlyRevision,
   type StudioCharge,
 } from "@/lib/studio/billing";
 import { isVariationsRequest, variationCount } from "@/lib/studio/variations";
-import { studioVideoUnits } from "@/lib/ugc/duration";
 import type { CreateJobInput, StudioJob } from "@/lib/studio/jobs";
 import { createStudioJob } from "@/server/studio/runner.server";
 import { beginDeferredMetered } from "@/server/billing/metered.server";
-import {
-  CREDIT_ACTIONS,
-  creditsFor,
-  creditsForVideoUnits,
-  videoFeatureFor,
-  type CreditAction,
-} from "@/lib/billing/catalog";
+import { CREDIT_ACTIONS, videoFeatureFor, type CreditAction } from "@/lib/billing/catalog";
 import { InsufficientBalanceError } from "@/server/billing/errors";
 import { saveStudioBillingLink, settleStudioBilling } from "@/server/billing/studio-async.server";
 import { runWithScope } from "@/server/request-context";
@@ -37,6 +33,7 @@ import {
   settleCaptionEdit,
 } from "@/server/billing/creation.server";
 import { HttpError } from "@/server/http-error";
+import { imageFundsPaused, PICTURES_PAUSED } from "@/server/ai/image-funds.server";
 import { quoteStudioVideo, shortClipCreditsForRecap } from "./video-quote.server";
 import { MOTION_MAX_SECONDS, MOTION_MIN_SECONDS } from "@/lib/studio/motion/document";
 
@@ -44,7 +41,13 @@ import { MOTION_MAX_SECONDS, MOTION_MIN_SECONDS } from "@/lib/studio/motion/docu
 const MOTION_DEFAULT_SECONDS = 12;
 import { shortClipPlan } from "@/lib/studio/short-clip";
 import { resolvePhotoMode } from "@/lib/studio/photo-design/mode";
-import { isClipEditEnabled, isPhotoDesignEnabled, isProductHeroEnabled } from "@/lib/feature-flags";
+import {
+  isClipEditEnabled,
+  isPhotoDesignEnabled,
+  isProductHeroEnabled,
+  isVideoStoryboardEnabled,
+} from "@/lib/feature-flags";
+import { needsStoryboard } from "@/lib/studio/video/board";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { pickFeaturedProduct, productPhotoControls } from "@/lib/products/feature";
 import { settleVideoControls } from "@/lib/studio/video/settle";
@@ -88,8 +91,28 @@ export async function createBilledStudioJob(args: {
    * for a worker acting without a person, also one for a selling brief.
    */
   autoProduct?: "named" | "any";
+  /**
+   * A worker's new piece may carry the brand's own Inspo photos by itself,
+   * only sometimes and in rotation (src/lib/inspo/media-rotation.ts). The
+   * seed keeps the decision the same on a retry. Never used when a product
+   * or photos were already chosen.
+   */
+  ownMediaSeed?: string;
+  /**
+   * A person's request: answer once the job exists and make it after the
+   * response (see `createStudioJob`). Workers leave this off.
+   */
+  background?: boolean;
 }): Promise<BilledStudioJob> {
   const { client, workspaceId, userId, role, input } = args;
+  // No OpenRouter money for pictures right now: say so at once, before any
+  // hold or writer spend, instead of failing the job ~40 s later. Videos run
+  // on KIE and are left alone.
+  const drawsPicture =
+    studioJobRenders(input) &&
+    input.type !== "video" &&
+    !(input.type === "story" && input.controls.storyMode === "video");
+  if (drawsPicture && (await imageFundsPaused())) throw new HttpError(503, PICTURES_PAUSED);
   // A piece about a catalogue product (ADR-0035) must name one of this
   // workspace's products, and is made with that product's own photos unless
   // the person chose photos themselves. A product the brief names is picked
@@ -122,6 +145,76 @@ export async function createBilledStudioJob(args: {
       input.controls.referenceMode = photos.referenceMode;
       if (photos.referenceMode === "design") input.controls.photoFidelity = "exact";
       heroFromProduct = photos.referenceMode === "hero";
+    }
+  }
+  // The brand's own Inspo photos, now and then, on a worker's picture post
+  // or carousel that has no product and no photos of its own. Decided here,
+  // before pricing, so the charge matches what runs.
+  if (
+    args.ownMediaSeed &&
+    !revision &&
+    !input.controls.productId &&
+    !input.controls.referenceAssetIds?.length &&
+    !input.controls.sourceVideoAssetIds?.length &&
+    isPhotoDesignEnabled(workspaceId) &&
+    (input.type === "image" ||
+      input.type === "carousel" ||
+      (input.type === "social" && input.controls.includeImage))
+  ) {
+    const { pickInspoMediaFor } = await import("@/server/inspo/media-pool.server");
+    const pick = await pickInspoMediaFor(
+      workspaceId,
+      input.type,
+      args.ownMediaSeed,
+      input.intent?.brief ?? "",
+    );
+    if (pick) {
+      input.controls.referenceAssetIds = pick.assetIds;
+      // Site art (a mascot, an illustration) is drawn into the scene in the
+      // brand's own world; own photos are placed exactly.
+      input.controls.referenceMode = pick.mode ?? "design";
+      if (input.controls.referenceMode === "design") input.controls.photoFidelity = "exact";
+    }
+  }
+  // A person's brief that names their own Media ("use our launch event
+  // photos", a folder or a label) is made with those photos, the way a named
+  // product is picked by itself. Decided before pricing.
+  if (
+    !args.ownMediaSeed &&
+    !revision &&
+    !input.controls.productId &&
+    !input.controls.referenceAssetIds?.length &&
+    !input.controls.sourceVideoAssetIds?.length &&
+    isPhotoDesignEnabled(workspaceId) &&
+    (input.type === "image" ||
+      input.type === "carousel" ||
+      (input.type === "social" && input.controls.includeImage))
+  ) {
+    const brief = input.intent?.brief ?? "";
+    const { briefAsksForOwnMedia } = await import("@/lib/inspo/media-library");
+    if (briefAsksForOwnMedia(brief)) {
+      const { namedInspoMediaFor } = await import("@/server/inspo/media-pool.server");
+      const pick = await namedInspoMediaFor(workspaceId, input.type, brief);
+      if (pick) {
+        input.controls.referenceAssetIds = pick.assetIds;
+        input.controls.referenceMode = pick.mode ?? "design";
+        if (input.controls.referenceMode === "design") input.controls.photoFidelity = "exact";
+      }
+    }
+  }
+  // Site art chosen anywhere (a campaign's plan, a chat or assistant draft, a
+  // person's pick) is drawn into the picture in the brand's world, never
+  // pasted in like a photo.
+  if (
+    !revision &&
+    !input.controls.productId &&
+    input.controls.referenceMode === "design" &&
+    input.controls.referenceAssetIds?.length
+  ) {
+    const { allSiteArt } = await import("@/server/inspo/media-pool.server");
+    if (await allSiteArt(workspaceId, input.controls.referenceAssetIds)) {
+      input.controls.referenceMode = "inspire";
+      delete input.controls.photoFidelity;
     }
   }
   // A product hero is only ever made from the picked product's own photo
@@ -195,6 +288,21 @@ export async function createBilledStudioJob(args: {
         product: Boolean(input.controls.productId),
       },
     });
+  // A person's new long or premium AI video is storyboarded first
+  // (src/lib/studio/video/board.ts): the plan and a frame per scene for the
+  // storyboard's small price, and the video only when they press Create (a
+  // media-only revision of this job, which renders exactly its plan). A
+  // worker keeps what its plan asked; an edit of a storyboard is not forced.
+  if (
+    args.autoProduct !== "any" &&
+    !input.parentJobId &&
+    !input.refine &&
+    isVideoStoryboardEnabled(workspaceId) &&
+    needsStoryboard(input)
+  ) {
+    input.controls.videoPreview = true;
+    delete input.controls.videoQuote;
+  }
   // Reject foreign/deleted references before reserving credits or starting work.
   if (!studioTextOnlyRevision(input)) {
     await resolveStudioReferences(
@@ -246,8 +354,8 @@ export async function createBilledStudioJob(args: {
     video && quoted ? (await getEntitlements({ workspaceId, userId, role })).meters : null;
   let videoQuote = quoted
     ? quoteStudioVideo(input.controls, {
-        videoBalance: wallets?.video.available ?? 0,
-        premiumBalance: wallets?.premium_video.available ?? 0,
+        videoBalance: wallets?.video?.available ?? 0,
+        premiumBalance: wallets?.premium_video?.available ?? 0,
       })
     : null;
   // A person's Generate button carries the quote it showed, which must still
@@ -277,13 +385,12 @@ export async function createBilledStudioJob(args: {
     };
   };
   if (videoQuote) keepQuote(videoQuote);
-  const useCreation = input.controls.paymentSource === "creation" && !video;
-  const entitlements = useCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
-  if (useCreation && !entitlements?.creation?.active)
-    throw new HttpError(
-      409,
-      "Your creation allowance starts with your next plan renewal. Use wallet credits for this request.",
-    );
+  // Creation points are legacy (pricing v4, ADR-0050): only a window granted
+  // before v4 still pays in points. Anything else pays in credits.
+  const askedCreation = input.controls.paymentSource === "creation" && !video;
+  const entitlements = askedCreation ? await getEntitlements({ workspaceId, userId, role }) : null;
+  const useCreation = askedCreation && Boolean(entitlements?.creation?.active);
+  if (askedCreation && !useCreation) input.controls.paymentSource = "credits";
   const points = useCreation ? creationPointsFor(input) : null;
   let captionEditId: string | null = null;
   let captionCostChargeId: string | null = null;
@@ -320,11 +427,14 @@ export async function createBilledStudioJob(args: {
     ? 0
     : (points ??
       (video
-        ? (videoQuote?.units ?? creditsForVideoUnits(studioVideoUnits(input.controls.durationSec)))
+        ? (videoQuote?.units ?? studioVideoCredits(input.type, input.controls))
         : clip
           ? (videoQuote?.units ?? shortClipCreditsForRecap(input.controls, clip.clips))
-          : creditsFor(action as CreditAction) *
-            (isVariationsRequest(input) ? variationCount(input.controls) : 1)));
+          : studioCreditUnits(
+              action as StudioCharge,
+              input.controls,
+              isVariationsRequest(input) ? variationCount(input.controls) : 1,
+            )));
   const meter = useCreation
     ? ("creation" as const)
     : video
@@ -413,6 +523,12 @@ export async function createBilledStudioJob(args: {
             workspaceId,
             userId,
             input,
+            background: args.background,
+            onFinished: async (done) => {
+              // The request has answered by now; settle the hold here so the
+              // charge never waits for someone to poll the job.
+              if (createdHere && billingLinked) await settleStudioBilling(done);
+            },
             onCreated: async (created) => {
               createdHere = true;
               if (captionEditId) await linkCaptionEdit(captionEditId, created.id);
@@ -456,6 +572,18 @@ export async function createBilledStudioJob(args: {
   }
 }
 
+/** Briefs that never feature a product unless a person picks one. */
+const NEVER_PRODUCT: ReadonlySet<string> = new Set([
+  "hiring",
+  "greeting",
+  "event",
+  "milestone",
+  "intro",
+  "collab",
+  "market-entry",
+  "case-study",
+]);
+
 /** The catalogue product a new piece is about when none was chosen. Fails open. */
 async function autoPickProduct(
   workspaceId: string,
@@ -468,6 +596,11 @@ async function autoPickProduct(
     const products = await featureCandidates(workspaceId);
     if (!products.length) return null;
     const rotate = mode === "any";
+    // A post that is not about selling never gets a product attached by
+    // itself (ADR-0051): a hiring post or a greeting stays what it is.
+    const { deliverable } = readBrief(input.intent.brief);
+    if (NEVER_PRODUCT.has(deliverable)) return null;
+    if (rotate && NON_SELLING.has(deliverable)) return null;
     const pick = pickFeaturedProduct({
       text: [input.intent.brief, input.controls.campaign].filter(Boolean).join("\n"),
       goal: input.intent.goal,

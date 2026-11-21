@@ -117,7 +117,7 @@ export function SiteConnectPicker({
                 className={cn(
                   "text-[11px]",
                   on
-                    ? "text-primary"
+                    ? "text-primary-ink"
                     : t.state === "needs_check"
                       ? "text-warning"
                       : "text-muted-foreground",

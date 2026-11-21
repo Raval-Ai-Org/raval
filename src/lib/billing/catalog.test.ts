@@ -4,6 +4,9 @@ import {
   MAX_USD_PER_VC,
   PLAN_ORDER,
   PLANS,
+  PUBLIC_PLANS,
+  UNITS_PER_CREDIT,
+  hasActivePlan,
   VIDEO_OPTIONS,
   annualMonthlyUsd,
   planRank,
@@ -11,14 +14,22 @@ import {
 } from "./catalog";
 
 describe("billing catalog invariants", () => {
-  it("orders five plans with annual prices equal to ten monthly payments", () => {
+  it("sells three public plans at $49 / $149 / $399, yearly at $39 / $119 / $319 a month", () => {
     expect(PLAN_ORDER).toEqual(["free", "starter", "growth", "agency", "scale"]);
-    for (const id of PLAN_ORDER) {
-      expect(PLANS[id].priceAnnualUsd).toBe(10 * PLANS[id].priceMonthlyUsd);
-      expect(annualMonthlyUsd(id)).toBe(Math.round((PLANS[id].priceAnnualUsd / 12) * 100) / 100);
+    expect(PUBLIC_PLANS).toEqual(["starter", "growth", "agency"]);
+    const expected = { starter: [49, 39, 150], growth: [149, 119, 500], agency: [399, 319, 1500] };
+    for (const [id, [monthly, yearly, credits]] of Object.entries(expected)) {
+      const plan = PLANS[id as keyof typeof expected];
+      expect(plan.priceMonthlyUsd).toBe(monthly);
+      expect(plan.priceAnnualUsd).toBe(yearly * 12);
+      expect(annualMonthlyUsd(id as keyof typeof expected)).toBe(yearly);
+      expect(plan.allowances.credits).toBe(credits * UNITS_PER_CREDIT);
     }
+    // No Free plan: "free" is only the locked, no-plan state.
     expect(PLANS.free.priceMonthlyUsd).toBe(0);
-    expect(PLANS.scale.priceMonthlyUsd).toBe(1199);
+    expect(PLANS.free.allowances.credits).toBe(0);
+    expect(hasActivePlan("free")).toBe(false);
+    expect(hasActivePlan("starter")).toBe(true);
   });
 
   it("keeps account allowances and limits monotonic", () => {
@@ -58,12 +69,11 @@ describe("billing catalog invariants", () => {
 });
 
 describe("premium video on Starter", () => {
-  it("sells Premium video from Starter up, keeps Cinematic for Agency and Full HD for Growth", async () => {
+  it("opens Premium and Cinematic video on every paid plan", async () => {
     const { planAllows } = await import("./catalog");
+    // Credits price every video, so every plan can make every kind.
     expect(planAllows("starter", "video_premium")).toBe(true);
     expect(planAllows("free", "video_premium")).toBe(false);
-    expect(planAllows("starter", "video_cinematic")).toBe(false);
-    expect(planAllows("starter", "video_1080p")).toBe(false);
-    expect(planAllows("growth", "video_1080p")).toBe(true);
+    expect(planAllows("starter", "video_cinematic")).toBe(true);
   });
 });

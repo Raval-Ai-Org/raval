@@ -11,12 +11,14 @@ import {
   useTransform,
   type PanInfo,
 } from "framer-motion";
-import { ArrowRight, RefreshCw, RotateCcw, Sparkles, Star, Wand2, X } from "@/components/icons";
+import { ArrowRight, Heart, RefreshCw, RotateCcw, Wand2, X } from "@/components/icons";
+import { Illustration, type IlloKind } from "@/components/app/home/illustrations";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { duration, ease } from "@/lib/motion";
-import { readBrandPayload, studioApi } from "@/lib/studio/client";
+import { cachedIdeas, loadIdeas } from "@/lib/studio/idea-cache";
 import { STUDIO_FORMATS, type StudioType } from "@/lib/studio/formats";
 import { IDEA_SOURCE_LABEL, type StudioIdea } from "@/lib/studio/ideas";
 import {
@@ -52,24 +54,24 @@ export function IdeaSwipeDeck({
   fixtureIdeas?: StudioIdea[];
 }) {
   const reduce = useReducedMotion();
-  const [deck, setDeck] = useState<Deck>(() => newDeck([], [], []));
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  // Ideas Home already fetched (or the last batch kept in this browser) are
+  // shown at once; the shimmer shows only when there is nothing in hand.
+  const initial = fixtureIdeas ?? cachedIdeas(workspaceId, type)?.ideas ?? null;
+  const [deck, setDeck] = useState<Deck>(() =>
+    initial
+      ? newDeck(initial, readSavedIdeas(workspaceId), readSkippedIdeas(workspaceId))
+      : newDeck([], [], []),
+  );
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    initial ? "ready" : "loading",
+  );
   const [loadingMore, setLoadingMore] = useState(false);
   const [exit, setExit] = useState<DeckAction>("skip");
 
   const fetchIdeas = useCallback(
     async (refresh: boolean) => {
       if (fixtureIdeas) return fixtureIdeas;
-      const skipped = readSkippedIdeas(workspaceId);
-      const res = await studioApi.ideas({
-        workspaceId,
-        type,
-        brand: readBrandPayload(workspaceId),
-        dismissed: skipped.map((d) => d.title).slice(-30),
-        refresh,
-        limit: 8,
-      });
-      return res.ideas;
+      return loadIdeas(workspaceId, type, { refresh });
     },
     [workspaceId, type, fixtureIdeas],
   );
@@ -77,18 +79,39 @@ export function IdeaSwipeDeck({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setStatus("loading");
-    void fetchIdeas(false)
-      .then((ideas) => {
-        if (cancelled) return;
-        setDeck(newDeck(ideas, readSavedIdeas(workspaceId), readSkippedIdeas(workspaceId)));
-        setStatus("ready");
-      })
-      .catch(() => !cancelled && setStatus("error"));
+    const saved = () => readSavedIdeas(workspaceId);
+    const skipped = () => readSkippedIdeas(workspaceId);
+    if (fixtureIdeas) {
+      setDeck(newDeck(fixtureIdeas, saved(), skipped()));
+      setStatus("ready");
+      return;
+    }
+    const inHand = cachedIdeas(workspaceId, type);
+    if (inHand) {
+      setDeck(newDeck(inHand.ideas, saved(), skipped()));
+      setStatus("ready");
+      if (inHand.fresh) return;
+      // An older batch: swipe it now, new ideas join the end of the stack
+      // when they arrive (never reshuffling the card under the finger).
+      void fetchIdeas(false)
+        .then((ideas) => !cancelled && setDeck((d) => addIdeas(d, ideas)))
+        .catch(() => {});
+    } else {
+      setStatus("loading");
+      // Not aborted on close: the request is shared, its answer is kept for
+      // the next opening, and it runs in the background lane either way.
+      void fetchIdeas(false)
+        .then((ideas) => {
+          if (cancelled) return;
+          setDeck(newDeck(ideas, saved(), skipped()));
+          setStatus("ready");
+        })
+        .catch(() => !cancelled && setStatus("error"));
+    }
     return () => {
       cancelled = true;
     };
-  }, [open, fetchIdeas, workspaceId]);
+  }, [open, fetchIdeas, workspaceId, type, fixtureIdeas]);
 
   const update = useCallback(
     (next: Deck) => {
@@ -138,22 +161,40 @@ export function IdeaSwipeDeck({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[440px] gap-4 overflow-hidden p-5 sm:p-6">
-        <div className="pr-10">
-          <DialogTitle className="flex items-center gap-1.5">
-            <Sparkles className="size-4 text-primary" />
-            Swipe through ideas
-          </DialogTitle>
-          <DialogDescription className="mt-1">
-            Right to save, left to skip. Make the one you like.
-          </DialogDescription>
+      <DialogContent className="max-w-[460px] gap-4 overflow-hidden rounded-[28px] p-5 sm:p-6">
+        <DialogTitle className="sr-only">Swipe through ideas</DialogTitle>
+        <DialogDescription className="sr-only">
+          Right to save, left to skip. Make the one you like.
+        </DialogDescription>
+        {/* Holo: Mox asks one question, with how many are left. */}
+        <div className="flex items-center gap-3 pr-10">
+          <MoxFace mood={status === "loading" ? "thinking" : top ? "happy" : "wow"} size={40} />
+          <div className="min-w-0">
+            <p className="text-[18px] font-bold leading-tight tracking-[-0.02em]">
+              {top ? "Keep this idea?" : "Ideas for you"}
+            </p>
+            <p className="text-[12px] text-muted-foreground">
+              {status === "ready" && top ? `${deck.queue.length} left` : "Swipe right to keep"}
+            </p>
+          </div>
         </div>
 
         <div className="relative h-[300px]" data-testid="idea-deck">
           {status === "loading" ? (
-            <div className="absolute inset-0 overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2">
+            <div
+              role="status"
+              className="absolute inset-0 overflow-hidden rounded-[var(--ds-radius-tile)] bg-surface-2"
+            >
               <span className="studio-weave absolute inset-0" aria-hidden />
-              <span className="sr-only">Loading ideas</span>
+              {/* A card's shape, so the first ideas land where the eye already is. */}
+              <div className="relative flex h-full flex-col justify-end gap-2.5 p-5" aria-hidden>
+                <span className="h-5 w-24 rounded-full bg-foreground/[0.07]" />
+                <span className="h-5 w-4/5 rounded-full bg-foreground/[0.09]" />
+                <span className="h-3.5 w-3/5 rounded-full bg-foreground/[0.06]" />
+              </div>
+              <p className="absolute inset-x-0 top-5 text-center text-[12.5px] font-medium text-muted-foreground">
+                Mox is thinking up ideas for your brand…
+              </p>
             </div>
           ) : status === "error" ? (
             <div className="grid h-full place-items-center rounded-[var(--ds-radius-tile)] bg-surface-2 p-6 text-center text-sm text-muted-foreground">
@@ -208,10 +249,11 @@ export function IdeaSwipeDeck({
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-3">
-          <RoundButton label="Skip" onClick={() => act("skip")} disabled={!top}>
-            <X className="size-5" />
-          </RoundButton>
+        {/* Holo's pair: Skip (soft red) and Save (green), undo between. */}
+        <div className="flex items-center gap-2">
+          <PillButton label="Skip" onClick={() => act("skip")} disabled={!top} tone="skip">
+            <X className="size-4" strokeWidth={2.6} />
+          </PillButton>
           <RoundButton
             label="Undo last swipe"
             onClick={() => update(undoSwipe(deck))}
@@ -220,14 +262,19 @@ export function IdeaSwipeDeck({
           >
             <RotateCcw className="size-4" />
           </RoundButton>
-          <RoundButton label="Save" onClick={() => act("save")} disabled={!top} tone="save">
-            <Star className="size-5" />
-          </RoundButton>
-          <Button className="ml-1 rounded-full" disabled={!top} onClick={() => top && make(top)}>
-            <Wand2 />
-            Make this
-          </Button>
+          <PillButton label="Save" onClick={() => act("save")} disabled={!top} tone="save">
+            <Heart className="size-4" strokeWidth={2.6} />
+          </PillButton>
         </div>
+        <button
+          type="button"
+          disabled={!top}
+          onClick={() => top && make(top)}
+          className="ds-grad-pill inline-flex h-11 w-full items-center justify-center gap-2 rounded-full text-[14px] font-bold transition active:scale-[0.98] disabled:opacity-40"
+        >
+          <Wand2 className="size-4" />
+          Make this
+        </button>
 
         {deck.saved.length ? (
           <div className="border-t border-border/60 pt-3">
@@ -315,7 +362,7 @@ function TopCard({
       <CardFace idea={idea} top />
       <motion.span
         style={{ opacity: saveOpacity }}
-        className="pointer-events-none absolute left-4 top-16 -rotate-6 rounded-lg border-2 border-primary px-2 py-0.5 text-sm font-bold uppercase tracking-wide text-primary"
+        className="pointer-events-none absolute left-4 top-16 -rotate-6 rounded-lg border-2 border-primary px-2 py-0.5 text-sm font-bold uppercase tracking-wide text-primary-ink"
       >
         Save
       </motion.span>
@@ -329,15 +376,35 @@ function TopCard({
   );
 }
 
+const IDEA_ILLO: Record<StudioType, IlloKind> = {
+  video: "video",
+  script: "animate",
+  story: "story",
+  image: "post",
+  carousel: "carousel",
+  social: "swipe",
+  article: "article",
+  ad: "ad",
+};
+
 function CardFace({ idea, top }: { idea: StudioIdea; top?: boolean }) {
   return (
     <div
       className={cn(
-        `studio-tone-${idea.type} flex h-full flex-col rounded-[var(--ds-radius-tile)] border bg-surface-3 p-5 select-none`,
-        top ? "border-border shadow-4" : "border-border/60",
+        `studio-tone-${idea.type} relative flex h-full flex-col overflow-hidden rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] p-5 select-none`,
+        top && "shadow-[var(--ds-card-shadow-hover)]",
       )}
     >
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* A picture for the format in the card's corner, Holo style. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-6 size-36 rounded-full bg-[radial-gradient(closest-side,hsl(var(--tone)/0.18),transparent)]"
+      />
+      <Illustration
+        kind={IDEA_ILLO[idea.type]}
+        className="pointer-events-none absolute right-2 top-2 h-[78px] w-[96px]"
+      />
+      <div className="relative flex flex-wrap items-center gap-1.5 pr-24">
         <span className="inline-flex items-center gap-1 text-[12px] font-medium text-foreground/80">
           <TypeGlyph type={idea.type} size="sm" className="size-6 [&_svg]:size-3.5" />
           {STUDIO_FORMATS[idea.type].label}
@@ -346,7 +413,7 @@ function CardFace({ idea, top }: { idea: StudioIdea; top?: boolean }) {
           {IDEA_SOURCE_LABEL[idea.source]}
         </span>
       </div>
-      <p className="mt-4 text-[20px] font-semibold leading-snug tracking-tight text-foreground text-balance">
+      <p className="relative mt-6 text-[20px] font-bold leading-snug tracking-[-0.02em] text-foreground text-balance">
         {idea.title}
       </p>
       {idea.why ? (
@@ -356,6 +423,39 @@ function CardFace({ idea, top }: { idea: StudioIdea; top?: boolean }) {
         {idea.brief}
       </p>
     </div>
+  );
+}
+
+function PillButton({
+  children,
+  label,
+  onClick,
+  disabled,
+  tone,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone: "save" | "skip";
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      whileTap={{ scale: 0.95 }}
+      className={cn(
+        "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full text-[12.5px] font-bold uppercase tracking-wide transition-colors disabled:opacity-40",
+        tone === "save"
+          ? "border-2 border-[var(--mox-green)] text-[var(--mox-green-deep)] hover:bg-[var(--mox-green)]/10 dark:text-[var(--mox-lime)]"
+          : "bg-destructive/10 text-destructive hover:bg-destructive/15",
+      )}
+    >
+      {children}
+      {label}
+    </motion.button>
   );
 }
 
@@ -385,7 +485,7 @@ function RoundButton({
       className={cn(
         "grid place-items-center rounded-full bg-surface-3 shadow-2 ring-1 ring-border transition-colors disabled:opacity-40",
         small ? "size-9 text-muted-foreground" : "size-12",
-        tone === "save" ? "text-primary hover:bg-primary/10" : "text-foreground hover:bg-surface-2",
+        tone === "save" ? "text-primary-ink hover:bg-primary/10" : "text-foreground hover:bg-surface-2",
       )}
     >
       {children}

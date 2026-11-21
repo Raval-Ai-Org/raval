@@ -1,23 +1,18 @@
 "use client";
 
-// Development-only visual check for the onboarding steps added with goals and
-// the product catalogue (ADR-0035): each step with sample data, chosen with
-// `?step=`. Nothing here talks to a server; buttons record what they would do.
+// Development-only: every onboarding screen in the one-question stage
+// (ADR-0049) with sample data, chosen with `?step=` (website, manual, ask,
+// review, audience, products, language, done). Nothing here talks to a
+// server; buttons record what they would do.
 import { useEffect, useRef, useState } from "react";
-import { decideGoals } from "@/lib/goals/decide";
-import { firstPostBriefs } from "@/lib/onboarding/flow";
 import type { Product, ProductCandidate } from "@/lib/products/catalog";
-import type { StudioJob } from "@/lib/studio/jobs";
-import { AmbientCanvas } from "./ui";
-import { ChannelsStep } from "./ChannelsStep";
-import { FirstWinStep, type FirstPostState } from "./FirstWinStep";
-import { GoalStep, emptyGoalDraft, type GoalDraft } from "./GoalStep";
 import { ManualBrandStep, emptyManualBrand, type ManualBrand } from "./ManualBrandStep";
+import type { InspoItem } from "./manual/use-manual-inspiration";
+import { MANUAL_PARTS, type ManualPart } from "@/lib/onboarding/manual-brand";
 import { ProductsStep } from "./ProductsStep";
-import { ScanStrip } from "./ScanStrip";
 import type { ProductDraft } from "./ProductCard";
-
-const WS = "00000000-0000-4000-8000-000000000001";
+import { AskLab, ASK_LAB_STEPS, type LabSlot } from "./ask/AskLab";
+import { VisorTransition, type Beat } from "@/components/brand/mox/VisorTransition";
 
 const swatch = (bg: string, fg: string, label: string) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -105,48 +100,79 @@ const PRODUCTS: Product[] = [
   },
 ];
 
-const GOALS = (() => {
-  const d = decideGoals(
-    {
-      focus: "followers",
-      targets: [{ metric: "followers", platform: "instagram", target: 5000, baseline: 1200 }],
-      timeframeWeeks: 12,
-      postsPerWeek: 4,
-      channels: ["instagram", "tiktok"],
-    },
-    new Date("2026-11-01T00:00:00Z"),
-  );
-  return d.ok ? d.goals : null;
-})();
-
-const job = (n: number, status: StudioJob["status"], body: string): StudioJob =>
-  ({
-    id: `job-${n}`,
-    status,
-    output: {
-      variants: body
-        ? [{ platform: "instagram", title: "", body, hashtags: [], chars: body.length }]
-        : [],
-    },
-  }) as unknown as StudioJob;
+/** Screens the one-question flow replaced, and where they went. */
+const LEGACY_STEPS: Record<string, { step: string; id?: string }> = {
+  goals: { step: "ask", id: "focus" },
+  channels: { step: "ask", id: "channels" },
+  finish: { step: "done" },
+  first: { step: "done" },
+};
 
 export function OnboardingLab() {
   const [ready, setReady] = useState(false);
-  const [step, setStep] = useState("goals");
+  const [step, setStep] = useState("website");
   const [last, setLast] = useState("");
-  const [goal, setGoal] = useState<GoalDraft>({
-    ...emptyGoalDraft,
-    focus: "followers",
-    channels: ["instagram"],
-  });
+  const [entering, setEntering] = useState(false);
+  // `?step=finish&beat=glow`: hold the VR entry on one beat.
+  const [beat, setBeat] = useState<Beat | null>(null);
   const [manual, setManual] = useState<ManualBrand>(emptyManualBrand);
+  const [manualPart, setManualPart] = useState<ManualPart>("basics");
+  const [inspo, setInspo] = useState<InspoItem[]>([]);
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [incoming, setIncoming] = useState<ProductCandidate[]>([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setStep(params.get("step") ?? "goals");
+    // Older screen names land on the screen that replaced them.
+    const asked = params.get("step") ?? "website";
+    const moved = LEGACY_STEPS[asked];
+    if (moved) {
+      if (moved.id) params.set("id", moved.id);
+      params.set("step", moved.step);
+      window.history.replaceState(null, "", `?${params.toString()}`);
+    }
+    const next = moved?.step ?? asked;
+    setStep((ASK_LAB_STEPS as readonly string[]).includes(next) ? next : "website");
+    const part = params.get("part") as ManualPart | null;
+    if (part && MANUAL_PARTS.includes(part)) {
+      setManualPart(part);
+      setManual({
+        ...emptyManualBrand,
+        brandName: "Northwind Coffee",
+        oneLiner: "Small-batch coffee roasted in Leeds, delivered weekly",
+        industry: "Food & drink",
+        audience: "Busy professionals who care where their coffee comes from",
+        voice: ["friendly", "expert"],
+        colors: ["#1F3B2D", "#C8F169", "#F4F1EA"],
+        competitors: [{ name: "Bean Bros", url: "https://beanbros.example" }],
+      });
+      setInspo([
+        {
+          key: "i1",
+          label: "cold.png",
+          preview: swatch("#e8e2d6", "#2b2118", "COLD"),
+          link: null,
+          status: "done",
+        },
+        {
+          key: "i2",
+          label: "beans.png",
+          preview: swatch("#f1ece4", "#5b3a29", "BEANS"),
+          link: null,
+          status: "uploading",
+        },
+        {
+          key: "i3",
+          label: "instagram.com",
+          preview: null,
+          link: "https://instagram.com/p/x",
+          status: "error",
+          error: "We couldn't download this link.",
+        },
+      ]);
+    }
+    setBeat((params.get("beat") as Beat | null) ?? null);
     if (params.get("empty") === "1") setProducts([]);
     // `?saving=1`: what the scan found is still being kept.
     if (params.get("saving") === "1") {
@@ -157,173 +183,140 @@ export function OnboardingLab() {
   }, []);
 
   const record = (what: string) => () => setLast(what);
-  const briefs = firstPostBriefs({
-    workspaceId: WS,
-    brandName: "Northwind",
-    goals: GOALS,
-    product: PRODUCTS[0],
-    platform: "instagram",
-  });
-  const postStates: Record<string, Record<number, FirstPostState>> = {
-    first: {},
-    "first-running": {
-      1: {
-        status: "succeeded",
-        job: job(
-          1,
-          "succeeded",
-          "18 hours. That's how long our cold brew steeps before it meets a bottle.\n\nSave this for the next hot morning.",
-        ),
-      },
-      2: { status: "running", job: job(2, "running", "") },
-      3: { status: "starting" },
-    },
-    "first-failed": {
-      1: { status: "failed", error: "This post didn't finish. Try again." },
-      2: { status: "idle" },
-      3: { status: "idle" },
-    },
-  };
 
+  const slot: LabSlot | undefined =
+    step === "manual"
+      ? {
+          scan: false,
+          action: null,
+          node: (
+            <ManualBrandStep
+              value={manual}
+              part={manualPart}
+              inspirations={inspo}
+              reduce
+              headingRef={headingRef}
+              onChange={(p) => setManual((m) => ({ ...m, ...p }))}
+              onPart={(part) => {
+                setManualPart(part);
+                setLast(`part:${part}`);
+              }}
+              onAddInspoFiles={(files) => {
+                setInspo((list) => [
+                  ...list,
+                  ...files.map((f, i) => ({
+                    key: `f${list.length + i}`,
+                    label: f.name,
+                    preview: URL.createObjectURL(f),
+                    link: null,
+                    status: "done" as const,
+                  })),
+                ]);
+                return null;
+              }}
+              onAddInspoLink={(url) => {
+                setInspo((list) => [
+                  ...list,
+                  { key: `l${list.length}`, label: url, preview: null, link: url, status: "done" },
+                ]);
+                return null;
+              }}
+              onRemoveInspo={(key) => setInspo((list) => list.filter((i) => i.key !== key))}
+              onRetryInspo={record("inspo:retry")}
+              onHaveWebsite={record("back")}
+              onDone={record("manual:continue")}
+            />
+          ),
+        }
+      : step === "products"
+        ? {
+            scan: true,
+            action: {
+              label: "Continue",
+              onClick: record("products:continue"),
+              disabled: !products.length,
+              hint: products.length
+                ? null
+                : "Add at least one product or service so Mellox has something real to write about.",
+            },
+            node: (
+              <div className="mx-auto max-w-5xl">
+                <ProductsStep
+                  embedded
+                  brandName="Northwind"
+                  siteHost="northwind.example"
+                  scanning={false}
+                  incoming={incoming}
+                  failed={[]}
+                  products={products}
+                  loading={false}
+                  busy={{}}
+                  lowResolution={{ [PRODUCTS[0].id]: true }}
+                  adding={false}
+                  error={null}
+                  blockedReason={
+                    products.length
+                      ? null
+                      : "Add at least one product or service so Mellox has something real to write about."
+                  }
+                  reduce
+                  headingRef={headingRef}
+                  onRetry={record("retry")}
+                  onRemoveFound={() =>
+                    setProducts((list) => list.filter((p) => p.source === "manual"))
+                  }
+                  onAdd={(d: ProductDraft) => {
+                    setLast(`add:${d.kind}:${d.name}`);
+                    setProducts((list) => [
+                      ...list,
+                      {
+                        ...PRODUCTS[2],
+                        id: `new-${list.length}`,
+                        kind: d.kind,
+                        name: d.name,
+                        description: d.description,
+                        price: d.price,
+                      },
+                    ]);
+                  }}
+                  onSave={(id) => setLast(`save:${id}`)}
+                  onArchive={(id) => setProducts((list) => list.filter((p) => p.id !== id))}
+                  onUpload={(id) => setLast(`upload:${id}`)}
+                  onPrimary={(id) => setLast(`primary:${id}`)}
+                  onBack={record("back")}
+                  onContinue={record("products:continue")}
+                />
+              </div>
+            ),
+          }
+        : undefined;
+
+  // Every screen is the one-question stage (ADR-0049), as in the real flow.
   return (
-    <div
-      data-mellox-app
-      data-testid="onboarding-lab-frame"
-      data-ready={ready}
-      className="relative min-h-dvh overflow-x-clip bg-background text-foreground"
-    >
-      <AmbientCanvas />
+    <div data-testid="onboarding-lab-frame" data-ready={ready}>
       <p data-testid="lab-last" className="sr-only">
         {last}
       </p>
-      <main className="relative z-10 mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
-        {step === "goals" && (
-          <div className="mx-auto max-w-3xl">
-            <GoalStep
-              draft={goal}
-              saving={false}
-              error={null}
-              warnings={[]}
-              reduce
-              headingRef={headingRef}
-              scanStrip={
-                <ScanStrip
-                  url="https://northwind.example"
-                  status="loading"
-                  progress={{ stage: "search", message: "", pct: 62 }}
-                  phase={2}
-                  discoveries={{ products: { products: CANDIDATES } }}
-                  reduce
-                  onRetry={record("retry")}
-                />
-              }
-              onChange={(patch) => setGoal((g) => ({ ...g, ...patch }))}
-              onBack={record("back")}
-              onContinue={record("goals:continue")}
-            />
-          </div>
-        )}
-        {step === "manual" && (
-          <div className="mx-auto max-w-xl">
-            <ManualBrandStep
-              value={manual}
-              headingRef={headingRef}
-              onChange={(p) => setManual((m) => ({ ...m, ...p }))}
-              onBack={record("back")}
-              onContinue={record("manual:continue")}
-            />
-          </div>
-        )}
-        {step === "products" && (
-          <ProductsStep
-            brandName="Northwind"
-            siteHost="northwind.example"
-            scanning={false}
-            incoming={incoming}
-            failed={[]}
-            products={products}
-            loading={false}
-            busy={{}}
-            lowResolution={{ [PRODUCTS[0].id]: true }}
-            adding={false}
-            error={null}
-            blockedReason={
-              products.length
-                ? null
-                : "Add at least one product or service so Mellox has something real to write about."
-            }
-            reduce
-            headingRef={headingRef}
-            onRetry={record("retry")}
-            onRemoveFound={() => setProducts((list) => list.filter((p) => p.source === "manual"))}
-            onAdd={(d: ProductDraft) => {
-              setLast(`add:${d.kind}:${d.name}`);
-              setProducts((list) => [
-                ...list,
-                {
-                  ...PRODUCTS[2],
-                  id: `new-${list.length}`,
-                  kind: d.kind,
-                  name: d.name,
-                  description: d.description,
-                  price: d.price,
-                },
-              ]);
-            }}
-            onSave={(id) => setLast(`save:${id}`)}
-            onArchive={(id) => setProducts((list) => list.filter((p) => p.id !== id))}
-            onUpload={(id) => setLast(`upload:${id}`)}
-            onPrimary={(id) => setLast(`primary:${id}`)}
-            onBack={record("back")}
-            onContinue={record("products:continue")}
-          />
-        )}
-        {step === "channels" && (
-          <div className="mx-auto max-w-3xl">
-            <ChannelsStep
-              connectedCount={0}
-              headingRef={headingRef}
-              onBack={record("back")}
-              onContinue={record("channels:continue")}
-            >
-              <p className="ds-well rounded-[var(--ds-radius-tile)] px-4 py-6 text-center text-[13px] text-muted-foreground">
-                The connect tiles come from the live publishing provider.
-              </p>
-            </ChannelsStep>
-          </div>
-        )}
-        {step.startsWith("first") && (
-          <FirstWinStep
-            brandName="Northwind"
-            goalLine="Grow my following: 1,200 → 5,000 Instagram followers by 24 Jan"
-            briefs={briefs}
-            products={PRODUCTS}
-            productId={PRODUCTS[0].id}
-            platform="instagram"
-            platforms={["instagram", "tiktok"]}
-            priceLabel="6 credits"
-            posts={postStates[step] ?? {}}
-            billing={
-              step === "first-failed"
-                ? {
-                    message:
-                      "Your plan has run out of credits for new posts. You can finish setup and add more later.",
-                    href: "/pricing",
-                  }
-                : null
-            }
-            reduce
-            headingRef={headingRef}
-            onProduct={(id) => setLast(`product:${id}`)}
-            onPlatform={(id) => setLast(`platform:${id}`)}
-            onStart={record("first:start")}
-            onRetry={(n) => setLast(`retry:${n}`)}
-            onBack={record("back")}
-            onLibrary={record("library")}
-            onEnter={record("enter")}
-          />
-        )}
-      </main>
+      {ready && (
+        <AskLab
+          key={step}
+          step={step}
+          slot={slot}
+          onLast={(what) => {
+            setLast(what);
+            if (what === "done:enter") setEntering(true);
+          }}
+        />
+      )}
+      {(beat || entering) && (
+        <VisorTransition
+          freeze={beat ?? undefined}
+          onCovered={() => {
+            setEntering(false);
+            setLast("entered");
+          }}
+        />
+      )}
     </div>
   );
 }

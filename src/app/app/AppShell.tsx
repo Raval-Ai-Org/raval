@@ -3,8 +3,10 @@
 import { OpeningPill } from "@/components/ui/page-loader";
 import { normalizeAnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
+import { useBodyPointerGuard, useCanvasBusy } from "@/lib/shell/window";
+import { canStepBack, installShellHistory, previousUrl } from "@/lib/shell/history";
 import { ensureGeoRunCapture } from "@/lib/geo/pending-run";
-import { Link, useRouterState, useNavigate } from "@/lib/navigation";
+import { Link, useRouterState, useNavigate, usePrefetch } from "@/lib/navigation";
 
 // Remember a chat/suggestion scan request until the lazy AI Visibility dialog mounts.
 ensureGeoRunCapture();
@@ -20,6 +22,7 @@ import { useWorkspace, useWorkspaceActions } from "@/components/workspace/Worksp
 import {
   brainPath,
   campaignsPath,
+  chatPath,
   communitiesPath,
   conversationIdFromPath,
   inspoPath,
@@ -30,23 +33,16 @@ import { useBrainOverview, useBrainSeen } from "@/components/app/brain/use-brain
 import type { BrainSection } from "@/lib/brain/brain";
 import {
   ArrowLeft,
-  BarChart3,
-  BookOpen,
-  Calendar as CalendarIcon,
   ChevronDown,
+  Home,
   LayoutGrid,
-  Megaphone,
   Menu,
   MessageCircle,
-  Palette,
   PanelRightOpen,
   Plus,
   Rocket,
   Share2,
-  Sparkles,
-  Trophy,
   Users,
-  type LucideIcon,
 } from "@/components/icons";
 import {
   DropdownMenu,
@@ -57,11 +53,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPanel } from "@/components/app/ChatPanel";
 import { CommandBar } from "@/components/app/CommandBar";
+import { LibraryDialog } from "@/components/app/LibraryDialog";
 import { TopBarActions } from "@/components/app/TopBarActions";
 import { StudioRail } from "@/components/app/StudioRail";
 import { RecentChats } from "@/components/app/RecentChats";
-import { WorkspaceSwitcher } from "@/components/app/WorkspaceSwitcher";
 import { AccountMenu, AccountMenuCompact } from "@/components/app/AccountMenu";
+import { WorkspaceDialogs } from "@/components/app/WorkspaceDialogs";
+import { ContentCalendar } from "@/components/app/ContentCalendar";
 
 // Heavy modules — loaded on demand to shrink the initial workspace bundle.
 const AnalyticsModal = lazy(() =>
@@ -72,15 +70,6 @@ const StudioComposer = lazy(() =>
 );
 const ContentItemDialog = lazy(() =>
   import("@/components/studio/ContentItemDialog").then((m) => ({ default: m.ContentItemDialog })),
-);
-const LibraryDialog = lazy(() =>
-  import("@/components/app/LibraryDialog").then((m) => ({ default: m.LibraryDialog })),
-);
-const ContentCalendar = lazy(() =>
-  import("@/components/app/ContentCalendar").then((m) => ({ default: m.ContentCalendar })),
-);
-const WorkspaceDialogs = lazy(() =>
-  import("@/components/app/WorkspaceDialogs").then((m) => ({ default: m.WorkspaceDialogs })),
 );
 const PublishDialog = lazy(() =>
   import("@/components/app/PublishDialog").then((m) => ({ default: m.PublishDialog })),
@@ -100,6 +89,9 @@ const UgcStudioDialog = lazy(() =>
 const CreateLauncher = lazy(() =>
   import("@/components/studio/CreateLauncher").then((m) => ({ default: m.CreateLauncher })),
 );
+const AnimateFlow = lazy(() =>
+  import("@/components/studio/AnimateFlow").then((m) => ({ default: m.AnimateFlow })),
+);
 const BrainPulse = lazy(() =>
   import("@/components/app/brain/BrainPulse").then((m) => ({ default: m.BrainPulse })),
 );
@@ -109,7 +101,9 @@ const AppTour = lazy(() =>
 
 import { useStudioEntry } from "@/hooks/use-studio";
 import { StudioActivityWatcher, StudioButton } from "@/components/studio/StudioButton";
-import { setStudioRailOpen } from "@/lib/studio/rail-state";
+import { GeneratingPanel } from "@/components/studio/GeneratingPanel";
+import { UgcRenderWatcher } from "@/components/app/ugc/UgcRenderWatcher";
+import { setStudioRailOpen, useStudioRail } from "@/lib/studio/rail-state";
 import { useStudioStore } from "@/lib/studio/session-store";
 import { useIsCompact } from "@/hooks/use-mobile";
 import { Logo } from "@/components/brand/Logo";
@@ -119,11 +113,17 @@ import { useRealtimeContent } from "@/hooks/use-realtime-content";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSwipe } from "@/hooks/use-swipe";
-import { BillingPanel, WalletPill } from "@/components/app/BillingPanel";
-import { FreeSidebarCard } from "@/components/app/billing/FreePlanPushes";
+import { BillingPanel } from "@/components/app/BillingPanel";
 import { openFeatureUpgrade } from "@/components/app/FeatureGate";
-import { PlanLock } from "@/components/app/billing/billing-ui";
-import { PLANS, type FeatureKey } from "@/lib/billing/catalog";
+import type { PlanId } from "@/lib/billing/catalog";
+import { AppCanvas, AppFrame } from "@/components/app/shell/AppFrame";
+import { PlanChip } from "@/components/app/billing/WalletPill";
+import { StreakChip } from "@/components/app/shell/Momentum";
+import { MoxGauge } from "@/components/app/shell/MoxGauge";
+import { SidebarNav } from "@/components/app/shell/SidebarNav";
+import { StartHereModal } from "@/components/app/home/StartHere";
+import { EntryBloom } from "@/components/brand/mox/VisorTransition";
+import { activeNavId, type NavItem } from "@/lib/shell/nav";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { useAppTourSeen } from "@/hooks/use-app-tour";
 import { AnnouncementsOutlet } from "@/components/app/announcements/AnnouncementsOutlet";
@@ -152,7 +152,6 @@ function AppShell() {
   });
   const { data: autopilot } = useAutopilotStatus(workspaceId);
   const workspaceName = workspace.displayName;
-  const workspaceWebsite = workspace.websiteUrl;
   const homeHref = workspacePath(workspaceId);
 
   const { dna: brandDna } = useBrandDna(workspaceId);
@@ -166,7 +165,45 @@ function AppShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const activeConversationId = conversationIdFromPath(path);
+  // `?view=chat` is the Chat entry: the thread instead of Home's cards.
+  const chatView = useRouterState({
+    select: (s) => s.location.search.view === "chat",
+  });
+  const routeNavId = activeNavId(path, homeHref, chatView || Boolean(activeConversationId));
+  // A new section fades in. Opacity only, on the page that is already there:
+  // nothing remounts (chat keeps its state) and fixed panels stay put.
+  const mainRef = useRef<HTMLElement>(null);
+  const shownSection = useRef(routeNavId);
+  useEffect(() => {
+    if (shownSection.current === routeNavId) return;
+    shownSection.current = routeNavId;
+    const el = mainRef.current;
+    if (!el?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate([{ opacity: 0.35 }, { opacity: 1 }], {
+      duration: 260,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    });
+  }, [routeNavId]);
+  // A full window (Library, Calendar, Analytics, Create...) highlights its own
+  // row while it is open; otherwise the page's row.
+  const [windowNav, setWindowNav] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (event: CustomEvent<{ id: string; open: boolean }>) => {
+      const { id, open } = event.detail;
+      setWindowNav((current) => (open ? id : current === id ? null : current));
+    };
+    addAppEventListener("shell:window", on);
+    return () => removeAppEventListener("shell:window", on);
+  }, []);
+  const activeId = windowNav ?? routeNavId;
+  // Never let a closed window leave the whole app unclickable.
+  useBodyPointerGuard();
+  // Back is one step out (see shell/history.ts).
+  useEffect(() => installShellHistory(), []);
   const isCompact = useIsCompact();
+  const studioRail = useStudioRail();
+  // A screen is open on the canvas (Create, Library, a piece being made…).
+  const canvasBusy = useCanvasBusy();
   const [navOpen, setNavOpen] = useState(false);
   // Compact widths use an overlay drawer; desktop keeps an inline sidebar.
   const [vw, setVw] = useState<number>(1024);
@@ -180,7 +217,7 @@ function AppShell() {
       window.removeEventListener("orientationchange", on);
     };
   }, []);
-  const sidebarWidth = isCompact ? Math.min(320, Math.round(vw * 0.9)) : 240;
+  const sidebarWidth = isCompact ? Math.min(320, Math.round(vw * 0.9)) : 196;
 
   // Swipe gestures on mobile: right-swipe from left edge opens nav; left-swipe closes it.
   useSwipe({
@@ -339,10 +376,15 @@ function AppShell() {
   // section here.
   const openBrain = useCallback(
     (section?: BrainSection | null, tab?: string | null) => {
-      navigate({ to: brainPath(workspaceId, section, tab) });
+      const to = brainPath(workspaceId, section, tab);
+      // Inside Brain (or hopping from another section) the entry is replaced,
+      // so Back leaves Brain in one press.
+      const fromSection = routeNavId !== "home" && routeNavId !== "chat";
+      if (previousUrl() === to) window.history.back();
+      else navigate({ to, replace: fromSection && canStepBack() });
       closeNavOnPhone();
     },
-    [navigate, workspaceId, closeNavOnPhone],
+    [navigate, workspaceId, closeNavOnPhone, routeNavId],
   );
   useEffect(() => {
     const onBrain = (event: CustomEvent<{ section?: BrainSection; tab?: string } | null>) =>
@@ -434,219 +476,158 @@ function AppShell() {
     [isCompact, openBrain],
   );
 
-  const sidebarAction = (opts: {
-    icon: LucideIcon;
-    label: string;
-    hint?: string;
-    onClick: () => void;
-    accent?: string;
-    /** Paid feature: when the plan locks it, show the plan and open the upgrade screen. */
-    feature?: FeatureKey;
-    /** The app tour's name for this entry (`data-tour`). */
-    tour?: string;
-  }) => {
-    const Icon = opts.icon;
-    const lock =
-      opts.feature && billing.data && !billing.data.features[opts.feature].allowed
-        ? billing.data.features[opts.feature].requiredPlan
-        : null;
-    return (
-      <button
-        key={opts.label}
-        data-tour={opts.tour}
-        onClick={() => {
-          if (lock && opts.feature) openFeatureUpgrade(opts.feature);
-          else opts.onClick();
-          closeNavOnPhone();
-        }}
-        aria-label={lock ? `${opts.label} (needs the ${PLANS[lock].label} plan)` : undefined}
-        className="group relative flex w-full items-center gap-3 rounded-full px-2.5 py-2 text-left text-[13.5px] font-medium text-foreground/75 transition-all duration-150 hover:bg-[var(--ds-well-bg)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-      >
-        <span
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ds-well-bg)] text-muted-foreground transition-colors group-hover:bg-primary/12 group-hover:text-primary"
-          style={opts.accent ? { color: opts.accent } : undefined}
-        >
-          <Icon className="h-4 w-4" strokeWidth={1.9} aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1 break-words leading-snug">{opts.label}</span>
-        {lock ? (
-          <PlanLock plan={lock} />
-        ) : (
-          opts.hint && (
-            <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
-              {opts.hint}
-            </span>
-          )
-        )}
-      </button>
+  // Mellox 2.0 (ADR-0044): the sidebar is data (src/lib/shell/nav.ts); this
+  // only says where each row goes.
+  const lockFor = (item: NavItem): PlanId | null =>
+    item.feature && billing.data && !billing.data.features[item.feature].allowed
+      ? billing.data.features[item.feature].requiredPlan
+      : null;
+  // Hovering a sidebar row loads its page or window code ahead of the press,
+  // so a section opens at once. Once per row; it never fetches data.
+  const prefetch = usePrefetch();
+  const warmed = useRef(new Set<string>());
+  const warmNav = (item: NavItem) => {
+    if (warmed.current.has(item.id)) return;
+    warmed.current.add(item.id);
+    const t = item.target;
+    if (t.kind === "brain") return prefetch(brainPath(workspaceId));
+    if (t.kind === "analytics") return void import("@/components/app/AnalyticsModal");
+    if (t.kind === "event") {
+      if (t.event === "open:create-launcher") void import("@/components/studio/CreateLauncher");
+      if (t.event === "open:ai-visibility") void import("@/components/app/AiVisibilityDialog");
+      return;
+    }
+    prefetch(
+      t.place === "home"
+        ? homeHref
+        : t.place === "chat"
+          ? chatPath(workspaceId)
+          : t.place === "inspo"
+            ? inspoPath(workspaceId)
+            : t.place === "campaigns"
+              ? campaignsPath(workspaceId)
+              : t.place === "communities"
+                ? communitiesPath(workspaceId)
+                : workspacePath(workspaceId, "experiments"),
     );
   };
 
-  const SidebarSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    // A small group name so people can tell what each block is for.
-    <div role="group" aria-label={label} className="space-y-0.5">
-      <p
-        aria-hidden
-        className="px-2.5 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70"
-      >
-        {label}
-      </p>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  );
+  const pickNav = (item: NavItem, lock: PlanId | null) => {
+    closeNavOnPhone();
+    if (lock && item.feature) return openFeatureUpgrade(item.feature);
+    const t = item.target;
+    // Whatever window is open steps aside, and the highlight moves at once.
+    // A place (Home, Chat…) always clears the canvas, even when the window
+    // open on it claims that same row (Animate on Home, a Creator video):
+    // pressing Home must show Home. Pressing the row of the window that is
+    // open (Library while in Library) leaves it be.
+    if (t.kind === "route" || t.kind === "brain" || item.id !== activeId) {
+      emitAppEvent("shell:leave");
+      setWindowNav(null);
+    }
+    if (t.kind === "brain") return openBrain();
+    // A window opened from a page of its own (Brain, Inspo…) opens over Home,
+    // so its Back lands somewhere sensible and nothing is stacked.
+    if (
+      (t.kind === "analytics" || t.kind === "event") &&
+      routeNavId &&
+      routeNavId !== "home" &&
+      routeNavId !== "chat"
+    ) {
+      if (previousUrl() === homeHref) window.history.back();
+      else navigate({ to: homeHref, replace: canStepBack() });
+    }
+    if (t.kind === "analytics") return setAnalyticsOpen(true);
+    if (t.kind === "event") return emitAppEvent(t.event);
+    const to =
+      t.place === "home"
+        ? homeHref
+        : t.place === "chat"
+          ? chatPath(workspaceId)
+          : t.place === "inspo"
+            ? inspoPath(workspaceId)
+            : t.place === "campaigns"
+              ? campaignsPath(workspaceId)
+              : t.place === "communities"
+                ? communitiesPath(workspaceId)
+                : workspacePath(workspaceId, "experiments");
+    // Back is one step out: returning to the place just before steps back,
+    // and hopping between sections replaces the entry instead of stacking.
+    const fromSection = routeNavId !== "home" && routeNavId !== "chat";
+    // Already there (Home pressed on Home): the windows above stepped aside,
+    // nothing to load again.
+    const alreadyHere = window.location.pathname + window.location.search === to;
+    if (alreadyHere) {
+      /* nothing to navigate */
+    } else if (previousUrl() === to) window.history.back();
+    else navigate({ to, replace: fromSection && canStepBack() });
+    if (t.place === "chat") emitAppEvent("chat:focus");
+  };
 
   const MobileNav = (
-    <div className="flex h-full flex-col overflow-y-auto pb-2">
-      {/* Brand row — sticky; height matches main header (h-14) for aligned baseline */}
-      <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-sidebar/95 px-2 backdrop-blur-xl">
+    <div className="flex h-full flex-col px-2.5 pb-3">
+      {/* Brand row, on its own solid strip so the list never scrolls under
+          it; height matches the top bar (h-14). */}
+      <div className="relative z-10 flex h-14 shrink-0 items-center justify-between bg-[var(--ds-frame-bg)] px-1">
         <Link
           to={homeHref}
           onClick={closeNavOnPhone}
-          aria-label="Mellox AI — workspace home"
+          aria-label="Mellox — workspace home"
           title="Workspace home"
-          className="group flex h-9 items-center gap-1 rounded-full pl-1 pr-2.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="group flex h-9 items-center gap-1.5 rounded-full pl-1 pr-2.5 transition-colors hover:bg-[var(--ds-well-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <Logo height={28} markOnly />
+          <Logo height={26} markOnly />
           <span
-            className="text-sm leading-none text-foreground"
+            className="text-[13px] leading-none text-foreground"
             style={{ fontFamily: "var(--font-brand)" }}
           >
-            Mellox AI
+            Mellox
           </span>
-          <ArrowLeft
-            aria-hidden
-            className="h-3.5 w-3.5 opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0"
-          />
         </Link>
         <button
           type="button"
           onClick={() => setNavOpen(false)}
+          data-sidebar-keep
           aria-label="Collapse sidebar"
           title="Collapse sidebar"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
         >
           <PanelRightOpen className="h-4 w-4" aria-hidden />
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 px-2 pt-1">
-        {/* Workspace switcher */}
-        <WorkspaceSwitcher
-          workspaceId={workspaceId}
-          workspaceName={workspaceName}
-          workspaceWebsite={workspaceWebsite}
-          onSwitch={closeNavOnPhone}
+      {/* Only the list scrolls; Mox and the account stay in view. */}
+      <div className="-mx-2.5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-2.5 pb-3 pt-2 scrollbar-thin">
+        <SidebarNav
+          activeId={activeId}
+          lockFor={lockFor}
+          hintFor={(item) => (item.id === "brain" && brainNews ? `${brainNews}` : undefined)}
+          showFlag={(flag) => flag === "experiments" && Boolean(proofEngine?.enabled)}
+          onPick={pickNav}
+          onWarm={warmNav}
         />
 
-        <div className="h-px bg-border/50" />
+        {/* On a phone the drawer is the only way to past chats. */}
+        {isCompact && (
+          <>
+            <div className="h-px bg-border/50" />
+            <RecentChats
+              workspaceId={workspaceId}
+              activeConversationId={activeConversationId}
+              onNavigate={closeNavOnPhone}
+            />
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <Suspense fallback={null}>
+                <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />
+              </Suspense>
+            </div>
+          </>
+        )}
+      </div>
 
-        {/* Recent chats */}
-        <RecentChats
-          workspaceId={workspaceId}
-          activeConversationId={activeConversationId}
-          onNavigate={closeNavOnPhone}
-        />
-
-        <div className="h-px bg-border/50" />
-
-        {/* Ordered by priority: the brand comes first (everything Mellox makes
-            reads it), then making and posting, then growth and results, then
-            the team. The rail below keeps the same order. */}
-        <SidebarSection label="Brand">
-          {sidebarAction({
-            icon: BrainIcon,
-            label: "Brain",
-            hint: brainNews ? `${brainNews} new` : undefined,
-            tour: "brain",
-            onClick: () => openBrain(),
-          })}
-          {sidebarAction({
-            icon: Palette,
-            label: "Inspo",
-            tour: "inspo",
-            onClick: () => navigate({ to: inspoPath(workspaceId) }),
-          })}
-        </SidebarSection>
-
-        <SidebarSection label="Create">
-          {sidebarAction({
-            icon: BookOpen,
-            label: "Library",
-            tour: "library",
-            onClick: () => emitAppEvent("open:library"),
-          })}
-          {/* Campaigns (ADR-0039) holds the content calendar: its header opens it. */}
-          {sidebarAction({
-            icon: Megaphone,
-            label: "Campaigns",
-            tour: "campaigns",
-            onClick: () => navigate({ to: campaignsPath(workspaceId) }),
-          })}
-          {sidebarAction({
-            icon: CalendarIcon,
-            label: "Schedule",
-            feature: "publishing",
-            onClick: () => emitAppEvent("open:schedule"),
-          })}
-        </SidebarSection>
-
-        <SidebarSection label="Grow">
-          {sidebarAction({
-            icon: BarChart3,
-            label: "Analytics",
-            accent: "hsl(var(--brand-green))",
-            tour: "analytics",
-            onClick: () => setAnalyticsOpen(true),
-          })}
-          {sidebarAction({
-            icon: Sparkles,
-            label: "AI Visibility",
-            accent: "hsl(var(--brand-blue))",
-            tour: "visibility",
-            onClick: () => emitAppEvent("open:ai-visibility"),
-          })}
-          {/* The Reddit agent: threads worth joining, with replies to approve. */}
-          {sidebarAction({
-            icon: MessageCircle,
-            label: "Reddit agent",
-            tour: "communities",
-            onClick: () => navigate({ to: communitiesPath(workspaceId) }),
-          })}
-          {proofEngine?.enabled &&
-            sidebarAction({
-              icon: Trophy,
-              label: "Experiments",
-              accent: "hsl(var(--brand-green))",
-              feature: "experiments",
-              onClick: () => navigate({ to: workspacePath(workspaceId, "experiments") }),
-            })}
-        </SidebarSection>
-
-        <SidebarSection label="Team">
-          {sidebarAction({
-            icon: Share2,
-            label: "Share",
-            accent: "hsl(var(--brand-green))",
-            onClick: () => emitAppEvent("open:share"),
-          })}
-          {sidebarAction({
-            icon: Rocket,
-            label: "Client Portal",
-            feature: "client_portal",
-            onClick: () => emitAppEvent("open:client-portal"),
-          })}
-        </SidebarSection>
-
-        <div className="flex flex-wrap items-center gap-2 px-2 py-2 lg:hidden">
-          <Suspense fallback={null}>
-            <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />
-          </Suspense>
-          <WalletPill />
-        </div>
-
-        <FreeSidebarCard className="mx-1 mt-2" />
-
-        <div data-tour="account" className="mt-2 border-t border-border/50 pt-2">
+      <div className="flex shrink-0 flex-col gap-1.5 border-t border-[var(--ds-card-border)] pt-2.5">
+        <MoxGauge />
+        <div data-tour="account">
           <AccountMenu
             onOpenSettings={() => emitAppEvent("open:settings")}
             onClose={closeNavOnPhone}
@@ -657,131 +638,85 @@ function AppShell() {
   );
 
   return (
-    <div
-      data-mellox-app
-      className="flex h-[100dvh] min-h-0 w-full min-w-0 bg-sidebar text-foreground"
-    >
+    <AppFrame plain>
       <h1 className="sr-only">Mellox AI Workspace</h1>
 
-      {/* Full-height left rail: sidebar OR collapsed icon rail. Sits alongside header + main, Qwen/ChatGPT style. */}
-      {!navOpen && (
-        <aside
-          aria-label="Sidebar rail"
-          className="hidden h-full w-[56px] flex-none flex-col items-center border-r border-border/50 bg-sidebar py-3 lg:flex"
-        >
-          {/* Brand mark — always visible; goes to workspace home. */}
-          <div className="group relative mb-3 h-9 w-9">
-            <Link
-              to={homeHref}
-              aria-label="Mellox AI — workspace home"
-              title="Workspace home"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Logo height={26} markOnly />
-            </Link>
+      {/* Collapsed: the icon rail, in the open sidebar's order. */}
+      {/* The rail grows as the sidebar shrinks (same timing), so the canvas
+          slides in one smooth move instead of jumping by the rail's width. */}
+      <AnimatePresence initial={false}>
+        {!navOpen && (
+          <motion.aside
+            key="app-rail"
+            data-app-sidebar
+            aria-label="Sidebar rail"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 60, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden h-full w-[60px] flex-none flex-col items-center overflow-hidden py-3 lg:flex"
+          >
             <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setNavOpen(true)}
-                    aria-label="Open sidebar"
-                    className="absolute inset-0 grid place-items-center rounded-full bg-secondary text-foreground opacity-0 shadow-sm ring-1 ring-border/70 transition-all duration-200 group-hover:opacity-100 hover:bg-secondary hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <PanelRightOpen className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  Open sidebar
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          {/* Divider between brand and actions */}
-          <div aria-hidden className="mb-2 h-px w-6 bg-border/60" />
-
-          <TooltipProvider delayDuration={200}>
-            <div className="flex flex-1 flex-col items-center gap-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigate({ to: homeHref });
-                      emitAppEvent("chat:focus");
-                    }}
-                    aria-label="New Chat"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_20px_-8px_hsl(var(--primary)/0.7)] transition hover:-translate-y-px hover:shadow-[0_10px_28px_-10px_hsl(var(--primary)/0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <Plus className="h-[18px] w-[18px]" aria-hidden />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  New Chat
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Divider between primary and quick actions */}
-              <div aria-hidden className="my-1 h-px w-6 bg-border/50" />
-
-              {/* The most used places only, in the open sidebar's order;
-                  "More" opens the full sidebar for the rest. */}
-              {[
-                {
-                  icon: BrainIcon,
-                  label: "Brain",
-                  onClick: () => openBrain(),
-                },
-                {
-                  icon: BookOpen,
-                  label: "Library",
-                  onClick: () => emitAppEvent("open:library"),
-                },
-                {
-                  icon: Megaphone,
-                  label: "Campaigns",
-                  onClick: () => navigate({ to: campaignsPath(workspaceId) }),
-                },
-                {
-                  icon: BarChart3,
-                  label: "Analytics",
-                  onClick: () => emitAppEvent("open:analytics"),
-                },
-                {
-                  icon: LayoutGrid,
-                  label: "More",
-                  onClick: () => setNavOpen(true),
-                },
-              ].map(({ icon: Icon, label, onClick }) => (
-                <Tooltip key={label}>
+              <div className="group relative mb-4 h-9 w-9">
+                <Link
+                  to={homeHref}
+                  aria-label="Mellox — workspace home"
+                  title="Workspace home"
+                  className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 group-hover:scale-90 group-hover:opacity-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Logo height={26} markOnly />
+                </Link>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={onClick}
-                      aria-label={label}
-                      className="group flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-primary/12 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      onClick={() => setNavOpen(true)}
+                      data-sidebar-keep
+                      aria-label="Open sidebar"
+                      className="absolute inset-0 grid place-items-center rounded-full bg-[var(--ds-card-bg)] text-foreground opacity-0 shadow-[var(--ds-card-shadow)] transition-all duration-200 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                      <Icon
-                        className="h-5 w-5 transition-transform group-hover:scale-[1.08]"
-                        strokeWidth={1.9}
-                      />
+                      <PanelRightOpen className="h-[18px] w-[18px]" strokeWidth={1.9} />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
-                    {label}
+                    Open sidebar
                   </TooltipContent>
                 </Tooltip>
-              ))}
-            </div>
-
-            {/* Account avatar pinned to bottom (ChatGPT-style) */}
-            <div className="mt-2 border-t border-border/60 pt-3">
-              <AccountMenuCompact onOpenSettings={() => emitAppEvent("open:settings")} />
-            </div>
-          </TooltipProvider>
-        </aside>
-      )}
+              </div>
+              <div className="flex flex-1 flex-col items-center">
+                <SidebarNav
+                  collapsed
+                  activeId={activeId}
+                  lockFor={lockFor}
+                  showFlag={(flag) => flag === "experiments" && Boolean(proofEngine?.enabled)}
+                  onPick={pickNav}
+                  onWarm={warmNav}
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setNavOpen(true)}
+                      data-sidebar-keep
+                      aria-label="More"
+                      className="mt-1 grid h-10 w-10 place-items-center rounded-full text-foreground/60 transition hover:bg-[var(--ds-well-bg)] hover:text-foreground"
+                    >
+                      <LayoutGrid className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    More
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-col items-center gap-2 pt-3">
+                <MoxGauge compact />
+                <AccountMenuCompact onOpenSettings={() => emitAppEvent("open:settings")} />
+              </div>
+            </TooltipProvider>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence initial={false} mode="sync">
         {navOpen && (
@@ -794,21 +729,24 @@ function AppShell() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => setNavOpen(false)}
-                className="fixed inset-0 z-30 bg-background/60 backdrop-blur-sm"
+                className="ds-scrim fixed inset-0 z-30"
                 aria-hidden
               />
             )}
             <motion.aside
+              data-app-sidebar
               id="app-inline-nav"
               key="app-inline-nav"
               initial={isCompact ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}
               animate={isCompact ? { x: 0 } : { width: sidebarWidth, opacity: 1 }}
               exit={isCompact ? { x: -sidebarWidth } : { width: 0, opacity: 0 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               style={isCompact ? { width: sidebarWidth } : undefined}
               className={cn(
-                "h-full overflow-hidden border-r border-border/60 bg-sidebar [will-change:width,transform]",
-                isCompact ? "fixed inset-y-0 left-0 z-40 shadow-2xl" : "flex-none",
+                "h-full overflow-hidden [will-change:width,transform]",
+                isCompact
+                  ? "fixed inset-y-0 left-0 z-40 rounded-r-[28px] bg-[var(--ds-frame-bg)] shadow-[var(--ds-pop-shadow)]"
+                  : "flex-none",
               )}
             >
               <div style={{ width: sidebarWidth }} className="h-full">
@@ -819,16 +757,55 @@ function AppShell() {
         )}
       </AnimatePresence>
 
-      {/* Right column: header + workspace — one continuous surface (ChatGPT style) */}
-      <div className="flex min-w-0 flex-1 flex-col bg-background">
+      {/* Right column: top bar + the workspace. On a desktop the canvas starts at
+          the very top (Holo): the top bar sits on it, not on a white strip. */}
+      <div
+        data-workspace-column
+        className="relative isolate flex min-w-0 flex-1 flex-col lg:ds-canvas lg:overflow-hidden lg:rounded-tl-[var(--ds-canvas-radius)]"
+      >
+        {/* Where canvas screens are drawn (Create, Studio, Library, Brain…):
+            inside this column, so they are part of the page. They resize with
+            the sidebar by CSS alone and can never cover it. The host and every
+            window in it carry the canvas's own rounded corner: a square window
+            that relies only on the column's clip is sometimes composited with
+            a black corner in Chromium while it animates in. */}
+        <div
+          data-canvas-host
+          className="pointer-events-none absolute inset-0 z-30 hidden overflow-hidden rounded-tl-[var(--ds-canvas-radius)] lg:block [&>*]:pointer-events-auto [&>*]:rounded-tl-[var(--ds-canvas-radius)]"
+        />
+        {/* The to-do list of what is being made. It stays in view on every
+            screen: the full card on Home and Chat, a small pill in the corner
+            while a screen is open (a press opens the list). The Studio panel
+            shows the same work, so the card rests while that is open. */}
+        {(!studioRail.open || canvasBusy) && (
+          <GeneratingPanel
+            compact={canvasBusy && !isCompact}
+            className={
+              isCompact
+                ? "fixed inset-x-3 bottom-24 z-40 w-auto"
+                : canvasBusy
+                  ? "absolute bottom-4 left-4 z-40 max-w-[calc(100%-2rem)]"
+                  : // Under the top bar (Scale, Studio, Share), never over it.
+                    "absolute right-4 top-16 z-40 max-w-[calc(100%-2rem)]"
+            }
+          />
+        )}
         <AnnouncementsOutlet />
 
-        {/* Top bar — seamless: no border, same bg as chat, sticky at top */}
         <header
           role="banner"
-          className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-2 bg-background px-3 sm:px-4"
+          className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-2 px-3 sm:px-4"
         >
-          {/* LEFT — logo · breadcrumb */}
+          {/* With the Studio rail open on a desktop, the rail runs the full
+              height: its panel continues behind the top bar's corner, so
+              Scale, Studio and Share sit on the rail, not on a strip above it. */}
+          {studioRail.open && !isCompact ? (
+            <div
+              aria-hidden
+              className="ds-enter pointer-events-none absolute inset-y-0 right-0 -z-10 w-[320px] border-l border-border/60 bg-sidebar"
+            />
+          ) : null}
+          {/* LEFT — menu (phone) · workspace */}
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -836,13 +813,11 @@ function AppShell() {
               aria-label="Open sidebar"
               aria-controls="app-inline-nav"
               aria-expanded={navOpen}
-              className="grid size-11 shrink-0 place-items-center rounded-full text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+              className="grid size-11 shrink-0 place-items-center rounded-full text-foreground hover:bg-[var(--ds-well-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             >
               <Menu className="size-5" aria-hidden />
             </button>
-            {/* Logo lives in the full-height sidebar / icon rail (Qwen/ChatGPT layout). No duplicate here. */}
 
-            {/* Workspace breadcrumb — opens workspace menu */}
             <WorkspaceMenu
               workspaceName={workspaceName}
               workspaceId={workspaceId}
@@ -852,60 +827,48 @@ function AppShell() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                   title="Workspace menu"
-                  className="group flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium tracking-tight text-foreground/90 transition-colors hover:bg-secondary/80 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                  className="group flex min-w-0 items-center gap-2 rounded-full border border-transparent py-1.5 pl-1.5 pr-3 text-[13px] font-semibold tracking-tight text-foreground transition-all hover:border-[var(--ds-card-border)] hover:bg-[var(--ds-card-bg)] hover:shadow-[var(--ds-card-shadow)] data-[state=open]:bg-[var(--ds-card-bg)]"
                 >
                   {brandLogo ? (
                     <img
                       src={brandLogo}
                       alt=""
-                      className="h-4 w-4 shrink-0 rounded-[4px] object-contain bg-background ring-1 ring-border/60"
+                      className="h-6 w-6 shrink-0 rounded-full bg-background object-contain ring-1 ring-border/60"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).style.display = "none";
                       }}
                     />
                   ) : (
-                    <span className="grid h-4 w-4 place-items-center rounded-[4px] bg-primary text-[9px] font-bold uppercase text-primary-foreground shadow-sm">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--mox-lime)] text-[11px] font-bold uppercase text-[var(--mox-ink)]">
                       {(workspaceName?.[0] ?? "W").toUpperCase()}
                     </span>
                   )}
-                  <span className="max-w-[min(34vw,180px)] truncate sm:max-w-[180px]">
+                  <span className="max-w-[min(34vw,180px)] truncate sm:max-w-[200px]">
                     {workspaceName}
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/80 transition group-hover:text-foreground group-data-[state=open]:rotate-180" />
                 </motion.button>
               }
             />
+            {/* Holo's streak chip: days in a row with a finished piece. */}
+            <StreakChip workspaceId={workspaceId} className="hidden md:inline-flex" />
           </div>
 
-          {/* RIGHT — status cluster + actions */}
+          {/* RIGHT — status and actions */}
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="flex min-w-0 shrink items-center gap-1 sm:gap-1.5"
           >
-            {/* The duplicate "xl action row" that used to sit here —
-              Analytics, Calendar, Client portal and Share, all behind a
-              bare className="hidden" with no breakpoint — is gone. It was
-              invisible to sighted users but still focusable, so tabbing
-              through the header hit four controls nobody could see. Those
-              actions live in the sidebar and the Share menu below. */}
-
             {/* Mounted, not displayed: the Schedule dialog lives in here and
-              its open:schedule listener has to stay attached, while the
-              visible trigger is in the sidebar.
-              `hidden` (display:none) keeps React mounted and the listeners
-              live, and — unlike the `sr-only aria-hidden` this used to use —
-              takes the triggers out of the tab order instead of leaving a row
-              of focusable controls that neither sighted nor screen-reader
-              users could perceive. */}
+              its open:schedule listener has to stay attached. `hidden` keeps
+              React mounted and the listeners live, and takes the triggers out
+              of the tab order. */}
             <div hidden>
               <TopBarActions workspaceId={workspaceId} />
             </div>
 
-            {/* Tablet & mobile (<xl): all actions live in the left sidebar (menu). */}
-
-            {/* Studio toggle + Publish share one flex container to lock spacing */}
             <div className="flex shrink-0 items-center gap-1.5">
               {/* While Autopilot runs (or is paused) it shows here on every screen. */}
               {autopilot?.enabled &&
@@ -920,12 +883,8 @@ function AppShell() {
                     }
                   />
                 )}
-              <div className="hidden items-center gap-1.5 lg:flex">
-                <Suspense fallback={null}>
-                  <BrainPulse workspaceId={workspaceId} onOpenBrain={openBrain} />
-                </Suspense>
-                <WalletPill />
-              </div>
+              {/* Holo's corner: the plan only. The balance is Mox's gauge. */}
+              <PlanChip className="hidden lg:inline-flex" />
               <StudioButton />
 
               <DropdownMenu>
@@ -934,11 +893,11 @@ function AppShell() {
                     aria-label="Share"
                     title="Share"
                     data-tour="share"
-                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-primary px-3 text-[12px] font-semibold tracking-tight text-primary-foreground shadow-sm transition hover:bg-primary/90 hover:shadow-md active:scale-[0.97] data-[state=open]:bg-primary/90 sm:h-9 sm:min-w-9 sm:px-4"
+                    className="group relative inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full bg-foreground px-3 text-[12.5px] font-semibold tracking-tight text-background shadow-sm transition hover:-translate-y-px hover:bg-foreground/90 active:scale-[0.97] sm:h-8 sm:min-w-8 sm:px-3.5"
                   >
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+                      className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full"
                     />
                     <Share2 className="relative h-3.5 w-3.5" strokeWidth={2.4} aria-hidden />
                     <span className="relative hidden sm:inline">Share</span>
@@ -956,7 +915,7 @@ function AppShell() {
                     }}
                     className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Share2 className="h-4 w-4 text-[hsl(var(--brand-green))]" />
+                    <Share2 className="h-4 w-4 text-primary-ink" />
                     <span className="text-[13px] font-medium">Invite teammates</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
@@ -966,7 +925,7 @@ function AppShell() {
                     }}
                     className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2"
                   >
-                    <Users className="h-4 w-4 text-[hsl(var(--brand-blue))]" />
+                    <Users className="h-4 w-4 text-primary-ink" />
                     <span className="text-[13px] font-medium">Client portal</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -995,71 +954,82 @@ function AppShell() {
                 <AiVisibilityDialog workspaceId={workspaceId} />
                 <UgcStudioDialog workspaceId={workspaceId} />
                 <CreateLauncher />
+                <AnimateFlow />
               </Suspense>
-              <BillingPanel />
+              <BillingPanel requirePlan />
             </div>
           </motion.div>
         </header>
 
-        {/* Workspace — chat area to the right of the full-height sidebar */}
-        <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+        {/* The workspace: Holo's canvas, to the right of the sidebar */}
+        <AppCanvas className="lg:rounded-none lg:bg-transparent lg:bg-none lg:shadow-none">
           <main
+            ref={mainRef}
             data-workspace-main="true"
-            className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background"
+            className="flex min-w-0 flex-1 flex-col overflow-hidden"
           >
             <WorkspaceSurface
               workspaceId={workspaceId}
               activeConversationId={activeConversationId}
+              chatView={chatView}
             />
           </main>
-        </div>
+        </AppCanvas>
         <nav
           aria-label="Mobile workspace navigation"
-          className="flex shrink-0 items-center justify-around border-t border-border/60 bg-sidebar px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
+          className="flex shrink-0 items-center justify-around border-t border-border/50 bg-[var(--ds-frame-bg)] px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
         >
           <Link
             to={homeHref}
-            aria-label="Chat home"
-            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label="Home"
+            aria-current={activeId === "home" ? "page" : undefined}
+            className={cn(
+              "flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              activeId === "home" ? "text-foreground" : "text-foreground/60",
+            )}
           >
-            <Logo height={21} markOnly />
-            <span className="text-[10px] font-medium">Chat</span>
+            <Home className="size-5" aria-hidden />
+            <span className="text-[10px] font-semibold">Home</span>
+          </Link>
+          <Link
+            to={chatPath(workspaceId)}
+            aria-label="Chat"
+            aria-current={activeId === "chat" ? "page" : undefined}
+            className={cn(
+              "flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              activeId === "chat" ? "text-foreground" : "text-foreground/60",
+            )}
+          >
+            <MessageCircle className="size-5" aria-hidden />
+            <span className="text-[10px] font-semibold">Chat</span>
           </Link>
           <button
             type="button"
             onClick={() => emitAppEvent("open:create-launcher")}
-            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Create content"
           >
-            <Plus className="size-5" aria-hidden />
-            <span className="text-[10px] font-medium">Create</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => emitAppEvent("toggle:studio")}
-            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="Toggle Studio"
-          >
-            <PanelRightOpen className="size-5" aria-hidden />
-            <span className="text-[10px] font-medium">Studio</span>
+            <span className="ds-grad-pill grid h-8 w-11 place-items-center rounded-full">
+              <Plus className="size-5" aria-hidden />
+            </span>
           </button>
           <button
             type="button"
             onClick={() => openBrain()}
-            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Open Brain"
           >
             <BrainIcon className="size-5" />
-            <span className="text-[10px] font-medium">Brain</span>
+            <span className="text-[10px] font-semibold">Brain</span>
           </button>
           <button
             type="button"
             onClick={() => setNavOpen(true)}
-            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Open menu"
           >
             <Menu className="size-5" aria-hidden />
-            <span className="text-[10px] font-medium">Menu</span>
+            <span className="text-[10px] font-semibold">Menu</span>
           </button>
         </nav>
       </div>
@@ -1096,33 +1066,37 @@ function AppShell() {
         />
         <ContentCalendar workspaceId={workspaceId} />
       </Suspense>
+      <StartHereModal workspaceId={workspaceId} />
+      <EntryBloom />
       {tourOpen && (
         <Suspense fallback={null}>
           <AppTour stops={tourList} name={tourName} onStop={onTourStop} onClose={closeTour} />
         </Suspense>
       )}
-    </div>
+    </AppFrame>
   );
 }
 
 function WorkspaceSurface({
   workspaceId,
   activeConversationId,
+  chatView,
 }: {
   workspaceId: string;
   activeConversationId: string | null;
+  chatView: boolean;
 }) {
   const isCompact = useIsCompact();
   const [studioOpen, setStudioOpen] = useState(false);
-  // Like the sidebar: open on a computer until the person closes it, and that
-  // choice is remembered. On a phone it is a drawer and starts closed.
+  // Mellox 2.0: Home is the cards, so Studio starts closed and opens only for
+  // someone who left it open last time. On a phone it is a drawer.
   const studioHydrated = useRef(false);
   useEffect(() => {
     try {
-      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") !== "0")
+      if (window.innerWidth >= 1024 && window.localStorage.getItem("mellox:studioOpen") === "1")
         setStudioOpen(true);
     } catch {
-      if (window.innerWidth >= 1024) setStudioOpen(true);
+      /* ignore */
     }
   }, []);
   useEffect(() => {
@@ -1190,7 +1164,7 @@ function WorkspaceSurface({
   });
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-row bg-background">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-row">
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Keyed by workspace: nothing (messages, pending replies, context)
             survives into another workspace. */}
@@ -1199,8 +1173,22 @@ function WorkspaceSurface({
           workspaceId={workspaceId}
           conversationId={activeConversationId}
           variant="centered"
+          chatView={chatView}
         />
+        {/* Creator videos keep being followed after their window closes. */}
+        <UgcRenderWatcher />
       </section>
+
+      {/* Chat (Holo): past conversations on the right. On a phone they stay
+          in the menu drawer. */}
+      {!isCompact && !studioOpen && (chatView || activeConversationId) && (
+        <aside
+          aria-label="Chats"
+          className="ds-enter hidden w-[248px] flex-none flex-col overflow-y-auto border-l border-border/40 px-2.5 py-3 xl:flex"
+        >
+          <RecentChats workspaceId={workspaceId} activeConversationId={activeConversationId} />
+        </aside>
+      )}
 
       {/* Studio — inline on desktop, overlay drawer on mobile. */}
       <AnimatePresence initial={false} mode="sync">

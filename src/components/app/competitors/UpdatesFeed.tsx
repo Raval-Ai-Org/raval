@@ -30,7 +30,7 @@ const KIND: Record<
   CompetitorUpdateKind,
   { icon: React.ComponentType<{ className?: string }>; tint: string }
 > = {
-  launch: { icon: Rocket, tint: "bg-primary/15 text-primary" },
+  launch: { icon: Rocket, tint: "bg-primary/15 text-primary-ink" },
   pricing: { icon: Wallet, tint: "bg-warning/15 text-warning" },
   positioning: { icon: Target, tint: "bg-info/15 text-info" },
   funding: { icon: Sparkles, tint: "bg-success/15 text-success" },
@@ -84,7 +84,7 @@ export function UpdateRow({
           <span aria-hidden>·</span>
           <span>{relativeTime(update.publishedAt ?? update.detectedAt)}</span>
           {update.significance === "major" && (
-            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary-ink">
               Big change
             </span>
           )}
@@ -100,7 +100,7 @@ export function UpdateRow({
             href={update.sourceUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-primary"
+            className="mt-1.5 inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-primary-ink"
           >
             {hostOf(update.sourceUrl)}
             <ExternalLink className="h-3 w-3" />

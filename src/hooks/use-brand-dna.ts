@@ -1,6 +1,7 @@
 "use client";
 
 import type { BrandLookSpec } from "@/lib/brand-look/spec";
+import type { OnboardingProfile } from "@/lib/onboarding/answers";
 import { useEffect, useState } from "react";
 import { emitAppEvent } from "@/lib/app-events";
 import { buildDesignMd, saveDesignMd } from "@/lib/design-md";
@@ -136,6 +137,8 @@ export interface BrandDna {
   memorySyncedAt?: Record<string, number>;
   /** How content should look and sound (Brain → Brand → Look & voice). */
   look?: BrandLookSpec;
+  /** Who runs the brand, from onboarding's questions (ADR-0049). */
+  profile?: OnboardingProfile;
 }
 
 export const emptyCustomer: CustomerSignals = {

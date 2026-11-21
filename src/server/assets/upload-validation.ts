@@ -7,6 +7,9 @@ export function matchesMediaType(bytes: Uint8Array, type: string): boolean {
   if (type === "image/jpeg") return starts([255, 216, 255]);
   if (type === "image/gif") return ascii(0, "GIF87a") || ascii(0, "GIF89a");
   if (type === "image/webp") return ascii(0, "RIFF") && ascii(8, "WEBP");
+  if (type === "image/avif" || type === "image/heic" || type === "image/heif")
+    return bytes.length >= 12 && ascii(4, "ftyp");
+  if (type === "image/tiff") return ascii(0, "II*\0") || ascii(0, "MM\0*");
   if (type === "video/webm") return starts([26, 69, 223, 163]);
   if (type === "video/mp4" || type === "video/quicktime")
     return (

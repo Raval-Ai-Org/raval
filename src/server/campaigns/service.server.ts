@@ -21,6 +21,7 @@ import {
   CampaignPlanSchema,
   MAX_RUNNING_CAMPAIGNS,
   type CampaignBrief,
+  type CampaignMedia,
   type CampaignPiece,
   type CampaignPlan,
   type CampaignRow,
@@ -31,7 +32,9 @@ import {
 } from "@/lib/campaigns/contracts";
 import { groundCampaignPlan, groundText, type GroundOptions } from "@/lib/campaigns/ground";
 import { ctaFor, isShareableLink } from "@/lib/campaigns/links";
-import { assignMedia, settleFormats } from "@/lib/campaigns/media";
+import { assignMedia, settleFormats, type InspoExtra } from "@/lib/campaigns/media";
+import { remainingUses } from "@/lib/inspo/media-rotation";
+import { loadInspoMediaPool } from "@/server/inspo/media-pool.server";
 import { phaseOf, playbookById, type Playbook } from "@/lib/campaigns/playbooks";
 import { campaignProgress, pieceState, UNMADE } from "@/lib/campaigns/progress";
 import { briefFacts, pieceBrief, PLAN_SYSTEM, planUserPrompt } from "@/lib/campaigns/prompt";
@@ -41,6 +44,7 @@ import { diffPieces, pieceSignature, type CampaignStep } from "@/lib/campaigns/s
 import { isCampaignsEnabled, isAutopilotEnabled } from "@/lib/feature-flags";
 import { upcomingMoments } from "@/lib/studio/moments";
 import { trendLines } from "@/lib/studio/trends";
+import { RADAR_RULES, radarLines } from "@/lib/trends/radar";
 import { summarizeLearnings } from "@/lib/autopilot/learn";
 import type { PlatformId } from "@/lib/social-platforms";
 import { roleAtLeast, type WorkspaceRole } from "@/server/api-auth";
@@ -53,6 +57,7 @@ import { HttpError } from "@/server/http-error";
 import { runWithScope } from "@/server/request-context";
 import { assertPublicUrl } from "@/server/safe-fetch";
 import { loadStudioContext, invalidateStudioContext } from "@/server/studio/context.server";
+import { lookTextFor } from "@/server/brand-look/resolve.server";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
 const TABLE = "workspace_campaigns";
@@ -226,10 +231,12 @@ export async function getCampaign(caller: Caller, id: string): Promise<CampaignV
   const view = (await viewsFor(caller.workspaceId, [row]))[0];
   return {
     ...view,
-    mediaUrls: await mediaUrlsFor(
-      caller.workspaceId,
-      view.brief.media.map((m) => m.assetId),
-    ),
+    mediaUrls: await mediaUrlsFor(caller.workspaceId, [
+      ...new Set([
+        ...view.brief.media.map((m) => m.assetId),
+        ...view.plan.pieces.flatMap((p) => p.mediaIds),
+      ]),
+    ]),
   };
 }
 
@@ -505,6 +512,47 @@ function checkLink(brief: CampaignBrief): void {
   }
 }
 
+/**
+ * The brand's own Inspo photos, offered to the plan as well as the campaign's
+ * own uploads: placed on some pieces only, in rotation. Never throws.
+ */
+async function inspoExtraFor(
+  workspaceId: string,
+  brief: CampaignBrief,
+): Promise<InspoExtra | undefined> {
+  const pool = await loadInspoMediaPool(workspaceId);
+  const own = new Set(brief.media.map((m) => m.assetId));
+  const media: CampaignMedia[] = pool.media
+    .filter((m) => m.kind === "image" && !own.has(m.assetId))
+    .map((m) => ({
+      assetId: m.assetId,
+      kind: m.kind,
+      role: m.purpose === "person" ? "people" : "hero",
+      label: [m.folder, m.label].filter(Boolean).join(": ").slice(0, 80),
+    }));
+  if (!media.length) return undefined;
+  // Photos from a Media folder or label the campaign names come first.
+  const { mediaForBrief } = await import("@/lib/inspo/media-library");
+  const named = new Set(
+    mediaForBrief(
+      pool.media.map((m) => ({
+        assetId: m.assetId,
+        kind: m.kind,
+        folder: m.folder,
+        label: m.label,
+      })),
+      [brief.name, (brief as { about?: string }).about ?? ""].join(" "),
+      12,
+    ).map((m) => m.assetId),
+  );
+  if (named.size) media.sort((a, b) => Number(named.has(b.assetId)) - Number(named.has(a.assetId)));
+  return {
+    media,
+    remaining: remainingUses(pool.media, pool.uses, new Date()),
+    every: pool.frequency === "often" ? 2 : pool.frequency === "rarely" ? 5 : 3,
+  };
+}
+
 /** The skeleton for a brief, keeping the words of pieces that are still the same slot. */
 async function shape(
   workspaceId: string,
@@ -525,7 +573,12 @@ async function shape(
       return { ...piece, title: old.title, idea: old.idea, visual: old.visual };
     return piece;
   });
-  pieces = assignMedia(playbook, settleFormats(playbook, pieces, brief.media), brief.media);
+  pieces = assignMedia(
+    playbook,
+    settleFormats(playbook, pieces, brief.media),
+    brief.media,
+    await inspoExtraFor(workspaceId, brief),
+  );
   return {
     plan: {
       v: 1,
@@ -636,7 +689,11 @@ export async function editPiece(
   const { brief, plan } = parseRow(row);
   const at = plan.pieces.findIndex((p) => p.id === args.pieceId);
   if (at < 0) throw new HttpError(404, "Piece not found");
-  const owned = new Set(brief.media.map((m) => m.assetId));
+  // The brief's own media, plus Inspo photos code already placed in this plan.
+  const owned = new Set([
+    ...brief.media.map((m) => m.assetId),
+    ...plan.pieces.flatMap((p) => p.mediaIds),
+  ]);
   const next: CampaignPiece = { ...plan.pieces[at], ...args.patch, edited: true };
   if (args.patch.mediaIds) {
     next.mediaIds = args.patch.mediaIds.filter((id) => owned.has(id)).slice(0, 6);
@@ -720,7 +777,12 @@ export async function planCampaign(
       route: "campaign.plan",
     },
     async () => {
-      const ctx = await loadStudioContext(db, caller.workspaceId, null);
+      const [ctx, voice] = await Promise.all([
+        loadStudioContext(db, caller.workspaceId, null),
+        // How the brand writes (tone, emoji, length, point of view, language):
+        // the onboarding answers and Inspo voice. A free read.
+        lookTextFor(caller.workspaceId, "social"),
+      ]);
       const products = await productLines(caller.workspaceId, brief.productIds);
       const mediaLines = brief.media.map(
         (m, i) =>
@@ -742,13 +804,25 @@ export async function planCampaign(
         brief,
         pieces: plan.pieces,
         phases: plan.phases,
-        trendText: trendLines(ctx.socialTrends, channels as PlatformId[], 6),
+        trendText: [
+          ctx.radar?.length
+            ? `Moments trending now (staff-picked; tie a piece to one only if it fits the campaign). ${RADAR_RULES.join(" ")}
+${radarLines(ctx.radar, 3)}`
+            : "",
+          trendLines(ctx.socialTrends, channels as PlatformId[], 6),
+        ]
+          .filter(Boolean)
+          .join("\n"),
         learnings,
         recentOpenings,
-        brandText: wrapUntrusted("brand-context", ctx.brandText, {
-          maxChars: 6000,
-          route: "campaign.plan",
-        }),
+        brandText: wrapUntrusted(
+          "brand-context",
+          [ctx.brandText, voice].filter(Boolean).join("\n\n"),
+          {
+            maxChars: 6000,
+            route: "campaign.plan",
+          },
+        ),
         productLines: products,
         mediaLines,
       });

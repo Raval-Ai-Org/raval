@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { BrainIcon, BrainMark } from "./BrainMark";
 import { GoalCard } from "./home/GoalCard";
+import { BrainRing } from "./home/BrainRing";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -236,7 +237,7 @@ function StrategyBar({
             <h3 className="text-[15px] font-semibold leading-none tracking-tight">Strategy</h3>
             {strategy.status === "confirmed" && (
               <span className="inline-flex h-5 items-center gap-1 rounded-full bg-primary/15 px-2 text-[11px] font-medium leading-none">
-                <Check className="h-3 w-3 text-primary" /> In use
+                <Check className="h-3 w-3 text-primary-ink" /> In use
               </span>
             )}
             {strategy.status === "draft" && (
@@ -379,25 +380,30 @@ export function BrainHome({ overview, news, locked = {}, onOpen, onEditGoal }: B
   const columns = shown.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3";
   return (
     <div className="mx-auto w-full max-w-[1040px] px-4 pb-10 pt-5 sm:px-6">
-      <div className={cn("grid auto-rows-fr gap-3", columns)}>
-        {shown.map((brain, i) => (
-          <BrainTile
-            key={brain}
-            brain={brain}
-            card={overview.brains[brain]}
-            news={news[brain]}
-            lockedPlan={locked[brain]}
-            index={i}
-            onOpen={() => onOpen(brain)}
+      {shown.length === 4 ? (
+        <BrainRing overview={overview} news={news} locked={locked} onOpen={(b) => onOpen(b)} />
+      ) : (
+        <>
+          <div className={cn("grid auto-rows-fr gap-3", columns)}>
+            {shown.map((brain, i) => (
+              <BrainTile
+                key={brain}
+                brain={brain}
+                card={overview.brains[brain]}
+                news={news[brain]}
+                lockedPlan={locked[brain]}
+                index={i}
+                onOpen={() => onOpen(brain)}
+              />
+            ))}
+          </div>
+          <Flow
+            lit={shown.map((b) => overview.brains[b].ready)}
+            columns={columns.replace("grid-cols-2 ", "")}
           />
-        ))}
-      </div>
-
-      <Flow
-        lit={shown.map((b) => overview.brains[b].ready)}
-        columns={columns.replace("grid-cols-2 ", "")}
-      />
-      <div className="h-3 sm:hidden" />
+          <div className="h-3 sm:hidden" />
+        </>
+      )}
 
       <StrategyBar
         strategy={overview.strategy}
@@ -465,7 +471,7 @@ export function BrainHome({ overview, news, locked = {}, onOpen, onEditGoal }: B
             </ul>
           ) : (
             <div className="ds-tile grid min-h-[52px] grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5 px-3 py-2">
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/15 text-primary">
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/15 text-primary-ink">
                 <Check className="h-4 w-4" />
               </span>
               <span className="text-[13px] font-medium">All set</span>

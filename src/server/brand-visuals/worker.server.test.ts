@@ -119,7 +119,9 @@ it("retains uncertainty, filters invented evidence and does not infer video moti
   expect(profile.warnings).toContain("Customer examples need confirmation.");
   expect(profile.warnings).toContain("Mobile page was unavailable.");
   const content = mock.chat.mock.calls[0][0].messages[0].content;
-  expect(content.filter((p: { type: string }) => p.type === "image_url")).toHaveLength(1);
+  // The section crop and, since ADR-0048, the shrunk homepage overview.
+  expect(content.filter((p: { type: string }) => p.type === "image_url")).toHaveLength(2);
+  expect(JSON.stringify(content)).toContain("overview of the whole website page");
 });
 it("does not spend on visual analysis when every image is unavailable", async () => {
   mock.download.mockResolvedValue({ data: null, error: { message: "Gone" } });

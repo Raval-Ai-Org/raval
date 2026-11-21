@@ -21,9 +21,25 @@ import type { InspoHandlers, InspoTaste, InspoView } from "./types";
 
 const WS = "00000000-0000-4000-8000-000000000099";
 
+/** A small designed poster: soft light, a subject, and a headline that always fits. */
 function art(w: number, h: number, bg: string, fg: string, word: string) {
+  const m = Math.min(w, h);
+  const size = Math.min(w * 0.11, (w * 0.84) / Math.max(4, word.length * 0.56));
   return `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="${bg}"/><circle cx="${w * 0.62}" cy="${h * 0.42}" r="${Math.min(w, h) * 0.28}" fill="${fg}"/><text x="${w * 0.08}" y="${h * 0.88}" font-family="Georgia" font-size="${w * 0.09}" fill="#fff">${word}</text></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${bg}"/><stop offset="1" stop-color="${bg}" stop-opacity="0.78"/></linearGradient>
+        <radialGradient id="l" cx="0.3" cy="0.2" r="0.8"><stop offset="0" stop-color="#fff" stop-opacity="0.28"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect width="${w}" height="${h}" fill="#111"/><rect width="${w}" height="${h}" fill="url(#g)"/>
+      <circle cx="${w * 0.72}" cy="${h * 0.3}" r="${m * 0.34}" fill="${fg}" opacity="0.9"/>
+      <ellipse cx="${w * 0.5}" cy="${h * 0.7}" rx="${m * 0.36}" ry="${m * 0.06}" fill="#000" opacity="0.18"/>
+      <rect x="${w * 0.38}" y="${h * 0.38}" width="${m * 0.24}" height="${m * 0.3}" rx="${m * 0.05}" fill="#fff" opacity="0.92"/>
+      <rect x="${w * 0.41}" y="${h * 0.44}" width="${m * 0.18}" height="${m * 0.025}" rx="${m * 0.012}" fill="${bg}" opacity="0.7"/>
+      <rect width="${w}" height="${h}" fill="url(#l)"/>
+      <rect x="${w * 0.08}" y="${h * 0.08}" width="${m * 0.16}" height="${m * 0.04}" rx="${m * 0.02}" fill="#fff" opacity="0.85"/>
+      <text x="${w / 2}" y="${h * 0.88}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="800" letter-spacing="-1" font-size="${size}" fill="#fff">${word}</text>
+    </svg>`,
   )}`;
 }
 
@@ -35,7 +51,24 @@ const SAMPLES: Array<[VisualSource["purpose"], number, number, string, string, s
   ["style", 600, 520, "#f6f1e7", "#1f3d2b", "Weekend"],
   ["product", 600, 700, "#3a2a1f", "#cba66c", "Bag 250g"],
   ["person", 600, 800, "#495a45", "#f5f1e8", "Maya"],
+  ["product", 600, 600, "#c2410c", "#fff7ed", "Opening"],
+  ["product", 600, 600, "#1f2937", "#fde68a", "Ribbon"],
+  ["style", 600, 1500, "#ffffff", "#111111", "Homepage"],
 ];
+
+/** Lab extras: a Media folder with labels, and a full-page capture of the site. */
+const EXTRAS: Record<number, Partial<VisualSource>> = {
+  7: {
+    notes: "Doors open at the Lahore store launch",
+    region: { folder: "Launch event", lifetime: "temporary" },
+  },
+  8: {
+    notes: "Ribbon cutting with the team",
+    region: { folder: "Launch event", lifetime: "temporary" },
+  },
+  6: { notes: "Maya, our head roaster", region: { folder: "Team" } },
+  9: { kind: "website", region: { type: "full" } },
+};
 
 function sampleSources(): VisualSource[] {
   return SAMPLES.map(([purpose, w, h, bg, fg, word], i) => ({
@@ -54,6 +87,7 @@ function sampleSources(): VisualSource[] {
     region: {},
     created_at: new Date(Date.UTC(2026, 9, 20 - i)).toISOString(),
     asset: { storage_path: "lab", mime_type: "image/png", url: art(w, h, bg, fg, word) },
+    ...EXTRAS[i],
   }));
 }
 
@@ -67,9 +101,55 @@ const direction = DirectionSchema.parse({
     typography: { heading: "Fraunces", body: "Inter" },
   },
   sourceIds: ["00000000-0000-4000-8000-000000000001"],
+  bible: {
+    world: {
+      medium: "Hand-painted watercolour illustration with soft anime-style linework",
+      rendering: "visible brush texture, gentle grain, warm paper",
+      setting: "mountain lakes and cosy wooden interiors",
+      lighting: "golden morning light",
+      paletteMood: "warm cream, moss and honey",
+    },
+    type: {
+      headline: "High-contrast editorial serif, sentence case",
+      emphasis: "italic-accent",
+      casing: "sentence case",
+      placement: "centred in the top third",
+    },
+    composition: {
+      logo: "top-centre",
+      headlineZone: "top third, centred, two lines",
+      subjectZone: "lower two-thirds, the scene bleeds to the edges",
+      density: "balanced",
+    },
+    register: "illustrated",
+    text: "headline",
+    logo: "often",
+    frame: "",
+    components: [],
+    signatures: [
+      {
+        kind: "subject",
+        description: "A cheerful figure in a mustard rain jacket",
+        sourceIds: ["00000000-0000-4000-8000-000000000001"],
+      },
+      {
+        kind: "card",
+        description: "Product cards floating inside the scene",
+        sourceIds: ["00000000-0000-4000-8000-000000000001"],
+      },
+    ],
+    recurringSubject: {
+      description: "A cheerful figure in a mustard rain jacket with a canvas backpack",
+      sourceIds: ["00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002"],
+    },
+    avoid: ["glossy 3D renders"],
+    anchors: ["00000000-0000-4000-8000-000000000001"],
+  },
 });
 const draftProfile: VisualProfile = {
-  v: 1,
+  v: 2,
+  auto: false,
+  roles: [],
   selected: 0,
   coverage: [],
   warnings: [],
@@ -98,6 +178,7 @@ const SCENES = [
   "board",
   "board-empty",
   "directions",
+  "picked",
   "learning",
   "post",
   "video",
@@ -115,6 +196,7 @@ export function InspoLab() {
   const [sources, setSources] = useState<VisualSource[]>(sampleSources);
   const [look, setLook] = useState<BrandLookSpec>({});
   const [draft, setDraft] = useState<VisualProfile | null>(null);
+  const [adherence, setAdherence] = useState<"light" | "close" | "strict">("light");
   const [removedId, setRemovedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -128,7 +210,7 @@ export function InspoLab() {
     setScene(next);
     setSection(parseInspoSection(next));
     setSources(next === "board-empty" ? [] : sampleSources());
-    setDraft(next === "directions" ? draftProfile : null);
+    setDraft(next === "directions" || next === "picked" ? draftProfile : null);
     setRemovedId(null);
   }
 
@@ -142,6 +224,8 @@ export function InspoLab() {
     active: scene === "board" ? { id: "lab-active", name: "Quiet editorial" } : null,
     running: scene === "learning" ? { stage: "analysing", pages: 0 } : null,
     lastError: null,
+    auto: scene === "picked",
+    adherence,
     learnPrice: scene === "board" ? 125 : 0,
   };
   const dna: BrandDna = { ...sampleDna, look };
@@ -159,6 +243,10 @@ export function InspoLab() {
   };
 
   const handlers: InspoHandlers = {
+    setAdherence: (level) => {
+      setAdherence(level);
+      log(`adherence:${level}`);
+    },
     onSection: (s) => {
       setSection(s);
       log(`section:${s}`);
@@ -171,13 +259,39 @@ export function InspoLab() {
       setLook({});
       log("reset");
     },
-    upload: (files, chip) => log(`upload:${files.length}:${chip}`),
+    upload: (files, chip, folder) =>
+      log(`upload:${files.length}:${chip}${folder ? `:${folder}` : ""}`),
+    setDetails: (card, patch) => {
+      setSources((list) =>
+        list.map((s) =>
+          s.id === card.id
+            ? {
+                ...s,
+                notes: patch.label,
+                purpose: card.capture ? s.purpose : purposeOf(patch.chip, s.purpose),
+                region: {
+                  ...s.region,
+                  lifetime: patch.lifetime,
+                  ...(patch.folder ? { folder: patch.folder } : { folder: undefined }),
+                },
+              }
+            : s,
+        ),
+      );
+      log(`details:${card.label}:${patch.folder ?? "-"}:${patch.lifetime}`);
+    },
     addLink: (url, chip) => log(`link:${chip}:${url}`),
     setChip: (card, chip) => {
       setSources((list) =>
         list.map((s) => (s.id === card.id ? { ...s, purpose: purposeOf(chip, s.purpose) } : s)),
       );
       log(`chip:${card.label}:${chip}`);
+    },
+    setLifetime: (card, lifetime) => {
+      setSources((list) =>
+        list.map((s) => (s.id === card.id ? { ...s, region: { ...s.region, lifetime } } : s)),
+      );
+      log(`lifetime:${card.label}:${lifetime}`);
     },
     remove: (card) => {
       setSources((list) => list.filter((s) => s.id !== card.id));

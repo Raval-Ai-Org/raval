@@ -23,6 +23,10 @@ export type BillingAccount = {
   grace_until: string | null;
   comped_plan_id: string | null;
   comped_until: string | null;
+  /** "trial": a staff pass on the trial tier (free features only). */
+  comped_tier?: string | null;
+  /** "promo": a Stripe trial started from a code runs on the trial tier. */
+  trial_tier?: string | null;
   enforcement_override: "off" | "shadow" | "on" | null;
   pro_overage_mode: "credits" | "flash";
   provider?: string;

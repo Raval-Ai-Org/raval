@@ -2,7 +2,7 @@
 
 import { PackageOpen } from "lucide-react";
 import { useState, type CSSProperties } from "react";
-import { ADDONS, CREDIT_PACKS, VIDEO_PACKS } from "@/marketing/lib/pricing";
+import { ADDONS, CREDIT_PACKS, VIDEO_MENU } from "@/marketing/lib/pricing";
 import SectionHead from "./SectionHead";
 
 const APP_URL = "/signup";
@@ -19,16 +19,16 @@ export default function PricingTopups() {
         <SectionHead
           icon={<PackageOpen size={32} strokeWidth={1.4} aria-hidden="true" />}
           label="Top ups and add-ons"
-          title="Need more? Buy it once, keep it forever."
-          blurb="Credit packs and video packs never expire. Add-ons bill monthly and scale one thing at a time."
+          title="Need more? Top up any time."
+          blurb="Top-ups work across all your brands and stay valid for 12 months. Add-ons bill monthly and scale one thing at a time."
           wide
         />
 
         <div className="px-packs">
           <article className="px-card" data-reveal>
             <div className="px-pack-kicker">Credit packs</div>
-            <h3 className="px-h3">Slide to pick your pack</h3>
-            <p className="px-sub">Bigger packs carry a bonus. Credits work on everything except video.</p>
+            <h3 className="px-h3">Slide to pick your top-up</h3>
+            <p className="px-sub">The same credits as your plan: posts, carousels, Stories, ads and video.</p>
 
             <div className="px-pack-top">
               <div>
@@ -42,7 +42,7 @@ export default function PricingTopups() {
               </div>
               <div className="px-pack-price">
                 <div className="p">${d.price}</div>
-                <div className="r">${((d.price / d.credits) * 1000).toFixed(2)} per 1,000 credits</div>
+                <div className="r">${(d.price / d.credits).toFixed(2)} a credit</div>
               </div>
             </div>
 
@@ -68,34 +68,31 @@ export default function PricingTopups() {
 
             <div className="px-eq">
               <div>
-                <b>{fmt(Math.floor(d.credits / 30))}</b>image posts
+                <b>{fmt(d.credits)}</b>image posts
               </div>
               <div>
-                <b>{fmt(Math.floor(d.credits / 100))}</b>premium articles
+                <b>{fmt(Math.floor(d.credits / 30))}</b>10-second videos
               </div>
             </div>
             <a href={APP_URL} className="px-cta px-cta-lime" style={{ marginTop: 0 }}>
               Buy credits
             </a>
-            <p className="px-foot">One time purchase. Never expires.</p>
+            <p className="px-foot">One-time purchase. Valid for 12 months.</p>
           </article>
 
           <article className="px-card" data-reveal style={{ transitionDelay: "90ms" }}>
-            <div className="px-pack-kicker">Video packs</div>
-            <h3 className="px-h3">Video packs</h3>
+            <div className="px-pack-kicker">Video</div>
+            <h3 className="px-h3">Priced per second, in credits</h3>
             <p className="px-sub">
-              Video credits are separate so renders never drain your posting credits. One video credit is one 8
-              second Standard video.
+              No separate video wallet. Pick a model and a length; the price shows on Generate before
+              you spend, and a video that fails a check is never charged.
             </p>
-            {VIDEO_PACKS.map((v) => (
-              <div key={v.credits} className="px-vp">
+            {VIDEO_MENU.map(([label, rate]) => (
+              <div key={label} className="px-vp">
                 <div>
-                  <b>{v.credits} video credits</b>
-                  <span>{v.rate} per video credit</span>
+                  <b>{label}</b>
+                  <span>{rate}</span>
                 </div>
-                <a href={APP_URL} className="px-buy">
-                  {v.price}
-                </a>
               </div>
             ))}
           </article>

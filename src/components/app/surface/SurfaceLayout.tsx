@@ -1,10 +1,10 @@
 "use client";
 
-// SurfaceLayout — the one structure every large Mellox popup uses (AI
-// Visibility, Analytics, Brand DNA, Library, Backlinks, Competitors, Settings):
-// a quiet navigation rail on the left and a scrolling page on the right, in the
-// manner of Gemini's and ChatGPT's settings. On compact screens the rail becomes a row
-// of pills above the page.
+// SurfaceLayout — the one structure every large Mellox window uses (AI
+// Visibility, Analytics, Inspo, Competitors, Settings...). Mellox 2.0 (Holo):
+// the window sits beside the app sidebar, so its sections are a row of pill
+// tabs at the top, never a second sidebar. `variant="rail"` keeps the old
+// left rail for screens with no app sidebar (the admin console).
 //
 // The layout owns scrolling, so nothing has to be sticky with negative
 // offsets: the rail never moves, the page scrolls under its own header.
@@ -33,6 +33,7 @@ export function SurfaceLayout<T extends string>({
   railBottom,
   children,
   label,
+  variant = "tabs",
 }: {
   items: SurfaceNavItem<T>[];
   value: T | null;
@@ -43,6 +44,8 @@ export function SurfaceLayout<T extends string>({
   railBottom?: ReactNode;
   children: ReactNode;
   label: string;
+  /** "tabs" (default): pill tabs on top. "rail": a left rail (admin). */
+  variant?: "tabs" | "rail";
 }) {
   // One animated highlight per rail, so two open surfaces never share it.
   const group = useId();
@@ -50,11 +53,89 @@ export function SurfaceLayout<T extends string>({
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [value]);
+  if (variant === "tabs") {
+    return (
+      <div className="flex h-full min-h-0 min-w-0 flex-col">
+        <nav aria-label={label} className="flex min-w-0 shrink-0 justify-center px-3 pb-1 pt-1">
+          <LayoutGroup id={group}>
+            <ul
+              className="flex min-w-0 max-w-full gap-0.5 overflow-x-auto rounded-full bg-[var(--ds-well-bg)] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="list"
+            >
+              {items.map((item) => {
+                const active = item.id === value;
+                const Icon = item.icon;
+                return (
+                  <li key={item.id} className="shrink-0">
+                    <button
+                      ref={active ? activeItemRef : undefined}
+                      type="button"
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => onChange(item.id)}
+                      className={cn(
+                        "group relative flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-[color,transform] active:scale-[0.97]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId="tab-active"
+                          aria-hidden
+                          transition={{ type: "spring", stiffness: 460, damping: 38 }}
+                          className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[0_1px_2px_hsl(160_20%_10%/0.06),0_6px_16px_-8px_hsl(160_30%_12%/0.22)] dark:bg-white/[0.1]"
+                        />
+                      )}
+                      <Icon
+                        className={cn(
+                          "relative h-4 w-4 shrink-0",
+                          active
+                            ? "text-[var(--mox-green-deep)] dark:text-[var(--mox-lime)]"
+                            : "text-muted-foreground group-hover:text-foreground",
+                        )}
+                        strokeWidth={active ? 2.2 : 1.9}
+                      />
+                      <span className="relative">{item.label}</span>
+                      {!!item.count && (
+                        <span
+                          className={cn(
+                            "relative min-w-[18px] rounded-full px-1 text-center text-[10.5px] font-bold tabular-nums leading-[18px]",
+                            item.highlight
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-foreground/[0.07] text-muted-foreground",
+                          )}
+                        >
+                          {item.count > 99 ? "99+" : item.count}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </LayoutGroup>
+        </nav>
+        <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin">
+          {railTop && (
+            <div className="mx-auto hidden w-full max-w-[1100px] px-7 pt-4 lg:block [&>*]:max-w-[360px]">
+              {railTop}
+            </div>
+          )}
+          {children}
+          {railBottom && (
+            <div className="mx-auto hidden w-full max-w-[1100px] px-7 pb-8 lg:block">
+              {railBottom}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col lg:flex-row">
       <nav
         aria-label={label}
-        className="min-h-0 min-w-0 shrink-0 border-b border-border/60 lg:flex lg:w-[216px] lg:flex-col lg:border-b-0 lg:border-r lg:bg-surface-2/40 lg:px-3 lg:py-4"
+        className="min-h-0 min-w-0 shrink-0 border-b border-[var(--ds-card-border)] lg:flex lg:w-[220px] lg:flex-col lg:border-b-0 lg:border-r lg:bg-[var(--ds-well-bg)]/50 lg:px-3 lg:py-4"
       >
         {railTop && <div className="mb-4 hidden min-w-0 shrink-0 px-1 lg:block">{railTop}</div>}
         <LayoutGroup id={group}>
@@ -73,7 +154,7 @@ export function SurfaceLayout<T extends string>({
                     aria-current={active ? "page" : undefined}
                     onClick={() => onChange(item.id)}
                     className={cn(
-                      "group relative flex h-11 w-full items-center gap-2.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-colors lg:h-9",
+                      "group relative flex h-11 w-full items-center gap-2.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-[color,transform] active:scale-[0.97] lg:h-9",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                       active
                         ? "text-foreground"
@@ -85,14 +166,14 @@ export function SurfaceLayout<T extends string>({
                         layoutId="rail-active"
                         aria-hidden
                         transition={{ type: "spring", stiffness: 420, damping: 36 }}
-                        className="absolute inset-0 rounded-full bg-primary/12 ring-1 ring-primary/15"
+                        className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[0_1px_2px_hsl(160_20%_10%/0.06),0_6px_16px_-8px_hsl(160_30%_12%/0.22)] ring-1 ring-[var(--ds-card-border)] dark:bg-white/[0.08]"
                       />
                     )}
                     <Icon
                       className={cn(
                         "relative h-[18px] w-[18px] shrink-0",
                         active
-                          ? "text-primary"
+                          ? "text-[var(--mox-green-deep)] dark:text-[var(--mox-lime)]"
                           : "text-muted-foreground group-hover:text-foreground",
                       )}
                       strokeWidth={active ? 2.2 : 1.9}
@@ -208,14 +289,14 @@ export function GroupLabel({ children, action }: { children: ReactNode; action?:
 
 const TONE_TEXT = {
   default: "text-foreground",
-  primary: "text-primary",
+  primary: "text-primary-ink",
   success: "text-success",
   warning: "text-warning",
   destructive: "text-destructive",
 } as const;
 const TONE_ICON = {
   default: "bg-foreground/[0.06] text-foreground/80",
-  primary: "bg-primary/12 text-primary",
+  primary: "bg-primary/12 text-primary-ink",
   success: "bg-success/12 text-success",
   warning: "bg-warning/12 text-warning",
   destructive: "bg-destructive/12 text-destructive",

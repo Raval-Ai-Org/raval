@@ -17,7 +17,8 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { authedFetch } from "@/lib/authed-fetch";
 import { useNavigate } from "@/lib/navigation";
-import { campaignsPath, workspacePath } from "@/lib/workspace/paths";
+import { campaignsPath, communitiesPath, workspacePath } from "@/lib/workspace/paths";
+import { useBrainOverview } from "./brain/use-brain";
 import { waitingPlace } from "@/lib/pulse/pulse";
 import { ArrowDown } from "@/components/icons";
 import { toast } from "@/lib/toast";
@@ -62,11 +63,18 @@ import {
 } from "@/lib/studio/session-store";
 import { cn } from "@/lib/utils";
 import { ChatComposer, CHAT_MODELS, type ChatComposerHandle } from "./chat/ChatComposer";
-import { FreeCreditStrip } from "./billing/FreePlanPushes";
+
 import { autopilotPath, useComposerAutopilot } from "./autopilot/composer/useComposerAutopilot";
 import { useWorkspacePulse } from "./pulse/use-pulse";
 import { WaitingChip } from "./pulse/WaitingChip";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
+import { HomeBento } from "./home/HomeBento";
+import { HomeAutopilot } from "./autopilot/home/HomeAutopilot";
+import { shouldAskClarify } from "@/lib/chat/clarify-gate";
+import { useStartHere } from "./home/use-start-here";
+import { useOpenCreate } from "@/components/studio/use-open-create";
+import { IdeaSwipeDeck } from "@/components/studio/IdeaSwipeDeck";
+import type { StudioType } from "@/lib/studio/formats";
 import { AssistantMessage, ErrorMessage, NoticeMessage, UserMessage } from "./chat/ChatMessages";
 import { ChatOffers } from "./chat/ChatOffers";
 import { StudioTaskCard, type StudioTaskPayload } from "./chat/StudioTaskCard";
@@ -162,12 +170,15 @@ export function ChatPanel({
   workspaceId,
   conversationId = null,
   mobileAccessory,
+  chatView = false,
 }: {
   workspaceId: string;
   conversationId?: string | null;
   /** Kept for callers; the chat always uses the centered layout. */
   variant?: "rail" | "centered";
   mobileAccessory?: ReactNode;
+  /** The Chat entry (`?view=chat`): an empty thread instead of Home's cards. */
+  chatView?: boolean;
 }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -310,8 +321,7 @@ export function ChatPanel({
   const conversationRef = useRef<string | null>(conversationId);
   const preserveMessagesOnRouteRef = useRef(false);
   const skipNextHistoryLoadRef = useRef(false);
-  const { dna, save: saveDna } = useBrandDna(workspaceId);
-  const dnaRef = useRef(dna);
+  const { dna } = useBrandDna(workspaceId);
   // Used by an APPROVED "save to memory" suggestion from a chat reply (the
   // path without chat tools). It lands in the brand's memory (ADR-0033).
   const saveMemoryNote = async (title: string, body: string) => {
@@ -419,48 +429,10 @@ export function ChatPanel({
       if (place) emitAppEvent(place.event, place.detail as never);
     },
   });
-  useEffect(() => {
-    dnaRef.current = dna;
-  }, [dna]);
-  const syncingMemoryRef = useRef(false);
-  // Live message count at this session's last sync. The stored count is the DB
-  // window (at most 60), which a long conversation outgrows — it then fired an
-  // extraction on every turn.
-  const lastSyncedLiveCountRef = useRef<number | null>(null);
-  const maybeSyncMemory = async () => {
-    if (syncingMemoryRef.current) return;
-    const current = dnaRef.current;
-    const liveCount = messagesRef.current.length;
-    const lastRaw = lastSyncedLiveCountRef.current ?? current.memoryLastMsgCount ?? 0;
-    // A shorter live list means a different conversation: count from zero.
-    const last = liveCount < lastRaw ? 0 : lastRaw;
-    if (liveCount < 4) return;
-    if (liveCount - last < 4) return;
-    syncingMemoryRef.current = true;
-    try {
-      const { syncMemoryFromChat } = await import("@/lib/memory-sync");
-      const res = await syncMemoryFromChat(workspaceId, current, saveDna, conversationRef.current);
-      lastSyncedLiveCountRef.current = liveCount;
-      // What it noticed shows as a note under the latest reply, with Undo.
-      const noticed = res.memories ?? [];
-      if (noticed.length) {
-        emitAppEvent("memory:changed", { workspaceId });
-        setMessages((m) => {
-          const at = m.map((x) => x.role === "assistant" && x.kind === "text").lastIndexOf(true);
-          if (at < 0) return m;
-          return m.map((x, i) =>
-            i === at
-              ? { ...x, extras: { ...x.extras, memory: [...(x.extras?.memory ?? []), ...noticed] } }
-              : x,
-          );
-        });
-      }
-    } catch (e) {
-      console.warn("memory sync failed", e);
-    } finally {
-      syncingMemoryRef.current = false;
-    }
-  };
+  // No background memory reader: chat's own remember / update_memory /
+  // forget tools save in the reply (ADR-0033), and Brand DNA's "Sync from
+  // chat" reads a conversation on a person's click. The reader used to run a
+  // model call every few turns of every chat.
 
   const { reducedMotion } = useChatPrefs();
 
@@ -1259,10 +1231,11 @@ export function ChatPanel({
       }
     }
 
-    // Ask clarifying questions only when a conversation starts; follow-ups
-    // already have the context and should get an answer straight away.
+    // Ask clarifying questions only when a conversation starts with a bare
+    // request to make something (shouldAskClarify, pure); everything else is
+    // answered straight away, with no extra model call.
     let payload: ClarifyPayload | null = null;
-    if (priorMessages.filter((m) => m.role === "user").length === 0 && text.length > 0) {
+    if (priorMessages.filter((m) => m.role === "user").length === 0 && shouldAskClarify(text)) {
       setClarifying(true);
       try {
         const cr = await authedFetch("/api/clarify", {
@@ -1563,8 +1536,6 @@ export function ChatPanel({
       );
       emitAppEvent("chat:idle");
       completePreviewPlan("All done", "Your update is ready");
-      // Background memory extraction — only if enough new turns since last sync.
-      void maybeSyncMemory();
     }
   };
 
@@ -1642,6 +1613,9 @@ export function ChatPanel({
   /* ───────────── render ───────────── */
 
   const empty = messages.length === 0 && !historyLoading;
+  // Home (Mellox 2.0): a new chat outside the Chat entry shows the cards, with
+  // the message box docked under them. Sending moves to the conversation.
+  const home = empty && !conversationId && !chatView;
   const last = messages[messages.length - 1];
   const lastTextIdx = messages
     .map((m) => m.kind === "text" && m.role === "assistant")
@@ -1660,19 +1634,25 @@ export function ChatPanel({
   const placeholder = attachments.length
     ? "Ask something about your files…"
     : empty
-      ? "How can Mellox help today?"
-      : "Reply to Mellox…";
+      ? "Ask Mox anything…"
+      : "Reply to Mox…";
 
-  // Autopilot lives in the message box: a switch when it's off, the whole box
-  // when it's on. Typing hands the box straight back.
-  const onAutopilotType = useCallback((char?: string) => {
-    if (char) setInput((v) => v + char);
-    requestAnimationFrame(() => composerRef.current?.focus());
-  }, []);
-  const autopilot = useComposerAutopilot({ workspaceId, hero: empty, onType: onAutopilotType });
+  // Autopilot has its own area on Home; elsewhere the box's toolbar keeps a
+  // small pill that opens it. The box itself never changes for Autopilot.
+  const autopilot = useComposerAutopilot({ workspaceId, hidden: home });
   // What waits for a person and what is running, read once for the box and
   // the ideas under it (src/lib/pulse/pulse.ts). Free; starts nothing.
   const pulse = useWorkspacePulse(workspaceId).data;
+  // Home's cards (free reads; a card only opens a place).
+  const startHere = useStartHere(workspaceId);
+  // Same cached read Start here already makes: real lines on Home's brain tiles.
+  const brainOverview = useBrainOverview(workspaceId).data ?? null;
+  const openCreate = useOpenCreate();
+  // Home's idea cards (Holo's Idea swipe): the deck itself, any format or
+  // blog topics. Picking one opens the composer with it; nothing is made yet.
+  const [swipe, setSwipe] = useState<{ type?: StudioType } | null>(null);
+  // Ideas are a model call: they load when a person opens the deck (the
+  // last batch this browser kept shows at once), never on idle or hover.
   const openWaiting = () => {
     const place = pulse ? waitingPlace(pulse) : null;
     if (!place) return;
@@ -1690,6 +1670,15 @@ export function ChatPanel({
 
   return (
     <LayoutGroup id="mellox-chat">
+      {home && swipe ? (
+        <IdeaSwipeDeck
+          open
+          onOpenChange={(next) => !next && setSwipe(null)}
+          workspaceId={workspaceId}
+          type={swipe.type}
+          onPick={(idea) => openCreate.open(idea.type, { brief: idea.brief })}
+        />
+      ) : null}
       <div className="mx-chat relative flex h-full min-h-0 flex-col">
         {/* Conversation (or the greeting above the centered message box) */}
         <div
@@ -1697,12 +1686,33 @@ export function ChatPanel({
           onScroll={onChatScroll}
           className={cn(
             "mx-scroll min-h-0 overflow-y-auto overscroll-contain",
-            empty
-              ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
-              : "flex-1",
+            home
+              ? "flex-1"
+              : empty
+                ? "flex flex-[1_1_0%] flex-col [justify-content:safe_flex-end] pb-7 [@media(max-height:500px)]:pb-2"
+                : // Messages fade out just above the box, whatever the canvas.
+                  "flex-1 [mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent)]",
           )}
         >
-          {empty ? (
+          {home ? (
+            // Coming back to Home fades the cards in (CSS only, never left half-drawn).
+            <div className="ds-enter">
+              <HomeBento
+                start={startHere}
+                create={openCreate}
+                pulse={pulse}
+                onOpenWaiting={openWaiting}
+                onSwipe={(type) => setSwipe({ type })}
+                brain={brainOverview}
+                onAsk={(text) => {
+                  setInput(text);
+                  composerRef.current?.focus();
+                }}
+                onCommunities={() => navigate({ to: communitiesPath(workspaceId) })}
+                autopilot={<HomeAutopilot workspaceId={workspaceId} campaigns={pulse?.campaigns} />}
+              />
+            </div>
+          ) : empty ? (
             <ChatGreeting name={userName} brand={dna.brandName} reducedMotion={reducedMotion} />
           ) : (
             <div
@@ -1850,7 +1860,15 @@ export function ChatPanel({
         <motion.div
           layout="position"
           transition={layoutTransition}
-          className="relative z-10 mx-auto w-full max-w-3xl shrink-0 px-3 md:px-6"
+          className={cn(
+            // No painted fade here: a flat canvas-grey band can't match the
+            // tinted wash, and on the greeting it lay over the headline. The
+            // conversation fades out by a mask on its own scroll area instead.
+            "relative z-10 mx-auto w-full shrink-0 px-3 md:px-6",
+            home
+              ? "max-w-[760px] pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-2"
+              : "max-w-3xl",
+          )}
         >
           <AnimatePresence>
             {showJumpToLatest && !empty ? (
@@ -1869,12 +1887,13 @@ export function ChatPanel({
               </motion.button>
             ) : null}
           </AnimatePresence>
-          {!empty ? <div className="mx-composer-fade" aria-hidden /> : null}
           {mobileAccessory ? <div className="mb-2">{mobileAccessory}</div> : null}
-          <FreeCreditStrip className="mb-2" />
+
           <ChatComposer
             ref={composerRef}
-            hero={empty}
+            // Home docks a slim Holo pill; a new chat keeps the big box.
+            hero={empty && !home}
+            slim={home}
             value={input}
             onChange={setInput}
             onSend={() => void send()}
@@ -1893,8 +1912,6 @@ export function ChatPanel({
                 {pulse ? <WaitingChip pulse={pulse} onOpen={openWaiting} /> : null}
               </>
             }
-            cover={autopilot.cover}
-            autopilot={autopilot.signal}
             // The "/" menu: a person's own pick, so it may open a place or ask.
             onCommand={(command) => {
               if (command.run.type === "prefill") return setInput(command.run.text);
@@ -1906,8 +1923,10 @@ export function ChatPanel({
           />
         </motion.div>
 
-        {/* Starters under the centered box, or a quiet note under the bottom one */}
+        {/* Starters under the centered box, or a quiet note under the bottom one.
+            On Home the starters sit in the cards instead. */}
         <div
+          hidden={home}
           className={cn(
             "shrink-0 px-3 md:px-6",
             empty

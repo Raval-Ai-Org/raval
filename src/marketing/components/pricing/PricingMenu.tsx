@@ -10,11 +10,11 @@ export default function PricingMenu() {
           icon={<Coins size={32} strokeWidth={1.4} aria-hidden="true" />}
           label="Transparent by design"
           title="What a credit actually buys."
-          blurb="One credit is worth $0.01 at face value. The price of every job shows before you run it."
+          blurb="One credit makes one image post. Text work is free. The price of every job shows before you run it."
         />
         <div className="px-menu">
           <div className="px-card" data-reveal>
-            <h3>Credits (everything except video)</h3>
+            <h3>Credits per piece</h3>
             {CREDIT_MENU.map(([label, cost]) => (
               <div key={label} className="px-m-row">
                 <span>{label}</span>
@@ -23,7 +23,7 @@ export default function PricingMenu() {
             ))}
           </div>
           <div className="px-card" data-reveal style={{ transitionDelay: "90ms" }}>
-            <h3>Video credits (VC)</h3>
+            <h3>Video, credits per second</h3>
             {VIDEO_MENU.map(([label, cost]) => (
               <div key={label} className="px-m-row">
                 <span>{label}</span>

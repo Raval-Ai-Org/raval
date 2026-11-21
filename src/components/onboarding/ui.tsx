@@ -44,7 +44,7 @@ export function Eyebrow({
     <p
       className={`inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground ${className}`}
     >
-      {Icon && <Icon className="h-3.5 w-3.5 text-primary" aria-hidden />}
+      {Icon && <Icon className="h-3.5 w-3.5 text-primary-ink" aria-hidden />}
       {children}
     </p>
   );
@@ -98,7 +98,7 @@ export function BrandMark({
       ) : (
         <span
           aria-hidden
-          className="font-semibold leading-none text-primary"
+          className="font-semibold leading-none text-primary-ink"
           style={{ fontSize: Math.round(size * 0.42) }}
         >
           {initial}

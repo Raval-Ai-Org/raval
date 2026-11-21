@@ -69,6 +69,7 @@ export type RateLimitTier =
   | "links-brief"
   | "links-checkout"
   | "billing-checkout"
+  | "billing-promo"
   | "billing-read"
   | "billing-request"
   | "billing-admin"
@@ -87,7 +88,8 @@ export type RateLimitTier =
   | "setup-write"
   | "product-import"
   | "integration-read"
-  | "integration-write";
+  | "integration-write"
+  | "upload";
 
 type TierConfig = { limit: number; windowSeconds: number; label: string };
 
@@ -196,6 +198,8 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "links-checkout": { limit: 10, windowSeconds: 3600, label: "placement order" },
   // Opening a Stripe checkout session.
   "billing-checkout": { limit: 10, windowSeconds: 3600, label: "credit purchase" },
+  // Checking a trial code: a person types a few, a guesser is stopped.
+  "billing-promo": { limit: 12, windowSeconds: 3600, label: "trial code check" },
   "billing-read": { limit: 120, windowSeconds: 60, label: "billing" },
   // "Upgrade now" / "Ask the owner" requests: people, not scripts, send these.
   "billing-request": { limit: 20, windowSeconds: 3600, label: "upgrade request" },
@@ -241,6 +245,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   "admin-read": { limit: 240, windowSeconds: 60, label: "admin" },
   "admin-write": { limit: 60, windowSeconds: 60, label: "admin change" },
   "admin-danger": { limit: 10, windowSeconds: 600, label: "sensitive admin change" },
+  // A person's own files going into Library or Inspo: storage and a read-back,
+  // no paid model. One request per file, so a 100-photo drop must fit.
+  upload: { limit: 240, windowSeconds: 600, label: "upload" },
 };
 
 export type RateLimitResult = {

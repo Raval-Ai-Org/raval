@@ -32,8 +32,9 @@ describeLive("OpenRouter models (live)", () => {
   afterAll(() => restoreSink?.());
 
   it.each([
-    ["economy", "audience.score", "google/gemini-3.1-flash-lite"],
-    ["workhorse", "studio.social", "google/gemini-3.8-flash"],
+    ["economy", "audience.score", "anthropic/claude-haiku-5.5"],
+    ["writer", "studio.social", "anthropic/claude-haiku-5.5"],
+    ["workhorse", "studio.image.review", "google/gemini-3.8-flash"],
     ["luna", "chat.history-summary", "openai/gpt-6-luna"],
   ])(
     "answers on the %s tier",
@@ -78,8 +79,8 @@ describeLive("OpenRouter models (live)", () => {
   it.each([
     ["analyst", "brand-extract", "openai/gpt-6.1-sol"],
     ["conversation", "chat.pro", "anthropic/claude-sonnet-5.5"],
-    ["summary", "coach.briefing", "openai/gpt-6.1-terra"],
-    ["budget", "studio.ideas", "deepseek/deepseek-v4.1-flash"],
+    ["summary", "coach.briefing", "anthropic/claude-haiku-5.5"],
+    ["budget", "studio.ideas", "deepseek/deepseek-v4.1-flash-1017"],
     ["labeller", "competitors.updates", "z-ai/glm-5.3-flash"],
     ["careful", "guardrails.media-safety", "anthropic/claude-haiku-5.5"],
   ])(

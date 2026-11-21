@@ -1,9 +1,11 @@
 // The product cut out of its own photo, made once per photo and kept
 // (ADR-0040). A photo that is already a clean PNG on transparency is used as
-// it is; otherwise the image model is asked for the product alone on a
-// transparent background, and the result is kept only if its alpha shows a
-// real cut-out (src/lib/studio/product-hero/cutout.ts). Any failure returns
-// null and the poster is made from the original photo instead.
+// it is; otherwise the local sidecar's BiRefNet-lite matting cuts it out at
+// $0 (src/server/local-ai, real pixels, never redrawn), and only when that is
+// unavailable or fails the check is the image model asked for the product
+// alone on a transparent background. Either result is kept only if its alpha
+// shows a real cut-out (src/lib/studio/product-hero/cutout.ts). Any failure
+// returns null and the poster is made from the original photo instead.
 import "server-only";
 import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -17,6 +19,7 @@ import { cleanAlpha, judgeCutout, paddedBox } from "@/lib/studio/product-hero/cu
 import { dominantColour } from "@/lib/studio/product-hero/palette";
 import { cutoutPrompt } from "@/lib/studio/product-hero/prompt";
 import type { StudioReference } from "../references.server";
+import { localCutout } from "@/server/local-ai/client.server";
 
 export const CUTOUT_SOURCE = "product-cutout";
 
@@ -130,6 +133,25 @@ export async function photoCropsProduct(photo: Buffer, productName: string): Pro
   }
 }
 
+/**
+ * The local matting model's cut-out of the photo, checked the same way as the
+ * image model's (judgeCutout); null when the sidecar is off or the matte is
+ * not a clean product.
+ */
+export async function localCutOut(photo: Buffer, productName: string, workspaceId?: string) {
+  const send = await sharp(photo, { limitInputPixels: PHOTO_PIXEL_LIMIT, failOn: "none" })
+    .rotate()
+    .resize(SEND_SIDE, SEND_SIDE, { fit: "inside", withoutEnlargement: true })
+    .png()
+    .toBuffer();
+  const matte = await localCutout(send, { workspaceId });
+  if (!matte) return null;
+  const made = await trimmedCutout(matte);
+  if (!made) return null;
+  const cropped = await photoCropsProduct(photo, productName);
+  return { ...made, cropped: made.cropped || cropped };
+}
+
 /** Ask the image model for the product alone on transparency, then check it. */
 export async function cutOut(photo: Buffer, productName: string) {
   const { data: send, info } = await sharp(photo, {
@@ -145,6 +167,7 @@ export async function cutOut(photo: Buffer, productName: string) {
       prompt: cutoutPrompt(productName),
       size: sizeFor(info.width, info.height),
       background: "transparent",
+      meterRoute: "studio.image.cutout",
       routing: {
         referenceAssets: [`data:image/png;base64,${send.toString("base64")}`],
         editing: true,
@@ -175,7 +198,10 @@ export async function ensureProductCutout(args: {
     const downloaded = await downloadAssetObject(args.client, args.photo.storagePath);
     if (downloaded.error || !downloaded.data) return null;
     const original = Buffer.from(await downloaded.data.arrayBuffer());
-    const made = (await trimmedCutout(original)) ?? (await cutOut(original, args.productName));
+    const made =
+      (await trimmedCutout(original)) ??
+      (await localCutOut(original, args.productName, args.workspaceId)) ??
+      (await cutOut(original, args.productName));
     if (!made) return null;
     const saved = await persistAsset({
       workspaceId: args.workspaceId,

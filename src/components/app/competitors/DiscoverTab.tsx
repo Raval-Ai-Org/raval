@@ -50,7 +50,7 @@ export function DiscoverTab({
     <div className="space-y-6">
       <div className="grid gap-3 lg:grid-cols-2">
         <Card className="flex flex-wrap items-center gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/12 text-primary">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary/12 text-primary-ink">
             <Compass className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1 basis-24">

@@ -4,7 +4,6 @@
 // Market Brain and the competitor sweeps supply the signals. Nothing here
 // generates, publishes or searches the web on its own.
 import "server-only";
-import { getEntitlements } from "@/server/billing/entitlements.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { llmJson } from "@/lib/ai-gateway.server";
@@ -50,6 +49,7 @@ import { runWithScope } from "@/server/request-context";
 import { scheduleForWorkspace } from "@/server/social/schedule.server";
 import { createBilledStudioJob } from "@/server/studio/billed.server";
 import { loadStudioContext } from "@/server/studio/context.server";
+import { lookTextFor } from "@/server/brand-look/resolve.server";
 import { trendsFor } from "@/lib/studio/trends";
 import type { PlatformId } from "@/lib/social-platforms";
 import { advanceStudioJob, getJobRow } from "@/server/studio/runner.server";
@@ -286,7 +286,7 @@ function planUser(
       }
       const shape = input.shape.get(s.index);
       const aim = shareAim(shape?.aim);
-      return `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${aim ? ` · for: ${aim.label.toLowerCase()}` : ""}${opening(shape?.hook) ? ` · opening: ${opening(shape?.hook)!.label.toLowerCase()}` : ""}${shape?.pillar ? ` · theme: ${shape.pillar}` : ""}${s.moment ? ` · key date: ${s.moment}` : ""}`;
+      return `[${s.index}] ${s.date} ${s.time} · ${s.platform ?? "blog"} · format: ${s.type} · allowed: ${s.allowedTypes.join(", ")}${aim ? ` · for: ${aim.label.toLowerCase()}` : ""}${opening(shape?.hook) ? ` · opening: ${opening(shape?.hook)!.label.toLowerCase()}` : ""}${shape?.pillar ? ` · theme: ${shape.pillar}` : ""}${shape?.stage ? ` · stage: ${shape.stage}` : ""}${s.moment ? ` · key date: ${s.moment}` : ""}`;
     })
     .join("\n");
   const aims = [...new Set([...input.shape.values()].map((v) => v.aim))]
@@ -414,6 +414,16 @@ async function context(workspaceId: string) {
  * Autopilot's and campaigns' posts that have numbers, for what it learns
  * between weeks. Campaign planning reads it too.
  */
+/** Saves, sends and comments only where the network reported them (never 0 for missing). */
+function interactions(metrics: Record<string, unknown>) {
+  const out: { saves?: number; shares?: number; comments?: number } = {};
+  for (const key of ["saves", "shares", "comments"] as const) {
+    const n = Number(metrics[key]);
+    if (metrics[key] != null && Number.isFinite(n) && n >= 0) out[key] = n;
+  }
+  return out;
+}
+
 export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece[]> {
   const { data } = await db
     .from("autopilot_actions")
@@ -428,6 +438,9 @@ export async function measuredPieces(workspaceId: string): Promise<MeasuredPiece
     platform: typeof row.platform === "string" ? row.platform : null,
     contentType: typeof row.content_type === "string" ? row.content_type : null,
     views: Number(record(record(row.result).metrics).views) || 0,
+    ...interactions(record(record(row.result).metrics)),
+    aim: typeof record(row.result).aim === "string" ? (record(row.result).aim as string) : null,
+    hook: typeof record(row.result).hook === "string" ? (record(row.result).hook as string) : null,
   }));
 }
 
@@ -634,7 +647,6 @@ export const realPorts: AutopilotPorts = {
     },
 
     async create({ workspaceId, userId, role, idempotencyKey, action, platforms, story }) {
-      const entitlements = await getEntitlements({ workspaceId, userId, role });
       const type = (action.content_type ?? "social") as StudioType;
       // Instagram, TikTok and YouTube can't take words alone: the post gets a picture.
       const picture = withPicture(type, action.platform);
@@ -652,6 +664,8 @@ export const realPorts: AutopilotPorts = {
             brief: action.brief,
             aim: action.result.aim,
             pillar: action.result.pillar,
+            stage: action.result.stage,
+            stageMessage: action.result.stageMessage,
             use: readBrainUse(action.result.brains),
           }),
           goal: action.goal ? STUDIO_GOAL[action.goal] : undefined,
@@ -664,7 +678,7 @@ export const realPorts: AutopilotPorts = {
           autopilotProgramId: action.program_id ?? undefined,
         },
         controls: {
-          paymentSource: entitlements.creation?.active ? "creation" : "credits",
+          paymentSource: "credits",
           platforms: platforms?.length ? platforms : action.platform ? [action.platform] : [],
           ...(picture ? { includeImage: true } : {}),
           ...campaign,
@@ -686,6 +700,12 @@ export const realPorts: AutopilotPorts = {
             role,
             input,
             autoProduct: "any",
+            // Now and then a piece shows the brand's own Inspo photos, unless
+            // its campaign already placed photos or clips on it.
+            ownMediaSeed:
+              campaign.referenceAssetIds || campaign.sourceVideoAssetIds
+                ? undefined
+                : `autopilot:${action.id}`,
           }),
       );
       const charged =
@@ -936,7 +956,27 @@ export const realPorts: AutopilotPorts = {
           detail: short(t.detail, 280),
         }),
       );
-      return { audience, competitors, market, trends } satisfies BrainLists;
+      // Trend Radar moments staff published for this brand lead the list
+      // (ADR-0052): the plan can point at them like any stored trend.
+      const radar: BrainEntry[] = (ctx.radar ?? [])
+        .filter((t) => !t.platforms.length || t.platforms.some((p) => platforms.includes(p)))
+        .slice(0, 3)
+        .map((t) => ({
+          name: short(`${t.title} (trending now, staff-picked)`, 120),
+          detail: short(
+            [t.brief, t.whatToMake && `Make: ${t.whatToMake}`, t.doNots && `Never: ${t.doNots}`]
+              .filter(Boolean)
+              .join(" "),
+            280,
+          ),
+        }))
+        .filter((e) => e.name && e.detail);
+      return {
+        audience,
+        competitors,
+        market,
+        trends: [...radar, ...trends].slice(0, 8),
+      } satisfies BrainLists;
     },
 
     async recentTitles(workspaceId) {
@@ -957,7 +997,12 @@ export const realPorts: AutopilotPorts = {
 
     async propose(input) {
       const { program } = input;
-      const ctx = await context(program.workspace_id);
+      const [ctx, voice] = await Promise.all([
+        context(program.workspace_id),
+        // How the brand writes (onboarding answers, Inspo voice), so each
+        // week's ideas already fit how it sounds. A free read.
+        lookTextFor(program.workspace_id, "social"),
+      ]);
       const extras = [
         ...ctx.upcoming
           .slice(0, 8)
@@ -978,7 +1023,12 @@ export const realPorts: AutopilotPorts = {
           llmJson<{ items?: unknown[] }>({
             route: "autopilot.plan",
             system: PLAN_SYSTEM,
-            user: planUser(input, ctx.brandText, extras, ctx.audience),
+            user: planUser(
+              input,
+              [ctx.brandText, voice].filter(Boolean).join("\n\n"),
+              extras,
+              ctx.audience,
+            ),
             maxTokens: 6_000,
             outputSchema: PLAN_SCHEMA as unknown as Record<string, unknown>,
             timeoutMs: 60_000,

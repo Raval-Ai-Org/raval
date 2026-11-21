@@ -3,6 +3,10 @@
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { PLANS, CREDIT_PACKS, VIDEO_PACKS, ADDONS, PAUSE } from "../../src/lib/billing/catalog.ts";
+import { existsSync } from "node:fs";
+
+// Same as stripe-readiness: read the operator's .env so one command works.
+if (existsSync(".env")) process.loadEnvFile(".env");
 
 const apply = process.argv.includes("--apply");
 const environment = process.argv.includes("--production") ? "production" : "sandbox";

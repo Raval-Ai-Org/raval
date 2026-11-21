@@ -199,7 +199,7 @@ function Panel({
       <button
         type="button"
         onClick={() => emitAppEvent("open:brand-dna")}
-        className="font-medium text-primary underline-offset-2 hover:underline"
+        className="font-medium text-primary-ink underline-offset-2 hover:underline"
       >
         Add it
       </button>
@@ -213,7 +213,7 @@ function Panel({
           urlTouched.current = true;
           setUrlInput(brandUrl);
         }}
-        className="font-medium text-primary underline-offset-2 hover:underline"
+        className="font-medium text-primary-ink underline-offset-2 hover:underline"
       >
         Use {brandHost}
       </button>
@@ -420,7 +420,7 @@ function Panel({
               <button
                 type="button"
                 onClick={() => latestSucceededId && void scans.view(latestSucceededId)}
-                className="font-medium text-primary underline-offset-2 hover:underline"
+                className="font-medium text-primary-ink underline-offset-2 hover:underline"
               >
                 Back to latest
               </button>

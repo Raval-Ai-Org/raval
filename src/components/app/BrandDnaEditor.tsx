@@ -202,7 +202,7 @@ export function BrandDnaEditor({
       {/* RIGHT — Live preview */}
       <div className="min-w-0 xl:sticky xl:top-2 xl:self-start">
         <div className="mb-2 flex items-center gap-2 px-1">
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-brand-green" />
+          <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary-ink" />
           <p className="text-[11px] font-semibold uppercase leading-4 tracking-wide text-muted-foreground">
             Live preview
           </p>

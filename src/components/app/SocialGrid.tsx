@@ -23,6 +23,9 @@ import {
   type TileTone,
 } from "./connectors/ConnectorParts";
 
+/** Set by SocialAccountsSection on a working account that should move connection. */
+export const STEADIER = "steadier_connection";
+
 const RECONNECT_COPY: Record<string, string> = {
   all_pages_removed: "Every connected Page was removed.",
   access_revoked: "Access was removed on the network.",
@@ -192,6 +195,8 @@ function Network({
         <ul className="divide-y divide-[var(--ds-tile-border)] border-t border-[var(--ds-tile-border)]">
           {accounts.map((account) => {
             const active = account.status === "active";
+            // Working, but on the backup connection: one reconnect moves it.
+            const upgrade = active && account.reconnectReason === STEADIER;
             const reason = account.reconnectReason
               ? (RECONNECT_COPY[account.reconnectReason] ?? null)
               : null;
@@ -220,15 +225,23 @@ function Network({
                       {reason ?? "Reconnect needed"}
                     </span>
                   )}
+                  {upgrade && (
+                    <span className="block truncate text-[12px] text-muted-foreground">
+                      Reconnect once for steadier posting
+                    </span>
+                  )}
                 </span>
                 {canEdit && (
                   <span className="flex shrink-0 items-center gap-1.5">
-                    {!active && (
+                    {(!active || upgrade) && (
                       <button
                         type="button"
                         onClick={onConnect}
                         disabled={busy !== null}
-                        className={cn(dsPrimaryBtn, "h-8 px-3 text-[12.5px]")}
+                        className={cn(
+                          upgrade ? dsGhostBtn : dsPrimaryBtn,
+                          "h-8 px-3 text-[12.5px]",
+                        )}
                       >
                         Reconnect
                       </button>

@@ -1,13 +1,14 @@
 "use client";
 
 // Inspo's data (ADR-0037): the one look on Brand DNA (`dna.look`) and the
-// brand's visual references (`brand_visual_sources`). Nothing here starts a
-// paid step by itself: "Learn my style" is a person's click with the price on
-// the button, and a direction is used only after a person picks it.
+// brand's visual references (`brand_visual_sources`). Adding Love or Avoid
+// pictures to the board starts "Learn my style" by itself (one learn per
+// batch of uploads, a running one is joined); a direction Mox picks is shown
+// as a draft until a person keeps or changes it.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useBrandDna } from "@/hooks/use-brand-dna";
-import { emitAppEvent } from "@/lib/app-events";
+import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import {
   getVisualTaste,
   learnVisualReferences,
@@ -20,6 +21,7 @@ import type { VisualProfile, VisualView } from "@/lib/brand-visuals/contracts";
 import { creditsFor } from "@/lib/billing/catalog";
 import { parseLook } from "@/lib/brand-look/spec";
 import {
+  canLearn,
   inspoCards,
   purposeOf,
   studioReferenceMode,
@@ -59,8 +61,13 @@ type Started =
     }
   | { name: string; error: string; id?: undefined };
 
-/** Send one file straight to storage, reporting how much has gone. */
-function putFile(file: File, signed: Signed, onProgress: (share: number) => void) {
+/** Send one file, reporting how much has gone. */
+function putFile(
+  file: File,
+  signed: Signed,
+  onProgress: (share: number) => void,
+  body: Blob = file,
+) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(signed.method, signed.url);
@@ -71,7 +78,7 @@ function putFile(file: File, signed: Signed, onProgress: (share: number) => void
         ? resolve()
         : reject(new Error(UPLOAD_MESSAGES.missing));
     xhr.onerror = () => reject(new Error(UPLOAD_MESSAGES.missing));
-    xhr.send(file);
+    xhr.send(body);
   });
 }
 
@@ -96,18 +103,25 @@ export function tasteOf(view: VisualView | null, draft: VisualProfile | null): I
   const newest = view.profiles[0];
   const active = view.profiles.find((p) => p.id === view.activeId);
   const running = view.jobs.find((j) => j.status === "queued" || j.status === "running");
+  // Mellox's own pick stays on screen as the draft until a person keeps or changes it.
+  const auto = !!active?.profile.auto && newest?.id === active.id;
+  const shown = draft ?? active?.profile ?? null;
   return {
     available: view.available,
     canEdit: view.canEdit,
     sources: view.sources,
     draft:
-      newest && newest.status === "candidate" && draft ? { id: newest.id, profile: draft } : null,
+      newest && (newest.status === "candidate" || auto) && draft
+        ? { id: newest.id, profile: draft }
+        : null,
     active: active
       ? {
           id: active.id,
           name: active.profile.directions[active.profile.selected]?.name ?? "Your style",
         }
       : null,
+    auto,
+    adherence: shown?.directions[shown.selected]?.adherence ?? "light",
     running: running ? { stage: running.stage, pages: running.next_page } : null,
     // Older rows may still hold raw browser text: show only a plain sentence.
     lastError:
@@ -157,6 +171,26 @@ export function InspoPanel({
     };
   }, [reload]);
 
+  // Media added elsewhere (Library, Studio uploads, a Brand DNA save) shows
+  // here without a refresh; our own changes tell the rest of the app.
+  const selfEmit = useRef(0);
+  useEffect(() => {
+    const onChange = () => {
+      if (Date.now() - selfEmit.current < 1500) return;
+      void reload();
+    };
+    addAppEventListener("assets:changed", onChange);
+    addAppEventListener("brand-dna:saved", onChange);
+    return () => {
+      removeAppEventListener("assets:changed", onChange);
+      removeAppEventListener("brand-dna:saved", onChange);
+    };
+  }, [reload]);
+  const announce = useCallback(() => {
+    selfEmit.current = Date.now();
+    emitAppEvent("assets:changed");
+  }, []);
+
   // While an analysis runs, read it again every few seconds.
   const runningId = view?.jobs.find((j) => j.status === "queued" || j.status === "running")?.id;
   useEffect(() => {
@@ -182,20 +216,73 @@ export function InspoPanel({
     return () => clearTimeout(timer);
   }, [removed]);
 
-  const perform = useCallback(async (name: string, action: () => Promise<VisualView>) => {
-    setBusy(name);
-    setError(null);
-    try {
-      const next = await action();
-      if (live.current) setView(next);
-      return true;
-    } catch (cause) {
-      if (live.current) setError(message(cause, "That change could not be saved."));
-      return false;
-    } finally {
-      if (live.current) setBusy(null);
-    }
-  }, []);
+  const perform = useCallback(
+    async (name: string, action: () => Promise<VisualView>) => {
+      setBusy(name);
+      setError(null);
+      try {
+        const next = await action();
+        if (live.current) setView(next);
+        announce();
+        return true;
+      } catch (cause) {
+        if (live.current) setError(message(cause, "That change could not be saved."));
+        return false;
+      } finally {
+        if (live.current) setBusy(null);
+      }
+    },
+    [announce],
+  );
+
+  // The brand was already scanned, so the first look at its site is read by
+  // itself the first time an editor opens Inspo. It is the included first
+  // analysis (no charge); a repeat is always a person's click with its price.
+  const autoRead = useRef(false);
+  const site = dna.websiteUrl?.trim() ?? "";
+  useEffect(() => {
+    if (autoRead.current || !view || !site) return;
+    if (!view.available || !view.canEdit) return;
+    if (view.profiles.length || view.jobs.length) return;
+    autoRead.current = true;
+    void perform("scan", () =>
+      scanVisualWebsite({
+        data: {
+          workspaceId,
+          url: /^https?:\/\//i.test(site) ? site : `https://${site}`,
+          maxPages: 4,
+          idempotencyKey: crypto.randomUUID(),
+        },
+      }),
+    );
+  }, [view, site, workspaceId, perform]);
+
+  // Learning from the board starts by itself once a person adds Love or Avoid
+  // pictures (2026-11): a short wait gathers several uploads into one learn,
+  // and a learn already running is joined, never repeated.
+  const learnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const queueLearn = useCallback(() => {
+    if (learnTimer.current) clearTimeout(learnTimer.current);
+    learnTimer.current = setTimeout(() => {
+      learnTimer.current = null;
+      const current = viewRef.current;
+      if (!live.current || !current?.available || !current.canEdit) return;
+      if (current.jobs.some((j) => j.status === "queued" || j.status === "running")) return;
+      if (!canLearn(inspoCards(current.sources))) return;
+      toast.success("Mox is learning your style from the board");
+      void perform("learn", () =>
+        learnVisualReferences({ data: { workspaceId, idempotencyKey: crypto.randomUUID() } }),
+      );
+    }, 5000);
+  }, [perform, workspaceId]);
+  useEffect(
+    () => () => {
+      if (learnTimer.current) clearTimeout(learnTimer.current);
+    },
+    [],
+  );
 
   const call = useCallback(
     async (path: string, init: { body: BodyInit; json?: boolean }) => {
@@ -218,7 +305,7 @@ export function InspoPanel({
   const send = useCallback((body: FormData) => call("upload", { body }), [call]);
 
   const upload = useCallback(
-    async (dropped: File[], chip: InspoChip) => {
+    async (dropped: File[], chip: InspoChip, folder?: string) => {
       const purpose = purposeOf(chip);
       const failed: { name: string; error: string }[] = [];
       const files = dropped.slice(0, MAX_FILES_PER_BATCH);
@@ -287,7 +374,31 @@ export function InspoPanel({
           async ({ p, item }) => {
             if (!item.id) return;
             try {
-              await putFile(p.file, item.upload, (share) => patch(p.key, share));
+              // Straight to storage first; if the browser can't reach it, the
+              // same file goes through Mellox's server to the same place.
+              await putFile(p.file, item.upload, (share) => patch(p.key, share)).catch(async () => {
+                const {
+                  data: { session },
+                } = await supabase.auth.getSession();
+                if (!session) throw new Error("Sign in again to add this.");
+                const relay = `/api/brand-visuals/upload/relay?${new URLSearchParams({
+                  workspaceId,
+                  id: item.id,
+                  type: item.type,
+                })}`;
+                await putFile(
+                  p.file,
+                  {
+                    url: relay,
+                    method: "PUT",
+                    headers: {
+                      authorization: `Bearer ${session.access_token}`,
+                      "content-type": item.type,
+                    },
+                  },
+                  (share) => patch(p.key, share),
+                );
+              });
               patch(p.key, undefined);
               const { upload: _signed, ...info } = item;
               sent.push({ ...info, key: p.key });
@@ -303,6 +414,7 @@ export function InspoPanel({
               json: true,
               body: JSON.stringify({
                 purpose,
+                ...(folder ? { folder } : {}),
                 items: group.map(({ id, name, type, size }) => ({ id, name, type, size })),
               }),
             })) as { results: { id: string; assetId?: string; error?: string }[] };
@@ -332,9 +444,13 @@ export function InspoPanel({
         }
       }
       showFailed();
+      if (added) announce();
       if (added && live.current) toast.success(added > 1 ? `${added} added` : "Added");
+      // Board pictures teach Mox by themselves: one learn a few seconds after
+      // the last batch, never one per file (`queueLearn`).
+      if (added && (chip === "like" || chip === "avoid")) queueLearn();
     },
-    [call, reload],
+    [announce, call, reload, queueLearn, workspaceId],
   );
 
   const addLink = useCallback(
@@ -349,13 +465,15 @@ export function InspoPanel({
         body.set("sourceUrl", url);
         await send(body);
         await reload();
+        announce();
+        if (chip === "like" || chip === "avoid") queueLearn();
       } catch (cause) {
         if (live.current) setError(message(cause, "That link could not be added."));
       } finally {
         if (live.current) setUploads((u) => u.filter((x) => x.id !== id));
       }
     },
-    [workspaceId, send, reload],
+    [announce, workspaceId, send, reload, queueLearn],
   );
 
   const sourceById = useCallback((id: string) => view?.sources.find((s) => s.id === id), [view]);
@@ -385,11 +503,37 @@ export function InspoPanel({
     onSection,
     saveLook: (next) => save({ look: tidyLook(next) }),
     resetLook: () => save({ look: undefined }),
-    upload: (files, chip) => void upload(files, chip),
+    upload: (files, chip, folder) => void upload(files, chip, folder),
     addLink: (url, chip) => void addLink(url, chip),
     setChip: (card, chip) => {
       if (card.chip === chip) return;
       void perform("chip", () => setStatus(card, "approved", chip));
+    },
+    setLifetime: (card, lifetime) => {
+      if (card.lifetime === lifetime) return;
+      void perform("lifetime", () =>
+        updateVisualReference({
+          data: { workspaceId, id: card.id, status: "approved", lifetime },
+        }),
+      );
+    },
+    setDetails: (card, patch) => {
+      const s = sourceById(card.id);
+      void perform("details", () =>
+        updateVisualReference({
+          data: {
+            workspaceId,
+            id: card.id,
+            status: "approved",
+            notes: patch.label,
+            folder: patch.folder,
+            ...(card.capture ? {} : { lifetime: patch.lifetime }),
+            ...(card.capture || patch.chip === card.chip
+              ? {}
+              : { purpose: purposeOf(patch.chip, s?.purpose) }),
+          },
+        }),
+      );
     },
     remove: (card) =>
       void perform("remove", () => setStatus(card, "removed")).then((ok) => ok && setRemoved(card)),
@@ -430,6 +574,29 @@ export function InspoPanel({
           },
         }),
       ).then((ok) => ok && toast.success("Style saved"));
+    },
+    setAdherence: (level) => {
+      const withLevel = (p: VisualProfile): VisualProfile => ({
+        ...p,
+        directions: p.directions.map((d, i) => (i === p.selected ? { ...d, adherence: level } : d)),
+      });
+      const current = tasteOf(view, draft);
+      if (current?.draft) {
+        setDraft((d) => (d ? withLevel(d) : d));
+        return;
+      }
+      const active = view?.profiles.find((p) => p.id === view.activeId);
+      if (!active) return;
+      void perform("direction", () =>
+        saveVisualDirection({
+          data: {
+            workspaceId,
+            profile: withLevel(active.profile),
+            expectedActiveId: view?.activeId ?? null,
+            confirm: true,
+          },
+        }),
+      );
     },
     stopDirection: () =>
       void perform("manual", () =>

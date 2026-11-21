@@ -34,7 +34,7 @@ Decision record: [ADR-0036](../adr/0036-own-photos-and-clips.md).
 | Design-layer prompt: brand look, memory, type system, craft rules, verbatim copy      | `src/lib/studio/photo-design/prompt.ts`           |
 | Layer rendered as an ordinary Studio image task (metered, routed, retried)            | `startMedia` in `runner.server.ts`                |
 | Windows found, photos placed, design laid over, checks run                            | `compose.server.ts`, `geometry.ts`, `checks.ts`   |
-| One more layer with the failure written in, or a plain failure                        | `finishPhotoDesign`                               |
+| One more layer with the failure written in, then the lenient pass, then a code layout | `finishPhotoDesign`                               |
 | Real logo by code, visual review, saved with `source_preserved: true`                 | `advanceStudioJob`                                |
 
 A picture edit starts from the previous layer (`design_layer_path`), so only
@@ -105,7 +105,9 @@ again. "Bring photos to life" first waits for one animated clip per photo
   picture about a picked product is a product hero poster instead (ADR-0040):
   the product is cut out and staged, never pasted in a window.
 - The model never draws a logo or a person; only the real logo, placed by code.
-- No template fallback: a design that can't hold the photos fails plainly.
+- Never fails over the layout: after the retry, the lenient pass uses the windows the
+  layer left (faces kept clear), else `composeFittedPhotos` lays the photos out by code
+  at the post size. Either way the piece carries a warning.
 - Photo and clip ids are always checked against the workspace
   (`resolveStudioReferences`, `resolveStudioClips`); no URL from the browser.
 
@@ -136,7 +138,7 @@ Studied, not vendored. Only ideas were taken, rewritten as Mellox code.
 | auto-editor          | Unlicense                                        | Idea only: cut dead air by measured loudness                                               |
 | PySceneDetect        | BSD-3-Clause                                     | Idea only: start on scene changes (FFmpeg `scdet`)                                         |
 | whisper.cpp          | MIT                                              | Optional local engine for captions (not bundled)                                           |
-| Remotion             | Remotion licence (companies need a paid licence) | Not used; FFmpeg and next/og cover it                                                      |
+| Remotion             | Remotion licence (free up to 3 people)           | Used as MotionMox, Mellox's modified fork (ADR-0045, docs/studio/motionmox.md)             |
 | Motion Canvas        | MIT                                              | Not used: an editor-driven tool, not a server renderer                                     |
 | ComfyUI              | GPL-3.0                                          | Not used: a GPU node server and a copyleft licence                                         |
 | rembg                | MIT                                              | Not used: needs Python, ONNX and ~170 MB models per worker                                 |

@@ -8,6 +8,7 @@ import type { ZodType } from "zod";
 import {
   chatCompletion,
   AiGatewayError,
+  PROMPT_MAX_INPUT_CHARS,
   type TokenTask,
   type LlmImageInput,
   type ContentPart,
@@ -65,6 +66,9 @@ async function callJson(
     messages,
     response_format: { type: "json_object" as const },
     max_tokens: overrides.maxTokens,
+    // Code-built prompts: the 16k chat budget would cut off the schema at the
+    // end of the system prompt and the correction at the end of the user turn.
+    inputChars: isExtraction ? undefined : PROMPT_MAX_INPUT_CHARS,
     temperature: opts.temperature,
     cacheTtlMs: opts.cacheTtlMs,
     // The repair attempt must never be answered from the cache.
@@ -186,6 +190,7 @@ export async function runTool<T>(opts: RunToolOpts): Promise<T | null> {
     ],
     tools: [tool],
     max_tokens: opts.maxTokens,
+    inputChars: PROMPT_MAX_INPUT_CHARS,
     temperature: opts.temperature,
     noCache: opts.noCache,
     route: opts.route,

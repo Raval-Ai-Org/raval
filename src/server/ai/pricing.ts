@@ -19,6 +19,7 @@ type TokenPrice = { inPerM: number; outPerM: number };
 // usage.cost is always preferred over these. Open-weight models list the
 // dearest full-precision host, so an estimate never under-counts.
 const TOKEN_PRICES: Record<string, TokenPrice> = {
+  "google/gemini-4-carbon": { inPerM: 2, outPerM: 10 },
   "anthropic/claude-opus-5.5": { inPerM: 4, outPerM: 20 },
   "anthropic/claude-sonnet-5.5": { inPerM: 2, outPerM: 10 },
   "anthropic/claude-haiku-5.5": { inPerM: 0.1, outPerM: 0.5 },
@@ -27,6 +28,8 @@ const TOKEN_PRICES: Record<string, TokenPrice> = {
   "openai/gpt-6.1-sol": { inPerM: 2, outPerM: 10 },
   "openai/gpt-6.1-terra": { inPerM: 1, outPerM: 5 },
   "openai/gpt-6-luna": { inPerM: 0.1, outPerM: 0.5 },
+  // The 1017 snapshot (cost review 2026-11-12): half the original's price.
+  "deepseek/deepseek-v4.1-flash-1017": { inPerM: 0.15, outPerM: 0.6 },
   "deepseek/deepseek-v4.1-flash": { inPerM: 0.3, outPerM: 1.2 },
   "z-ai/glm-5.3-flash": { inPerM: 0.15, outPerM: 0.6 },
   // Retain estimates for historical calls and explicit model overrides.

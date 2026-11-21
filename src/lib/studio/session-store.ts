@@ -16,8 +16,10 @@ import type { PlatformId } from "@/lib/social-platforms";
 import { recommendedRatio } from "./aspect";
 import { studioApi, readBrandPayload, StudioApiError } from "./client";
 import { STUDIO_FORMATS, type StudioType } from "./formats";
+import { categoryById, type CategoryId } from "./categories";
 import { getTemplate, templateFits } from "./templates";
 import { editTarget, planEdit, type EditAim, type EditTurn } from "./edit-chat";
+import { needsStoryboard, withStoryboard } from "./video/board";
 import {
   isActiveJob,
   newIdempotencyKey,
@@ -43,6 +45,8 @@ export type StudioSession = {
   ideaSource?: string;
   /** StudioTemplate id — structure the generator follows. */
   template?: string;
+  /** The kind of post (categories.ts) — how it is written and how it looks. */
+  category?: CategoryId;
   /** Repurposing: the content item this piece is made from. */
   sourceContentId?: string;
   /** What the composer shows for it ("Made from your carousel …"); display only. */
@@ -314,6 +318,8 @@ export function openComposer(
     ideaId?: string;
     ideaSource?: string;
     template?: string;
+    /** The kind of post to start on (categories.ts), e.g. from a Home card. */
+    category?: CategoryId;
     platforms?: PlatformId[];
     sourceContentId?: string;
     sourceLabel?: string;
@@ -331,6 +337,7 @@ export function openComposer(
       | "recapMotion"
       | "videoKind"
       | "videoPeople"
+      | "endFrameAssetId"
     >;
   } = {},
 ): string | null {
@@ -365,6 +372,7 @@ export function openComposer(
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
         template: opts.template,
+        category: opts.category ?? reusable.category,
         sourceContentId: opts.sourceContentId,
         sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
         sourceScript: opts.sourceScript,
@@ -387,6 +395,7 @@ export function openComposer(
         ideaId: opts.ideaId,
         ideaSource: opts.ideaSource,
         template: opts.template,
+        category: opts.category,
         sourceContentId: opts.sourceContentId,
         sourceLabel: opts.sourceContentId ? opts.sourceLabel : undefined,
         sourceScript: opts.sourceScript,
@@ -501,9 +510,21 @@ export function startInBackground(opts: {
 }
 
 /** Open review for an existing job (from the rail, a deep link, or a notification). */
-export async function openJob(jobId: string, workspaceId?: string | null): Promise<string | null> {
-  hydrate();
+/** Opens already on their way, by job: repeated clicks join, never add a second session. */
+const opening = new Map<string, Promise<string | null>>();
+
+export function openJob(jobId: string, workspaceId?: string | null): Promise<string | null> {
   const ws = workspaceId ?? getActiveWorkspaceId();
+  const key = `${ws}:${jobId}`;
+  const pending = opening.get(key);
+  if (pending) return pending;
+  const run = openJobNow(jobId, ws).finally(() => opening.delete(key));
+  opening.set(key, run);
+  return run;
+}
+
+async function openJobNow(jobId: string, ws: string | null): Promise<string | null> {
+  hydrate();
   if (!ws) return null;
   const existing = state.sessions.find(
     (s) => s.workspaceId === ws && (s.job?.id === jobId || s.lastGood?.id === jobId),
@@ -529,6 +550,8 @@ export async function openJob(jobId: string, workspaceId?: string | null): Promi
             : "intent",
       brief: job.input?.intent?.brief ?? "",
       goal: job.input?.intent?.goal,
+      category: job.input?.intent?.category,
+      template: job.input?.intent?.template,
       sourceContentId: job.input?.intent?.sourceContentId,
       sourceScript: job.input?.intent?.sourceScript,
       controls: job.input?.controls ?? defaultControls(job.type),
@@ -567,6 +590,7 @@ export function updateSession(
       | "ideaId"
       | "ideaSource"
       | "template"
+      | "category"
       | "controls"
       | "type"
       | "error"
@@ -600,6 +624,11 @@ export function focusSession(id: string) {
         : { ...s, window: "minimized" as const },
   );
   setState({ sessions, activeId: id });
+}
+
+/** The composer that is open right now, if any. */
+export function getActiveSessionId(): string | null {
+  return state.activeId;
 }
 
 export function minimizeSession(id: string) {
@@ -747,9 +776,27 @@ function requestSignature(
   });
 }
 
+/**
+ * Whether Generate must wait for a provider price quote. Own clips, site
+ * reels, camera-move recaps and animated recaps (priced per photo) are never
+ * quoted, so they must never wait for one.
+ */
+export function needsVideoQuote(type: StudioSession["type"], c: StudioSession["controls"]) {
+  const video = type === "video" || (type === "story" && c.storyMode === "video");
+  if (!video || c.videoPreview || !c.videoModelKey) return false;
+  if (type === "video" && (c.videoMode === "brand" || c.videoMode === "site")) return false;
+  if (c.videoMode === "recap") return false;
+  return true;
+}
+
 export async function generate(
   id: string,
-  opts: { kind?: "generate" | "regenerate" | "refine"; refine?: StudioRefine } = {},
+  opts: {
+    kind?: "generate" | "regenerate" | "refine";
+    refine?: StudioRefine;
+    /** Show the progress screen while it is made (a video from its storyboard), not review. */
+    progress?: boolean;
+  } = {},
 ) {
   const s = getSession(id);
   if (!s) return;
@@ -757,12 +804,12 @@ export async function generate(
     toast.error("Wait for your reference photo to finish uploading.");
     return;
   }
-  if (
-    (s.type === "video" || (s.type === "story" && s.controls.storyMode === "video")) &&
-    !s.controls.videoPreview &&
-    s.controls.videoModelKey &&
-    !s.controls.videoQuote
-  ) {
+  // A new long or premium video is made as its storyboard first, priced as
+  // one: it waits for no video quote (Create on the storyboard does).
+  const storyboardFirst =
+    (opts.kind ?? "generate") === "generate" &&
+    needsStoryboard({ type: s.type, controls: s.controls });
+  if (!storyboardFirst && needsVideoQuote(s.type, s.controls) && !s.controls.videoQuote) {
     toast.error(
       "Wait for the video price before generating. If it cannot be quoted, choose another option.",
     );
@@ -782,7 +829,7 @@ export async function generate(
   patchSession(id, {
     pendingKey: key,
     pendingKind: kind,
-    step: kind === "generate" ? "generating" : s.step === "intent" ? "generating" : s.step,
+    step: kind === "generate" || opts.progress || s.step === "intent" ? "generating" : s.step,
     error: null,
     billing: null,
     retryKey: null,
@@ -816,10 +863,15 @@ async function submit(
         ideaId: s.ideaId,
         ideaSource: s.ideaSource,
         template: s.template,
+        // A category that doesn't suit this format (picked before a format change) is left out.
+        ...(s.category && categoryById(s.category)?.formats.includes(s.type)
+          ? { category: s.category }
+          : {}),
         ...(s.sourceContentId ? { sourceContentId: s.sourceContentId } : {}),
         ...(s.sourceScript ? { sourceScript: s.sourceScript } : {}),
       },
-      controls: s.controls,
+      // A new long or premium video is made as its storyboard first (board.ts).
+      controls: kind === "generate" ? withStoryboard(s.type, s.controls) : s.controls,
       brand: readBrandPayload(s.workspaceId),
       parentJobId,
       refine,
@@ -1079,7 +1131,7 @@ export async function refreshWorkspaceJobs(workspaceId?: string | null) {
   const ws = workspaceId ?? getActiveWorkspaceId();
   if (!ws) return;
   try {
-    const jobs = await studioApi.listJobs(ws);
+    const jobs = await studioApi.listJobs(ws, { lane: "poll" });
     // Replace only this workspace's jobs; other workspaces' stay as they were.
     const own = new Set(jobs.map((j) => j.id));
     setState(
@@ -1145,7 +1197,7 @@ async function pollOnce() {
       if (!job || !isActiveJob(job) || s.pendingKey) continue;
       tracked.add(job.id);
       try {
-        applyJob(s.id, await studioApi.getJob(s.workspaceId, job.id));
+        applyJob(s.id, await studioApi.getJob(s.workspaceId, job.id, { lane: "poll" }));
       } catch (error) {
         if (error instanceof StudioApiError && error.status === 404) {
           patchSession(s.id, { job: null, step: s.lastGood ? "review" : "intent" });
@@ -1160,7 +1212,7 @@ async function pollOnce() {
       const pendingCreate = state.sessions.some((s) => s.pendingKey === job.idempotency_key);
       if (pendingCreate && job.stage !== "render" && job.stage !== "save") continue;
       try {
-        const next = await studioApi.getJob(job.workspace_id, job.id);
+        const next = await studioApi.getJob(job.workspace_id, job.id, { lane: "poll" });
         upsertJobs([next]);
         if (!isActiveJob(next)) emitAppEvent("content:changed");
       } catch {

@@ -1,7 +1,12 @@
 /** Inline text requests have a 120 second limit. Allow ample headroom for cleanup. */
 export const STUDIO_TEXT_TIMEOUT_MS = 15 * 60_000;
 export const STUDIO_JOB_TIMEOUT_MS = 2 * 60 * 60_000;
-export const STUDIO_IMAGE_RENDER_TIMEOUT_MS = 10 * 60_000;
+/**
+ * A Studio picture is one bounded background call (150 s, one retry on a busy
+ * answer, then the safety read), so a result still missing after this was lost.
+ * The runner starts it again once before giving up.
+ */
+export const STUDIO_IMAGE_RENDER_TIMEOUT_MS = 7 * 60_000;
 export const STUDIO_COMPOSITION_TIMEOUT_MS = 30 * 60_000;
 /** Putting the brand's own clips together runs on Mellox's own machine, not a provider. */
 export const STUDIO_CLIP_EDIT_TIMEOUT_MS = 45 * 60_000;

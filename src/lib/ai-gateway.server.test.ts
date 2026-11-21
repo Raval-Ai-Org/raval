@@ -24,12 +24,14 @@ import {
 import {
   ANALYST,
   BUDGET,
+  CONVERSATION,
   ECONOMY,
   LABELLER,
+  LUNA,
   planFor,
   PREMIUM,
-  SUMMARY,
   WORKHORSE,
+  WRITER,
 } from "@/server/ai/task-models";
 
 const FULL_PRECISION = ["fp8", "fp16", "bf16", "fp32", "unknown"];
@@ -73,8 +75,8 @@ const msgs = [
 
 describe("chatCompletion request body", () => {
   it.each([
-    { route: "chat", primary: WORKHORSE, fallback: SUMMARY, openWeight: false },
-    { route: "competitors.updates", primary: LABELLER, fallback: ECONOMY, openWeight: true },
+    { route: "chat", primary: WRITER, fallback: LUNA, openWeight: false },
+    { route: "competitors.updates", primary: LABELLER, fallback: LUNA, openWeight: true },
   ])(
     "sends and meters the fallback for $route",
     async ({ route, primary, fallback, openWeight }) => {
@@ -134,6 +136,8 @@ describe("chatCompletion request body", () => {
   it("requires parameters and drops temperature for a JSON schema, never forces tools", async () => {
     const s = scripted([{ content: "{}" }, { content: null }]);
     restore = s.restore;
+    // An open-weight model first (studio.ideas itself is on Haiku since ADR-0052).
+    vi.stubEnv("AI_MODEL_STUDIO_IDEAS", `${BUDGET},${WRITER}`);
     await chatCompletion({
       route: "studio.ideas",
       messages: msgs,
@@ -143,8 +147,8 @@ describe("chatCompletion request body", () => {
         json_schema: { name: "x", strict: true, schema: { type: "object" } },
       },
     });
-    // studio.ideas runs on an open-weight model: full-precision hosts only.
-    expect(s.bodies[0].models).toEqual([BUDGET, WORKHORSE]);
+    // An open-weight model in the list: full-precision hosts only.
+    expect(s.bodies[0].models).toEqual([BUDGET, WRITER]);
     expect(s.bodies[0].provider).toEqual({
       data_collection: "deny",
       require_parameters: true,
@@ -168,6 +172,19 @@ describe("chatCompletion request body", () => {
     expect(s.bodies[0].temperature).toBe(0.9);
   });
 
+  it("turns reasoning off only when every model in the list accepts it", async () => {
+    const s = scripted([{ content: "a" }, { content: "b" }]);
+    restore = s.restore;
+    vi.stubEnv("AI_MODEL_STUDIO_IDEAS", `${BUDGET},${WRITER}`);
+    await chatCompletion({ route: "studio.ideas", messages: msgs, noCache: true });
+    expect(s.bodies[0].models).toEqual([BUDGET, WRITER]);
+    expect(s.bodies[0].reasoning).toEqual({ effort: "none", exclude: true });
+    // Gemini answers 400 "Reasoning is mandatory": a list with it thinks briefly instead.
+    vi.stubEnv("AI_MODEL_STUDIO_IDEAS", `${BUDGET},${WORKHORSE}`);
+    await chatCompletion({ route: "studio.ideas", messages: msgs, noCache: true });
+    expect(s.bodies[1].reasoning).toEqual({ effort: "low", exclude: true });
+  });
+
   it("uses the degraded plan past the spend ceiling", async () => {
     budget.mode = "degrade";
     const s = scripted([{ content: "a" }]);
@@ -185,7 +202,13 @@ describe("chatCompletion request body", () => {
     restore = s.restore;
     await chatCompletion({ route: "ugc.notes", messages: msgs, noCache: true });
     expect(s.bodies[0].models).toEqual(["vendor/custom"]);
-    await chatCompletion({ route: "chat.pro", messages: msgs, noCache: true, escalate: true });
+    await chatCompletion({
+      route: "ai-generate.blog",
+      messages: msgs,
+      noCache: true,
+      escalate: true,
+    });
+    expect(s.bodies[1].models[0]).toBe(PREMIUM);
     expect(s.bodies[1].reasoning.effort).toBe("medium");
   });
 });
@@ -197,7 +220,7 @@ describe("prompt caching and token ceilings", () => {
       { role: "system" as const, content: "brand" },
       { role: "user" as const, content: "q" },
     ];
-    const marked = withPromptCache(three, PREMIUM);
+    const marked = withPromptCache(three, CONVERSATION);
     expect(JSON.stringify(marked[1])).toContain("cache_control");
     expect(JSON.stringify(marked[0])).not.toContain("cache_control");
     expect(withPromptCache(three, WORKHORSE)).toBe(three);
@@ -272,6 +295,21 @@ describe("llmText / llmJson", () => {
     expect(out).toEqual({ a: 1 });
     expect(s.bodies[1].max_tokens).toBe(18_000);
     expect(s.bodies[0].response_format.type).toBe("json_schema");
+  });
+
+  it("retries a cut-off answer above the route plan's own ceiling", async () => {
+    const s = scripted([{ content: '{"a":', finish: "length" }, { content: '{"a":1}' }]);
+    restore = s.restore;
+    // studio.motion.compose's plan floor is 16k; the retry must ask for more.
+    await llmJson({
+      route: "studio.motion.compose",
+      system: "s",
+      user: "u",
+      outputSchema: { type: "object" },
+      fallback: { a: 0 },
+    });
+    expect(s.bodies[1].max_tokens).toBeGreaterThan(s.bodies[0].max_tokens);
+    expect(s.bodies[1].max_tokens).toBe(32_000);
   });
 });
 

@@ -220,7 +220,7 @@ type Tone = "live" | "active" | "idle" | "warn" | "bad";
 
 const TONE_CLASS: Record<Tone, string> = {
   live: "bg-success-surface text-success",
-  active: "bg-primary-surface text-primary",
+  active: "bg-primary-surface text-primary-ink",
   idle: "bg-secondary text-muted-foreground",
   warn: "bg-warning-surface text-warning",
   bad: "bg-destructive/10 text-destructive",
@@ -404,7 +404,7 @@ export function Journey({ reached, failed }: { reached: JourneyKey; failed?: boo
                 className={cn(
                   "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                   done && "border-primary bg-primary text-primary-foreground",
-                  current && !failed && "border-primary bg-card text-primary",
+                  current && !failed && "border-primary bg-card text-primary-ink",
                   current && failed && "border-destructive bg-card text-destructive",
                   !done && !current && "border-border bg-card",
                 )}

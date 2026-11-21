@@ -6,9 +6,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ADDONS,
   CREDIT_PACKS,
+  creditPackFor,
   PAUSE,
   PLANS,
   TRIAL,
+  cr,
   VIDEO_PACKS,
   planRank,
   type BillingInterval,
@@ -27,6 +29,8 @@ import {
 } from "./grants.server";
 import { windowAfterCancel } from "@/lib/billing/cancel-window";
 import { grantMeter, clawbackMeter } from "./meters.server";
+import { markRedemption } from "./promo.server";
+import { TRIAL_MESSAGES } from "@/lib/billing/promo";
 import { projectStripeSubscription, shouldPreserveFreeWindow } from "./stripe-subscription-state";
 
 const admin = supabaseAdmin as unknown as SupabaseClient;
@@ -108,7 +112,13 @@ function environment(): "sandbox" | "production" {
   return key.startsWith("sk_live_") ? "production" : "sandbox";
 }
 
-function catalogItem(kind: PurchaseKind, key: string, interval: BillingInterval | null) {
+function catalogItem(
+  kind: PurchaseKind,
+  key: string,
+  interval: BillingInterval | null,
+  /** Fulfilling a checkout already paid: packs from before v4 still count. */
+  opts: { legacy?: boolean } = {},
+) {
   if (kind === "plan") {
     if (!interval || !(key in PLANS) || key === "free") throw new HttpError(400, "Invalid plan.");
     const plan = PLANS[key as PaidPlanId];
@@ -120,7 +130,9 @@ function catalogItem(kind: PurchaseKind, key: string, interval: BillingInterval 
   if (interval) throw new HttpError(400, "Packs are one-time purchases.");
   const pack =
     kind === "credit_pack"
-      ? CREDIT_PACKS.find((item) => item.key === key)
+      ? opts.legacy
+        ? creditPackFor(key)
+        : CREDIT_PACKS.find((item) => item.key === key)
       : VIDEO_PACKS.find((item) => item.key === key);
   if (!pack) throw new HttpError(400, "Unknown pack.");
   return { cents: pack.usd * 100, interval: "one_time" as const };
@@ -147,17 +159,44 @@ async function mappedPrice(kind: PurchaseKind, key: string, interval: BillingInt
   return String(data.provider_price_id);
 }
 
+async function customerExists(id: string): Promise<boolean> {
+  try {
+    const customer = await stripe().customers.retrieve(id);
+    return !("deleted" in customer && customer.deleted);
+  } catch (cause) {
+    if ((cause as { code?: string })?.code === "resource_missing") return false;
+    throw new HttpError(503, "Could not check the billing customer.");
+  }
+}
+
 async function customerFor(account: BillingAccount, email: string | null): Promise<string> {
   if (account.provider !== "stripe" && account.provider_customer_id) {
     throw new HttpError(409, "This account uses another billing provider.");
   }
-  if (account.provider_customer_id) return account.provider_customer_id;
+  if (account.provider_customer_id) {
+    const stored = String(account.provider_customer_id);
+    if (await customerExists(stored)) return stored;
+    // A customer made with the other Stripe mode (test vs live) or deleted in
+    // the dashboard can never be charged here. With no subscription on it,
+    // nothing depends on it: release it (compare-and-set) and make a new one.
+    if (account.provider_subscription_id)
+      throw new HttpError(409, "Your billing customer needs attention. Contact support.");
+    const { error: clearError } = await admin
+      .from("billing_accounts")
+      .update({ provider_customer_id: null, updated_at: new Date().toISOString() })
+      .eq("id", account.id)
+      .eq("provider_customer_id", stored)
+      .is("provider_subscription_id", null);
+    if (clearError) throw new HttpError(503, "Could not link the billing customer.");
+    account = { ...account, provider_customer_id: null };
+  }
   const customer = await stripe().customers.create(
     {
       email: email ?? undefined,
       metadata: { mellox_account_id: account.id },
     },
-    { idempotencyKey: `mellox-customer:${account.id}` },
+    // Keyed per Stripe mode: a test-mode key's customer is never replayed live.
+    { idempotencyKey: `mellox-customer:${environment()}:${account.id}` },
   );
   const { data, error } = await admin
     .from("billing_accounts")
@@ -218,8 +257,10 @@ async function resumeOrReplacePlanCheckout(args: {
   userId: string;
   key: string;
   interval: BillingInterval | null;
-  trial: boolean;
-}): Promise<{ url: string } | null> {
+  /** "false", or "promo:<code id>" for a trial checkout. */
+  trial: string;
+  ui: CheckoutUi;
+}): Promise<CheckoutOpened | null> {
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data, error } = await admin
       .from("checkout_intents")
@@ -272,16 +313,30 @@ async function resumeOrReplacePlanCheckout(args: {
 
     // Sessions created before this marker existed were regular checkouts.
     const recordedTrial = session.metadata?.mellox_checkout_trial ?? "false";
-    const trialMatches = recordedTrial === String(args.trial);
+    const trialMatches = recordedTrial === args.trial;
     const selectionMatches =
       intent.catalog_key === args.key && intent.interval === args.interval && trialMatches;
-    if (selectionMatches && session.url) return { url: session.url };
+    const uiMatches = (session.ui_mode === "elements") === (args.ui === "elements");
+    const opened = openedFrom(session);
+    if (selectionMatches && uiMatches && opened) return opened;
 
     await stripe().checkout.sessions.expire(session.id);
     await releaseCheckoutIntent(intent.id);
     return null;
   }
   return null;
+}
+
+/** "hosted" sends the person to Stripe's page; "elements" keeps them on Mellox's /checkout. */
+export type CheckoutUi = "hosted" | "elements";
+export type CheckoutOpened = { sessionId: string; url?: string; clientSecret?: string };
+
+function openedFrom(session: Stripe.Checkout.Session): CheckoutOpened | null {
+  if (session.ui_mode === "elements")
+    return session.client_secret
+      ? { sessionId: session.id, clientSecret: session.client_secret }
+      : null;
+  return session.url ? { sessionId: session.id, url: session.url } : null;
 }
 
 export async function createAccountCheckout(args: {
@@ -292,8 +347,12 @@ export async function createAccountCheckout(args: {
   quantity: number;
   interval?: BillingInterval;
   trial?: boolean;
+  /** A trial code from Mellox: its days and credits, card still required. */
+  promoCode?: string;
   returnPath?: string;
-}): Promise<{ url: string }> {
+  ui?: CheckoutUi;
+}): Promise<CheckoutOpened> {
+  const ui: CheckoutUi = args.ui ?? "hosted";
   if (!(await stripeAccountReady()))
     throw new HttpError(503, "Purchases open after Stripe webhook and prices are verified.");
   let account = await accountForUser(args.userId);
@@ -311,9 +370,18 @@ export async function createAccountCheckout(args: {
   if (args.kind === "plan" && args.quantity !== 1) {
     throw new HttpError(400, "A subscription has one plan.");
   }
-  if (args.trial && (args.kind !== "plan" || args.key !== TRIAL.plan || account.trial_used)) {
-    throw new HttpError(409, "This trial is not available.");
+  // There is no Free plan and no open trial (ADR-0050): a trial starts only
+  // from a code Mellox gave out, checked here and claimed again at the webhook.
+  if (args.trial && !args.promoCode) {
+    throw new HttpError(409, "Trials start with a code from Mellox.");
   }
+  const promo = args.promoCode
+    ? await import("./promo.server").then(({ promoOfferFor }) =>
+        promoOfferFor(account, args.promoCode),
+      )
+    : null;
+  if (promo && args.kind !== "plan") throw new HttpError(400, "A trial code is used with a plan.");
+  const trialMarker = promo ? `promo:${promo.id}` : "false";
   if (!Number.isInteger(args.quantity) || args.quantity < 1 || args.quantity > 20) {
     throw new HttpError(400, "Invalid purchase quantity.");
   }
@@ -333,7 +401,7 @@ export async function createAccountCheckout(args: {
       .eq("id", account.id)
       .single();
     if (currentError || !current) throw new HttpError(503, "Could not check current subscription.");
-    if (current.provider_subscription_id || (args.trial && current.trial_used)) {
+    if (current.provider_subscription_id || (promo && current.trial_used)) {
       throw new HttpError(409, "This account already has a subscription or used its trial.");
     }
     const { error: expireError } = await admin
@@ -349,7 +417,8 @@ export async function createAccountCheckout(args: {
       userId: args.userId,
       key: args.key,
       interval,
-      trial: Boolean(args.trial),
+      trial: trialMarker,
+      ui,
     });
     if (existing) return existing;
   }
@@ -374,7 +443,8 @@ export async function createAccountCheckout(args: {
       userId: args.userId,
       key: args.key,
       interval,
-      trial: Boolean(args.trial),
+      trial: trialMarker,
+      ui,
     });
     if (existing) return existing;
     // The competing reservation was stale and has now been released.
@@ -399,6 +469,11 @@ export async function createAccountCheckout(args: {
   const origin = getAppUrl();
   const returnPath = args.returnPath ?? "/projects";
   const mode = args.kind === "plan" ? "subscription" : "payment";
+  const back = (state: string) =>
+    `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=${state}&checkout_session_id={CHECKOUT_SESSION_ID}`;
+  // On Mellox's own checkout page the person stays here; Stripe only comes back
+  // to the page after a bank or wallet redirect, and the page shows Launch.
+  const pageReturn = `${origin}/checkout?step=launch&checkout_session_id={CHECKOUT_SESSION_ID}&from=${encodeURIComponent(returnPath)}`;
   let session: Stripe.Checkout.Session;
   try {
     session = await stripe().checkout.sessions.create(
@@ -408,37 +483,77 @@ export async function createAccountCheckout(args: {
         client_reference_id: intentId,
         metadata: {
           mellox_checkout_intent: intentId,
-          mellox_checkout_trial: String(Boolean(args.trial)),
+          mellox_checkout_trial: trialMarker,
         },
         ...(mode === "subscription"
           ? {
               subscription_data: {
-                metadata: { mellox_checkout_intent: intentId },
-                ...(args.trial ? { trial_period_days: TRIAL.days } : {}),
+                metadata: {
+                  mellox_checkout_intent: intentId,
+                  ...(promo ? { mellox_promo_code_id: promo.id } : {}),
+                },
+                ...(promo
+                  ? {
+                      trial_period_days: promo.days,
+                      // No card on file when the trial ends: stop, never bill.
+                      trial_settings: {
+                        end_behavior: { missing_payment_method: "cancel" as const },
+                      },
+                    }
+                  : {}),
               },
             }
           : {}),
         line_items: [{ price: priceId, quantity: args.quantity }],
         expires_at: Math.floor(expiresAt.getTime() / 1000),
-        billing_address_collection: "auto",
-        customer_update: { address: "auto", name: "auto" },
-        custom_text: {
-          submit: {
-            message:
-              mode === "subscription"
-                ? "Your Mellox plan activates automatically after payment."
-                : "Your credits are added automatically after payment.",
-          },
-        },
-        ...(mode === "subscription"
-          ? { payment_method_collection: "always" as const }
-          : { saved_payment_method_options: { payment_method_save: "enabled" as const } }),
-        success_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=success&checkout_session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}${returnPath}${returnPath.includes("?") ? "&" : "?"}billing=cancel&checkout_session_id={CHECKOUT_SESSION_ID}`,
+        ...(ui === "elements"
+          ? {
+              ui_mode: "elements" as const,
+              return_url: pageReturn,
+              // Card only on Mellox's page (Apple Pay, Google Pay and Link pay
+              // with a card too); no Cash App / Amazon Pay tabs.
+              payment_method_types: ["card" as const, "link" as const],
+            }
+          : {
+              billing_address_collection: "auto" as const,
+              customer_update: { address: "auto" as const, name: "auto" as const },
+              custom_text: {
+                submit: {
+                  message:
+                    mode === "subscription"
+                      ? "Your Mellox plan activates automatically after payment."
+                      : "Your credits are added automatically after payment.",
+                },
+              },
+              success_url: back("success"),
+              cancel_url: back("cancel"),
+            }),
+        ...(mode === "subscription" ? { payment_method_collection: "always" as const } : {}),
+        // Offer "save this card" and show a returning customer the cards they
+        // saved before (only ones they agreed to keep: allow_redisplay "always").
+        // A subscription keeps its card for renewals either way.
+        saved_payment_method_options:
+          ui === "elements"
+            ? {
+                payment_method_save: "enabled" as const,
+                allow_redisplay_filters: ["always" as const],
+              }
+            : mode === "payment"
+              ? { payment_method_save: "enabled" as const }
+              : undefined,
       },
       { idempotencyKey: `mellox-checkout:${intentId}` },
     );
-  } catch {
+  } catch (cause) {
+    // Stripe's own reason (a parameter it refused, a price it can't use) never
+    // reaches the browser, but the operator needs it to fix the setup.
+    console.error("[billing] checkout session refused", {
+      ui,
+      mode,
+      code: (cause as { code?: string })?.code,
+      param: (cause as { param?: string })?.param,
+      message: cause instanceof Error ? cause.message : String(cause),
+    });
     await admin
       .from("checkout_intents")
       .update({ consumed_at: new Date().toISOString() })
@@ -446,9 +561,10 @@ export async function createAccountCheckout(args: {
       .is("consumed_at", null);
     throw new HttpError(502, "Secure checkout could not be opened. Please try again.");
   }
-  if (!session.url) {
+  const opened = openedFrom(session);
+  if (!opened) {
     await consumeCheckoutIntent(intentId).catch(() => undefined);
-    throw new HttpError(502, "Stripe did not return a checkout URL.");
+    throw new HttpError(502, "Stripe did not return a checkout.");
   }
   const { error: linkError } = await admin
     .from("checkout_intents")
@@ -466,7 +582,7 @@ export async function createAccountCheckout(args: {
       .is("consumed_at", null);
     throw new HttpError(503, "Could not finish checkout setup.");
   }
-  return { url: session.url };
+  return opened;
 }
 
 export type AccountCheckoutStatus = {
@@ -1137,7 +1253,9 @@ async function intentForSession(session: Stripe.Checkout.Session): Promise<Check
 
 async function grantPack(intent: CheckoutIntent, session: Stripe.Checkout.Session): Promise<void> {
   if (session.payment_status !== "paid") return;
-  const expected = catalogItem(intent.kind, intent.catalog_key, intent.interval);
+  const expected = catalogItem(intent.kind, intent.catalog_key, intent.interval, {
+    legacy: true,
+  });
   if (session.currency !== "usd" || session.amount_total !== expected.cents * intent.quantity) {
     throw new Error("Checkout total mismatch.");
   }
@@ -1166,7 +1284,7 @@ async function grantPack(intent: CheckoutIntent, session: Stripe.Checkout.Sessio
   }
   const grantIds: string[] = [];
   if (intent.kind === "credit_pack") {
-    const pack = CREDIT_PACKS.find((item) => item.key === intent.catalog_key);
+    const pack = creditPackFor(intent.catalog_key);
     if (!pack) throw new Error("Unknown paid credit pack.");
     const paid = await grantMeter({
       accountId: intent.account_id,
@@ -1388,6 +1506,54 @@ async function planForSubscription(subscription: Stripe.Subscription): Promise<{
   };
 }
 
+/**
+ * Claim one use of the trial's code for this account and card. Refused (the
+ * code ran out, or this account or card already had a trial): the
+ * subscription is cancelled before anything is granted or charged, and the
+ * person picks a plan the normal way.
+ */
+async function claimPromoTrial(
+  subscription: Stripe.Subscription,
+  account: BillingAccount,
+  promoId: string,
+  trialEndsAt: string,
+): Promise<{ code: string; credits: number } | null> {
+  const { promoById, redeemPromo } = await import("./promo.server");
+  const promo = await promoById(promoId);
+  let fingerprint: string | null = null;
+  const method =
+    typeof subscription.default_payment_method === "string"
+      ? subscription.default_payment_method
+      : (subscription.default_payment_method?.id ?? null);
+  if (method) {
+    const pm = await stripe()
+      .paymentMethods.retrieve(method)
+      .catch(() => null);
+    fingerprint = pm?.card?.fingerprint ?? null;
+  }
+  const redeemed = promo
+    ? await redeemPromo({
+        codeId: promo.id,
+        accountId: account.id,
+        userId: account.owner_user_id,
+        subscriptionId: subscription.id,
+        fingerprint,
+        trialEndsAt,
+      })
+    : null;
+  if (promo && redeemed) return { code: promo.code, credits: promo.credits };
+  console.warn("[billing] trial code refused at start", { account: account.id, promo: promoId });
+  await stripe()
+    .subscriptions.cancel(subscription.id, { prorate: false, invoice_now: false })
+    .catch((cause) =>
+      console.error("[billing] could not cancel a refused trial", {
+        subscription: subscription.id,
+        message: cause instanceof Error ? cause.message : String(cause),
+      }),
+    );
+  return null;
+}
+
 async function syncSubscription(
   subscriptionIdValue: string,
   paidInvoiceId?: string,
@@ -1480,7 +1646,31 @@ async function syncSubscription(
       ? account.pause_started_at
       : now.toISOString()
     : null;
-  if (trialing) {
+  // A trial from a code runs on the trial tier; once it is paid, the plan.
+  const promoId = subscription.metadata?.mellox_promo_code_id || null;
+  changes.trial_tier = trialing && promoId ? "promo" : null;
+  if (trialing && promoId) {
+    const expiry = changes.trial_ends_at as string;
+    const promo = await claimPromoTrial(subscription, account, promoId, expiry);
+    if (!promo) return;
+    for (const [meter, amount] of [
+      ["credits", cr(promo.credits)],
+      ["pro_messages", TRIAL_MESSAGES.proMessages],
+      ["flash_messages", TRIAL_MESSAGES.flashMessages],
+    ] as const) {
+      await grantMeter({
+        accountId: account.id,
+        meter,
+        amount,
+        source: "promo",
+        restriction: "ai_only",
+        idempotencyKey: `promo-trial:${subscription.id}:${meter}`,
+        expiresAt: expiry,
+        providerRef: subscription.id,
+        reason: `Trial code ${promo.code}`,
+      });
+    }
+  } else if (trialing) {
     const expiry = changes.trial_ends_at as string;
     for (const [meter, amount] of [
       ["credits", TRIAL.credits],
@@ -1488,6 +1678,7 @@ async function syncSubscription(
       ["pro_messages", TRIAL.proMessages],
       ["flash_messages", TRIAL.flashMessages],
     ] as const) {
+      if (amount <= 0) continue;
       await grantMeter({
         accountId: account.id,
         meter,
@@ -1603,6 +1794,8 @@ async function syncSubscription(
   }
   const { error } = await admin.from("billing_accounts").update(changes).eq("id", account.id);
   if (error) throw new Error("Could not sync Stripe subscription.");
+  if (promoId && (active || canceled))
+    await markRedemption(subscription.id, active ? "converted" : "ended");
   if ((active || trialing) && subscription.metadata.mellox_checkout_intent) {
     const { error: consumeError } = await admin
       .from("checkout_intents")

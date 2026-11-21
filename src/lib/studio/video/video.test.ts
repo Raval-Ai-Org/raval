@@ -8,6 +8,7 @@ import {
   recommendedModel,
   studioVideoModelFor,
   usableKind,
+  VIDEO_KIND_GROUPS,
   VIDEO_KINDS,
   videoKind,
 } from "./kinds";
@@ -22,8 +23,10 @@ import {
   type VideoStoryboard,
 } from "./storyboard";
 import {
+  canDeliverWithVisualWarning,
   qaFrameTimes,
   redoPlan,
+  requiresSourceAudio,
   technicalIssues,
   visualFailures,
   VIDEO_REDO_ROUNDS,
@@ -51,7 +54,7 @@ describe("video kinds", () => {
   it.each([
     ["Our summer sale: 20% off everything", {}, "offer-teaser"],
     ["How to brew the perfect pour over", {}, "how-it-works"],
-    ["Before and after a deep clean", {}, "before-after"],
+    ["Before and after a deep clean", {}, "product-demo"],
     ["The vibe of our cafe on a rainy morning", {}, "mood-broll"],
     ["A customer's morning with our app", {}, "brand-story"],
     ["Show off the new bottle", { product: true }, "product-motion"],
@@ -62,12 +65,38 @@ describe("video kinds", () => {
     ["Anything", { picture: true }, "living-picture"],
     ["Anything", { picture: true, product: true }, "product-motion"],
     ["Anything", { carousel: true }, "motion-post"],
+    ["Unboxing our new headphones", {}, "product-showcase"],
+    ["Launch video for our new perfume", {}, "product-showcase"],
+    ["Behind the scenes at our workshop", {}, "mood-broll"],
+    ["Our grand opening is this Saturday", {}, "offer-teaser"],
+    ["Explain what our service does", {}, "how-it-works"],
+    ["Showcase the features of our app", {}, "product-demo"],
+    ["Aesthetic b-roll of our bakery with text on top", {}, "broll-hook"],
   ] as const)("picks %s", (brief, source, kind) => {
     expect(pickVideoKind(brief, source)).toBe(kind);
   });
 
   it("a template wins over the brief", () => {
     expect(pickVideoKind("sale", {}, "video-process")).toBe("how-it-works");
+  });
+
+  it("every kind sits under one composer heading, and every heading has kinds", () => {
+    const groups = new Set(VIDEO_KIND_GROUPS.map((g) => g.id));
+    for (const kind of VIDEO_KINDS) expect(groups).toContain(kind.group);
+    for (const group of groups) expect(VIDEO_KINDS.some((kind) => kind.group === group)).toBe(true);
+  });
+
+  it("a kind drawn by code is never made by a video model", () => {
+    expect(usableKind("motion-post", {})).toBe("product-motion");
+    expect(usableKind("motion-graphics", { picture: true })).toBe("living-picture");
+    // A motion graphic left over after switching back to new footage.
+    const settled = settleVideoControls({
+      type: "video",
+      controls: { platforms: ["instagram"], videoMode: "generate", videoKind: "motion-graphics" },
+      brief: "Our new kettle",
+    });
+    expect(videoKind(settled.videoKind!).join).not.toBe("code");
+    expect(settled.videoKind).toBe("product-motion");
   });
 
   it("a kind that needs a post falls back to a product film, never a cast story", () => {
@@ -335,6 +364,30 @@ describe("storyboard", () => {
 });
 
 describe("video checks", () => {
+  it("uses a completed Mellox soundtrack when the provider clip is silent", () => {
+    expect(requiresSourceAudio({ requested: true, soundtrackAvailable: true })).toBe(false);
+    expect(requiresSourceAudio({ requested: true, soundtrackAvailable: false })).toBe(true);
+    expect(requiresSourceAudio({ requested: false, soundtrackAvailable: false })).toBe(false);
+  });
+
+  it("does not turn an unusable individual judge score into a false rejection", () => {
+    const judge = VideoJudgeSchema.parse({
+      clips: [{ clip: 1, sameSubject: "unavailable", clean: 9, followsPlan: 9, problem: "" }],
+      ending: 9,
+      summary: "",
+    });
+    expect(judge.clips[0]?.sameSubject).toBe(10);
+    expect(visualFailures(judge, "brand-story", plan16)).toEqual([]);
+  });
+
+  it("delivers an unresolved visual concern for review but never broken media", () => {
+    const visual = [{ clip: 0, reason: "The person changes in this clip." }];
+    expect(canDeliverWithVisualWarning(visual, [])).toBe(true);
+    expect(canDeliverWithVisualWarning(visual, [{ clip: 0, reason: "The end is missing." }])).toBe(
+      false,
+    );
+  });
+
   it("samples every clip and every join", () => {
     const times = qaFrameTimes(plan16);
     expect(times).toHaveLength(6);

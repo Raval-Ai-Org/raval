@@ -37,7 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Logo } from "@/components/brand/Logo";
 import { dsGhostBtn, dsIconBtn } from "@/components/app/surface/buttons";
 import { Link, useNavigate, useSearchParams } from "@/lib/navigation";
-import { WORKSPACES_HOME } from "@/lib/workspace/paths";
+import { ALL_WORKSPACES } from "@/lib/workspace/paths";
 import { cn } from "@/lib/utils";
 import { buildDigest, digestToCsv, digestToText } from "@/lib/agency/command-center";
 import { useCommandCenter } from "./use-command-center";
@@ -215,7 +215,7 @@ h1{font-size:22px;margin:0}.sub{color:#666;font-size:13px;margin:2px 0 24px}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee}
 th{font-size:11px;color:#666;font-weight:600}td.r,th.r{text-align:right}h2{font-size:14px;margin:28px 0 8px}
 li{font-size:13px;margin:4px 0}.foot{margin-top:32px;color:#999;font-size:11px}</style></head><body>
-<h1>Client report</h1><div class="sub">${esc(d.dateLabel)} · Mellox AI</div>
+<h1>Client report</h1><div class="sub">${esc(d.dateLabel)} · Mellox</div>
 <div class="stats"><div class="s"><div class="n">${d.clients}</div><div class="l">Clients</div></div>
 <div class="s"><div class="n">${d.review}</div><div class="l">To review</div></div>
 <div class="s"><div class="n">${d.ready}</div><div class="l">Ready to post</div></div>
@@ -325,7 +325,7 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
         group: "Actions",
         label: "Add a client",
         icon: <Plus className={ic} />,
-        run: () => go(WORKSPACES_HOME),
+        run: () => go(ALL_WORKSPACES),
       },
     ];
     const perClient = cc.clients.flatMap<PaletteEntry>((c) => [
@@ -478,14 +478,14 @@ ${d.waiting.length ? `<h2>Waiting for review</h2><ul>${d.waiting.map((x) => `<li
           <header className="sticky top-0 z-30 border-b border-transparent bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
             <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:px-6">
               <Link
-                to={WORKSPACES_HOME}
+                to={ALL_WORKSPACES}
                 aria-label="Back to all clients"
                 className={cn(dsIconBtn, "h-9 w-9 shrink-0 border border-border/70 bg-card")}
               >
                 <ArrowLeft className="h-4 w-4" />
               </Link>
               <Link
-                to={WORKSPACES_HOME}
+                to={ALL_WORKSPACES}
                 aria-label="Mellox AI home"
                 className="hidden shrink-0 sm:block"
               >

@@ -25,6 +25,7 @@ import { getWordPressConnection } from "@/lib/wordpress.functions";
 import { getWebflowConnection } from "@/lib/webflow.functions";
 import { getWixAvailability, getWixConnection } from "@/lib/wix.functions";
 import { getGoogleConnection } from "@/lib/google-analytics.functions";
+import { AppUses } from "./AppUses";
 import { ConnectedApps } from "./ConnectedApps";
 import { CanvaConnection } from "./CanvaConnection";
 import { NotionConnection } from "./NotionConnection";
@@ -308,7 +309,13 @@ export function ConnectorsGallery({
         // Back on the grid: show what changed while the connector was open.
         if (!id) void qc.invalidateQueries({ queryKey: connectorsKey(workspaceId) });
       }}
-      renderDetail={(id) => detailFor(id, workspaceId, !!snapshot?.canvaDirect)}
+      renderDetail={(id) => (
+        <>
+          {detailFor(id, workspaceId, !!snapshot?.canvaDirect)}
+          {/* Connected: what it does now, and a button to each place it's used. */}
+          {snapshot?.tones[id] === "on" ? <AppUses app={id} className="pt-2" /> : null}
+        </>
+      )}
     />
   );
 }

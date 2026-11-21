@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lookbackDays, updateFingerprint } from "./updates.server";
-import { nextCheckAt } from "./service.server";
+import { nextCheckAt, profileDue } from "./service.server";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
 
@@ -66,5 +66,26 @@ describe("nextCheckAt", () => {
   it("settles at weekly rather than backing off forever", () => {
     const capped = Date.parse(nextCheckAt({ foundSomething: false, quietSweeps: 99, now: NOW }));
     expect(capped - NOW).toBe(168 * 3600_000);
+  });
+});
+
+describe("profileDue", () => {
+  it("builds a profile for a new competitor and when a person asks again", () => {
+    expect(profileDue({ profile: null, profile_status: "pending" })).toBe(true);
+    expect(profileDue({ profile: { summary: "x" }, profile_status: "pending" })).toBe(true);
+  });
+
+  it("finishes a build a crashed worker left behind", () => {
+    expect(profileDue({ profile: null, profile_status: "running" })).toBe(true);
+  });
+
+  it("never retries a failed profile by itself", () => {
+    // A site that blocks readers fails the same way every sweep, at ~8 searches a try.
+    expect(profileDue({ profile: null, profile_status: "failed" })).toBe(false);
+    expect(profileDue({ profile: { summary: "x" }, profile_status: "failed" })).toBe(false);
+  });
+
+  it("leaves a ready profile alone", () => {
+    expect(profileDue({ profile: { summary: "x" }, profile_status: "ready" })).toBe(false);
   });
 });

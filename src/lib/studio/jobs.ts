@@ -1,5 +1,6 @@
 // The Studio job contract shared by the browser and the server: what a
 // generation request contains and what a finished job returns. Pure + zod.
+import type { BriefRead } from "./brief-read";
 import type { HeroLook } from "./product-hero/variety";
 import { z } from "zod";
 import type { PlatformId } from "@/lib/social-platforms";
@@ -10,6 +11,8 @@ import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import type { AdOnImage } from "./ad-formats";
 import { AD_OBJECTIVE_IDS } from "./ad-objectives";
 import { VIDEO_KIND_IDS, type VideoKindId } from "./video/kinds";
+import { MOTIONMOX_ELEMENT_IDS } from "./motionmox/elements";
+import { CATEGORY_IDS } from "./categories";
 import type { VideoPlanOutput } from "./video/storyboard";
 
 export const PlatformIdSchema = z.enum([
@@ -106,6 +109,12 @@ export const ControlsSchema = z.object({
    * own photo and staged as a poster (ADR-0040); set by the server only.
    */
   referenceMode: z.enum(["preserve", "design", "edit", "inspire", "hero"]).optional(),
+  /**
+   * Video: a still the video settles on (Animate's "End frame"), checked
+   * against this workspace. Used only by the kinds in
+   * src/lib/studio/video/end-frame.ts, and only when the video opens on a picture.
+   */
+  endFrameAssetId: z.string().uuid().optional(),
   /** Design mode: keep the photos exact (default) or let the model blend them in. */
   photoFidelity: z.enum(["exact", "blend"]).optional(),
   /**
@@ -127,12 +136,19 @@ export const ControlsSchema = z.object({
   sourceVideoAssetIds: z.array(z.string().uuid()).max(5).optional(),
   /** Brand mode: captions of what is said (absent means on). */
   clipCaptions: z.boolean().optional(),
+  /**
+   * Brand and recap modes: what MotionMox animates into the video
+   * (src/lib/studio/motionmox/elements.ts). Absent: read from the brief.
+   */
+  motionElements: z.array(z.enum(MOTIONMOX_ELEMENT_IDS)).max(9).optional(),
   /** Recap mode: camera moves over the exact photos, or AI motion per photo. */
   recapMotion: z.enum(["camera", "ai"]).optional(),
   /** A product from the brand's catalogue (ADR-0035), checked against this workspace. */
   productId: z.string().uuid().optional(),
   /** The person chose "No product": a product the brief names isn't picked for them. */
   noProduct: z.boolean().optional(),
+  /** A Trend Radar trend this piece is made for (platform_trends id, re-checked on the server). */
+  trendId: z.string().uuid().optional(),
   /** Ads: the designed layout (src/lib/studio/ad-formats.ts). Absent: picked per ad. */
   adFormat: z.string().max(40).optional(),
   /** Ads: what the ad is for (src/lib/studio/ad-objectives.ts). Absent: from the brief and goal. */
@@ -172,6 +188,11 @@ export const IntentSchema = z.object({
   autopilotProgramId: z.string().uuid().optional(),
   /** A StudioTemplate id; the prompt follows its structure. */
   template: z.string().max(40).optional(),
+  /**
+   * The kind of post (categories.ts: meme, sale, tips…). Every writer, the
+   * carousel structure and the picture follow it. Absent: the template's.
+   */
+  category: z.enum(CATEGORY_IDS).optional(),
   /**
    * Decided by a plan before the piece is made (Autopilot): what it is for
    * (viral.ts) and how it opens (memory.ts). Studio follows them instead of
@@ -468,12 +489,27 @@ export type StudioJobOutput = {
   concept?: string;
   /** New AI video: its kind, clips and storyboard, and the checks it passed. */
   videoPlan?: VideoPlanOutput;
+  /** Image: the native post style it is made in (post-styles.ts id, ADR-0051). */
+  postStyle?: string;
+  /** Carousel: the native carousel style its slides are designed in (post-styles.ts id). */
+  carouselStyle?: string;
+  /** Carousel: the director's one look every model-drawn slide follows (ADR-0051 round 3). */
+  carouselLook?: string;
   /** Image: the campaign layout the concept was staged on (art-direction.ts id). */
   artDirection?: string;
   /** Product poster: its staging, colour mood, light, set, idea and words (ADR-0040). */
   heroLook?: HeroLook;
+  /** What the person asked for, read once at job start (brief-read.ts, ADR-0051). */
+  briefRead?: BriefRead;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
+  /** Meme and other multi-line layouts: the exact lines, in order (categories.ts). */
+  onImageLines?: string[];
+  /** Meme: the layout the picture is made on (categories.ts MEME_LAYOUTS id). */
+  memeLayout?: string;
+  /** Meme on a real template: its id and how it was made (memes/types.ts). */
+  memeFormat?: string;
+  memeMode?: "classic" | "remix" | "original";
   altText?: string;
   /** Ad: the shared visual direction. */
   visualConcept?: string;

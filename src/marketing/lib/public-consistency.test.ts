@@ -27,23 +27,25 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("public pricing and brand consistency", () => {
-  it("opens on monthly pricing and shows Scale's monthly price", () => {
+  it("opens on yearly pricing with three plans and Enterprise as Talk to us", () => {
     const html = renderToStaticMarkup(React.createElement(PricingPlans));
-    expect(html).toContain('aria-pressed="true">Monthly');
-    const scale = html.slice(html.indexOf('class="pp-strip"'));
-    expect(scale).toContain("$1,199");
-    expect(scale).toContain("billed monthly");
-    expect(scale).not.toContain("$999");
+    expect(html).toContain('aria-pressed="true">Yearly');
+    for (const price of ["$39", "$119", "$319"]) expect(html).toContain(price);
+    expect(html).not.toContain(">Free<");
+    const enterprise = html.slice(html.indexOf('class="pp-strip"'));
+    expect(enterprise).toContain("Talk to us");
+    expect(enterprise).not.toContain("$1,199");
   });
 
-  it("keeps Scale's card data, comparison, FAQ and annual charge aligned", () => {
-    expect(CATALOG.scale.priceMonthlyUsd).toBe(1199);
-    expect(PLANS.find((p) => p.id === "scale")?.monthly).toBe(1199);
-    expect(MATRIX_COLUMNS.find((p) => p.name === "Scale")?.price).toBe("$1,199 /mo");
-    const answer = PRICING_FAQS.find((f) => f.q === "What does Scale include?")?.a;
-    expect(answer).toContain("$1,199 a month");
-    expect(answer).toContain("$11,990 a year");
-    expect(planPrice("scale", "year")).toMatchObject({ billed: 11990, perMonth: 999.17 });
+  it("keeps plan cards, comparison, FAQ and annual charges on the catalog's prices", () => {
+    expect(PLANS.map((p) => p.id)).toEqual(["starter", "growth", "agency"]);
+    for (const plan of PLANS) expect(plan.monthly).toBe(CATALOG[plan.id].priceMonthlyUsd);
+    expect(MATRIX_COLUMNS.find((p) => p.name === "Growth")?.price).toBe("$119 /mo yearly");
+    expect(MATRIX_COLUMNS.find((p) => p.name === CATALOG.scale.label)?.price).toBe("Talk to us");
+    const free = PRICING_FAQS.find((f) => f.q === "Is there a free plan?")?.a;
+    expect(free).toBeTruthy();
+    expect(planPrice("starter", "year")).toMatchObject({ billed: 468, perMonth: 39 });
+    expect(planPrice("agency", "year")).toMatchObject({ billed: 3828, perMonth: 319 });
   });
 
   it("uses Mellox AI as the public organization name and identifies its founders", () => {

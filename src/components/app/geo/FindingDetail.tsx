@@ -284,7 +284,7 @@ export function SetupSteps({ at }: { at: number }) {
               i <= at ? "font-medium text-foreground" : "text-muted-foreground",
             )}
           >
-            {i < at && <CheckCircle className="ds-pop h-3 w-3 shrink-0 text-primary" />}
+            {i < at && <CheckCircle className="ds-pop h-3 w-3 shrink-0 text-primary-ink" />}
             {label}
           </span>
         </li>

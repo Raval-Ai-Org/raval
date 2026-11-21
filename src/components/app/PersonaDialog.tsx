@@ -98,9 +98,9 @@ export function PersonaDialog({
                   <opt.Icon className="h-[18px] w-[18px] text-foreground" />
                 </div>
                 {isSaving && !isSaved && (
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-green" />
+                  <Loader2 className="h-4 w-4 animate-spin text-primary-ink" />
                 )}
-                {isSaved && <Check className="h-4 w-4 text-brand-green" strokeWidth={3} />}
+                {isSaved && <Check className="h-4 w-4 text-primary-ink" strokeWidth={3} />}
               </div>
               <div className="relative mt-4">
                 <div className="text-[16px] font-semibold tracking-tight">{opt.title}</div>

@@ -228,8 +228,8 @@ export default function AboutPage() {
         {/* Closing */}
         <CtaBand
           title="See what AI says about your brand today."
-          text="Start free, no card needed. Upgrade when you are ready to publish."
-          primary={{ label: "Start free", href: "/signup" }}
+          text="Plans from $39 a month. Try Growth for 7 days."
+          primary={{ label: "Get started", href: "/signup" }}
           secondary={{ label: "Contact us", href: "/contact" }}
         />
       </main>

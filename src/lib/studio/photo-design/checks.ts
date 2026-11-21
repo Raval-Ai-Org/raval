@@ -80,6 +80,54 @@ export function judgeLayer(
   return { ok: true, windows: windows.map((i) => regions.indexOf(real[i])) };
 }
 
+/** The lenient pass: an overlay still works while this much of the photo shows. */
+export const LENIENT_OVERLAY_SHARE = 0.2;
+/** The lenient pass: the main window must still be at least this big. */
+export const LENIENT_HERO_SHARE = 0.04;
+
+/**
+ * The last chance for a layer that failed `judgeLayer` (after its retry):
+ * use the windows it did leave instead of failing the piece. Too many windows
+ * → the largest ones; too few → the strongest photos fill the windows there
+ * are (`placed` says how many). Null only when there's no usable window at
+ * all; the caller then lays the photos out by code.
+ */
+export function lenientWindows(
+  plan: Pick<PhotoDesignPlan, "layout" | "order" | "shapes">,
+  regions: Region[],
+  canvas: { width: number; height: number },
+  photoAspects?: number[],
+): { windows: number[]; placed: number } | null {
+  const total = canvas.width * canvas.height;
+  const real = regions.filter((region) => region.area / total >= SPECK_SHARE);
+  if (plan.layout === "overlay") {
+    const shown = real.reduce((sum, region) => sum + region.area, 0) / total;
+    return shown >= LENIENT_OVERLAY_SHARE ? { windows: real.map((_, i) => i), placed: 1 } : null;
+  }
+  if (!real.length || real[0].area / total < LENIENT_HERO_SHARE) return null;
+  // Windows a photo can sit in: big enough to read, largest first.
+  const usable = real.filter((region, i) => i === 0 || region.area / total >= SPECK_SHARE * 2);
+  const placed = Math.min(plan.order.length, usable.length);
+  const free = new Set(usable.map((_, i) => i).slice(1, placed));
+  const windows = [0];
+  for (let p = 1; p < placed; p++) {
+    const aspect = photoAspects?.[plan.order[p]] ?? SHAPE_ASPECT[plan.shapes[p]];
+    let best = -1;
+    let bestScore = Infinity;
+    for (const index of free) {
+      const region = usable[index];
+      const score = Math.abs(Math.log(region.width / region.height / aspect));
+      if (score < bestScore - 1e-9) {
+        best = index;
+        bestScore = score;
+      }
+    }
+    free.delete(best);
+    windows.push(best);
+  }
+  return { windows: windows.map((i) => regions.indexOf(usable[i])), placed };
+}
+
 /** Every face that should show still shows (shares measured on the result). */
 export function judgeFaces(
   shares: number[],

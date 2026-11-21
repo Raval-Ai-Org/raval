@@ -6,7 +6,7 @@
 // needed. The role switch (?role=support) shows how the same screens look for
 // each role, including the "your role can't do that" answers.
 //
-//   /admin-lab?s=overview|users|user|workspaces|workspace|audit|security|team|plans
+//   /admin-lab?s=overview|customers|activity|errors|revenue|users|user|workspaces|workspace|audit|security|team|plans
 //   /admin-lab?s=workspace&role=analyst
 
 import { useEffect, useState } from "react";
@@ -26,6 +26,7 @@ import {
   labSupportView,
   LAB_ANALYTICS,
   LAB_ANNOUNCEMENTS,
+  LAB_TRENDS,
   LAB_INTEGRATIONS,
   labLookup,
   LAB_FLAGS,
@@ -44,11 +45,17 @@ import {
   labWorkspaceDetail,
   labWorkspaces,
 } from "./AdminLab.fixtures";
+import { labBalances, labPulse } from "./AdminLab.pulse";
+import { ActivityScreen } from "./ActivityScreen";
 import { AuditScreen } from "./AuditScreen";
+import { CustomersScreen } from "./CustomersScreen";
+import { ErrorsScreen } from "./ErrorsScreen";
+import { RevenueScreen } from "./RevenueScreen";
 import { AbuseScreen } from "./AbuseScreen";
 import { AiControlsScreen } from "./AiControlsScreen";
 import { AnalyticsScreen } from "./AnalyticsScreen";
 import { AnnouncementsScreen } from "./AnnouncementsScreen";
+import { TrendsScreen } from "./TrendsScreen";
 import { EmergencyScreen } from "./EmergencyScreen";
 import { FlagsScreen } from "./FlagsScreen";
 import { HealthScreen } from "./HealthScreen";
@@ -74,6 +81,8 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/me": "any",
   "/api/admin/overview": "overview.read",
   "/api/admin/finance": "any",
+  "/api/admin/pulse": "overview.read",
+  "/api/admin/balances": "overview.read",
   "/api/admin/users": "users.read",
   "/api/admin/users/detail": "users.read",
   "/api/admin/users/suspend": "users.suspend",
@@ -107,7 +116,13 @@ const NEEDS: Record<string, Permission | "any"> = {
   "/api/admin/integrations": "integrations.read",
   "/api/admin/lookup": "lookup.read",
   "/api/admin/credits": "credits.grant",
+  "/api/admin/users/gift-credits": "credits.grant",
+  "/api/admin/users/gift-plan": "entitlements.override",
+  "/api/admin/users/access-pass": "entitlements.override",
+  "/api/admin/promos": "entitlements.read",
   "/api/admin/announcements": "announcements.manage",
+  "/api/admin/trends": "trends.manage",
+  "/api/admin/trends/media": "trends.manage",
 };
 
 function install(role: AdminRoleKey): () => void {
@@ -138,6 +153,10 @@ function install(role: AdminRoleKey): () => void {
         return json(me);
       case "/api/admin/overview":
         return json(LAB_OVERVIEW);
+      case "/api/admin/pulse":
+        return json(labPulse(pii));
+      case "/api/admin/balances":
+        return json(labBalances(me.billing));
       case "/api/admin/finance":
         return me.billing
           ? json(LAB_FINANCE)
@@ -190,6 +209,16 @@ function install(role: AdminRoleKey): () => void {
         return post ? json({ key: "lab" }) : json(LAB_FLAGS);
       case "/api/admin/announcements":
         return post ? json({ id: "lab" }) : json(LAB_ANNOUNCEMENTS);
+      case "/api/admin/trends":
+        return post ? json({ id: "lab" }) : json(LAB_TRENDS);
+      case "/api/admin/trends/media":
+        return json({
+          path: "platform/trends/lab",
+          kind: "image",
+          caption: null,
+          stills: [],
+          url: null,
+        });
       default:
         // Every other route here is a change: pretend it worked.
         return json({ ok: true, id: "lab", suspended: true, sessionsEnded: 2 });
@@ -220,6 +249,18 @@ export function AdminLab() {
 
   let screen;
   switch (section) {
+    case "customers":
+      screen = <CustomersScreen />;
+      break;
+    case "activity":
+      screen = <ActivityScreen />;
+      break;
+    case "errors":
+      screen = <ErrorsScreen />;
+      break;
+    case "revenue":
+      screen = <RevenueScreen />;
+      break;
     case "users":
       screen = <UsersScreen />;
       break;
@@ -276,6 +317,9 @@ export function AdminLab() {
       break;
     case "announcements":
       screen = <AnnouncementsScreen />;
+      break;
+    case "trends":
+      screen = <TrendsScreen />;
       break;
     case "emergency":
       screen = <EmergencyScreen />;

@@ -4,7 +4,8 @@
 // design tokens: neutral surfaces, one lime accent, no per-type rainbow.
 import type * as React from "react";
 import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
 import { Clapperboard } from "lucide-react";
 import {
   Check,
@@ -105,7 +106,10 @@ export function Segmented<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cn("inline-flex rounded-lg bg-surface-2 p-0.5 ring-1 ring-border", className)}
+      className={cn(
+        "inline-flex rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1",
+        className,
+      )}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -118,10 +122,10 @@ export function Segmented<T extends string | number>({
             title={o.hint}
             onClick={() => onChange(o.value)}
             className={cn(
-              "min-h-11 min-w-11 rounded-md px-3 text-xs font-medium transition-colors duration-[--motion-duration-fast] lg:min-h-8 lg:min-w-0",
+              "min-h-11 min-w-11 rounded-full px-3.5 text-xs font-semibold transition-all duration-[--motion-duration-fast] lg:min-h-8 lg:min-w-0",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
               selected
-                ? "bg-surface-3 text-foreground shadow-1"
+                ? "bg-[var(--ds-card-bg)] text-foreground shadow-[0_2px_8px_-2px_rgb(15_23_20/0.18)]"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -324,7 +328,7 @@ export function PlatformLogoGrid<T extends PlatformAppIconId>({
   note?: (id: T) => string | null | undefined;
   className?: string;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div role={multi ? "group" : "radiogroup"} className={cn("flex flex-wrap gap-2.5", className)}>
       {platforms.map((id, i) => {
@@ -387,17 +391,23 @@ export function PlatformLogoGrid<T extends PlatformAppIconId>({
               <span
                 aria-hidden
                 className={cn(
-                  "pointer-events-none absolute -inset-[3px] rounded-[calc(var(--r)+3px)] ring-2 transition-[box-shadow,opacity] duration-[--motion-duration-fast]",
-                  selected ? "ring-primary opacity-100" : "ring-transparent opacity-0",
+                  // A Mox gradient border (masked to the edge), not a flat lime ring.
+                  "pointer-events-none absolute -inset-[3px] rounded-[calc(var(--r)+3px)] p-[2px] [background:var(--mox-gradient)] transition-opacity duration-[--motion-duration-fast]",
+                  selected ? "opacity-100" : "opacity-0",
                 )}
-                style={{ ["--r" as string]: `${Math.round(size * 0.26)}px` }}
+                style={{
+                  ["--r" as string]: `${Math.round(size * 0.26)}px`,
+                  WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+                  WebkitMaskComposite: "xor",
+                  mask: "linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)",
+                }}
               />
               <motion.span
                 aria-hidden
                 initial={false}
                 animate={selected ? { scale: 1, opacity: 1 } : { scale: 0.4, opacity: 0 }}
                 transition={spring.control}
-                className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-surface-2"
+                className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full text-[var(--mox-ink)] shadow-[0_4px_10px_-3px_rgb(31_214_196/0.7)] ring-2 ring-white [background:var(--mox-gradient)] dark:ring-[var(--ds-card-bg)]"
               >
                 <Check className="size-2.5" />
               </motion.span>
@@ -426,43 +436,47 @@ export function RatioPicker({
   recommended?: AspectRatio;
 }) {
   return (
-    <div role="radiogroup" aria-label="Size" className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+    <div
+      role="radiogroup"
+      aria-label="Size"
+      // Never wider than its column. One row reads as a pill; when it has to
+      // wrap it becomes a rounded box instead of a stretched blob.
+      className="flex max-w-full flex-wrap gap-1 rounded-[22px] border border-[var(--ds-card-border)] bg-[var(--ds-well-bg)] p-1 sm:inline-flex"
+    >
       {ratios.map((r) => {
         const meta = RATIOS[r];
         const selected = value === r;
-        const scale = 20 / Math.max(meta.w, meta.h);
+        const scale = 16 / Math.max(meta.w, meta.h);
         return (
           <button
             key={r}
             type="button"
             role="radio"
             aria-checked={selected}
+            aria-label={`${meta.label} ${r}${recommended === r ? ", recommended" : ""}`}
+            title={recommended === r ? `Recommended · ${meta.use}` : meta.use}
             onClick={() => onChange(r)}
             className={cn(
-              "flex min-h-14 items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors duration-[--motion-duration-fast]",
+              "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all duration-[--motion-duration-fast] sm:flex-none lg:min-h-9",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55",
               selected
-                ? "border-primary-border bg-primary-surface"
-                : "border-border bg-surface-3 hover:border-border-strong",
+                ? "bg-[var(--ds-card-bg)] text-foreground shadow-[0_2px_8px_-2px_rgb(15_23_20/0.18)]"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+            <span className="grid size-4 shrink-0 place-items-center" aria-hidden>
               <span
                 className={cn(
                   "rounded-[3px] border-[1.5px]",
-                  selected ? "border-primary" : "border-muted-foreground/60",
+                  selected ? "border-[var(--mox-green)]" : "border-current opacity-70",
                 )}
                 style={{ width: meta.w * scale, height: meta.h * scale }}
               />
             </span>
-            <span className="min-w-0">
-              <span className="block text-xs font-medium text-foreground">
-                {meta.label} <span className="text-muted-foreground">{r}</span>
-              </span>
-              <span className="block truncate text-[11px] text-muted-foreground">
-                {recommended === r ? "Recommended" : meta.use}
-              </span>
-            </span>
+            {r}
+            {recommended === r ? (
+              <span aria-hidden className="size-1.5 rounded-full bg-[var(--mox-green)]" />
+            ) : null}
           </button>
         );
       })}
@@ -564,7 +578,7 @@ export function DrawCheck({
   delay?: number;
   strokeWidth?: number;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden className={cn("size-4", className)}>
       <motion.path
@@ -592,7 +606,7 @@ const BURST_TONES = [
 
 /** A small, once-only burst of brand colour for a real moment of completion. */
 export function Burst({ count = 14, radius = 36 }: { count?: number; radius?: number }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   if (reduce) return null;
   return (
     <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 z-20">

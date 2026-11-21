@@ -261,13 +261,14 @@ export function isAudienceEnabled(workspaceId?: string): boolean {
 }
 
 /**
- * The quick score that follows a generation by itself. Separate so the one
- * unrequested model call can be switched off without losing the feature.
+ * The quick score that follows a generation by itself. Off unless set to
+ * "true" (Mellox Lean): it was one unrequested model call per generation.
+ * The score is still one click away (`predictContent`).
  */
 export function isAudienceAutoScoreEnabled(workspaceId?: string): boolean {
   if (!isAudienceEnabled(workspaceId)) return false;
-  return !isFalsy(
-    (process.env.FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED ?? "").trim().toLowerCase(),
+  return (
+    (process.env.FEATURE_FLAG_AUDIENCE_AUTO_SCORE_ENABLED ?? "").trim().toLowerCase() === "true"
   );
 }
 
@@ -382,6 +383,22 @@ export function isClipEditEnabled(workspaceId?: string): boolean {
 }
 
 /**
+ * MotionMox (Mellox's fork of Remotion, vendor/motionmox) draws "Brand my
+ * clips" and photo recaps, with the elements a person asks for animated in.
+ * On unless set to "false"; `FEATURE_FLAG_MOTIONMOX_ENABLED_WS_<id>`
+ * overrides it for one workspace. Off: the FFmpeg path, as before.
+ */
+export function isMotionMoxEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_MOTIONMOX_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_MOTIONMOX_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
  * New AI videos planned as a storyboard of whole clips, chained, and checked
  * before anyone sees them (src/lib/studio/video/). On unless set to "false";
  * `FEATURE_FLAG_VIDEO_STORYBOARD_ENABLED_WS_<id>` overrides it for one
@@ -479,4 +496,38 @@ export function isCommunityEnabled(workspaceId?: string): boolean {
  */
 export function isRedditApiEnabled(): boolean {
   return isTruthy((process.env.FEATURE_FLAG_REDDIT_API_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * The local open-source AI sidecar (services/local-ai, docs/local-ai.md):
+ * product cut-outs, OCR, image safety, aesthetic score and voiceover on the
+ * same machine at $0. Used only when LOCAL_AI_URL is set; every call fails
+ * open to the paid path. On unless FEATURE_FLAG_LOCAL_AI_ENABLED=false;
+ * _WS_<id> overrides per workspace.
+ */
+export function isLocalAiEnabled(workspaceId?: string): boolean {
+  if (!(process.env.LOCAL_AI_URL ?? "").trim()) return false;
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_LOCAL_AI_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_LOCAL_AI_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Meme templates (ADR-0047): a meme may be made on a real template picture
+ * (classic, words drawn by code) or a brand-themed remix of one. On unless set
+ * to "false"; `FEATURE_FLAG_MEME_TEMPLATES_ENABLED_WS_<id>` overrides it for one
+ * workspace. Off means every meme is an original scene, as before.
+ */
+export function isMemeTemplatesEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_MEME_TEMPLATES_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_MEME_TEMPLATES_ENABLED ?? "").trim().toLowerCase());
 }

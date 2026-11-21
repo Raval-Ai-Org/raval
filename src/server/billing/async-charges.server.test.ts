@@ -1,3 +1,4 @@
+import { PLANS } from "@/lib/billing/catalog";
 import { describe, expect, it, vi } from "vitest";
 import { outcomeFor } from "./async-charges.server";
 import { lowBalanceLevel, monthlyAllowance } from "./notify.server";
@@ -125,8 +126,9 @@ describe("billing notices", () => {
     expect(lowBalanceLevel(400, 2000)).toBe("meter_80");
     expect(lowBalanceLevel(0, 2000)).toBe("meter_100");
     expect(lowBalanceLevel(0, 0)).toBeNull();
-    expect(monthlyAllowance("free", "credits")).toBe(100);
-    expect(monthlyAllowance("growth", "video")).toBe(200);
+    expect(monthlyAllowance("free", "credits")).toBe(0);
+    expect(monthlyAllowance("growth", "credits")).toBe(PLANS.growth.allowances.credits);
+    expect(monthlyAllowance("growth", "video")).toBe(0);
   });
 
   it("rewards referrals only after the refund window and under the yearly cap", () => {

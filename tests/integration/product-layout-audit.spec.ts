@@ -152,13 +152,9 @@ async function layoutProblems(page: Page, rootSelector?: string) {
 }
 
 const moduleScenes: Scene[] = [
-  "ugc-product",
+  "ugc-formats",
+  "ugc-create",
   "ugc-empty",
-  "ugc-brief",
-  "ugc-concepts",
-  "ugc-script",
-  "ugc-generate",
-  "ugc-blocked",
   "ugc-failed",
   "geo-scan",
   "agent",

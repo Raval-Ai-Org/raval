@@ -1,5 +1,4 @@
 import "server-only";
-import { CREATION_PLANS } from "@/lib/billing/creation";
 
 // Billing notices: stored in account_notifications (shown in Plan & billing)
 // and emailed once. The table's unique (account, user, kind, window_key) is
@@ -7,7 +6,7 @@ import { CREATION_PLANS } from "@/lib/billing/creation";
 // matter how many actions cross it.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PLANS, SIGNUP_GRANT, SOFT_LIMIT_RATIO, type Meter } from "@/lib/billing/catalog";
+import { PLANS, SOFT_LIMIT_RATIO, type Meter } from "@/lib/billing/catalog";
 import { formatMeter } from "@/lib/billing/present";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { appUrl, sendEmail, type EmailMessage } from "@/server/notify/email.server";
@@ -71,11 +70,11 @@ export async function notifyAdmins(message: Omit<EmailMessage, "to">): Promise<v
   if (to.length) await sendEmail({ ...message, to });
 }
 
-/** This month's allowance for a meter (Free credits are the one-time signup grant). */
+/** This month's allowance for a meter (legacy meters get no new grants, so 0). */
 export function monthlyAllowance(plan: keyof typeof PLANS, meter: Meter): number {
-  if (meter === "creation") return CREATION_PLANS[plan].points;
+  if (meter === "creation") return 0;
   const a = PLANS[plan].allowances;
-  if (meter === "credits") return plan === "free" ? SIGNUP_GRANT.credits : a.credits;
+  if (meter === "credits") return a.credits;
   if (meter === "video") return a.videoUnits;
   if (meter === "premium_video") return a.premiumVideos;
   if (meter === "pro_messages") return a.proMessages;

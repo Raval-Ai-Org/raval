@@ -20,7 +20,9 @@ import { adminDb, adminRpc, httpErrorFromPg } from "./db.server";
 
 type Actor = { actorId: string; actorRole: string; audit: AuditContext };
 
-type OverrideRow = { route_key: string; models: string[] | null; effort: Effort | null };
+/** An override never turns reasoning off (the database allows low, medium and high). */
+type OverrideEffort = Exclude<Effort, "none">;
+type OverrideRow = { route_key: string; models: string[] | null; effort: OverrideEffort | null };
 type CapRow = {
   scope: "global" | "workspace";
   workspace_id: string | null;
@@ -64,7 +66,7 @@ export async function getAiControls(): Promise<AdminAiControls> {
       const key = routeEnvKey(route);
       const envModels = envList(process.env[`AI_MODEL_${key}`]);
       const envEffort = process.env[`AI_EFFORT_${key}`]?.trim().toLowerCase() ?? "";
-      const hasEnvEffort = ["low", "medium", "high"].includes(envEffort);
+      const hasEnvEffort = ["none", "low", "medium", "high"].includes(envEffort);
       const overrideModels = row?.models?.filter((m) => allowed.has(m)) ?? null;
       const models = envModels ?? (overrideModels?.length ? overrideModels : base?.models) ?? [];
       const effort = (hasEnvEffort ? (envEffort as Effort) : (row?.effort ?? base?.effort)) ?? null;
@@ -113,7 +115,7 @@ export type RouteOverrideInput = {
   route: string;
   /** null for both models and effort clears the override. */
   models: string[] | null;
-  effort: Effort | null;
+  effort: OverrideEffort | null;
   reason: string;
 };
 

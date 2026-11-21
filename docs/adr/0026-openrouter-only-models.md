@@ -26,6 +26,13 @@
 
 ## Why these tiers
 
+> **Superseded tier list.** The table below is the original 2026-09-25
+> decision. The tiers were re-chosen in the cost reviews of 2026-11-03 and
+> 2026-11-12 ([docs/ai-cost/model-swap-2026-11-12.md](../ai-cost/model-swap-2026-11-12.md));
+> the current plan per route is `src/server/ai/task-models.ts` and
+> [MODEL-USAGE-AUDIT.md](../../MODEL-USAGE-AUDIT.md). The decision itself
+> (OpenRouter only, one plan per route label) is unchanged.
+
 | Tier | Model | Used for | Why |
 | --- | --- | --- | --- |
 | PREMIUM | `anthropic/claude-opus-5.5` | Brand DNA, writing voice, articles that go live, GEO fixes and the coding agent, campaign/coach strategy, market intelligence, experiment hypotheses | Work everything else builds on, or that ships to a customer's site; worth the price ($4/$20 per 1M). |

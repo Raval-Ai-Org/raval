@@ -41,17 +41,20 @@ export async function reconcileBillingCapacity(args: {
 export async function reconcilePendingBillingCapacity(
   limit = 50,
 ): Promise<{ checked: number; failed: number }> {
-  let query = admin
-    .from("billing_accounts")
-    .select("owner_user_id")
-    .order("capacity_reconciled_at", { ascending: true, nullsFirst: true })
-    .limit(limit);
-  if (globalBillingMode() !== "on") query = query.eq("enforcement_override", "on");
-  const { data, error } = await query;
+  // Only accounts whose limits may have changed since their last check (edited,
+  // a comp/trial/grace/override boundary passed, or a 6-hour safety re-check),
+  // decided in SQL: billing_accounts_due_capacity (20261118140000).
+  const { data, error } = await admin.rpc(
+    "billing_accounts_due_capacity" as never,
+    {
+      p_limit: limit,
+      p_only_enforced: globalBillingMode() !== "on",
+    } as never,
+  );
   if (error) throw new Error("Could not load accounts for capacity reconciliation.");
   let checked = 0;
   let failed = 0;
-  for (const row of data ?? []) {
+  for (const row of (data ?? []) as { owner_user_id: string }[]) {
     try {
       await reconcileBillingCapacity({ ownerUserId: String(row.owner_user_id) });
       checked++;

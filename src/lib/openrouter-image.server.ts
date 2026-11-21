@@ -2,8 +2,8 @@
 // Images API (POST /api/v1/images, confirmed 2026-09-25: synchronous, returns
 // base64 in data[].b64_json with usage.cost).
 //
-// Pipeline: route a model (model-router.server.ts: GPT Image 2.5 Flare or
-// Sunburst, each falling back to the other) → image budget → per-tenant cache
+// Pipeline: route a model (model-router.server.ts: Recraft V4.1 for plain
+// pictures, GPT Image 2.5 Flare for references and edits, Sunburst for premium) → image budget → per-tenant cache
 // and in-flight dedupe → OpenRouter → metering from usage.cost.
 //
 // Two entry points:
@@ -22,6 +22,7 @@ import {
   MediaSafetyError,
 } from "@/server/guardrails/media-safety.server";
 import { randomUUID } from "node:crypto";
+import { normalizeReferenceImages } from "./image-reference.server";
 import { fetchWithRetry, upstreamDetail } from "@/server/upstream";
 import { cache, digest, recordCacheLookup } from "@/server/cache/store";
 import { enforceBudget } from "@/server/ai/budget";
@@ -30,6 +31,12 @@ import { round6, unitPrice } from "@/server/ai/pricing";
 import { getRequestScope } from "@/server/request-context";
 import { log } from "@/server/observability/logger";
 import {
+  kieImagesReady,
+  markImageFundsOut,
+  openRouterImagesPaused,
+} from "@/server/ai/image-funds.server";
+import { imageProvider, kieImage, kieServedModel } from "./kie-image.server";
+import {
   AiGatewayError,
   getOpenRouterKey,
   mapOpenRouterError,
@@ -37,6 +44,7 @@ import {
   openRouterHeaders,
 } from "./ai-gateway.server";
 import {
+  isRecraftModel,
   routeImageModel,
   routeStandardImageModel,
   type ImageRoutingInput,
@@ -73,10 +81,14 @@ export type GeneratedImage = { b64: string; mimeType: string; model: string; cos
  * 4:5, so Studio's 4:5 portrait (1024x1280) renders as 3:4, the closest
  * supported portrait ratio. A Pin (1024x1536) is the models' native 2:3.
  */
-export function aspectRatioFor(size: ImageSize): "1:1" | "16:9" | "9:16" | "3:4" | "2:3" {
+export function aspectRatioFor(
+  size: ImageSize,
+  model = "",
+): "1:1" | "16:9" | "9:16" | "3:4" | "4:5" | "2:3" {
   if (size === "1792x1024") return "16:9";
   if (size === "1024x1792") return "9:16";
-  if (size === "1024x1280") return "3:4";
+  // Recraft draws Studio's 4:5 portrait natively.
+  if (size === "1024x1280") return isRecraftModel(model) ? "4:5" : "3:4";
   if (size === "1024x1536") return "2:3";
   return "1:1";
 }
@@ -87,7 +99,11 @@ function usableReferences(refs: string[] | undefined): string[] {
     .slice(0, MAX_REFERENCES);
 }
 
+/** Recraft V4.1's list price per picture (OpenRouter, 2026-11-19). */
+const RECRAFT_PRICE_USD = 0.035;
+
 function fallbackPrice(model: string): number {
+  if (isRecraftModel(model)) return RECRAFT_PRICE_USD;
   return unitPrice(
     /sunburst|premium/i.test(model) ? "openrouter:image:premium" : "openrouter:image",
   );
@@ -102,6 +118,21 @@ const TERMINAL_CODES = new Set([
   "refusal",
 ]);
 
+/**
+ * Recraft is on test: a request it refuses (an unlisted field, a prompt it
+ * won't take) goes on to Flare instead of failing the piece. Missing keys and
+ * credits stay terminal for every model.
+ */
+function isTerminal(error: unknown, model: string): boolean {
+  if (!(error instanceof AiGatewayError)) return false;
+  const code = error.code ?? "";
+  if (isRecraftModel(model))
+    return (
+      code === "missing_api_key" || code === "invalid_api_key" || code === "insufficient_credits"
+    );
+  return TERMINAL_CODES.has(code);
+}
+
 /** One Images API call. Exported for tests via setImageTransport. */
 export type ImageRequest = {
   model: string;
@@ -115,7 +146,30 @@ export type ImageRequest = {
 
 export type ImageTransport = (req: ImageRequest) => Promise<GeneratedImage>;
 
+/**
+ * Recraft refuses fields it doesn't list (quality, background, resolution,
+ * output_format) and takes at most one reference, so it gets only these.
+ */
+function recraftBody(req: ImageRequest): Record<string, unknown> {
+  return {
+    model: req.model,
+    prompt: req.prompt.slice(0, 10_000),
+    aspect_ratio: req.aspectRatio,
+    n: 1,
+  };
+}
+
+/** Whether a model can do this request at all (Recraft: no transparency, no references). */
+export function modelCanServe(
+  model: string,
+  req: { references: string[]; background?: "opaque" | "transparent" },
+): boolean {
+  if (!isRecraftModel(model)) return true;
+  return req.references.length === 0 && req.background !== "transparent";
+}
+
 async function openRouterImage(req: ImageRequest): Promise<GeneratedImage> {
+  if (isRecraftModel(req.model)) return sendImageBody(req, recraftBody(req));
   const body: Record<string, unknown> = {
     model: req.model,
     prompt: req.prompt.slice(0, 10_000),
@@ -127,11 +181,21 @@ async function openRouterImage(req: ImageRequest): Promise<GeneratedImage> {
     n: 1,
   };
   if (req.references.length) {
-    body.input_references = req.references.map((url) => ({
+    // Any size, orientation or format a person uploaded is made readable
+    // first (upright, ≤2048 px, JPEG/PNG), so a photo never fails the render.
+    const readable = await normalizeReferenceImages(req.references);
+    body.input_references = readable.map((url) => ({
       type: "image_url",
       image_url: { url },
     }));
   }
+  return sendImageBody(req, body);
+}
+
+async function sendImageBody(
+  req: ImageRequest,
+  body: Record<string, unknown>,
+): Promise<GeneratedImage> {
   const res = await fetchWithRetry(
     `${OPENROUTER_BASE}/images`,
     { method: "POST", headers: openRouterHeaders(getOpenRouterKey()), body: JSON.stringify(body) },
@@ -208,7 +272,28 @@ export type GenerateImageOpts = {
   /** Skip the budget check (a restart of an already-budgeted task). */
   budgeted?: boolean;
   background?: "opaque" | "transparent";
+  /**
+   * The image's own metering label (`studio.image.render`, `.rerender`,
+   * `.version`, …), so spend per kind of picture can be read from
+   * ai_usage_events. Defaults to the request scope's route.
+   */
+  meterRoute?: ImageMeterRoute;
+  /** Overrides the quality the routing would pick (e.g. "low" for a no-words backdrop). */
+  quality?: ImageQuality;
 };
+
+/** Metering labels for images (listed in NON_MODEL_ROUTES: no text model plan). */
+export type ImageMeterRoute =
+  | "studio.image.render"
+  | "studio.image.rerender"
+  | "studio.image.version"
+  | "studio.image.backdrop"
+  | "studio.image.slide"
+  | "studio.image.edit"
+  | "studio.image.cutout"
+  | "studio.image.design"
+  | "studio.image.storyboard"
+  | "studio.image.reframe";
 
 export type GenerateImageResult = GeneratedImage & {
   route: string;
@@ -243,24 +328,40 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     ...opts.routing,
     referenceAssets: references,
     hasReference: references.length > 0,
+    transparent: opts.background === "transparent",
   });
   const quality: ImageQuality =
-    opts.routing?.requiredQuality === "maximum" || opts.routing?.requiredQuality === "high"
+    opts.quality ??
+    (opts.routing?.requiredQuality === "maximum" || opts.routing?.requiredQuality === "high"
       ? "high"
-      : "medium";
+      : "medium");
+  const route = opts.meterRoute;
   // Billed per image: the workspace's monthly image quota and spend ceiling apply.
   if (!opts.budgeted) await enforceBudget("image");
 
-  const candidates = (opts.model ? [opts.model] : [plan.model, ...plan.fallbacks]).slice(
-    0,
-    Math.max(1, Math.min(3, opts.maxAttempts ?? 3)),
-  );
-  const send = transportOverride ?? openRouterImage;
+  // KIE draws when it is chosen (IMAGE_PROVIDER=kie), or when OpenRouter is
+  // short of money and KIE can take over: a low balance never stops a picture
+  // that KIE can make.
+  let onKie = imageProvider() === "kie" || (kieImagesReady() && (await openRouterImagesPaused()));
+  const forKie = (list: string[]) =>
+    list
+      // KIE has no Recraft: a Recraft pick is drawn by Flare there.
+      .map(kieServedModel)
+      .filter((model, index, all) => all.indexOf(model) === index);
+  const limit = Math.max(1, Math.min(3, opts.maxAttempts ?? 3));
+  let candidates = (opts.model ? [opts.model] : [plan.model, ...plan.fallbacks])
+    .map((model) => (onKie ? kieServedModel(model) : model))
+    .filter((model, index, all) => all.indexOf(model) === index)
+    .filter((model) => modelCanServe(model, { references, background: opts.background }))
+    .slice(0, limit);
+  let send = transportOverride ?? (onKie ? kieImage : openRouterImage);
+  let provider: "kie" | "openrouter" = onKie ? "kie" : "openrouter";
   let lastError: unknown;
   let attempt = 0;
-  for (const model of candidates) {
+  for (let index = 0; index < candidates.length; index++) {
+    const model = candidates[index];
     attempt += 1;
-    const aspectRatio = aspectRatioFor(size);
+    const aspectRatio = aspectRatioFor(size, model);
     const key = `or:img:${await digest(
       `${tenant()}|${model}|${aspectRatio}|${quality}|${opts.background ?? "opaque"}|${references.join(",")}|${opts.prompt}`,
     )}`;
@@ -269,9 +370,10 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
     if (hit) {
       await assertSafeMediaImages([`data:${hit.mimeType};base64,${hit.b64}`], { stage: "output" });
       recordUsage({
-        provider: "openrouter",
+        provider,
         model,
         kind: "image",
+        route,
         cached: true,
         savedUsd: hit.costUsd,
       });
@@ -292,9 +394,10 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
               background: opts.background,
             });
             recordUsage({
-              provider: "openrouter",
+              provider,
               model,
               kind: "image",
+              route,
               units: 1,
               estCostUsd: image.costUsd,
               latencyMs: Date.now() - started,
@@ -306,9 +409,10 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
             return image;
           } catch (error) {
             recordUsage({
-              provider: "openrouter",
+              provider,
               model,
               kind: "image",
+              route,
               status: "error",
               latencyMs: Date.now() - started,
             });
@@ -332,7 +436,20 @@ export async function generateImage(opts: GenerateImageOpts): Promise<GenerateIm
         code: error instanceof AiGatewayError ? error.code : undefined,
         message: upstreamDetail(error),
       });
-      if (error instanceof AiGatewayError && TERMINAL_CODES.has(error.code ?? "")) throw error;
+      if (!onKie && error instanceof AiGatewayError && error.code === "insufficient_credits") {
+        await markImageFundsOut();
+        // OpenRouter is out of money: the same picture goes to KIE at once.
+        if (kieImagesReady()) {
+          onKie = true;
+          provider = "kie";
+          send = transportOverride ?? kieImage;
+          candidates = [...candidates.slice(0, index), ...forKie(candidates.slice(index))];
+          index -= 1;
+          log.warn("openrouter.image.kie_takeover", { model, attempt });
+          continue;
+        }
+      }
+      if (isTerminal(error, model)) throw error;
     }
   }
   throw lastError instanceof Error
@@ -421,6 +538,8 @@ export async function startImageTask(opts: {
   referenceAssets?: string[];
   model?: string;
   background?: "opaque" | "transparent";
+  meterRoute?: ImageMeterRoute;
+  quality?: ImageQuality;
 }): Promise<StartedImageTask> {
   const references = usableReferences(opts.referenceAssets);
   const plan = (opts.costTier === "standard" ? routeStandardImageModel : routeImageModel)({
@@ -428,11 +547,23 @@ export async function startImageTask(opts: {
     hasReference: references.length > 0,
     referenceAssets: references,
     editing: references.length > 0,
+    transparent: opts.background === "transparent",
   });
   await enforceBudget("image");
   // Fail fast when the key is missing instead of parking a doomed task.
-  getOpenRouterKey();
-  const model = opts.model ?? plan.model;
+  if (imageProvider() === "kie") {
+    if (!process.env.KIE_API_KEY?.trim())
+      throw new AiGatewayError(503, "KIE_API_KEY is not set.", "missing_api_key");
+  } else getOpenRouterKey();
+  // A restart on a model that can't do this job (Recraft with a reference or
+  // a transparent layer) runs on the plan's own model instead.
+  const onKie = imageProvider() === "kie";
+  const served = (m: string) => (onKie ? kieServedModel(m) : m);
+  const model = served(
+    opts.model && modelCanServe(opts.model, { references, background: opts.background })
+      ? opts.model
+      : plan.model,
+  );
   const taskId = `${IMAGE_TASK_PREFIX}${randomUUID()}`;
   const scope = getRequestScope();
   await inBackground(async () => {
@@ -450,6 +581,8 @@ export async function startImageTask(opts: {
           maxAttempts: 1,
           budgeted: true,
           background: opts.background,
+          meterRoute: opts.meterRoute,
+          quality: opts.quality,
         });
         parked = {
           state: "success",
@@ -474,7 +607,7 @@ export async function startImageTask(opts: {
           ...(error instanceof MediaSafetyError
             ? { code: error.code, retryable: error.code === "safety_unavailable" }
             : error instanceof AiGatewayError
-              ? { code: error.code, retryable: !TERMINAL_CODES.has(error.code ?? "") }
+              ? { code: error.code, retryable: !isTerminal(error, model) }
               : {}),
           message:
             error instanceof AiGatewayError || error instanceof MediaSafetyError
@@ -490,7 +623,9 @@ export async function startImageTask(opts: {
     taskId,
     model,
     route: plan.route,
-    fallbacks: [plan.model, ...plan.fallbacks].filter((m) => m !== model),
+    fallbacks: [plan.model, ...plan.fallbacks]
+      .map(served)
+      .filter((m, index, all) => m !== model && all.indexOf(m) === index),
   };
 }
 

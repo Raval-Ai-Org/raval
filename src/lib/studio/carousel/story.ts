@@ -9,6 +9,7 @@
 import { applyLean } from "@/lib/taste/bias";
 import type { Lean } from "@/lib/taste/contracts";
 import type { CarouselSlide } from "../jobs";
+import { categoryById } from "../categories";
 
 export type SlideRole = "cover" | "context" | "point" | "proof" | "recap" | "cta";
 
@@ -266,11 +267,15 @@ export function pickCarouselStructure(args: {
   brief?: string | null;
   /** The brand's taste for carousel stories (ADR-0038). */
   lean?: Lean | null;
+  /** The category the person picked (categories.ts): its structure comes next after a template's. */
+  category?: string | null;
 }): CarouselStructure {
   const kept = getCarouselStructure(args.preferred);
   if (kept) return kept;
   const fromTemplate = getCarouselStructure(TEMPLATE_STRUCTURE[args.template ?? ""]);
   if (fromTemplate) return fromTemplate;
+  const fromCategory = getCarouselStructure(categoryById(args.category)?.carouselStructure);
+  if (fromCategory) return fromCategory;
   // "A four-step checklist" must come out as a checklist, not as three mistakes.
   const asked = getCarouselStructure(structureFromBrief(args.brief));
   if (asked) return asked;
@@ -311,7 +316,7 @@ export function slidePlanText(count: number): string {
     context:
       "context. Why this matters now: the cost of the problem, or the moment the reader will recognise. It must make the next slide feel needed.",
     point:
-      "point. One idea only. Heading at most 8 words, body at most 30 words with a concrete detail, example or instruction.",
+      "point. One idea only. Heading at most 8 words, body at most 14 words with a concrete detail, example or instruction.",
     proof: "proof. One concrete example, result or demonstration from the supplied facts.",
     recap:
       "recap. The whole carousel in 3 or 4 lines. `body` is those lines separated by line breaks, each at most 6 words, in the same order as the slides.",
@@ -352,7 +357,11 @@ function emphasisIn(heading: string, raw: unknown): string | undefined {
  * highlighted words that exist in the heading.
  */
 export function normalizeSlides(raw: unknown, count?: number): CarouselSlide[] {
-  const list = Array.isArray(raw) ? raw : [];
+  const all = Array.isArray(raw) ? raw : [];
+  // Never more slides than the person picked: the extras before the last
+  // slide go, so the close stays the close.
+  const limit = count ? Math.max(3, Math.min(10, Math.round(count))) : 10;
+  const list = all.length > limit ? [...all.slice(0, limit - 1), all[all.length - 1]] : all;
   const plan = slidePlan(count ?? list.length);
   return list.slice(0, 10).map((item, i) => {
     const row = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
@@ -374,7 +383,7 @@ export function normalizeSlides(raw: unknown, count?: number): CarouselSlide[] {
             .join("\n")
         : oneLine(row.body, 320);
     const kicker = role === "cta" ? "" : oneLine(row.kicker, 26);
-    const visual = oneLine(row.visual, 240);
+    const visual = oneLine(row.visual, 1000);
     const emphasis = emphasisIn(heading, row.emphasis);
     const photo =
       Number.isInteger(row.photo) && (row.photo as number) >= 0 && (row.photo as number) < 6

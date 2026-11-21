@@ -44,7 +44,11 @@ import {
   cancelSession,
   chooseVersion,
   discardSession,
+  focusSession,
   generate,
+  getActiveSessionId,
+  getSession,
+  minimizeSession,
   openComposer,
   patchJobOutput,
   refreshSessionJob,
@@ -77,6 +81,9 @@ import { SendToApps } from "./SendToApps";
 import { useConnectedApps } from "@/components/app/connectors/use-connected-apps";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { VersionStrip } from "./VersionStrip";
+import { StoryboardView, type BoardFrame } from "./storyboard/StoryboardView";
+import { boardFromStoryboard } from "@/lib/studio/video/board";
+import { videoKind } from "@/lib/studio/video/kinds";
 
 export type ReviewRow = {
   id: string;
@@ -116,7 +123,8 @@ const TOOL =
   "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-foreground transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
 const TOOL_ICON =
   "grid size-8 place-items-center rounded-full text-foreground/80 transition-colors duration-[--motion-duration-fast] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 [&_svg]:size-3.5";
-const FLOAT = "rounded-full bg-surface-3/90 p-1 shadow-2 ring-1 ring-border/70 backdrop-blur";
+const FLOAT =
+  "rounded-full border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)]/90 p-1 shadow-[var(--ds-card-shadow)] backdrop-blur-xl";
 
 /** One storyboard line, short enough for a check row. */
 function shortLine(text: string): string {
@@ -173,7 +181,7 @@ function CheckRow({ check, index }: { check: Check; index: number }) {
       <span
         className={cn(
           "grid size-5 shrink-0 place-items-center rounded-full",
-          check.state === "ok" && "bg-primary-surface text-primary ring-1 ring-primary-border",
+          check.state === "ok" && "bg-primary-surface text-primary-ink ring-1 ring-primary-border",
           check.state === "warn" && "bg-warning-surface text-warning ring-1 ring-warning-border",
           check.state === "fail" && "bg-danger-surface text-danger ring-1 ring-danger-border",
           check.state === "busy" && "bg-surface-2 text-muted-foreground ring-1 ring-border",
@@ -253,6 +261,8 @@ export function ReviewPanel({
   const [expandChoices, setExpandChoices] = useState<PlatformId[]>([]);
   const [showExpand, setShowExpand] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Holo: a finished picture is shown alone; "Show as post" brings the mock back.
+  const [asPost, setAsPost] = useState(false);
   const [justApproved, setJustApproved] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // A result that finished moments ago gets a short "ready" beat on arrival.
@@ -718,6 +728,12 @@ export function ReviewPanel({
     }
   })();
 
+  const singlePicture =
+    !["article", "script", "story", "carousel", "ad"].includes(session.type) &&
+    media?.kind === "image";
+  const pictureOnly =
+    singlePicture && media?.status === "ready" && !!media.url && !editing && !asPost;
+
   const hasMedia = !!media && media.status !== "failed";
   // One Canva control per post: a carousel opens all its slides, anything
   // else its one picture.
@@ -732,6 +748,65 @@ export function ReviewPanel({
           ? { assetId: media.assetId, contentId: rows[0]?.id }
           : null;
   const mediaReady = media?.status === "ready" && !!media.url;
+  // A long or premium video waits here as its storyboard (board.ts): every
+  // scene read and drawn, made only when the person presses Create.
+  const storyboardPreview =
+    draft.storyboard?.status === "preview" && !!draft.videoPlan?.storyboard
+      ? draft.videoPlan
+      : null;
+  const board = useMemo(
+    () =>
+      storyboardPreview
+        ? boardFromStoryboard(storyboardPreview.storyboard, storyboardPreview.clipSeconds)
+        : null,
+    [storyboardPreview],
+  );
+  const boardFrames = useMemo(() => {
+    const out: Record<string, BoardFrame> = {};
+    for (const m of draft.media ?? [])
+      out[m.slot] = {
+        status: m.status === "ready" ? "ready" : m.status === "failed" ? "failed" : "pending",
+        url: m.url,
+      };
+    return out;
+  }, [draft.media]);
+  // Holo: Create hands the video to the corner list and closes Studio, like
+  // Generate does. Opening it from the list shows the video being made, not
+  // the storyboard again; a refusal brings the storyboard back to say why.
+  const makeVideo = () => {
+    const id = session.id;
+    updateSession(id, { controls: { ...session.controls, videoPreview: false } });
+    const started = generate(id, {
+      kind: "refine",
+      refine: {
+        instruction:
+          "Make the video from this approved storyboard. Keep every scene, word and the look exactly as planned.",
+        target: "media",
+      },
+      progress: true,
+    });
+    if (getSession(id)?.pendingKey) minimizeSession(id);
+    void started.then(() => {
+      const s = getSession(id);
+      if (!s || (!s.error && !s.billing)) return;
+      const active = getActiveSessionId();
+      if (!active || active === id) return focusSession(id);
+      toast.error(s.billing ? "That video needs more credits." : (s.error ?? "It didn't start."), {
+        action: { label: "Open", onClick: () => focusSession(id) },
+      });
+    });
+  };
+  const videoPriceLabel = studioPriceLabel({
+    type: session.type,
+    controls: { ...session.controls, videoPreview: false },
+  });
+  const focusEditChat = () => {
+    const box = document.querySelector<HTMLTextAreaElement>(
+      'section[aria-label="Edit with chat"] textarea',
+    );
+    box?.scrollIntoView({ behavior: "smooth", block: "center" });
+    box?.focus();
+  };
   const firstScheduled = rows.find((r) => r.scheduled_at)?.scheduled_at;
   const words = draft.article?.markdown.split(/\s+/).filter(Boolean).length ?? 0;
   const tookSeconds =
@@ -741,6 +816,13 @@ export function ReviewPanel({
 
   /* ── Status: one unmistakable statement of where this piece stands ── */
   const hero = (() => {
+    if (board)
+      return {
+        tone: "ok" as Tone,
+        icon: <Sparkles className="size-4" />,
+        title: "Your storyboard is ready",
+        sub: `${board.scenes.length} scenes · nothing is made or charged until you press Create video`,
+      };
     if (session.type === "script")
       return {
         tone: "ok" as Tone,
@@ -1003,29 +1085,11 @@ export function ReviewPanel({
             Create another {format.noun}
           </Button>
         </motion.div>
-      ) : draft.storyboard?.status === "preview" ? (
+      ) : board ? null : draft.storyboard?.status === "preview" ? (
         <motion.div key="make-video" {...fadeSwap} className="flex w-full gap-2">
-          <Button
-            className="w-full"
-            disabled={revising || !mediaReady}
-            onClick={() => {
-              updateSession(session.id, { controls: { ...session.controls, videoPreview: false } });
-              void generate(session.id, {
-                kind: "refine",
-                refine: {
-                  instruction:
-                    "Use this approved first frame to make the video. Keep the concept, product identity and brand direction.",
-                  target: "media",
-                },
-              });
-            }}
-          >
+          <Button className="w-full" disabled={revising || !mediaReady} onClick={makeVideo}>
             <Sparkles />
-            Make video ·{" "}
-            {studioPriceLabel({
-              type: session.type,
-              controls: { ...session.controls, videoPreview: false },
-            })}
+            Make video · {videoPriceLabel}
           </Button>
         </motion.div>
       ) : session.type === "script" && draft.script ? (
@@ -1172,14 +1236,9 @@ export function ReviewPanel({
     // action pinned. Desktop: canvas and inspector scroll independently.
     <div className="flex h-full min-h-0 flex-col overflow-y-auto @5xl/composer:grid @5xl/composer:grid-cols-[minmax(0,1fr)_380px] @5xl/composer:grid-rows-[minmax(0,1fr)] @5xl/composer:overflow-hidden">
       {/* ── Canvas ── */}
-      <div className="studio-canvas relative flex shrink-0 flex-col @5xl/composer:min-h-0 @5xl/composer:overflow-y-auto">
-        <div
-          aria-hidden
-          className={`studio-aurora studio-aurora-soft studio-tone-${session.type} !bottom-auto h-[560px]`}
-        />
-
+      <div className="relative flex shrink-0 flex-col [scrollbar-width:thin] @5xl/composer:min-h-0 @5xl/composer:overflow-y-auto @5xl/composer:pt-16">
         {/* Floating toolbar */}
-        <div className="pointer-events-none sticky top-0 z-20 flex flex-wrap items-center gap-2 px-3 pb-2 pt-3 @3xl/composer:px-5 @3xl/composer:pt-4">
+        <div className="pointer-events-none sticky top-0 z-20 flex flex-wrap items-center gap-2 px-3 pb-2 pt-3 @5xl/composer:top-16 @3xl/composer:px-5 @3xl/composer:pt-4">
           {multi ? (
             <div
               role="tablist"
@@ -1249,96 +1308,6 @@ export function ReviewPanel({
               <PlatformAppIcon platform={platforms[0]} size={28} label />
             </span>
           ) : null}
-
-          <AnimatePresence initial={false}>
-            {!editing ? (
-              <motion.div
-                key="tools"
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: duration.base }}
-                className={cn("pointer-events-auto ml-auto flex items-center", FLOAT)}
-              >
-                {session.type !== "script" ? (
-                  <button
-                    type="button"
-                    className={TOOL}
-                    onClick={() => setEditing(true)}
-                    disabled={revising || locked}
-                  >
-                    <Pencil />
-                    Edit
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={TOOL}
-                  onClick={() => void generate(session.id, { kind: "regenerate" })}
-                  disabled={revising || locked}
-                  title={`Same description, a new version · ${newTakePrice}`}
-                >
-                  <RefreshCw />
-                  <span className="hidden sm:inline">New take · {newTakePrice}</span>
-                </button>
-                <span aria-hidden className="mx-1 h-4 w-px bg-border" />
-                <button
-                  type="button"
-                  className={TOOL_ICON}
-                  onClick={copyText}
-                  aria-label="Copy text"
-                  title="Copy text"
-                >
-                  <Copy />
-                </button>
-                {mediaReady ? (
-                  <>
-                    <DownloadAssetButton
-                      url={media!.url}
-                      filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
-                      compact
-                    />
-                    <button
-                      type="button"
-                      className={TOOL_ICON}
-                      onClick={() => setExpanded(true)}
-                      aria-label="Open full size"
-                      title="Open full size"
-                    >
-                      <Maximize2 />
-                    </button>
-                  </>
-                ) : null}
-                {canvaSource ? (
-                  <CanvaEditButton
-                    variant="tool"
-                    {...canvaSource}
-                    onChanged={() => void refreshSessionJob(session.id)}
-                  />
-                ) : null}
-                {mediaReady && !fixtureRows && (
-                  <VisualFeedback
-                    key={job.id}
-                    workspaceId={session.workspaceId}
-                    jobId={job.id}
-                    disabled={revising}
-                  />
-                )}
-                {draft.artwork?.artStoragePath && !fixtureRows && (
-                  <EditVisualText
-                    workspaceId={session.workspaceId}
-                    jobId={job.id}
-                    headline={draft.artwork.headline}
-                    disabled={revising || locked}
-                    onChanged={() => {
-                      void refreshSessionJob(session.id);
-                      void loadRows();
-                    }}
-                  />
-                )}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </div>
 
         {/* Arrival beat */}
@@ -1418,6 +1387,22 @@ export function ReviewPanel({
 
         {/* Stage */}
         <div className="relative flex flex-1 flex-col px-4 pb-28 pt-4 @3xl/composer:px-10 @3xl/composer:pt-6">
+          {board ? (
+            <StoryboardView
+              board={board}
+              frames={boardFrames}
+              ratio={ratio.replace(":", " / ")}
+              meta={[
+                storyboardPreview?.kind ? (videoKind(storyboardPreview.kind)?.label ?? "") : "",
+                storyboardPreview?.voice ? "Voiceover" : "",
+              ]}
+              createLabel={`Create video · ${videoPriceLabel}`}
+              onCreate={makeVideo}
+              onChange={focusEditChat}
+              busy={revising}
+              disabled={revising}
+            />
+          ) : null}
           <AnimatePresence>
             {justApproved && !reduce ? (
               <motion.span
@@ -1443,12 +1428,134 @@ export function ReviewPanel({
             className={cn(
               "relative flex w-full justify-center transition-[opacity,filter] duration-[--motion-duration-slow]",
               revising && "pointer-events-none opacity-45 blur-[1.5px] saturate-50",
+              board && "hidden",
             )}
           >
-            {preview}
+            {pictureOnly ? (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                aria-label="Open full size"
+                className="block overflow-hidden rounded-[18px] shadow-[0_34px_80px_-34px_rgb(0_0_0/0.5)] transition-transform duration-300 hover:scale-[1.01]"
+              >
+                <img
+                  src={media!.url!}
+                  alt={variant?.body?.slice(0, 120) ?? "Your picture"}
+                  className="block max-h-[min(62dvh,640px)] w-auto max-w-full object-contain"
+                />
+              </button>
+            ) : (
+              preview
+            )}
           </motion.div>
+          <div className="relative z-10 mt-6 flex justify-center">
+            <AnimatePresence initial={false}>
+              {!editing ? (
+                <motion.div
+                  key="tools"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: duration.base }}
+                  className={cn(
+                    "pointer-events-auto flex flex-wrap items-center justify-center",
+                    FLOAT,
+                  )}
+                >
+                  {session.type !== "script" ? (
+                    <button
+                      type="button"
+                      className={TOOL}
+                      onClick={() => setEditing(true)}
+                      disabled={revising || locked}
+                    >
+                      <Pencil />
+                      Edit
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={TOOL}
+                    onClick={() => void generate(session.id, { kind: "regenerate" })}
+                    disabled={revising || locked}
+                    title={`Same description, a new version · ${newTakePrice}`}
+                  >
+                    <RefreshCw />
+                    <span className="hidden sm:inline">New take · {newTakePrice}</span>
+                  </button>
+                  {singlePicture && media?.status === "ready" ? (
+                    <button
+                      type="button"
+                      className={TOOL}
+                      onClick={() => setAsPost((v) => !v)}
+                      aria-pressed={asPost}
+                    >
+                      <Eye />
+                      {asPost ? "Picture only" : "Show as post"}
+                    </button>
+                  ) : null}
+                  <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+                  <button
+                    type="button"
+                    className={TOOL_ICON}
+                    onClick={copyText}
+                    aria-label="Copy text"
+                    title="Copy text"
+                  >
+                    <Copy />
+                  </button>
+                  {mediaReady ? (
+                    <>
+                      <DownloadAssetButton
+                        url={media!.url}
+                        filename={`mellox-${media!.kind}-${new Date().toISOString().slice(0, 10)}`}
+                        compact
+                      />
+                      <button
+                        type="button"
+                        className={TOOL_ICON}
+                        onClick={() => setExpanded(true)}
+                        aria-label="Open full size"
+                        title="Open full size"
+                      >
+                        <Maximize2 />
+                      </button>
+                    </>
+                  ) : null}
+                  {canvaSource ? (
+                    <CanvaEditButton
+                      variant="tool"
+                      {...canvaSource}
+                      onChanged={() => void refreshSessionJob(session.id)}
+                    />
+                  ) : null}
+                  {mediaReady && !fixtureRows && (
+                    <VisualFeedback
+                      key={job.id}
+                      workspaceId={session.workspaceId}
+                      jobId={job.id}
+                      disabled={revising}
+                    />
+                  )}
+                  {draft.artwork?.artStoragePath && !fixtureRows && (
+                    <EditVisualText
+                      workspaceId={session.workspaceId}
+                      jobId={job.id}
+                      headline={draft.artwork.headline}
+                      disabled={revising || locked}
+                      onChanged={() => {
+                        void refreshSessionJob(session.id);
+                        void loadRows();
+                      }}
+                    />
+                  )}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
           {!locked && media?.kind === "image" ? (
             <VersionStrip
+              rail={pictureOnly}
               media={draft.media}
               ratio={ratio.replace(":", " / ")}
               disabled={revising || editing}
@@ -1500,7 +1607,7 @@ export function ReviewPanel({
               aria-live="polite"
             >
               <div className="flex items-center gap-3 py-1.5 pl-4 pr-1.5">
-                <Sparkles className="size-4 text-primary" />
+                <Sparkles className="size-4 text-primary-ink" />
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.span
                     key={session.job?.stage ?? "start"}
@@ -1540,7 +1647,7 @@ export function ReviewPanel({
       {/* ── Inspector ── */}
       <aside
         id="studio-inspector"
-        className="flex flex-col border-t border-border/70 bg-surface-3 @5xl/composer:min-h-0 @5xl/composer:border-l @5xl/composer:border-t-0"
+        className="flex flex-col border-t border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] @5xl/composer:min-h-0 @5xl/composer:border-l @5xl/composer:border-t-0"
       >
         <div className="studio-stagger min-h-0 flex-1 divide-y divide-border/60 @5xl/composer:overflow-y-auto">
           {/* Status */}
@@ -1572,7 +1679,7 @@ export function ReviewPanel({
                 </div>
               </motion.div>
             </AnimatePresence>
-            <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            <div className={cn("mt-4 flex flex-wrap items-center gap-1.5", board && "hidden")}>
               <span className="inline-flex h-6 items-center rounded-full bg-surface-2 px-2.5 text-[11px] font-medium tabular-nums text-muted-foreground">
                 Version {job.attempt}
               </span>
@@ -1584,7 +1691,7 @@ export function ReviewPanel({
               ) : null}
               {draft.angle ? (
                 <span className="inline-flex h-6 items-center gap-1 rounded-full bg-primary-surface px-2.5 text-[11px] font-medium text-foreground ring-1 ring-primary-border">
-                  <Sparkles className="size-3 text-primary" />
+                  <Sparkles className="size-3 text-primary-ink" />
                   {draft.angle}
                 </span>
               ) : null}
@@ -1598,7 +1705,7 @@ export function ReviewPanel({
             <div className="mt-5 hidden @5xl/composer:flex">{actions}</div>
           </div>
 
-          {job.status === "succeeded" && job.content_item_ids?.[0] ? (
+          {!board && job.status === "succeeded" && job.content_item_ids?.[0] ? (
             <InspectorSection title="Make more from this">
               <MakeMoreFrom
                 session={session}
@@ -1610,7 +1717,8 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {job.status === "succeeded" &&
+          {!board &&
+          job.status === "succeeded" &&
           job.content_item_ids?.[0] &&
           connectedApps.has("mailchimp") &&
           session.type !== "story" &&
@@ -1624,7 +1732,8 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {job.status === "succeeded" &&
+          {!board &&
+          job.status === "succeeded" &&
           job.content_item_ids?.[0] &&
           (connectedApps.has("googledrive") ||
             connectedApps.has("gmail") ||
@@ -1642,7 +1751,7 @@ export function ReviewPanel({
           ) : null}
 
           {/* Other formats make a Story through "Make more from this". */}
-          {session.type === "story" || (session.type === "video" && rows.length) ? (
+          {board ? null : session.type === "story" || (session.type === "video" && rows.length) ? (
             <InspectorSection title={session.type === "story" ? "About Stories" : "Stories"}>
               <StoryNotes
                 workspaceId={session.workspaceId}
@@ -1665,7 +1774,7 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {hasDelivery && session.type !== "article" ? (
+          {board ? null : hasDelivery && session.type !== "article" ? (
             <InspectorSection title="Delivery">
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {groupStatus === "published"
@@ -1713,7 +1822,7 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          {morePlatforms.length > 0 && !locked ? (
+          {!board && morePlatforms.length > 0 && !locked ? (
             <InspectorSection title="More platforms">
               <p className="text-sm leading-relaxed text-muted-foreground">
                 Adapt this post for more channels while keeping the existing versions.
@@ -1754,22 +1863,24 @@ export function ReviewPanel({
             </InspectorSection>
           ) : null}
 
-          <InspectorSection
-            title="Checks"
-            aside={
-              <span className={cn("text-xs", failing ? "text-danger" : "text-muted-foreground")}>
-                {failing ? `${failing} to fix` : "All clear"}
-              </span>
-            }
-          >
-            <ul className="-my-1.5">
-              {checks.map((c, i) => (
-                <CheckRow key={c.key} check={c} index={i} />
-              ))}
-            </ul>
-          </InspectorSection>
+          {!board ? (
+            <InspectorSection
+              title="Checks"
+              aside={
+                <span className={cn("text-xs", failing ? "text-danger" : "text-muted-foreground")}>
+                  {failing ? `${failing} to fix` : "All clear"}
+                </span>
+              }
+            >
+              <ul className="-my-1.5">
+                {checks.map((c, i) => (
+                  <CheckRow key={c.key} check={c} index={i} />
+                ))}
+              </ul>
+            </InspectorSection>
+          ) : null}
 
-          {showAudience ? (
+          {showAudience && !board ? (
             <InspectorSection title="Audience">
               <AudienceInspector
                 workspaceId={session.workspaceId}

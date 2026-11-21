@@ -132,8 +132,8 @@ export const HEAD_TO_HEAD = {
     { label: "Audit to drafted fix, one loop", levels: ["f", "n", "n", "n"] as Level[] },
     { label: "Agency / multi client mode", cap: 8 },
     { label: "Enterprise depth GEO analytics", levels: ["p", "n", "f", "n"] as Level[] },
-    { label: "Permanently free plan", levels: ["n", "f", "n", "n"] as Level[] },
-    { label: "Entry price per month", text: ["$49", "$0", "$99", "$69"] },
+    { label: "Image posts and creator videos in one plan", levels: ["f", "p", "n", "n"] as Level[] },
+    { label: "Entry price per month", text: ["$39", "$0", "$99", "$69"] },
   ],
   rowsBy: ["fffffffffffffp", "fpffpnnnnnnnnn", "nppnnnfffnfnnf", "fffpnnnnpnpnnf"],
 };

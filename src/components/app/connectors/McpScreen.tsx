@@ -189,7 +189,7 @@ function Permission({
         <span
           className={cn(
             "grid size-9 shrink-0 place-items-center rounded-full transition-colors duration-300",
-            active ? "bg-primary/15 text-primary" : "bg-[var(--ds-well-bg)] text-muted-foreground",
+            active ? "bg-primary/15 text-primary-ink" : "bg-[var(--ds-well-bg)] text-muted-foreground",
           )}
         >
           <Icon className="size-4" />

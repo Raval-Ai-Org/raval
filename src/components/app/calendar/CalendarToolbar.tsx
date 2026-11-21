@@ -147,7 +147,7 @@ function FilterMenu({
           <button
             type="button"
             onClick={() => onChange({ ...NO_FILTER, query: filter.query })}
-            className="text-[12px] font-medium text-primary hover:underline"
+            className="text-[12px] font-medium text-primary-ink hover:underline"
           >
             Clear filters
           </button>

@@ -49,14 +49,15 @@ function readStoredPreference(): ThemePreference {
   } catch {
     /* private mode, or storage disabled — fall through to the default */
   }
-  return "system";
+  // Mellox 2.0 (ADR-0044): the app is light until someone picks otherwise.
+  return "light";
 }
 
 function systemTheme(): ResolvedTheme {
   try {
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   } catch {
-    return "dark";
+    return "light";
   }
 }
 
@@ -65,10 +66,10 @@ function resolve(preference: ThemePreference, system: ResolvedTheme): ResolvedTh
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // The server renders with the dark class on <html> and the pre-hydration
-  // script corrects it before paint, so starting here matches the markup.
-  const [preference, setPreferenceState] = React.useState<ThemePreference>("system");
-  const [system, setSystem] = React.useState<ResolvedTheme>("dark");
+  // The server renders light and the pre-hydration script corrects it before
+  // paint, so starting here matches the markup.
+  const [preference, setPreferenceState] = React.useState<ThemePreference>("light");
+  const [system, setSystem] = React.useState<ResolvedTheme>("light");
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -121,8 +122,8 @@ export function useTheme(): ThemeContextValue {
   // Report the server default rather than throwing — a missing provider should
   // not take down a panel.
   return {
-    preference: "system",
-    theme: "dark",
+    preference: "light",
+    theme: "light",
     mounted: false,
     setPreference: () => {},
     setTheme: () => {},

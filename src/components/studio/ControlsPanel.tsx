@@ -12,9 +12,11 @@ import type { StudioControls } from "@/lib/studio/jobs";
 import { updateSession, type StudioSession } from "@/lib/studio/session-store";
 import { FieldLabel, PlatformPicker, RatioPicker, Segmented } from "./studio-ui";
 import { SourceClips } from "./SourceClips";
-import { AdFormatPicker, AdObjectivePicker, ProductPicker } from "./ProductAndFormat";
+import { canvasPickers } from "@/lib/studio/start";
+import { AdFormatPicker, AdObjectivePicker } from "./ProductAndFormat";
+import { showsPostCanvas } from "./PostCanvasSettings";
 import { studioPriceLabel } from "@/lib/studio/billing";
-import { shortClipPlan } from "@/lib/studio/short-clip";
+import { needsStoryboard } from "@/lib/studio/video/board";
 import { useEntitlements } from "@/lib/billing/use-entitlements";
 import { Crown } from "@/components/icons";
 import { emitAppEvent } from "@/lib/app-events";
@@ -22,6 +24,7 @@ import { isAiVideo, settleVideoControls } from "@/lib/studio/video/settle";
 import { DEFAULT_STUDIO_VIDEO_MODEL, recommendedModel } from "@/lib/studio/video/kinds";
 import { lengthChoices } from "@/lib/studio/video/lengths";
 import { VideoKindPicker } from "./VideoKindPicker";
+import { showsVideoCanvas } from "./VideoCanvasSettings";
 
 const MODEL_NAMES: Partial<Record<string, string>> = {
   draft: "Economy",
@@ -172,7 +175,11 @@ export function ControlsPanel({
       ? "4:5"
       : recommendedRatio(c.platforms, mediaKind, format.ratios)
     : undefined;
+  // A video's shape and length sit on the canvas (VideoCanvasSettings).
+  const onCanvas = showsVideoCanvas(session);
   const showRatio =
+    !onCanvas &&
+    !showsPostCanvas(session) &&
     session.type !== "story" &&
     format.ratios.length > 0 &&
     (format.media !== "optional-image" || c.includeImage || session.type === "carousel");
@@ -185,6 +192,8 @@ export function ControlsPanel({
       c.videoMode === "site" ||
       c.videoMode === "motion");
   const motionGraphic = session.type === "video" && c.videoMode === "motion";
+  // What this start shows on the page itself is left out here.
+  const canvas = canvasPickers(session.type, c);
   const animatedRecap = ownFootage && c.videoMode === "recap" && c.recapMotion === "ai";
   const motionPost = c.videoMode === "recap" && c.videoKind === "motion-post";
   const aiVideo = isAiVideo(session.type, c);
@@ -223,7 +232,7 @@ export function ControlsPanel({
 
   return (
     <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
-      {session.type === "video" && (
+      {session.type === "video" && !canvas.source && (
         <SourceClips
           key={session.workspaceId}
           workspaceId={session.workspaceId}
@@ -233,9 +242,14 @@ export function ControlsPanel({
         />
       )}
       {session.type === "video" && (aiVideo || motionPost || motionGraphic) ? (
-        <VideoKindPicker controls={c} picked={settled.videoKind} set={set} />
+        <VideoKindPicker
+          controls={c}
+          picked={settled.videoKind}
+          hasPicture={!!session.sourceContentId || !!c.referenceAssetIds?.length}
+          set={set}
+        />
       ) : null}
-      {motionGraphic ? (
+      {motionGraphic && !onCanvas ? (
         <div>
           <FieldLabel>Length</FieldLabel>
           <Segmented
@@ -246,9 +260,7 @@ export function ControlsPanel({
           />
         </div>
       ) : null}
-      {session.type === "story" ? (
-        <StoryControls controls={c} set={set} lengths={lengths} length={settled.durationSec} />
-      ) : null}
+      {session.type === "story" ? <StoryControls controls={c} set={set} /> : null}
 
       {format.media === "optional-image" && !storyVideo && !c.seamless ? (
         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-surface-3 px-3.5 py-3">
@@ -273,19 +285,10 @@ export function ControlsPanel({
         </label>
       ) : null}
 
-      {session.type === "ad" && (
+      {session.type === "ad" && !canvas.adObjective && (
         <AdObjectivePicker value={c.adObjective} onChange={(adObjective) => set({ adObjective })} />
       )}
 
-      {(["image", "video", "carousel", "story", "ad"].includes(session.type) || c.includeImage) && (
-        <ProductPicker
-          workspaceId={session.workspaceId}
-          type={session.type}
-          value={c.productId}
-          // "No product" also stops a product the brief names being picked.
-          onChange={(productId) => set({ productId, noProduct: productId ? undefined : true })}
-        />
-      )}
       {session.type === "ad" && (
         <AdFormatPicker
           value={c.adFormat}
@@ -332,49 +335,12 @@ export function ControlsPanel({
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {animatedRecap
-              ? "Economy and Standard use credits for each photo. Premium uses video credits."
-              : `${recommendedKey && MODEL_NAMES[recommendedKey] ? `${MODEL_NAMES[recommendedKey]} works best for this kind. ` : ""}8 seconds or less on Economy or Standard uses credits. Longer or Premium uses video credits.`}
+              ? "Each animated photo is a short clip, priced in credits."
+              : `${recommendedKey && MODEL_NAMES[recommendedKey] ? `${MODEL_NAMES[recommendedKey]} works best for this kind. ` : ""}Videos are priced per second in credits: Economy 1.5, Standard 3, Premium 5.`}
           </p>
         </div>
       )}
 
-      {billing?.creation?.active &&
-        ((session.type !== "video" && !storyVideo) ||
-          c.videoPreview ||
-          shortClipPlan({ type: session.type, controls: c })) && (
-          <div>
-            <FieldLabel>Pay for this creation with</FieldLabel>
-            <Segmented
-              label="Payment source"
-              className="flex w-full flex-wrap"
-              value={c.paymentSource ?? "creation"}
-              onChange={(paymentSource) => set({ paymentSource, paymentSourceExplicit: true })}
-              options={[
-                { value: "creation", label: "Creation points" },
-                { value: "credits", label: "Wallet credits" },
-              ]}
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              {billing.meters.creation?.available ?? 0} creation points available. Wallet credits
-              are used only when you choose them.
-            </p>
-          </div>
-        )}
-      {session.type === "carousel" && c.paymentSource === "creation" && (
-        <div>
-          <FieldLabel>Artwork</FieldLabel>
-          <Segmented
-            label="Artwork"
-            className="flex w-full flex-wrap"
-            value={c.artworkMode ?? "template"}
-            onChange={(artworkMode) => set({ artworkMode })}
-            options={[
-              { value: "template", label: "Designed template", hint: "One shared background" },
-              { value: "full", label: "Individual artwork", hint: "Each slide is priced" },
-            ]}
-          />
-        </div>
-      )}
       {session.type === "article" && (
         <div>
           <FieldLabel>Writing quality</FieldLabel>
@@ -451,7 +417,7 @@ export function ControlsPanel({
               </div>
             ) : null}
 
-            {session.type === "script" || (session.type === "video" && !ownFootage) ? (
+            {session.type === "script" || (session.type === "video" && !ownFootage && !onCanvas) ? (
               <div>
                 <FieldLabel
                   hint={
@@ -475,22 +441,6 @@ export function ControlsPanel({
                     value: v,
                     label: `${v}s`,
                   }))}
-                />
-              </div>
-            ) : null}
-
-            {session.type === "carousel" ? (
-              <div>
-                <FieldLabel hint={`${c.slideCount ?? 6} slides`}>Slides</FieldLabel>
-                <input
-                  type="range"
-                  min={3}
-                  max={10}
-                  step={1}
-                  value={c.slideCount ?? 6}
-                  onChange={(e) => set({ slideCount: Number(e.target.value) })}
-                  aria-label="Number of slides"
-                  className="w-full accent-[hsl(var(--primary))]"
                 />
               </div>
             ) : null}
@@ -519,11 +469,24 @@ export function ControlsPanel({
                   />
                 </label>
                 <label className="flex items-center justify-between gap-3 rounded-lg bg-surface-2 px-3 py-2">
-                  <span className="text-xs font-medium text-foreground">Preview a frame first</span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-foreground">
+                      Storyboard first
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {needsStoryboard({ type: session.type, controls: c })
+                        ? "Always for 16 s+ and Premium videos"
+                        : "See every scene before the video is made"}
+                    </span>
+                  </span>
                   <Switch
-                    checked={c.videoPreview ?? false}
+                    checked={
+                      (c.videoPreview ?? false) ||
+                      needsStoryboard({ type: session.type, controls: c })
+                    }
+                    disabled={needsStoryboard({ type: session.type, controls: c })}
                     onCheckedChange={(videoPreview) => set({ videoPreview })}
-                    aria-label="Preview a frame first"
+                    aria-label="Storyboard first"
                   />
                 </label>
               </div>
@@ -576,63 +539,22 @@ export function ControlsPanel({
   );
 }
 
-/** What only a Story asks: designed frames or a video, how many, and what about. */
+/**
+ * What only a Story asks in the side panel: what it is about and who to tag.
+ * Frames or video, and how many, sit on the canvas (PostCanvasSettings).
+ */
 function StoryControls({
   controls: c,
   set,
-  lengths,
-  length,
 }: {
   controls: StudioControls;
   set: (patch: Partial<StudioControls>) => void;
-  /** Whole-clip lengths for a Story video (src/lib/studio/video/lengths.ts). */
-  lengths: number[];
-  length?: number;
 }) {
-  const video = c.storyMode === "video";
   const [mentions, setMentions] = useState((c.mentions ?? []).map((m) => `@${m}`).join(" "));
   return (
     <div className="space-y-4">
       <div>
-        <FieldLabel>Made of</FieldLabel>
-        <Segmented
-          label="Made of"
-          value={(video ? "video" : "frames") as "frames" | "video"}
-          onChange={(storyMode) =>
-            set({ storyMode, ...(storyMode === "video" ? { includeImage: false } : {}) })
-          }
-          options={[
-            { value: "frames", label: "Designed frames", hint: "Your brand look" },
-            { value: "video", label: "AI video", hint: "8s uses credits" },
-          ]}
-        />
-      </div>
-
-      {video ? (
-        <div>
-          <FieldLabel>Length</FieldLabel>
-          <Segmented
-            label="Length"
-            className="max-w-full flex-wrap"
-            value={length ?? lengths[0] ?? 8}
-            onChange={(durationSec) => set({ durationSec })}
-            options={(lengths.length ? lengths : [8]).map((v) => ({ value: v, label: `${v}s` }))}
-          />
-        </div>
-      ) : (
-        <div>
-          <FieldLabel hint="Each frame shows for about 5 seconds">Frames</FieldLabel>
-          <Segmented
-            label="Frames"
-            value={c.frameCount ?? 3}
-            onChange={(frameCount) => set({ frameCount })}
-            options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))}
-          />
-        </div>
-      )}
-
-      <div>
-        <FieldLabel hint="Optional">About</FieldLabel>
+        <FieldLabel hint="Optional">What the Story is about</FieldLabel>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="What the Story is about">
           {[
             { id: "", label: "Mellox picks" },
@@ -647,7 +569,7 @@ function StoryControls({
                 title={"detail" in t ? t.detail : "Picked to differ from your last Stories"}
                 onClick={() => set({ storyTheme: t.id || undefined })}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-[colors,transform] active:scale-95",
                   on
                     ? "border-primary-border bg-primary-surface text-foreground"
                     : "border-border bg-surface-3 text-muted-foreground hover:text-foreground",
@@ -658,6 +580,10 @@ function StoryControls({
             );
           })}
         </div>
+        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+          {getStoryTheme(c.storyTheme)?.detail ??
+            "Each frame says one new thing; Mellox picks a theme your last Stories didn't use."}
+        </p>
       </div>
 
       {c.platforms.includes("instagram") ? (

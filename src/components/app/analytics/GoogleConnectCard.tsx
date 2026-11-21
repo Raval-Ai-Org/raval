@@ -585,7 +585,7 @@ export function GoogleConnectCard({
         {!compact && !conn && view.configured && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/70 px-3 py-2.5">
             <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <ShieldCheck className="size-3.5 text-primary" aria-hidden />
+              <ShieldCheck className="size-3.5 text-primary-ink" aria-hidden />
               Reports are scoped to this workspace; AI insights use the providers disclosed before
               connection.
             </p>

@@ -36,6 +36,7 @@ import {
   type ClientStatus,
   type ReviewItem,
 } from "@/lib/agency/command-center";
+import { celebrateOnce } from "@/lib/celebrate";
 
 type Decision = "approved" | "rejected";
 
@@ -367,6 +368,7 @@ export function useCommandCenter() {
       hide([item.id], true);
       void logAudit(item.workspaceId, "schedule", item.id);
       broadcast();
+      celebrateOnce("first-scheduled");
       toast.success("Scheduled", {
         description: when.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }),
       });

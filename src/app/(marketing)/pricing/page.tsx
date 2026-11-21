@@ -19,7 +19,7 @@ import WhatsNew from "@/marketing/components/whats-new/WhatsNew";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Simple plans, credits you control. Every Mellox plan includes all four marketing brains. Start free, upgrade when you are ready to publish.",
+    "One credit, three plans. Every Mellox plan makes posts, carousels, ads and videos, with Autopilot, the four marketing brains and AI visibility. From $39 a month.",
   alternates: { canonical: "/pricing" },
 };
 
@@ -78,7 +78,7 @@ export default function PricingPage() {
         <Faq
           items={PRICING_FAQS}
           title="Pricing questions, answered."
-          blurb="Find out what AI says about your brand today. Start free, no card needed."
+          blurb="Find out what AI says about your brand today. Try Growth for 7 days."
         />
       </main>
 

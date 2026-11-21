@@ -1,0 +1,7 @@
+MotionMox is a modified fork of Remotion (https://www.remotion.dev),
+Copyright (c) Remotion. Remotion is licensed under the Remotion License,
+included here as LICENSE.md, which continues to apply to this code.
+
+Changes by Mellox AI: package and product renamed to MotionMox, usage
+reporting off by default, the system Chromium used, renders kept offline.
+See MELLOX_PATCHES.md.

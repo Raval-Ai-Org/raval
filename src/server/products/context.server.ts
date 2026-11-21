@@ -26,8 +26,11 @@ export async function catalogBlockFor(workspaceId: string): Promise<string> {
           ...rows.slice(0, 12).map((r) => {
             const head = [r.name, r.price].filter(Boolean).join(" — ");
             const kind = r.kind === "service" ? " (service)" : "";
-            return `- ${head}${kind}${r.description ? `: ${short(r.description, 140)}` : ""}`;
+            const why = (r.benefits ?? []).slice(0, 3).join("; ");
+            const page = /^https:\/\//i.test(r.url ?? "") ? ` (page: ${r.url})` : "";
+            return `- ${head}${kind}${r.description ? `: ${short(r.description, 140)}` : ""}${why ? ` Benefits: ${short(why, 160)}.` : ""}${page}`;
           }),
+          "Send people to the real page that fits the piece (a product's page above, else the website) and say what they will find there. Never invent a page, a link or a path.",
         ].join("\n")
       : "";
     cache.set(workspaceId, { at: Date.now(), text });

@@ -4,6 +4,7 @@
 //
 //   Overview   the headline numbers from every source that has them
 //   Social     the brand's social accounts (no Google needed)
+//   Ads & leads Google Ads campaigns and HubSpot contacts (connected apps)
 //   Website    Google Analytics 4
 //   Search     Google Search Console
 //   Content    what this workspace made and posted
@@ -14,6 +15,7 @@
 // connect Google, until a property or Search Console site is chosen.
 import { TABS, type AnalyticsTab } from "@/components/app/AnalyticsTabs";
 import { GoogleGate } from "@/components/app/analytics/AnalyticsLock";
+import { AppsPanel } from "@/components/app/analytics/AppsPanel";
 import { ContentPanel } from "@/components/app/analytics/ContentPanel";
 import { useAnalyticsInvalidation } from "@/components/app/analytics/hooks";
 import { InsightsPanel } from "@/components/app/analytics/InsightsPanel";
@@ -42,6 +44,7 @@ export function AnalyticsContent({
             <div key={tab} className="ds-enter">
               {tab === "overview" && <OverviewPanel onTabChange={onTabChange} />}
               {tab === "social" && <SocialPanel />}
+              {tab === "ads" && <AppsPanel />}
               {tab === "website" && (
                 <GoogleGate>
                   <WebsitePanel />

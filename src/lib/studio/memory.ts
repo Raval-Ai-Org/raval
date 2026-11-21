@@ -70,6 +70,25 @@ export const HOOK_STYLES: HookStyle[] = [
     directive:
       "Open by hinting at one specific, useful thing without giving it away yet, and pay it off fully in the piece; no 'you won't believe' phrasing.",
   },
+  // Round 6 (docs/studio/reference-study-2026-10.md).
+  {
+    id: "paradox",
+    label: "A flipped pair",
+    directive:
+      "Open with two very short sentences of the same shape that flip each other, so the second lands the point (e.g. 'Small shop. Big hours.'); or set two things people confuse against each other as 'X ≠ Y'.",
+  },
+  {
+    id: "negation",
+    label: "No, no, just",
+    directive:
+      "Open by removing what the reader dreads in the shape 'No X. No Y. Just Z.', where X and Y are real frustrations of this audience and Z is the brand's real promise.",
+  },
+  {
+    id: "right-now",
+    label: "Right now",
+    directive:
+      "Open with one real, current fact the brief supplies (today's weather by the water, places left this week, what came in this morning) and tie it to now; skip this opening if the brief has no such fact.",
+  },
 ];
 
 function hash(value: string): number {
@@ -152,6 +171,17 @@ export function memorySection(recent: Recent): string {
     parts.push(
       `Openings already used. The new piece must not start with the same words, the same sentence shape or the same idea as any of these:\n${openings
         .map((o) => `- ${o}`)
+        .join("\n")}`,
+    );
+  }
+  const jokes = distinct(
+    recent.map((r) => r.joke),
+    20,
+  );
+  if (jokes.length) {
+    parts.push(
+      `Jokes, memes and on-picture lines already posted. Never tell any of these again: not the same situation, setup, punchline, pun or wordplay, even reworded:\n${jokes
+        .map((j) => `- ${j}`)
         .join("\n")}`,
     );
   }

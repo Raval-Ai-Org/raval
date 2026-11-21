@@ -15,6 +15,7 @@ import { Link2 } from "@/components/icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useOptionalWorkspaceId } from "@/components/workspace/WorkspaceProvider";
 import { workspacePath } from "@/lib/workspace/paths";
+import { leaveRoute } from "@/lib/shell/history";
 
 export default function BacklinksRoute() {
   const router = useRouter();
@@ -22,11 +23,12 @@ export default function BacklinksRoute() {
 
   return (
     <AppModalShell
+      routed
       open
       onOpenChange={(next: boolean) => {
         // Closing leaves the route rather than hiding a page that is still the
         // current URL.
-        if (!next) router.push(workspaceId ? workspacePath(workspaceId) : "/projects");
+        if (!next) leaveRoute(router, workspaceId ? workspacePath(workspaceId) : "/projects");
       }}
       title="Backlinks"
       Icon={Link2}

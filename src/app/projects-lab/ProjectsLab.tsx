@@ -1,12 +1,15 @@
 "use client";
 
 import { Logo } from "@/components/brand/Logo";
-import { SecondaryBrandSymbols } from "@/components/brand/SecondaryBrandSymbols";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion-safe";
+import { AppFrame } from "@/components/app/shell/AppFrame";
 import {
   PasteLinkBar,
   ProjectCard,
   ProjectsFoot,
+  ProjectsHero,
   ProjectsStage,
+  UnfinishedSetups,
 } from "@/app/projects/ProjectsPage";
 import type { WorkspaceSummary } from "@/hooks/use-workspaces";
 
@@ -46,53 +49,67 @@ const sample = (
 const SAMPLES: WorkspaceSummary[] = [
   sample(1, "Northwind", "northwind.example", { scheduledCount: 6, geoScore: 82 }),
   sample(2, "Acme Studio", "acme.example", { pendingApprovals: 3, health: "attention" }),
-  sample(3, "Lumen", "lumen.example", { onboarded: false }),
+  sample(3, "Lumen", "lumen.example", { geoScore: 64 }),
+];
+
+/** Setups started but not finished: their own row, never brand cards. */
+const UNFINISHED: WorkspaceSummary[] = [
+  sample(4, "New brand", "", { onboarded: false, websiteUrl: null, domain: null }),
+  sample(5, "Harbour Bakery", "harbour.example", { onboarded: false }),
 ];
 
 export function ProjectsLab() {
+  const reduce = useReducedMotionSafe();
   return (
-    <div
-      data-mellox-app
-      className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background text-foreground"
-    >
-      <ProjectsStage>
-        <header className="relative z-10 flex h-14 items-center px-5">
-          <Logo height={30} />
-        </header>
+    <AppFrame>
+      <div
+        className="group/projects relative flex min-h-0 flex-1 flex-col overflow-y-auto text-foreground"
+        // The bar is clear over the colour wash and only frosts once the page moves.
+        onScroll={(e) =>
+          e.currentTarget.toggleAttribute("data-scrolled", e.currentTarget.scrollTop > 8)
+        }
+      >
+        <ProjectsStage>
+          <header className="sticky top-0 z-20 flex h-16 border-b border-transparent transition-[background-color,border-color,backdrop-filter] duration-300 group-data-[scrolled]/projects:border-[var(--ds-card-border)] group-data-[scrolled]/projects:bg-[var(--ds-frame-bg)]/80 group-data-[scrolled]/projects:backdrop-blur-xl items-center px-5">
+            <Logo height={30} />
+          </header>
 
-        <section className="relative z-10 mx-auto w-full max-w-5xl px-5 pb-16 pt-10 text-center sm:pb-20 sm:pt-12">
-          <SecondaryBrandSymbols size="lg" className="mx-auto mb-8 justify-center gap-3 sm:gap-5" />
-          <h1 className="font-display mt-4 text-[40px] leading-[1.05] tracking-tight sm:text-[52px]">
-            Which brand today?
-          </h1>
-          <p className="mt-2 text-[14px] text-muted-foreground">
-            Open your brand or add another one you run.
-          </p>
-          <div className="mx-auto mt-8 w-full max-w-xl">
+          <ProjectsHero
+            reduce={reduce}
+            eyebrow="Your brands"
+            title="Which brand today, Sam?"
+            subtitle="Open your brand or add another one you run."
+          >
             <PasteLinkBar existing={SAMPLES} onCreated={() => {}} onOpenAdvanced={() => {}} />
+          </ProjectsHero>
+          <UnfinishedSetups
+            items={UNFINISHED}
+            reduce={reduce}
+            onContinue={() => {}}
+            onDiscard={() => {}}
+          />
+        </ProjectsStage>
+
+        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
+          <div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {SAMPLES.map((w, i) => (
+                <ProjectCard
+                  key={w.id}
+                  workspace={w}
+                  index={i}
+                  lastOpened={i === 0}
+                  onOpen={() => {}}
+                  onRename={() => {}}
+                  onStatusChange={() => {}}
+                />
+              ))}
+            </div>
           </div>
         </section>
-      </ProjectsStage>
 
-      <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-12 pt-8">
-        <div className="rounded-3xl border border-border/70 bg-card/70 p-5 backdrop-blur-xl sm:p-7">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {SAMPLES.map((w, i) => (
-              <ProjectCard
-                key={w.id}
-                workspace={w}
-                index={i}
-                lastOpened={i === 0}
-                onOpen={() => {}}
-                onRename={() => {}}
-                onStatusChange={() => {}}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <ProjectsFoot />
-    </div>
+        <ProjectsFoot />
+      </div>
+    </AppFrame>
   );
 }

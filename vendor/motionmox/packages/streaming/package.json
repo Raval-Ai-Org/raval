@@ -1,0 +1,25 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/streaming"
+  },
+  "name": "@motionmox/streaming",
+  "version": "4.0.542",
+  "description": "Utilities for streaming data between programs",
+  "main": "dist",
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "contributors": [],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs"
+    }
+  },
+  "private": true
+}

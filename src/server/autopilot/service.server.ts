@@ -24,6 +24,7 @@ import {
   type ProgramRow,
   type ProgramSettings,
   type ProgramView,
+  type AutopilotGoal,
   type Strategy,
 } from "@/lib/autopilot/contracts";
 import { totalWeeks, weekOf } from "@/lib/autopilot/policy";
@@ -248,10 +249,21 @@ function nudgeOverdue(workspaceId: string, actions: ActionRow[], now: Date): voi
   });
 }
 
-/** Ask for an opportunity scan (Market Brain or a competitor sweep found something). */
+/**
+ * Ask for an opportunity scan (Market Brain or a competitor sweep found
+ * something). Only a workspace with a running Autopilot program uses
+ * opportunities, so nobody else pays for a scan.
+ */
 export async function requestOpportunityScan(workspaceId: string): Promise<void> {
   if (!isAutopilotEnabled(workspaceId)) return;
   try {
+    const { data: running, error } = await admin
+      .from("autopilot_programs")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "running")
+      .limit(1);
+    if (error || !running?.length) return;
     await enqueueScan(store, workspaceId, new Date());
   } catch (error) {
     console.error(`[autopilot] could not queue a scan for ${workspaceId}`, error);
@@ -873,10 +885,16 @@ export async function startProgram(caller: Caller, settings: ProgramSettings): P
  * The workspace's confirmed marketing strategy changed (ADR-0032): a live
  * program plans its coming weeks against it. No program, nothing to do.
  */
-export async function syncProgramStrategy(workspaceId: string, strategy: Strategy): Promise<void> {
+export async function syncProgramStrategy(
+  workspaceId: string,
+  strategy: Strategy,
+  goal?: AutopilotGoal,
+): Promise<void> {
   const program = await store.liveProgram(workspaceId);
   if (!program) return;
-  await store.updateProgram(program.id, { strategy });
+  // The goal moves with the strategy, so the week's aim mix (shapeWeek) can't
+  // drift from what the person confirmed.
+  await store.updateProgram(program.id, { strategy, ...(goal ? { goal } : {}) });
 }
 
 export async function updateProgram(caller: Caller, settings: ProgramSettings): Promise<void> {

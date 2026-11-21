@@ -86,11 +86,21 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
   const succeeded = job.status === "succeeded";
   if (link.caption_edit_id)
     await settleCaptionEdit(link.caption_edit_id, succeeded ? "captured" : "released", job.id);
-  if (succeeded && link.hold_id) {
+  const captured = succeeded ? studioCapturedAmount(job, Number(link.amount), link.meter) : 0;
+  if (succeeded && link.hold_id && captured <= 0) {
+    // Only included work was delivered (the optional picture failed): nothing
+    // to capture, and a zero capture is refused, so the hold goes back whole.
+    await releaseMeter({
+      accountId: link.account_id,
+      holdId: link.hold_id,
+      idempotencyKey: `${link.charge_key}:included`,
+      reason: "Only included work was delivered",
+    });
+  } else if (succeeded && link.hold_id) {
     await captureMeter({
       accountId: link.account_id,
       holdId: link.hold_id,
-      amount: studioCapturedAmount(job, Number(link.amount), link.meter),
+      amount: captured,
       idempotencyKey: link.charge_key,
       route: link.route,
       chargeId: link.charge_id ?? undefined,
@@ -109,7 +119,7 @@ export async function settleStudioBilling(job: StudioJob): Promise<void> {
       workspace_id: link.workspace_id,
       action: link.action,
       meter: link.meter,
-      amount: studioCapturedAmount(job, Number(link.amount), link.meter),
+      amount: captured,
       decision: "would_charge",
       idempotency_key: `studio:${job.id}`,
     });

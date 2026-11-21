@@ -62,18 +62,20 @@ export function conceptMessages(input: ConceptInput): { system: string; user: st
     .filter(Boolean);
   const writes = input.allowText && !input.fixedHeadline;
   const system = [
-    "You are the art director and copywriter of one premium product poster for a brand's social feed. Code has already chosen the topic, layout, colours, light and set; you write this poster's own scene idea inside them and, when asked, its headline.",
-    "Every poster is about something new, but it is always the same brand: keep the brand's colours, type, finish and taste exactly as they are. Different topic and idea, same look.",
+    "You are the art director and copywriter of one premium product poster for a brand's social feed. Code has already chosen the layout, colours, light and set; you write this poster's own scene idea inside them and, when asked, its headline.",
+    "The brief is the post: the headline says what the person asked this post to say (their offer, their occasion, their message), in their facts and, where they gave them, their words. Keep the brand's colours, type, finish and taste exactly as they are.",
     "Rules for the scene:",
     "- One vivid, specific idea a photographer could shoot, 2–4 sentences, inside the given staging, that shows this poster's topic. Make it clearly different from every earlier idea listed.",
     "- Only these may appear: the product, its own formula, the ingredients its facts name, the set, light and shadow, and the occasion's touches. No people, hands, faces or animals; no other products; no words, logos or signs in the scene; no figures.",
     "- Never change the product itself: its shape, colours and label stay exactly as they are.",
     writes
-      ? "Rules for the words:\n- headlines: three different options, best first, each 2–8 words for this post's reader, about this poster's topic, specific to the brief and the product, in the brand's voice and in the caption's language. Each opens with a different word, and none opens with the same word as an earlier headline or sounds close to one. No figure, award, promise, comparison or claim the product's facts don't state.\n- support: one short sentence (at most 16 words) built only from the product's facts, or an empty string."
+      ? "Rules for the words:\n- headlines: three different options, best first, each 2–8 words for this post's reader, saying this poster's message (the brief's own point when the topic is the brief), specific to the brief and the product, in the brand's voice and in the caption's language. Each opens with a different word, and none opens with the same word as an earlier headline or sounds close to one. No figure, award, promise, comparison or claim that neither the brief nor the product's facts state.\n- support: one short sentence (at most 16 words) built only from the brief's facts and the product's facts, or an empty string."
       : 'Leave "headlines" empty and "support" as an empty string.',
     'Return JSON only: {"scene": string, "headlines": string[], "support": string}.',
   ].join("\n");
   const user = [
+    `The brief (the post's message): ${clip(input.brief, 600) || "a product post"}`,
+    "",
     `Brand: ${clip(input.brandName, 80)}`,
     `Product: ${clip(input.product.name, 80)}${input.product.category ? ` (${clip(input.product.category, 60)})` : ""}`,
     input.product.description ? `What it is: ${clip(input.product.description, 500)}` : "",
@@ -83,11 +85,10 @@ export function conceptMessages(input: ConceptInput): { system: string; user: st
     input.audience ? `Who it is for: ${clip(input.audience, 240)}` : "",
     input.voice ? `Brand voice: ${clip(input.voice, 240)}` : "",
     "",
-    `The brief: ${clip(input.brief, 600) || "a product post"}`,
     input.caption ? `The caption: ${clip(input.caption, 500)}` : "",
     input.fixedHeadline ? `The headline is fixed: "${clip(input.fixedHeadline, 120)}"` : "",
     input.draftHeadline && writes
-      ? `The copy writer's line (improve or replace it): "${clip(input.draftHeadline, 120)}"`
+      ? `The copy writer's line, already checked against the brief (keep it as the first option unless one of yours says the brief's message better): "${clip(input.draftHeadline, 120)}"`
       : "",
     "",
     input.topic ? `This poster's topic: ${input.topic.direction}.` : "",

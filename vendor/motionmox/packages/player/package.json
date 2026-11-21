@@ -1,0 +1,45 @@
+{
+  "repository": {
+    "url": "https://github.com/remotion-dev/remotion/tree/main/packages/player"
+  },
+  "name": "@motionmox/player",
+  "version": "4.0.542",
+  "description": "React component for embedding a MotionMox preview into your app",
+  "main": "dist/cjs/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "module": "dist/esm/index.mjs",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "module": "./dist/esm/index.mjs",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "bugs": {
+    "url": "https://github.com/remotion-dev/remotion/issues"
+  },
+  "author": "Jonny Burger <jonny@remotion.dev>",
+  "maintainers": [
+    "Jonny Burger <jonny@remotion.dev>",
+    "Shankhadeep Dey <shankhadeepdey99@gmail.com>"
+  ],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "dependencies": {
+    "@motionmox/core": "file:../core"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "keywords": [
+    "@motionmox/core",
+    "ffmpeg",
+    "video",
+    "react",
+    "player"
+  ],
+  "homepage": "https://www.remotion.dev/docs/player",
+  "private": true
+}

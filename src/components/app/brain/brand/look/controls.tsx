@@ -471,7 +471,7 @@ function FontRow({
           {sample}
         </div>
       </div>
-      {active && <Check className="h-4 w-4 text-primary" />}
+      {active && <Check className="h-4 w-4 text-primary-ink" />}
     </button>
   );
 }
@@ -536,7 +536,7 @@ export function DropZone({
     >
       <span
         className={cn(
-          "grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary transition-transform duration-300",
+          "grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary-ink transition-transform duration-300",
           over ? "scale-110" : "group-hover:scale-105",
         )}
       >

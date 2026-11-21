@@ -101,7 +101,7 @@ export function Pager({
 
 const CHIP_TONES = {
   neutral: "bg-foreground/[0.06] text-foreground/75",
-  primary: "bg-primary/12 text-primary",
+  primary: "bg-primary/12 text-primary-ink",
   success: "bg-success/12 text-success",
   warning: "bg-warning/12 text-warning",
   danger: "bg-destructive/12 text-destructive",

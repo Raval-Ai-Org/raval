@@ -50,3 +50,22 @@ describe("visual capture network boundary", () => {
     expect(socket.close).toHaveBeenCalled();
   });
 });
+
+describe("artwork boxes", () => {
+  it("keeps the largest distinct pictures inside the captured page", async () => {
+    const { pickArtBoxes } = await import("./capture.server");
+    const boxes = pickArtBoxes(
+      [
+        { left: 0, top: 0, width: 1440, height: 900, alt: "hero" },
+        { left: 10, top: 10, width: 1400, height: 880, alt: "same hero" },
+        { left: 100, top: 1200, width: 600, height: 400, alt: "card" },
+        { left: 0, top: 17_900, width: 1440, height: 900, alt: "below the cut" },
+        { left: 0, top: 2000, width: 300, height: 300, alt: "small" },
+      ],
+      1440,
+      18_000,
+      4,
+    );
+    expect(boxes.map((b) => b.alt)).toEqual(["hero", "card"]);
+  });
+});

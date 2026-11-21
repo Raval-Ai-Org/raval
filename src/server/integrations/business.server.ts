@@ -30,6 +30,9 @@ import {
   googleAdsBudgetArgs,
   googleAdsCampaignArgs,
   googleAdsCampaignUrl,
+  googleAdsKeywordArgs,
+  googleAdsKeywordIdeasArgs,
+  readKeywordIdeas,
   readCustomerIds,
   readDriveId,
   readGmailDraftId,
@@ -427,7 +430,7 @@ export async function sendAdToGoogleAds(args: {
   dailyBudget: number;
   /** Where people land; the brand's website when not given. */
   finalUrl?: string | null;
-}): Promise<{ campaignUrl: string; campaign: string }> {
+}): Promise<{ campaignUrl: string; campaign: string; keywords: string[] }> {
   requireOn(args.workspaceId);
   const caller: ToolCaller = { kind: "person", userId: args.userId, role: args.role };
   if (!(args.dailyBudget >= DAILY_MIN && args.dailyBudget <= DAILY_MAX)) {
@@ -524,14 +527,45 @@ export async function sendAdToGoogleAds(args: {
     "ad",
   );
 
+  // Keywords Google itself suggests for the landing page, so the campaign is
+  // ready to switch on. A failure leaves an ad group without keywords, which
+  // the person can fill in Google Ads; the campaign is still made.
+  let keywords: string[] = [];
+  try {
+    keywords = readKeywordIdeas(
+      await run(
+        "GOOGLEADS_GENERATE_KEYWORD_IDEAS",
+        googleAdsKeywordIdeasArgs(customerId, finalUrl),
+        "keyword ideas",
+      ),
+    );
+    if (keywords.length)
+      await run(
+        "GOOGLEADS_MUTATE_AD_GROUP_CRITERIA",
+        googleAdsKeywordArgs(customerId, adGroup, keywords),
+        "keywords",
+      );
+  } catch (error) {
+    keywords = [];
+    console.warn(
+      "[integrations] Google Ads keywords skipped",
+      error instanceof Error ? error.message : error,
+    );
+  }
+
   await recordAudit({
     workspaceId: args.workspaceId,
     userId: args.userId,
     action: "integrations.googleads.paused_campaign",
     entity: item.id,
-    payload: { customerId, campaign, dailyBudget: args.dailyBudget },
+    payload: { customerId, campaign, dailyBudget: args.dailyBudget, keywords: keywords.length },
   });
-  return { campaign, campaignUrl: googleAdsCampaignUrl(customerId, campaign) };
+  // Analytics reads this account's campaigns from now on.
+  await db
+    .from("integration_accounts")
+    .update({ metadata: { ...(account.metadata ?? {}), customerId } })
+    .eq("id", account.id);
+  return { campaign, campaignUrl: googleAdsCampaignUrl(customerId, campaign), keywords };
 }
 
 // ── Google Sheets: the calendar ───────────────────────────────────────────

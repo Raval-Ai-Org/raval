@@ -14,12 +14,14 @@ export const POST = defineRoute({
   name: "brand-visuals/upload/finish",
   auth: "workspace",
   minRole: "editor",
-  rateLimit: "generate",
+  rateLimit: "upload",
   query: z.object({ workspaceId: z.string().uuid() }),
   body: z.object({
     purpose: z.enum(PURPOSES),
     format: z.union([z.literal("all"), z.enum(FORMATS)]).default("all"),
     campaign: z.string().max(120).optional(),
+    /** Inspo → Media folder the files go into. */
+    folder: z.string().max(60).optional(),
     items: z
       .array(
         z.object({
@@ -45,6 +47,7 @@ export const POST = defineRoute({
           label: uploadLabel(item.name),
           format: body.format,
           campaign: body.campaign || undefined,
+          folder: body.folder || undefined,
         });
         results.push({ id: item.id, assetId });
       } catch (error) {

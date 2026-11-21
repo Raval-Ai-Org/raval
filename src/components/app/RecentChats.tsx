@@ -1,10 +1,10 @@
 "use client";
 
 import { Spinner } from "@/components/icons";
-import { conversationPath, workspacePath } from "@/lib/workspace/paths";
+import { chatPath, conversationPath } from "@/lib/workspace/paths";
 import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib/app-events";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "@/lib/navigation";
+import { useNavigate, useRouterState } from "@/lib/navigation";
 import {
   ChevronDown,
   MoreHorizontal,
@@ -72,6 +72,11 @@ export function RecentChats({
   const [recentsOpen, setRecentsOpen] = useState(true);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
+  // Hopping between conversations replaces the entry, so Back leaves chat in
+  // one press instead of walking through every conversation opened.
+  const inConversation = useRouterState({
+    select: (s) => s.location.pathname.includes("/chat/"),
+  });
 
   useEffect(() => {
     try {
@@ -132,14 +137,14 @@ export function RecentChats({
   const newChat = () => {
     if (!workspaceId) return;
     onNavigate?.();
-    navigate({ to: workspacePath(workspaceId) });
+    navigate({ to: chatPath(workspaceId) });
     emitAppEvent("chat:focus");
   };
 
   const open = (id: string) => {
     onNavigate?.();
     if (!workspaceId) return;
-    navigate({ to: conversationPath(workspaceId, id) });
+    navigate({ to: conversationPath(workspaceId, id), replace: inConversation });
   };
 
   const update = async (id: string, patch: { title?: string; is_pinned?: boolean }) => {
@@ -187,7 +192,7 @@ export function RecentChats({
       toast.error("Couldn't delete conversation", { description: error.message });
       return;
     }
-    if (activeConversationId === conversation.id) navigate({ to: workspacePath(workspaceId) });
+    if (activeConversationId === conversation.id) navigate({ to: chatPath(workspaceId) });
     await load();
     emitAppEvent("chat:conversation-changed");
   };

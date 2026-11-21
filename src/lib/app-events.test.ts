@@ -33,6 +33,30 @@ describe("app events", () => {
     expect(handler).not.toHaveBeenCalled();
     off();
   });
+
+  it("replays the latest open request when a lazy surface subscribes", () => {
+    emitAppEvent("open:library", { tab: "media" });
+    emitAppEvent("open:library", { tab: "posts" });
+
+    const handler = vi.fn();
+    const off = onAppEvent("open:library", handler);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail).toEqual({ tab: "posts" });
+
+    emitAppEvent("open:library", { tab: "loved" });
+    expect(handler).toHaveBeenCalledTimes(2);
+    off();
+  });
+
+  it("discards pending open requests when the workspace changes", () => {
+    emitAppEvent("open:settings", { section: "preferences" });
+    emitAppEvent("workspace:changed", { id: "ws-2" });
+
+    const handler = vi.fn();
+    const off = onAppEvent("open:settings", handler);
+    expect(handler).not.toHaveBeenCalled();
+    off();
+  });
 });
 
 describe("notes store", () => {
