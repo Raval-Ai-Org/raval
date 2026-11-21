@@ -90,7 +90,7 @@ export const softwareApplicationJsonLd = {
   featureList: [
     "Brand DNA: learns your voice, audience and rules from your website",
     "AI social media post, image and article generation",
-    "Content calendar, scheduling and native publishing to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest, Reddit and Threads",
+    "Content calendar, scheduling and native publishing to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest and Threads",
     "AI search visibility tracking and GEO / AEO fixes",
     "Competitor tracking and weekly briefings",
     "Agency Mode for managing many clients",

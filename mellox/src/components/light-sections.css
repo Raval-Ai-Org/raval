@@ -1,0 +1,179 @@
+/* ---------- Light theme for the home page's cinematic sections ----------
+   These sections were drawn on a black stage. In the light theme they now sit on the same warm off-white as the rest of
+   the page, with soft pastel washes instead of black, so no section breaks the flow. The dark theme is untouched. */
+
+/* Intro: the stage colour is set from script (dark), so the light rule must win with !important */
+:root[data-theme="light"] .intro .intro-stage { background-color: var(--mx-bg) !important; }
+:root[data-theme="light"] .intro-tone {
+  background:
+    radial-gradient(60% 50% at 50% 50%, rgb(203 233 96 / 0.28), transparent 70%),
+    var(--mx-bg);
+}
+:root[data-theme="light"] .intro-disc {
+  background: radial-gradient(
+    circle closest-side,
+    rgb(222 241 170) 0%,
+    rgb(200 232 200) 30%,
+    rgb(196 220 240) 60%,
+    rgb(214 222 246 / 0.85) 80%,
+    rgb(214 222 246 / 0) 100%
+  );
+}
+:root[data-theme="light"] .timeline-dot.glass,
+:root[data-theme="light"] .timeline-dot.glass:hover {
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.7)),
+    #ffffff;
+  box-shadow: 0 6px 20px -8px rgb(13 17 20 / 0.25), inset 0 0 0 1px rgb(13 17 20 / 0.06);
+}
+:root[data-theme="light"] .timeline-seg {
+  background: linear-gradient(90deg, rgb(var(--mx-w) / 0.12), rgb(120 160 0 / 0.8));
+  box-shadow: 0 0 10px rgb(120 160 0 / 0.25);
+}
+:root[data-theme="light"] .intro-outro h2 span {
+  background: linear-gradient(100deg, var(--mx-fg) 0%, #6f9500 75%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+:root[data-theme="light"] .color-field .grain { mix-blend-mode: normal; opacity: 0.05; }
+@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
+  :root[data-theme="light"] .intro .intro-stage { background-color: var(--mx-bg) !important; }
+  :root[data-theme="light"] .intro .intro-group {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.6));
+    box-shadow: 0 10px 30px -18px rgb(13 17 20 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  }
+}
+
+/* Problems: no black fade-in at the top; flat page colour with a faint lime wash */
+:root[data-theme="light"] .problems {
+  background:
+    radial-gradient(70% 220px at 50% 0, rgb(203 233 96 / 0.16), transparent 70%),
+    var(--mx-bg);
+}
+:root[data-theme="light"] .problems [class*="card"] ,
+:root[data-theme="light"] .problems-grid > * { box-shadow: 0 14px 40px -24px rgb(13 17 20 / 0.3); }
+
+/* Problems: the caption panels over the pastel art become white frosted glass with dark text */
+:root[data-theme="light"] .pcard-caption {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.85));
+  border-color: rgb(13 17 20 / 0.08);
+  box-shadow: 0 10px 30px -18px rgb(13 17 20 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.9);
+}
+:root[data-theme="light"] .tool-count { background: rgb(255 255 255 / 0.7); border-color: rgb(13 17 20 / 0.1); }
+:root[data-theme="light"] .pcard { box-shadow: 0 24px 60px -36px rgb(13 17 20 / 0.35); }
+:root[data-theme="light"] .bubble.ai { background: rgb(255 255 255 / 0.85); color: var(--mx-fg); }
+:root[data-theme="light"] .bubble.user { background: linear-gradient(135deg, rgb(7 86 231 / 0.22), rgb(7 86 231 / 0.1)); color: var(--mx-fg); }
+
+/* Four brains: each card is a light card with its colour glow, not a black slab */
+:root[data-theme="light"] .bcard {
+  background: linear-gradient(160deg, #ffffff, #f3f5ec);
+  border-color: rgb(13 17 20 / 0.08);
+  box-shadow: 0 30px 70px -40px rgb(13 17 20 / 0.35);
+}
+:root[data-theme="light"] .bglow { opacity: 0.55; }
+:root[data-theme="light"] .intent,
+:root[data-theme="light"] .drift,
+:root[data-theme="light"] .brains [class*="chip"] {
+  background: rgb(255 255 255 / 0.8);
+  border-color: rgb(13 17 20 / 0.12);
+  box-shadow: 0 6px 18px -10px rgb(13 17 20 / 0.3);
+}
+:root[data-theme="light"] .bi-customer .core,
+:root[data-theme="light"] .radar { background: radial-gradient(circle, rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.3)); }
+
+/* Workflow: white step cards with the step colour as a soft glow, and a white app window inside */
+:root[data-theme="light"] .wf-card {
+  background: linear-gradient(160deg, #ffffff, #f3f5ec);
+  border-color: rgb(13 17 20 / 0.08);
+  box-shadow: 0 30px 70px -40px rgb(13 17 20 / 0.35);
+}
+:root[data-theme="light"] .wf-glow {
+  background:
+    radial-gradient(70% 90% at 0% 100%, color-mix(in srgb, var(--sc) 22%, transparent), transparent 70%),
+    radial-gradient(50% 60% at 100% 0%, color-mix(in srgb, var(--sc) 10%, transparent), transparent 70%);
+}
+:root[data-theme="light"] .tick { background: color-mix(in srgb, var(--sc) 18%, #fff); }
+:root[data-theme="light"] .win {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.98), rgb(247 248 243 / 0.98));
+  box-shadow: -16px 16px 50px -24px rgb(13 17 20 / 0.28);
+  color: var(--mx-t7);
+}
+:root[data-theme="light"] .wf-tab { box-shadow: 0 2px 10px -6px rgb(13 17 20 / 0.2); }
+
+/* No hard edge where the "What's new" wash meets the next section: the last wash fades out before its section ends */
+:root[data-theme="light"] .px > .px-section:last-of-type::before {
+  inset: 12% 0 0 0;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 28%, #000 50%, transparent 88%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 28%, #000 50%, transparent 88%);
+}
+/* link text in the "What's new" cards: the accent, darkened so it reads on the pale card */
+:root[data-theme="light"] .wn-link { color: color-mix(in srgb, var(--accent) 55%, #0d1114); }
+
+/* Logos that are drawn white (X, Threads, TikTok, Grok) would vanish on light tiles: draw them black */
+:root[data-theme="light"] img[src$="/llms/x.svg"],
+:root[data-theme="light"] img[src$="/llms/threads.svg"],
+:root[data-theme="light"] img[src$="/llms/tiktok.svg"],
+:root[data-theme="light"] img[src$="/llms/grok.svg"] { filter: invert(1); }
+
+/* ---------- Text colours that were written for a black stage ----------
+   Pale greys and neon accents are replaced by dark equivalents so every label, caption and illustration reads on light. */
+:root[data-theme="light"] {
+  --lt-lime: #5a7500;   /* brand lime, darkened for text */
+  --lt-red: #c4283a;
+  --lt-mute: #5d6788;
+  --lt-body: #3c4668;
+}
+:root[data-theme="light"] .pcard-caption p { color: var(--lt-mute); }
+:root[data-theme="light"] .row em { color: #1f7a3a; }
+:root[data-theme="light"] .row.ghost em { color: var(--lt-red); }
+:root[data-theme="light"] .side-item { color: var(--lt-mute); }
+:root[data-theme="light"] .side-item:hover,
+:root[data-theme="light"] .side-item.is-active { color: var(--mx-fg); }
+:root[data-theme="light"] .bcard-copy p { color: var(--lt-body); }
+:root[data-theme="light"] .swap .bad { color: var(--lt-red); }
+:root[data-theme="light"] .swap .good,
+:root[data-theme="light"] .badge-ok,
+:root[data-theme="light"] .ready,
+:root[data-theme="light"] .status,
+:root[data-theme="light"] .cite { color: var(--lt-lime); }
+:root[data-theme="light"] .g-fg { stroke: var(--lt-lime); }
+:root[data-theme="light"] .shift-tag { color: var(--lt-red); }
+:root[data-theme="light"] .badge-ok { background: rgb(120 160 0 / 0.14); }
+:root[data-theme="light"] .wf-tab { color: var(--lt-body); background: rgb(255 255 255 / 0.8); }
+:root[data-theme="light"] .wf-tab.is-active { color: #fff; }
+:root[data-theme="light"] .wf-tab.is-active .n { opacity: 0.8; }
+:root[data-theme="light"] .wf-copy p { color: var(--lt-body); }
+:root[data-theme="light"] .wf-copy li { color: var(--mx-t6); }
+:root[data-theme="light"] .win { color: var(--mx-t7); }
+/* accent eyebrows and card numbers: the step or brain colour, darkened to read on white */
+:root[data-theme="light"] .wf-eyebrow { color: color-mix(in srgb, var(--sc) 55%, #0d1114); }
+:root[data-theme="light"] .bcard-num { color: color-mix(in srgb, var(--bc) 55%, #0d1114); }
+:root[data-theme="light"] .intro-outro p { color: var(--lt-body); }
+:root[data-theme="light"] .wf-tab.is-active { background: var(--mx-fg); color: #fff; }
+:root[data-theme="light"] .sig span { color: var(--lt-body); }
+:root[data-theme="light"] .m2-beta { color: #0b7a1a; border-color: #0b7a1a; }
+
+/* Problems illustrations: labels and chips sit on strong colour, so they get solid dark text and white chips */
+:root[data-theme="light"] .energy,
+:root[data-theme="light"] .mem-status { color: rgb(13 17 20 / 0.85); font-weight: 500; }
+:root[data-theme="light"] .mem-chip {
+  color: var(--mx-fg);
+  background: rgb(255 255 255 / 0.82);
+  border-color: rgb(13 17 20 / 0.18);
+}
+:root[data-theme="light"] .energy-track { background: rgb(13 17 20 / 0.16); }
+
+/* Pale accent text from the feature pages, blog code and cookie banner, darkened for light */
+:root[data-theme="light"] .ft-engine em.no { color: var(--lt-red); background: rgb(238 52 69 / 0.1); }
+:root[data-theme="light"] .tone-amber { color: #a14a10; background: rgb(254 112 50 / 0.12); border-color: rgb(254 112 50 / 0.4); }
+:root[data-theme="light"] .tone-blue { color: #1946b8; background: rgb(7 86 231 / 0.1); border-color: rgb(7 86 231 / 0.35); }
+:root[data-theme="light"] .bl-prose code { color: #3c4a00; }
+:root[data-theme="light"] .mx-links a:hover { color: var(--lt-lime); }
+:root[data-theme="light"] .text-lime { color: var(--lt-lime); }
+:root[data-theme="light"] [class*="cookie"] a, :root[data-theme="light"] [role="dialog"] a { color: var(--lt-lime); }
+:root[data-theme="light"] .ck-text a, :root[data-theme="light"] .ck-lede a { color: var(--lt-lime); }
+:root[data-theme="light"] .ft-num { color: var(--lt-lime); }
+:root[data-theme="light"] .bcard-tag { color: color-mix(in srgb, var(--bc, #FE7032) 60%, #0d1114); }
+:root[data-theme="light"] .cx-card-n { color: var(--lt-lime); }
+/* dropdown options inherited white text, invisible on the white list */
+:root[data-theme="light"] select option { color: var(--mx-fg); background: #ffffff; }

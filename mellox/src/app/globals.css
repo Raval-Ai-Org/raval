@@ -384,32 +384,6 @@ html:not(.mx-live) .hero-bg *::after,
   }
 }
 
-/* ---------- Dark scenes inside the light theme ----------
-   The home page's cinematic sections (glowing orbs and colour floods on black) are designed on a dark stage, so they
-   keep the dark tokens in both themes. Everything around them follows the visitor's theme. */
-:root[data-theme="light"] :is(.intro, .problems, .brains, .wf, .mx-footer, .ft-stage) {
-  color-scheme: dark;
-  --mx-bg: #030405;
-  --mx-bg0: #05070a;
-  --mx-bg2: #0a0d12;
-  --mx-bg3: #0d1118;
-  --mx-bg-rgb: 3 4 5;
-  --mx-panel: #0b0d0e;
-  --mx-w: 255 255 255;
-  --mx-fg: #ffffff;
-  --mx-t1: #8b97c2;
-  --mx-t2: #9aa7cf;
-  --mx-t3: #6f7aa3;
-  --mx-t4: #8e98b8;
-  --mx-t5: #7f8ab3;
-  --mx-t6: #dfe6ff;
-  --mx-t7: #cfd7f5;
-  --mx-t8: #aab4dc;
-  --mx-lime-text: #cbe960;
-  --brand-white: #ffffff;
-  color: #ffffff;
-}
-
 /* ---------- Liquid glass, light theme: frosted white instead of a dark tint ---------- */
 :root[data-theme="light"] .glass {
   background:

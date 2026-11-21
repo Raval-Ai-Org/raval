@@ -26,7 +26,7 @@ export const faqs: Faq[] = [
   },
   {
     q: "Which platforms can Mellox publish to?",
-    a: "Mellox creates a native version of each post for LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest, Reddit and Threads, then publishes instantly or on the schedule you set.",
+    a: "Mellox creates a native version of each post for LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest and Threads, then publishes instantly or on the schedule you set.",
   },
   {
     q: "What is Autopilot mode?",

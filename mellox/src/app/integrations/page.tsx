@@ -10,12 +10,13 @@ import { FAQS, GROUPS, STEPS } from "@/lib/integrations";
 import "@/components/pricing/pricing.css";
 import "@/components/features/features.css";
 import "@/components/integrations/integrations.css";
+import { ConnectorGrid } from "@/components/mellox2/Mellox2";
 import CtaBand from "@/components/cta/CtaBand";
 
 export const metadata: Metadata = {
   title: "Integrations",
   description:
-    "Connect Google Analytics and Search Console, Meta, LinkedIn, X, TikTok, YouTube, Pinterest, Reddit, WordPress, Webflow and GitHub to Mellox.",
+    "Connect Google Analytics and Search Console, Meta, LinkedIn, X, TikTok, YouTube, Pinterest, WordPress, Webflow and GitHub to Mellox.",
   alternates: { canonical: "/integrations" },
 };
 
@@ -82,6 +83,8 @@ export default function IntegrationsPage() {
             </ol>
           </div>
         </section>
+
+        <ConnectorGrid />
 
         {GROUPS.map((g) => (
           <section key={g.id} id={g.id} className="px-section ig-group" style={{ ["--accent" as string]: g.accent }}>

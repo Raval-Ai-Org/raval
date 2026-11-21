@@ -11,12 +11,14 @@ import Problems from "@/components/Problems";
 import Footer from "@/components/Footer";
 import Faq from "@/components/Faq";
 import Testimonials from "@/components/Testimonials";
-import Workflow from "@/components/Workflow";
+import MoxJourney from "@/components/journey/MoxJourney";
+import { PlatformGrid } from "@/components/platform/Platform";
 import JsonLd from "@/components/JsonLd";
 import Navbar from "@/components/Navbar";
 import { FEATURED, faqs } from "@/lib/faqs";
 import { SITE_DESCRIPTION, faqJsonLd } from "@/lib/seo";
 import PricingReveal from "@/components/pricing/PricingReveal";
+import { Mellox2Home } from "@/components/mellox2/Mellox2";
 import WhatsNew from "@/components/whats-new/WhatsNew";
 import "@/components/pricing/pricing.css";
 
@@ -38,6 +40,17 @@ export default function Home() {
           <Navbar />
 
           <div className="relative z-10 flex flex-col items-center">
+            {/* Mox, the Mellox 3D character, is the main visual of Mellox 2.0 */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/mox/face.webp"
+              alt="Mox, the Mellox 3D character"
+              width={120}
+              height={125}
+              className="mb-5 h-[96px] w-auto rounded-[28px] sm:h-[120px]"
+              style={{ boxShadow: "0 0 60px rgba(35,253,54,0.45)" }}
+              fetchPriority="high"
+            />
             <p className="hero-pill rounded-full px-4 py-2 text-[11px] font-medium tracking-[0.02em] text-white/85 sm:text-[12.5px]">
               The only AI you need for growth and marketing.
             </p>
@@ -71,13 +84,17 @@ export default function Home() {
 
         <Problems />
 
-        <Brains />
+        {/* The whole product as one animated flow, guided by Mox, then every area as a card */}
+        <MoxJourney />
 
-        <Workflow />
+        <PlatformGrid />
+
+        <Brains />
 
         {/* New capabilities: reuses the pricing page design tokens through the .px wrapper */}
         <div className="px">
           <PricingReveal />
+          <Mellox2Home />
           <WhatsNew
             title="Now with Autopilot and your favourite tools."
             blurb="Autopilot mode, Claude and ChatGPT over MCP, Slack and Notion, and Canva editing."

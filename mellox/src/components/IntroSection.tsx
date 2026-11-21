@@ -27,7 +27,6 @@ const socials: { name: string; icon: string }[] = [
   { name: "Facebook", icon: "facebook" },
   { name: "Instagram", icon: "instagram" },
   { name: "YouTube", icon: "youtube" },
-  { name: "Reddit", icon: "reddit" },
   { name: "LinkedIn", icon: "linkedin" },
   { name: "Pinterest", icon: "pinterest" },
   { name: "TikTok", icon: "tiktok" },

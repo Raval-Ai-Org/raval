@@ -136,7 +136,7 @@ export const GROUPS: IntegrationGroup[] = [
       { name: "TikTok", logo: "tiktok", text: "Plan and publish short-form content from the same queue.", plan: "Paid plans" },
       { name: "YouTube", logo: "youtube", text: "Keep video publishing on the same calendar as everything else.", plan: "Paid plans" },
       { name: "Pinterest", logo: "pinterest", text: "Publish pins as part of the same campaign plan.", plan: "Paid plans" },
-      { name: "Reddit", logo: "reddit", text: "Draft and schedule posts for the communities your audience reads.", plan: "Paid plans" },
+      { name: "Reddit (Beta agent)", logo: "reddit", text: "The Reddit agent finds conversations and drafts replies you approve. Coming soon: connecting your Reddit account.", plan: "Beta" },
     ],
   },
   {
@@ -177,7 +177,7 @@ export const FAQS = [
   },
   {
     q: "Which social platforms can I publish to?",
-    a: "Facebook, Instagram, Threads, LinkedIn, X, TikTok, YouTube, Pinterest and Reddit.",
+    a: "Facebook, Instagram, Threads, LinkedIn, X, TikTok, YouTube and Pinterest. Reddit is coming soon.",
   },
   {
     q: "Which AI assistants do you track?",

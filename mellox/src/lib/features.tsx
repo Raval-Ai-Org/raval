@@ -210,7 +210,7 @@ export const FEATURES: Feature[] = [
     headline: ["Write once. Publish", "natively everywhere."],
     lede: "Native posts for LinkedIn, X, Instagram, TikTok and more, scheduled on your calendar and published only after you approve.",
     metaDescription:
-      "Plan, approve, schedule and publish content natively to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest, Reddit and Threads from one workspace.",
+      "Plan, approve, schedule and publish content natively to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest and Threads from one workspace.",
     steps: [
       { title: "Draft in your voice", text: "Posts, carousels and articles are created from your Brand DNA and plan." },
       { title: "Approve", text: "Every draft waits in a Needs Approval queue. Nothing goes out until you confirm it." },
@@ -237,7 +237,7 @@ export const FEATURES: Feature[] = [
       },
       {
         q: "Which channels can I publish to?",
-        a: "Facebook, Instagram, YouTube, Reddit, LinkedIn, Pinterest, TikTok, X and Threads.",
+        a: "Facebook, Instagram, YouTube, LinkedIn, Pinterest, TikTok, X and Threads.",
       },
       {
         q: "How do I connect my accounts?",
