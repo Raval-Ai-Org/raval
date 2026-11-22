@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 import { buildSecurityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
+  // This site sits inside a larger repo; keep Turbopack rooted here so the parent's src/instrumentation.ts is not picked up.
+  turbopack: { root: process.cwd() },
   // Lets a production build run into its own folder (NEXT_DIST_DIR=.next-build) without disturbing a running dev server.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Do not advertise the framework in an "X-Powered-By: Next.js" response header.

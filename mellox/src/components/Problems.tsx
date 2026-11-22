@@ -35,7 +35,6 @@ const socials = [
   "facebook",
   "instagram",
   "youtube",
-  "reddit",
   "linkedin",
   "pinterest",
   "tiktok",

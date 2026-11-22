@@ -9,7 +9,7 @@ const ENGINES = [
   { name: "Gemini", icon: "gemini" },
   { name: "Perplexity", icon: "perplexity" },
 ];
-const CHANNELS = ["linkedin", "x", "instagram", "tiktok", "facebook", "youtube", "pinterest", "reddit", "threads"];
+const CHANNELS = ["linkedin", "x", "instagram", "tiktok", "facebook", "youtube", "pinterest", "threads"];
 
 function Icon({ name, size = 22 }: { name: string; size?: number }) {
   // eslint-disable-next-line @next/next/no-img-element

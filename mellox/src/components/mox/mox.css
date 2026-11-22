@@ -1,0 +1,20 @@
+/* Mox cut-outs: soft ground shadow, optional float. */
+.mox {
+  display: block;
+  max-width: none;
+  user-select: none;
+  filter: drop-shadow(0 18px 22px rgb(0 0 0 / 0.28)) drop-shadow(0 0 22px rgb(35 253 54 / 0.12));
+}
+:root[data-theme="light"] .mox {
+  filter: drop-shadow(0 16px 18px rgb(13 17 20 / 0.16));
+}
+.mox-float {
+  animation: mox-bob 4.6s ease-in-out infinite;
+}
+@keyframes mox-bob {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-1deg); }
+  50% { transform: translate3d(0, -10px, 0) rotate(1.2deg); }
+}
+@media (prefers-reduced-motion: reduce), (pointer: coarse), (hover: none) {
+  .mox-float { animation: none; }
+}

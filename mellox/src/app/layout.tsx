@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Michroma, Google_Sans_Flex, Micro_5 } from "next/font/google";
 import "./globals.css";
+import "@/components/light-sections.css";
 import Analytics from "@/components/Analytics";
 import MotionGate from "@/components/MotionGate";
 import Preloader from "@/components/Preloader";

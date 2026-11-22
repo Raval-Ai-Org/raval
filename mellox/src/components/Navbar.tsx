@@ -15,8 +15,10 @@ type NavLink = { label: string; href: string; children?: Child[] };
 const links: NavLink[] = [
   {
     label: "Product",
-    href: "/features/brand-dna",
+    href: "/features",
     children: [
+      { label: "All features", hint: "Follow Mox through everything Mellox does", href: "/features" },
+      { label: "Mellox 2.0 and Mox", hint: "Everything new, with Mox", href: "/features/mellox-2" },
       { label: "Brand DNA", hint: "AI that sounds like you", href: "/features/brand-dna" },
       { label: "AI Visibility (GEO)", hint: "See how AI talks about you", href: "/features/ai-visibility" },
       { label: "The Four Brains", hint: "Four specialists, one answer", href: "/features/four-brains" },

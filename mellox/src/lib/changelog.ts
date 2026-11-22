@@ -21,6 +21,25 @@ export type Release = {
 
 export const RELEASES: Release[] = [
   {
+    date: "2026-11-11",
+    version: "v2.0",
+    title: "Mellox 2.0 and Mox",
+    summary: "A redesigned app with Mox, our 3D guide, plus Campaigns, Inspo, new video types, creator ads and more.",
+    changes: [
+      { type: "new", text: "Meet Mox, the 3D character who guides you through greetings, chat, onboarding, the tour and loading screens." },
+      { type: "new", text: "New light UI with a simpler sidebar, a new Home, a Create screen, a simpler Studio, streaks and levels, and a new onboarding." },
+      { type: "new", text: "Campaigns: plan a full campaign around a key date, with 16 campaign types." },
+      { type: "new", text: "Inspo: set your brand's look in one place, and upload up to 100 files at once." },
+      { type: "new", text: "Reddit agent (Beta): finds conversations and drafts replies you approve." },
+      { type: "new", text: "12 video styles, storyboards with quality checks, automatic soundtrack and motion graphics." },
+      { type: "new", text: "Creator UGC video ads with 30 Reel formats." },
+      { type: "new", text: "Product hero posters, photo design and connected carousels." },
+      { type: "new", text: "A Library that shows every piece at its true shape, and hearts that teach Mellox your taste." },
+      { type: "new", text: "Social analytics for every post, a Google Ads and HubSpot view, and analytics without connecting Google." },
+      { type: "new", text: "New connectors: Canva, Google Drive, Gmail, Google Ads, HubSpot, Mailchimp, Google Sheets and Wix." },
+    ],
+  },
+  {
     date: "2026-10-06",
     version: "v1.3",
     title: "Autopilot, MCP and your favourite tools",

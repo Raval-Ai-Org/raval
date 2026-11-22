@@ -29,7 +29,7 @@ export const TOPICS = [
   "AI marketing assistant and AI CMO",
   "AI social media post generator (image posts, carousels, short video)",
   "AI image generation for marketing, editable in Canva",
-  "AI content calendar, scheduling and native publishing to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest, Reddit and Threads",
+  "AI content calendar, scheduling and native publishing to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest and Threads",
   "Brand voice and brand kit extracted from a website (Brand DNA)",
   "Generative Engine Optimization (GEO) and Answer Engine Optimization (AEO)",
   "AI search visibility tracking: how ChatGPT, Gemini and Perplexity describe a brand",
@@ -59,7 +59,7 @@ export const QUICK_ANSWERS: { q: string; a: string }[] = [
   },
   {
     q: "How do I publish and schedule posts to LinkedIn, X, Instagram and TikTok?",
-    a: "Connect your accounts, pick a time on the Mellox calendar, and it publishes natively to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest, Reddit and Threads. Nothing is published without your approval.",
+    a: "Connect your accounts, pick a time on the Mellox calendar, and it publishes natively to LinkedIn, X, Instagram, TikTok, Facebook, YouTube, Pinterest and Threads. Nothing is published without your approval.",
   },
   {
     q: "How do I get my brand recommended by ChatGPT, Gemini and Perplexity?",
@@ -111,7 +111,7 @@ export function buildLlmsTxt(posts: PostIndexEntry[]): string {
 
   add("## Product");
   for (const f of FEATURES) add(`- [${f.name}](${abs(`/features/${f.slug}`)}): ${f.metaDescription}`);
-  add(`- [Integrations](${abs("/integrations")}): Connect Claude and ChatGPT over MCP, Slack, Notion, Canva, Google Analytics and Search Console, Meta, LinkedIn, X, TikTok, YouTube, Pinterest, Reddit, WordPress, Webflow and GitHub.`);
+  add(`- [Integrations](${abs("/integrations")}): Connect Claude and ChatGPT over MCP, Slack, Notion, Canva, Google Analytics and Search Console, Meta, LinkedIn, X, TikTok, YouTube, Pinterest, WordPress, Webflow and GitHub.`);
   add();
 
   add("## Who it is for");
