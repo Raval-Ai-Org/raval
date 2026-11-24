@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blind vote</title>
+    <style>
+      :root {
+        --bg: #f7f7f5;
+        --ink: #15171a;
+        --muted: #6b6f76;
+        --line: #dcdcd6;
+        --pick: #1f7a4d;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121314;
+          --ink: #ecece8;
+          --muted: #9a9ea6;
+          --line: #2c2e31;
+          --pick: #4cc38a;
+        }
+      }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }
+      main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+      .pair { border-top: 1px solid var(--line); padding: 20px 0; }
+      .brief { font-weight: 600; margin-bottom: 10px; }
+      .imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .imgs img { width: 100%; border-radius: 10px; border: 3px solid transparent; cursor: pointer; }
+      .imgs img.picked { border-color: var(--pick); }
+      button { font: inherit; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+      .bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); }
+      .muted { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Which post is better?</h1>
+      <p class="muted">
+        Copy this page into the run folder and open it from there (it reads pairs.json and img/).
+        Click the better picture, or Tie. You never see which version made which picture. Save
+        your votes as votes.json in the run folder, then run score.mjs.
+      </p>
+      <div class="bar"><span id="count" class="muted"></span><button id="save">Save votes.json</button></div>
+      <div id="pairs"></div>
+    </main>
+    <script>
+      const votes = {};
+      const count = () =>
+        (document.getElementById("count").textContent = Object.keys(votes).length + " voted");
+      fetch("pairs.json")
+        .then((r) => r.json())
+        .then((pairs) => {
+          const root = document.getElementById("pairs");
+          for (const p of pairs) {
+            if (!p.left || !p.right) continue;
+            const el = document.createElement("section");
+            el.className = "pair";
+            el.innerHTML =
+              '<div class="brief"></div><div class="imgs"><img alt="Left picture" /><img alt="Right picture" /></div><button>Tie</button>';
+            el.querySelector(".brief").textContent = p.brief;
+            const [l, r] = el.querySelectorAll("img");
+            l.src = "img/" + p.left;
+            r.src = "img/" + p.right;
+            const mark = (side) => {
+              votes[p.id] = side;
+              l.classList.toggle("picked", side === "left");
+              r.classList.toggle("picked", side === "right");
+              count();
+            };
+            l.onclick = () => mark("left");
+            r.onclick = () => mark("right");
+            el.querySelector("button").onclick = () => mark("tie");
+            root.appendChild(el);
+          }
+          count();
+        });
+      document.getElementById("save").onclick = () => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(
+          new Blob([JSON.stringify(votes, null, 2)], { type: "application/json" }),
+        );
+        a.download = "votes.json";
+        a.click();
+      };
+    </script>
+  </body>
+</html>

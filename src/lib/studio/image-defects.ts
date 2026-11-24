@@ -128,9 +128,13 @@ export function creativeScore(scores: RubricScores | undefined, kind: ReviewKind
   return weight ? Math.round((total / weight) * 10) / 10 : null;
 }
 
+/** Best of two only when the first take scores under this (out of 10). */
+export const BEST_OF_TWO_BELOW = 8;
+
 export type RedoDecision = {
   redo: boolean;
-  reason: "hard" | "score" | null;
+  /** "best": a second take for a new brand's first posts (Round 9, flag `besttwo`). */
+  reason: "hard" | "score" | "best" | null;
   /** What the next render must fix, most important first. */
   fixes: string[];
   score: number | null;
@@ -144,6 +148,7 @@ export function creativeRedo(
   review: { issues: readonly string[]; scores?: RubricScores; fixes?: readonly string[] } | null,
   kind: ReviewKind,
   attempts: number,
+  opts: { bestOfTwo?: boolean } = {},
 ): RedoDecision {
   const score = creativeScore(review?.scores, kind);
   if (!review || attempts >= 1) return { redo: false, reason: null, fixes: [], score };
@@ -158,6 +163,11 @@ export function creativeRedo(
   const fixes = (review.fixes ?? []).filter((f) => f.trim().length >= 4).slice(0, 4);
   if (score !== null && score < REDO_BELOW && fixes.length)
     return { redo: true, reason: "score", fixes, score };
+  // A new brand's first posts: one more take, and the better of the two is
+  // kept. Only with a score, so the two can be compared.
+  // A first take that already scores well is kept: no second render, no cost.
+  if (opts.bestOfTwo && score !== null && score < BEST_OF_TWO_BELOW)
+    return { redo: true, reason: "best", fixes, score };
   return { redo: false, reason: null, fixes: [], score };
 }
 
@@ -168,10 +178,12 @@ export function creativeRedo(
  * that isn't better never replaces it.
  */
 export function keepFirstRender(
-  first: { score: number | null; hard: boolean } | null | undefined,
+  first: { score: number | null; hard: boolean; best?: boolean } | null | undefined,
   second: { score: number | null; hard: boolean },
 ): boolean {
   if (!first || first.score === null) return false;
   if (first.hard !== second.hard) return second.hard;
+  // Best of two: two equal takes, the higher score wins (the first on a tie).
+  if (first.best) return second.score === null || first.score >= second.score;
   return second.score !== null && first.score - second.score >= 0.5;
 }

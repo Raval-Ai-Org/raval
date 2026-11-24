@@ -370,7 +370,21 @@ export type KindSource = {
   product?: boolean;
   /** A reviewed script is the source. */
   script?: boolean;
+  /**
+   * Round 9 video pack: the brand sells a service, venue or digital product
+   * (sectors/kinds.ts). With no catalogue product, it never gets a
+   * product-only kind: the work is shown being done instead.
+   */
+  service?: boolean;
 };
+
+/** Kinds that show a physical product alone; a service with no product gets none. */
+const PRODUCT_ONLY: readonly VideoKindId[] = ["product-motion", "product-showcase", "product-demo"];
+
+/** The service fallback: the work shown being done, with hands (same model and price tier). */
+function forService(kind: VideoKindId, source: KindSource): VideoKindId {
+  return source.service && !source.product && PRODUCT_ONLY.includes(kind) ? "how-it-works" : kind;
+}
 
 /**
  * The kind a video is made as when the person left "Auto". A post's picture
@@ -384,6 +398,10 @@ export function pickVideoKind(
   source: KindSource = {},
   template?: string,
 ): VideoKindId {
+  return forService(pickVideoKindBase(brief, source, template), source);
+}
+
+function pickVideoKindBase(brief: string, source: KindSource, template?: string): VideoKindId {
   const fromTemplate = kindForTemplate(template);
   if (fromTemplate) return fromTemplate;
   if (source.carousel) return "motion-post";
@@ -414,8 +432,8 @@ export function pickVideoKind(
 export function usableKind(kind: VideoKindId, source: KindSource): VideoKindId {
   if (videoKind(kind).join === "code") kind = "living-picture";
   const spec = videoKind(kind);
-  if (!spec.needsSource || source.picture || source.carousel) return kind;
-  return "product-motion";
+  if (!spec.needsSource || source.picture || source.carousel) return forService(kind, source);
+  return forService("product-motion", source);
 }
 
 export type PeopleRule = VideoKind["people"];

@@ -6,7 +6,7 @@
 // channels and formats come only from the skeleton.
 // Pure: no I/O.
 import { withoutUnknownFacts } from "@/lib/autopilot/brief";
-import type { CampaignPiece } from "./contracts";
+import type { CampaignPiece, CampaignPlatform } from "./contracts";
 
 export type GroundOptions = {
   /** True when a sentence's facts are all in the brief or brand context. */
@@ -46,6 +46,26 @@ export function groundText(value: unknown, max: number, opts: GroundOptions): st
 }
 
 export type WrittenPlan = { bigIdea: string; pieces: CampaignPiece[]; dropped: number };
+
+/**
+ * Round 9: the campaign's shared look, grounded like the pieces (no figure,
+ * link or rival the brand never gave). Null when nothing usable came back.
+ */
+export function groundPlatform(raw: unknown, opts: GroundOptions): CampaignPlatform | null {
+  const out = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const p =
+    out.platform && typeof out.platform === "object"
+      ? (out.platform as Record<string, unknown>)
+      : null;
+  if (!p) return null;
+  const platform = {
+    tagline: groundText(p.tagline, 80, opts),
+    keyVisual: groundText(p.keyVisual, 240, opts),
+    motif: groundText(p.motif, 160, opts),
+    photoRule: groundText(p.photoRule, 200, opts),
+  };
+  return platform.tagline || platform.keyVisual ? platform : null;
+}
 
 /**
  * Lay the model's words onto the skeleton. Unknown ids are ignored; a piece

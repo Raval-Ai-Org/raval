@@ -160,7 +160,7 @@ export const TERMS: TermsSection[] = [
     title: "Suspension and termination",
     paras: [
       "You may stop using Mellox at any time. We may suspend or end your access if you break these Terms, if payment fails, if required by law, or if your use puts the service or others at risk. Where it is reasonable, we will tell you first.",
-      "After termination you lose access to your workspace. Request export or deletion through privacy@mellox.ai or our contact page; the Privacy Policy explains existing deletion controls, retained copies and records requiring operational review. OWNER CONFIRMATION REQUIRED: termination retention procedures and legally required records. Sections that by their nature should survive, such as ownership, disclaimers and liability, continue to apply.",
+      "After termination you lose access to your workspace. Request export or deletion through privacy@mellox.ai or our contact page; the Privacy Policy explains how long each kind of data is kept, which copies remain with the people you shared them with, and the records we must keep by law, such as billing and tax records. Sections that by their nature should survive, such as ownership, disclaimers and liability, continue to apply.",
     ],
   },
   {

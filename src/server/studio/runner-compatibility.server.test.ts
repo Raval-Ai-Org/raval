@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
 // Job writes go through the same authorized fixture the test passes in.
 vi.mock("./job-writer.server", () => ({ studioJobWriter: (client: unknown) => client }));
-vi.mock("@/lib/feature-flags", () => ({ isAudienceAutoScoreEnabled: () => false }));
+vi.mock("@/lib/feature-flags", () => ({
+  isAudienceAutoScoreEnabled: () => false,
+  creativeSkillsFor: () => ({}),
+}));
 vi.mock("@/lib/openrouter-image.server", () => ({
   isImageTask: () => true,
   checkImageTask: mocks.check,

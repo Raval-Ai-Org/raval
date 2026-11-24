@@ -97,6 +97,13 @@ export const ControlsSchema = z.object({
   /** Build a still storyboard before spending video credits. */
   videoPreview: z.boolean().optional(),
   campaign: z.string().trim().max(120).optional(),
+  /** Round 9: a campaign's type voice (type-voices.ts id), checked again by the runner. */
+  typeVoice: z
+    .string()
+    .trim()
+    .max(40)
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   /**
    * Explicit source photos selected for this generation, checked against this
    * workspace. Up to six when designing with them, four otherwise.
@@ -468,7 +475,15 @@ export type MediaOutput = {
 
 export type StudioJobOutput = {
   visualTaste?: VisualSnapshot;
-  artwork?: { headline: string; brandName: string; artStoragePath?: string };
+  artwork?: {
+    headline: string;
+    brandName: string;
+    artStoragePath?: string;
+    /** Round 9: the headline set over the whole picture (no brand direction needed). */
+    layout?: "overlay";
+    /** The catalogue font the overlay headline is set in. */
+    font?: string;
+  };
   storyboard?: {
     status: "preview" | "rendering" | "ready";
     assetId?: string;
@@ -503,6 +518,10 @@ export type StudioJobOutput = {
   briefRead?: BriefRead;
   /** Exact short copy selected for an image layer, kept separate from art direction. */
   onImageText?: string;
+  /** Image/ad: the director's idea technique (creative-system.ts id, ADR-0052). */
+  technique?: string;
+  /** Round 9 shadow check: the drawn words share no word with the brief (recorded only). */
+  briefFitShadow?: string;
   /** Meme and other multi-line layouts: the exact lines, in order (categories.ts). */
   onImageLines?: string[];
   /** Meme: the layout the picture is made on (categories.ts MEME_LAYOUTS id). */

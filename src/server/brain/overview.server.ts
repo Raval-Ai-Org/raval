@@ -64,6 +64,10 @@ async function goalOverview(
         .then(({ leadCountFor }) => leadCountFor(workspaceId, goals.startedAt, db))
         .catch(() => null)
     : null;
+  // Round 9: clicks on tracked links (counted only when a person opened one).
+  const linkClicks = await import("@/server/links/tracked.server")
+    .then(({ linkClicksSince }) => linkClicksSince(db as never, workspaceId, goals.startedAt))
+    .catch(() => null);
   const views = published
     .map((p) => Number((p.metrics as Record<string, unknown> | null)?.views))
     .filter((v) => Number.isFinite(v) && v >= 0);
@@ -76,6 +80,7 @@ async function goalOverview(
         views: views.length ? views.reduce((a, b) => a + b, 0) : null,
         connected: [...new Set(published.map((p) => String(p.platform)))],
         leads,
+        linkClicks,
       },
       new Date(),
     ),

@@ -15,6 +15,8 @@ export type MeasuredFacts = {
   connected: string[];
   /** New contacts counted by a connected CRM since the goal started (never an estimate). */
   leads?: { value: number; source: string; measuredAt: string } | null;
+  /** Clicks on Mellox's tracked links since the goal started (people only, never bots). */
+  linkClicks?: number | null;
 };
 
 export type ProgressRow =
@@ -123,6 +125,19 @@ export function goalProgress(
         t.baseline !== undefined
           ? `You started at ${formatCount(t.baseline)}. Update it in Brand → Goal when you check.`
           : "Add where you are today in Brand → Goal so you can see the gap.",
+    });
+  }
+
+  // Clicks on the brand's own links in posts: measured, never a target.
+  if (typeof measured.linkClicks === "number") {
+    rows.push({
+      id: "clicks",
+      state: "measured",
+      label: "Clicks on your links",
+      value: measured.linkClicks,
+      target: null,
+      ratio: null,
+      detail: "People who opened a link in a Mellox post since you set the goal",
     });
   }
 

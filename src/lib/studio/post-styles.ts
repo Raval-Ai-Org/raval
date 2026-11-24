@@ -671,6 +671,25 @@ export function pickSurpriseIdea(args: {
   recent?: readonly string[];
   /** A Trend Radar trend reaches this brand now. */
   hasTrend?: boolean;
+  /** Round 9 relevance pack (ADR-0053): the service idea shows the real work. */
+  relevance?: boolean;
+}): SurpriseIdea {
+  const idea = pickSurpriseIdeaBase(args);
+  return args.relevance && idea.id === "service-object" ? SERVICE_WORK_IDEA : idea;
+}
+
+/** The relevance pack's service idea: the work itself first, no stock example of one trade. */
+const SERVICE_WORK_IDEA: SurpriseIdea = {
+  id: "service-object",
+  line: "One strong idea that shows what the brand's main product or service really gives its customers: the real work, the result or the moment it matters, specific enough that a stranger could name the business, with a bold headline.",
+};
+
+function pickSurpriseIdeaBase(args: {
+  seed: string;
+  hasOffer?: boolean;
+  hasOccasion?: boolean;
+  recent?: readonly string[];
+  hasTrend?: boolean;
 }): SurpriseIdea {
   const recent = new Set(args.recent?.slice(0, 2) ?? []);
   const pool = SURPRISE_IDEAS.filter((i) => {

@@ -309,7 +309,7 @@ export function slidePlan(count: number): SlideRole[] {
 }
 
 /** The slide-by-slide brief the model writes to. */
-export function slidePlanText(count: number): string {
+export function slidePlanText(count: number, skills?: { relevance?: boolean }): string {
   const what: Record<SlideRole, string> = {
     cover:
       "cover. A promise or a tension in at most 8 words, specific enough that only this brand could have written it. `body` is one short line that says who it is for or what they will get.",
@@ -320,7 +320,9 @@ export function slidePlanText(count: number): string {
     proof: "proof. One concrete example, result or demonstration from the supplied facts.",
     recap:
       "recap. The whole carousel in 3 or 4 lines. `body` is those lines separated by line breaks, each at most 6 words, in the same order as the slides.",
-    cta: "close. One clear next step that follows from the content, in the heading. `body` says what they get by doing it.",
+    cta: skills?.relevance
+      ? "close. The brief's own next step (its action, place, date or link) in the heading, never a stock line. `body` says what they get."
+      : "close. One clear next step that follows from the content, in the heading. `body` says what they get by doing it.",
   };
   return slidePlan(count)
     .map((role, i) => `Slide ${i + 1}: ${what[role]}`)

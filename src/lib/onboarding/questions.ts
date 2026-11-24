@@ -60,6 +60,8 @@ export type PickScreen = {
 
 export type ChannelsScreen = { kind: "channels"; id: "channels"; title: string; sub: string };
 export type StylesScreen = { kind: "styles"; id: "styles"; title: string; sub: string };
+/** The brand's own photos (team, place, work), kept as Inspo media and never redrawn. */
+export type PhotosScreen = { kind: "photos"; id: "photos"; title: string; sub: string };
 export type SayScreen = {
   kind: "say";
   id: string;
@@ -70,7 +72,7 @@ export type SayScreen = {
   side: "right" | "center";
 };
 
-export type AskScreen = PickScreen | ChannelsScreen | StylesScreen | SayScreen;
+export type AskScreen = PickScreen | ChannelsScreen | StylesScreen | PhotosScreen | SayScreen;
 
 const ROLE_OPTIONS: Option<Role>[] = [
   {
@@ -383,6 +385,12 @@ export function askScreens(a: Answers, ctx: AskContext): AskScreen[] {
       ],
       pose: "pose-thinking",
       side: "right",
+    },
+    {
+      kind: "photos",
+      id: "photos",
+      title: "Show Mox your **real** business",
+      sub: "Up to 10 photos of your team, your place and your work. Mox puts them in posts as they are, never redrawn.",
     },
   );
   if (!ctx.sourceKnown) {

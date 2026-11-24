@@ -141,6 +141,20 @@ describe("goalProgress", () => {
     expect(reach.state === "measured" && reach.ratio).toBeCloseTo(0.24);
   });
 
+  it("shows link clicks only when tracked links exist (Round 9)", () => {
+    const at = new Date("2026-11-15T00:00:00Z");
+    const none = goalProgress(d.goals, { postsPublished: 1, views: null, connected: [] }, at);
+    expect(none.rows.some((r) => r.id === "clicks")).toBe(false);
+    const some = goalProgress(
+      d.goals,
+      { postsPublished: 1, views: null, connected: [], linkClicks: 42 },
+      at,
+    );
+    const clicks = some.rows.find((r) => r.id === "clicks")!;
+    expect(clicks.state === "measured" && clicks.value).toBe(42);
+    expect(clicks.state === "measured" && clicks.target).toBeNull();
+  });
+
   it("counts leads only from a connected CRM, never estimated", () => {
     const leadsGoal = decideGoals(
       {

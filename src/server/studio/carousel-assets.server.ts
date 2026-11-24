@@ -11,6 +11,7 @@
 // fonts don't cover, a storage hiccup) keeps working exactly as it did before
 // slide images existed.
 import "server-only";
+import { creativeSkillsFor } from "@/lib/feature-flags";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -155,7 +156,13 @@ export async function storeCarouselSlides(args: {
   const theme = safeTheme(spec.theme);
   const slides = normalizeSlides(args.slides, args.slides.length);
   if (!design || !theme || slides.length < 2) return null;
-  if (!carouselRenderable({ slides, brand: spec.brand })) return null;
+  if (
+    !carouselRenderable(
+      { slides, brand: spec.brand },
+      { arabic: creativeSkillsFor(workspaceId).scripts },
+    )
+  )
+    return null;
   const coverPath =
     args.coverPath && isWorkspaceStoragePath(args.coverPath, workspaceId) ? args.coverPath : null;
   const hash = carouselHash(slides, spec, coverPath);

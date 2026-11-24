@@ -10,7 +10,15 @@
 import { radarForBrief } from "@/lib/trends/radar";
 import { signTrendMedia, trendPicturePaths } from "@/server/trends/media.server";
 import { techniqueById } from "@/lib/studio/creative-system";
-import { buildPostPlanPrompt } from "@/lib/studio/post-plan";
+import { buildPostPlanPrompt, composedHeadline } from "@/lib/studio/post-plan";
+import { afterComesFirst, asksBeforeAfter } from "@/lib/studio/job-done";
+import {
+  OVERLAY_SPACE_NOTE,
+  overlayHeadline,
+  type HeadlineOverlay,
+} from "@/lib/studio/headline-overlay";
+import { loadSiteGlance } from "./prompt-media.server";
+import { whatsAppLine, whatsAppLink } from "@/lib/studio/whatsapp";
 import { humanizeOutput } from "@/lib/studio/humanize";
 import { naturalizeVariants } from "@/lib/studio/naturalize.server";
 import { copyIssue } from "@/lib/studio/copy-qa";
@@ -138,7 +146,10 @@ import { isPhotoDesignType } from "@/lib/studio/photo-design/mode";
 import { photoDesignCopy } from "@/lib/studio/photo-design/plan";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { isClipEditEnabled, isMotionMoxEnabled } from "@/lib/feature-flags";
-import { isMemeTemplatesEnabled } from "@/lib/feature-flags";
+import { creativeSkillsFor, isMemeTemplatesEnabled } from "@/lib/feature-flags";
+import type { CreativeSkills } from "@/lib/feature-flags";
+import { brandTypeChoice, skillLinesFor } from "./skill-lines.server";
+import { typeVoiceFonts, typeVoiceId } from "@/lib/studio/type-voices";
 import { elementsFromBrief } from "@/lib/studio/motionmox/elements";
 import {
   CLIP_EDIT_FAILED,
@@ -149,6 +160,28 @@ import {
   type ClipEditTask,
 } from "./clip-edit/render.server";
 
+/** Fewer than three finished picture posts: a new brand (Round 9 best-of-two). Fails closed. */
+async function isNewBrandForPictures(
+  client: SupabaseClient,
+  workspaceId: string,
+): Promise<boolean> {
+  try {
+    const { count, error } = await client
+      .from("studio_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("status", "succeeded")
+      .in("type", ["image", "social"]);
+    if (error || count === null) return false;
+    return count < 3;
+  } catch {
+    return false;
+  }
+}
+
+/** Shown when the code-set headline could not be drawn (the picture has no words). */
+const OVERLAY_FAILED_NOTE =
+  "The headline could not be set on this picture. Add it with Edit text, or make a new version.";
 /** An animated photo a recap video waits for; never the post's own media. */
 const MOTION_SLOT = "motion:";
 const isMotionSlot = (slot: string) => slot.startsWith(MOTION_SLOT);
@@ -223,6 +256,7 @@ import { AIM_ANGLES } from "@/lib/studio/viral";
 import { normalizeSlides, pickCarouselStructure } from "@/lib/studio/carousel/story";
 import {
   BACKDROP_RATIO,
+  carouselFont,
   carouselTheme,
   isSeamless,
   pickCarouselDesign,
@@ -264,7 +298,7 @@ import {
   postStyleById,
   type PostStyle,
 } from "@/lib/studio/post-styles";
-import { HEADLINE_MAX_WORDS, briefFitIssues } from "@/lib/studio/brief-fit";
+import { HEADLINE_MAX_WORDS, briefFitIssues, drawnWordsDrift } from "@/lib/studio/brief-fit";
 import type { VisualSnapshot } from "@/lib/brand-visuals/contracts";
 import { bibleWantsLogo, wantsSupportingLines } from "@/lib/brand-visuals/bible";
 import {
@@ -342,8 +376,19 @@ type ProviderTask = {
   referenceWarning?: string;
   reviewAttempts?: number;
   /** A taste redo keeps the first picture (unlinked) so the better-scoring one wins. */
-  firstRender?: { storagePath: string; score: number | null; hard: boolean; review: ImageReview };
+  firstRender?: {
+    storagePath: string;
+    score: number | null;
+    hard: boolean;
+    review: ImageReview;
+    /** A best-of-two take (Round 9): the higher score wins, not only a clearly better one. */
+    best?: boolean;
+    /** The first take's word-free picture, so a kept first take keeps "Edit text" on itself. */
+    artStoragePath?: string;
+  };
   compose?: boolean;
+  /** Round 9 (flag `headline`): code sets this headline on the word-free picture. */
+  overlay?: HeadlineOverlay;
   /** A design layer the person's real photos are laid into once it is finished. */
   photoDesign?: PhotoDesignTask;
   /** A product hero poster made from the product's own cut-out (ADR-0040). */
@@ -1093,10 +1138,18 @@ function carouselSpec(args: {
     ? ctx.style.visual.palette
     : paletteFromDnaColors((dna?.colors as never) ?? null);
   const dnaFonts = Array.isArray(dna?.fonts) ? (dna.fonts as string[]) : [];
-  const fonts = ctx.style?.visual.typography ?? {
+  const ownFonts = ctx.style?.visual.typography ?? {
     heading: dnaFonts[0],
     body: dnaFonts[1] ?? dnaFonts[0],
   };
+  // Type pack (ADR-0053): with no display face of its own, the brand's type
+  // voice draws the slides instead of the Inter fallback.
+  const voice = brandTypeChoice({
+    workspaceId: job.workspace_id,
+    ctx,
+    skills: creativeSkillsFor(job.workspace_id),
+  });
+  const fonts = voice ? typeVoiceFonts(voice) : ownFonts;
   const picked = pickCarouselDesign({
     profileKey: `${job.workspace_id}:brand`,
     seed: input.idempotencyKey,
@@ -1150,10 +1203,17 @@ function storyLook(args: {
     ? args.ctx.style.visual.palette
     : paletteFromDnaColors((args.dna?.colors as never) ?? null);
   const dnaFonts = Array.isArray(args.dna?.fonts) ? (args.dna.fonts as string[]) : [];
-  const fonts = args.ctx.style?.visual.typography ?? {
-    heading: dnaFonts[0],
-    body: dnaFonts[1] ?? dnaFonts[0],
-  };
+  const voice = brandTypeChoice({
+    workspaceId: args.job.workspace_id,
+    ctx: args.ctx,
+    skills: creativeSkillsFor(args.job.workspace_id),
+  });
+  const fonts = voice
+    ? typeVoiceFonts(voice)
+    : (args.ctx.style?.visual.typography ?? {
+        heading: dnaFonts[0],
+        body: dnaFonts[1] ?? dnaFonts[0],
+      });
   const design = pickCarouselDesign({
     profileKey: `${args.job.workspace_id}:brand`,
     seed: args.input.idempotencyKey,
@@ -2375,6 +2435,23 @@ ${ctx.brandText}`,
           return { ...checked, topic };
         })()
       : null;
+  // Round 9 (flag `headline`): a plain picture post's headline is set by
+  // code on a word-free picture, so "Edit text" fixes a word for free.
+  const overlay: HeadlineOverlay | null = (() => {
+    if (!picture || compose || sourceInstruction || look?.maxWords === 0) return null;
+    if (!creativeSkillsFor(job.workspace_id).headline) return null;
+    if ((output.onImageLines ?? []).length) return null;
+    const headline = overlayHeadline(picture.headline);
+    if (!headline) return null;
+    const choice = brandTypeChoice({
+      workspaceId: job.workspace_id,
+      ctx,
+      skills: { ...creativeSkillsFor(job.workspace_id), type: true },
+    });
+    const own = ctx.style?.visual?.typography?.heading;
+    const name = own || (choice?.kind === "own" ? choice.headline : choice?.voice.headline);
+    return { headline, brandName: ctx.brandName, font: carouselFont(name, "Inter") };
+  })();
   const builderSize = ratio === "16:9" ? "1792x1024" : ratio === "9:16" ? "1024x1792" : "1024x1024";
   // A director picture leaves clear space for a small logo at the top, the
   // way the showcase posts carry it (ADR-0052); other paths keep their corner.
@@ -2586,17 +2663,19 @@ ${ctx.brandText}`,
       ? // A picture post (and a post with a picture), built like a Story frame
         // from the art director's paragraph (ADR-0051): short, coherent,
         // never cut by the image model's limit.
-        postImagePrompt({
-          brandName: ctx.brandName,
-          concept: picture.scene,
-          headline: compose ? null : picture.headline,
-          lines: compose || !picture.headline ? [] : (output.onImageLines ?? []),
-          noText: compose || look?.maxWords === 0,
-          ratio,
-          logoCorner: logoAt,
-          revision: refineNote,
-          source: sourceInstruction,
-        })
+        ((built: string) => (overlay ? `${built}\n\n${OVERLAY_SPACE_NOTE}` : built))(
+          postImagePrompt({
+            brandName: ctx.brandName,
+            concept: picture.scene,
+            headline: compose || overlay ? null : picture.headline,
+            lines: compose || overlay || !picture.headline ? [] : (output.onImageLines ?? []),
+            noText: compose || !!overlay || look?.maxWords === 0,
+            ratio,
+            logoCorner: logoAt,
+            revision: refineNote,
+            source: sourceInstruction,
+          }),
+        )
       : imagePrompt({
           body,
           scene: null,
@@ -2641,7 +2720,7 @@ ${ctx.brandText}`,
   // Words are drawn at high quality (director posts and designed ads,
   // ADR-0052): medium came out soft and misspelled.
   const renderQuality =
-    (directedPost && !compose && look?.maxWords !== 0 && !!picture?.headline?.trim()) ||
+    (directedPost && !compose && !overlay && look?.maxWords !== 0 && !!picture?.headline?.trim()) ||
     (designedAd && look?.maxWords !== 0)
       ? ("high" as const)
       : undefined;
@@ -2664,6 +2743,7 @@ ${ctx.brandText}`,
         return {
           slot: optionSlot(index),
           compose,
+          ...(overlay ? { overlay } : {}),
           kind: "image" as const,
           ratio,
           prompt: versionPrompt,
@@ -2689,6 +2769,7 @@ ${ctx.brandText}`,
     {
       slot: "main",
       compose,
+      ...(overlay ? { overlay } : {}),
       kind: "image",
       ratio,
       prompt,
@@ -3017,7 +3098,9 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
     ? {
         ...loaded,
         brandText: `${product.block}\n\n${loaded.brandText}`.trim(),
-        visualBrandText: [
+        visualBrandText: ((parts: (string | undefined)[]) =>
+          // Context pack: the product comes first so the director's cap never cuts it.
+          creativeSkillsFor(job.workspace_id).context ? [...parts.slice(1), parts[0]] : parts)([
           loaded.visualBrandText,
           `The piece is about: ${product.name}`,
           // Pictures and videos made from the product's own photo show that
@@ -3025,7 +3108,7 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
           productPhoto
             ? `The supplied product photo is the real ${product.name}. Show exactly this product: the same shape, colours, label, text and packaging. Never invent, restyle or replace it, and never show a different product.`
             : "",
-        ]
+        ])
           .filter(Boolean)
           .join("\n\n")
           .trim(),
@@ -3231,6 +3314,22 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
     !mediaOnly && !studioTextOnlyRevision(input)
       ? await studioReferenceImages([...studioReferences, ...trendRefs])
       : undefined;
+  // Context pack: with nothing attached, the writer sees the top of the
+  // brand's own website (what it sells, its headline, its colours). Writer
+  // only: the picture model never gets it.
+  const siteGlance =
+    creativeSkillsFor(job.workspace_id).context &&
+    !referenceImages?.length &&
+    !mediaOnly &&
+    !input.refine &&
+    (type === "image" || type === "carousel" || type === "ad" || type === "social")
+      ? await loadSiteGlance(client as never, job.workspace_id)
+      : null;
+  const writerImages = referenceImages?.length
+    ? referenceImages
+    : siteGlance?.images.length
+      ? siteGlance.images
+      : undefined;
 
   let output: StudioJobOutput = { ...(parent?.output ?? {}) };
   // Visual-only revisions must use edits saved on the content rows.
@@ -3261,6 +3360,17 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       !!parent && studioTextOnlyRevision(input) && ["image", "video"].includes(type);
     const videoPlan =
       boundedCaption || captionOnly ? null : studioVideoPlan(job.workspace_id, type, controls);
+    const skills = creativeSkillsFor(job.workspace_id);
+    const skillPick = skillLinesFor({
+      workspaceId: job.workspace_id,
+      ctx,
+      skills,
+      // A campaign's voice keeps every piece in one type (typeVoiceById re-checks it).
+      typeVoice: controls.typeVoice,
+      visual: type !== "article",
+      format: type,
+      seed: job.id,
+    });
     const promptArgs = {
       ctx,
       intent: input.intent,
@@ -3275,6 +3385,18 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
       adFormat,
       adObjective,
       memeTemplates: isMemeTemplatesEnabled(job.workspace_id),
+      skills,
+      skillLines: skillPick.lines,
+      // Context pack: the brand's own WhatsApp, never for an article.
+      contactLine:
+        skills.context && type !== "article"
+          ? whatsAppLine(
+              whatsAppLink(
+                (ctx as unknown as { brand?: { socials?: unknown } | null }).brand?.socials,
+              ),
+              platforms,
+            )
+          : null,
       refine: input.refine,
       current: parent?.output,
       video: videoPlan
@@ -3318,13 +3440,19 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
         system: built.system,
         user:
           attempt === 0
-            ? built.user
+            ? `${built.user}${
+                siteGlance?.images.length
+                  ? `
+
+${siteGlance.note}`
+                  : ""
+              }`
             : `${built.user}\n\n## Required correction\nThe previous candidate was rejected: ${rejected ?? "it was incomplete or repeated recent work"} Meet the requested format and length exactly. Keep the subject, purpose and facts of the person's brief exactly; change only the wording and the opening line, never the topic. If current web research is supplied, cite its exact URL beside the relevant article claim.`,
         schema: built.schema as never,
         maxTokens: built.maxTokens,
         temperature: built.temperature,
         regenerate: true,
-        images: referenceImages,
+        images: writerImages,
       })) as Record<string, unknown>;
       let candidate = await shapeOutput({
         client,
@@ -3377,6 +3505,19 @@ async function runJob(client: Db, job: JobRow, input: CreateJobInput, parent: Jo
 ${ctx.brandText}
 ${source?.body ?? ""}`,
             }).join(" ") || null;
+      // Round 9 shadow: the drawn words alone, recorded and never enforced.
+      if (
+        creativeSkillsFor(job.workspace_id).relevance &&
+        !captionOnly &&
+        BRIEF_FIT_TYPES.has(type)
+      ) {
+        const drift = drawnWordsDrift({
+          read: briefRead,
+          headline: candidate.onImageText ?? candidate.slides?.[0]?.heading,
+          lines: candidate.onImageLines ?? [],
+        });
+        candidate = { ...candidate, briefFitShadow: drift ?? undefined };
+      }
       // Same opening as an earlier piece: worth one more try, never a failure.
       const repeatedOpening =
         input.refine || attempt === 1 ? null : findRepeatedOpening(candidate, ctx.recent);
@@ -3504,7 +3645,7 @@ ${source?.body ?? ""}`,
   if (adObjective) output.adObjective = adObjective.id;
   if (visualTaste?.direction.composed && !["video", "carousel", "story"].includes(type))
     output.artwork = {
-      headline: output.title ?? input.intent.brief.slice(0, 90),
+      headline: composedHeadline(output, input.intent.brief, creativeSkillsFor(job.workspace_id)),
       brandName: ctx.brandName,
     };
   if (
@@ -3530,6 +3671,20 @@ ${source?.body ?? ""}`,
             protectedTerms: ctx.style ? styleProtectedTerms(ctx.style) : undefined,
           }),
     };
+    // Round 9 (FEATURE_FLAG_TRACKED_LINKS_ENABLED): own-site links on
+    // clickable networks become short links whose clicks are counted.
+    if (output.variants?.length && !studioTextOnlyRevision(input)) {
+      const { trackCaptionLinks } = await import("@/server/links/tracked.server");
+      output = {
+        ...output,
+        variants: await trackCaptionLinks({
+          workspaceId: job.workspace_id,
+          jobId: job.id,
+          website: ctx.website,
+          variants: output.variants,
+        }),
+      };
+    }
     // A caption that uses a word the team asked Mellox to avoid (ADR-0033)
     // carries a warning: a person sees it, and fully automatic mode holds it.
     const memories = await loadMemories(job.workspace_id);
@@ -3663,6 +3818,21 @@ ${source?.body ?? ""}`,
           : {}),
         ...(pieceStyles?.picked ? { picture_style: pieceStyles.picked } : {}),
         ...(radarTrend ? { trend_id: radarTrend.id } : {}),
+        // The exact words drawn on the picture and the director's technique,
+        // so the next piece is told what this one said (round 9, ADR-0053).
+        ...(output.onImageText?.trim() && needsMedia(type, input)
+          ? { on_image_text: output.onImageText.trim().slice(0, 160) }
+          : {}),
+        ...(output.technique ? { technique: output.technique } : {}),
+        ...((choice) => (choice && typeVoiceId(choice) ? { type_voice: typeVoiceId(choice) } : {}))(
+          needsMedia(type, input)
+            ? brandTypeChoice({
+                workspaceId: job.workspace_id,
+                ctx,
+                skills: creativeSkillsFor(job.workspace_id),
+              })
+            : null,
+        ),
         // The kind of post and the joke it told, so no later post repeats it (novelty.ts).
         ...(resolveCategory(input.intent) ? { category: resolveCategory(input.intent)!.id } : {}),
         ...(output.memeLayout ? { meme_layout: output.memeLayout } : {}),
@@ -3736,11 +3906,85 @@ ${source?.body ?? ""}`,
     await patchJob(client, job.id, { output, asset_ids: job.asset_ids, title });
   }
 
+  // Round 9 (flag `jobdone`): two of the person's own photos of a real job,
+  // before and after, set side by side by code. Nothing is generated; if a
+  // photo can't be read the piece is made the usual way.
+  let jobDoneDrawn = false;
+  if (
+    creativeSkillsFor(job.workspace_id).jobdone &&
+    (type === "social" || type === "image") &&
+    !addPlatforms &&
+    !variations &&
+    !canKeepSourcePhoto &&
+    !input.refine &&
+    controls.referenceMode === "design" &&
+    studioReferences.length === 2 &&
+    asksBeforeAfter(input.intent.brief)
+  ) {
+    try {
+      await requireActiveJob(client, job);
+      await setStage(client, job.id, "render");
+      await assertSafeMediaImages(
+        studioReferences.map((r) => r.url),
+        { stage: "source" },
+      );
+      const open = async (ref: (typeof studioReferences)[number]) => {
+        const downloaded = await downloadAssetObject(client, ref.storagePath);
+        if (downloaded.error || !downloaded.data) throw new Error("photo could not be opened");
+        return Buffer.from(await downloaded.data.arrayBuffer());
+      };
+      const [first, second] = await Promise.all(studioReferences.map(open));
+      const swap = afterComesFirst(input.intent.brief);
+      const ratio = mediaRatio(type, input, platforms);
+      const { drawJobDone } = await import("./job-done.server");
+      const bytes = await drawJobDone({
+        before: swap ? second : first,
+        after: swap ? first : second,
+        ratio,
+      });
+      const saved = await persistAsset({
+        workspaceId: job.workspace_id,
+        idempotencyKey: `studio-jobdone:${job.id}`,
+        bytes,
+        mimeType: "image/jpeg",
+        contentItemIds: job.content_item_ids,
+        assetType: "image",
+        filename: `mellox-job-done-${job.id.slice(0, 8)}`,
+        metadata: { source: "studio_job_done", job_id: job.id },
+      });
+      if (saved.ok && saved.asset.storage_path) {
+        const media = {
+          slot: "main",
+          kind: "image" as const,
+          ratio,
+          status: "ready" as const,
+          assetId: saved.asset.id,
+          storagePath: saved.asset.storage_path,
+        };
+        output = {
+          ...output,
+          media: [...(output.media ?? []).filter((m) => m.slot !== "main"), media],
+        };
+        job.asset_ids = [...new Set([...(job.asset_ids ?? []), saved.asset.id])];
+        await patchJob(client, job.id, { output, asset_ids: job.asset_ids, title });
+        jobDoneDrawn = true;
+      }
+    } catch (error) {
+      console.warn("[studio] job-done post not drawn; making it the usual way", error);
+    }
+  }
+
   // A classic meme (ADR-0047) is the real template with its words drawn by
   // code: no image model and no image cost. A template meme that can't be
   // drawn (words that don't fit, a script the font lacks) or with the flag off
   // becomes an original scene with the same words.
-  if (type === "image" && output.memeFormat && !addPlatforms && !canKeepSourcePhoto) {
+  if (
+    type === "image" &&
+    output.memeFormat &&
+    !addPlatforms &&
+    !canKeepSourcePhoto &&
+    !jobDoneDrawn
+  ) {
     const template = memeTemplate(output.memeFormat);
     const usable =
       !!template && isMemeTemplatesEnabled(job.workspace_id) && !memeConceptIssue(output);
@@ -3811,7 +4055,10 @@ ${source?.body ?? ""}`,
     output.slides?.length &&
     output.carousel &&
     (isSeamless(output.carousel.design) || output.carousel.design.flow === "composed") &&
-    !carouselRenderable({ slides: output.slides, brand: output.carousel.brand })
+    !carouselRenderable(
+      { slides: output.slides, brand: output.carousel.brand },
+      { arabic: creativeSkillsFor(job.workspace_id).scripts },
+    )
   ) {
     const { flow: _flow, ...plain } = output.carousel.design;
     output = {
@@ -3829,7 +4076,13 @@ ${source?.body ?? ""}`,
     type === "carousel" &&
     (isSeamless(output.carousel?.design) || output.carousel?.design.flow === "composed");
 
-  if (needsMedia(type, input) && !addPlatforms && !canKeepSourcePhoto && !memeDrawn) {
+  if (
+    needsMedia(type, input) &&
+    !addPlatforms &&
+    !canKeepSourcePhoto &&
+    !memeDrawn &&
+    !jobDoneDrawn
+  ) {
     await requireActiveJob(client, job);
     await setStage(client, job.id, "render");
     let referenceUrl: string | null = null;
@@ -4001,6 +4254,9 @@ async function directPicture(args: {
   hook?: ReturnType<typeof pickHookStyle>;
   briefRead?: BriefRead;
   partial: { target: string; error: string }[];
+  skills?: CreativeSkills;
+  skillLines?: string[];
+  pictureCaption?: string;
 }): Promise<Record<string, unknown> | null> {
   const built = buildPostPlanPrompt({
     ctx: args.ctx,
@@ -4010,6 +4266,9 @@ async function directPicture(args: {
     angle: args.angle,
     hook: args.hook,
     refine: args.input.refine,
+    skills: args.skills,
+    skillLines: args.skillLines,
+    pictureCaption: args.pictureCaption,
   });
   try {
     const plan = (await runStructuredPrompt({
@@ -4075,6 +4334,13 @@ async function shapeOutput(args: {
       // designed idea, not a generic scene. It fails open to the brief's own
       // picture idea (preflightPictureBrief).
       const picture = await directPicture({
+        pictureCaption: (variants as { body?: string }[] | undefined)?.[0]?.body,
+        skills: creativeSkillsFor(job.workspace_id),
+        skillLines: skillLinesFor({
+          workspaceId: job.workspace_id,
+          ctx,
+          skills: creativeSkillsFor(job.workspace_id),
+        }).lines,
         ctx,
         input,
         platforms,
@@ -5476,6 +5742,34 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
         });
         finalImage = `data:image/jpeg;base64,${composed.toString("base64")}`;
       }
+      if (task.overlay && finalImage && !restored && row.output) {
+        try {
+          const art = await persistAsset({
+            workspaceId: row.workspace_id,
+            idempotencyKey: `studio-art:${row.id}:${task.slot}:${task.taskId}`,
+            dataUrl: finalImage,
+            assetType: "image",
+            metadata: { source: "headline_overlay_background", job_id: row.id },
+          });
+          if (!art.ok || !art.asset.storage_path) throw new Error("background not saved");
+          const { drawHeadlineOverlay } = await import("./headline-overlay.server");
+          const drawn = await drawHeadlineOverlay({
+            art: Buffer.from(finalImage.split(",")[1], "base64"),
+            overlay: task.overlay,
+          });
+          finalImage = `data:image/jpeg;base64,${drawn.toString("base64")}`;
+          if (task.slot === "main")
+            row.output.artwork = {
+              ...task.overlay,
+              layout: "overlay",
+              artStoragePath: art.asset.storage_path,
+            };
+        } catch (error) {
+          // The picture is kept without its headline rather than failing the post.
+          console.warn("[studio] headline overlay not drawn", error);
+          warnings.push(OVERLAY_FAILED_NOTE);
+        }
+      }
       if (
         row.output?.visualTaste &&
         finalImage &&
@@ -5521,6 +5815,10 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
                       // banner words, never on the caption.
                       [
                         `Post topic (the picture must clearly be about this): ${postTopic({ title: row.output?.title ?? row.title, caption: row.output?.variants?.[0]?.body })}`,
+                        // Round 9 relevance: the reviewer reads what the person asked for.
+                        creativeSkillsFor(row.workspace_id).relevance && row.input?.intent?.brief
+                          ? `The person's brief: ${String(row.input.intent.brief).replace(/\s+/g, " ").slice(0, 400)}`
+                          : "",
                         `Scene asked for: ${(row.output?.concept ?? "").slice(0, 900)}`,
                         // Exactly the words the prompt sent (headline and
                         // supporting lines), never words it didn't ask for.
@@ -5538,7 +5836,11 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
                             productAsked: row.output?.briefRead?.productAsked,
                             goal: row.input?.intent?.goal,
                           }).review
-                        } Clean and professional. Flag the picture as off-topic if it shows something unrelated to the post topic.`,
+                        } Clean and professional. Flag the picture as off-topic if it shows something unrelated to the post topic.${
+                          creativeSkillsFor(row.workspace_id).relevance
+                            ? " Also off-topic: a picture any rival business could post by swapping the logo."
+                            : ""
+                        }`,
                       ]
                     : [
                         row.title,
@@ -5567,17 +5869,34 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
       const artIssues =
         imageReview?.issues.filter(
           (issue) =>
-            !task.compose || !/typograph|font|spelling|text|letter|logo|headline/i.test(issue),
+            !(task.compose || task.overlay) ||
+            !/typograph|font|spelling|text|letter|logo|headline/i.test(issue),
         ) ?? [];
       // At most one more picture, at Mellox's cost: for a defect a person
       // can't live with (wrong words, wrong product, covered face, broken
       // anatomy), or for a picture clearly below the creative bar for its
       // kind with specific fixes (creativeRedo). Other notes stay notes.
+      // Round 9 (flag `besttwo`): a new brand's first three picture posts get
+      // a second take at Mellox's cost, and the better one is kept.
+      const bestOfTwo =
+        !restored &&
+        !task.reviewAttempts &&
+        task.kind === "image" &&
+        task.slot === "main" &&
+        !task.photoDesign &&
+        !task.productHero &&
+        !task.meme &&
+        !boardFrame &&
+        (row.type === "image" || row.type === "social") &&
+        !row.input?.refine &&
+        creativeSkillsFor(row.workspace_id).besttwo &&
+        (await isNewBrandForPictures(c, row.workspace_id));
       const decision = creativeRedo(
         imageReview ? { ...imageReview, issues: artIssues } : null,
         reviewKind,
         // A kept picture is never sent for another render.
         restored ? Number.MAX_SAFE_INTEGER : (task.reviewAttempts ?? 0),
+        { bestOfTwo },
       );
       const hardNow = hardImageDefects(artIssues).length > 0;
       // The redo came back: keep the first picture if it was clearly better.
@@ -5596,6 +5915,12 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
           if (stored?.data) {
             finalImage = `data:image/png;base64,${Buffer.from(await stored.data.arrayBuffer()).toString("base64")}`;
             imageReview = task.firstRender.review;
+            // The kept take's own word-free picture stays the one "Edit text" uses.
+            if (task.firstRender.artStoragePath && row.output?.artwork)
+              row.output.artwork = {
+                ...row.output.artwork,
+                artStoragePath: task.firstRender.artStoragePath,
+              };
           }
         }
         task.firstRender = undefined;
@@ -5619,6 +5944,10 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
               score: decision.score,
               hard: hardNow,
               review: imageReview,
+              ...(decision.reason === "best" ? { best: true } : {}),
+              ...(row.output?.artwork?.artStoragePath
+                ? { artStoragePath: row.output.artwork.artStoragePath }
+                : {}),
             };
         }
         // The fix goes first so the image model's prompt limit can't cut it off.
@@ -5627,7 +5956,9 @@ async function advanceJob(client: unknown, row: JobRow): Promise<JobRow> {
             [
               decision.reason === "hard"
                 ? "The previous render was rejected by visual quality review. Correct these specific visible defects and create a fresh, polished composition:"
-                : "The previous render was below the creative bar. Make a fresh, stronger composition that applies these specific changes:",
+                : decision.reason === "best"
+                  ? `Make a second, different take on the same brief: a fresh composition of the same idea, not a copy of the first.${decision.fixes.length ? " Worth improving:" : ""}`
+                  : "The previous render was below the creative bar. Make a fresh, stronger composition that applies these specific changes:",
               ...decision.fixes.map((issue) => `- ${issue}`),
               "Preserve the supplied brand identity and exact verified copy. Do not recreate the problem.",
             ].join("\n"),

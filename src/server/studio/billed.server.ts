@@ -51,6 +51,7 @@ import { needsStoryboard } from "@/lib/studio/video/board";
 import { RECAP_AI_SECONDS } from "@/lib/studio/clip-edit";
 import { pickFeaturedProduct, productPhotoControls } from "@/lib/products/feature";
 import { settleVideoControls } from "@/lib/studio/video/settle";
+import { workspaceSellsService } from "./business-kind.server";
 
 const BILLING_ROUTE: Record<CreateJobInput["type"], string> = {
   social: "studio.social",
@@ -286,6 +287,7 @@ export async function createBilledStudioJob(args: {
         picture: Boolean(input.intent.sourceContentId),
         script: Boolean(input.intent.sourceScript),
         product: Boolean(input.controls.productId),
+        service: await workspaceSellsService(client as never, workspaceId),
       },
     });
   // A person's new long or premium AI video is storyboarded first

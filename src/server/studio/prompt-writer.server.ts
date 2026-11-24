@@ -38,7 +38,11 @@ import type { CategoryId } from "@/lib/studio/categories";
 import { pictureStyleById, styleForPiece } from "@/lib/brand-look/picture-styles";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 import { loadStudioContext } from "./context.server";
+import { creativeSkillsFor } from "@/lib/feature-flags";
 import { loadPromptMedia, loadSiteGlance } from "./prompt-media.server";
+import { sectorOf } from "@/lib/studio/sectors/kinds";
+import { mechanismLineFor } from "./example-briefs.server";
+import { skillLinesFor } from "./skill-lines.server";
 
 const ResultSchema = z.object({
   title: z.coerce.string().min(3),
@@ -66,6 +70,9 @@ export type WrittenPrompt = {
   /** True when Mellox picked the category (the person had none). */
   categoryPicked?: boolean;
 };
+
+/** How a Surprise kind travels in `signal` / `avoid` (never shown, never sent to a model). */
+const SURPRISE_MARK = "surprise:";
 
 /** Formats whose brief has a picture idea. */
 const PICTURE_TYPES = new Set<StudioType>(["image", "ad", "carousel", "social", "story"]);
@@ -115,7 +122,14 @@ export async function writeStudioPrompt(args: {
   const signals = collectSignals(ctx, ctx.brand);
   const { lookTextFor } = await import("@/server/brand-look/resolve.server");
   const styleText = await lookTextFor(args.workspaceId, args.type);
-  const avoid = (args.avoid ?? []).slice(0, 30);
+  // Round 9 relevance: the client sends back the Surprise kinds it was given
+  // ("surprise:<id>"), so the next Surprise is another kind of post.
+  const skills = creativeSkillsFor(args.workspaceId);
+  const rawAvoid = (args.avoid ?? []).slice(0, 30);
+  const recentSurprises = rawAvoid
+    .filter((a) => typeof a === "string" && a.startsWith(SURPRISE_MARK))
+    .map((a) => a.slice(SURPRISE_MARK.length));
+  const avoid = rawAvoid.filter((a) => !(typeof a === "string" && a.startsWith(SURPRISE_MARK)));
   // Sharpening the person's own idea never adds a random signal or story
   // device: those changed what the post was about.
   const picked = mode === "expand" ? null : pickSignal(signals, avoid);
@@ -130,6 +144,7 @@ export async function writeStudioPrompt(args: {
           hasOccasion: picked?.source === "season",
           hasTrend: signals.some((s) => s.source === "radar"),
           hasOffer: /\b(offer|discount|sale|% off|promo code|free shipping)\b/i.test(ctx.brandText),
+          ...(skills.relevance ? { recent: recentSurprises, relevance: true } : {}),
         })
       : null;
   // A Surprise post keeps only a real occasion, the brand's own campaign or a
@@ -145,6 +160,35 @@ export async function writeStudioPrompt(args: {
           : null
         : picked;
   const sparks = mode === "expand" ? [] : pickSparks(args.type);
+  // Round 9 sectors: what this kind of business shows and why a piece sells
+  // here (one line from the example-brief library), never for the person's own idea.
+  const sectorLines =
+    skills.sectors && mode !== "expand"
+      ? [
+          ...skillLinesFor({ workspaceId: args.workspaceId, ctx, skills }).lines,
+          mechanismLineFor({
+            sector: sectorOf(ctx.industry, ctx.brandText)?.id,
+            format: args.type,
+            seed: `${args.workspaceId}:${Date.now()}:${Math.random()}`,
+          })?.line ?? "",
+        ].filter(Boolean)
+      : [];
+  // Context pack: the brand's own photo folders, in its own words, so a
+  // Surprise brief can name one and the piece is then made with those photos.
+  const folderLines =
+    skills.context && mode !== "expand" && !media.images.length
+      ? await (async () => {
+          const { loadInspoMediaPool } = await import("@/server/inspo/media-pool.server");
+          const { libraryLines } = await import("@/lib/inspo/media-library");
+          const pool = await loadInspoMediaPool(args.workspaceId).catch(() => null);
+          const lines = pool?.media.length ? libraryLines(pool.media, 4) : "";
+          return lines
+            ? [
+                `The brand's own photo folders (name one in the brief to make the piece with those photos):\n${lines.slice(0, 400)}`,
+              ]
+            : [];
+        })()
+      : [];
   const platforms = args.controls?.platforms?.length
     ? args.controls.platforms
     : format.defaultPlatforms;
@@ -226,6 +270,8 @@ export async function writeStudioPrompt(args: {
         ctx.industry && `Industry: ${ctx.industry}`,
         ctx.audience && `Audience: ${ctx.audience}`,
         ctx.website && `Website: ${ctx.website}`,
+        ...sectorLines,
+        ...folderLines,
         `Today: ${ctx.today}`,
       ]
         .filter(Boolean)
@@ -336,7 +382,8 @@ export async function writeStudioPrompt(args: {
     ).slice(0, PROMPT_MAX_CHARS),
     why: parsed.why.trim().slice(0, 140),
     basedOn: SIGNAL_LABEL[source],
-    signal: signal?.headline ?? null,
+    signal:
+      signal?.headline ?? (skills.relevance && surprise ? `${SURPRISE_MARK}${surprise.id}` : null),
     goal: parsed.goal && PROMPT_GOALS.includes(parsed.goal) ? parsed.goal : undefined,
   };
 }

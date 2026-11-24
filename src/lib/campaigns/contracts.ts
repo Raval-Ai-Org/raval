@@ -158,10 +158,26 @@ export const CampaignPhaseSchema = z.object({
 });
 export type CampaignPhase = z.infer<typeof CampaignPhaseSchema>;
 
+/**
+ * Round 9 (flag `campaign_platform`): what makes every piece look like one
+ * campaign. Written by the same paid plan call, grounded like its words; the
+ * type voice is chosen by code from the brand's own.
+ */
+export const CampaignPlatformSchema = z.object({
+  tagline: text(80).default(""),
+  keyVisual: text(240).default(""),
+  motif: text(160).default(""),
+  photoRule: text(200).default(""),
+  typeVoice: z.string().max(40).optional(),
+});
+export type CampaignPlatform = z.infer<typeof CampaignPlatformSchema>;
+
 export const CampaignPlanSchema = z.object({
   v: z.literal(1).default(1),
   /** The thread that runs through every piece. */
   bigIdea: text(300).default(""),
+  /** Round 9: the campaign's shared look. Absent on older plans. */
+  platform: CampaignPlatformSchema.optional().catch(undefined),
   phases: z.array(CampaignPhaseSchema).max(8),
   pieces: z.array(CampaignPieceSchema).max(MAX_CAMPAIGN_PIECES),
   /** True once a model has written the ideas (the paid step). */

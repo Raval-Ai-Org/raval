@@ -56,3 +56,16 @@ Never write a new layout into a single prompt instead.
    test) and run
    `npx vitest run src/lib/studio/art-direction.test.ts src/lib/studio/ad-formats.test.ts src/lib/studio/ad-objectives.test.ts src/lib/studio/creative-knowledge.test.ts src/lib/studio/photo-design src/lib/studio/prompt-size.test.ts`.
 6. Add a "Round N" section to `docs/studio/reference-study-2026-10.md`.
+
+## Round 9 skill packs
+
+The creative skill packs (ADR-0053, all off by default) add a few short lines
+that code picks about the business: its sector, its type voice and why the
+piece sells. They never add style menus.
+
+- Relevance comes first: `CONCEPT_TEST` leads with "unmistakably this business
+  and this brief", and services start with `show-the-work`.
+- Details are in the `sector-playbooks`, `type-voices`, `video-for-services`
+  and `campaign-platform` skills.
+- With the packs off, prompts must stay byte-identical
+  (`creative-golden.test.ts`).

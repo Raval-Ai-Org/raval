@@ -66,6 +66,7 @@ import { PickScreen } from "@/components/onboarding/ask/PickScreen";
 import { SayScreen } from "@/components/onboarding/ask/SayScreen";
 import { ChannelsScreen } from "@/components/onboarding/ask/ChannelsScreen";
 import { StylesScreen } from "@/components/onboarding/ask/StylesScreen";
+import { MAX_ONBOARDING_PHOTOS, PhotosScreen } from "@/components/onboarding/ask/PhotosScreen";
 import {
   AnswerTrail,
   AudiencePick,
@@ -191,6 +192,8 @@ function Onboarding() {
   const manualKey = (id: string) => `onboarding:manual:${id}`;
   const answersKey = (id: string) => `onboarding:answers:${id}`;
   const inspiration = useManualInspiration(workspaceId);
+  // The brand's own photos (team, place, work): Inspo media, saved as picked.
+  const ownPhotos = useManualInspiration(workspaceId, { max: MAX_ONBOARDING_PHOTOS });
   const brand: BrandExtractResult =
     mode === "manual"
       ? {
@@ -627,6 +630,12 @@ function Onboarding() {
   };
 
   const continueAsk = () => {
+    if (screen.kind === "photos") {
+      const next = { ...answers, photos: ownPhotos.saved };
+      setAnswers(next);
+      nextAsk(next);
+      return;
+    }
     if (screen.kind === "channels") {
       setFlash((n) => n + 1);
       // The goal is saved as soon as its parts are in, so a refresh keeps it.
@@ -776,6 +785,17 @@ function Onboarding() {
   const action: StageAction | null = (() => {
     switch (step) {
       case "ask":
+        if (screen.kind === "photos")
+          return ownPhotos.items.length
+            ? {
+                label: "Continue",
+                onClick: continueAsk,
+                busy: saving,
+                hint: ownPhotos.items.some((i) => i.status === "uploading")
+                  ? "Saving your photos…"
+                  : null,
+              }
+            : { label: "Later", quiet: true, onClick: continueAsk, busy: saving };
         if (screen.kind === "say" || screen.kind === "channels" || screen.kind === "styles")
           return { label: "Continue", onClick: continueAsk, busy: saving };
         // A pick answers with a tap; going back to one keeps its answer.
@@ -1024,6 +1044,16 @@ function Onboarding() {
               reduce={reduce}
               headingRef={headingRef}
               onChange={(styles) => setAnswers((a) => ({ ...a, styles }))}
+            />
+          )}
+          {step === "ask" && screen.kind === "photos" && (
+            <PhotosScreen
+              screen={screen}
+              items={ownPhotos.items}
+              reduce={reduce}
+              headingRef={headingRef}
+              onAdd={ownPhotos.addFiles}
+              onRemove={(key) => void ownPhotos.remove(key)}
             />
           )}
           {step === "scan" && (

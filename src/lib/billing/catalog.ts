@@ -1021,6 +1021,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "memory-extract",
   "studio.naturalize",
   "studio.caption.edit",
+  // Staff-only blind benchmark judge (tests/live, Mellox pays); never runs for a customer.
+  "bench.creative.judge",
   // Suggestions are loaded automatically while browsing and saving; included in Studio.
   "studio.ideas",
   "studio.research",

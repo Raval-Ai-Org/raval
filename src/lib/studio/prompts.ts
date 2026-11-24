@@ -3,6 +3,9 @@
 // deliberately chosen angle that differs from recent work, and an explicit
 // "don't repeat these" list. Pure (no server imports) so it is unit-testable.
 import type { HeroLook } from "./product-hero/variety";
+import type { CreativeSkills } from "@/lib/feature-flags";
+import { skillLinesBody } from "./skill-lines";
+import { businessKindOf, sellsNoThing } from "./sectors/kinds";
 import { z } from "zod";
 import { briefReadLines, readBrief, type BriefRead } from "./brief-read";
 import type { CarouselStyle } from "./post-styles";
@@ -30,7 +33,7 @@ import { radarBlock, radarForBrief, radarLines, type RadarTrend } from "@/lib/tr
 import { shareSection } from "./viral";
 import { ARCHETYPE_IDS, archetypeMenu, recentLayouts } from "./art-direction";
 import { CONCEPT_METHOD, COVER_TEST, SELF_REVIEW } from "./creative-knowledge";
-import { CONCEPT_TEST, HOUSE_CRAFT, creativeSystemLines } from "./creative-system";
+import { conceptTest, creativeSystemLines, houseCraft } from "./creative-system";
 import { briefVisualIdea, pictureJobFor, pictureRules } from "./brief-visual";
 import { applyLean } from "@/lib/taste/bias";
 import type { Lean, Taste } from "@/lib/taste/contracts";
@@ -76,6 +79,10 @@ export type StudioContext = {
     status?: string | null;
     /** The first line a reader saw, so the next piece opens differently. */
     hook?: string;
+    /** Pictures: the exact headline drawn on it (`meta.on_image_text`, round 9). */
+    onImageText?: string | null;
+    /** Pictures: the director's creative technique (`meta.technique`, creative-system.ts). */
+    technique?: string | null;
     hookStyle?: string | null;
     /** Carousels: the story structure and the look it was given. */
     structure?: string | null;
@@ -401,6 +408,10 @@ function sharedUser(
     angle: Angle;
     controls?: StudioControls;
     hook?: HookStyle;
+    skillLines?: readonly string[];
+    skills?: CreativeSkills;
+    /** Round 9: how people reach the brand on WhatsApp (whatsapp.ts), when it has one. */
+    contactLine?: string | null;
     extra?: Section[];
     /** The piece this one is made from (repurpose), read by every text format. */
     source?: BuildArgs["source"];
@@ -431,6 +442,8 @@ function sharedUser(
         ctx.industry && `Industry: ${ctx.industry}`,
         ctx.audience && `Audience: ${ctx.audience}`,
         ctx.website && `Website: ${ctx.website}`,
+        ...skillLinesBody(args.skillLines),
+        args.contactLine ?? "",
         `Today: ${ctx.today}`,
       ]
         .filter(Boolean)
@@ -468,7 +481,13 @@ function sharedUser(
     { label: "Already made", body: memorySection(ctx.recent) },
     {
       label: "Stay consistent with the profile",
-      body: ctx.style ? null : consistencySection(ctx.recent, null, ctx.lovedSamples),
+      // Context pack: a brand with its own look keeps the posts its team
+      // loved as voice samples (the look's own rules still decide the voice).
+      body: ctx.style
+        ? args.skills?.context && ctx.lovedSamples?.length
+          ? consistencySection([] as never, null, ctx.lovedSamples)
+          : null
+        : consistencySection(ctx.recent, null, ctx.lovedSamples),
     },
     ...(args.extra ?? []),
   ];
@@ -697,6 +716,8 @@ export type BuiltPrompt<T> = {
 };
 
 export type BuildArgs = {
+  /** Round 9: how people reach the brand on WhatsApp, when it has one. */
+  contactLine?: string | null;
   ctx: StudioContext;
   intent: StudioIntent;
   controls: StudioControls;
@@ -735,6 +756,16 @@ export type BuildArgs = {
     /** The opening picked by code for this video (video/hooks.ts). */
     hook?: VideoHook | null;
   };
+  /** Round 9 skill packs that are on for this workspace (ADR-0053); absent: all off. */
+  skills?: CreativeSkills;
+  /**
+   * Short lines about this business picked on the server by the skill packs
+   * (sector facts, type voice). At most 3 lines, 450 characters; facts and
+   * taste only, never menus. Shown inside the Business section.
+   */
+  skillLines?: readonly string[];
+  /** Context pack: the caption this picture goes with (the director never saw it). */
+  pictureCaption?: string;
 };
 
 function platformRubric(platforms: PlatformId[]): string {
@@ -855,7 +886,7 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
     system: systemPrompt(
       "You are Mellox, a creative director who writes carousels people swipe to the end and save.",
       [
-        `Write exactly ${count} slides, in this order:\n${slidePlanText(count)}`,
+        `Write exactly ${count} slides, in this order:\n${slidePlanText(count, { relevance: args.skills?.relevance })}`,
         `The person chose ${count} slides. If the brief lists more or fewer slides or names another number, ${count} wins: merge, drop or split points so there are exactly ${count}. Never write a different slide count on a slide or in the caption.`,
         "It is ONE piece told across slides, not a set of separate cards. Decide the single idea first, then make every slide a step toward it.",
         "Continuity: each slide picks up where the one before stopped and leaves a reason to see the next. Slide 2 must pay off the cover. Never restart the topic, never repeat a point, and keep the same terms for the same things from the first slide to the last.",
@@ -866,7 +897,9 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
           : "",
         structure
           ? `\`kicker\` is a label of 1 to 3 words above the heading that shows where the reader is, such as ${structure.kickerHint}. Keep the labels in one consistent pattern across the middle slides. Leave it empty on the last slide.`
-          : "`kicker` is a label of 1 to 3 words above the heading that shows where the reader is. Keep one consistent pattern.",
+          : args.skills?.relevance
+            ? "`kicker` is optional: 1 to 3 words above the heading only when the slides are a real sequence or contrast. Else leave it empty."
+            : "`kicker` is a label of 1 to 3 words above the heading that shows where the reader is. Keep one consistent pattern.",
         "`emphasis` is the 1 to 3 words of that slide's heading that carry its meaning, copied exactly from the heading. They are highlighted in the design.",
         "`role` is one of cover, context, point, proof, recap, cta, matching the slide order above.",
         "Every slide's words are set exactly as written in the slide design. Every slide is designed by an image model that sets these exact words: keep every heading to 8 words or fewer and each body to 14 words or fewer, so every word is spelled right and legible on a phone. The whole carousel is about the brief's own subject, on every slide. No emoji, hashtags, markdown, or 'swipe' instructions.",
@@ -874,8 +907,8 @@ export function buildCarouselPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof
           ? `How the slides look (${args.carouselStyle.name}): ${args.carouselStyle.writer}`
           : "",
         "First decide the carousel's one idea (a series idea): a reveal that builds slide by slide, a countdown to the best point, myth then truth, one object or character that travels through every slide, or a problem solved step by step. The cover makes a promise or opens a curiosity gap; the last slide pays it off.",
-        `Cover, house craft (ADR-0052): ${HOUSE_CRAFT.slice(0, 5).join(" ")}`,
-        "`look` is the one look every slide shares, decided first for this brief and brand, in 50 to 100 words of plain prose: the background colour field by the brand's hex values, the grid, where the words sit, the type character (bold, confident headline with one accent colour on the key words), the picture treatment (real photography, premium 3D or illustration in the brand's world) and one recurring graphic accent. It must look like a top brand's carousel, never a plain template.",
+        `Cover, house craft (ADR-0052): ${houseCraft(args.skills).slice(0, 5).join(" ")}`,
+        `\`look\` is the one look every slide shares, decided first for this brief and brand, in 50 to 100 words of plain prose: the background colour field by the brand's hex values, the grid, where the words sit, the type character (${args.skills?.type ? "the brand's type voice from Business, one weight" : "bold, confident headline with one accent colour on the key words"}), the picture treatment (real photography, premium 3D or illustration in the brand's world) and one recurring graphic accent. It must look like a top brand's carousel, never a plain template.`,
         "`visual` is that slide's image prompt, 50 to 120 words of plain prose an image model draws the finished slide from: its own picture (a concrete, real subject from the brand's world that shows that slide's point: the product in use, the place, the step being done, the people at work), the composition within the look, and where the heading and body sit. Refer to the words as 'the heading' and 'the line', never repeat their text. Real photographs look real. The cover may use one strong idea (a visual metaphor, a symbolic object, the subject in front of giant type) when it fits the brief; inside slides stay clear and readable. Never another brand's name or logo.",
         "`caption` is the post caption: an opening line that names the topic in plain searchable words, 1-3 short lines of context, and a call to action. Hashtags go in the array.",
         args.controls.cta ? `Use this call to action: ${args.controls.cta}` : "",
@@ -1059,10 +1092,11 @@ export function buildAdPrompt(args: BuildArgs): BuiltPrompt<z.infer<typeof AdSch
         ...creativeSystemLines({
           deliverable: args.briefRead?.deliverable,
           trend: !!radarForBrief(args.ctx.radar, args.intent.brief, args.controls?.trendId),
+          skills: args.skills,
         }),
-        `Before writing, think of three ad ideas on different techniques and keep the best (${CONCEPT_TEST}); name it in \`technique\`.`,
+        `Before writing, think of three ad ideas on different techniques and keep the best (${conceptTest(args.skills)}); name it in \`technique\`.`,
         args.adFormat
-          ? "`visualConcept` is the finished ad's image prompt, 120 to 240 words of plain prose for the winning idea: the idea and hero subject and its scale, the setting or the brand-colour field by hex, the composition, exactly where the headline, support line, badge and button sit and how they are set (heavy confident headline, one accent word, clean button), the light, one graphic accent, the finish, and clear space for the small logo at the top. Use the layout below as a starting point, never as a template. Refer to the words by their role; never repeat their text."
+          ? `\`visualConcept\` is the finished ad's image prompt, 120 to 240 words of plain prose for the winning idea: the idea and hero subject and its scale, the setting or the brand-colour field by hex, the composition, exactly where the headline, support line, badge and button sit and how they are set (${args.skills?.type ? "headline in the brand's type voice, clean button" : "heavy confident headline, one accent word, clean button"}), the light, one graphic accent, the finish, and clear space for the small logo at the top. Use the layout below as a starting point, never as a template. Refer to the words by their role; never repeat their text.`
           : "`visualConcept` is one ad visual for all variants, the image prompt for the winning idea in 120 to 240 words: the hero and its scale, the set or the brand-colour field by hex, any person (always a fictional model) and pose, angle, light, real materials, one graphic accent, and a calm area for the platform's text. Leave space for the platform UI; no text in the image beyond a short product name if essential.",
         args.adFormat ? adFormatDirective(args.adFormat) : "",
         SEARCH_AD_RULES,
@@ -1312,7 +1346,9 @@ export function buildVideoStoryboardPrompt(
           ? `The opening (${args.video.hook.label}): ${args.video.hook.direction} Make it fit this brand and product.`
           : "",
         "`storyboard.logline` is the whole story in one sentence.",
-        "`storyboard.bible` is what never changes: the product (exactly as the brand sells it), the one setting, the light, the colours (from the brand palette) and the camera look. Every clip is made from this bible alone, so write it completely and concretely.",
+        args.skills?.video && sellsNoThing(businessKindOf(args.ctx.industry, args.ctx.brandText))
+          ? "`storyboard.bible` is what never changes: in `product`, the service as it is really done (who does it, their tools, the place, the result), the one setting, the light, the colours (from the brand palette) and the camera look. Every clip is made from this bible alone. Show proof only from the brand's facts."
+          : "`storyboard.bible` is what never changes: the product (exactly as the brand sells it), the one setting, the light, the colours (from the brand palette) and the camera look. Every clip is made from this bible alone, so write it completely and concretely.",
         people,
         `Each clip has "opensOn" (the first frame; from clip 2 on it is the frame the clip before ended on), 2 to 4 "shots" with times in seconds inside that clip, "endsOn" (the exact final frame, still for half a second), "sound" (the scene's own sound and the music feel) and "onScreen" (${
           kind.words === "hook"

@@ -1,0 +1,1630 @@
+[
+  {
+    "id": "accounting-tax-01",
+    "sector": "accounting-tax",
+    "goal": "moment",
+    "format": "post",
+    "awareness": "problem",
+    "brief": "Idea: Freelancers who invoice clients abroad leave their return to the last night and miss papers they needed weeks earlier. One calm post a week before the {date} deadline tells them exactly what to send us now.\nHeadline: Your return, ready by Friday\nSupporting line: Send us five documents this week and we file before {date}.\nPicture: Our accountant at her desk sorting one freelancer's bank statements, foreign invoices and ID into labelled folders, the filing form open on the screen beside them.\nCaption idea: Name the five documents one per line, repeat the deadline {date}, and say how to send them securely through {link}.",
+    "mechanism": "A named document list a week before the deadline turns a vague dread into one small task the reader can finish today.",
+    "placeholders": [
+      "{date}",
+      "{link}"
+    ],
+    "expect": "A real desk with the freelancer's own papers being sorted, the five documents named, and the deadline placeholder in the headline area.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "accounting-tax-02",
+    "sector": "accounting-tax",
+    "goal": "lead",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: A café owner's month of receipts, sorted the way we do it, so the VAT quarter stops costing the owner a weekend.\nCover: The shoebox of receipts, sorted\nSlides:\nSlide 2: Snap it the day you pay — each receipt photographed into one shared folder before it fades.\nSlide 3: Split by type — stock, wages, rent and equipment each go on their own line.\nSlide 4: Match it to the bank — every payment out has a receipt, or we message you about it.\nSlide 5: We file, you get the receipt — the return goes in and the confirmation lands in your inbox.\nLast slide: Book a first call: {link}\nCaption: For café, salon and shop owners who do their own books. Four steps we run every month, and a short call to see if it fits you.",
+    "mechanism": "Showing the exact routine an accountant follows makes the fee feel like a finished job, not an hourly risk.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "Four concrete monthly steps a shop owner recognises, ending in a booking link, with no calculators or coin piles.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "accounting-tax-03",
+    "sector": "accounting-tax",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: Small business owners in Lagos fear a bill that grows with every question they ask. Our accountant explains, at her own desk, the fixed monthly fee and what it covers, and shows a same-day reply.\nShots:\nShot 1 (0–2s): Our accountant at her desk looks up and says: every question is included.\nShot 2 (2–4s): Her hand slides a one-page fee sheet across the desk to a shop owner.\nShot 3 (4–6s): She answers that client's message on her phone the same afternoon.\nShot 4 (6–8s): The month's books open on screen as she ticks the last reconciled line.\nSound: Her own voice, plain and unhurried, with the office behind it.\nCaption idea: What the {price} monthly fee covers, written out line by line, and how to start at {link}.",
+    "mechanism": "A fixed fee with every inclusion named removes the fear that each phone call to the accountant adds to the bill.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The real accountant on camera, the fee sheet handed over, and a reply sent the same day, without stock office imagery.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "accounting-tax-04",
+    "sector": "accounting-tax",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "product",
+    "brief": "Offer: Monthly payroll for teams up to {team_size}, at {price} a month.\nFor: Restaurant and salon owners in the Gulf who still run salaries themselves on the last night of the month.\nAngle: Payroll is done on the same day every month, so staff are paid on time and the owner gets that evening back.\nHeadline: Salaries out. Evening back.\nSupporting line: We prepare payslips and the bank file; you approve once.\nPicture: Our payroll accountant beside the owner at a restaurant's back table after closing, the approval screen on a laptop and printed payslips in a neat stack.\nButton: Book a call",
+    "mechanism": "Owners buy payroll help when it gives back a specific lost evening, not when it promises general efficiency.",
+    "placeholders": [
+      "{team_size}",
+      "{price}"
+    ],
+    "expect": "An owner and accountant at a real back table, one approval step, and the price and team size as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "accounting-tax-05",
+    "sector": "accounting-tax",
+    "goal": "launch",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: A new e-invoicing rule starts on {date} for small businesses in our country. We launch a setup visit that connects a shop's billing to the system and sends a test invoice before the rule begins.\nFrame 1: E-invoicing starts {date}. Ready?\nMiddle frames: Who the rule covers, in one plain line; our accountant at a shop counter connecting the billing software and sending a test invoice; the short checklist of what we set up in one visit.\nLast frame: Setup visit {price}. Book at {link}",
+    "mechanism": "A dated rule change gives a clear reason to act now, and a single fixed visit makes compliance feel finished in one go.",
+    "placeholders": [
+      "{date}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A dated rule, a real setup at a shop counter, and a fixed visit price, all without fear imagery.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "accounting-tax-06",
+    "sector": "accounting-tax",
+    "goal": "event",
+    "format": "post",
+    "awareness": "problem",
+    "brief": "Idea: The morning after the national budget, our two partners run a live session for business owners in Nairobi: what changed, who it touches, and what to do before {date}.\nHeadline: Budget morning, in plain words\nSupporting line: A live session on {date} at {time}, with questions answered on the spot.\nPicture: Our two partners at the office table with the printed budget marked up in pen, one pointing at a single changed line while the other takes notes.\nCaption idea: Who should join, the three things we will cover, and how to save a seat at {link}.",
+    "mechanism": "Explaining a fresh rule change the next morning puts the firm in front of owners exactly when they are confused.",
+    "placeholders": [
+      "{date}",
+      "{time}",
+      "{link}"
+    ],
+    "expect": "The real partners with marked-up budget pages, a session date and time, and a clear way to join.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "accounting-tax-07",
+    "sector": "accounting-tax",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: A letter from the tax office makes owners panic and pay too fast. A calm carousel shows how to read one, and that we read it for them.\nCover: That letter from the tax office\nSlides:\nSlide 2: Read the date first — the notice gives you a window to reply, and it starts now.\nSlide 3: Find the reference — it tells you which year and which return they mean.\nSlide 4: Don't pay yet — some notices ask for papers, not money.\nSlide 5: Send it to us — we read it, explain it, and draft the reply with you.\nLast slide: Send a photo of the letter to {phone}\nCaption: For anyone who opened an envelope this week and closed it again. Four calm steps, and a number to send it to.",
+    "mechanism": "Explaining a feared document step by step shows competence before any sale and invites a low-effort first contact.",
+    "placeholders": [
+      "{phone}"
+    ],
+    "expect": "A plain reading guide for a notice, with a phone placeholder, and no magnifying glass or stress stock images.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-01",
+    "sector": "auto-dealership",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "product",
+    "brief": "Idea: This week's arrival, filmed exactly as it is: the real car on our lot, every panel, the dash running, and the signed inspection sheet, so a buyer sees the car before they make the trip.\nShots:\nShot 1 (0–2s): The car rolls onto our lot and stops beside the others.\nShot 2 (2–4s): Our salesperson walks round it, palm along each panel.\nShot 3 (4–6s): Inside, the engine starts and the mileage reading holds on the dash.\nShot 4 (6–8s): The signed inspection sheet, every box ticked, held up to the car.\nShot 5 (8–9s): The car with its price {price} and \"Test drive this week\".\nSound: Engine start, a door shutting, and one line from the salesperson.\nCaption idea: Model, {year}, {mileage}, the full inspection report at {link}, and our opening hours.",
+    "mechanism": "A walkaround of the exact car in stock answers the used-car buyer's first fear: that the listing hides something.",
+    "placeholders": [
+      "{price}",
+      "{year}",
+      "{mileage}",
+      "{link}"
+    ],
+    "expect": "The real car on the dealer's own lot, mileage and inspection shown, with no empty mountain roads or rendered cars.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-02",
+    "sector": "auto-dealership",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Used-car buyers fear hidden accident damage and turned-back mileage. We show the four checks every car on our lot goes through, and hand the buyer the same sheet.\nCover: What we check before we sell\nSlides:\nSlide 2: Paint depth on every panel — a reading that jumps means a repaint, and we tell you where.\nSlide 3: Mileage against the service book — the stamps and dates have to agree.\nSlide 4: Underneath, on the lift — rust, leaks and welds you can't see from the kerb.\nSlide 5: The sheet goes with the car — you take home the report we filled in.\nLast slide: Ask for any car's report: {link}\nCaption: Four checks, one sheet, every car. Ask us for the report on the one you're looking at.",
+    "mechanism": "Naming the specific checks against accident damage and mileage fraud turns a dealer's honesty from a claim into a method.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "Real inspection steps on the dealer's lift and lot, ending in a report offer, without thumbs-up salesman stock.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-03",
+    "sector": "auto-dealership",
+    "goal": "lead",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: A written trade-in valuation at our showroom in {minutes}, with no obligation to buy.\nFor: Families in {area} ready to swap their old car but tired of haggling over two prices at once.\nAngle: The trade-in is valued and written down before any talk about the new car, so one price can't be played against the other.\nHeadline: Your trade-in, priced first\nSupporting line: Bring the car and its papers; leave with a written number.\nPicture: Our appraiser walking round a family's car on the forecourt, tablet in hand, the owners beside him reading the screen.\nButton: Book a valuation",
+    "mechanism": "Separating the trade-in price from the new-car price removes the buyer's suspicion that one is padded to fix the other.",
+    "placeholders": [
+      "{minutes}",
+      "{area}"
+    ],
+    "expect": "An appraiser with a real family and their own car, the written valuation promise, and a booking button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-04",
+    "sector": "auto-dealership",
+    "goal": "moment",
+    "format": "post",
+    "awareness": "most",
+    "brief": "Idea: Families in India want their new car home on Dhanteras, at the hour they choose. We book the handover slot ahead, with registration done, so the keys change hands on the day.\nHeadline: Home on Dhanteras morning\nSupporting line: Book by {date} and we schedule your handover for the hour you pick.\nPicture: A family at our showroom receiving the keys, a marigold garland on the bonnet, the grandmother holding the puja plate beside the car.\nCaption idea: How the handover slots work, the paperwork we finish before the day, finance terms in writing, and booking at {link}.",
+    "mechanism": "On a festival when buying a car is auspicious, a promised handover hour matters more to families than a discount.",
+    "placeholders": [
+      "{date}",
+      "{link}"
+    ],
+    "expect": "A real family handover with festival details, a booking date, and no countdown or fake scarcity.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-05",
+    "sector": "auto-dealership",
+    "goal": "event",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: A Saturday test-drive day in Lagos: three models ready on our lot, a real route mapped through town and a stretch of highway, and no salesperson in the passenger seat unless you want one.\nFrame 1: Drive it alone this Saturday\nMiddle frames: Three cars lined up on our lot with keys on their tags; the route on a map through town roads and a highway stretch; a driver adjusting the seat and mirrors alone in the car.\nLast frame: {date}, {hours}. Book a slot: {link}",
+    "mechanism": "A pressure-free test drive answers the buyer's dread of the sales pitch, which keeps many from visiting a lot at all.",
+    "placeholders": [
+      "{date}",
+      "{hours}",
+      "{link}"
+    ],
+    "expect": "Real cars and a mapped route, the no-pressure promise, and a slot booking with date and hours.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-06",
+    "sector": "auto-dealership",
+    "goal": "sell",
+    "format": "post",
+    "awareness": "product",
+    "brief": "Idea: Car finance ads hide the terms in small print. We show one car's monthly payment with every term written beside it, so a first-time buyer in Toronto can read the whole deal in one look.\nHeadline: The whole payment, every line\nSupporting line: {monthly_payment} a month over {term}, deposit {deposit}, rate {rate}, all written in full.\nPicture: Our finance manager and a young buyer at the desk reading the one-page terms together, a pen resting on each line.\nCaption idea: The car, the full terms again in plain words, what changes with a bigger deposit, and how to apply at {link}.",
+    "mechanism": "Showing every finance term up front meets ad rules for credit and removes the buyer's fear of fees found later.",
+    "placeholders": [
+      "{monthly_payment}",
+      "{term}",
+      "{deposit}",
+      "{rate}",
+      "{link}"
+    ],
+    "expect": "One car's full finance terms as placeholders, a real finance desk, and no 'zero down' style claims.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-dealership-07",
+    "sector": "auto-dealership",
+    "goal": "launch",
+    "format": "carousel",
+    "awareness": "product",
+    "brief": "Idea: The new model has arrived. Instead of a feature list, each slide shows one feature working on the car in our showroom, the way a family would really use it.\nCover: The new model, every feature working\nSlides:\nSlide 2: Rear seats fold flat — one pull, and a flat-pack wardrobe box slides in.\nSlide 3: Boot opens hands-free — a foot under the bumper while arms hold the shopping.\nSlide 4: Your phone on the screen — plugged in, maps and music up straight away.\nSlide 5: Child seat fittings — both anchor points, shown with a real seat clipped in.\nLast slide: First test drives from {date}: {link}\nCaption: The new model is on our showroom floor. Come and try each of these yourself from {date}.",
+    "mechanism": "A feature shown working in a real use case is believed; a feature listed in a spec sheet is skimmed.",
+    "placeholders": [
+      "{date}",
+      "{link}"
+    ],
+    "expect": "Each feature in use on the real car in the showroom, with a launch date and booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-parts-accessories-01",
+    "sector": "auto-parts-accessories",
+    "goal": "moment",
+    "format": "video",
+    "awareness": "problem",
+    "brief": "Idea: The first monsoon rain in Karachi shows whose wiper blades are worn: streaks right across the glass. We fit new blades in our bay while the driver waits.\nShots:\nShot 1 (0–2s): Rain on a windscreen, the old blades dragging streaks across it.\nShot 2 (2–4s): Our fitter's hands unclip the worn blade in the bay.\nShot 3 (4–6s): The new blade clicks on; the part number on its box held up.\nShot 4 (6–8s): One wipe in the rain and the glass is clear.\nSound: Rain on the roof, the click, one clean wipe, and the fitter naming the sizes.\nCaption idea: Sizes for {models}, {price} fitted while you wait at our shop in {area}.",
+    "mechanism": "The first rain of the season makes a worn part visible to the driver at the exact moment they are willing to replace it.",
+    "placeholders": [
+      "{models}",
+      "{price}",
+      "{area}"
+    ],
+    "expect": "A real worn blade swapped in a shop bay, the part number shown, and the result in rain, no fire or exploded parts.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-parts-accessories-02",
+    "sector": "auto-parts-accessories",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Copy brake pads look like the real thing in the box. A carousel shows four ways to tell, using a genuine pad and a copy side by side on our counter.\nCover: Genuine pads, or a copy?\nSlides:\nSlide 2: The box — sharp print and a seal that tears, not a sticker that peels.\nSlide 3: The part number — stamped on the backing plate and matching the box.\nSlide 4: The weight — a copy often feels lighter in the hand.\nSlide 5: The pad edge — bonded evenly to the plate, with no gaps.\nLast slide: Bring your old pads; we match the number\nCaption: Brakes are the one part not worth guessing. Bring the old set or the car to {area} and we'll match the right one.",
+    "mechanism": "Teaching buyers to spot a fake part makes the seller the safe choice without having to claim it.",
+    "placeholders": [
+      "{area}"
+    ],
+    "expect": "Genuine and copy pads compared on a real counter with four concrete checks, without dramatic smoke or flames.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-parts-accessories-03",
+    "sector": "auto-parts-accessories",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "product",
+    "brief": "Offer: Made-to-fit seat covers for {models}, fitted in our bay for {price}.\nFor: Parents whose back seats carry school runs, snacks and child seats every day.\nAngle: Cut for the exact seat, so the cover stays put and the side airbag seams stay open.\nHeadline: Cut for your seats\nSupporting line: Wipe-clean, fitted while you wait, airbags left clear.\nPicture: A fitted cover on a family car's back seat with a child seat clipped in over it, a parent's hand wiping away biscuit crumbs.\nButton: Check my car",
+    "mechanism": "Exact fit for a named model answers the buyer's main doubt with seat covers: that a universal one slips and blocks airbags.",
+    "placeholders": [
+      "{models}",
+      "{price}"
+    ],
+    "expect": "The cover fitted on a real family car with crumbs being wiped, model fitment as a placeholder, and a fitment-check button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-parts-accessories-04",
+    "sector": "auto-parts-accessories",
+    "goal": "sell",
+    "format": "story",
+    "awareness": "problem",
+    "brief": "Idea: On cold winter mornings in Warsaw a tired battery shows itself: a slow, groaning start. We test the battery in minutes and swap it if it needs it.\nFrame 1: Slow start on cold mornings?\nMiddle frames: A car cranking slowly in a frosty driveway; our tester clipped to the battery with its health reading on the screen; the new battery going in with its date code turned to the owner.\nLast frame: Battery test at {area}, {hours}",
+    "mechanism": "A symptom the driver already hears every morning makes a quick test feel like an answer, not an upsell.",
+    "placeholders": [
+      "{area}",
+      "{hours}"
+    ],
+    "expect": "A real slow start, a tester reading, and a battery swap, with the shop's area and hours.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-parts-accessories-05",
+    "sector": "auto-parts-accessories",
+    "goal": "launch",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: Road disputes in Dubai often come down to one driver's word against another's. A new dash camera is in stock, fitted with the cable tucked out of sight, recording from the moment the engine starts.\nHeadline: The road, on record\nSupporting line: Fitted behind the mirror, wired out of sight, recording when you start.\nPicture: Our fitter tucking the cable along the edge of a customer's windscreen, the small camera already sitting behind the mirror.\nCaption idea: The models it fits, what is in the box, the fitting price {price}, and booking at {link}.",
+    "mechanism": "A dash camera sells on the fear of being blamed after a crash, and a clean hidden fit removes the worry about messy wires.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The camera fitted on a real car with hidden wiring, fitment and price placeholders, and a booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-parts-accessories-06",
+    "sector": "auto-parts-accessories",
+    "goal": "lead",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: Ordering tyres by a guessed size means a wasted trip and a return. A carousel teaches drivers to read their own tyre sidewall, then send us a photo for the right match.\nCover: Read your tyre in four steps\nSlides:\nSlide 2: Width first — the first number, in millimetres across the tread.\nSlide 3: Profile next — the sidewall's height, as a share of the width.\nSlide 4: Rim size — the number after the R, matching your wheel.\nSlide 5: Load and speed — the code at the end, which must match or beat the original.\nLast slide: Send a sidewall photo to {phone}\nCaption: Snap the side of one tyre, send it to us, and we reply with the sizes we stock for your car and the fitting price.",
+    "mechanism": "Teaching a small skill earns a direct message, and a photo of the tyre gives the shop an exact, ready-to-quote lead.",
+    "placeholders": [
+      "{phone}"
+    ],
+    "expect": "A real tyre sidewall decoded in four steps and a phone placeholder for the photo, no racing cars.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-01",
+    "sector": "auto-repair-detailing",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: A swirled bonnet, a strip of tape down the middle, and one side corrected: the finish speaks for the work better than any promise.\nShots:\nShot 1 (0–2s): A dull bonnet covered in fine swirl marks, tape running down the centre.\nShot 2 (2–4s): Our detailer runs the polisher in slow passes on the left half.\nShot 3 (4–6s): He wipes the residue off with one cloth pass.\nShot 4 (6–8s): The tape comes off: one half swirled, one half clear.\nShot 5 (8–9s): Water beads and rolls off the corrected half.\nSound: The polisher's hum, the tape peeling, and quiet workshop noise.\nCaption idea: How long a full correction takes, the price {price}, what the {guarantee} covers, and booking at {link}.",
+    "mechanism": "A half-and-half panel shows the result of skilled work on the customer's own kind of car, where a finished car alone proves little.",
+    "placeholders": [
+      "{price}",
+      "{guarantee}",
+      "{link}"
+    ],
+    "expect": "A real taped panel corrected on one half in the workshop, without models posing on bonnets.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-02",
+    "sector": "auto-repair-detailing",
+    "goal": "sell",
+    "format": "post",
+    "awareness": "problem",
+    "brief": "Idea: Drivers in Lahore expect a garage to find extra faults once the car is on the lift. We show the fault to the owner and write the price before a spanner touches the car.\nHeadline: Price first, then spanners\nSupporting line: We find the fault, show it to you, and write the price before work starts.\nPicture: Our mechanic under a raised car pointing out a cracked suspension bush to the owner, the written estimate on a clipboard in his other hand.\nCaption idea: How the estimate works, what happens if we find something else (we call first), and how to book a slot at {link}.",
+    "mechanism": "A price agreed before work starts removes the fear of a surprise bill, the main reason drivers avoid new garages.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "The owner shown the real fault under the car with a written estimate, no wrench clip art.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-03",
+    "sector": "auto-repair-detailing",
+    "goal": "moment",
+    "format": "carousel",
+    "awareness": "most",
+    "brief": "Idea: Before the long Eid drive to family in the Gulf heat, a car needs four checks. We run them in one visit so the journey isn't spent on the hard shoulder.\nCover: Before the long Eid drive\nSlides:\nSlide 2: Tyres — cracks, tread depth and pressure for a fully loaded car.\nSlide 3: Coolant and hoses — topped up and squeezed for soft spots before the heat finds them.\nSlide 4: Brakes — pads measured, not guessed, with the reading shown to you.\nSlide 5: Air conditioning — cooling tested at idle, the way it runs in traffic.\nLast slide: Eid road-trip check {price}, book by {date}\nCaption: Four checks, one visit, done before the roads fill up. Book your slot by {date}.",
+    "mechanism": "A named trip on a fixed date gives drivers a deadline of their own, which turns routine maintenance into a planned errand.",
+    "placeholders": [
+      "{price}",
+      "{date}"
+    ],
+    "expect": "Four checks shown on a real car in the bay, with an Eid booking date and price placeholder.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-04",
+    "sector": "auto-repair-detailing",
+    "goal": "lead",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: Ceramic coating with a {guarantee}, and a paint check before we quote.\nFor: Owners in {area} whose cars sit outside all winter on salted roads.\nAngle: Salt and road grime rinse off a coated car instead of eating into the paint.\nHeadline: Winter rinses right off\nSupporting line: We measure your paint, correct it, then coat it; you see every step.\nPicture: Our detailer rinsing road grime off a coated car door, the water beading and running off the panel.\nButton: Book paint check",
+    "mechanism": "A paint check before the quote lets the detailer price the real car and gives the owner a small first step.",
+    "placeholders": [
+      "{guarantee}",
+      "{area}"
+    ],
+    "expect": "Real winter grime rinsing off a coated panel, a guarantee placeholder, and a paint-check booking.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-05",
+    "sector": "auto-repair-detailing",
+    "goal": "trust",
+    "format": "story",
+    "awareness": "problem",
+    "brief": "Idea: Drivers in Nairobi often wonder whether the part they paid for was really replaced. We hand every customer their old part back, bagged and labelled with their name.\nFrame 1: Your old brake pads, handed back\nMiddle frames: Our mechanic taking the worn pads off; the old pad beside the new one on the bench, the thin edge measured with a gauge; the old pads in a bag with the customer's name tag.\nLast frame: Ask for your old parts. Book {link}",
+    "mechanism": "Returning the replaced part is physical proof the work was done, which answers the most common fear about garages.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "The real worn part beside the new one, measured and bagged, with a booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-06",
+    "sector": "auto-repair-detailing",
+    "goal": "launch",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: Our detailing van now comes to homes in {area}, with water, power and kit on board, so a busy parent's car is cleaned in the driveway while they work.\nHeadline: Detailing in your driveway\nSupporting line: Water, power and kit on board; you don't need to be outside.\nPicture: Our detailer cleaning a family minivan's seats in a suburban driveway, the van's side door open to show the tanks and tools inside.\nCaption idea: Which streets we cover, how long a visit takes, the price {price}, and the first open dates at {link}.",
+    "mechanism": "Coming to the customer removes the half-day lost to dropping off and collecting a car, which is the real cost of detailing.",
+    "placeholders": [
+      "{area}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The real van and kit at work in a home driveway, the area and price placeholders, and a booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "auto-repair-detailing-07",
+    "sector": "auto-repair-detailing",
+    "goal": "event",
+    "format": "video",
+    "awareness": "unaware",
+    "brief": "Idea: New drivers in Manila have never opened a bonnet. On a Saturday morning our workshop teaches them three checks they can do at home: oil, tyres and coolant.\nShots:\nShot 1 (0–2s): A new driver lifts a bonnet in our workshop for the first time.\nShot 2 (2–4s): Our mechanic pulls the dipstick and shows where the oil should sit.\nShot 3 (4–6s): The driver presses a tyre gauge on and reads it out.\nShot 4 (6–8s): The group of learners around one car, each checking the coolant.\nSound: The mechanic's voice explaining, the learners laughing, the gauge's hiss.\nCaption idea: Saturday {date} at {time}, what you will learn, and how to sign up at {link}.",
+    "mechanism": "Teaching a skill for free makes the workshop the place new drivers already know when the car needs real work.",
+    "placeholders": [
+      "{date}",
+      "{time}",
+      "{link}"
+    ],
+    "expect": "Real learners at a real car in the workshop, three checks taught, with event date and sign-up.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "baby-care-01",
+    "sector": "baby-care",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Parents read baby cream labels at midnight and still can't tell what's in it. A carousel reads our nappy cream's label aloud, one ingredient at a time.\nCover: Every ingredient, read aloud\nSlides:\nSlide 2: What's in it — the full list, in the order printed on the tube.\nSlide 3: What each one does — one plain line per ingredient.\nSlide 4: What we leave out — {left_out}, and why.\nSlide 5: The test report — {test_report}, with the page you can read.\nLast slide: The full label and report: {link}\nCaption: Read it, screenshot it, ask your doctor about it. Everything on our tube, nothing hidden.",
+    "mechanism": "Decoding the label answers a parent's first question about a baby product: what exactly touches their child's skin.",
+    "placeholders": [
+      "{left_out}",
+      "{test_report}",
+      "{link}"
+    ],
+    "expect": "The real tube's label decoded line by line, with test and left-out placeholders, and no studio babies.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "baby-care-02",
+    "sector": "baby-care",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "problem",
+    "brief": "Idea: The three a.m. change, eyes half shut and one hand on the baby. Our wipes pack opens and pulls with one hand, and that is the whole point.\nShots:\nShot 1 (0–2s): A parent at the changing mat in the middle of the night, eyes half closed.\nShot 2 (2–4s): One hand flips the lid and pulls a single wipe free.\nShot 3 (4–6s): The lid snaps shut with the same hand, the other still on the baby.\nShot 4 (6–8s): The pack on the shelf beside the cot, name and size readable.\nSound: A quiet room, the soft snap of the lid, and the parent's tired sigh.\nCaption idea: Pack sizes, {price}, and where to buy at {link}.",
+    "mechanism": "Showing a product solving a parent's hardest real moment sells more than calm, staged nursery scenes.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real tired parent at night using the pack with one hand, without spotless rooms or perfect babies.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "baby-care-03",
+    "sector": "baby-care",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "product",
+    "brief": "Offer: A try-size pack of {product} for {price}.\nFor: New parents in Jakarta unsure which nappy size fits a baby who grew last week.\nAngle: Size goes by weight, not age, and a small pack means a wrong guess costs little.\nHeadline: Size by weight, not age\nSupporting line: Find your baby's weight on the chart, then try a small pack first.\nPicture: A parent's hands holding a nappy against the weight chart on the pack, the baby's feet kicking at the edge of the mat.\nButton: Find my size",
+    "mechanism": "A small trial pack lowers the cost of a wrong size, the main reason parents hesitate to switch nappy brands.",
+    "placeholders": [
+      "{product}",
+      "{price}"
+    ],
+    "expect": "The size chart on the real pack with a baby's feet in frame, a try-pack price, and a find-size button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "baby-care-04",
+    "sector": "baby-care",
+    "goal": "moment",
+    "format": "post",
+    "awareness": "most",
+    "brief": "Idea: Eid means a full day of visiting relatives in Cairo, with a baby who still needs changing between houses. One small pouch holds everything, packed the night before.\nHeadline: Packed for a day of visits\nSupporting line: Wipes, cream and nappies in one pouch, ready by the door.\nPicture: The pouch open on a bed beside the baby's Eid outfit, each item in its own pocket, the parent's shoes waiting by the door.\nCaption idea: What goes in the pouch, which pack sizes fit, Eid delivery dates and ordering at {link}.",
+    "mechanism": "Tying a product to a festival's real logistics makes it the obvious thing to buy before the day.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "A real packed pouch next to an Eid outfit, delivery-date info in the caption, no clouds or storks.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "baby-care-05",
+    "sector": "baby-care",
+    "goal": "launch",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: Our new baby wash has nothing added for scent. A launch story shows it at a real bath time and puts the ingredient list right on screen.\nFrame 1: New: a wash with nothing extra\nMiddle frames: A parent's hand pressing the pump once beside the bath; the bottle turned to show the full ingredient list; the baby's toes splashing in the water, shared with permission.\nLast frame: {product}, out now at {link}",
+    "mechanism": "Leading with what is left out answers the sensitive-skin worry that stops parents trying a new wash.",
+    "placeholders": [
+      "{product}",
+      "{link}"
+    ],
+    "expect": "A real bath time with the bottle and full label shown, launch link, and no flawless studio baby.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "baby-care-06",
+    "sector": "baby-care",
+    "goal": "lead",
+    "format": "post",
+    "awareness": "unaware",
+    "brief": "Idea: Parents in their last month before birth in London pack the hospital bag in a rush. A printable checklist lets them pack once, tick it off, and see what we stock.\nHeadline: The hospital bag, ticked off\nSupporting line: Download the list, pack once, and go when it's time.\nPicture: A packed hospital bag on a nursery chair, the printed checklist on top with half the items ticked in pen.\nCaption idea: What is on the list for parent and baby, which items we stock, and the download at {link}.",
+    "mechanism": "A useful checklist earns an email from parents months before they need nappies every week.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "A real packed bag and a half-ticked checklist, with a download link, no staged perfect nursery.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bags-leather-01",
+    "sector": "bags-leather",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "product",
+    "brief": "Idea: What fits inside, really. A commuter in Seoul packs a full workday into our tote, and the zip still closes.\nShots:\nShot 1 (0–2s): The tote swung onto a shoulder on a busy station platform.\nShot 2 (2–4s): At a desk, the zip opens and a laptop slides in.\nShot 3 (4–6s): A lunch box, a water bottle, an umbrella and a charger follow.\nShot 4 (6–8s): The zip runs shut with no strain on the seam.\nShot 5 (8–9s): The tote on its own, standing upright, with its name.\nSound: Station noise, the zip, the soft thud of each item going in.\nCaption idea: Inside size, laptop size it takes, {price}, and ordering at {link}.",
+    "mechanism": "Showing a real day's things going in answers the buyer's worry that a bag is smaller inside than it looks.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The real tote packed with everyday items in a commute setting, the zip closing, with no pedestal or gold dust.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bags-leather-02",
+    "sector": "bags-leather",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Bonded leather is sold as real every day. A carousel shows four ways to tell full grain, using our own wallet and a bonded one side by side.\nCover: Full grain, and how to tell\nSlides:\nSlide 2: The surface — real grain has uneven pores and small marks; bonded is too even.\nSlide 3: The cut edge — full grain shows packed fibres; bonded shows a layer of backing.\nSlide 4: The bend — full grain creases softly; bonded cracks along the fold.\nSlide 5: The years — full grain darkens and softens; bonded peels.\nLast slide: Every piece, full grain: {link}\nCaption: Use these four checks in any shop, ours included. Our grain, edges and stitching are on every product page.",
+    "mechanism": "Teaching a buyer to test leather themselves shifts trust from the seller's word to what the buyer can see.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "Our real wallet beside a bonded one with four checks, without stock leather textures.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bags-leather-03",
+    "sector": "bags-leather",
+    "goal": "moment",
+    "format": "post",
+    "awareness": "most",
+    "brief": "Idea: For Father's Day and Eid gifts in Riyadh, a wallet with the recipient's initials pressed by our maker by hand turns a common gift into a personal one.\nHeadline: Initials, pressed by hand\nSupporting line: Order by {date} and we press the initials before it ships.\nPicture: Our maker's hands pressing letters into a wallet with a brass stamp and mallet at the workbench, a finished wallet with initials beside it.\nCaption idea: How to add the initials at checkout, the order-by date {date}, gift wrap, and ordering at {link}.",
+    "mechanism": "Personalisation with a clear order-by date turns a gift browser into a buyer before the occasion passes.",
+    "placeholders": [
+      "{date}",
+      "{link}"
+    ],
+    "expect": "The maker stamping initials by hand at the bench, with an order-by date, no models holding bags at arm's length.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bags-leather-04",
+    "sector": "bags-leather",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: Every strap and stitch covered by our {guarantee}.\nFor: People whose last bag strap snapped on a busy street.\nAngle: A saddle-stitched strap uses two needles per hole, so one broken thread can't unravel the seam.\nHeadline: Straps that stay on\nSupporting line: Saddle-stitched by hand, covered by our {guarantee}.\nPicture: Our maker's hands pulling two needles through a strap's seam at the bench, the bag's buckle waiting beside it.\nButton: Shop bags",
+    "mechanism": "A strap that breaks is the common failure people remember, so explaining why ours won't is the strongest sales point.",
+    "placeholders": [
+      "{guarantee}"
+    ],
+    "expect": "The real saddle-stitching by hand at the bench, with a guarantee placeholder, and no gold dust.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bags-leather-05",
+    "sector": "bags-leather",
+    "goal": "launch",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: Our new backpack is made for students in São Paulo who carry a laptop, books and a lunch to lectures. A launch story packs it for a real day on campus.\nFrame 1: The new backpack, packed for lectures\nMiddle frames: A student on a campus bench sliding a laptop into the padded sleeve; books and a lunch box fitting in the main pocket; the bag on a shoulder walking to class.\nLast frame: {product}, {price}. Shop at {link}",
+    "mechanism": "Packing a launch product for one specific real day lets a buyer picture it doing the job in their own week.",
+    "placeholders": [
+      "{product}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real student packing the backpack on campus, with launch price and link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bags-leather-06",
+    "sector": "bags-leather",
+    "goal": "trust",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: The way full-grain leather ages is its strongest argument. Our maker's own bag, carried every day for {months}, sits beside a new one from the same hide.\nHeadline: Same bag, {months} later\nSupporting line: Carried daily by our maker; this is how full grain wears in.\nPicture: Two identical bags side by side on the workbench, one new and one carried by our maker, its creases, softened handles and scuffs plain to see.\nCaption idea: What changed and why, how to care for it, and the bag at {link}.",
+    "mechanism": "Showing real wear on a real bag proves the leather ages well, which a new product photo never can.",
+    "placeholders": [
+      "{months}",
+      "{link}"
+    ],
+    "expect": "A real carried bag beside a new one, with honest wear, no stock textures or gold dust.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-01",
+    "sector": "bakery-desserts",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "product",
+    "brief": "Idea: Cut open, so you see the layers. One of this morning's cakes goes from oven to slice to box, so a buyer knows it isn't dry inside.\nShots:\nShot 1 (0–2s): Our baker pulls a tray of sponges out of the oven, steam rising.\nShot 2 (2–4s): Cream piped between the layers in a slow spiral.\nShot 3 (4–6s): A knife slices down and lifts out one piece, the layers showing.\nShot 4 (6–8s): The cake boxed and handed across the counter to a customer.\nSound: The oven door, the knife through the sponge, the box closing.\nCaption idea: Flavours this week, {price}, order by {day} for the weekend at {link}.",
+    "mechanism": "Cutting the cake on camera answers the doubt that a beautiful cake is dry inside.",
+    "placeholders": [
+      "{price}",
+      "{day}",
+      "{link}"
+    ],
+    "expect": "A real cake from oven to slice to box in the bakery, with no flour clouds or 'baked with love' hearts.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-02",
+    "sector": "bakery-desserts",
+    "goal": "moment",
+    "format": "carousel",
+    "awareness": "most",
+    "brief": "Idea: Families in Mumbai buy mithai boxes to share on Diwali. Our box is made in the week before, and each sweet in it gets its own slide.\nCover: The Diwali box, made this week\nSlides:\nSlide 2: Kaju katli — cut by hand into diamonds the morning we pack.\nSlide 3: Motichoor ladoo — rolled by our team, tray after tray.\nSlide 4: Milk barfi — set overnight, cut and boxed the next day.\nSlide 5: How long they keep — {shelf_life} in a cool place.\nLast slide: Order by {date}: {link}\nCaption: One box, four sweets, made in the week of Diwali. Order by {date} for collection or delivery in {area}.",
+    "mechanism": "For festival sweets, freshness and when it was made matter more than the box, so naming the making week sells.",
+    "placeholders": [
+      "{shelf_life}",
+      "{date}",
+      "{link}",
+      "{area}"
+    ],
+    "expect": "Each sweet in the real box with a making note and shelf life placeholder, and a Diwali order-by date.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-03",
+    "sector": "bakery-desserts",
+    "goal": "lead",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: Parents send us their child's own drawing of the birthday cake they dream of, and we bake it. The drawing and the finished cake sit side by side.\nHeadline: Your child's drawing, baked\nSupporting line: Send the drawing; we'll call to plan size, flavour and the day.\nPicture: A child's crayon drawing of a dinosaur cake taped to the bakery counter, the finished dinosaur cake beside it in its box.\nCaption idea: How to send a drawing, how many days ahead to order ({days}), price from {price}, and where to send it: {phone}.",
+    "mechanism": "A child's own drawing is personal, shareable and unmistakable, and the request itself becomes the custom-cake enquiry.",
+    "placeholders": [
+      "{days}",
+      "{price}",
+      "{phone}"
+    ],
+    "expect": "A real child's drawing beside the finished cake on the counter, with order notice and contact.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-04",
+    "sector": "bakery-desserts",
+    "goal": "trust",
+    "format": "story",
+    "awareness": "problem",
+    "brief": "Idea: Parents of children with nut allergies in Melbourne ask the same question before they buy. A story shows how we answer it: the label, the card and the separate tray.\nFrame 1: What's in this cake?\nMiddle frames: Our baker reading the allergen label on a cake box aloud; the allergen card printed for every bake on the counter; a separate tray and tools kept for nut-free bakes.\nLast frame: Ask us before you order: {phone}",
+    "mechanism": "Showing allergen handling in the real kitchen answers a doubt that otherwise stops a parent buying from any bakery.",
+    "placeholders": [
+      "{phone}"
+    ],
+    "expect": "The real label, allergen card and separate tray in the bakery, with a phone to ask.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-05",
+    "sector": "bakery-desserts",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "most",
+    "brief": "Offer: Lunar New Year pineapple tart tins, preorder by {date}, {price} a tin.\nFor: Families in Singapore visiting relatives over New Year who need a gift that travels.\nAngle: Each tin is baked the week it is collected, so the tarts are fresh, not from a warehouse.\nHeadline: Baked the week you visit\nSupporting line: Preorder by {date}; collect in the week before New Year.\nPicture: Our baker pressing lattice onto a tray of pineapple tarts, filled tins stacked and tied on the counter behind her.\nButton: Preorder now",
+    "mechanism": "A preorder with a baked-this-week date turns a seasonal gift into a planned purchase and guarantees freshness.",
+    "placeholders": [
+      "{date}",
+      "{price}"
+    ],
+    "expect": "Real tarts being made and tins stacked, a preorder date and price, and no fake countdown.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-06",
+    "sector": "bakery-desserts",
+    "goal": "event",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: On Saturday mornings in Bristol our head baker teaches eight people to make a sourdough loaf, from starter to the loaf they carry home.\nHeadline: Bake your own loaf, Saturday\nSupporting line: Bring your hands; we bring the starter, flour and oven.\nPicture: Our head baker showing a small group how to shape a dough round on the floured bench, each person's dough in front of them.\nCaption idea: Date {date}, time {time}, what you take home, the price {price}, and booking at {link}.",
+    "mechanism": "A class turns a bakery into a place people have made something, which brings them back as regular customers.",
+    "placeholders": [
+      "{date}",
+      "{time}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "Real people shaping dough with the baker, the class date, time and price, and a booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "bakery-desserts-07",
+    "sector": "bakery-desserts",
+    "goal": "launch",
+    "format": "carousel",
+    "awareness": "most",
+    "brief": "Idea: Our new morning tray in Mexico City: conchas, cuernos and orejas out of the oven at {time}, every weekday, for the walk to work.\nCover: The new morning tray, out at {time}\nSlides:\nSlide 2: Conchas — the sugar shell scored by hand before baking.\nSlide 3: Cuernos — rolled and curled, crisp on the outside.\nSlide 4: Orejas — layered and folded, baked until they crack.\nSlide 5: Out at {time} — the tray on the counter as the shutters go up.\nLast slide: Weekdays from {date} at {address}\nCaption: A new weekday tray from {date}, out at {time}. Come on the way to work.",
+    "mechanism": "A fixed out-of-the-oven time gives people a reason to make a daily visit part of their routine.",
+    "placeholders": [
+      "{time}",
+      "{date}",
+      "{address}"
+    ],
+    "expect": "Each pastry on the real tray with the out-time and address placeholders, no stock cakes.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "beverages-01",
+    "sector": "beverages",
+    "goal": "moment",
+    "format": "post",
+    "awareness": "most",
+    "brief": "Idea: In Ramadan, the first sip after sunset matters. Our rose sherbet is made to be poured for a full iftar table in Lahore, next to the dates.\nHeadline: The first sip after sunset\nSupporting line: Pour it over ice for the whole table.\nPicture: The bottle on a crowded iftar table beside a plate of dates and a jug, a grandmother pouring glasses for the family.\nCaption idea: Serving ideas for iftar, the bottle size, {price}, and where to buy in {area}.",
+    "mechanism": "Placing a drink at the exact moment it is drunk in a ritual makes it part of the occasion, not just a product.",
+    "placeholders": [
+      "{price}",
+      "{area}"
+    ],
+    "expect": "The real bottle on a busy iftar table with family, the label visible, and no splash crowns.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "beverages-02",
+    "sector": "beverages",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "product",
+    "brief": "Idea: The pour, ice cold. A can pulled from a beach cooler in Rio, cracked open and poured, with the first sip in the heat.\nShots:\nShot 1 (0–2s): A hand lifts the can out of a cooler full of ice at the beach.\nShot 2 (2–4s): The tab cracks and the fizz rises.\nShot 3 (4–6s): Poured over ice in a cup, the label facing us.\nShot 4 (6–8s): A friend takes the first sip and laughs.\nShot 5 (8–9s): The can on its own with its name.\nSound: Waves, the crack of the tab, the fizz, a laugh.\nCaption idea: Flavour, can size, {price}, and where to find it at {link}.",
+    "mechanism": "The crack, fizz and pour are the sensory cues that make a cold drink wanted in a hot moment.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real can and pour at a beach with the label readable, no fruit orbiting the can.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "beverages-03",
+    "sector": "beverages",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Parents in Johannesburg worry about sugar in fizzy drinks. A carousel shows what's in our can, in plain words, straight from the label.\nCover: What's in the can, plainly\nSlides:\nSlide 2: Sugar — {sugar} per can, written on the front.\nSlide 3: The flavour — from {flavour_source}, nothing more.\nSlide 4: The fizz — carbonated water, the first thing on the list.\nSlide 5: What we leave out — {left_out}.\nLast slide: Read the full label: {link}\nCaption: Read our label before you buy, then decide. Everything on the can, in plain words.",
+    "mechanism": "Stating sugar and ingredients plainly answers the health doubt and earns trust from parents.",
+    "placeholders": [
+      "{sugar}",
+      "{flavour_source}",
+      "{left_out}",
+      "{link}"
+    ],
+    "expect": "The real can's label decoded in plain words, with placeholders for sugar and sources, and no health-halo claims.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "beverages-04",
+    "sector": "beverages",
+    "goal": "launch",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: Summer in Delhi brings the craving for a cool lassi. Our new mango lassi comes bottled, chilled and ready for the desk at work.\nFrame 1: New: mango lassi, chilled\nMiddle frames: A bottle taken out of an office fridge; the lid twisted off and poured into a glass; a colleague's first sip at their desk.\nLast frame: {product}, {price}. Find it at {link}",
+    "mechanism": "A familiar drink in a new handy form lets people enjoy a home favourite in a place they normally can't.",
+    "placeholders": [
+      "{product}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The real bottle in an office setting with a pour and a sip, with launch price and link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "beverages-05",
+    "sector": "beverages",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "most",
+    "brief": "Offer: An office fridge pack, delivered every Monday, at {price}.\nFor: Office teams in {area} who run out of cold drinks by Wednesday.\nAngle: A weekly delivery means the fridge is full at the start of the week, without anyone placing an order.\nHeadline: A full fridge, every Monday\nSupporting line: Choose your flavours once; we deliver and restock each week.\nPicture: Our driver stacking cans into an office fridge on a Monday morning, a team member reaching in for the first one.\nButton: Set up delivery",
+    "mechanism": "A standing order removes the small task of reordering, which is when a team switches to whatever is nearest.",
+    "placeholders": [
+      "{price}",
+      "{area}"
+    ],
+    "expect": "A real delivery stocking an office fridge, the price placeholder, and a set-up button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "beverages-06",
+    "sector": "beverages",
+    "goal": "moment",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: Dry January in Manchester: people still want something good in a glass at the party. Our sparkling drink mixes three ways, with no alcohol.\nCover: Mix it three ways\nSlides:\nSlide 2: With lime and mint — a squeeze, a few leaves, plenty of ice.\nSlide 3: With ginger and honey — a spoonful of each, stirred, then topped up.\nSlide 4: With berries — crushed in the glass, then poured over.\nSlide 5: Straight from the can — over ice, nothing else.\nLast slide: Find it at {link}\nCaption: Three easy mixes for a dry January party, and how to buy for a crowd.",
+    "mechanism": "Giving a drink a recipe gives it a role at a party, which is what non-drinkers are looking for in January.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "Three real mixes with the can in each, and no splash crowns or fruit in mid-air.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-01",
+    "sector": "books-stationery",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: What our staff are reading this week. One of our booksellers in Dublin pulls her own pick off a packed shelf and says, in one line, why she stayed up past midnight with it.\nShots:\nShot 1 (0–2s): A hand pulls one book from a packed shelf in our shop.\nShot 2 (2–4s): Our bookseller turns and holds it up beside her face.\nShot 3 (4–6s): She gives her one line on why she couldn't put it down.\nShot 4 (6–8s): Her thumb flicks the pages to the chapter she means.\nShot 5 (8–9s): The book set on the staff picks table with her handwritten card.\nSound: Shop noise, the book sliding out, her own voice.\nCaption idea: The title, her line again in writing, where it sits in the shop, and our address {address}.",
+    "mechanism": "A named bookseller's specific taste is more believable than a bestseller list and makes the shop the place to discover.",
+    "placeholders": [
+      "{address}"
+    ],
+    "expect": "The real bookseller with her own pick and card in the shop, with no candles or floating books.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-02",
+    "sector": "books-stationery",
+    "goal": "moment",
+    "format": "carousel",
+    "awareness": "most",
+    "brief": "Idea: Back to school in Nairobi means a long supplies list and a crowded Saturday. We pack each school's list as one ready bag, so parents shop once and skip the queue.\nCover: The whole school list, one bag\nSlides:\nSlide 2: Exercise books — ruled and squared, the exact kind the list names.\nSlide 3: Pens and pencils — the right sort, with spares for the lost ones.\nSlide 4: Geometry set — complete, in its case, name label inside.\nSlide 5: The ready bag — every item packed and checked against your list.\nLast slide: Send your list by {date}; collect at {address}\nCaption: Photograph your child's school list and send it to {phone}. We pack it, you collect it, price {price}.",
+    "mechanism": "A bag packed to the school's own list turns the season's most stressful errand into one message and one pickup.",
+    "placeholders": [
+      "{date}",
+      "{address}",
+      "{phone}",
+      "{price}"
+    ],
+    "expect": "Real items from a real school list packed in one bag, an order-by date and collection address.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-03",
+    "sector": "books-stationery",
+    "goal": "sell",
+    "format": "post",
+    "awareness": "product",
+    "brief": "Idea: Fountain pen users in Tokyo know the disappointment of ink soaking through cheap paper. We show our notebook's writing test: the page written in the wettest inks, and the back of that same page.\nHeadline: Fountain pen, no bleed\nSupporting line: The wettest inks we stock, written on one page; turn it over.\nPicture: An open notebook with lines of handwriting in several inks, a second copy of the notebook beside it turned to show the back of that page, clean.\nCaption idea: The paper weight, the pens and inks we tested, the notebook price {price}, and ordering at {link}.",
+    "mechanism": "A writing test answers the one question a pen user has about paper and proves it on the exact pens they use.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real writing test front and back with the notebook itself, no staged coffee-and-candle desk.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-04",
+    "sector": "books-stationery",
+    "goal": "event",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: On Thursday evening in Buenos Aires, a local author reads from her new novel among our shelves, answers questions, and signs copies at the counter.\nFrame 1: The author reads here Thursday\nMiddle frames: The new novel stacked on our front table; folding chairs set out between the shelves; the author at the counter signing a copy for a reader.\nLast frame: {date}, {time}. Entry {entry}. Save a seat: {link}",
+    "mechanism": "A reading brings people through the door for one evening, and most of them leave with a signed copy.",
+    "placeholders": [
+      "{date}",
+      "{time}",
+      "{entry}",
+      "{link}"
+    ],
+    "expect": "The shop set for a real reading, the author signing, and the date, time and seat link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-05",
+    "sector": "books-stationery",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: Tell us three books you loved; each month we post the next one with a handwritten note, {price}.\nFor: Readers in {area} who finished their last good book and don't know what to pick up next.\nAngle: A real bookseller reads your three titles and chooses for you, then writes why.\nHeadline: Your next book, chosen\nSupporting line: A bookseller picks it, wraps it and writes you a note.\nPicture: Our bookseller writing a short note on a card at the counter, the chosen book and an addressed envelope beside her.\nButton: Start mine",
+    "mechanism": "A pick made for one reader by a named person feels like a gift and outperforms a generic recommendation list.",
+    "placeholders": [
+      "{price}",
+      "{area}"
+    ],
+    "expect": "A bookseller writing a note for a subscriber's book, price and area placeholders, and a short button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-06",
+    "sector": "books-stationery",
+    "goal": "lead",
+    "format": "post",
+    "awareness": "unaware",
+    "brief": "Idea: A reader in Lahore wanted the out-of-print book his mother read to him as a child. We found a copy. A post invites others to send us the title they gave up on.\nHeadline: The book you stopped looking for\nSupporting line: Send us the title and edition; we search second-hand dealers for a copy.\nPicture: Our bookseller at the counter with the phone to her ear, writing a title on a notepad, a stack of worn second-hand books beside her.\nCaption idea: What to send us (title, author, edition if you know it), how a search works, and where to send it: {phone}.",
+    "mechanism": "A book search starts a conversation with a reader who will remember the shop that found what no one else could.",
+    "placeholders": [
+      "{phone}"
+    ],
+    "expect": "A real bookseller searching by phone with second-hand stock, and a number to send titles to.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "books-stationery-07",
+    "sector": "books-stationery",
+    "goal": "moment",
+    "format": "video",
+    "awareness": "most",
+    "brief": "Idea: Board exam season in Chennai: students arrive with a list in hand and no time. We keep past papers by subject and a revision kit at the counter, packed in one stop.\nShots:\nShot 1 (0–2s): A student hands a folded list across our counter.\nShot 2 (2–4s): Our staff pull past-paper books from the shelf, subject by subject.\nShot 3 (4–6s): Highlighters, flashcards and a clipboard go into one bag.\nShot 4 (6–8s): The list comes back with every line ticked, the bag on top.\nSound: Shop chatter, pages, the bag rustling, a quick thanks.\nCaption idea: Subjects we stock past papers for, what is in the kit, {price}, and our hours {hours}.",
+    "mechanism": "In exam season students want the whole list solved in one stop, so a counter-ready kit beats browsing shelves.",
+    "placeholders": [
+      "{price}",
+      "{hours}"
+    ],
+    "expect": "Real past papers pulled by subject and a packed kit at the counter, with price and hours.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-01",
+    "sector": "cafe",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: Every morning in our Istanbul café, the barista pulls shots and tips the first ones away until the grinder is set right. Regulars get the cup after that, never the first.\nShots:\nShot 1 (0–2s): The shutters roll up on an empty street.\nShot 2 (2–4s): The grinder runs and the barista taps the dose level.\nShot 3 (4–6s): The first shot pours; she tastes it, frowns, and tips it away.\nShot 4 (6–8s): A small turn of the grinder, another shot, and this time a nod.\nShot 5 (8–9s): The first customer takes that cup at the counter.\nSound: Shutters, the grinder, the machine's hiss, one quiet word: ready.\nCaption idea: Why the first shots go down the sink, our opening time {hours}, and the address {address}.",
+    "mechanism": "Showing the quiet daily routine behind a cup proves care better than any claim about quality.",
+    "placeholders": [
+      "{hours}",
+      "{address}"
+    ],
+    "expect": "The real barista tuning the grinder and tipping away shots before opening, no latte-art hearts.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-02",
+    "sector": "cafe",
+    "goal": "sell",
+    "format": "post",
+    "awareness": "product",
+    "brief": "Idea: A new iced latte for Dubai's summer, sweetened only with date syrup instead of sugar, so it tastes like home and goes down cold after a long afternoon.\nHeadline: Dates, espresso, cold milk\nSupporting line: Our new iced latte, sweetened with date syrup only.\nPicture: Our barista pouring a fresh shot over ice and milk, the jar of date syrup open beside the glass on the counter and a plate of dates next to it.\nCaption idea: The drink's name, {price}, on the menu from {date}, and a line on where the dates come from.",
+    "mechanism": "A local ingredient in a familiar drink feels new and ours, and gives regulars a reason to try something this week.",
+    "placeholders": [
+      "{price}",
+      "{date}"
+    ],
+    "expect": "The new drink being made with the date syrup in view, the price and start date.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-03",
+    "sector": "cafe",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: A weekday desk pass, {price}, with {refills} and a seat by a socket.\nFor: People in Toronto working from home who have had enough of the kitchen table.\nAngle: A fixed daily price buys a seat, a socket and coffee, so nobody watches the clock or feels they must keep ordering.\nHeadline: A desk with refills\nSupporting line: Seat, socket, wifi and coffee for one daily price.\nPicture: A person on a laptop at our long table, a socket in use beside them, our barista topping up their cup.\nButton: Get day pass",
+    "mechanism": "A day price lets remote workers stay without guilt and fills the café's quiet weekday hours with steady spend.",
+    "placeholders": [
+      "{price}",
+      "{refills}"
+    ],
+    "expect": "A real remote worker settled at a café table with a socket and refill, the pass price, and a button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-04",
+    "sector": "cafe",
+    "goal": "moment",
+    "format": "story",
+    "awareness": "most",
+    "brief": "Idea: When the monsoon breaks in Mumbai, everyone wants cutting chai and hot pakoras. A story the first rainy afternoon brings the street inside.\nFrame 1: Rain outside? Chai inside.\nMiddle frames: Rain running down our front window and umbrellas by the door; chai poured from a height into small glasses; a basket of onion pakoras lifted from the kadai.\nLast frame: Chai and pakoras {price}, till {time}",
+    "mechanism": "Linking a comfort order to the first rain of the season makes the café the reflex choice when it happens.",
+    "placeholders": [
+      "{price}",
+      "{time}"
+    ],
+    "expect": "Real chai being poured and pakoras fried with rain at the window, a price and closing time.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-05",
+    "sector": "cafe",
+    "goal": "event",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: A cupping morning in Melbourne: our roaster sets out three coffees from different farms and shows people how to taste what makes each one different.\nCover: Three coffees, one Saturday morning\nSlides:\nSlide 2: Smell it dry — the ground coffee in a bowl, before any water.\nSlide 3: Break the crust — a spoon through the top, then breathe in.\nSlide 4: Slurp it — loud, from the spoon, so it hits your whole mouth.\nSlide 5: Compare — three bowls side by side, and a card to write what you notice.\nLast slide: Saturday {date}, {time}. Book: {link}\nCaption: Our roaster runs it, the coffees are on the bar after, and seats are {price}.",
+    "mechanism": "Teaching people to taste turns customers into fans who come back for the beans they learned to tell apart.",
+    "placeholders": [
+      "{date}",
+      "{time}",
+      "{link}",
+      "{price}"
+    ],
+    "expect": "The real cupping steps at the café bar with a date, time, price and booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-06",
+    "sector": "cafe",
+    "goal": "trust",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: Our barista in Paris starts a regular's order the moment they walk in. A post introduces her and the small ritual that makes our corner feel like their own.\nHeadline: Your order, before you ask\nSupporting line: {barista_name} has it started as you open the door.\nPicture: Our barista sliding a cup across the counter to a regular still taking off his scarf, the next cup already under the machine.\nCaption idea: {barista_name}'s name, how long she has been with us ({years}), the orders she knows by heart, and our address.",
+    "mechanism": "Being known by name is a reason people choose one café over a nearer one, so the person behind the bar is the offer.",
+    "placeholders": [
+      "{barista_name}",
+      "{years}"
+    ],
+    "expect": "The real barista and a regular in a natural moment at the counter, with her name as a placeholder.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cafe-07",
+    "sector": "cafe",
+    "goal": "moment",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: In exam season in Seoul, students need somewhere to study after the library shuts. We stay open late and keep the upstairs room quiet for them.\nShots:\nShot 1 (0–2s): Students at upstairs tables, notes spread out, heads down.\nShot 2 (2–4s): A handwritten quiet room sign taped at the top of the stairs.\nShot 3 (4–6s): Our barista climbs up with a tray and sets down fresh cups without a word.\nShot 4 (6–8s): The street below has emptied; the upstairs is still full.\nSound: Pages turning, a pen tapping, the faint machine downstairs.\nCaption idea: Late hours {hours} for exam weeks, quiet upstairs, sockets at every table, and the address.",
+    "mechanism": "Giving one group a space for one need, like late study, makes the café part of their routine for the whole season.",
+    "placeholders": [
+      "{hours}"
+    ],
+    "expect": "Real students studying late upstairs with the quiet sign, and the late hours placeholder.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-01",
+    "sector": "car-rental",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: The car you get, as it is today. The evening before pickup in Tbilisi, we film the exact car a renter booked, washed and checked, and send it to them.\nShots:\nShot 1 (0–2s): Our depot at dawn, the booked car pulled out of the row.\nShot 2 (2–4s): A team member washes it down and wipes the seats.\nShot 3 (4–6s): The walkaround: each tyre, each panel, the fuel gauge full.\nShot 4 (6–8s): The plate and the renter's name on a card on the dashboard.\nSound: Water, a door shutting, our team member saying the renter's name.\nCaption idea: How every booking gets its own video, the cars we rent {models}, and booking at {link}.",
+    "mechanism": "Seeing the exact car before arrival answers the renter's fear of an old, dirty car that isn't the one on the website.",
+    "placeholders": [
+      "{models}",
+      "{link}"
+    ],
+    "expect": "The booked car washed and walked round at the real depot, no stock sports cars on empty roads.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-02",
+    "sector": "car-rental",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "product",
+    "brief": "Offer: {price} a day with {inclusions} and {km_included} in the rate.\nFor: Visitors to Cape Town who want to drive the coast without a surprise at the return desk.\nAngle: Every charge is on the booking page before payment, so the price at pickup is the price at return.\nHeadline: One price, all listed\nSupporting line: Cover and distance already in the daily rate, every line listed.\nPicture: A couple loading bags into one of our cars at the depot, the printed rate sheet on the bonnet with each line ticked.\nButton: See the rate",
+    "mechanism": "Listing every inclusion up front answers the renter's biggest fear: fees added at the counter or on return.",
+    "placeholders": [
+      "{price}",
+      "{inclusions}",
+      "{km_included}"
+    ],
+    "expect": "A real car and renters at the depot with an itemised rate sheet, all figures as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-03",
+    "sector": "car-rental",
+    "goal": "lead",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: After a long flight into Istanbul, nobody wants a shuttle bus to a rental lot. Our driver waits at arrivals with a name sign and the car parked outside.\nHeadline: Your car, at arrivals\nSupporting line: We meet your flight, walk you to the car, and handle the paperwork there.\nPicture: Our team member at the arrivals barrier holding a sign with a traveller's name, the traveller waving as they push their trolley through.\nCaption idea: How airport handover works, what to send us before you fly, {price}, and the number to message: {phone}.",
+    "mechanism": "Meeting the renter at arrivals removes the most tiring step of renting, which is when travellers choose a provider.",
+    "placeholders": [
+      "{price}",
+      "{phone}"
+    ],
+    "expect": "A real meet at the arrivals barrier with a name sign, a price placeholder and a contact number.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-04",
+    "sector": "car-rental",
+    "goal": "moment",
+    "format": "carousel",
+    "awareness": "most",
+    "brief": "Idea: Wedding season in Lahore: the barat car has to arrive dressed in flowers, on time, with a driver who knows the venue. We hire it with every detail planned.\nCover: The barat car, with driver\nSlides:\nSlide 2: Dressed the morning of — fresh flower strings tied on by our team.\nSlide 3: A driver in uniform — who has driven to your venue before the day.\nSlide 4: Your timings — collected for {hours}, from the groom's house to the venue and on.\nSlide 5: Dates for the season — {dates_open}.\nLast slide: Book your date: {phone}\nCaption: Tell us the date, the venue and the timings, and we send you the car's photos and the driver's name.",
+    "mechanism": "A wedding car is bought on punctuality and presentation, so spelling out timing and decoration sells it.",
+    "placeholders": [
+      "{hours}",
+      "{dates_open}",
+      "{phone}"
+    ],
+    "expect": "A real decorated car and driver with the season's dates and booking details as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-05",
+    "sector": "car-rental",
+    "goal": "trust",
+    "format": "story",
+    "awareness": "problem",
+    "brief": "Idea: Renters in Mexico City dread being blamed for a scratch they didn't make. At pickup we walk round the car together and photograph every mark, and both of us keep the photos.\nFrame 1: Walk round it with us\nMiddle frames: Our team member and a renter crouched by a bumper, pointing at a small scuff; the photo of it on the renter's phone; the signed damage sheet with each mark circled.\nLast frame: Same photos at return. Book: {link}",
+    "mechanism": "Recording existing damage together at pickup removes the fear of a deposit dispute on return.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "A real joint walkaround with photos and a damage sheet, and a booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-06",
+    "sector": "car-rental",
+    "goal": "sell",
+    "format": "post",
+    "awareness": "product",
+    "brief": "Idea: People who have just moved to Dubai for work need a car from the first week, before they know if they'll stay. A monthly rental covers the gap with no loan or registration.\nHeadline: Your car while you settle\nSupporting line: Monthly rental with {inclusions}, end it with {notice}.\nPicture: A new arrival collecting keys from our team member outside a building, a suitcase still beside them on the pavement.\nCaption idea: The monthly price {price}, what is included, what we need from you to start, and booking at {link}.",
+    "mechanism": "Newcomers delay buying a car until they settle, so a flexible monthly rental fills a real, time-bound gap.",
+    "placeholders": [
+      "{inclusions}",
+      "{notice}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real newcomer collecting a car with luggage beside them, and monthly price and notice placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "car-rental-07",
+    "sector": "car-rental",
+    "goal": "launch",
+    "format": "carousel",
+    "awareness": "product",
+    "brief": "Idea: Seven-seaters are now in our fleet in Marrakech for families on the summer trip to the grandparents, so nobody squeezes into two cars.\nCover: Seven seats, one car, whole family\nSlides:\nSlide 2: Third row up — seats for the cousins, folded down for the luggage.\nSlide 3: Child seats on request — fitted by us before you arrive.\nSlide 4: Room behind — the bags for a week, shown packed in the boot.\nSlide 5: The models — {models}, from {price} a day.\nLast slide: Book for the summer: {link}\nCaption: New in our fleet for summer family trips. Ask for child seats when you book.",
+    "mechanism": "Showing one car taking the whole family and their luggage replaces the cost and hassle of renting two.",
+    "placeholders": [
+      "{models}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The real seven-seater with seats and boot in use, models and price as placeholders, and a booking link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-01",
+    "sector": "cleaning",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "problem",
+    "brief": "Idea: One oven door, cleaned for real. A family in Sydney hadn't seen through theirs in years; our cleaner shows what an oven clean actually involves.\nShots:\nShot 1 (0–2s): A greasy oven door, the inside of the glass impossible to see through.\nShot 2 (2–4s): Our cleaner lifts the door off and lays it on a mat.\nShot 3 (4–6s): She scrapes and scrubs the glass, grime coming away in strips.\nShot 4 (6–8s): One wipe, and the door goes back on.\nShot 5 (8–9s): The family's child peers through the clear glass at a tray inside.\nSound: The scraper, the scrub, the satisfying wipe, the child's gasp.\nCaption idea: How long an oven clean takes, the price {price}, and booking at {link}.",
+    "mechanism": "Watching a familiar mess disappear at real speed proves the work more than any claim about thoroughness.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real oven door cleaned by our cleaner in a real kitchen, no sparkles or rubber-glove flat-lays.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-02",
+    "sector": "cleaning",
+    "goal": "lead",
+    "format": "post",
+    "awareness": "problem",
+    "brief": "Idea: Tenants moving out in London lose deposit money over the oven, the limescale and the skirting. We clean to the same check-out list the landlord's inspector uses.\nHeadline: Cleaned to the inspector's list\nSupporting line: Send us your inventory; we clean line by line and send photos of each room.\nPicture: Our two cleaners in an empty flat, one descaling a shower screen, the other ticking a printed check-out inventory on a clipboard.\nCaption idea: What the move-out clean covers, how to send your inventory, the price by flat size {price}, and booking at {link}.",
+    "mechanism": "Cleaning to the landlord's own check-out list speaks to the tenant's real fear: losing part of the deposit.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "Real cleaners in an empty flat working from a printed inventory, price and link placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-03",
+    "sector": "cleaning",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: Letting strangers into the home is the hardest part of hiring a cleaner in Mexico City. A carousel shows exactly what happens on cleaning day, with the same team each time.\nCover: What happens on cleaning day\nSlides:\nSlide 2: The same two people — {cleaner_names}, every visit, named in your booking.\nSlide 3: ID at the door — shown before they step inside.\nSlide 4: Your list first — the rooms and the jobs you asked for, in your order.\nSlide 5: Photos when done — each room, sent before they leave.\nLast slide: Book your team: {link}\nCaption: Same people, same list, every visit. Tell us what matters most in your home when you book.",
+    "mechanism": "Showing the visit step by step with the same named people answers the fear of strangers in the home.",
+    "placeholders": [
+      "{cleaner_names}",
+      "{link}"
+    ],
+    "expect": "A real visit from the door to the finished photos with team names as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-04",
+    "sector": "cleaning",
+    "goal": "moment",
+    "format": "story",
+    "awareness": "most",
+    "brief": "Idea: In Hong Kong the whole home is cleaned before Lunar New Year, because nobody sweeps on the first day and risks sweeping the luck out. We take the big clean off the family's hands.\nFrame 1: Clean before the new year\nMiddle frames: Our team wiping window tracks and cupboard tops in a flat; the kitchen extractor filter scrubbed in the sink; the family hanging their new year decorations in the clean room.\nLast frame: Book by {date}: {link}",
+    "mechanism": "Tying a deep clean to a tradition's real deadline gives families a date to book before, not a vague someday.",
+    "placeholders": [
+      "{date}",
+      "{link}"
+    ],
+    "expect": "A real pre-new-year deep clean in a flat and the family decorating after, with a booking date.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-05",
+    "sector": "cleaning",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "product",
+    "brief": "Offer: A home clean priced by room, {price}, fixed before we arrive.\nFor: Families in Johannesburg tired of hourly quotes that grow on the day.\nAngle: You choose the rooms, the price is set, and it doesn't change however long the job takes us.\nHeadline: Priced before we arrive\nSupporting line: Pick your rooms; the price is fixed, not by the hour.\nPicture: Our cleaner at a customer's front door holding the room-by-room price sheet the customer approved, her cleaning caddy at her feet.\nButton: Price my home",
+    "mechanism": "A fixed price by room moves the risk of a slow job onto the cleaner, which is what makes people book a first visit.",
+    "placeholders": [
+      "{price}"
+    ],
+    "expect": "A real cleaner at the door with the approved price sheet, a price placeholder and a pricing button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-06",
+    "sector": "cleaning",
+    "goal": "trust",
+    "format": "post",
+    "awareness": "problem",
+    "brief": "Idea: Parents and pet owners in Toronto worry about what a cleaner sprays near the floor where kids crawl and dogs lick. We show every product we use, label facing out.\nHeadline: Every bottle, label out\nSupporting line: The exact products we use in your home, and what is in each one.\nPicture: Our cleaner mopping a kitchen floor while the family's dog watches from its bed, the product bottle on the counter turned so its label reads.\nCaption idea: The products we use and their labels {product_list}, what we never bring into a home with pets, and booking at {link}.",
+    "mechanism": "Showing the actual products answers the safety doubt directly instead of asking customers to trust a vague claim.",
+    "placeholders": [
+      "{product_list}",
+      "{link}"
+    ],
+    "expect": "A real clean with the family's dog nearby and labels readable, product list as a placeholder.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "cleaning-07",
+    "sector": "cleaning",
+    "goal": "launch",
+    "format": "video",
+    "awareness": "problem",
+    "brief": "Idea: In Riyadh, sand and dust settle deep into sofas and mattresses. Our new steam cleaning service lifts it out at home, and the water shows what came out.\nShots:\nShot 1 (0–2s): A family sofa that looks clean until a hand pats it and dust rises.\nShot 2 (2–4s): Our cleaner runs the steam wand over the seat in slow lines.\nShot 3 (4–6s): The machine's waste tank, the water gone thick and murky.\nShot 4 (6–8s): The children climb back onto the dry sofa.\nSound: The machine's hiss, the hand pat, the children's voices.\nCaption idea: New: sofa and mattress steam cleaning, how long it takes to dry, {price}, and booking at {link}.",
+    "mechanism": "Showing what comes out of furniture that looked clean reveals a problem people didn't know they had.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real sofa steam-cleaned at home with the waste water shown, a launch price and link.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-01",
+    "sector": "clinic-doctor",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: Patients in Karachi often ask for antibiotics for a cold. Our doctor answers that one question to camera in her own consult room, plainly, and says when to come back.\nShots:\nShot 1 (0–2s): The question on screen: do I need antibiotics for a cold?\nShot 2 (2–4s): Our doctor in her consult room gives the plain answer.\nShot 3 (4–6s): She counts on her fingers the signs that mean come back.\nShot 4 (6–8s): Our reception desk, the hours board beside it.\nSound: Her own voice, calm, with the clinic quiet behind her.\nCaption idea: The doctor's name and {qualifications}, the signs to come back for in writing, our hours {hours}, and booking at {link}.",
+    "mechanism": "A doctor answering a common question honestly shows she will not over-treat, which is what families look for.",
+    "placeholders": [
+      "{qualifications}",
+      "{hours}",
+      "{link}"
+    ],
+    "expect": "The real doctor in her consult room answering one question, with qualifications as a placeholder.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-02",
+    "sector": "clinic-doctor",
+    "goal": "lead",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Parents in Nairobi can't tell when a child's fever is normal and when it needs a doctor. A carousel gives four clear signs, written with our paediatrician.\nCover: When a child's fever needs us\nSlides:\nSlide 2: A baby under three months — any fever at all, call us the same day.\nSlide 3: A rash that won't fade — press a glass on it; if it stays, come in now.\nSlide 4: Fast or hard breathing — ribs pulling in, or grunting with each breath.\nSlide 5: Drowsy or not drinking — hard to wake, or no wet nappy for hours.\nLast slide: Call {phone}; in an emergency, go to the nearest hospital\nCaption: Save this for the night you need it. Our paediatrician sees children at {hours}.",
+    "mechanism": "Clear warning signs a worried parent can check at home build trust long before the clinic is needed.",
+    "placeholders": [
+      "{phone}",
+      "{hours}"
+    ],
+    "expect": "Four accurate fever warning signs with a phone and hours placeholder, no stethoscope stock images.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-03",
+    "sector": "clinic-doctor",
+    "goal": "sell",
+    "format": "post",
+    "awareness": "most",
+    "brief": "Idea: Families in Manila avoid clinics where the bill is a surprise. Our fees are printed at reception, so a patient knows the cost before they sit down.\nHeadline: The fee, before the chair\nSupporting line: Consultation {fee}, follow-up {follow_up_fee}, printed at our desk.\nPicture: Our receptionist pointing out the printed fee board to a mother with a toddler on her hip, the waiting room chairs behind them.\nCaption idea: Every fee listed, what a consultation includes, tests we only order if you need them, and booking at {link}.",
+    "mechanism": "Fees shown before the visit remove the fear of hidden costs that keeps families from choosing a new clinic.",
+    "placeholders": [
+      "{fee}",
+      "{follow_up_fee}",
+      "{link}"
+    ],
+    "expect": "A real reception desk with the printed fee board and fees as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-04",
+    "sector": "clinic-doctor",
+    "goal": "moment",
+    "format": "story",
+    "awareness": "most",
+    "brief": "Idea: People with diabetes in Jakarta want to fast through Ramadan safely. A pre-Ramadan visit sets their medicine timings for suhoor and iftar with our doctor.\nFrame 1: Fasting this Ramadan with diabetes?\nMiddle frames: Our doctor and a patient going over a printed medicine timetable split into suhoor and iftar; a finger-prick sugar test at the desk; the signs that mean break the fast, on one card.\nLast frame: Book before {date}: {link}",
+    "mechanism": "A visit tied to a fast's real start date gives patients with a condition a clear, timely reason to book.",
+    "placeholders": [
+      "{date}",
+      "{link}"
+    ],
+    "expect": "A real consultation on fasting timings and a sugar test, with a booking deadline placeholder.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-05",
+    "sector": "clinic-doctor",
+    "goal": "event",
+    "format": "post",
+    "awareness": "solution",
+    "brief": "Idea: As autumn starts in Madrid, older patients and carers need their flu vaccine before winter. We set aside walk-in vaccine mornings so nobody waits for a slot.\nHeadline: Flu vaccine mornings, walk in\nSupporting line: {dates}, {hours}, no appointment needed.\nPicture: Our nurse giving a vaccine to an older man in the consult room, his daughter holding his coat beside him.\nCaption idea: Who should come, what to bring, the fee or cover {fee}, and our address {address}.",
+    "mechanism": "Walk-in vaccine days remove the booking step that makes older patients put a seasonal vaccine off.",
+    "placeholders": [
+      "{dates}",
+      "{hours}",
+      "{fee}",
+      "{address}"
+    ],
+    "expect": "A real nurse vaccinating a patient in the clinic with dates and hours as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-06",
+    "sector": "clinic-doctor",
+    "goal": "lead",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: Weekday appointments until {time}, booked the same day.\nFor: Workers in Bogotá who can't leave a shift to see a doctor.\nAngle: Seeing a doctor after work means not losing a day's pay to an illness that needs ten minutes of care.\nHeadline: A doctor after work\nSupporting line: Open weekday evenings until {time}; book today.\nPicture: Our doctor examining a delivery rider still in his work jacket, his helmet on the chair beside him.\nButton: Book tonight",
+    "mechanism": "Evening hours remove the lost wages that keep working people from seeing a doctor during the day.",
+    "placeholders": [
+      "{time}"
+    ],
+    "expect": "A real working patient seen in the evening, with closing time placeholders and a booking button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "clinic-doctor-07",
+    "sector": "clinic-doctor",
+    "goal": "launch",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: Grown children in Lahore struggle to take elderly parents to the lab for routine blood tests. Our new home collection sends a nurse to the house.\nCover: Blood tests, without leaving home\nSlides:\nSlide 2: Book a time — by phone or online, for the morning you choose.\nSlide 3: Our nurse arrives — with ID, sealed kits and the doctor's request.\nSlide 4: Sample taken at home — in the parent's own chair, a few minutes.\nSlide 5: Results to you — sent to your phone and reviewed by our doctor.\nLast slide: Book a home visit: {link}\nCaption: New: home sample collection in {area}. Price {price} on top of the tests.",
+    "mechanism": "Bringing the test to the parent removes the trip that makes families postpone routine checks for the elderly.",
+    "placeholders": [
+      "{link}",
+      "{area}",
+      "{price}"
+    ],
+    "expect": "Real steps of a home blood collection with an older patient at home, area and price placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "coffee-tea-brand-01",
+    "sector": "coffee-tea-brand",
+    "goal": "trust",
+    "format": "post",
+    "awareness": "product",
+    "brief": "Idea: Supermarket coffee shows a best-before date, never a roast date. Ours is stamped by hand on every bag in our Melbourne roastery on the day it is roasted.\nHeadline: The roast date, by hand\nSupporting line: Roasted on the date stamped; best brewed within {window}.\nPicture: Our roaster pressing the date stamp onto a bag on the packing bench, the cooling tray of fresh beans behind her.\nCaption idea: Why the roast date matters more than best-before, when we roast {roast_days}, and ordering at {link}.",
+    "mechanism": "A roast date proves freshness in a way a best-before date can't, answering the stale-coffee doubt directly.",
+    "placeholders": [
+      "{window}",
+      "{roast_days}",
+      "{link}"
+    ],
+    "expect": "The real roaster stamping the date on a bag, with roast window placeholders, no latte-art hearts.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "coffee-tea-brand-02",
+    "sector": "coffee-tea-brand",
+    "goal": "sell",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: How we brew it at home. A morning pour-over in a kitchen in Bogotá with our beans, so a buyer sees the method is easy and the cup is theirs to make.\nShots:\nShot 1 (0–2s): The bag opens and beans tip into a hand grinder.\nShot 2 (2–4s): The grounds bloom and swell under the first pour.\nShot 3 (4–6s): The kettle circles slowly as the coffee drips through.\nShot 4 (6–8s): The cup on the kitchen table beside a plate of arepas, first sip.\nShot 5 (8–9s): The bag on its own with its name.\nSound: The grinder, the pour, the drip, a cup set down.\nCaption idea: Our ratio and grind in words, the beans used, {price}, and ordering at {link}.",
+    "mechanism": "Showing a simple home brew of the exact product removes the fear of a bitter cup and makes buying feel easy.",
+    "placeholders": [
+      "{price}",
+      "{link}"
+    ],
+    "expect": "A real home pour-over with the bag in view, no steam-swirl stock mugs.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "coffee-tea-brand-03",
+    "sector": "coffee-tea-brand",
+    "goal": "moment",
+    "format": "carousel",
+    "awareness": "most",
+    "brief": "Idea: In Taipei, a tin of good oolong is what you carry to your elders at Lunar New Year. Our gift tin holds a high-mountain oolong and a card on how to brew it.\nCover: The New Year tin, for your elders\nSlides:\nSlide 2: The tea — rolled oolong leaves from {origin}, picked this spring.\nSlide 3: The tin — sealed to keep the leaves fresh through the holiday.\nSlide 4: The card — water heat, leaves per pot and steep times, in plain steps.\nSlide 5: Order by {date} — so it arrives before the reunion dinner.\nLast slide: Order the tin: {link}\nCaption: A gift your grandparents will brew, not shelve. Order by {date}, {price}.",
+    "mechanism": "A gift tied to a ritual with a clear order-by date turns a festival obligation into an easy purchase.",
+    "placeholders": [
+      "{origin}",
+      "{date}",
+      "{link}",
+      "{price}"
+    ],
+    "expect": "The real tin, rolled leaves and brewing card, with an order-by date and price placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "coffee-tea-brand-04",
+    "sector": "coffee-tea-brand",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "most",
+    "brief": "Offer: Fresh beans posted every two weeks, {offer}, on {terms}.\nFor: People in Berlin who drink coffee every morning and keep running out on a Sunday.\nAngle: The next bag arrives before the last one is empty, roasted that week.\nHeadline: Never the last scoop\nSupporting line: Roasted the week it ships, posted before you run out.\nPicture: A hand scraping the last spoon from an almost-empty bag on a kitchen counter while the new bag sits unopened beside it.\nButton: Start my beans",
+    "mechanism": "A delivery that lands before the last scoop solves a real daily annoyance and makes freshness automatic.",
+    "placeholders": [
+      "{offer}",
+      "{terms}"
+    ],
+    "expect": "An almost-empty bag beside the new one in a real kitchen, the offer placeholder and a start button.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "coffee-tea-brand-05",
+    "sector": "coffee-tea-brand",
+    "goal": "launch",
+    "format": "story",
+    "awareness": "product",
+    "brief": "Idea: A new single-origin lot from {origin} has arrived at our roastery. A launch story follows it from sack to the first cups we tasted.\nFrame 1: New lot from {origin}\nMiddle frames: Unroasted beans poured from a jute sack with the farm's name stencilled on it; the first roast tipping out into the cooling tray; our team slurping spoons around the cupping table.\nLast frame: {product}, {price}. Try it: {link}",
+    "mechanism": "Following one lot from sack to cup gives a new coffee a real story and makes the origin believable.",
+    "placeholders": [
+      "{origin}",
+      "{product}",
+      "{price}",
+      "{link}"
+    ],
+    "expect": "The real sack, first roast and cupping table, with origin and price placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "coffee-tea-brand-06",
+    "sector": "coffee-tea-brand",
+    "goal": "trust",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: Buyers in Cape Town read chocolate and cherry on a coffee bag and think they're added flavours. A carousel explains what tasting notes really mean.\nCover: No chocolate added. Here's why.\nSlides:\nSlide 2: A note is a likeness — the roasted bean tastes like it, nothing is mixed in.\nSlide 3: Where it comes from — the farm's height, the bean and how it was dried.\nSlide 4: How to find it — let the cup cool a little; notes show as it drops.\nSlide 5: Our notes, tested — each bag's notes agreed by our team at the cupping table.\nLast slide: Find your notes: {link}\nCaption: Read our notes, then tell us what you taste. Disagreeing is part of it.",
+    "mechanism": "Explaining tasting notes plainly answers the doubt that they are marketing words that won't match the cup.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "A clear explanation of tasting notes with the real cupping table, no stock farmer photos.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-01",
+    "sector": "consulting-b2b",
+    "goal": "trust",
+    "format": "video",
+    "awareness": "solution",
+    "brief": "Idea: Our partner in Singapore opens with an opinion: your weekly report has no decision in it. Then she shows the one-page format we put in place of the slide deck.\nShots:\nShot 1 (0–2s): Our partner to camera: your weekly report has no decision in it.\nShot 2 (2–4s): She flips through a thick printed report, pages of charts.\nShot 3 (4–6s): At the whiteboard she draws three boxes: what changed, what we decide, who owns it.\nShot 4 (6–8s): A client's leadership team in a workshop filling in the page.\nSound: Her voice, a marker squeaking, a quiet room.\nCaption idea: The one-page format in writing, her name and {credentials}, and how to book a call at {link}.",
+    "mechanism": "A sharp opinion and a method a client can use tomorrow shows practical expertise, not slides with no action.",
+    "placeholders": [
+      "{credentials}",
+      "{link}"
+    ],
+    "expect": "The real partner on camera with a method drawn and a real workshop, no chess pieces or handshakes.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-02",
+    "sector": "consulting-b2b",
+    "goal": "lead",
+    "format": "carousel",
+    "awareness": "problem",
+    "brief": "Idea: Distribution businesses in the Gulf lose cash to stock in the wrong place. A carousel names three signs an owner can check this week.\nCover: Three signs your stock is costing you\nSlides:\nSlide 2: Out here, overflowing there — one branch out of a line another can't move.\nSlide 3: Rush freight every month — paying to fly in what a forecast should have shipped.\nSlide 4: Old stock nobody counts — sitting in the back, still on the books at full cost.\nSlide 5: What we do first — map stock, sales and orders for one product line in {weeks}.\nLast slide: Book a first call: {link}\nCaption: If two of these sound familiar, we can show you where the cash is sitting. One product line, {weeks}.",
+    "mechanism": "Naming symptoms an owner already sees lets them diagnose themselves and makes the first call feel useful.",
+    "placeholders": [
+      "{weeks}",
+      "{link}"
+    ],
+    "expect": "Three concrete stock problems and a scoped first step with placeholders, no arrows on whiteboards.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-03",
+    "sector": "consulting-b2b",
+    "goal": "event",
+    "format": "post",
+    "awareness": "problem",
+    "brief": "Idea: A new rule on {regulation} reaches factory owners in Lagos on {date}. Our partners run a breakfast briefing on what changes on the shop floor and in the books.\nHeadline: The new rule, over breakfast\nSupporting line: One hour on {date}: what changes, who it affects, the first three steps.\nPicture: Our partner at the head of a table of factory owners over breakfast, the printed rule open in front of them with lines marked.\nCaption idea: Who should come, the agenda in three lines, the venue {address}, and how to save a seat at {link}.",
+    "mechanism": "Explaining a new rule before it lands puts the firm in front of owners at the moment they need advice.",
+    "placeholders": [
+      "{regulation}",
+      "{date}",
+      "{address}",
+      "{link}"
+    ],
+    "expect": "A real breakfast briefing with factory owners, the rule and date as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-04",
+    "sector": "consulting-b2b",
+    "goal": "sell",
+    "format": "ad",
+    "awareness": "solution",
+    "brief": "Offer: A fixed-scope operations review in {weeks}, for {price}.\nFor: Owners of family-run manufacturers in São Paulo who know something is slow but not what.\nAngle: A fixed fee and a fixed end date, ending in a written plan the owner's own team can run.\nHeadline: One review, a written plan\nSupporting line: {weeks}, fixed fee, a plan your team can run without us.\nPicture: Our consultant walking the factory floor with the owner, notebook in hand, stopping at a line where boxes are piled up waiting.\nButton: See the scope",
+    "mechanism": "A fixed fee and end date remove the fear of an open-ended retainer, the main barrier to hiring a consultant.",
+    "placeholders": [
+      "{weeks}",
+      "{price}"
+    ],
+    "expect": "A real consultant on the factory floor with the owner, weeks and price as placeholders.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-05",
+    "sector": "consulting-b2b",
+    "goal": "trust",
+    "format": "story",
+    "awareness": "solution",
+    "brief": "Idea: Clients in Warsaw ask what we actually do in a workshop day. A story shows one, from the first sticky note to the decision on the wall.\nFrame 1: Inside one workshop day\nMiddle frames: The client's team mapping their order process in sticky notes along an office wall; our consultant circling the step where orders wait longest; the team voting on the one change to test first.\nLast frame: Book a workshop: {link}",
+    "mechanism": "Showing a workshop as it really runs makes an intangible service concrete and proves the client's team does the work.",
+    "placeholders": [
+      "{link}"
+    ],
+    "expect": "A real process-mapping workshop with the client's team, no symbolic objects.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-06",
+    "sector": "consulting-b2b",
+    "goal": "moment",
+    "format": "post",
+    "awareness": "most",
+    "brief": "Idea: The new financial year starts in July in Karachi, and budgets get written in a rush. We help owners turn the year into one page their managers can follow.\nHeadline: Next year, on one page\nSupporting line: Three goals, the numbers behind them, and who owns each one.\nPicture: Our consultant and an owner at a desk going through a single printed page, the old thick budget file pushed to one side.\nCaption idea: What goes on the page, how long the session takes {hours}, the fee {price}, and booking before {date} at {link}.",
+    "mechanism": "A budget deadline is a fixed moment owners must plan for, so a simple one-page outcome sells at that time.",
+    "placeholders": [
+      "{hours}",
+      "{price}",
+      "{date}",
+      "{link}"
+    ],
+    "expect": "A real owner and consultant with a one-page plan, the old budget file aside, and a booking date.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  },
+  {
+    "id": "consulting-b2b-07",
+    "sector": "consulting-b2b",
+    "goal": "launch",
+    "format": "carousel",
+    "awareness": "solution",
+    "brief": "Idea: We launch our report on cash cycles in family-run distributors across East Africa, written from our own project work. A carousel shows the questions it answers.\nCover: Where the cash goes, our new report\nSlides:\nSlide 2: Why profitable firms run short — the gap between paying suppliers and being paid.\nSlide 3: The three places cash waits — stock, credit to customers, and slow invoices.\nSlide 4: What owners changed first — the moves that freed cash fastest in our projects.\nSlide 5: A checklist to use Monday — one page at the back of the report.\nLast slide: Download the report: {link}\nCaption: Written by {author}, drawn from our own client work. Free to download at {link}.",
+    "mechanism": "A published report from real project work proves depth and earns contact details from owners who want the method.",
+    "placeholders": [
+      "{link}",
+      "{author}"
+    ],
+    "expect": "The report's questions and checklist promised, author as a placeholder, no invented findings or figures.",
+    "source": "mellox-round9-original",
+    "license": "proprietary, written for Mellox"
+  }
+]

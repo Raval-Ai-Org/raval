@@ -31,7 +31,8 @@ export type TechniqueId =
   | "contrast"
   | "real-moment"
   | "clean-announcement"
-  | "editorial-portrait";
+  | "editorial-portrait"
+  | "show-the-work";
 
 export type Technique = {
   id: TechniqueId;
@@ -134,7 +135,18 @@ export const TECHNIQUES: readonly Technique[] = [
     example:
       "The founder at their workbench, side light, looking at the camera; one line of their own words in a fine serif beside them.",
   },
+  {
+    id: "show-the-work",
+    label: "Show the work (for a service)",
+    how: "Show this service being done well, for real: the person, the tools and the place at the moment the skill shows. Specific beats symbolic: a stranger should guess the trade before reading a word.",
+    example:
+      "Gloved hands tightening a new brass fitting under a spotless sink, a torch lighting the joint, for a plumber: 'Fixed once. Fixed right.'",
+  },
 ];
+
+/** Round 9 relevance (ADR-0053): the symbolic-object example no longer shows one trade for every service. */
+const SYMBOLIC_OBJECT_EXAMPLE_V2 =
+  "A cracked phone screen mended with one gold seam on a deep blue field, for a repair shop: 'Good as new, and then some'.";
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 
@@ -165,6 +177,8 @@ export function techniquesFor(args: {
   service?: boolean;
   /** A live trend or moment is part of this brief. */
   trend?: boolean;
+  /** Round 9 relevance pack: services lead with the real work, not a symbol. */
+  relevance?: boolean;
 }): Technique[] {
   const d = args.deliverable ?? "brand-moment";
   let ids: TechniqueId[];
@@ -218,10 +232,54 @@ export function techniquesFor(args: {
           ]
         : [...BIG_IDEAS];
   }
-  if (args.service && !ids.includes("symbolic-object")) ids.push("symbolic-object");
+  if (args.relevance && args.service) {
+    ids = serviceFirst(d, ids);
+  } else if (args.service && !ids.includes("symbolic-object")) ids.push("symbolic-object");
   if (args.trend) ids.unshift("culture-tie");
   return [...new Set(ids)].map((id) => BY_ID.get(id)!).filter(Boolean);
 }
+
+/**
+ * Relevance pack: a service post leads with the work itself. `show-the-work`
+ * goes first (second for posts that must be clear, after their plain
+ * technique) and `symbolic-object` moves to the end, still offered.
+ */
+function serviceFirst(d: DeliverableId, ids: TechniqueId[]): TechniqueId[] {
+  const base =
+    d === "brand-moment" || !KNOWN_DELIVERABLE_CASES.has(d)
+      ? ([
+          "visual-metaphor",
+          "real-moment",
+          "bold-statement",
+          "contrast",
+          "type-and-subject",
+        ] as TechniqueId[])
+      : ids;
+  const rest = base.filter((id) => id !== "symbolic-object" && id !== "show-the-work");
+  const clear = mustBeClear(d);
+  const ordered: TechniqueId[] = clear
+    ? [rest[0], "show-the-work", ...rest.slice(1)]
+    : ["show-the-work", ...rest];
+  return [...ordered.filter(Boolean), "symbolic-object"];
+}
+
+/** Deliverables `techniquesFor` lists by name; anything else takes the default list. */
+const KNOWN_DELIVERABLE_CASES: ReadonlySet<string> = new Set([
+  "hiring",
+  "greeting",
+  "event",
+  "milestone",
+  "intro",
+  "case-study",
+  "quote",
+  "tips",
+  "feature-board",
+  "comparison",
+  "promo-offer",
+  "launch",
+  "teaser",
+  "product-hero",
+]);
 
 /** Posts that must read as clear information before they are clever. */
 export function mustBeClear(deliverable?: DeliverableId | null): boolean {
@@ -246,20 +304,70 @@ export const HOUSE_CRAFT: readonly string[] = [
 export const CONCEPT_TEST =
   "Score each concept 1-10 on: would a top global brand post this (Apple, McDonald's, Nike level); does it stop the thumb; is the brief's point clear in one second; does it fit this brand's world. Pick the highest total; a concept that is clever but unclear loses.";
 
+/**
+ * Relevance pack (ADR-0053): the same test with "this business and this
+ * brief" first and counted double, so polish never beats relevance. Kept no
+ * longer than `CONCEPT_TEST`.
+ */
+export const CONCEPT_TEST_RELEVANT =
+  "Score each concept 1-10 on: is it unmistakably this business and this brief (count it twice); is the point clear in one second; does it stop the thumb; would a top brand post it. A concept a rival could post by swapping the logo loses.";
+
+/** The concept test for this workspace's skill packs. */
+export function conceptTest(skills?: { relevance?: boolean } | null): string {
+  return skills?.relevance ? CONCEPT_TEST_RELEVANT : CONCEPT_TEST;
+}
+
+/** The highest concept total the director writes in `score`. */
+export function conceptMax(skills?: { relevance?: boolean } | null): number {
+  return skills?.relevance ? 50 : 40;
+}
+
+/**
+ * Type pack (ADR-0053): the house type line without the one condensed face
+ * and the forced accent word. The brand's type voice arrives in the user
+ * message. Kept no longer than the line it replaces.
+ */
+export const HOUSE_TYPE_LINE_VOICE =
+  "Type is designed, not placed: set in the brand's type voice (see Business), big with tight leading, one confident weight for the headline, aligned to a clear grid with generous margins. Colour a word only when it carries the point.";
+
+/** Type pack: bold-statement in the brand's own voice, no condensed face (no longer than before). */
+const BOLD_STATEMENT_VOICE = {
+  how: "Type carries the post: one strong line set big in the brand's type voice on the brand colour, a thin rule and one small graphic accent; colour on a word only when it carries the point.",
+  example:
+    "'Strength starts from the foundation' set big in white over a dark orange construction site at sunset, diagonal lines in a corner.",
+};
+
+/** House craft for this workspace's skill packs. */
+export function houseCraft(skills?: { type?: boolean } | null): readonly string[] {
+  if (!skills?.type) return HOUSE_CRAFT;
+  return HOUSE_CRAFT.map((rule, i) => (i === 1 ? HOUSE_TYPE_LINE_VOICE : rule));
+}
+
 /** Lines for the director: the techniques that fit, the craft and the test. */
 export function creativeSystemLines(args: {
   deliverable?: DeliverableId | null;
   service?: boolean;
   trend?: boolean;
+  skills?: { relevance?: boolean; type?: boolean } | null;
 }): string[] {
-  const offered = techniquesFor(args);
+  const relevance = !!args.skills?.relevance;
+  const offered = techniquesFor({ ...args, relevance });
+  const typed = !!args.skills?.type;
+  const how = (t: Technique) =>
+    typed && t.id === "bold-statement" ? BOLD_STATEMENT_VOICE.how : t.how;
+  const example = (t: Technique) =>
+    relevance && t.id === "symbolic-object"
+      ? SYMBOLIC_OBJECT_EXAMPLE_V2
+      : typed && t.id === "bold-statement"
+        ? BOLD_STATEMENT_VOICE.example
+        : t.example;
   return [
     mustBeClear(args.deliverable)
       ? "This post must be clear first: the facts readable at a glance. Make it beautiful with craft, a strong photo or an object that carries the details, not with a puzzle."
       : "Great brand posts are built on one idea. Look for the twist that makes this brief memorable, then execute it simply and believably.",
     "Idea techniques that fit this post (consider them, pick the best for this brief):",
-    ...offered.map((t) => `- ${t.id} (${t.label}): ${t.how} Example: ${t.example}`),
+    ...offered.map((t) => `- ${t.id} (${t.label}): ${how(t)} Example: ${example(t)}`),
     "House craft:",
-    ...HOUSE_CRAFT.map((rule) => `- ${rule}`),
+    ...houseCraft(args.skills).map((rule) => `- ${rule}`),
   ];
 }

@@ -22,16 +22,22 @@ export type InspoItem = {
   preview: string | null;
   link: string | null;
   status: "uploading" | "done" | "error";
+  /** What the picture is in Inspo (Love by default) and its Media folder. */
+  tag?: InspoTag;
   assetId?: string;
   error?: string;
 };
+
+/** Where a picture lands in Inspo: Love (default), or the brand's own media. */
+export type InspoTag = { purpose: "style" | "person" | "element" | "product"; folder?: string };
 
 const keyOf = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random()}`;
 
-export function useManualInspiration(workspaceId: string | null) {
+export function useManualInspiration(workspaceId: string | null, opts: { max?: number } = {}) {
+  const max = opts.max ?? MAX_INSPIRATIONS;
   const [items, setItems] = useState<InspoItem[]>([]);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -47,9 +53,10 @@ export function useManualInspiration(workspaceId: string | null) {
     setItems((list) => list.map((item) => (item.key === key ? { ...item, ...next } : item)));
 
   const send = useCallback(
-    async (key: string, form: FormData) => {
+    async (key: string, form: FormData, tag?: InspoTag) => {
       if (!workspaceId) return;
-      form.set("purpose", "style");
+      form.set("purpose", tag?.purpose ?? "style");
+      if (tag?.folder) form.set("folder", tag.folder);
       try {
         const response = await authedFetch(
           `/api/brand-visuals/upload?workspaceId=${encodeURIComponent(workspaceId)}`,
@@ -74,8 +81,8 @@ export function useManualInspiration(workspaceId: string | null) {
 
   /** Returns why some files were left out, or null. */
   const addFiles = useCallback(
-    (files: File[]): string | null => {
-      const room = MAX_INSPIRATIONS - itemsRef.current.length;
+    (files: File[], tag?: InspoTag): string | null => {
+      const room = max - itemsRef.current.length;
       let problem: string | null = null;
       const accepted: File[] = [];
       for (const file of files) {
@@ -89,8 +96,7 @@ export function useManualInspiration(workspaceId: string | null) {
         }
         accepted.push(file);
       }
-      if (accepted.length > room)
-        problem = `Up to ${MAX_INSPIRATIONS} for now. Add more in Inspo later.`;
+      if (accepted.length > room) problem = `Up to ${max} for now. Add more in Inspo later.`;
       const chosen = accepted.slice(0, Math.max(0, room));
       const added = chosen.map((file) => ({
         file,
@@ -100,6 +106,7 @@ export function useManualInspiration(workspaceId: string | null) {
           preview: URL.createObjectURL(file),
           link: null,
           status: "uploading" as const,
+          tag,
         },
       }));
       if (added.length) setItems((list) => [...list, ...added.map((a) => a.item)]);
@@ -107,11 +114,11 @@ export function useManualInspiration(workspaceId: string | null) {
         const form = new FormData();
         form.set("file", file);
         form.set("label", item.label);
-        void send(item.key, form);
+        void send(item.key, form, tag);
       }
       return problem;
     },
-    [send],
+    [send, max],
   );
 
   const addLink = useCallback(

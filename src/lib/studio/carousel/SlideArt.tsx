@@ -12,6 +12,7 @@ import {
   backdropTiles,
   bodySize,
   headingSize,
+  isRtlText,
   isSeamless,
   ribbonLift,
   slideColors,
@@ -318,6 +319,29 @@ function Panorama({
   );
 }
 
+/**
+ * Body text: as it is, or for Arabic script one box per word in a reversed,
+ * wrapping row (the slide renderer has no bidi), which reads right in the
+ * browser preview too.
+ */
+export function flowText(text: string): ReactElement | string {
+  if (!isRtlText(text)) return text;
+  return (
+    <div
+      style={{ display: "flex", flexDirection: "row-reverse", flexWrap: "wrap", lineHeight: 1.5 }}
+    >
+      {text
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((word, i) => (
+          <span key={i} style={{ marginLeft: "0.28em" }}>
+            {word}
+          </span>
+        ))}
+    </div>
+  );
+}
+
 /** Heading words, wrapped by hand so highlighted words can be styled. */
 export function Heading({
   text,
@@ -347,6 +371,7 @@ export function Heading({
   const at = emphasis ? text.toLowerCase().indexOf(emphasis.toLowerCase()) : -1;
   const end = at >= 0 ? at + (emphasis?.length ?? 0) : -1;
   let cursor = 0;
+  const rtl = isRtlText(text);
   const words = text
     .split(/\s+/)
     .filter(Boolean)
@@ -359,14 +384,16 @@ export function Heading({
     <div
       style={{
         display: "flex",
-        flexDirection: "row",
+        // Arabic script runs right to left: each word is its own box in a
+        // reversed row, so wrapped lines read in the right order everywhere.
+        flexDirection: rtl ? "row-reverse" : "row",
         flexWrap: "wrap",
         justifyContent: align === "center" ? "center" : "flex-start",
         fontFamily: font,
         fontSize: size,
         fontWeight: upper ? 800 : 700,
-        lineHeight: upper ? 0.98 : 1.08,
-        letterSpacing: -0.02 * size,
+        lineHeight: upper ? 0.98 : rtl ? 1.4 : 1.08,
+        letterSpacing: rtl ? 0 : -0.02 * size,
         color,
         ...(upper ? { textTransform: "uppercase" as const } : {}),
       }}
@@ -382,9 +409,12 @@ export function Heading({
                   paddingLeft: size * 0.12,
                   paddingRight: size * 0.12,
                   borderRadius: size * 0.1,
-                  marginRight: size * 0.14,
+                  ...(rtl ? { marginLeft: size * 0.14 } : { marginRight: size * 0.14 }),
                 }
-              : { marginRight: size * 0.24, ...(w.hot ? { color: accent } : {}) }
+              : {
+                  ...(rtl ? { marginLeft: size * 0.24 } : { marginRight: size * 0.24 }),
+                  ...(w.hot ? { color: accent } : {}),
+                }
           }
         >
           {w.word}
@@ -610,7 +640,7 @@ export function SlideArt(props: SlideArtProps): ReactElement {
         opacity: role === "cover" || role === "cta" ? 0.88 : 1,
       }}
     >
-      {slide.body}
+      {flowText(slide.body)}
     </div>
   ) : null;
 
@@ -696,7 +726,7 @@ export function SlideArt(props: SlideArtProps): ReactElement {
               color: c.ink,
             }}
           >
-            {slide.body}
+            {flowText(slide.body)}
           </div>
         ) : null}
         {heading}
@@ -732,7 +762,7 @@ export function SlideArt(props: SlideArtProps): ReactElement {
               color: role === "cta" ? c.accent : c.muted,
             }}
           >
-            {slide.body}
+            {flowText(slide.body)}
           </div>
         ) : null}
         {role === "cta" && props.site ? (
@@ -797,7 +827,7 @@ export function SlideArt(props: SlideArtProps): ReactElement {
                   color: c.ink,
                 }}
               >
-                {line}
+                {flowText(line)}
               </div>
             </div>
           ))}

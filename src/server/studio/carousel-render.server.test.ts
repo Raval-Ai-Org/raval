@@ -290,3 +290,42 @@ describe("renderCarouselSlides", () => {
     180_000,
   );
 });
+
+describe("Arabic script (Round 9, flag scripts)", () => {
+  const rtlSlides = normalizeSlides(
+    [
+      { heading: "قهوتك الباردة تفقد طعمها بعد ثلاثة أيام", kicker: "نصيحة" },
+      { heading: "ہماری کافی ہر صبح تازہ بنتی ہے", body: "اپنا آرڈر آج ہی دیں اور فرق خود چکھیں" },
+    ],
+    3,
+  );
+
+  it("is drawn only when Arabic is allowed", () => {
+    expect(carouselRenderable({ slides: rtlSlides, brand: "Slow Pour" })).toBe(false);
+    expect(carouselRenderable({ slides: rtlSlides, brand: "Slow Pour" }, { arabic: true })).toBe(
+      true,
+    );
+  });
+
+  it("draws Arabic and Urdu slides right to left, or refuses without the font", async () => {
+    const design: CarouselDesign = { v: 1, look: "editorial", colorway: "light", motif: "orbit" };
+    const run = () =>
+      renderCarouselSlides({
+        slides: rtlSlides,
+        design,
+        theme: carouselTheme({ palette, colorway: "light" }),
+        ratio: "4:5",
+        brand: "Slow Pour",
+      });
+    if (!OUT) {
+      await expect(run()).rejects.toThrow(/unavailable/);
+      return;
+    }
+    const images = await run();
+    expect(images).toHaveLength(rtlSlides.length);
+    if (OUT) {
+      mkdirSync(OUT, { recursive: true });
+      images.forEach((img, i) => writeFileSync(join(OUT, `rtl-${i}.jpg`), img));
+    }
+  }, 60_000);
+});

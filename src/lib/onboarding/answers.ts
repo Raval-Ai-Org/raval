@@ -10,11 +10,7 @@
 import type { BrandLookSpec } from "@/lib/brand-look/spec";
 import type { GoalFocus, WorkspaceGoals } from "@/lib/goals/contracts";
 import { tidyLook } from "@/lib/inspo/look";
-import {
-  PICTURE_STYLE_IDS,
-  cleanStyleIds,
-  mediumForStyles,
-} from "@/lib/brand-look/picture-styles";
+import { PICTURE_STYLE_IDS, cleanStyleIds, mediumForStyles } from "@/lib/brand-look/picture-styles";
 
 export const ROLES = ["owner", "marketing", "agency", "creator"] as const;
 export type Role = (typeof ROLES)[number];
@@ -76,6 +72,8 @@ export type Answers = {
   /** Picture styles picked (picture-styles.ts ids, up to three); empty = Mox decides. */
   styles?: string[];
   source?: SignupSource;
+  /** How many of the brand's own photos were added on the photos screen. */
+  photos?: number;
 };
 
 /** Who the brand is run by; kept on Brand DNA (`dna.profile`). */
@@ -159,8 +157,15 @@ export function answersToLook(a: Answers, look: BrandLookSpec | null | undefined
     }
   }
 
+  // Three or more real photos: Mox reaches for them often, unless a person
+  // already chose how often (Inspo → Post look).
+  if ((a.photos ?? 0) >= OWN_PHOTOS_OFTEN && !visual.ownMedia) visual.ownMedia = "often";
+
   return tidyLook({ ...base, writing, visual });
 }
+
+/** Photos on the onboarding photos screen that make own media "often". */
+export const OWN_PHOTOS_OFTEN = 3;
 
 /** The goal as decideGoals reads it, or null while no focus is chosen. Keeps typed targets. */
 export function answersToGoals(

@@ -11,7 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { serializeBrandContext, type BrandCtxDna } from "@/lib/ai/brand-context";
 import { readBrandDna } from "@/server/workspaces/brand-dna.server";
 import { getLatestMarketBrain } from "@/lib/market-brain-latest.server";
-import { upcomingMoments } from "@/lib/studio/moments";
+import { countryOf, upcomingMoments } from "@/lib/studio/moments";
+import { creativeSkillsFor } from "@/lib/feature-flags";
 import type { StudioContext } from "@/lib/studio/prompts";
 import { recentPerformanceSignals } from "@/lib/studio/performance";
 import { openingLine } from "@/lib/studio/memory";
@@ -198,6 +199,8 @@ async function loadWorkspaceSnapshot(
           (storyFrames.length ? str(storyFrames[0].heading) : null) ??
           (openingLine(str(r.body)) || undefined),
         storyTheme: str(story.theme),
+        onImageText: str(meta.on_image_text)?.slice(0, 160),
+        technique: str(meta.technique),
         hookStyle: str(meta.hook_style),
         structure: str(record(meta.carousel).structure),
         adFormat: str(meta.ad_format),
@@ -369,7 +372,20 @@ export async function loadStudioContext(
     today: new Date().toISOString().slice(0, 10),
     socialTrends,
     radar,
-    moments: upcomingMoments(new Date(), { limit: 4 }),
+    moments: upcomingMoments(new Date(), {
+      limit: 4,
+      ...(creativeSkillsFor(workspaceId).culture
+        ? {
+            country: countryOf({
+              website: snapshot.website,
+              language: str(
+                ((dna as { look?: { writing?: { language?: unknown } } } | null)?.look?.writing
+                  ?.language as string | undefined) ?? null,
+              ),
+            }),
+          }
+        : {}),
+    }),
     campaignsNow: campaignsNow.map((c) => ({ name: c.name, phase: c.phase, purpose: c.purpose })),
   };
 }

@@ -10,10 +10,12 @@
 import "server-only";
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { catalogFont } from "@/lib/brand-look/fonts";
+import { catalogFont, isSingleWeight } from "@/lib/brand-look/fonts";
 import { SlideArt } from "@/lib/studio/carousel/SlideArt";
 import {
   canRenderText,
+  isRtlText,
+  RTL_FONT,
   carouselCanvas,
   isSeamless,
   type CarouselDesign,
@@ -35,7 +37,10 @@ const fontCache = new Map<string, Promise<FontFace[]>>();
 async function fetchFamily(family: string): Promise<FontFace[]> {
   const known = catalogFont(family);
   if (!known) return [];
-  const single = known.category === "display" || known.category === "handwriting";
+  const single =
+    known.category === "display" ||
+    known.category === "handwriting" ||
+    isSingleWeight(known.family);
   const name = known.family.replace(/ /g, "+");
   const css = await safeFetch(
     `https://fonts.googleapis.com/css2?family=${name}${single ? "" : ":wght@400;700"}`,
@@ -137,16 +142,29 @@ export async function slidePhotoData(
 }
 
 /** Slides this renderer can draw faithfully (see canRenderText). */
-export function carouselRenderable(input: Pick<CarouselRenderInput, "slides" | "brand">): boolean {
+export function carouselRenderable(
+  input: Pick<CarouselRenderInput, "slides" | "brand">,
+  /** Round 9 (flag `scripts`): Arabic and Urdu are drawn right to left in Vazirmatn. */
+  opts: { arabic?: boolean } = {},
+): boolean {
   return canRenderText(
     [input.brand, ...input.slides.flatMap((s) => [s.heading, s.body, s.kicker ?? ""])].join(" "),
+    opts,
   );
 }
 
 /** One JPEG per slide, in order. Throws if a slide can't be drawn. */
 export async function renderCarouselSlides(input: CarouselRenderInput): Promise<Buffer[]> {
   const { width, height } = carouselCanvas(input.ratio);
-  const fonts = await loadFonts([input.theme.headingFont, input.theme.bodyFont]);
+  // Arabic-script slides use the one font that draws joined letters correctly.
+  const rtl = input.slides.some((s) => isRtlText(`${s.heading} ${s.body} ${s.kicker ?? ""}`));
+  const theme = rtl ? { ...input.theme, headingFont: RTL_FONT, bodyFont: RTL_FONT } : input.theme;
+  const fonts = await loadFonts([theme.headingFont, theme.bodyFont]);
+  // Without its font, next/og reaches for a fallback that breaks joined
+  // letters (or crashes); the caller then keeps the old carousel instead.
+  if (rtl && !fonts.some((f) => f.name === RTL_FONT)) {
+    throw new Error(`[carousel] ${RTL_FONT} unavailable; Arabic-script slides not drawn`);
+  }
 
   let coverImage: string | null = null;
   if (input.coverArt?.length) {
@@ -177,7 +195,7 @@ export async function renderCarouselSlides(input: CarouselRenderInput): Promise<
         slides={input.slides}
         index={index}
         design={input.design}
-        theme={input.theme}
+        theme={theme}
         width={width}
         height={height}
         brand={input.brand}

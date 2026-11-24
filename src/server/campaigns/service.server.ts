@@ -30,19 +30,25 @@ import {
   type CampaignsHome,
   type PieceView,
 } from "@/lib/campaigns/contracts";
-import { groundCampaignPlan, groundText, type GroundOptions } from "@/lib/campaigns/ground";
+import {
+  groundCampaignPlan,
+  groundPlatform,
+  groundText,
+  type GroundOptions,
+} from "@/lib/campaigns/ground";
 import { ctaFor, isShareableLink } from "@/lib/campaigns/links";
 import { assignMedia, settleFormats, type InspoExtra } from "@/lib/campaigns/media";
 import { remainingUses } from "@/lib/inspo/media-rotation";
 import { loadInspoMediaPool } from "@/server/inspo/media-pool.server";
 import { phaseOf, playbookById, type Playbook } from "@/lib/campaigns/playbooks";
 import { campaignProgress, pieceState, UNMADE } from "@/lib/campaigns/progress";
-import { briefFacts, pieceBrief, PLAN_SYSTEM, planUserPrompt } from "@/lib/campaigns/prompt";
+import { briefFacts, pieceBrief, planSystem, planUserPrompt } from "@/lib/campaigns/prompt";
+import { creativeSkillsFor } from "@/lib/feature-flags";
 import { buildCampaignSkeleton, takenBy, type TakenSlot } from "@/lib/campaigns/skeleton";
 import { suggestCampaigns } from "@/lib/campaigns/suggest";
 import { diffPieces, pieceSignature, type CampaignStep } from "@/lib/campaigns/sync";
 import { isCampaignsEnabled, isAutopilotEnabled } from "@/lib/feature-flags";
-import { upcomingMoments } from "@/lib/studio/moments";
+import { countryOf, upcomingMoments } from "@/lib/studio/moments";
 import { trendLines } from "@/lib/studio/trends";
 import { RADAR_RULES, radarLines } from "@/lib/trends/radar";
 import { summarizeLearnings } from "@/lib/autopilot/learn";
@@ -300,7 +306,11 @@ export async function getCampaignsHome(caller: Caller): Promise<CampaignsHome> {
   const prog = program.data as { mode?: string; status?: string } | null;
   const suggestions = suggestCampaigns({
     today,
-    moments: upcomingMoments(new Date(), { limit: 4, extraDays: 30 }),
+    moments: upcomingMoments(new Date(), {
+      limit: 4,
+      extraDays: 30,
+      country: await brandCountry(workspaceId),
+    }),
     ...inputs,
     existing: rows
       .filter((r) => r.status !== "ended")
@@ -339,6 +349,21 @@ async function everydayPosts(workspaceId: string, today: string) {
   return ((data ?? []) as { title: string; platform: string | null; planned_for: string }[]).map(
     (r) => ({ date: r.planned_for.slice(0, 10), platform: r.platform ?? "", title: r.title }),
   );
+}
+
+/** Round 9 (skills pack `culture`): the brand's country for the moments calendar, else null. */
+async function brandCountry(workspaceId: string): Promise<string | null> {
+  if (!creativeSkillsFor(workspaceId).culture) return null;
+  try {
+    const { data } = await db
+      .from("workspaces")
+      .select("website_url")
+      .eq("id", workspaceId)
+      .maybeSingle();
+    return countryOf({ website: (data as { website_url?: string | null } | null)?.website_url });
+  } catch {
+    return null;
+  }
 }
 
 async function suggestionInputs(workspaceId: string) {
@@ -784,6 +809,8 @@ export async function planCampaign(
         lookTextFor(caller.workspaceId, "social"),
       ]);
       const products = await productLines(caller.workspaceId, brief.productIds);
+      // Round 9 (flag `campaign_platform`): the plan also writes a shared look.
+      const skills = creativeSkillsFor(caller.workspaceId);
       const mediaLines = brief.media.map(
         (m, i) =>
           `${i + 1}. ${m.kind === "video" ? "Clip" : "Photo"}${m.role !== "any" ? ` (${m.role})` : ""}${m.label ? `: ${m.label}` : ""}`,
@@ -831,7 +858,7 @@ ${radarLines(ctx.radar, 3)}`
         () =>
           llmJson<Record<string, unknown>>({
             route: "campaign.plan",
-            system: `${PLAN_SYSTEM}\n\n${UNTRUSTED_DATA_RULE}`,
+            system: `${planSystem({ platform: skills.campaign_platform })}\n\n${UNTRUSTED_DATA_RULE}`,
             user,
             maxTokens: 12_000,
             timeoutMs: 90_000,
@@ -848,11 +875,21 @@ ${radarLines(ctx.radar, 3)}`
       const opts = await groundingFor(caller.workspaceId, brief, corpus);
       const labels = Object.fromEntries(plan.phases.map((p) => [p.id, p.label]));
       const written = groundCampaignPlan(out, plan.pieces, labels, opts);
+      // The look's words are grounded like the pieces; its type voice is the
+      // brand's own, chosen by code, never by the model.
+      const platform = skills.campaign_platform ? groundPlatform(out, opts) : null;
+      const typeVoice = platform
+        ? await import("@/server/studio/skill-lines.server").then(({ brandTypeChoice }) => {
+            const choice = brandTypeChoice({ workspaceId: caller.workspaceId, ctx, skills });
+            return choice?.kind === "voice" ? choice.voice.id : undefined;
+          })
+        : undefined;
       if (written.dropped > plan.pieces.length / 2)
         throw new HttpError(502, "The plan didn't come out well. Nothing was charged; try again.");
       const next: CampaignPlan = {
         ...plan,
         bigIdea: written.bigIdea || plan.bigIdea,
+        ...(platform ? { platform: { ...platform, ...(typeVoice ? { typeVoice } : {}) } } : {}),
         pieces: written.pieces,
         written: true,
         rev: plan.rev + 1,
@@ -1023,6 +1060,7 @@ async function syncSteps(caller: Caller, campaignId: string): Promise<void> {
           mediaMode: piece.mediaMode,
           productId: product,
           cta: ctaFor(piece.platform, brief.goal, phase.cta) ?? null,
+          ...(plan.platform?.typeVoice ? { typeVoice: plan.platform.typeVoice } : {}),
         },
       },
     };

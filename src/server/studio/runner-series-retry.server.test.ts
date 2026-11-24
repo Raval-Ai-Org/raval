@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: {} }));
 vi.mock("./job-writer.server", () => ({ studioJobWriter: (client: unknown) => client }));
-vi.mock("@/lib/feature-flags", () => ({ isAudienceAutoScoreEnabled: () => false }));
+vi.mock("@/lib/feature-flags", () => ({
+  isAudienceAutoScoreEnabled: () => false,
+  creativeSkillsFor: () => ({}),
+}));
 vi.mock("@/lib/openrouter-image.server", () => ({
   isImageTask: () => true,
   checkImageTask: mocks.check,

@@ -75,6 +75,12 @@ export const FONT_CATALOG: readonly CatalogFont[] = [
     "Afacad",
     "Gantari",
     "Geist",
+    // Round 9 type voices (type-voices.ts): add, never remove.
+    "Chakra Petch",
+    "Rajdhani",
+    "Reem Kufi",
+    "Tajawal",
+    "Vazirmatn",
   ]),
   ...f("serif", [
     "Playfair Display",
@@ -153,6 +159,9 @@ export const FONT_CATALOG: readonly CatalogFont[] = [
     "Gasoek One",
     "Bagel Fat One",
     "Instrument Serif",
+    "Fredoka",
+    "Baloo 2",
+    "Pixelify Sans",
   ]),
   ...f("mono", [
     "JetBrains Mono",
@@ -275,6 +284,33 @@ export function nearestCatalogFont(guess: string | null | undefined): CatalogFon
 
 const WEIGHTS = "400;500;600;700;800";
 
+/**
+ * Faces Google ships in one weight only. Asking them for 500-800 makes the
+ * whole stylesheet request fail, and a browser would fake a bold anyway.
+ */
+const SINGLE_WEIGHT = new Set(
+  [
+    "Archivo Black",
+    "Anton",
+    "Bebas Neue",
+    "DM Serif Display",
+    "DM Serif Text",
+    "Instrument Serif",
+    "Bagel Fat One",
+    "Marcellus",
+    "Young Serif",
+    "Alfa Slab One",
+    "Abril Fatface",
+    "Prata",
+    "Gloock",
+  ].map(fontKey),
+);
+
+/** The family ships one weight (request it at 400). */
+export function isSingleWeight(family: string | null | undefined): boolean {
+  return !!family && SINGLE_WEIGHT.has(fontKey(family));
+}
+
 /** Google Fonts CSS2 URL for the given families (catalogue families only). */
 export function googleFontHref(families: Array<string | null | undefined>): string | null {
   const known = [
@@ -286,7 +322,7 @@ export function googleFontHref(families: Array<string | null | undefined>): stri
       const fam = family.replace(/ /g, "+");
       const cat = catalogFont(family)?.category;
       // Script and some display faces ship one weight; ask for regular only.
-      return cat === "handwriting" || cat === "display"
+      return cat === "handwriting" || cat === "display" || isSingleWeight(family)
         ? `family=${fam}`
         : `family=${fam}:wght@${WEIGHTS}`;
     })

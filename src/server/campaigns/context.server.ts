@@ -54,6 +54,8 @@ export function campaignControls(action: ActionRow): Partial<StudioControls> {
   if (typeof c.name === "string" && c.name.trim()) out.campaign = c.name.trim().slice(0, 120);
   if (typeof c.cta === "string" && c.cta.trim()) out.cta = c.cta.trim().slice(0, 140);
   if (typeof c.productId === "string" && uuid.test(c.productId)) out.productId = c.productId;
+  if (typeof c.typeVoice === "string" && /^[a-z0-9-]{1,40}$/.test(c.typeVoice))
+    out.typeVoice = c.typeVoice;
   const type = action.content_type ?? "social";
   if (c.mediaMode === "design" && type !== "video" && type !== "story") {
     const photos = ids(c.mediaIds, type === "carousel" ? 6 : 1);

@@ -70,3 +70,6 @@ Post Training/
 .motionmox-bundle
 vendor/motionmox/packages/*/node_modules
 public/promo-mox
+
+# Live test output (paid runs, benchmarks)
+.live-out/

@@ -18,6 +18,8 @@ import { PickScreen } from "./PickScreen";
 import { SayScreen } from "./SayScreen";
 import { ChannelsScreen } from "./ChannelsScreen";
 import { StylesScreen } from "./StylesScreen";
+import { PhotosScreen } from "./PhotosScreen";
+import type { InspoItem } from "../manual/use-manual-inspiration";
 import { AnswerTrail, AudiencePick, BrandCard, LanguagePick } from "./AfterSteps";
 import { DoneStep } from "./DoneStep";
 import { UrlStep } from "../UrlStep";
@@ -57,6 +59,36 @@ const DISCOVERIES: Discoveries = {
   pages: { paths: ["/", "/shop", "/about", "/subscribe"], sitemapUrls: 18 },
   market: { mentions: 4, about: 2, competitors: 3, reviews: 6 },
 };
+
+/** Sample photos for the photos screen (local stand-ins, nothing is uploaded). */
+const LAB_PHOTOS: InspoItem[] = [
+  {
+    key: "a",
+    label: "team.jpg",
+    preview: "/creators/amara.jpg",
+    link: null,
+    status: "done",
+    tag: { purpose: "person", folder: "Team" },
+  },
+  {
+    key: "b",
+    label: "shop.jpg",
+    preview: "/creators/daniel.jpg",
+    link: null,
+    status: "uploading",
+    tag: { purpose: "element", folder: "Place" },
+  },
+  {
+    key: "c",
+    label: "job.jpg",
+    preview: "/creators/elena.jpg",
+    link: null,
+    status: "error",
+    error: "Not saved",
+    tag: { purpose: "element", folder: "Work" },
+  },
+];
+const labPhotos = LAB_PHOTOS;
 
 const AUDIENCE = [
   "Busy professionals who care where their coffee comes from",
@@ -110,7 +142,10 @@ export function AskLab({
   const action: StageAction | null = slot
     ? slot.action
     : step === "ask"
-      ? screen.kind === "say" || screen.kind === "channels" || screen.kind === "styles"
+      ? screen.kind === "say" ||
+        screen.kind === "channels" ||
+        screen.kind === "styles" ||
+        screen.kind === "photos"
         ? { label: "Continue", onClick: () => (onLast(`ask:${screen.id}:continue`), next()) }
         : null
       : step === "done" || step === "website"
@@ -184,6 +219,19 @@ export function AskLab({
             reduce={reduce}
             headingRef={headingRef}
             onChange={(channels: OnboardingChannel[]) => setAnswers((a) => ({ ...a, channels }))}
+          />
+        )}
+        {step === "ask" && screen.kind === "photos" && (
+          <PhotosScreen
+            screen={screen}
+            items={labPhotos}
+            reduce={reduce}
+            headingRef={headingRef}
+            onAdd={(files, tag) => {
+              onLast(`photos:${tag.folder}:${files.length}`);
+              return null;
+            }}
+            onRemove={() => onLast("photos:remove")}
           />
         )}
         {step === "ask" && screen.kind === "styles" && (

@@ -32,6 +32,20 @@ function stem(word: string): string {
     .slice(0, 8);
 }
 
+/**
+ * Round 9 shadow check (ADR-0053): do the words drawn on the picture alone
+ * (not the 280-word scene) share a word with the brief? Recorded on the job,
+ * never enforced, until the blind benchmark shows where its line belongs.
+ */
+export function drawnWordsDrift(input: BriefFitInput): string | null {
+  const terms = new Set(input.read.keyTerms.map(stem));
+  const copy = [input.headline ?? "", ...(input.lines ?? [])].join(" ").trim();
+  if (!terms.size || !copy) return null;
+  const said = new Set(contentWords(copy).map(stem));
+  if ([...terms].some((t) => said.has(t))) return null;
+  return `The drawn words mention none of: ${input.read.keyTerms.slice(0, 4).join(", ")}.`;
+}
+
 /** Every reason the copy drifts from the brief; empty when it fits. */
 export function briefFitIssues(input: BriefFitInput): string[] {
   const issues: string[] = [];

@@ -251,6 +251,9 @@ const REGISTRY: Record<string, TaskPlan> = {
   // Scores a finished video's sampled frames; code decides (src/lib/studio/video/checks.ts).
   "studio.video.qa": tier(WORKHORSE, "low", { maxTokens: 1_200 }),
   "studio.image.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
+  // Round 9 blind benchmark judge (tests/live/creative-blind.live.ts, owner-run
+  // only): compares two finished posts for one brief; needs eyes and taste.
+  "bench.creative.judge": tier(ANALYST, "low", { maxTokens: 900 }),
   "brand-visuals.review": tier(WORKHORSE, "low", { maxTokens: 700 }),
   "campaign-generation": tier(ANALYST, "low"),
   // Campaigns (ADR-0039): the words for a laid-out campaign, and the brief

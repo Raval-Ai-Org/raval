@@ -522,6 +522,52 @@ export function isLocalAiEnabled(workspaceId?: string): boolean {
  * to "false"; `FEATURE_FLAG_MEME_TEMPLATES_ENABLED_WS_<id>` overrides it for one
  * workspace. Off means every meme is an original scene, as before.
  */
+/** Round 9 creative skill packs (ADR-0053). Each is OFF unless set to true. */
+export const CREATIVE_SKILL_PACKS = [
+  "relevance",
+  "type",
+  "sectors",
+  "video",
+  "campaign_platform",
+  // The brand's own colours, type, product, caption and campaign phase reach
+  // the picture director whole instead of being cut off (resource audit).
+  "context",
+  // Arabic and Urdu words drawn by code, right to left (render-tested).
+  "scripts",
+  // A plain picture post's headline set by code on a word-free picture, so
+  // "Edit text" fixes a word with no new render.
+  "headline",
+  // "Job done": two of the person's own photos, before and after, set by code.
+  "jobdone",
+  // A new brand's first three picture posts: two takes, the better one kept (Mellox's cost).
+  "besttwo",
+  // The brand's own country's dates (national days, local shopping days) in
+  // the moments calendar; the country is read from the site's domain or the
+  // content language. Off: the calendar stays the global list.
+  "culture",
+] as const;
+export type CreativeSkillPack = (typeof CREATIVE_SKILL_PACKS)[number];
+export type CreativeSkills = Partial<Record<CreativeSkillPack, boolean>>;
+
+/**
+ * Which creative skill packs are on for a workspace. Off by default:
+ * `FEATURE_FLAG_SKILLS_<PACK>_ENABLED=true` turns one on everywhere and
+ * `FEATURE_FLAG_SKILLS_<PACK>_ENABLED_WS_<id>` overrides it for one workspace.
+ * Read once on the server and passed to prompt builders as an argument.
+ */
+export function creativeSkillsFor(workspaceId?: string): CreativeSkills {
+  const out: CreativeSkills = {};
+  for (const pack of CREATIVE_SKILL_PACKS) {
+    const key = `FEATURE_FLAG_SKILLS_${pack.toUpperCase()}_ENABLED`;
+    const perWs = workspaceId
+      ? (process.env[`${key}_WS_${workspaceId}`] ?? "").trim().toLowerCase()
+      : "";
+    const value = perWs || (process.env[key] ?? "").trim().toLowerCase();
+    if (isTruthy(value)) out[pack] = true;
+  }
+  return out;
+}
+
 export function isMemeTemplatesEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_MEME_TEMPLATES_ENABLED_WS_${workspaceId}`] ?? "")
@@ -530,4 +576,16 @@ export function isMemeTemplatesEnabled(workspaceId?: string): boolean {
     if (perWs) return !isFalsy(perWs);
   }
   return !isFalsy((process.env.FEATURE_FLAG_MEME_TEMPLATES_ENABLED ?? "").trim().toLowerCase());
+}
+
+/**
+ * Tracked links (Round 9): own-site links in captions on clickable networks
+ * become short Mellox links whose clicks are counted. OFF unless
+ * `FEATURE_FLAG_TRACKED_LINKS_ENABLED=true` (with `_WS_<id>` per workspace).
+ */
+export function isTrackedLinksEnabled(workspaceId: string): boolean {
+  const local = process.env[`FEATURE_FLAG_TRACKED_LINKS_ENABLED_WS_${workspaceId}`];
+  return isTruthy(
+    (local ?? process.env.FEATURE_FLAG_TRACKED_LINKS_ENABLED ?? "").trim().toLowerCase(),
+  );
 }

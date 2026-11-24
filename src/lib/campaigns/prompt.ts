@@ -44,6 +44,16 @@ export const PLAN_SYSTEM = [
   'Answer as JSON: {"bigIdea": string, "pieces": [{"id": string, "title": string, "idea": string, "visual": string}]} with one entry per slot id.',
 ].join("\n");
 
+/** Round 9 (flag `campaign_platform`): the plan also writes the campaign's shared look. */
+export function planSystem(opts: { platform?: boolean } = {}): string {
+  if (!opts.platform) return PLAN_SYSTEM;
+  return [
+    ...PLAN_SYSTEM.split("\n").slice(0, -1),
+    "Also write the campaign's platform, what makes every piece recognisably this campaign: a tagline (at most 8 words, only an offer the brief states), the key visual (one recurring picture idea built on the brand's real product, service or people), one small motif that repeats, and a photo rule (how the brand's own photos are used).",
+    'Answer as JSON: {"bigIdea": string, "platform": {"tagline": string, "keyVisual": string, "motif": string, "photoRule": string}, "pieces": [{"id": string, "title": string, "idea": string, "visual": string}]} with one entry per slot id.',
+  ].join("\n");
+}
+
 export function planUserPrompt(args: {
   playbook: Playbook;
   brief: CampaignBrief;
@@ -116,6 +126,21 @@ export function planUserPrompt(args: {
  * The campaign section Studio adds when it makes one piece. Goes into the
  * brief, so every format's prompt carries it.
  */
+function platformLines(
+  platform: NonNullable<CampaignPlan["platform"]>,
+  deliverable?: string,
+): string[] {
+  return [
+    platform.tagline &&
+      `The campaign tagline (use it where it fits, word for word): ${platform.tagline}`,
+    platform.keyVisual &&
+      `The campaign's key visual, recurring in every piece: ${platform.keyVisual}`,
+    platform.motif && `The repeating motif: ${platform.motif}`,
+    platform.photoRule && `Photos: ${platform.photoRule}`,
+    deliverable && `This phase's deliverable: ${deliverable.replace(/-/g, " ")}`,
+  ].filter((l): l is string => Boolean(l));
+}
+
 export function pieceBrief(args: {
   playbook: Playbook;
   brief: CampaignBrief;
@@ -145,6 +170,8 @@ export function pieceBrief(args: {
     brief.facts.length ? `Facts you may use: ${brief.facts.join(" | ")}` : "",
     brief.hashtag && `Use the campaign hashtag ${brief.hashtag}.`,
     link.line,
+    // Round 9: the shared look and this phase's deliverable, only on plans that have a platform.
+    ...(plan.platform ? platformLines(plan.platform, phase.deliverable) : []),
     ...playbook.rules,
   ]
     .filter(Boolean)

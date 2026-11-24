@@ -7,6 +7,7 @@ import { PRIVACY_UPDATED } from "@/marketing/lib/privacy";
 import { SITE_URL } from "@/marketing/lib/seo";
 import { TERMS_UPDATED } from "@/marketing/lib/terms";
 import { COOKIES_UPDATED } from "@/marketing/lib/cookies-policy";
+import { DATA_DELETION_UPDATED } from "@/marketing/lib/data-deletion";
 import { USE_CASES } from "@/marketing/lib/use-cases";
 
 type Entry = MetadataRoute.Sitemap[number];
@@ -65,6 +66,12 @@ const PAGES: Page[] = [
     priority: 0.3,
     changeFrequency: "yearly",
     lastModified: parse(COOKIES_UPDATED),
+  },
+  {
+    path: "/data-deletion",
+    priority: 0.3,
+    changeFrequency: "yearly",
+    lastModified: parse(DATA_DELETION_UPDATED),
   },
 ];
 

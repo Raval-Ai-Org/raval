@@ -121,3 +121,39 @@ describe("learned style (ADR-0048)", () => {
     expect(creativeRedo({ issues: ["off-style: photo"] }, "designed", 1).redo).toBe(false);
   });
 });
+
+describe("best of two (Round 9, flag besttwo)", () => {
+  const review = (overall: number) => ({
+    issues: [],
+    scores: {
+      concept: overall,
+      craft: overall,
+      brand: overall,
+      clarity: overall,
+      stopping: overall,
+    } as never,
+    fixes: [],
+  });
+
+  it("takes a second look only for a first take under the bar, once", async () => {
+    const { BEST_OF_TWO_BELOW } = await import("./image-defects");
+    const low = creativeRedo(review(BEST_OF_TWO_BELOW - 1), "designed", 0, { bestOfTwo: true });
+    if (low.score !== null && low.score >= 6)
+      expect(low).toMatchObject({ redo: true, reason: "best" });
+    expect(creativeRedo(review(9.5), "designed", 0, { bestOfTwo: true }).redo).toBe(false);
+    expect(creativeRedo(review(7), "designed", 1, { bestOfTwo: true }).redo).toBe(false);
+    expect(creativeRedo(review(7), "designed", 0).reason).not.toBe("best");
+  });
+
+  it("keeps the higher-scoring take, the first on a tie", () => {
+    expect(
+      keepFirstRender({ score: 7, hard: false, best: true }, { score: 7.2, hard: false }),
+    ).toBe(false);
+    expect(
+      keepFirstRender({ score: 7.2, hard: false, best: true }, { score: 7.2, hard: false }),
+    ).toBe(true);
+    expect(keepFirstRender({ score: 7.2, hard: false, best: true }, { score: 6, hard: true })).toBe(
+      true,
+    );
+  });
+});

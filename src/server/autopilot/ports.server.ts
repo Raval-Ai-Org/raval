@@ -406,6 +406,38 @@ Rules:
 
 /* ───────────────────────── brand context (cached per sweep) ───────────────────────── */
 
+/**
+ * Round 9 (flag `sectors`): what this kind of business shows and why pieces
+ * sell here, for the weekly plan. Three "why it sells" lines from the
+ * example-brief library, each a different one. Empty when off.
+ */
+async function sectorExtras(
+  workspaceId: string,
+  ctx: Awaited<ReturnType<typeof context>>,
+): Promise<string[]> {
+  const { creativeSkillsFor } = await import("@/lib/feature-flags");
+  if (!creativeSkillsFor(workspaceId).sectors) return [];
+  const { sectorLinesFor } = await import("@/server/studio/sectors/select.server");
+  const { sectorOf } = await import("@/lib/studio/sectors/kinds");
+  const { mechanismLineFor } = await import("@/server/studio/example-briefs.server");
+  const sector = sectorOf(ctx.industry, ctx.brandText)?.id;
+  const used: string[] = [];
+  const why: string[] = [];
+  for (const goal of ["sell", "trust", "lead"]) {
+    const pick = mechanismLineFor({
+      sector,
+      goal,
+      seed: `${workspaceId}:${goal}:${Date.now()}`,
+      recent: used,
+    });
+    if (pick && !used.includes(pick.id)) {
+      used.push(pick.id);
+      why.push(pick.line);
+    }
+  }
+  return [...sectorLinesFor(ctx, { visual: true }), ...why];
+}
+
 async function context(workspaceId: string) {
   return loadStudioContext(db, workspaceId, null);
 }
@@ -1012,6 +1044,7 @@ export const realPorts: AutopilotPorts = {
         ...(ctx.risingQueries.length
           ? [`People are searching for: ${ctx.risingQueries.slice(0, 6).join(", ")}`]
           : []),
+        ...(await sectorExtras(program.workspace_id, ctx)),
       ];
       const out = await runWithScope(
         {

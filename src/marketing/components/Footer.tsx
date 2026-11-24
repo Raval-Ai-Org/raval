@@ -33,6 +33,7 @@ const columns: { title: string; links: { label: string; href: string; external?:
       { label: "Terms of Service", href: "/terms" },
       { label: "AI safety & acceptable use", href: "/safety" },
       { label: "Cookie Policy", href: "/cookies" },
+      { label: "Data deletion", href: "/data-deletion" },
     ],
   },
   {

@@ -376,10 +376,28 @@ const DRAWABLE: ReadonlyArray<readonly [number, number]> = [
   [0x2200, 0x22ff],
 ];
 
-export function canRenderText(text: string): boolean {
+/** Arabic-script ranges (Arabic, Urdu, Persian), drawn with Vazirmatn right to left (Tajawal breaks Urdu letters) (Round 9, flag `scripts`). */
+const ARABIC: ReadonlyArray<readonly [number, number]> = [
+  [0x0600, 0x06ff],
+  [0x0750, 0x077f],
+  [0x200c, 0x200f],
+  [0xfb50, 0xfdff],
+  [0xfe70, 0xfeff],
+];
+
+/** True when the text is written in an Arabic script (drawn right to left). */
+export function isRtlText(text: string): boolean {
+  return /[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]/.test(text);
+}
+
+/** The one font that draws Arabic script correctly in the slide renderer (render-tested). */
+export const RTL_FONT = "Vazirmatn";
+
+export function canRenderText(text: string, opts: { arabic?: boolean } = {}): boolean {
+  const ranges = opts.arabic ? [...DRAWABLE, ...ARABIC] : DRAWABLE;
   for (const char of text) {
     const code = char.codePointAt(0) ?? 0;
-    if (!DRAWABLE.some(([from, to]) => code >= from && code <= to)) return false;
+    if (!ranges.some(([from, to]) => code >= from && code <= to)) return false;
   }
   return true;
 }

@@ -79,6 +79,11 @@ export const POST = defineRoute({
       notes: String(form.get("notes") ?? ""),
       format,
       campaign: String(form.get("campaign") ?? "").slice(0, 120) || undefined,
+      // Inspo → Media folder ("Team", "Work"); the onboarding photos screen sets it.
+      folder:
+        String(form.get("folder") ?? "")
+          .trim()
+          .slice(0, 60) || undefined,
       sourceUrl: external,
     };
     const c = { workspaceId, userId, role };

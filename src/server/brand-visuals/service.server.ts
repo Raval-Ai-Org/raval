@@ -625,8 +625,9 @@ export async function editVisualArtwork(
   );
   if (!job) throw new HttpError(404, "This image is no longer available.");
   const output = job.output as import("@/lib/studio/jobs").StudioJobOutput;
+  const overlay = output.artwork?.layout === "overlay";
   if (
-    !output.visualTaste ||
+    (!output.visualTaste && !overlay) ||
     !output.artwork?.artStoragePath ||
     !isWorkspaceStoragePath(output.artwork.artStoragePath, c.workspaceId)
   )
@@ -657,14 +658,27 @@ export async function editVisualArtwork(
   if (art.error || !art.data) throw new Error("The original artwork could not be opened.");
   const ratio = output.media?.find((m) => m.slot === "main")?.ratio ?? "1:1";
   const compositionWarnings: string[] = [];
-  let bytes = await composeVisualArtwork({
-    art: Buffer.from(await art.data.arrayBuffer()),
-    snapshot: output.visualTaste,
-    headline: args.headline,
-    brandName: output.artwork.brandName,
-    ratio,
-    onWarning: (message) => compositionWarnings.push(message),
-  });
+  const artBytes = Buffer.from(await art.data.arrayBuffer());
+  // Round 9: an overlay headline is set again on the same word-free picture.
+  let bytes = overlay
+    ? await (
+        await import("@/server/studio/headline-overlay.server")
+      ).drawHeadlineOverlay({
+        art: artBytes,
+        overlay: {
+          headline: args.headline,
+          brandName: output.artwork.brandName,
+          font: output.artwork.font ?? "Inter",
+        },
+      })
+    : await composeVisualArtwork({
+        art: artBytes,
+        snapshot: output.visualTaste!,
+        headline: args.headline,
+        brandName: output.artwork.brandName,
+        ratio,
+        onWarning: (message) => compositionWarnings.push(message),
+      });
   const tasks = job.provider_tasks as Array<{
     slot: string;
     logo?: { url: string; corner: import("@/server/studio/logo-overlay.server").LogoCorner };
@@ -686,9 +700,9 @@ export async function editVisualArtwork(
     assetType: "image",
     mimeType: "image/png",
     metadata: {
-      source: "visual_composition",
+      source: overlay ? "headline_overlay" : "visual_composition",
       job_id: job.id,
-      profile_id: output.visualTaste.profileId,
+      ...(output.visualTaste ? { profile_id: output.visualTaste.profileId } : {}),
     },
   });
   if (!saved.ok || !saved.asset.storage_path)

@@ -162,3 +162,22 @@ describe("autopilot set-up", () => {
     expect(answersToProfile({ approval: "assist" })).toEqual({ approval: "assist" });
   });
 });
+
+describe("own photos (Round 9)", () => {
+  it("asks for the brand's real photos once, before the last question", () => {
+    const list = askScreens({ tone: "auto" }, { mode: "site", sourceKnown: false });
+    const at = list.findIndex((s) => s.kind === "photos");
+    expect(at).toBeGreaterThan(0);
+    expect(list[at + 1]?.id).toBe("source");
+    expect(askScreens({}, { mode: "manual", sourceKnown: true }).at(-1)?.kind).toBe("photos");
+  });
+
+  it("uses three or more photos often, never over a person's own setting", async () => {
+    const { answersToLook, OWN_PHOTOS_OFTEN } = await import("./answers");
+    expect(answersToLook({ photos: OWN_PHOTOS_OFTEN }, null).visual?.ownMedia).toBe("often");
+    expect(answersToLook({ photos: 2 }, null).visual?.ownMedia).toBeUndefined();
+    expect(answersToLook({ photos: 9 }, { visual: { ownMedia: "rarely" } }).visual?.ownMedia).toBe(
+      "rarely",
+    );
+  });
+});

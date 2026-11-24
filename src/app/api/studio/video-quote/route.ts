@@ -7,6 +7,7 @@ import { getEntitlements } from "@/server/billing/entitlements.server";
 import { PLANS } from "@/lib/billing/catalog";
 import { freeVideosLeft } from "@/lib/billing/video-charge";
 import { settleVideoControls } from "@/lib/studio/video/settle";
+import { workspaceSellsService } from "@/server/studio/business-kind.server";
 
 export const POST = defineRoute({
   name: "studio/video-quote",
@@ -24,14 +25,19 @@ export const POST = defineRoute({
       .optional(),
   }),
   workspaceId: ({ body }) => body.workspaceId,
-  handler: async ({ body, workspaceId, userId, role }) => {
+  handler: async ({ body, workspaceId, userId, role, supabase }) => {
     // The same settling createBilledStudioJob does, so the quote is for what runs.
     const controls = settleVideoControls({
       type: body.controls.storyMode === "video" ? "story" : "video",
       controls: body.controls,
       brief: body.brief,
       template: body.template,
-      source: { ...body.source, product: Boolean(body.controls.productId) },
+      source: {
+        ...body.source,
+        product: Boolean(body.controls.productId),
+        // Same read createBilledStudioJob makes (Round 9 video pack).
+        service: await workspaceSellsService(supabase as never, workspaceId),
+      },
     });
     // One of the month's free or premium videos while one is left, otherwise credits.
     const entitlements = await getEntitlements({ workspaceId, userId, role });

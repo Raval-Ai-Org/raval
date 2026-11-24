@@ -12,7 +12,9 @@ vi.mock("@/server/billing/creation.server", () => ({ captionEditsRemaining: asyn
 vi.mock("@/lib/feature-flags", () => ({
   isAudienceAutoScoreEnabled: () => false,
   isVideoStoryboardEnabled: () => false,
+  creativeSkillsFor: () => ({}),
   isMemeTemplatesEnabled: () => true,
+  isTrackedLinksEnabled: () => false,
 }));
 vi.mock("@/lib/ai", () => ({
   runStructuredPrompt: mocks.prompt,

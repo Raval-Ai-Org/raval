@@ -57,3 +57,16 @@ The posts on our website (`public/Home/wall/`). Each one has:
   - the campaign plan `trendText`.
 - `RADAR_RULES` always apply: the brand's own style, never the trend owner's
   art or logos, no implied partnership, no invented facts.
+
+## Round 9 skill packs
+
+The creative skill packs (ADR-0053, all off by default) add a few short lines
+that code picks about the business: its sector, its type voice and why the
+piece sells. They never add style menus.
+
+- Relevance comes first: `CONCEPT_TEST` leads with "unmistakably this business
+  and this brief", and services start with `show-the-work`.
+- Details are in the `sector-playbooks`, `type-voices`, `video-for-services`
+  and `campaign-platform` skills.
+- With the packs off, prompts must stay byte-identical
+  (`creative-golden.test.ts`).
