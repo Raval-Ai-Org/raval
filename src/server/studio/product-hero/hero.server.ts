@@ -78,6 +78,8 @@ export async function prepareProductHero(args: {
     brandContext?: string | null;
     lookBlock?: string | null;
     fonts?: readonly string[];
+    /** Round 9 type voice line, only when the `type` pack is on. */
+    typeLine?: string | null;
     colours?: readonly string[];
     visualTasteRules?: string | readonly string[] | null;
     logoCorner?: string | null;
@@ -153,6 +155,7 @@ export async function prepareProductHero(args: {
       brandContext: args.brand.brandContext,
       lookBlock: args.brand.lookBlock,
       fonts: args.brand.fonts,
+      typeLine: args.brand.typeLine,
       visualTasteRules: args.brand.visualTasteRules,
       logoCorner: args.brand.logoCorner,
       revision: args.revision,

@@ -34,6 +34,8 @@ export type ConceptInput = {
   allowText: boolean;
   /** The brand's latest product posters, newest first. */
   recent: readonly Partial<HeroLook>[];
+  /** Round 9 skill lines about this business (skill-lines.server.ts); none when the packs are off. */
+  skillLines?: readonly string[];
 };
 
 export type HeroConcept = {
@@ -84,6 +86,12 @@ export function conceptMessages(input: ConceptInput): { system: string; user: st
     input.ingredients.length ? `Ingredients its facts name: ${input.ingredients.join(", ")}` : "",
     input.audience ? `Who it is for: ${clip(input.audience, 240)}` : "",
     input.voice ? `Brand voice: ${clip(input.voice, 240)}` : "",
+    input.skillLines?.length
+      ? `About this business (taste and facts, never set as words):\n${input.skillLines
+          .slice(0, 3)
+          .map((l) => `- ${clip(l, 220)}`)
+          .join("\n")}`
+      : "",
     "",
     input.caption ? `The caption: ${clip(input.caption, 500)}` : "",
     input.fixedHeadline ? `The headline is fixed: "${clip(input.fixedHeadline, 120)}"` : "",

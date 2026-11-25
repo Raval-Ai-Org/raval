@@ -149,7 +149,7 @@ import { isClipEditEnabled, isMotionMoxEnabled } from "@/lib/feature-flags";
 import { creativeSkillsFor, isMemeTemplatesEnabled } from "@/lib/feature-flags";
 import type { CreativeSkills } from "@/lib/feature-flags";
 import { brandTypeChoice, skillLinesFor } from "./skill-lines.server";
-import { typeVoiceFonts, typeVoiceId } from "@/lib/studio/type-voices";
+import { typeVoiceFonts, typeVoiceId, typeVoiceLine } from "@/lib/studio/type-voices";
 import { elementsFromBrief } from "@/lib/studio/motionmox/elements";
 import {
   CLIP_EDIT_FAILED,
@@ -2485,6 +2485,15 @@ ${ctx.brandText}`,
         brandContext: ctx.visualBrandText ?? ctx.brandText,
         lookBlock: look?.block,
         fonts: look?.fonts.length ? look.fonts : (styled?.fonts ?? []).filter(Boolean),
+        // Round 9 (pack `type`): the brand's one type voice reaches posters too.
+        typeLine: ((choice) => (choice ? typeVoiceLine(choice) : null))(
+          brandTypeChoice({
+            workspaceId: job.workspace_id,
+            ctx,
+            skills: creativeSkillsFor(job.workspace_id),
+            stored: input.controls.typeVoice,
+          }),
+        ),
         colours: look?.colors.length
           ? look.colors
           : (styled?.colors ?? []).map((c) => c?.hex).filter((hex): hex is string => !!hex),
@@ -5147,6 +5156,19 @@ async function planHeroLook(args: {
     audience: ctx.audience ?? null,
     allowText: plan.allowText,
     recent: recentLooks,
+    // Round 9 (packs `sectors`): what this business shows and why it sells.
+    // The type voice goes to the render prompt, not to the scene writer.
+    skillLines: ((pick) => (pick.type ? pick.lines.slice(1) : pick.lines))(
+      skillLinesFor({
+        workspaceId: job.workspace_id,
+        ctx,
+        skills: creativeSkillsFor(job.workspace_id),
+        typeVoice: input.controls.typeVoice,
+        visual: true,
+        format: job.type,
+        seed: job.id,
+      }),
+    ),
   });
   return {
     ...plan.look,

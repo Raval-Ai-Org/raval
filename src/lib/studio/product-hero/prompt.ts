@@ -41,6 +41,8 @@ export type ProductHeroPromptInput = {
   brandContext?: string | null;
   lookBlock?: string | null;
   fonts?: readonly string[];
+  /** Round 9 type voice line (pack `type`): the brand's one type, in words. */
+  typeLine?: string | null;
   /** The team's own picture rules: one block of text or a list. */
   visualTasteRules?: string | readonly string[] | null;
   logoCorner?: string | null;
@@ -107,6 +109,7 @@ export function productHeroPrompt(input: ProductHeroPromptInput): string {
       : "",
     `• Placement: ${staging.placement}`,
     `• Typography: ${hasText ? staging.type : staging.typeWithoutText}`,
+    hasText && input.typeLine ? `• ${input.typeLine.slice(0, 240)}` : "",
     `• Light and camera: ${staging.light}${light ? ` Mood: ${light.text}.` : ""}`,
     `• Finish: ${staging.finish}`,
     `• Avoid: ${staging.avoid}.`,

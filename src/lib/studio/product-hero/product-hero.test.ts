@@ -506,3 +506,55 @@ describe("headlines never open the way the latest ones did", () => {
     expect(sameOpening("Gentle wins", "Pure gel clarity")).toBe(false);
   });
 });
+
+describe("Round 9 skill lines on product posters", () => {
+  const plan = planProductHero({ seed: "r9", brief: "", product, headline: "Gentle wins" });
+  const conceptBase = {
+    brandName: "Acme",
+    product,
+    staging: plan.staging,
+    look: plan.look,
+    occasion: null,
+    texture: plan.texture,
+    ingredients: plan.ingredients,
+    benefits: plan.copy.benefits ?? [],
+    brief: "a product post",
+    allowText: true,
+    recent: [],
+  };
+  const promptBase = {
+    staging: plan.staging,
+    palette: productPalette({ product: "#78afe1" }),
+    productName: product.name,
+    texture: plan.texture,
+    copy: plan.copy,
+    allowText: true,
+    cutout: true,
+    series: false,
+    brandName: "Acme",
+  };
+
+  it("adds nothing when the packs are off", () => {
+    expect(conceptMessages({ ...conceptBase, skillLines: [] })).toEqual(
+      conceptMessages(conceptBase),
+    );
+    expect(productHeroPrompt({ ...promptBase, typeLine: null })).toBe(
+      productHeroPrompt(promptBase),
+    );
+  });
+
+  it("gives the scene writer the business lines and the render the type voice", () => {
+    const { system, user } = conceptMessages({
+      ...conceptBase,
+      skillLines: ["Show the routine at the sink.", "Sells because it is gentle."],
+    });
+    expect(user).toContain("About this business");
+    expect(user).toContain("- Show the routine at the sink.");
+    expect(system).toBe(conceptMessages(conceptBase).system);
+    const typed = productHeroPrompt({ ...promptBase, typeLine: "Type voice: soft rounded sans." });
+    expect(typed).toContain("• Type voice: soft rounded sans.");
+    expect(
+      productHeroPrompt({ ...promptBase, allowText: false, typeLine: "Type voice: x." }),
+    ).not.toContain("Type voice");
+  });
+});
