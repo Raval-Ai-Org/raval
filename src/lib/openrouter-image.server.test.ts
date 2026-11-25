@@ -135,6 +135,8 @@ describe("OpenRouter image generation", () => {
 
   it("hands a picture OpenRouter can't pay for to KIE instead of failing", async () => {
     vi.stubEnv("KIE_API_KEY", "kie-test");
+    // Pictures pinned to OpenRouter (unset, they follow KIE whenever its key is set).
+    vi.stubEnv("IMAGE_PROVIDER", "openrouter");
     // No live balance read and no pause left by an earlier test: OpenRouter is tried first.
     vi.stubEnv("OPENROUTER_API_KEY", "");
     const { clearImageFundsPause } = await import("@/server/ai/image-funds.server");

@@ -1,4 +1,5 @@
-// Central AI text gateway — OpenRouter only.
+// Central AI text gateway — KIE by default (src/lib/kie-chat.server.ts),
+// OpenRouter as the rollback (AI_PROVIDER=openrouter).
 //
 // Every paid text, vision and tool call in Mellox goes through this file (the
 // GEO agent's tool loop lives beside it in ai-gateway.tool-loop.server.ts and
@@ -38,6 +39,8 @@ import { getAppUrl } from "@/server/env";
 import { humanizeText } from "@/lib/ai/humanize-text";
 import { safeParseJson } from "@/lib/ai/json";
 import { logGuardrailEvent } from "@/server/guardrails/events";
+import { aiProvider } from "./ai-provider.server";
+import { completionAsSse, kieTransport } from "./kie-chat.server";
 
 export const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
@@ -277,7 +280,7 @@ export function withPromptCache(
 
 export class AiGatewayError extends UpstreamError {
   constructor(status: number, message: string, code?: string) {
-    super(status, message, { provider: "openrouter", code, internal: true });
+    super(status, message, { provider: aiProvider(), code, internal: true });
     this.name = "AiGatewayError";
   }
 }
@@ -453,7 +456,10 @@ export function setLlmTransport(t: LlmTransport | null): () => void {
 }
 
 export function sendCompletion(body: Record<string, unknown>, opts: TransportOpts): Promise<any> {
-  return (transportOverride ?? openRouterTransport)(body, opts);
+  return (transportOverride ?? (aiProvider() === "kie" ? kieTransport : openRouterTransport))(
+    body,
+    opts,
+  );
 }
 
 /* ─────────────────────────────── request body ─────────────────────────────── */
@@ -689,7 +695,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       if (hit) {
         const model = hit.json?.model ?? primary;
         recordUsage({
-          provider: "openrouter",
+          provider: aiProvider(),
           model,
           route,
           cached: true,
@@ -715,7 +721,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       });
     } catch (error) {
       recordUsage({
-        provider: "openrouter",
+        provider: aiProvider(),
         model: primary,
         route,
         status: "error",
@@ -728,7 +734,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
     // content and finish_reason "error". That text is never an answer.
     if (json?.choices?.[0]?.finish_reason === "error") {
       recordUsage({
-        provider: "openrouter",
+        provider: aiProvider(),
         model,
         route,
         ...usageTokens(json?.usage),
@@ -747,7 +753,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       console.info("[ai-gateway] answered by a different model", { route, primary, model });
     }
     recordUsage({
-      provider: "openrouter",
+      provider: aiProvider(),
       model,
       route,
       ...usageTokens(usage),
@@ -883,7 +889,8 @@ export function meterSseStream(
 
 /** Streaming chat completion. Passes through OpenAI-shape SSE, metered. */
 export async function chatCompletionStream(opts: ChatOptions): Promise<Response> {
-  const key = getOpenRouterKey();
+  const onKie = aiProvider() === "kie";
+  const key = onKie ? "" : getOpenRouterKey();
   const budget = await checkBudget("text");
   // Text is never blocked by an allowance (it degrades), so a block here is an admin's emergency switch.
   if (budget.mode === "block") {
@@ -919,6 +926,56 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
   // Captured now: the stream finishes after the request scope has closed.
   const scope = getRequestScope();
 
+  if (onKie) {
+    // KIE's model families stream in different formats: the reply is made in
+    // one call and handed to the chat UI as the same OpenAI-shape SSE.
+    let answer: any;
+    try {
+      answer = await sendCompletion(
+        { ...body, stream: false, stream_options: undefined },
+        { route, timeoutMs: STREAM_TIMEOUT_MS, retries: 1, retryOnTimeout: true },
+      );
+    } catch (error) {
+      recordUsage({
+        provider: "kie",
+        model: primary,
+        route,
+        status: "error",
+        workspaceId: scope.workspaceId ?? null,
+        userId: scope.userId ?? null,
+      });
+      throw error;
+    }
+    const metered = meterSseStream(
+      completionAsSse(answer),
+      ({ usage, finishReason, outputChars, model }) => {
+        const answered = model ?? primary;
+        recordUsage({
+          provider: "kie",
+          model: answered,
+          route,
+          workspaceId: scope.workspaceId ?? null,
+          userId: scope.userId ?? null,
+          ...usageTokens(usage),
+          outputTokens: usage?.completion_tokens ?? Math.ceil(outputChars / 4),
+          estCostUsd: completionCost(answered, usage),
+          truncated: finishReason === "length",
+          latencyMs: Date.now() - started,
+          status: degraded ? "degraded" : "ok",
+        });
+      },
+    );
+    return new Response(metered, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-AI-Model": typeof answer?.model === "string" ? answer.model : primary,
+        ...(degraded ? { "X-Usage-Degraded": "1" } : {}),
+      },
+    });
+  }
+
   // Time-to-first-byte timeout only — we don't want to cut a healthy long stream.
   const upstream = await fetchWithTimeout(
     `${OPENROUTER_BASE}/chat/completions`,
@@ -932,7 +989,7 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
   if (!upstream.ok || !upstream.body) {
     const text = await upstream.text().catch(() => "");
     recordUsage({
-      provider: "openrouter",
+      provider: aiProvider(),
       model: primary,
       route,
       status: "error",
@@ -945,7 +1002,7 @@ export async function chatCompletionStream(opts: ChatOptions): Promise<Response>
   const metered = meterSseStream(upstream.body, ({ usage, finishReason, outputChars, model }) => {
     const answered = model ?? primary;
     recordUsage({
-      provider: "openrouter",
+      provider: aiProvider(),
       model: answered,
       route,
       workspaceId: scope.workspaceId ?? null,
@@ -1184,7 +1241,7 @@ async function schemaPrompt<T>(opts: LlmJsonOpts<T>, schema: Record<string, unkn
     kind: "parse_failure",
     severity: "warn",
     route: opts.route,
-    detail: { fallbackUsed: true, truncated, provider: "openrouter", structured: true },
+    detail: { fallbackUsed: true, truncated, provider: aiProvider(), structured: true },
   });
   return opts.fallback;
 }
@@ -1225,7 +1282,7 @@ export async function llmJson<T>(opts: LlmJsonOpts<T>): Promise<T> {
     kind: "parse_failure",
     severity: "warn",
     route: opts.route,
-    detail: { fallbackUsed: true, truncated: first.truncated, provider: "openrouter" },
+    detail: { fallbackUsed: true, truncated: first.truncated, provider: aiProvider() },
   });
   return opts.fallback;
 }

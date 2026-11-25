@@ -82,7 +82,7 @@ export function isGeoProbesEnabled(workspaceId?: string): boolean {
       .toLowerCase();
     if (perWs) return isTruthy(perWs);
   }
-  if (!process.env.OPENROUTER_API_KEY) return false;
+  if (!process.env.OPENROUTER_API_KEY && !process.env.KIE_API_KEY) return false;
   return isTruthy((process.env.FEATURE_FLAG_GEO_AI_PROBES_ENABLED ?? "").trim().toLowerCase());
 }
 

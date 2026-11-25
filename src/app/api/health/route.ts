@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { textAiConfigured } from "@/lib/ai-provider.server";
 import { getImageModelConfigStatus } from "@/lib/model-router.server";
 import { videoFallbackProvider, videoProvider } from "@/server/ugc/models.server";
 
@@ -26,7 +27,7 @@ export function GET() {
   const videoReady =
     (primary === "kie" ? kie : openrouter) || (fallback === "openrouter" && openrouter);
   return NextResponse.json({
-    status: openrouter ? "ok" : "degraded",
+    status: textAiConfigured() ? "ok" : "degraded",
     version: version(),
     ai: { provider: "openrouter", configured: openrouter },
     image: { provider: "openrouter", ...getImageModelConfigStatus() },

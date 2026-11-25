@@ -15,6 +15,10 @@ export const META_SCOPES = [
   "instagram_basic",
   "instagram_manage_comments",
   "business_management",
+  // Private replies from automations ("send the link by DM"). Without them
+  // the public reply still goes out and the message is skipped with a note.
+  "instagram_manage_messages",
+  "pages_messaging",
 ] as const;
 
 export function metaConfig() {

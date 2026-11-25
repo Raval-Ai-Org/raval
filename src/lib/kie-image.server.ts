@@ -18,6 +18,7 @@ import { log } from "@/server/observability/logger";
 import { round6 } from "@/server/ai/pricing";
 import { createKieTask, getKieTask, KieGatewayError } from "./kie-gateway.server";
 import { AiGatewayError } from "./ai-gateway.server";
+import { aiProvider } from "./ai-provider.server";
 import { normalizeReferenceImages } from "./image-reference.server";
 import { IMAGE_FLARE, isRecraftModel } from "./model-router.server";
 import type { GeneratedImage, ImageRequest } from "./openrouter-image.server";
@@ -32,7 +33,10 @@ const MAX_KIE_REFERENCES = 4;
 const FALLBACK_USD = 0.04;
 
 export function imageProvider(): "kie" | "openrouter" {
-  return process.env.IMAGE_PROVIDER?.trim().toLowerCase() === "kie" ? "kie" : "openrouter";
+  const chosen = process.env.IMAGE_PROVIDER?.trim().toLowerCase();
+  if (chosen === "kie" || chosen === "openrouter") return chosen;
+  // Unset: pictures follow the text provider (KIE whenever KIE_API_KEY is set).
+  return aiProvider();
 }
 
 /** The model KIE draws a request with (Recraft → Flare; KIE has no Recraft). */

@@ -11,14 +11,23 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rateLimitFor } from "@/server/rate-limit";
 import { HttpError } from "@/server/http-error";
 import type {
+  EngageDmStatus,
   EngageDraft,
   EngageHome,
+  EngagePost,
+  EngageRule,
   EngageStatus,
   EngageSyncResult,
 } from "@/lib/engage/contracts";
 
 export type {
+  EngageAnswer,
   EngageComment,
+  EngageDmStatus,
+  EngageExample,
+  EngagePost,
+  EngageRule,
+  RuleInput,
   EngageDraft,
   EngageHome,
   EngagePage,
@@ -75,6 +84,11 @@ export const draftEngageReply = createServerFn({ method: "POST" })
     const c = await caller(context, data.workspaceId, "editor");
     const service = await svc();
     const { comment } = await service.commentFor(data.workspaceId, data.commentId);
+    const guidance = comment.rule_id
+      ? await (
+          await import("@/server/engage/automations.server")
+        ).ruleGuidance(data.workspaceId, comment.rule_id)
+      : null;
     if (comment.status === "replied" || comment.status === "dismissed")
       throw new HttpError(409, "This comment is already done.");
     const [{ runMetered }, { draftEngageReply: draft }, { runWithScope }] = await Promise.all([
@@ -100,6 +114,7 @@ export const draftEngageReply = createServerFn({ method: "POST" })
               postCaption: comment.post_caption,
             },
             note: data.note,
+            guidance,
           }),
         ),
     );
@@ -152,4 +167,140 @@ export const disconnectMeta = createServerFn({ method: "POST" })
     await caller(context, data.workspaceId, "editor");
     await (await svc()).disconnectMeta(data.workspaceId, context.userId);
     return { ok: true };
+  });
+
+// ── Automations and Train Mox ─────────────────────────────────────────────
+
+const auto = () => import("@/server/engage/automations.server");
+
+const ruleInput = z
+  .object({
+    name: z.string().max(200).optional(),
+    platforms: z
+      .array(z.enum(["instagram", "facebook"]))
+      .max(2)
+      .optional(),
+    postScope: z.enum(["any", "posts"]).optional(),
+    postIds: z.array(z.string().max(80)).max(30).optional(),
+    match: z.enum(["keywords", "any"]).optional(),
+    keywords: z.array(z.string().max(100)).max(40).optional(),
+    wholeWord: z.boolean().optional(),
+    replyMode: z.enum(["fixed", "mox", "none"]).optional(),
+    replies: z.array(z.string().max(2_200)).max(12).optional(),
+    moxGuidance: z.string().max(1_000).nullable().optional(),
+    dmEnabled: z.boolean().optional(),
+    dmMessage: z.string().max(1_000).nullable().optional(),
+    dmLink: z.string().max(2_000).nullable().optional(),
+    sendMode: z.enum(["auto", "approve"]).optional(),
+  })
+  .strict();
+
+/** Recent posts, for choosing which posts an automation listens to. */
+export const listEngagePosts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("engage-sync")])
+  .inputValidator((data) => z.object({ workspaceId: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<EngagePost[]> => {
+    await caller(context, data.workspaceId, "editor");
+    return (await auto()).listEngagePosts(data.workspaceId);
+  });
+
+export const saveEngageRule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, id: uuid.optional(), rule: ruleInput }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<EngageRule> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    return (await auto()).saveRule({
+      workspaceId: data.workspaceId,
+      userId: c.userId,
+      id: data.id,
+      input: data.rule,
+    });
+  });
+
+export const deleteEngageRule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, id: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    await (await auto()).deleteRule(data.workspaceId, c.userId, data.id);
+    return { ok: true };
+  });
+
+export const setEngageRuleStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, id: uuid, status: z.enum(["live", "paused"]) }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    await (await auto()).setRuleStatus(data.workspaceId, c.userId, data.id, data.status);
+    return { ok: true };
+  });
+
+export const reorderEngageRules = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, ids: z.array(uuid).max(40) }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    await caller(context, data.workspaceId, "editor");
+    await (await auto()).reorderRules(data.workspaceId, data.ids);
+    return { ok: true };
+  });
+
+export const setEngageAutomations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, on: z.boolean() }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    await (await auto()).setAutomations(data.workspaceId, c.userId, data.on);
+    return { ok: true };
+  });
+
+export const saveEngageAnswer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) =>
+    z
+      .object({
+        workspaceId: uuid,
+        id: uuid.optional(),
+        question: z.string().max(600),
+        answer: z.string().max(3_000),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    await (await auto()).saveAnswer({ ...data, userId: c.userId });
+    return { ok: true };
+  });
+
+export const deleteEngageAnswer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, id: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    await caller(context, data.workspaceId, "editor");
+    await (await auto()).deleteAnswer(data.workspaceId, data.id);
+    return { ok: true };
+  });
+
+export const deleteEngageExample = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, id: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    await caller(context, data.workspaceId, "editor");
+    await (await auto()).deleteExample(data.workspaceId, data.id);
+    return { ok: true };
+  });
+
+/** Send the private message an automation prepared, from a person's click. */
+export const sendEngageDm = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("engage-send")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, commentId: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<{ dmStatus: EngageDmStatus }> => {
+    await caller(context, data.workspaceId, "editor");
+    const status = await (
+      await svc()
+    ).sendPrivateReply(data.workspaceId, data.commentId, context.userId);
+    return { dmStatus: status };
   });

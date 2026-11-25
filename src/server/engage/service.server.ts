@@ -1,10 +1,12 @@
-// service.server.ts — Engage, Phase 1: comments on the brand's own Instagram
-// and Facebook posts, answered by a person.
+// service.server.ts — Engage: comments on the brand's own Instagram and
+// Facebook posts, answered by a person or by an automation the team set up.
 //
 // Reads for the inbox use the caller's own RLS client. Everything that holds
 // a token or writes runs with the service role, for a workspace id the RPC
-// has already verified, and every row is matched on that id. Mellox never
-// sends a reply by itself: `sendReply` runs only from a person's click.
+// (or the cron sweep) has already verified, and every row is matched on that
+// id. A reply goes out only from a person's click, or from a live automation
+// with fixed words the team wrote (`automations.server.ts`); a reply Mox
+// writes always waits for a person.
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -12,13 +14,18 @@ import { decryptWithKeys, encryptWithKey } from "@/server/crypto/secret-box.serv
 import { recordAudit } from "@/server/audit.server";
 import { HttpError } from "@/server/http-error";
 import type {
+  EngageAnswer,
   EngageComment,
+  EngageDmStatus,
+  EngageExample,
   EngageHome,
   EngagePlatform,
+  EngageRule,
   EngageStatus,
   EngageSyncResult,
 } from "@/lib/engage/contracts";
 import { sendableReply } from "@/lib/engage/reply";
+import { KEEP_EXAMPLES, worthKeeping } from "@/lib/engage/training";
 import {
   COMMENTS_PER_POST,
   POSTS_PER_SYNC,
@@ -42,7 +49,7 @@ import { consumeMetaState } from "./meta/oauth.server";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
 
-type PageRow = {
+export type PageRow = {
   id: string;
   workspace_id: string;
   page_id: string;
@@ -53,11 +60,12 @@ type PageRow = {
   last_error: string | null;
 };
 
-type CommentDbRow = {
+export type CommentDbRow = {
   id: string;
   page_row_id: string;
   platform: EngagePlatform;
   external_id: string;
+  post_id: string;
   author_name: string | null;
   body: string;
   commented_at: string;
@@ -68,15 +76,90 @@ type CommentDbRow = {
   reply_text: string | null;
   replied_at: string | null;
   last_error: string | null;
+  rule_id: string | null;
+  matched_keyword: string | null;
+  auto_sent: boolean;
+  dm_status: EngageDmStatus;
+  dm_text: string | null;
+  dm_error: string | null;
 };
 
-const COMMENT_COLUMNS =
-  "id,page_row_id,platform,external_id,author_name,body,commented_at,post_caption,post_permalink,status,draft,reply_text,replied_at,last_error";
+export const COMMENT_COLUMNS =
+  "id,page_row_id,platform,external_id,post_id,author_name,body,commented_at,post_caption,post_permalink,status,draft,reply_text,replied_at,last_error,rule_id,matched_keyword,auto_sent,dm_status,dm_text,dm_error";
+
+export const PAGE_COLUMNS =
+  "id,workspace_id,page_id,page_name,ig_user_id,ig_username,synced_at,last_error";
+
+export const RULE_COLUMNS =
+  "id,name,status,platforms,post_scope,post_ids,match,keywords,whole_word,reply_mode,replies,mox_guidance,dm_enabled,dm_message,dm_link,send_mode,position,live_since,matched_count,sent_count,dm_count,last_matched_at";
+
+export type RuleDbRow = {
+  id: string;
+  name: string;
+  status: "live" | "paused";
+  platforms: EngagePlatform[];
+  post_scope: "any" | "posts";
+  post_ids: string[];
+  match: "keywords" | "any";
+  keywords: string[];
+  whole_word: boolean;
+  reply_mode: "fixed" | "mox" | "none";
+  replies: string[];
+  mox_guidance: string | null;
+  dm_enabled: boolean;
+  dm_message: string | null;
+  dm_link: string | null;
+  send_mode: "auto" | "approve";
+  position: number;
+  live_since: string;
+  matched_count: number;
+  sent_count: number;
+  dm_count: number;
+  last_matched_at: string | null;
+};
+
+export function ruleView(r: RuleDbRow): EngageRule {
+  return {
+    id: r.id,
+    name: r.name,
+    status: r.status,
+    platforms: r.platforms ?? [],
+    postScope: r.post_scope,
+    postIds: r.post_ids ?? [],
+    match: r.match,
+    keywords: r.keywords ?? [],
+    wholeWord: r.whole_word,
+    replyMode: r.reply_mode,
+    replies: r.replies ?? [],
+    moxGuidance: r.mox_guidance,
+    dmEnabled: r.dm_enabled,
+    dmMessage: r.dm_message,
+    dmLink: r.dm_link,
+    sendMode: r.send_mode,
+    position: r.position,
+    liveSince: r.live_since,
+    matchedCount: r.matched_count,
+    sentCount: r.sent_count,
+    dmCount: r.dm_count,
+    lastMatchedAt: r.last_matched_at,
+  };
+}
+
+/** Which networks the person allowed private messages on. */
+export function messagingFrom(scopes: unknown): { instagram: boolean; facebook: boolean } {
+  const list = Array.isArray(scopes)
+    ? scopes.filter((s): s is string => typeof s === "string")
+    : [];
+  return {
+    instagram: list.includes("instagram_manage_messages"),
+    facebook: list.includes("pages_messaging"),
+  };
+}
 
 async function activeConnection(workspaceId: string) {
   const { data } = await db
     .from("workspace_connections")
-    .select("id,status,account_login,last_error")
+    .select("id,status,account_login,last_error,permissions")
     .eq("workspace_id", workspaceId)
     .eq("provider", "meta")
     .neq("status", "revoked")
@@ -86,7 +169,13 @@ async function activeConnection(workspaceId: string) {
     status: string;
     account_login: string;
     last_error: string | null;
+    permissions: { scopes?: unknown } | null;
   } | null;
+}
+
+export async function canMessageFor(workspaceId: string) {
+  const conn = await activeConnection(workspaceId);
+  return messagingFrom(conn?.permissions?.scopes);
 }
 
 // ── Inbox ─────────────────────────────────────────────────────────────────
@@ -95,34 +184,65 @@ export async function getEngageHome(
   client: SupabaseClient,
   workspaceId: string,
 ): Promise<EngageHome> {
-  const [conn, pages, comments, replied] = await Promise.all([
-    client
-      .from("workspace_connections")
-      .select("status,account_login,last_error")
-      .eq("workspace_id", workspaceId)
-      .eq("provider", "meta")
-      .neq("status", "revoked")
-      .maybeSingle(),
-    client
-      .from("meta_pages")
-      .select("id,workspace_id,page_id,page_name,ig_user_id,ig_username,synced_at,last_error")
-      .eq("workspace_id", workspaceId)
-      .order("page_name"),
-    client
-      .from("engage_comments")
-      .select(COMMENT_COLUMNS)
-      .eq("workspace_id", workspaceId)
-      .in("status", ["new", "drafted", "sending", "unknown", "replied"])
-      .order("commented_at", { ascending: false })
-      .limit(100),
-    client
-      .from("engage_comments")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .eq("status", "replied"),
-  ]);
+  const [conn, pages, comments, replied, auto, rules, answers, examples, settings] =
+    await Promise.all([
+      client
+        .from("workspace_connections")
+        .select("status,account_login,last_error,permissions")
+        .eq("workspace_id", workspaceId)
+        .eq("provider", "meta")
+        .neq("status", "revoked")
+        .maybeSingle(),
+      client
+        .from("meta_pages")
+        .select(PAGE_COLUMNS)
+        .eq("workspace_id", workspaceId)
+        .order("page_name"),
+      client
+        .from("engage_comments")
+        .select(COMMENT_COLUMNS)
+        .eq("workspace_id", workspaceId)
+        .in("status", ["new", "drafted", "sending", "unknown", "replied"])
+        .order("commented_at", { ascending: false })
+        .limit(100),
+      client
+        .from("engage_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("status", "replied"),
+      client
+        .from("engage_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("auto_sent", true),
+      client
+        .from("engage_rules")
+        .select(RULE_COLUMNS)
+        .eq("workspace_id", workspaceId)
+        .order("position")
+        .order("created_at"),
+      client
+        .from("engage_knowledge")
+        .select("id,question,answer,updated_at")
+        .eq("workspace_id", workspaceId)
+        .order("updated_at", { ascending: false })
+        .limit(100),
+      client
+        .from("engage_examples")
+        .select("id,platform,comment,reply,created_at")
+        .eq("workspace_id", workspaceId)
+        .order("created_at", { ascending: false })
+        .limit(KEEP_EXAMPLES),
+      client
+        .from("engage_settings")
+        .select("automations_on")
+        .eq("workspace_id", workspaceId)
+        .maybeSingle(),
+    ]);
   const pageRows = (pages.data ?? []) as PageRow[];
   const byId = new Map(pageRows.map((p) => [p.id, p]));
+  const ruleRows = ((rules.data ?? []) as RuleDbRow[]).map(ruleView);
+  const ruleName = new Map(ruleRows.map((r) => [r.id, r.name]));
   const rows = (comments.data ?? []) as CommentDbRow[];
   const view: EngageComment[] = rows.map((c) => {
     const page = byId.get(c.page_row_id);
@@ -134,6 +254,7 @@ export async function getEngageHome(
       authorName: c.author_name,
       body: c.body,
       commentedAt: c.commented_at,
+      postId: c.post_id,
       postCaption: c.post_caption,
       postPermalink: c.post_permalink,
       status: c.status,
@@ -141,12 +262,20 @@ export async function getEngageHome(
       replyText: c.reply_text,
       repliedAt: c.replied_at,
       lastError: c.last_error,
+      ruleId: c.rule_id,
+      ruleName: c.rule_id ? (ruleName.get(c.rule_id) ?? null) : null,
+      matchedKeyword: c.matched_keyword,
+      autoSent: c.auto_sent,
+      dmStatus: c.dm_status,
+      dmText: c.dm_text,
+      dmError: c.dm_error,
     };
   });
   const c = conn.data as {
     status: string;
     account_login: string;
     last_error: string | null;
+    permissions: { scopes?: unknown } | null;
   } | null;
   return {
     configured: metaConfigured(),
@@ -156,6 +285,7 @@ export async function getEngageHome(
             c.status === "active" ? "active" : c.status === "suspended" ? "suspended" : "error",
           accountName: c.account_login,
           lastError: c.last_error,
+          canMessage: messagingFrom(c.permissions?.scopes),
         }
       : null,
     pages: pageRows.map((p) => ({
@@ -170,7 +300,33 @@ export async function getEngageHome(
     counts: {
       waiting: view.filter((v) => v.status !== "replied").length,
       replied: replied.count ?? 0,
+      autoReplied: auto.count ?? 0,
     },
+    automationsOn: (settings.data as { automations_on: boolean } | null)?.automations_on ?? true,
+    rules: ruleRows,
+    answers: (
+      (answers.data ?? []) as { id: string; question: string; answer: string; updated_at: string }[]
+    ).map((a): EngageAnswer => ({
+      id: a.id,
+      question: a.question,
+      answer: a.answer,
+      updatedAt: a.updated_at,
+    })),
+    examples: (
+      (examples.data ?? []) as {
+        id: string;
+        platform: EngagePlatform;
+        comment: string;
+        reply: string;
+        created_at: string;
+      }[]
+    ).map((e): EngageExample => ({
+      id: e.id,
+      platform: e.platform,
+      comment: e.comment,
+      reply: e.reply,
+      createdAt: e.created_at,
+    })),
   };
 }
 
@@ -325,7 +481,7 @@ export async function disconnectMeta(workspaceId: string, userId: string): Promi
 
 // ── Tokens ────────────────────────────────────────────────────────────────
 
-async function pageToken(workspaceId: string, pageRowId: string): Promise<string> {
+export async function pageToken(workspaceId: string, pageRowId: string): Promise<string> {
   const { data } = await db
     .from("meta_page_tokens")
     .select("page_token_enc")
@@ -347,6 +503,11 @@ async function markTokenProblem(workspaceId: string, error: GraphError) {
     .eq("workspace_id", workspaceId)
     .eq("provider", "meta")
     .neq("status", "revoked");
+}
+
+export async function pagesFor(workspaceId: string): Promise<PageRow[]> {
+  const { data } = await db.from("meta_pages").select(PAGE_COLUMNS).eq("workspace_id", workspaceId);
+  return (data ?? []) as PageRow[];
 }
 
 // ── Sync ──────────────────────────────────────────────────────────────────
@@ -389,15 +550,14 @@ async function readPage(page: PageRow, token: string): Promise<CommentRow[]> {
   return rows;
 }
 
-/** Read new comments for every Page. A comment already stored is left as it is. */
+/**
+ * Read new comments for every Page. A comment already stored is left as it
+ * is. New comments then go through the live automations.
+ */
 export async function syncEngage(workspaceId: string): Promise<EngageSyncResult> {
   const conn = await activeConnection(workspaceId);
   if (!conn) throw new HttpError(409, "Connect Instagram and Facebook first.");
-  const { data } = await db
-    .from("meta_pages")
-    .select("id,workspace_id,page_id,page_name,ig_user_id,ig_username,synced_at,last_error")
-    .eq("workspace_id", workspaceId);
-  const pages = (data ?? []) as PageRow[];
+  const pages = await pagesFor(workspaceId);
   let added = 0;
   let errors = 0;
   for (const page of pages) {
@@ -435,7 +595,14 @@ export async function syncEngage(workspaceId: string): Promise<EngageSyncResult>
       .from("workspace_connections")
       .update({ status: "active", last_error: null })
       .eq("id", conn.id);
-  return { pages: pages.length, added, errors };
+  let automated = 0;
+  try {
+    const { applyRules } = await import("./automations.server");
+    automated = (await applyRules(workspaceId)).sent;
+  } catch (error) {
+    console.error("[engage] automations failed", error);
+  }
+  return { pages: pages.length, added, errors, automated };
 }
 
 // ── One comment ───────────────────────────────────────────────────────────
@@ -451,7 +618,7 @@ export async function commentFor(workspaceId: string, commentId: string) {
   const row = data as CommentDbRow;
   const { data: page } = await db
     .from("meta_pages")
-    .select("id,workspace_id,page_id,page_name,ig_user_id,ig_username,synced_at,last_error")
+    .select(PAGE_COLUMNS)
     .eq("workspace_id", workspaceId)
     .eq("id", row.page_row_id)
     .maybeSingle();
@@ -481,6 +648,13 @@ export async function dismissEngageComment(workspaceId: string, commentId: strin
     .eq("workspace_id", workspaceId)
     .eq("id", commentId)
     .in("status", ["new", "drafted", "unknown"]);
+  // A private message that was waiting for this reply is not sent either.
+  await db
+    .from("engage_comments")
+    .update({ dm_status: "skipped", dm_error: "The comment was dismissed." })
+    .eq("workspace_id", workspaceId)
+    .eq("id", commentId)
+    .eq("dm_status", "pending");
 }
 
 /** Does the brand already have a reply under this comment with these words? */
@@ -507,20 +681,22 @@ async function findOwnReply(page: PageRow, comment: CommentDbRow, token: string,
 }
 
 /**
- * Send a reply a person pressed Send on. `new|drafted|unknown → sending` is a
- * compare-and-set, so a double click sends once. An unclear outcome is kept
- * as `unknown`; the next press first looks for the reply before sending again.
+ * Post a public reply. `new|drafted|unknown → sending` is a compare-and-set,
+ * so a double click (or a click racing the automation) sends once. An unclear
+ * outcome is kept as `unknown`; the next try first looks for the reply.
+ * `userId` is null for an automation's send.
  */
-export async function sendEngageReply(args: {
+export async function deliverReply(args: {
   workspaceId: string;
   commentId: string;
   text: string;
-  userId: string;
+  userId: string | null;
   brandDomain: string | null;
 }): Promise<{ status: EngageStatus }> {
   const { comment, page } = await commentFor(args.workspaceId, args.commentId);
   if (comment.status === "replied") return { status: "replied" };
   if (comment.status === "dismissed") throw new HttpError(409, "This comment was dismissed.");
+  if (comment.status === "sending") throw new HttpError(409, "This reply is already being sent.");
   const ok = sendableReply(args.text, comment.platform, args.brandDomain);
   if (!ok.ok) throw new HttpError(400, ok.reason);
   if (comment.platform === "instagram" && !page.ig_user_id)
@@ -535,6 +711,7 @@ export async function sendEngageReply(args: {
     .select("id");
   if (!claimed?.length) throw new HttpError(409, "This reply is already being sent.");
 
+  const auto = args.userId === null;
   const token = await pageToken(args.workspaceId, page.id);
   const done = async (replyId: string) => {
     await db
@@ -545,6 +722,7 @@ export async function sendEngageReply(args: {
         reply_external_id: replyId,
         replied_at: new Date().toISOString(),
         replied_by: args.userId,
+        auto_sent: auto,
         last_error: null,
       })
       .eq("workspace_id", args.workspaceId)
@@ -552,10 +730,12 @@ export async function sendEngageReply(args: {
     await recordAudit({
       workspaceId: args.workspaceId,
       userId: args.userId,
-      action: "engage.reply.sent",
+      action: auto ? "engage.reply.auto_sent" : "engage.reply.sent",
       entity: `engage_comments:${comment.id}`,
-      payload: { platform: comment.platform, reply_id: replyId },
+      payload: { platform: comment.platform, reply_id: replyId, rule_id: comment.rule_id },
     });
+    // A person's own words teach Mox the brand's voice.
+    if (!auto && worthKeeping(ok.text)) await keepExample(args.workspaceId, comment, ok.text);
     return { status: "replied" as const };
   };
 
@@ -593,5 +773,120 @@ export async function sendEngageReply(args: {
       .eq("id", comment.id);
     if (unknown) return { status: "unknown" };
     throw new HttpError(error instanceof GraphError && error.kind === "limit" ? 429 : 502, message);
+  }
+}
+
+/** A person pressed Send. The private message the automation prepared goes with it. */
+export async function sendEngageReply(args: {
+  workspaceId: string;
+  commentId: string;
+  text: string;
+  userId: string;
+  brandDomain: string | null;
+}): Promise<{ status: EngageStatus }> {
+  const out = await deliverReply(args);
+  // The reply is out; a message problem stays on the comment, never fails the reply.
+  if (out.status === "replied")
+    await sendPrivateReply(args.workspaceId, args.commentId, args.userId).catch((error) =>
+      console.error("[engage] private message failed", error),
+    );
+  return out;
+}
+
+/**
+ * Send the prepared private message for a comment (`dm_status = pending`).
+ * Claimed `pending → unknown` before the call, so a crash or an unclear
+ * answer is never sent twice: an unknown message stays unknown.
+ */
+export async function sendPrivateReply(
+  workspaceId: string,
+  commentId: string,
+  userId: string | null,
+): Promise<EngageDmStatus> {
+  const { comment, page } = await commentFor(workspaceId, commentId);
+  if (comment.dm_status !== "pending" || !comment.dm_text) return comment.dm_status;
+  const allowed = await canMessageFor(workspaceId);
+  if (!allowed[comment.platform]) {
+    await db
+      .from("engage_comments")
+      .update({
+        dm_status: "skipped",
+        dm_error: "Private messages aren't allowed yet. Connect again and allow messages.",
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("id", comment.id)
+      .eq("dm_status", "pending");
+    return "skipped";
+  }
+  const { data: claimed } = await db
+    .from("engage_comments")
+    .update({ dm_status: "unknown", dm_error: null })
+    .eq("workspace_id", workspaceId)
+    .eq("id", comment.id)
+    .eq("dm_status", "pending")
+    .select("id");
+  if (!claimed?.length) return "unknown";
+  const set = (dm_status: EngageDmStatus, dm_error: string | null) =>
+    db
+      .from("engage_comments")
+      .update({ dm_status, dm_error })
+      .eq("workspace_id", workspaceId)
+      .eq("id", comment.id);
+  try {
+    const token = await pageToken(workspaceId, page.id);
+    // Private replies: one message to the person who wrote the comment.
+    await graphPost<{ message_id?: string }>(`${page.page_id}/messages`, token, {
+      recipient: JSON.stringify({ comment_id: comment.external_id }),
+      message: JSON.stringify({ text: comment.dm_text.slice(0, 1_000) }),
+    });
+    await set("sent", null);
+    if (comment.rule_id)
+      await db.rpc("engage_rule_bump", {
+        p_rule: comment.rule_id,
+        p_matched: 0,
+        p_sent: 0,
+        p_dm: 1,
+      });
+    await recordAudit({
+      workspaceId,
+      userId,
+      action: "engage.dm.sent",
+      entity: `engage_comments:${comment.id}`,
+      payload: { platform: comment.platform, rule_id: comment.rule_id },
+    });
+    return "sent";
+  } catch (error) {
+    if (error instanceof GraphError) await markTokenProblem(workspaceId, error);
+    if (error instanceof GraphError && error.kind === "unknown") {
+      await set("unknown", "Meta didn't confirm the private message. It won't be sent again.");
+      return "unknown";
+    }
+    const message =
+      error instanceof Error ? error.message.slice(0, 300) : "Couldn't send the message.";
+    await set("failed", message);
+    return "failed";
+  }
+}
+
+/** Keep a person's sent reply as a voice example (newest KEEP_EXAMPLES). */
+async function keepExample(workspaceId: string, comment: CommentDbRow, reply: string) {
+  try {
+    await db.from("engage_examples").insert({
+      workspace_id: workspaceId,
+      platform: comment.platform,
+      comment: comment.body.slice(0, 1_000) || "(no words)",
+      reply: reply.slice(0, 2_200),
+    });
+    const { data } = await db
+      .from("engage_examples")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .range(KEEP_EXAMPLES, KEEP_EXAMPLES + 50);
+    const old = (data ?? []).map((r) => (r as { id: string }).id);
+    if (old.length)
+      await db.from("engage_examples").delete().eq("workspace_id", workspaceId).in("id", old);
+  } catch (error) {
+    console.error("[engage] keeping an example failed", error);
   }
 }

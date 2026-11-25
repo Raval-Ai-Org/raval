@@ -46,6 +46,14 @@ export const POST = defineCronRoute({
       } catch (error) {
         console.error("[visual-taste] capture sweep failed", error);
       }
+      // Engage automations: read comments for brands with live rules (about
+      // every three minutes each) and act on new ones.
+      try {
+        const { runDueEngage } = await import("@/server/engage/automations.server");
+        await runDueEngage({ max: 10, budgetMs: 40_000 });
+      } catch (error) {
+        console.error("[engage] automation sweep failed", error);
+      }
       try {
         const { purgeExpiredMemories } = await import("@/server/memory/service.server");
         await purgeExpiredMemories();

@@ -14,6 +14,7 @@
 //   - Only tool/transition summaries leave this loop (ToolLoopTurn.toolCalls);
 //     reasoning is never logged or surfaced.
 import "server-only";
+import { aiProvider } from "./ai-provider.server";
 import { BudgetExceededError, checkBudget } from "@/server/ai/budget";
 import { refreshRoutingOverrides } from "@/server/platform/routing-overrides.server";
 import { recordUsage } from "@/server/ai/metering";
@@ -285,7 +286,7 @@ export async function llmToolLoop(opts: LlmToolLoopOpts): Promise<LlmToolLoopRes
       });
     } catch (error) {
       recordUsage({
-        provider: "openrouter",
+        provider: aiProvider(),
         model,
         route: opts.route,
         status: "error",
@@ -314,7 +315,7 @@ export async function llmToolLoop(opts: LlmToolLoopOpts): Promise<LlmToolLoopRes
     const choice = response?.choices?.[0];
     const stopReason: string = choice?.finish_reason ?? "unknown";
     recordUsage({
-      provider: "openrouter",
+      provider: aiProvider(),
       model: answered,
       route: opts.route,
       ...usageTokens(u),

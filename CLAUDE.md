@@ -136,8 +136,19 @@ Decision record [ADR-0014](docs/adr/0014-canonical-workspaces.md).
 Decision record [ADR-0026](docs/adr/0026-openrouter-only-models.md); full
 table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
 
-- **No Anthropic API.** Text, vision, tool use and images all go through
-  OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
+- **KIE serves everything now (2026-11-25).** With `KIE_API_KEY` set, text,
+  vision and tool calls go to KIE through `src/lib/kie-chat.server.ts` (the
+  gateway's transport; `aiProvider()` in `src/lib/ai-provider.server.ts`) and
+  pictures through `kie-image.server.ts`. The route plans below are unchanged:
+  each OpenRouter id is mapped to KIE's API for that family (Claude Messages,
+  Gemini chat, GPT/DeepSeek Responses), stand-ins in `KIE_STAND_INS` (GPT-6
+  Luna → Gemini 3.8 Flash, GLM → DeepSeek), then a safety net (Gemini 3.8
+  Flash, GPT-6.1 Sol). Pictures go to GPT-6.1 Sol first and are uploaded to
+  KIE's file store (KIE's Gemini can't open base64). Chat streams the finished
+  reply as OpenAI SSE. `AI_PROVIDER=openrouter` / `IMAGE_PROVIDER=openrouter`
+  roll back. Live check: `tests/live/kie-chat.live.ts`.
+- **No Anthropic API.** Without KIE, text, vision, tool use and images all go
+  through OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
   Sonnet / Haiku 5.5 via OpenRouter; `anthropic/claude-opus-5.5` is kept only
   as the premium rollback (`OPUS`).
 - **The model comes from the route label.** `src/server/ai/task-models.ts`
@@ -1803,6 +1814,32 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   stored rows only; Settings → Agents (`AgentsPanel`) shows it above
   `OperationsInbox`, the one approvals list. Never give an agent its own chatbot
   or a way to act without a person's click or an approval.
+
+## Inbox (Engage: comment replies, automations, Train Mox)
+
+Flag `FEATURE_FLAG_ENGAGE_ENABLED` (with `_WS_<id>`). Route `/w/<id>/app/inbox`
+(`inboxPath`), UI `src/components/app/engage/` (tabs Comments / Automations /
+Train Mox), RPC `src/server/fns/engage.ts`, server `src/server/engage/`, pure
+rules `src/lib/engage/`. Meta (Facebook Login for Business, `META_*` env) is
+read only through `meta/graph.server.ts`; POSTs are never retried, an unknown
+outcome is resolved by reading (a reply) or left `unknown` (a DM).
+
+- **Automations are ManyChat-style rules** (`engage_rules`, pure `rules.ts`):
+  the first live rule in the person's order wins (`pickRule`), keywords match
+  through the ported OpenReply matcher (`keywords.ts`, MIT, see
+  `docs/engage/THIRD_PARTY.md`), and a rule only acts on comments written
+  after it went live (`live_since`).
+- **Only fixed words send by themselves** (`sendsByItself`), within
+  `AUTO_SENDS_PER_HOUR` (`engage_take_send`). A reply Mox writes always waits
+  for a person; never let a model's text go out without a click.
+- Each comment is matched once (`rules_checked` compare-and-set). Automations
+  run from the **existing** run-schedules hook (`runDueEngage`, ~every 3 min
+  per brand with a live rule, not for brands without a plan); no cron job.
+- **Train Mox:** `engage_knowledge` answers are facts drafts may use (and the
+  figure check accepts); `engage_examples` (a person's sent replies, newest 50)
+  are voice only. Both reach the prompt only in `reply.server.ts`, capped.
+- Private replies (DM) need `instagram_manage_messages` / `pages_messaging`;
+  without them the DM is `skipped` with a note and the public reply still goes.
 
 ## MCP server (AI assistants)
 

@@ -14,7 +14,8 @@ try {
 }
 
 const SITE = process.env.BRAND_EXTRACT_LIVE_URL || "https://stripe.com";
-const describeLive = process.env.OPENROUTER_API_KEY ? describe : describe.skip;
+const describeLive =
+  process.env.OPENROUTER_API_KEY || process.env.KIE_API_KEY ? describe : describe.skip;
 
 describeLive("brand extraction (live)", () => {
   it("streams real discoveries, in pipeline order, before the result", async () => {
