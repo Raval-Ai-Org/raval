@@ -3,12 +3,15 @@
 // The target was checked as the brand's own https page when the link was made.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isLinkBot } from "@/lib/links/tracked";
+import { getAppUrl } from "@/server/env";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const home = new URL("/", request.url);
+  // The public site, never request.url: behind the host's proxy that is the
+  // server's own address (https://0.0.0.0:8080), not mellox.ai.
+  const home = `${getAppUrl()}/`;
   if (!/^[A-Za-z0-9]{6,16}$/.test(slug)) return Response.redirect(home, 302);
   const bot = isLinkBot(request.headers.get("user-agent"));
   const { data } = await (
