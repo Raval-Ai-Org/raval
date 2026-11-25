@@ -164,6 +164,55 @@ function fetchHtml(url: string, timeoutMs = 8000): Promise<string> {
   });
 }
 
+/** The page as the Internet Archive last saw it (`id_` = the original HTML, links untouched). */
+export function archiveUrl(url: string): string {
+  return `https://web.archive.org/web/2id_/${url}`;
+}
+
+/** A page whose text is only a bot wall or challenge is no page at all. */
+export function looksLikeBlockPage(html: string): boolean {
+  if (!html) return true;
+  if (html.length > 20_000) return false;
+  return /access denied|attention required|just a moment|verify you are human|captcha|request unsuccessful|incapsula|you have been blocked|enable javascript and cookies/i.test(
+    html,
+  );
+}
+
+export type PageRead = { html: string; via: "direct" | "archive" | "none" };
+
+/**
+ * Read one page of the brand's site through the SSRF-guarded fetcher, always
+ * as MelloxBrandBot: directly, then (when `archive` is set) the Internet
+ * Archive's public copy. A site that refuses automated readers (dove.com
+ * answers 403) is never worked around; its public archived copy is read instead.
+ */
+export async function readSitePage(
+  url: string,
+  opts: { timeoutMs?: number; archive?: boolean; skipDirect?: boolean } = {},
+  fetchText: typeof fetchPublicText = fetchPublicText,
+): Promise<PageRead> {
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const base = { timeoutMs, maxBytes: MAX_PAGE_BYTES, requireTextContent: true };
+  // A short page that only looked like a wall is still better than nothing.
+  let fallback: PageRead = { html: "", via: "none" };
+  if (!opts.skipDirect) {
+    const direct = await fetchText(url, { ...base, headers: { "User-Agent": USER_AGENT } });
+    if (!looksLikeBlockPage(direct)) return { html: direct, via: "direct" };
+    if (direct) fallback = { html: direct, via: "direct" };
+  }
+  if (opts.archive) {
+    const archived = await fetchText(archiveUrl(url), {
+      ...base,
+      // The archive redirects to its closest snapshot and can be slow.
+      timeoutMs: Math.max(timeoutMs, 15_000),
+      maxRedirects: 4,
+      headers: { "User-Agent": USER_AGENT },
+    });
+    if (!looksLikeBlockPage(archived)) return { html: archived, via: "archive" };
+  }
+  return fallback;
+}
+
 const CANDIDATE_PATHS = [
   "/about",
   "/about-us",
@@ -270,8 +319,19 @@ export async function runBrandExtraction(
     progress("fetch_home", `Fetching ${safeUrl.hostname}`, 5);
 
     // 1. Fetch homepage
-    const homeHtml = await fetchHtml(safeUrl.toString(), 10000);
+    const home = await readSitePage(safeUrl.toString(), { timeoutMs: 10000, archive: true });
+    const homeHtml = home.html;
+    // The site refuses automated readers: its other pages come from the archive
+    // too. With no homepage at all, they are tried directly and then archived.
+    const blocked = home.via === "archive";
+    const homeMissing = home.via === "none";
     if (!homeHtml) progress("fetch_home", "Homepage returned no content — continuing anyway", 10);
+    else if (home.via === "archive")
+      progress(
+        "fetch_home",
+        "Your site blocks automated readers — using its latest public copy",
+        12,
+      );
     else progress("fetch_home", `Loaded homepage (${Math.round(homeHtml.length / 1024)} KB)`, 12);
 
     // Homepage-only identity signals are resolved up front so the client can
@@ -365,7 +425,18 @@ export async function runBrandExtraction(
         : "No sub-pages found",
       32,
     );
-    const subHtmls = await Promise.all(subUrls.map((u) => fetchHtml(u, 7000)));
+    const subHtmls = await Promise.all(
+      subUrls.map((u, i) =>
+        // Only a few archived pages: the archive is slow and the site already said no.
+        blocked && i >= 4
+          ? Promise.resolve("")
+          : readSitePage(u, {
+              timeoutMs: 7000,
+              archive: (blocked || homeMissing) && i < 4,
+              skipDirect: blocked,
+            }).then((r) => r.html),
+      ),
+    );
     const crawledCount = subHtmls.filter(Boolean).length;
     progress(
       "crawl",
@@ -380,7 +451,8 @@ export async function runBrandExtraction(
         type: "error",
         stage: "website_extraction",
         code: "website_unreadable",
-        error: "Website could not be read. Check the URL and try again.",
+        error:
+          "We couldn't open this website: it blocks automated readers or didn't answer. Check the address, try your main domain, or choose \"I don't have a website\" to set up your brand by hand.",
       });
       return;
     }
