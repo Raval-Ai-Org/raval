@@ -58,6 +58,9 @@ export type RateLimitTier =
   | "competitor-profile"
   | "community-refresh"
   | "community-reply"
+  | "engage-sync"
+  | "engage-reply"
+  | "engage-send"
   | "analytics"
   | "analytics-sync"
   | "analytics-insights"
@@ -172,6 +175,9 @@ const TIERS: Record<RateLimitTier, TierConfig> = {
   // 6 h by the job); a reply draft is one model call.
   "community-refresh": { limit: 4, windowSeconds: 3600, label: "community refresh" },
   "community-reply": { limit: 30, windowSeconds: 3600, label: "reply draft" },
+  "engage-sync": { limit: 12, windowSeconds: 3600, label: "comment refresh" },
+  "engage-reply": { limit: 60, windowSeconds: 3600, label: "comment reply draft" },
+  "engage-send": { limit: 60, windowSeconds: 3600, label: "comment reply" },
   // Analytics reports: database reads, plus an occasional Google Data API call
   // to fill the GA4 users cache for a custom range.
   analytics: { limit: 60, windowSeconds: 60, label: "analytics report" },

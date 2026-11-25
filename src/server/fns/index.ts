@@ -13,6 +13,7 @@ import * as canva from "./canva";
 import * as chatActions from "./chat-actions";
 import * as coach from "./coach";
 import * as community from "./community";
+import * as engage from "./engage";
 import * as competitorIntel from "./competitor-intel";
 import * as competitors from "./competitors";
 import * as competitorWatch from "./competitor-watch";
@@ -62,6 +63,7 @@ const MODULES: Record<string, Record<string, unknown>> = {
   "chat-actions": chatActions,
   coach,
   community,
+  engage,
   "competitor-intel": competitorIntel,
   competitors,
   "competitor-watch": competitorWatch,

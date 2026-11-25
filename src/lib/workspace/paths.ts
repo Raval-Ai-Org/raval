@@ -107,6 +107,15 @@ export function communitiesPath(workspaceId: string): string {
 }
 
 /**
+ * Inbox: comments on the brand's own Instagram and Facebook posts, answered
+ * by a person (Engage).
+ *   inboxPath(id) → /w/<id>/app/inbox
+ */
+export function inboxPath(workspaceId: string): string {
+  return workspacePath(workspaceId, "inbox");
+}
+
+/**
  * Re-anchor an in-app path ("/app?settings=connections", "/app/chat/x") inside
  * a workspace. Already-canonical and non-app paths are returned unchanged.
  */

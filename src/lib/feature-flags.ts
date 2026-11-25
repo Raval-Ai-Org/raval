@@ -478,6 +478,20 @@ export function isInspoLinksEnabled(workspaceId?: string): boolean {
  * overrides it for one workspace. Off: the view is hidden, RPCs answer 404,
  * the worker skips the workspace and chat/MCP tools answer nothing.
  */
+/**
+ * Engage (Instagram and Facebook comment replies, a person sends each one).
+ * On unless `false`; per workspace `FEATURE_FLAG_ENGAGE_ENABLED_WS_<id>`.
+ */
+export function isEngageEnabled(workspaceId?: string): boolean {
+  if (workspaceId) {
+    const perWs = (process.env[`FEATURE_FLAG_ENGAGE_ENABLED_WS_${workspaceId}`] ?? "")
+      .trim()
+      .toLowerCase();
+    if (perWs) return !isFalsy(perWs);
+  }
+  return !isFalsy((process.env.FEATURE_FLAG_ENGAGE_ENABLED ?? "").trim().toLowerCase());
+}
+
 export function isCommunityEnabled(workspaceId?: string): boolean {
   if (workspaceId) {
     const perWs = (process.env[`FEATURE_FLAG_COMMUNITY_ENABLED_WS_${workspaceId}`] ?? "")

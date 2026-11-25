@@ -11,6 +11,7 @@ import { addAppEventListener, emitAppEvent, removeAppEventListener } from "@/lib
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { inboxPath } from "@/lib/workspace/paths";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { isPlatformAppIconId, PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
 import { dsGhostBtn, dsPrimaryBtn } from "@/components/app/surface/buttons";
@@ -246,6 +247,23 @@ export function SocialAccountsSection({ variant, onConnectedChange }: Props) {
             onConnect={(platform) => void connect(platform)}
             onDisconnect={setConfirmDisconnect}
           />
+        )}
+        {workspaceId && (
+          <a
+            href={inboxPath(workspaceId)}
+            className="ds-tile mt-4 flex items-center gap-3 px-5 py-4 text-[13px] hover:bg-muted/40"
+          >
+            <span className="flex -space-x-2">
+              <PlatformAppIcon platform="instagram" size={28} />
+              <PlatformAppIcon platform="facebook" size={28} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium text-foreground">Reply to comments</span>
+              <span className="block text-muted-foreground">
+                Comments on your Instagram and Facebook posts, with replies Mox drafts and you send.
+              </span>
+            </span>
+          </a>
         )}
         <DisconnectDialog
           open={confirmDisconnect !== null}

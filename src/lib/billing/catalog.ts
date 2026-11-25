@@ -914,6 +914,14 @@ export const CREDIT_ACTIONS = {
     expectedCostUsd: 0.015,
     routes: ["community.reply"],
   },
+  engage_reply: {
+    credits: 0,
+    label: "Comment reply draft",
+    unit: "per draft",
+    feature: "publishing",
+    expectedCostUsd: 0.004,
+    routes: ["engage.reply"],
+  },
   insights_refresh: {
     credits: 0,
     label: "Analytics insights",

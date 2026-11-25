@@ -294,6 +294,7 @@ const REGISTRY: Record<string, TaskPlan> = {
   // Community Intelligence: label and summarise supplied threads; draft one reply.
   "community.classify": tier(LABELLER, "low", { maxTokens: 4_000 }),
   "community.reply": tier(WRITER, "low", { maxTokens: 2_000 }),
+  "engage.reply": tier(WRITER, "low", { maxTokens: 1_000 }),
   // Autopilot: a week's plan over fixed slots, and a relevance read of
   // signals that were already collected.
   "autopilot.plan": tier(WRITER, "medium"),
