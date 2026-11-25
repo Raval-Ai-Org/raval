@@ -46,6 +46,21 @@ export type EngageComment = {
   dmStatus: EngageDmStatus;
   dmText: string | null;
   dmError: string | null;
+  /** What auto-reply did: answered, waits for a team answer, needs a person, skipped. */
+  moxState: EngageMoxState;
+  moxNote: string | null;
+  questionId: string | null;
+};
+
+export type EngageMoxState = "none" | "replied" | "waiting_info" | "needs_person" | "skipped";
+
+/** Something Mox needed to know and didn't, asked once for every comment like it. */
+export type EngageQuestion = {
+  id: string;
+  question: string;
+  askedCount: number;
+  exampleComment: string | null;
+  createdAt: string;
 };
 
 export type EngageHome = {
@@ -62,6 +77,12 @@ export type EngageHome = {
   comments: EngageComment[];
   counts: { waiting: number; replied: number; autoReplied: number };
   automationsOn: boolean;
+  /** Mox answers new comments by itself. */
+  autoReply: boolean;
+  /** The team's own rules for every reply. */
+  guidelines: string;
+  /** What Mox is waiting to learn from the team. */
+  questions: EngageQuestion[];
   rules: EngageRule[];
   answers: EngageAnswer[];
   examples: EngageExample[];
@@ -79,7 +100,15 @@ export type EngagePost = {
 
 export type EngageDraft = { text: string; removed: number };
 
-export type EngageSyncResult = { pages: number; added: number; errors: number; automated: number };
+export type EngageSyncResult = {
+  pages: number;
+  added: number;
+  errors: number;
+  /** Replies sent by themselves this read (quick replies and Mox). */
+  automated: number;
+  /** New questions Mox asked the team. */
+  asked: number;
+};
 
 export const PLATFORM_LABEL: Record<EngagePlatform, string> = {
   instagram: "Instagram",

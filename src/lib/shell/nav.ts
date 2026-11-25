@@ -19,13 +19,14 @@ export type NavIcon =
   | "analytics"
   | "visibility"
   | "communities"
+  | "inbox"
   | "experiments";
 
 /** Where a row goes. Routes are workspace pages; events open a window. */
 export type NavTarget =
   | {
       kind: "route";
-      place: "home" | "chat" | "inspo" | "campaigns" | "communities" | "experiments";
+      place: "home" | "chat" | "inspo" | "campaigns" | "inbox" | "communities" | "experiments";
     }
   | { kind: "brain" }
   | { kind: "analytics" }
@@ -135,6 +136,15 @@ export const NAV_GROUPS: NavGroup[] = [
         badge: "New",
       },
       {
+        id: "inbox",
+        label: "Inbox",
+        icon: "inbox",
+        target: { kind: "route", place: "inbox" },
+        tour: "inbox",
+        badge: "New",
+        rail: true,
+      },
+      {
         id: "analytics",
         label: "Analytics",
         icon: "analytics",
@@ -181,7 +191,7 @@ export function activeNavId(path: string, homePath: string, chatView: boolean): 
   const home = homePath.replace(/\/$/, "");
   if (p === home) return chatView ? "chat" : "home";
   if (p.startsWith(`${home}/chat`)) return "chat";
-  for (const id of ["brain", "inspo", "campaigns", "communities", "experiments"]) {
+  for (const id of ["brain", "inspo", "campaigns", "inbox", "communities", "experiments"]) {
     if (p.startsWith(`${home}/${id}`)) return id;
   }
   return null;

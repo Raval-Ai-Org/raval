@@ -29,8 +29,26 @@ const GENERIC = new Set([
   "shop",
   "products",
 ]);
-const DROP = { "hardware-building-supplies": ["plumbing", "electrical"] };
-const EXTRA = { "real-estate-agent": ["real estate"], cafe: ["tea stall", "chai"] };
+const DROP = {
+  "hardware-building-supplies": ["plumbing", "electrical"],
+  // A skincare or beauty brand says "personal care" too; it named them a detergent maker.
+  "household-fmcg": ["personal care"],
+};
+// Words real brands' industry lines use (checked against live workspaces,
+// 2026-11-25). Listed first so the 14-term cut never drops them.
+const EXTRA = {
+  "real-estate-agent": ["real estate"],
+  cafe: ["tea stall", "chai"],
+  "game-studio": ["game development", "game dev", "games studio", "mobile games", "playable ads"],
+  "education-tutoring": [
+    "higher education",
+    "university",
+    "college",
+    "business school",
+    "education",
+  ],
+  skincare: ["clean skincare", "acne"],
+};
 
 const sectors = [];
 for (const name of FILES) {
@@ -51,7 +69,9 @@ for (const name of FILES) {
       label: s.label,
       kind: s.kind,
       parent: s.parent,
-      match: [...(s.match ?? []).map((x) => String(x).toLowerCase()), ...(EXTRA[s.id] ?? [])]
+      match: [
+        ...new Set([...(EXTRA[s.id] ?? []), ...(s.match ?? []).map((x) => String(x).toLowerCase())]),
+      ]
         .filter((t) => !GENERIC.has(t) && !(DROP[s.id] ?? []).includes(t))
         .slice(0, 14),
       show: s.show,

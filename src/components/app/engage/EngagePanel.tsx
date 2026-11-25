@@ -1,18 +1,16 @@
 "use client";
-// EngagePanel — Inbox: comments on the brand's own Instagram and Facebook
-// posts, in three tabs (SurfaceLayout):
-//   * Comments: every comment waiting, with what an automation did to it;
-//   * Automations: ManyChat-style "when someone comments → reply / DM";
-//   * Train Mox: the answers Mox may use, and what it learned from replies.
+// EngagePanel — the Inbox: comments on the brand's own Instagram and Facebook
+// posts on one page (InboxScreen): the comments with editable replies, what
+// people ask (answers that train Mox) and quick replies.
 // Query keys carry the workspace id, so a workspace switch drops them.
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { useConnectWindow } from "@/components/app/connectors/useConnectWindow";
-import { SurfaceLayout, SurfacePage } from "@/components/app/surface/SurfaceLayout";
+import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
 import { EmptyState, ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Brain, Inbox, Zap } from "@/components/icons";
+import { Inbox } from "@/components/icons";
 import { toast } from "@/lib/toast";
 import {
   disconnectMeta,
@@ -22,21 +20,16 @@ import {
 } from "@/lib/engage.functions";
 import { cn } from "@/lib/utils";
 import { dsPrimaryBtn } from "@/components/app/surface/buttons";
-import { CommentsTab } from "./CommentsTab";
-import { AutomationsTab } from "./AutomationsTab";
-import { TrainTab } from "./TrainTab";
+import { InboxScreen } from "./InboxScreen";
 import { engageKeys, errorText } from "./engage-shared";
 
 export { engageKeys } from "./engage-shared";
-
-type Tab = "comments" | "automations" | "train";
 
 export function EngagePanel({ workspaceId }: { workspaceId: string }) {
   const client = useQueryClient();
   const role = useOptionalWorkspaceRole();
   const canEdit = role !== "viewer";
   const key = engageKeys.home(workspaceId);
-  const [tab, setTab] = useState<Tab>("comments");
   const home = useQuery({
     queryKey: key,
     queryFn: () => getEngageHome({ data: { workspaceId } }),
@@ -54,7 +47,8 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
         toast.success(
           [
             r.added ? `${r.added} new comment${r.added === 1 ? "" : "s"}` : "No new comments",
-            r.automated ? `${r.automated} answered by your automations` : "",
+            r.automated ? `${r.automated} answered by Mox` : "",
+            r.asked ? `Mox has ${r.asked} question${r.asked === 1 ? "" : "s"} for you` : "",
           ]
             .filter(Boolean)
             .join(" · "),
@@ -126,7 +120,7 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
           title="Answer every comment, even while you sleep"
           description={
             data.configured
-              ? "Connect your Instagram professional account and Facebook Page. Set up automations that reply and send links by DM, teach Mox your answers, and approve the rest in one place."
+              ? "Connect your Instagram professional account and Facebook Page. Teach Mox what people ask, let quick replies answer the easy ones, and send the rest from one place."
               : "Instagram and Facebook replies aren't set up on this server yet."
           }
           action={
@@ -145,54 +139,19 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
       </SurfacePage>
     );
 
-  const liveRules = data.rules.filter((r) => r.status === "live").length;
   return (
-    <SurfaceLayout<Tab>
-      label="Inbox sections"
-      value={tab}
-      onChange={setTab}
-      items={[
-        { id: "comments", label: "Comments", icon: Inbox, count: data.counts.waiting || undefined },
-        {
-          id: "automations",
-          label: "Automations",
-          icon: Zap,
-          count: liveRules || undefined,
-        },
-        { id: "train", label: "Train Mox", icon: Brain },
-      ]}
-    >
-      {tab === "comments" && (
-        <CommentsTab
-          workspaceId={workspaceId}
-          data={data}
-          canEdit={canEdit}
-          syncing={sync.isPending}
-          waiting={metaWindow.waiting}
-          onSync={() => sync.mutate()}
-          onConnect={connect}
-          onDisconnect={() => disconnect.mutate()}
-          onChanged={() => void reload()}
-          onOpenAutomations={() => setTab("automations")}
-        />
-      )}
-      {tab === "automations" && (
-        <AutomationsTab
-          workspaceId={workspaceId}
-          data={data}
-          canEdit={canEdit}
-          onChanged={() => void reload()}
-          onReconnect={connect}
-        />
-      )}
-      {tab === "train" && (
-        <TrainTab
-          workspaceId={workspaceId}
-          data={data}
-          canEdit={canEdit}
-          onChanged={() => void reload()}
-        />
-      )}
-    </SurfaceLayout>
+    <SurfacePage width="wide">
+      <InboxScreen
+        workspaceId={workspaceId}
+        data={data}
+        canEdit={canEdit}
+        syncing={sync.isPending}
+        waiting={metaWindow.waiting}
+        onSync={() => sync.mutate()}
+        onConnect={connect}
+        onDisconnect={() => disconnect.mutate()}
+        onChanged={() => void reload()}
+      />
+    </SurfacePage>
   );
 }

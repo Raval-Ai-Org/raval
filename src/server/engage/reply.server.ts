@@ -1,10 +1,10 @@
-// reply.server.ts — Mox's draft reply to one comment (route engage.reply).
-// Called inside runMetered by the server fn, after the role check. Brand
-// facts, memory and voice come from the verified workspace id; the comment
-// and the post are untrusted data. Nothing is sent: a person reads the draft,
-// changes it and presses Send.
+// reply.server.ts — Mox's reply to one comment: a draft a person asks for
+// (route engage.reply) or the auto-reply decision (route engage.auto). Brand
+// facts, the team's rules, answers, memory and voice come from the verified
+// workspace id; the comment and the post are untrusted data.
 import "server-only";
-import { llmText } from "@/lib/ai-gateway.server";
+import { llmJson, llmText } from "@/lib/ai-gateway.server";
+import { parseDecision } from "@/lib/engage/auto-reply";
 import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untrusted";
 import { memoryBlockFor } from "@/server/memory/context.server";
 import { lookTextFor } from "@/server/brand-look/resolve.server";
@@ -79,19 +79,34 @@ Rules:
 - Reply with the text of the reply only.
 ${UNTRUSTED_DATA_RULE}`;
 
-export async function draftEngageReply(args: {
+type ReplyArgs = {
   workspaceId: string;
   platform: EngagePlatform;
   comment: { body: string; authorName: string | null; postCaption: string | null };
+  /** What the team wants in this reply (a person's draft request). */
   note?: string;
   /** The matched automation's instructions, written by the team. */
   guidance?: string | null;
-}): Promise<EngageDraft & { brandDomain: string | null }> {
-  const [brand, memory, voice, training] = await Promise.all([
+};
+
+/** The team's standing instructions for every reply (Inbox or chat). */
+async function guidelinesFor(workspaceId: string): Promise<string> {
+  const { data } = await db
+    .from("engage_settings")
+    .select("guidelines")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  return ((data as { guidelines?: string } | null)?.guidelines ?? "").slice(0, 3_000);
+}
+
+/** Everything Mox knows for one comment, read by the verified workspace id. */
+async function replyContext(args: ReplyArgs, route: string) {
+  const [brand, memory, voice, training, guidelines] = await Promise.all([
     loadCommunityBrand(args.workspaceId),
     memoryBlockFor(args.workspaceId, "text").catch(() => ""),
     lookTextFor(args.workspaceId, "comment-reply"),
     trainingFor(args.workspaceId).catch(() => ({ answers: [], examples: [] })),
+    guidelinesFor(args.workspaceId).catch(() => ""),
   ]);
   const answers = answersBlock(training.answers);
   const examples = examplesBlock(training.examples, args.platform);
@@ -103,39 +118,97 @@ export async function draftEngageReply(args: {
     answers &&
       `TEAM ANSWERS (questions people ask and the team's own answers; facts you may use):\n${answers}`,
     examples && `PAST REPLIES THE TEAM SENT (voice only):\n${examples}`,
+    guidelines && `THE TEAM'S RULES FOR EVERY REPLY (their own words; follow them):\n${guidelines}`,
     args.guidance &&
       `THIS AUTOMATION'S INSTRUCTIONS (from the team):\n${args.guidance.slice(0, 1_000)}`,
     `WHERE: a comment on the brand's ${PLATFORM_LABEL[args.platform]} post. Aim for under ${DRAFT_TARGET_CHARS[args.platform]} characters.`,
     args.comment.postCaption &&
       `THE BRAND'S POST:\n${wrapUntrusted("post-caption", args.comment.postCaption, {
         maxChars: 1_500,
-        route: "engage.reply",
+        route,
       })}`,
     `THE COMMENT${args.comment.authorName ? ` (from ${args.comment.authorName.slice(0, 60)})` : ""}:\n${wrapUntrusted(
       "social-comment",
       args.comment.body,
-      { maxChars: 2_000, route: "engage.reply" },
+      { maxChars: 2_000, route },
     )}`,
     args.note && `WHAT THE TEAM WANTS IN THIS REPLY (their own words):\n${args.note.slice(0, 400)}`,
   ]
     .filter(Boolean)
     .join("\n\n");
+  // Figures the comment or the post already state may be repeated back.
+  const facts = [
+    brand.facts,
+    answersFacts(training.answers),
+    guidelines,
+    args.guidance ?? "",
+    args.comment.body,
+    args.comment.postCaption ?? "",
+    args.note ?? "",
+  ].join("\n");
+  return { brand, user, facts };
+}
 
+export async function draftEngageReply(
+  args: ReplyArgs,
+): Promise<EngageDraft & { brandDomain: string | null }> {
+  const ctx = await replyContext(args, "engage.reply");
   const out = await llmText({
     route: "engage.reply",
     system: SYSTEM,
-    user,
+    user: ctx.user,
     maxTokens: 1_000,
     timeoutMs: 45_000,
     retries: 1,
   });
   const finished = finishEngageReply(out.text, {
     platform: args.platform,
-    brandDomain: brand.domain,
-    // Figures the comment or the post already state may be repeated back.
-    facts: `${brand.facts}\n${answersFacts(training.answers)}\n${args.guidance ?? ""}\n${args.comment.body}\n${args.comment.postCaption ?? ""}\n${args.note ?? ""}`,
+    brandDomain: ctx.brand.domain,
+    facts: ctx.facts,
   });
-  return { ...finished, brandDomain: brand.domain };
+  return { ...finished, brandDomain: ctx.brand.domain };
+}
+
+const DECIDE_SYSTEM = `You run the brand's comment replies on its own social media posts, by yourself. For each comment you decide what to do, and a reply is posted publicly without a person checking it, so be careful.
+Choose one action:
+- "reply": you can answer well with what you know (BRAND FACTS, TEAM ANSWERS, THE TEAM'S RULES), or the comment needs no facts (praise, thanks, an emoji, a friend tagged, a hello). Write the reply.
+- "ask": the comment asks something specific only the brand can answer (a price, a size, stock, a date, delivery to a place, opening hours, a policy) and the answer is NOT in what you know. Do not guess and do not reply. Write the question for the team, short and general so the answer can be reused ("What is the price of the cardamom cold brew?").
+- "person": a complaint, an angry customer, a refund or order problem, health, legal or safety, anything private, or anything you are unsure about.
+- "skip": spam, scams, bots, or nothing a reply would fit.
+Reply rules:
+- Warm and direct, like the person who runs the account. One or two short sentences. No hashtags. At most one emoji, and only if the brand's voice uses them.
+- Never invent prices, dates, numbers, stock, results or promises. Only facts from BRAND FACTS, TEAM ANSWERS and THE TEAM'S RULES.
+- PAST REPLIES only show the voice; never copy their facts to a different question.
+- Never ask for phone, email, address or payment in public; invite a private message instead.
+- No links except the brand's own website, and only if it truly helps.
+- Reply in the language and script the comment is written in.
+Answer with JSON only: {"action":"reply"|"ask"|"person"|"skip","reply":string|null,"question":string|null,"why":string}. "why" is a few plain words for the team.
+${UNTRUSTED_DATA_RULE}`;
+
+/**
+ * Auto-reply (route engage.auto): Mox decides and, for a reply, writes it.
+ * What happens next is pure (`autoOutcome`, src/lib/engage/auto-reply.ts).
+ */
+export async function decideEngageReply(args: ReplyArgs) {
+  const ctx = await replyContext(args, "engage.auto");
+  const raw = await llmJson<unknown>({
+    route: "engage.auto",
+    fallback: { action: "person", why: "Mox couldn't decide." },
+    system: DECIDE_SYSTEM,
+    user: ctx.user,
+    maxTokens: 1_200,
+    timeoutMs: 45_000,
+    retries: 1,
+  });
+  const decision = parseDecision(raw);
+  const finished = decision.reply
+    ? finishEngageReply(decision.reply, {
+        platform: args.platform,
+        brandDomain: ctx.brand.domain,
+        facts: ctx.facts,
+      })
+    : null;
+  return { decision, finished, brandDomain: ctx.brand.domain };
 }
 
 /** The brand's own site, for the send check. */

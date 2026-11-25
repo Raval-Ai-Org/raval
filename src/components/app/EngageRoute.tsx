@@ -28,11 +28,11 @@ function Inner() {
       title="Inbox"
       Icon={Inbox}
       size="2xl"
-      bodyClassName="overflow-hidden"
+      bodyClassName="overflow-y-auto"
     >
       <Suspense fallback={<PageLoader />}>
         {workspaceId ? (
-          <div className="ds-enter h-full min-h-0">
+          <div className="ds-enter">
             {/* Remount on switch, so no state from one brand survives into another. */}
             <EngagePanel key={workspaceId} workspaceId={workspaceId} />
           </div>

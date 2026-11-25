@@ -8,10 +8,11 @@
 //         sends its private message) within the hourly cap;
 //       - every other match waits for a person: fixed words become the
 //         draft, a Mox rule keeps its guidance for "Draft with Mox";
-//       - a reply Mox writes is never sent without a person (`sendsByItself`).
+//       - a quick reply set to "Mox writes" waits for a person
+//         (`sendsByItself`); Mox's own auto-reply is auto-reply.server.ts.
 //   * `runDueEngage` is called by the existing every-minute run-schedules
-//     hook: a brand with automations on and a live rule is read about every
-//     three minutes. No cron job of its own. Graph reads cost nothing.
+//     hook: a brand with auto-reply on, or automations on and a live rule, is
+//     read about every three minutes (then Mox answers, auto-reply.server.ts). No cron job of its own. Graph reads cost nothing.
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -211,7 +212,7 @@ export async function saveAnswer(args: {
   id?: string;
   question: string;
   answer: string;
-}) {
+}): Promise<string> {
   const tidy = tidyAnswer(args.question, args.answer);
   if (!tidy.ok) throw new HttpError(400, tidy.reason);
   if (args.id) {
@@ -222,7 +223,8 @@ export async function saveAnswer(args: {
       .eq("id", args.id)
       .select("id");
     if (!data?.length) throw new HttpError(404, "That answer isn't here any more.");
-    return;
+    await retryAfterAnswer(args.workspaceId);
+    return args.id;
   }
   const { count } = await db
     .from("engage_knowledge")
@@ -230,13 +232,25 @@ export async function saveAnswer(args: {
     .eq("workspace_id", args.workspaceId);
   if ((count ?? 0) >= MAX_ANSWERS)
     throw new HttpError(409, `Mox can keep up to ${MAX_ANSWERS} answers. Remove one first.`);
-  const { error } = await db.from("engage_knowledge").insert({
-    workspace_id: args.workspaceId,
-    question: tidy.question,
-    answer: tidy.answer,
-    created_by: args.userId,
-  });
-  if (error) throw new HttpError(500, "Couldn't save the answer.");
+  const { data: row, error } = await db
+    .from("engage_knowledge")
+    .insert({
+      workspace_id: args.workspaceId,
+      question: tidy.question,
+      answer: tidy.answer,
+      created_by: args.userId,
+    })
+    .select("id")
+    .single();
+  if (error || !row) throw new HttpError(500, "Couldn't save the answer.");
+  await retryAfterAnswer(args.workspaceId);
+  return (row as { id: string }).id;
+}
+
+/** A new answer may be what a waiting comment needed: Mox reads them again. */
+async function retryAfterAnswer(workspaceId: string) {
+  const { retryWaiting } = await import("./auto-reply.server");
+  await retryWaiting(workspaceId).catch(() => undefined);
 }
 
 export async function deleteAnswer(workspaceId: string, id: string) {
@@ -448,12 +462,16 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
   const now = new Date().toISOString();
   const { data } = await db
     .from("engage_settings")
-    .select("workspace_id,next_sync_at")
-    .eq("automations_on", true)
+    .select("workspace_id,next_sync_at,auto_reply")
+    .or("automations_on.eq.true,auto_reply.eq.true")
     .lte("next_sync_at", now)
     .order("next_sync_at")
     .limit(opts.max ?? 10);
-  const due = (data ?? []) as { workspace_id: string; next_sync_at: string }[];
+  const due = (data ?? []) as {
+    workspace_id: string;
+    next_sync_at: string;
+    auto_reply: boolean;
+  }[];
   const { isEngageEnabled } = await import("@/lib/feature-flags");
   const { loadBackgroundAccount } = await import("@/server/background/account.server");
   let ran = 0;
@@ -474,7 +492,7 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
         .select("id", { count: "exact", head: true })
         .eq("workspace_id", row.workspace_id)
         .eq("status", "live");
-      if (!count) {
+      if (!count && !row.auto_reply) {
         // Nothing to run: look again in an hour.
         await db
           .from("engage_settings")

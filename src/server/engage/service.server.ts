@@ -19,11 +19,14 @@ import type {
   EngageDmStatus,
   EngageExample,
   EngageHome,
+  EngageMoxState,
   EngagePlatform,
+  EngageQuestion,
   EngageRule,
   EngageStatus,
   EngageSyncResult,
 } from "@/lib/engage/contracts";
+import { MAX_OPEN_QUESTIONS } from "@/lib/engage/auto-reply";
 import { sendableReply } from "@/lib/engage/reply";
 import { KEEP_EXAMPLES, worthKeeping } from "@/lib/engage/training";
 import {
@@ -82,10 +85,13 @@ export type CommentDbRow = {
   dm_status: EngageDmStatus;
   dm_text: string | null;
   dm_error: string | null;
+  mox_state: EngageMoxState;
+  mox_note: string | null;
+  question_id: string | null;
 };
 
 export const COMMENT_COLUMNS =
-  "id,page_row_id,platform,external_id,post_id,author_name,body,commented_at,post_caption,post_permalink,status,draft,reply_text,replied_at,last_error,rule_id,matched_keyword,auto_sent,dm_status,dm_text,dm_error";
+  "id,page_row_id,platform,external_id,post_id,author_name,body,commented_at,post_caption,post_permalink,status,draft,reply_text,replied_at,last_error,rule_id,matched_keyword,auto_sent,dm_status,dm_text,dm_error,mox_state,mox_note,question_id";
 
 export const PAGE_COLUMNS =
   "id,workspace_id,page_id,page_name,ig_user_id,ig_username,synced_at,last_error";
@@ -184,7 +190,7 @@ export async function getEngageHome(
   client: SupabaseClient,
   workspaceId: string,
 ): Promise<EngageHome> {
-  const [conn, pages, comments, replied, auto, rules, answers, examples, settings] =
+  const [conn, pages, comments, replied, auto, rules, answers, examples, settings, questions] =
     await Promise.all([
       client
         .from("workspace_connections")
@@ -235,10 +241,23 @@ export async function getEngageHome(
         .limit(KEEP_EXAMPLES),
       client
         .from("engage_settings")
-        .select("automations_on")
+        .select("automations_on,auto_reply,guidelines")
         .eq("workspace_id", workspaceId)
         .maybeSingle(),
+      client
+        .from("engage_questions")
+        .select("id,question,asked_count,example_comment,created_at")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "open")
+        .order("asked_count", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(MAX_OPEN_QUESTIONS),
     ]);
+  const set = settings.data as {
+    automations_on: boolean;
+    auto_reply: boolean;
+    guidelines: string;
+  } | null;
   const pageRows = (pages.data ?? []) as PageRow[];
   const byId = new Map(pageRows.map((p) => [p.id, p]));
   const ruleRows = ((rules.data ?? []) as RuleDbRow[]).map(ruleView);
@@ -269,6 +288,9 @@ export async function getEngageHome(
       dmStatus: c.dm_status,
       dmText: c.dm_text,
       dmError: c.dm_error,
+      moxState: c.mox_state ?? "none",
+      moxNote: c.mox_note ?? null,
+      questionId: c.question_id ?? null,
     };
   });
   const c = conn.data as {
@@ -302,7 +324,24 @@ export async function getEngageHome(
       replied: replied.count ?? 0,
       autoReplied: auto.count ?? 0,
     },
-    automationsOn: (settings.data as { automations_on: boolean } | null)?.automations_on ?? true,
+    automationsOn: set?.automations_on ?? true,
+    autoReply: set?.auto_reply ?? true,
+    guidelines: set?.guidelines ?? "",
+    questions: (
+      (questions.data ?? []) as {
+        id: string;
+        question: string;
+        asked_count: number;
+        example_comment: string | null;
+        created_at: string;
+      }[]
+    ).map((q): EngageQuestion => ({
+      id: q.id,
+      question: q.question,
+      askedCount: q.asked_count,
+      exampleComment: q.example_comment,
+      createdAt: q.created_at,
+    })),
     rules: ruleRows,
     answers: (
       (answers.data ?? []) as { id: string; question: string; answer: string; updated_at: string }[]
@@ -454,6 +493,13 @@ export async function completeMetaOAuth(args: { state: string; code: string }) {
     entity: `workspace_connections:${connectionId}`,
     payload: { pages: keep.length, scopes },
   });
+  // The sweep reads a brand only with a settings row: auto-reply starts now.
+  await db
+    .from("engage_settings")
+    .upsert(
+      { workspace_id: txn.workspaceId },
+      { onConflict: "workspace_id", ignoreDuplicates: true },
+    );
   return { workspaceId: txn.workspaceId, pages: keep.length };
 }
 
@@ -596,13 +642,23 @@ export async function syncEngage(workspaceId: string): Promise<EngageSyncResult>
       .update({ status: "active", last_error: null })
       .eq("id", conn.id);
   let automated = 0;
+  let asked = 0;
   try {
     const { applyRules } = await import("./automations.server");
     automated = (await applyRules(workspaceId)).sent;
   } catch (error) {
     console.error("[engage] automations failed", error);
   }
-  return { pages: pages.length, added, errors, automated };
+  // Whatever no quick reply answered, Mox answers (or asks the team).
+  try {
+    const { runAutoReply } = await import("./auto-reply.server");
+    const out = await runAutoReply(workspaceId);
+    automated += out.replied;
+    asked = out.asked;
+  } catch (error) {
+    console.error("[engage] auto-reply failed", error);
+  }
+  return { pages: pages.length, added, errors, automated, asked };
 }
 
 // ── One comment ───────────────────────────────────────────────────────────

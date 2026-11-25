@@ -125,6 +125,15 @@ const STOPS: TourStop[] = [
     sidebar: true,
   },
   {
+    id: "inbox",
+    icon: "chat",
+    title: "Answer your comments",
+    body: "Instagram and Facebook comments land in one inbox. Mox drafts replies from what you teach it; you send.",
+    anchors: ["inbox"],
+    side: "right",
+    sidebar: true,
+  },
+  {
     id: "communities",
     icon: "chat",
     title: "Join the conversations",

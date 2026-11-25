@@ -8,6 +8,9 @@
 //            person clicks, as that person (src/server/chat/actions.server.ts).
 //   memory   remember / update / forget. Runs by itself, but every change is
 //            decided by src/lib/memory/decide.ts.
+//   inbox    teach_auto_reply: a fact, a reply rule or the answer to a question
+//            Mox asked, saved for the Inbox auto-reply. Runs by itself (editor),
+//            through the same functions as the Inbox (src/server/engage/).
 //
 // Reads and actions are the SAME tools AI assistants use over MCP
 // (src/server/mcp/tools): each calls the app's own server function or route
@@ -216,6 +219,21 @@ const MEMORY_TOOLS = {
   },
 } as const;
 
+const INBOX_TOOL = {
+  description:
+    'Teach the Inbox auto-reply (Mox answers the brand\'s Instagram and Facebook comments by itself). kind "answer": a fact customers ask about, with question = what they ask and text = the answer ("Do you deliver to Karachi?" → "Yes, in 3–4 days"). kind "rule": how every reply should be ("always reply in Roman Urdu", "never promise a delivery date"); text is the rule. To answer a question Mox asked (listed under Comment auto-reply), pass its questionId and the answer as text. Only save what the person said; never invent an answer.',
+  input: {
+    kind: z.enum(["answer", "rule"]),
+    text: z
+      .string()
+      .min(2)
+      .max(1_500)
+      .describe("The answer, or the rule, in the person's meaning."),
+    question: z.string().max(300).optional().describe("With kind answer: what customers ask."),
+    questionId: z.string().uuid().optional().describe("The id of a question Mox asked."),
+  },
+} as const;
+
 const OPEN_TOOL = {
   description:
     "Offer a button that opens a place in Mellox. It only shows a button; nothing opens until the person clicks. Use it when the person asks where something is or would be better served on that screen.",
@@ -233,7 +251,10 @@ const spec = (name: string, description: string, input: z.ZodRawShape): ChatTool
 });
 
 /** The tools a person with this role is shown. Viewers only read. */
-export function chatToolSpecs(role: WorkspaceRole, opts: { memory: boolean }): ChatToolSpec[] {
+export function chatToolSpecs(
+  role: WorkspaceRole,
+  opts: { memory: boolean; inbox?: boolean },
+): ChatToolSpec[] {
   const editor = roleAtLeast(role, "editor");
   return [
     ...chatReadTools()
@@ -250,6 +271,9 @@ export function chatToolSpecs(role: WorkspaceRole, opts: { memory: boolean }): C
       ),
     ...(editor && opts.memory
       ? Object.entries(MEMORY_TOOLS).map(([name, tool]) => spec(name, tool.description, tool.input))
+      : []),
+    ...(editor && opts.inbox
+      ? [spec("teach_auto_reply", INBOX_TOOL.description, INBOX_TOOL.input)]
       : []),
     spec("open_in_mellox", OPEN_TOOL.description, OPEN_TOOL.input),
   ];
@@ -299,6 +323,7 @@ export function activityLabel(name: string): string | null {
   if (name === "remember" || name === "update_memory" || name === "forget") {
     return "Updating memory";
   }
+  if (name === "teach_auto_reply") return "Teaching auto-reply";
   return ACTIVITY[name] ?? null;
 }
 
@@ -372,7 +397,10 @@ export function describeAction(args: Record<string, unknown>): string {
  * The tool runner for one chat reply. It keeps what the reply changed or
  * offered (`state`), so the route can send it to the browser.
  */
-export function createChatTools(caller: ChatToolCaller, opts: { memory: boolean }) {
+export function createChatTools(
+  caller: ChatToolCaller,
+  opts: { memory: boolean; inbox?: boolean },
+) {
   const state: ChatTurnState = { memory: [], actions: [], offers: [] };
   const mcpCaller = toMcpCaller(caller);
   const reads = new Map(chatReadTools().map((tool) => [tool.name, tool]));
@@ -467,6 +495,56 @@ export function createChatTools(caller: ChatToolCaller, opts: { memory: boolean 
     };
   }
 
+  async function teachInbox(input: unknown): Promise<ChatToolOutcome> {
+    if (!opts.inbox || !roleAtLeast(caller.role, "editor")) {
+      return { content: "The Inbox isn't set up for this person. Nothing was saved.", label: null };
+    }
+    const args = parse(INBOX_TOOL, input) as {
+      kind: "answer" | "rule";
+      text: string;
+      question?: string;
+      questionId?: string;
+    };
+    const engage = await import("@/server/engage/auto-reply.server");
+    const ws = caller.workspaceId;
+    let saved: string;
+    if (args.questionId) {
+      const { question } = await engage.answerQuestion({
+        workspaceId: ws,
+        userId: caller.userId,
+        questionId: args.questionId,
+        answer: args.text,
+      });
+      saved = `the answer to "${question}"; the comments that waited for it will be answered`;
+    } else if (args.kind === "answer") {
+      if (!args.question)
+        return { content: "Say what customers ask (question) with the answer.", label: null };
+      const { saveAnswer } = await import("@/server/engage/automations.server");
+      await saveAnswer({
+        workspaceId: ws,
+        userId: caller.userId,
+        question: args.question,
+        answer: args.text,
+      });
+      saved = "the answer";
+    } else {
+      await engage.addGuidelineLine(ws, caller.userId, args.text);
+      saved = "the rule for every reply";
+    }
+    // Comments that waited are answered once this reply is done.
+    const { after } = await import("next/server");
+    after(() =>
+      engage
+        .runAutoReply(ws)
+        .then(() => undefined)
+        .catch(() => undefined),
+    );
+    return {
+      content: `Done: saved ${saved} for the Inbox auto-reply. Tell the person in a few words that Mox will use it from now on.`,
+      label: "Teaching auto-reply",
+    };
+  }
+
   function offerPlace(input: unknown): ChatToolOutcome {
     const { place } = parse(OPEN_TOOL, input);
     const found = findPlace(place);
@@ -487,6 +565,7 @@ export function createChatTools(caller: ChatToolCaller, opts: { memory: boolean 
       const action = actions.get(name);
       if (action) return await offerAction(action, input);
       if (name in MEMORY_TOOLS) return await runMemory(name as keyof typeof MEMORY_TOOLS, input);
+      if (name === "teach_auto_reply") return await teachInbox(input);
       if (name === "open_in_mellox") return offerPlace(input);
       return { content: "That tool doesn't exist.", label: null };
     } catch (error) {

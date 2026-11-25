@@ -502,6 +502,8 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
     kind: "venue",
     parent: "cafe",
     match: [
+      "tea stall",
+      "chai",
       "cafe",
       "coffee shop",
       "espresso",
@@ -511,9 +513,6 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
       "brunch",
       "latte",
       "tea house",
-      "chai",
-      "tea stall",
-      "chai",
     ],
     show: "A barista's hands pulling a shot or pouring latte art, the real counter and pastries, regulars at the window seat with permission, the drink with its price",
     proof: [
@@ -1135,6 +1134,11 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
     kind: "service",
     parent: "education",
     match: [
+      "higher education",
+      "university",
+      "college",
+      "business school",
+      "education",
       "tutoring",
       "tutor",
       "academy",
@@ -1144,9 +1148,6 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
       "ielts",
       "test prep",
       "school",
-      "classes",
-      "home tuition",
-      "admissions",
     ],
     show: "Real teachers in a real classroom or online session, the timetable and batch start date, a worked example on the board, real results the academy published with students' consent.",
     proof: [
@@ -1753,6 +1754,11 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
     kind: "digital",
     parent: "saas",
     match: [
+      "game development",
+      "game dev",
+      "games studio",
+      "mobile games",
+      "playable ads",
       "game studio",
       "indie game",
       "steam",
@@ -1762,7 +1768,6 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
       "console",
       "early access",
       "playtest",
-      "devlog",
     ],
     show: "Real gameplay frames or key art with the game's logo lockup, platform badges and release date; dev before/after clips; the team at their desks; capsule art cropped for social.",
     proof: [
@@ -2233,7 +2238,6 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
       "soap",
       "shampoo",
       "toothpaste",
-      "personal care",
       "toiletries",
       "disinfectant",
       "household products",
@@ -3453,6 +3457,7 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
     kind: "service",
     parent: "real-estate",
     match: [
+      "real estate",
       "real estate agent",
       "realtor",
       "property dealer",
@@ -3463,7 +3468,6 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
       "brokerage",
       "listings",
       "buy sell rent",
-      "real estate",
     ],
     show: "The real listing's best room and exterior, a spec strip (beds, baths, size, price), the agent on a walk-through, a sold story with days on market",
     proof: [
@@ -3861,6 +3865,8 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
     kind: "product",
     parent: "beauty",
     match: [
+      "clean skincare",
+      "acne",
       "skincare",
       "skin care",
       "serum",
@@ -3869,7 +3875,6 @@ export const SECTOR_PLAYBOOKS: readonly SectorPlaybook[] = [
       "cleanser",
       "face wash",
       "niacinamide",
-      "acne",
       "spf",
       "cruelty free",
       "dermatologist",

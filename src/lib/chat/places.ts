@@ -168,6 +168,14 @@ export const PLACES: readonly Place[] = [
     event: "open:campaigns",
   }),
   place({
+    id: "inbox",
+    label: "Inbox",
+    hint: "Comments, auto-replies and what Mox asks you",
+    group: "Plan",
+    keywords: ["comments", "replies", "reply", "dm", "instagram", "facebook", "auto reply"],
+    event: "open:inbox",
+  }),
+  place({
     id: "calendar",
     label: "Calendar",
     hint: "What's planned and scheduled",

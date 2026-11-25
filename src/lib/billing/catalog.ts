@@ -1027,6 +1027,8 @@ export const INCLUDED_ROUTES: readonly string[] = [
   "chat.history-summary",
   "clarify",
   "memory-extract",
+  // Inbox auto-reply (included, plan-gated in runDueEngage, capped per hour).
+  "engage.auto",
   "studio.naturalize",
   "studio.caption.edit",
   // Staff-only blind benchmark judge (tests/live, Mellox pays); never runs for a customer.

@@ -171,6 +171,8 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
     kind: "venue",
     parent: "cafe",
     match: [
+      "tea stall",
+      "chai",
       "cafe",
       "coffee shop",
       "espresso",
@@ -180,9 +182,6 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
       "brunch",
       "latte",
       "tea house",
-      "chai",
-      "tea stall",
-      "chai",
     ],
   },
   {
@@ -379,6 +378,11 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
     kind: "service",
     parent: "education",
     match: [
+      "higher education",
+      "university",
+      "college",
+      "business school",
+      "education",
       "tutoring",
       "tutor",
       "academy",
@@ -388,9 +392,6 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
       "ielts",
       "test prep",
       "school",
-      "classes",
-      "home tuition",
-      "admissions",
     ],
   },
   {
@@ -576,6 +577,11 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
     kind: "digital",
     parent: "saas",
     match: [
+      "game development",
+      "game dev",
+      "games studio",
+      "mobile games",
+      "playable ads",
       "game studio",
       "indie game",
       "steam",
@@ -585,7 +591,6 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
       "console",
       "early access",
       "playtest",
-      "devlog",
     ],
   },
   {
@@ -739,7 +744,6 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
       "soap",
       "shampoo",
       "toothpaste",
-      "personal care",
       "toiletries",
       "disinfectant",
       "household products",
@@ -1138,6 +1142,7 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
     kind: "service",
     parent: "real-estate",
     match: [
+      "real estate",
       "real estate agent",
       "realtor",
       "property dealer",
@@ -1148,7 +1153,6 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
       "brokerage",
       "listings",
       "buy sell rent",
-      "real estate",
     ],
   },
   {
@@ -1281,6 +1285,8 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
     kind: "product",
     parent: "beauty",
     match: [
+      "clean skincare",
+      "acne",
       "skincare",
       "skin care",
       "serum",
@@ -1289,7 +1295,6 @@ export const SECTOR_KINDS: readonly SectorKindRow[] = [
       "cleanser",
       "face wash",
       "niacinamide",
-      "acne",
       "spf",
       "cruelty free",
       "dermatologist",

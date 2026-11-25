@@ -31,9 +31,9 @@ describe("workspace sidebar", () => {
     expect(NAV_GROUPS[0].items.map((i) => i.id)).toEqual(["home", "chat", "create"]);
   });
 
-  it("stays short: four groups, three rows each at most", () => {
+  it("stays short: four groups, four rows each at most", () => {
     expect(NAV_GROUPS).toHaveLength(4);
-    for (const g of NAV_GROUPS) expect(g.items.length).toBeLessThanOrEqual(3);
+    for (const g of NAV_GROUPS) expect(g.items.length).toBeLessThanOrEqual(4);
   });
 
   it("marks the row a path belongs to", () => {

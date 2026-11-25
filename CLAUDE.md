@@ -1815,29 +1815,58 @@ and `FEATURE_FLAG_INTEGRATIONS_TESTING` (off unless `true`, with `_WS_<id>`).
   `OperationsInbox`, the one approvals list. Never give an agent its own chatbot
   or a way to act without a person's click or an approval.
 
-## Inbox (Engage: comment replies, automations, Train Mox)
+## Inbox (Engage: auto-reply, quick replies, what people ask)
 
 Flag `FEATURE_FLAG_ENGAGE_ENABLED` (with `_WS_<id>`). Route `/w/<id>/app/inbox`
-(`inboxPath`), UI `src/components/app/engage/` (tabs Comments / Automations /
-Train Mox), RPC `src/server/fns/engage.ts`, server `src/server/engage/`, pure
-rules `src/lib/engage/`. Meta (Facebook Login for Business, `META_*` env) is
-read only through `meta/graph.server.ts`; POSTs are never retried, an unknown
+(`inboxPath`, `open:inbox`, chat place `inbox`), a sidebar row under Social
+(the agreed exception, like Communities). UI `src/components/app/engage/`: one
+page, no tabs (`InboxScreen`, presentational; `/engage-lab`): header with
+Refresh and the Auto-reply switch, "Mox needs to know" (open questions, one
+line to answer each), four numbers, the comments with an editable reply each,
+and on the right "How Mox replies" (the team's rules), "What people ask"
+(answers) and "Quick replies" (a short form in a dialog). RPC
+`src/server/fns/engage.ts`, server `src/server/engage/`, pure rules
+`src/lib/engage/`. Meta (Facebook Login for Business, `META_*` env) is read
+only through `meta/graph.server.ts`; POSTs are never retried, an unknown
 outcome is resolved by reading (a reply) or left `unknown` (a DM).
 
-- **Automations are ManyChat-style rules** (`engage_rules`, pure `rules.ts`):
+- **Auto-reply: Mox answers by itself** (owner's decision 2026-11-25,
+  `auto-reply.server.ts`, pure `auto-reply.ts`, migration
+  `20261127120000_engage_auto_reply.sql`). On by default
+  (`engage_settings.auto_reply`), only for comments written after it was
+  turned on (`auto_reply_since`). After the quick replies, each new comment is
+  claimed once (`mox_checked`) and Mox decides (route `engage.auto`):
+  - `reply` is sent only if `finishEngageReply` kept it whole (a figure the
+    brand never gave holds it for a person) and within `AUTO_SENDS_PER_HOUR`;
+  - `ask` sends nothing: one open `engage_questions` row per fingerprint
+    (`questionFingerprint`); the comment waits;
+  - `person` (complaints, refunds, anything sensitive) waits with a draft;
+    `skip` (spam) is left alone. Never loosen these to send more.
+- **The team teaches once.** An answer to a question (Inbox or chat) becomes an
+  `engage_knowledge` row, and every comment that waited is read again
+  (`retryWaiting`, then `runAutoReply` in `after()`). Any new answer or rule
+  retries waiting comments too.
+- **Chat teaches the auto-reply.** `inboxBlockFor` (`engage/context.server.ts`)
+  gives chat the rules and up to five open questions (fenced as untrusted);
+  chat asks the first one once per conversation and saves the person's words
+  with `teach_auto_reply` (an answer, a rule, or a `questionId`), which runs
+  by itself for editors like memory. Workspace memory also reaches every reply
+  (`memoryBlockFor`). Never let chat invent an answer.
+- **Quick replies are ManyChat-style rules** (`engage_rules`, pure `rules.ts`):
   the first live rule in the person's order wins (`pickRule`), keywords match
   through the ported OpenReply matcher (`keywords.ts`, MIT, see
   `docs/engage/THIRD_PARTY.md`), and a rule only acts on comments written
-  after it went live (`live_since`).
-- **Only fixed words send by themselves** (`sendsByItself`), within
-  `AUTO_SENDS_PER_HOUR` (`engage_take_send`). A reply Mox writes always waits
-  for a person; never let a model's text go out without a click.
-- Each comment is matched once (`rules_checked` compare-and-set). Automations
-  run from the **existing** run-schedules hook (`runDueEngage`, ~every 3 min
-  per brand with a live rule, not for brands without a plan); no cron job.
-- **Train Mox:** `engage_knowledge` answers are facts drafts may use (and the
-  figure check accepts); `engage_examples` (a person's sent replies, newest 50)
-  are voice only. Both reach the prompt only in `reply.server.ts`, capped.
+  after it went live (`live_since`). A comment a rule matched is left to it.
+  Fixed words set to send by themselves go within the cap; a rule set to "Mox
+  writes" still waits for a person.
+- Each comment is matched once (`rules_checked`, `mox_checked`
+  compare-and-set). Everything runs from the **existing** run-schedules hook
+  (`runDueEngage`, ~every 3 min per brand with auto-reply on or a live rule,
+  not for brands without a plan); no cron job.
+- **What Mox knows:** `engage_knowledge` answers and `engage_settings.guidelines`
+  are facts and rules replies may use (and the figure check accepts);
+  `engage_examples` (a person's sent replies, newest 50) are voice only. They
+  reach the prompt only in `reply.server.ts` (`replyContext`), capped.
 - Private replies (DM) need `instagram_manage_messages` / `pages_messaging`;
   without them the DM is `skipped` with a note and the public reply still goes.
 

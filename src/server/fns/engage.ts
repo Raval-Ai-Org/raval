@@ -2,8 +2,11 @@
 // and Facebook posts. Reading needs membership and uses the caller's RLS
 // client. Refreshing, drafting, sending, dismissing and disconnecting need
 // editor. A draft is a person's click through runMetered (`engage_reply`,
-// included); a reply is sent only when a person presses Send.
+// included). Auto-reply (Mox answers by itself, asks the team what it doesn't
+// know) runs in the background sweep; its switch, the team's rules and the
+// answers to Mox's questions are set here.
 import "server-only";
+import { after } from "next/server";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerFn, type ServerFnContext } from "@/server/server-fn";
@@ -22,6 +25,8 @@ import type {
 
 export type {
   EngageAnswer,
+  EngageMoxState,
+  EngageQuestion,
   EngageComment,
   EngageDmStatus,
   EngageExample,
@@ -272,6 +277,7 @@ export const saveEngageAnswer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
     const c = await caller(context, data.workspaceId, "editor");
     await (await auto()).saveAnswer({ ...data, userId: c.userId });
+    answerWaitingSoon(data.workspaceId);
     return { ok: true };
   });
 
@@ -303,4 +309,72 @@ export const sendEngageDm = createServerFn({ method: "POST" })
       await svc()
     ).sendPrivateReply(data.workspaceId, data.commentId, context.userId);
     return { dmStatus: status };
+  });
+
+const autoReply = () => import("@/server/engage/auto-reply.server");
+
+/** Mox answers the comments that waited, after the response is sent. */
+function answerWaitingSoon(workspaceId: string) {
+  after(async () => {
+    try {
+      const { runAutoReply } = await autoReply();
+      await runAutoReply(workspaceId);
+    } catch (error) {
+      console.error("[engage] auto-reply after an answer failed", error);
+    }
+  });
+}
+
+export const setEngageAutoReply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, on: z.boolean() }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    await (await autoReply()).setAutoReply(data.workspaceId, c.userId, data.on);
+    return { ok: true };
+  });
+
+export const saveEngageGuidelines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) =>
+    z.object({ workspaceId: uuid, guidelines: z.string().max(6_000) }).parse(data),
+  )
+  .handler(async ({ data, context }): Promise<{ guidelines: string }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    const guidelines = await (
+      await autoReply()
+    ).setGuidelines(data.workspaceId, c.userId, data.guidelines);
+    answerWaitingSoon(data.workspaceId);
+    return { guidelines };
+  });
+
+/** The team answers what Mox asked; the comments that waited are answered. */
+export const answerEngageQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) =>
+    z
+      .object({ workspaceId: uuid, questionId: uuid, answer: z.string().min(1).max(1_500) })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const c = await caller(context, data.workspaceId, "editor");
+    await (
+      await autoReply()
+    ).answerQuestion({
+      workspaceId: data.workspaceId,
+      userId: c.userId,
+      questionId: data.questionId,
+      answer: data.answer,
+    });
+    answerWaitingSoon(data.workspaceId);
+    return { ok: true };
+  });
+
+export const dismissEngageQuestion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, rateLimitFor("setup-write")])
+  .inputValidator((data) => z.object({ workspaceId: uuid, questionId: uuid }).parse(data))
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    await caller(context, data.workspaceId, "editor");
+    await (await autoReply()).dismissQuestion(data.workspaceId, data.questionId);
+    return { ok: true };
   });

@@ -24,6 +24,7 @@ import {
   campaignsPath,
   chatPath,
   communitiesPath,
+  inboxPath,
   conversationIdFromPath,
   inspoPath,
   workspacePath,
@@ -343,6 +344,10 @@ function AppShell() {
     // Chat's buttons and the "/" menu reach these two routes the same way.
     const onOpenBacklinks = () => navigate({ to: workspacePath(workspaceId, "backlinks") });
     const onOpenExperiments = () => navigate({ to: workspacePath(workspaceId, "experiments") });
+    const onOpenInbox = () => {
+      navigate({ to: inboxPath(workspaceId) });
+      closeNavOnPhone();
+    };
     const onOpenInspo = (event: CustomEvent<{ section?: string } | null>) => {
       navigate({ to: inspoPath(workspaceId, event.detail?.section) });
       closeNavOnPhone();
@@ -362,7 +367,9 @@ function AppShell() {
     addAppEventListener("open:autopilot", onOpenAutopilot);
     addAppEventListener("open:backlinks", onOpenBacklinks);
     addAppEventListener("open:experiments", onOpenExperiments);
+    addAppEventListener("open:inbox", onOpenInbox);
     return () => {
+      removeAppEventListener("open:inbox", onOpenInbox);
       removeAppEventListener("open:autopilot", onOpenAutopilot);
       removeAppEventListener("open:backlinks", onOpenBacklinks);
       removeAppEventListener("open:experiments", onOpenExperiments);
@@ -506,9 +513,11 @@ function AppShell() {
             ? inspoPath(workspaceId)
             : t.place === "campaigns"
               ? campaignsPath(workspaceId)
-              : t.place === "communities"
-                ? communitiesPath(workspaceId)
-                : workspacePath(workspaceId, "experiments"),
+              : t.place === "inbox"
+                ? inboxPath(workspaceId)
+                : t.place === "communities"
+                  ? communitiesPath(workspaceId)
+                  : workspacePath(workspaceId, "experiments"),
     );
   };
 
@@ -548,9 +557,11 @@ function AppShell() {
             ? inspoPath(workspaceId)
             : t.place === "campaigns"
               ? campaignsPath(workspaceId)
-              : t.place === "communities"
-                ? communitiesPath(workspaceId)
-                : workspacePath(workspaceId, "experiments");
+              : t.place === "inbox"
+                ? inboxPath(workspaceId)
+                : t.place === "communities"
+                  ? communitiesPath(workspaceId)
+                  : workspacePath(workspaceId, "experiments");
     // Back is one step out: returning to the place just before steps back,
     // and hopping between sections replaces the entry instead of stacking.
     const fromSection = routeNavId !== "home" && routeNavId !== "chat";

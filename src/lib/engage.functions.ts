@@ -9,6 +9,8 @@ export type {
   EngageComment,
   EngageDmStatus,
   EngageExample,
+  EngageMoxState,
+  EngageQuestion,
   EngagePost,
   EngageRule,
   RuleInput,
@@ -53,3 +55,11 @@ export const deleteEngageExample = serverFn<typeof Handlers.deleteEngageExample>
   "engage/deleteEngageExample",
 );
 export const sendEngageDm = serverFn<typeof Handlers.sendEngageDm>("engage/sendEngageDm");
+export const setEngageAutoReply =
+  serverFn<typeof Handlers.setEngageAutoReply>("engage/setEngageAutoReply");
+export const saveEngageGuidelines =
+  serverFn<typeof Handlers.saveEngageGuidelines>("engage/saveEngageGuidelines");
+export const answerEngageQuestion =
+  serverFn<typeof Handlers.answerEngageQuestion>("engage/answerEngageQuestion");
+export const dismissEngageQuestion =
+  serverFn<typeof Handlers.dismissEngageQuestion>("engage/dismissEngageQuestion");

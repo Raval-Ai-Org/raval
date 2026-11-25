@@ -139,6 +139,37 @@ describe("kieTransport", () => {
     });
   });
 
+  it("moves on from a model that times out instead of trying it again", async () => {
+    vi.stubEnv("KIE_API_KEY", "kie-test");
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        urls.push(url);
+        if (url.includes("/claude/")) {
+          // Hangs until the attempt's deadline aborts it.
+          return new Promise<Response>((_, reject) =>
+            init.signal?.addEventListener("abort", () =>
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+            ),
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            choices: [{ finish_reason: "stop", message: { role: "assistant", content: "ok" } }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 },
+          }),
+        );
+      }),
+    );
+    const answer = await kieTransport(
+      { models: ["anthropic/claude-sonnet-5.5"], messages: [{ role: "user", content: "Hi" }] },
+      { route: "test", timeoutMs: 4_000 },
+    );
+    expect(urls.filter((u) => u.includes("/claude/"))).toHaveLength(1);
+    expect(answer.model).toBe("google/gemini-3.8-flash");
+  }, 20_000);
+
   it("stops at once when KIE is out of credits", async () => {
     vi.stubEnv("KIE_API_KEY", "kie-test");
     const fetchMock = vi.fn(

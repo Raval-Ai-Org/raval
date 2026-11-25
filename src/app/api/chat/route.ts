@@ -208,7 +208,7 @@ export const POST = defineRoute({
       const lastUser = [...turns].reverse().find((turn) => turn.role === "user")?.content ?? "";
       // Older turns are summarised (decisions, facts, open questions) instead of
       // clipped to first sentences; the newest 12 stay verbatim.
-      const [history, research, style, memory, audience, strategy, goal, catalog] =
+      const [history, research, style, memory, audience, strategy, goal, catalog, inbox] =
         await Promise.all([
           summarizeHistory(turns as never),
           researchBlock(lastUser),
@@ -222,6 +222,8 @@ export const POST = defineRoute({
           // The team's goal and what the brand sells (ADR-0035); empty until set.
           import("@/server/goals/context.server").then((m) => m.goalBlockFor(workspaceId)),
           import("@/server/products/context.server").then((m) => m.catalogBlockFor(workspaceId)),
+          // The Inbox auto-reply: its rules and what Mox waits to learn. Null when off.
+          import("@/server/engage/context.server").then((m) => m.inboxBlockFor(workspaceId)),
         ]);
 
       // Chat tools (ADR-0033): the reply can read this workspace's data, save
@@ -236,7 +238,7 @@ export const POST = defineRoute({
               token: (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim(),
               conversationId: body.conversationId ?? null,
             },
-            { memory: memory !== null },
+            { memory: memory !== null, inbox: inbox !== null },
           )
         : null;
 
@@ -260,6 +262,7 @@ export const POST = defineRoute({
         },
         // The team's own standing rules: followed, not fenced as outside data.
         ...(memory ? [{ role: "system" as const, content: memory }] : []),
+        ...(inbox && tools ? [{ role: "system" as const, content: inbox }] : []),
         ...(style ? [{ role: "system" as const, content: style }] : []),
         ...(research ? [{ role: "system" as const, content: research }] : []),
         ...(history as ChatMessage[]),

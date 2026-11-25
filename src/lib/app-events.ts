@@ -175,6 +175,8 @@ export type AppEventMap = {
    * one campaign or the designer for a kind. Only ever fired by a button.
    */
   "open:campaigns": { campaignId?: string; type?: string } | undefined;
+  /** Navigates to the Inbox (comment replies) at /w/<id>/app/inbox. Only ever fired by a button. */
+  "open:inbox": undefined;
   "open:details": undefined;
   /** Opens Brain → Home → Today (the day's plan). */
   "open:marketing-coach": undefined;

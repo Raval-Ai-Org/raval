@@ -13,12 +13,17 @@ function escape(term: string): string {
 
 const MATCHERS = SECTOR_KINDS.map((row) => ({
   row,
-  terms: row.match.map((t) => new RegExp(`(^|[^a-z0-9])${escape(t)}($|[^a-z0-9])`, "i")),
+  terms: row.match.map((t) => ({
+    re: new RegExp(`(^|[^a-z0-9])${escape(t)}($|[^a-z0-9])`, "i"),
+    // A phrase ("game development") says more than one word ("software").
+    weight: Math.min(3, t.trim().split(/\s+/).length),
+  })),
 }));
 
 /**
  * The sector a brand belongs to: its industry line counts three times its
  * description; a single passing mention in the description is not enough.
+ * A longer matching phrase counts more than a single word.
  */
 export function sectorOf(industry?: string | null, text?: string | null): SectorKindRow | null {
   const line = (industry ?? "").toLowerCase();
@@ -26,9 +31,9 @@ export function sectorOf(industry?: string | null, text?: string | null): Sector
   let best: { row: SectorKindRow; score: number } | null = null;
   for (const { row, terms } of MATCHERS) {
     let score = 0;
-    for (const re of terms) {
-      if (line && re.test(line)) score += 3;
-      if (body && re.test(body)) score += 1;
+    for (const { re, weight } of terms) {
+      if (line && re.test(line)) score += 3 * weight;
+      if (body && re.test(body)) score += weight;
     }
     if (score >= 2 && (!best || score > best.score)) best = { row, score };
   }

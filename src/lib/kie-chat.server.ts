@@ -713,6 +713,19 @@ function triesFor(target: KieTarget): number {
   return target.api === "claude" ? 2 : 1;
 }
 
+/**
+ * KIE's Claude sometimes hangs instead of failing (a 120 s wait on 2026-11-25).
+ * Its good answers arrive well inside this, so a hung call gives way to the
+ * next model while there is still time for it to answer.
+ */
+const CLAUDE_ATTEMPT_MS = 75_000;
+
+/** How long one try of this model may take, leaving the fallbacks their turn. */
+function attemptTimeout(target: KieTarget, callerMs: number, remaining: number): number {
+  const cap = target.api === "claude" ? Math.min(callerMs, CLAUDE_ATTEMPT_MS) : callerMs;
+  return Math.max(1_000, Math.min(cap, remaining));
+}
+
 async function sendOnce(
   target: KieTarget,
   body: Record<string, any>,
@@ -810,7 +823,11 @@ export async function kieTransport(
           target.api === "claude"
             ? (body as Record<string, any>)
             : await (hostedBody ??= hostMedia(body as Record<string, any>));
-        const answer = await sendOnce(target, sendBody, Math.min(opts.timeoutMs, remaining));
+        const answer = await sendOnce(
+          target,
+          sendBody,
+          attemptTimeout(target, opts.timeoutMs, remaining),
+        );
         const said = answer.choices?.[0]?.message?.content;
         if (
           (media.images || media.audio) &&
@@ -853,8 +870,13 @@ export async function kieTransport(
           detail: failure.error.detail?.slice(0, 160),
         });
         if (!failure.next) throw failure.error;
-        // A request this model refused won't pass on a second try.
-        if (failure.error.code === "invalid_request" || failure.error.code === "context_exceeded")
+        // A request this model refused won't pass on a second try, and a model
+        // that just timed out would only spend the time the fallbacks need.
+        if (
+          failure.error.code === "invalid_request" ||
+          failure.error.code === "context_exceeded" ||
+          failure.error.code === "timeout"
+        )
           break;
         if (attempt + 1 < triesFor(target)) await sleep(600);
       }

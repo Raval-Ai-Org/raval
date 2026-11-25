@@ -10,6 +10,7 @@ import {
   BookOpen,
   Calendar as CalendarIcon,
   Home,
+  Inbox,
   Megaphone,
   MessageCircle,
   Palette,
@@ -41,6 +42,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   analytics: BarChart3,
   visibility: Search,
   communities: Users,
+  inbox: Inbox,
   experiments: Trophy,
 };
 

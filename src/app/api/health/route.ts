@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { textAiConfigured } from "@/lib/ai-provider.server";
+import { aiProvider, textAiConfigured } from "@/lib/ai-provider.server";
+import { imageProvider } from "@/lib/kie-image.server";
 import { getImageModelConfigStatus } from "@/lib/model-router.server";
 import { videoFallbackProvider, videoProvider } from "@/server/ugc/models.server";
 
@@ -29,8 +30,8 @@ export function GET() {
   return NextResponse.json({
     status: textAiConfigured() ? "ok" : "degraded",
     version: version(),
-    ai: { provider: "openrouter", configured: openrouter },
-    image: { provider: "openrouter", ...getImageModelConfigStatus() },
+    ai: { provider: aiProvider(), configured: textAiConfigured() },
+    image: { provider: imageProvider(), ...getImageModelConfigStatus() },
     video: { provider: primary, fallback, kieConfigured: kie },
     services: {
       text: openrouter,
