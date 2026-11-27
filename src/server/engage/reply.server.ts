@@ -67,7 +67,7 @@ async function trainingFor(workspaceId: string) {
   };
 }
 
-const SYSTEM = `You write the brand's reply to a comment someone left on the brand's own social media post. A person on the brand's team will read it, change it if needed and send it themselves.
+const SYSTEM = `You write the brand's reply to a comment someone left on the brand's own social media post, or to a private message (DM) someone sent the brand (WHERE says which). A person on the brand's team will read it, change it if needed and send it themselves.
 Rules:
 - Answer what the comment says or asks, warmly and directly, like a real person who runs the account.
 - Short: one to three sentences. No hashtags. At most one emoji, and only if the brand's voice uses them.
@@ -82,6 +82,8 @@ ${UNTRUSTED_DATA_RULE}`;
 type ReplyArgs = {
   workspaceId: string;
   platform: EngagePlatform;
+  /** A public comment (default) or a private message someone sent the brand. */
+  kind?: "comment" | "dm";
   comment: { body: string; authorName: string | null; postCaption: string | null };
   /** What the team wants in this reply (a person's draft request). */
   note?: string;
@@ -121,14 +123,16 @@ async function replyContext(args: ReplyArgs, route: string) {
     guidelines && `THE TEAM'S RULES FOR EVERY REPLY (their own words; follow them):\n${guidelines}`,
     args.guidance &&
       `THIS AUTOMATION'S INSTRUCTIONS (from the team):\n${args.guidance.slice(0, 1_000)}`,
-    `WHERE: a comment on the brand's ${PLATFORM_LABEL[args.platform]} post. Aim for under ${DRAFT_TARGET_CHARS[args.platform]} characters.`,
+    args.kind === "dm"
+      ? `WHERE: a private message (DM) someone sent the brand on ${args.platform === "instagram" ? "Instagram" : "Facebook Messenger"}. Only they see your reply. You may ask which product they mean or for an order number; never for payment details or passwords. Aim for under 500 characters.`
+      : `WHERE: a comment on the brand's ${PLATFORM_LABEL[args.platform]} post. Aim for under ${DRAFT_TARGET_CHARS[args.platform]} characters.`,
     args.comment.postCaption &&
       `THE BRAND'S POST:\n${wrapUntrusted("post-caption", args.comment.postCaption, {
         maxChars: 1_500,
         route,
       })}`,
-    `THE COMMENT${args.comment.authorName ? ` (from ${args.comment.authorName.slice(0, 60)})` : ""}:\n${wrapUntrusted(
-      "social-comment",
+    `${args.kind === "dm" ? "THE MESSAGE" : "THE COMMENT"}${args.comment.authorName ? ` (from ${args.comment.authorName.slice(0, 60)})` : ""}:\n${wrapUntrusted(
+      args.kind === "dm" ? "direct-message" : "social-comment",
       args.comment.body,
       { maxChars: 2_000, route },
     )}`,
@@ -169,8 +173,9 @@ export async function draftEngageReply(
   return { ...finished, brandDomain: ctx.brand.domain };
 }
 
-const DECIDE_SYSTEM = `You run the brand's comment replies on its own social media posts, by yourself. For each comment you decide what to do, and a reply is posted publicly without a person checking it, so be careful.
+const DECIDE_SYSTEM = `You run the brand's replies to comments on its own social media posts and to private messages (DMs) people send it, by yourself (WHERE says which). For each one you decide what to do, and the reply is sent without a person checking it, so be careful.
 Choose one action:
+- In a DM, a person may want to order, book or ask about their order. Answer what you can; anything about a specific order, payment or a problem is "person".
 - "reply": you can answer well with what you know (BRAND FACTS, TEAM ANSWERS, THE TEAM'S RULES), or the comment needs no facts (praise, thanks, an emoji, a friend tagged, a hello). Write the reply.
 - "ask": the comment asks something specific only the brand can answer (a price, a size, stock, a date, delivery to a place, opening hours, a policy) and the answer is NOT in what you know. Do not guess and do not reply. Write the question for the team, short and general so the answer can be reused ("What is the price of the cardamom cold brew?").
 - "person": a complaint, an angry customer, a refund or order problem, health, legal or safety, anything private, or anything you are unsure about.

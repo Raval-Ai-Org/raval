@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { finishEngageReply, sendableReply } from "./reply";
-import { fbCommentRows, igCommentRows } from "./sync";
+import { DM_WINDOW_MS, fbCommentRows, hasComments, igCommentRows, readConversation } from "./sync";
 
 const NOW = Date.parse("2026-11-25T12:00:00Z");
 
@@ -93,5 +93,84 @@ describe("comment rows", () => {
     expect(rows.map((r) => r.external_id)).toEqual(["20_1"]);
     expect(rows[0].post_permalink).toBeNull();
     expect(rows[0].author_name).toBe("Ann");
+  });
+});
+
+describe("readConversation (DMs)", () => {
+  const now = Date.parse("2026-11-27T12:00:00Z");
+  const at = (min: number) => new Date(now - min * 60_000).toISOString();
+  const page = "111";
+  const conv = (messages: { id: string; message?: string; from: string; min: number }[]) => ({
+    id: "t_abc123",
+    messages: {
+      data: messages.map((m) => ({
+        id: m.id,
+        message: m.message,
+        created_time: at(m.min),
+        from: { id: m.from, name: m.from === page ? "Brand" : "Ayesha" },
+      })),
+    },
+  });
+
+  it("joins every message since the brand's last reply into one row to answer", () => {
+    const r = readConversation(
+      "facebook",
+      conv([
+        { id: "m_3", message: "and do you deliver to Lahore?", from: "222", min: 1 },
+        { id: "m_2", message: "Hi, how much is the cold brew?", from: "222", min: 2 },
+        { id: "m_1", message: "Thanks!", from: page, min: 60 },
+      ]),
+      [page],
+      now,
+    );
+    expect(r.kind).toBe("waiting");
+    if (r.kind !== "waiting") return;
+    expect(r.row.external_id).toBe("m_3");
+    expect(r.row.sender_id).toBe("222");
+    expect(r.row.post_id).toBe("t_abc123");
+    expect(r.row.body).toBe("Hi, how much is the cold brew?\nand do you deliver to Lahore?");
+  });
+
+  it("knows the brand answered last (also from Meta's own app)", () => {
+    const r = readConversation(
+      "instagram",
+      conv([
+        { id: "m_2", message: "Yes we do!", from: page, min: 1 },
+        { id: "m_1", message: "Open today?", from: "222", min: 5 },
+      ]),
+      [page],
+      now,
+    );
+    expect(r).toMatchObject({ kind: "answered", conversationId: "t_abc123", text: "Yes we do!" });
+  });
+
+  it("leaves a message older than Meta's 24-hour window alone", () => {
+    const old = DM_WINDOW_MS / 60_000 + 5;
+    expect(
+      readConversation(
+        "facebook",
+        conv([{ id: "m_1", message: "hi", from: "222", min: old }]),
+        [page],
+        now,
+      ).kind,
+    ).toBe("none");
+  });
+
+  it("names a photo without words instead of dropping it", () => {
+    const r = readConversation(
+      "instagram",
+      conv([{ id: "m_1", from: "222", min: 1 }]),
+      [page],
+      now,
+    );
+    expect(r.kind === "waiting" && r.row.body).toMatch(/photo/);
+  });
+});
+
+describe("hasComments", () => {
+  it("skips only a stated zero", () => {
+    expect(hasComments(0)).toBe(false);
+    expect(hasComments(3)).toBe(true);
+    expect(hasComments(undefined)).toBe(true);
   });
 });

@@ -24,6 +24,8 @@ export type EngagePage = {
 
 export type EngageComment = {
   id: string;
+  /** A comment on a post, or a private message (DM) someone sent the brand. */
+  kind: "comment" | "dm";
   platform: EngagePlatform;
   pageName: string;
   igUsername: string | null;

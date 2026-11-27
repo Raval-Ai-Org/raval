@@ -40,6 +40,7 @@ function sample(now: number): EngageHome {
     ...over,
   });
   const base = {
+    kind: "comment" as const,
     platform: "instagram" as const,
     pageName: "Chai Corner",
     igUsername: "chaicorner.pk",
@@ -80,6 +81,19 @@ function sample(now: number): EngageHome {
       },
     ],
     comments: [
+      {
+        ...base,
+        id: id(10),
+        kind: "dm",
+        authorName: "Hina",
+        body: "Hi! Do you take orders for an office of 20 people? We're in Gulberg.",
+        commentedAt: at(2),
+        postCaption: null,
+        status: "drafted",
+        draft: "Hi Hina! Yes, we do office orders. Which day and time works for you?",
+        moxState: "needs_person",
+        moxNote: "A bulk order: a person should confirm it.",
+      },
       {
         ...base,
         id: id(11),
@@ -225,6 +239,13 @@ export function EngageLab() {
   );
   const data = useMemo(() => {
     const full = sample(Date.now());
+    if (scene === "setup")
+      // What a brand sees when Meta shared no Instagram and no messages.
+      return {
+        ...full,
+        connection: { ...full.connection!, canMessage: { instagram: false, facebook: false } },
+        pages: full.pages.map((p) => ({ ...p, hasInstagram: false, igUsername: null })),
+      };
     return scene === "empty"
       ? {
           ...full,

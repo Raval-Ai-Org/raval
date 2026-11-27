@@ -52,6 +52,7 @@ const note = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 300);
 /** Answer, ask about or set aside every new comment no quick reply took. */
 export async function runAutoReply(
   workspaceId: string,
+  opts: { deadline?: number } = {},
 ): Promise<{ replied: number; asked: number; held: number }> {
   const settings = await settingsFor(workspaceId);
   const out = { replied: 0, asked: 0, held: 0 };
@@ -71,6 +72,9 @@ export async function runAutoReply(
   const { decideEngageReply } = await import("./reply.server");
 
   for (const c of comments) {
+    // Never claim a comment the run may not finish: a cut-off run would leave
+    // it checked with nothing done. The next sweep takes the rest.
+    if (opts.deadline && Date.now() > opts.deadline) break;
     const { data: claimed } = await db
       .from("engage_comments")
       .update({ mox_checked: true })
@@ -88,6 +92,7 @@ export async function runAutoReply(
         decideEngageReply({
           workspaceId,
           platform: c.platform,
+          kind: c.kind,
           comment: { body: c.body, authorName: c.author_name, postCaption: c.post_caption },
         }),
       );

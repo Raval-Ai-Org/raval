@@ -32,6 +32,13 @@ import { KEEP_EXAMPLES, worthKeeping } from "@/lib/engage/training";
 import {
   COMMENTS_PER_POST,
   POSTS_PER_SYNC,
+  hasComments,
+  dmWindowOpen,
+  readConversation,
+  CONVERSATIONS_PER_SYNC,
+  MESSAGES_PER_CONVERSATION,
+  type DmRead,
+  type GraphConversation,
   fbCommentRows,
   igCommentRows,
   type CommentRow,
@@ -52,6 +59,9 @@ import { consumeMetaState } from "./meta/oauth.server";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
 
+/** Instagram refuses a DM over 1,000 characters; Messenger takes 2,000. */
+const DM_MAX_CHARS = 1_000;
+
 export type PageRow = {
   id: string;
   workspace_id: string;
@@ -65,6 +75,8 @@ export type PageRow = {
 
 export type CommentDbRow = {
   id: string;
+  kind: "comment" | "dm";
+  sender_id: string | null;
   page_row_id: string;
   platform: EngagePlatform;
   external_id: string;
@@ -91,7 +103,7 @@ export type CommentDbRow = {
 };
 
 export const COMMENT_COLUMNS =
-  "id,page_row_id,platform,external_id,post_id,author_name,body,commented_at,post_caption,post_permalink,status,draft,reply_text,replied_at,last_error,rule_id,matched_keyword,auto_sent,dm_status,dm_text,dm_error,mox_state,mox_note,question_id";
+  "id,kind,sender_id,page_row_id,platform,external_id,post_id,author_name,body,commented_at,post_caption,post_permalink,status,draft,reply_text,replied_at,last_error,rule_id,matched_keyword,auto_sent,dm_status,dm_text,dm_error,mox_state,mox_note,question_id";
 
 export const PAGE_COLUMNS =
   "id,workspace_id,page_id,page_name,ig_user_id,ig_username,synced_at,last_error";
@@ -267,6 +279,7 @@ export async function getEngageHome(
     const page = byId.get(c.page_row_id);
     return {
       id: c.id,
+      kind: c.kind ?? "comment",
       platform: c.platform,
       pageName: page?.page_name ?? "",
       igUsername: page?.ig_username ?? null,
@@ -562,11 +575,13 @@ async function readPage(page: PageRow, token: string): Promise<CommentRow[]> {
   const rows: CommentRow[] = [];
   if (page.ig_user_id) {
     const media = await graphGet<GraphList<IgMedia>>(`${page.ig_user_id}/media`, token, {
-      fields: "id,caption,permalink,timestamp",
+      fields: "id,caption,permalink,timestamp,comments_count",
       limit: String(POSTS_PER_SYNC),
     });
     for (const m of media.data ?? []) {
       if (!/^[0-9]{1,40}$/.test(m.id)) continue;
+      // No comments, no read: keeps every brand well inside Instagram's rate limit.
+      if (!hasComments(m.comments_count)) continue;
       const comments = await graphGet<GraphList<IgComment>>(`${m.id}/comments`, token, {
         fields: "id,text,timestamp,username,from{id,username},replies{id,username,from{id}}",
         limit: String(COMMENTS_PER_POST),
@@ -580,11 +595,12 @@ async function readPage(page: PageRow, token: string): Promise<CommentRow[]> {
     }
   }
   const posts = await graphGet<GraphList<FbPost>>(`${page.page_id}/posts`, token, {
-    fields: "id,message,permalink_url,created_time",
+    fields: "id,message,permalink_url,created_time,comments.summary(true).limit(0)",
     limit: String(POSTS_PER_SYNC),
   });
   for (const p of posts.data ?? []) {
     if (!/^[0-9_]{1,80}$/.test(p.id)) continue;
+    if (!hasComments(p.comments?.summary?.total_count)) continue;
     const comments = await graphGet<GraphList<FbComment>>(`${p.id}/comments`, token, {
       fields: "id,message,created_time,from{id,name},comments.limit(10){id,from{id}}",
       filter: "toplevel",
@@ -596,16 +612,100 @@ async function readPage(page: PageRow, token: string): Promise<CommentRow[]> {
   return rows;
 }
 
+/** The DM conversations of one Page (Messenger) and its Instagram, newest first. */
+async function readMessages(
+  page: PageRow,
+  token: string,
+  allowed: { instagram: boolean; facebook: boolean },
+): Promise<DmRead[]> {
+  const reads: DmRead[] = [];
+  const fields = `id,updated_time,messages.limit(${MESSAGES_PER_CONVERSATION}){id,message,created_time,from}`;
+  const channels: { platform: EngagePlatform; meta: string; own: string[] }[] = [];
+  if (allowed.facebook)
+    channels.push({ platform: "facebook", meta: "messenger", own: [page.page_id] });
+  if (allowed.instagram && page.ig_user_id)
+    channels.push({
+      platform: "instagram",
+      meta: "instagram",
+      own: [page.ig_user_id, page.page_id],
+    });
+  for (const ch of channels) {
+    const list = await graphGet<GraphList<GraphConversation>>(
+      `${page.page_id}/conversations`,
+      token,
+      {
+        platform: ch.meta,
+        fields,
+        limit: String(CONVERSATIONS_PER_SYNC),
+      },
+    );
+    for (const conv of list.data ?? []) reads.push(readConversation(ch.platform, conv, ch.own));
+  }
+  return reads;
+}
+
+/**
+ * Store what the conversations say: a new message to answer (an older open
+ * row of the same conversation is folded into it), or a reply the brand
+ * already sent, which closes the open row.
+ */
+async function storeMessages(workspaceId: string, page: PageRow, reads: DmRead[]) {
+  let added = 0;
+  for (const r of reads) {
+    if (r.kind === "answered") {
+      await db
+        .from("engage_comments")
+        .update({
+          status: "replied",
+          reply_text: r.text.slice(0, 8_000) || null,
+          replied_at: r.at ?? new Date().toISOString(),
+          last_error: null,
+        })
+        .eq("workspace_id", workspaceId)
+        .eq("kind", "dm")
+        .eq("post_id", r.conversationId)
+        .in("status", ["new", "drafted"]);
+      continue;
+    }
+    if (r.kind !== "waiting") continue;
+    const { data: inserted } = await db
+      .from("engage_comments")
+      .upsert(
+        // Quick replies are for comments; Mox (auto-reply) takes DMs.
+        [{ ...r.row, workspace_id: workspaceId, page_row_id: page.id, rules_checked: true }],
+        { onConflict: "workspace_id,platform,external_id", ignoreDuplicates: true },
+      )
+      .select("id");
+    const id = (inserted?.[0] as { id: string } | undefined)?.id;
+    if (!id) continue;
+    added++;
+    // The new row carries every message since the brand's last reply.
+    await db
+      .from("engage_comments")
+      .update({ status: "dismissed", mox_note: "Folded into a newer message." })
+      .eq("workspace_id", workspaceId)
+      .eq("kind", "dm")
+      .eq("post_id", r.row.post_id)
+      .neq("id", id)
+      .in("status", ["new", "drafted"]);
+  }
+  return added;
+}
+
 /**
  * Read new comments for every Page. A comment already stored is left as it
  * is. New comments then go through the live automations.
  */
-export async function syncEngage(workspaceId: string): Promise<EngageSyncResult> {
+export async function syncEngage(
+  workspaceId: string,
+  opts: { deadline?: number } = {},
+): Promise<EngageSyncResult> {
   const conn = await activeConnection(workspaceId);
   if (!conn) throw new HttpError(409, "Connect Instagram and Facebook first.");
   const pages = await pagesFor(workspaceId);
   let added = 0;
   let errors = 0;
+  const allowed = messagingFrom(conn.permissions?.scopes);
   for (const page of pages) {
     try {
       const rows = await readPage(page, await pageToken(workspaceId, page.id));
@@ -619,9 +719,24 @@ export async function syncEngage(workspaceId: string): Promise<EngageSyncResult>
           .select("id");
         added += inserted?.length ?? 0;
       }
+      let dmError: string | null = null;
+      if (allowed.facebook || allowed.instagram) {
+        try {
+          const token = await pageToken(workspaceId, page.id);
+          added += await storeMessages(workspaceId, page, await readMessages(page, token, allowed));
+        } catch (error) {
+          // DMs failing never stops comments; the reason shows on the Page.
+          if (error instanceof GraphError) await markTokenProblem(workspaceId, error);
+          dmError =
+            `Couldn't read messages: ${error instanceof Error ? error.message : "unknown"}`.slice(
+              0,
+              300,
+            );
+        }
+      }
       await db
         .from("meta_pages")
-        .update({ synced_at: new Date().toISOString(), last_error: null })
+        .update({ synced_at: new Date().toISOString(), last_error: dmError })
         .eq("id", page.id)
         .eq("workspace_id", workspaceId);
     } catch (error) {
@@ -652,7 +767,7 @@ export async function syncEngage(workspaceId: string): Promise<EngageSyncResult>
   // Whatever no quick reply answered, Mox answers (or asks the team).
   try {
     const { runAutoReply } = await import("./auto-reply.server");
-    const out = await runAutoReply(workspaceId);
+    const out = await runAutoReply(workspaceId, opts);
     automated += out.replied;
     asked = out.asked;
   } catch (error) {
@@ -736,6 +851,23 @@ async function findOwnReply(page: PageRow, comment: CommentDbRow, token: string,
   );
 }
 
+/** Does the conversation already hold this message from the brand, after theirs? */
+async function findOwnMessage(page: PageRow, comment: CommentDbRow, token: string, text: string) {
+  const norm = (s: string | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+  const conv = await graphGet<{
+    messages?: {
+      data?: { id: string; message?: string; created_time?: string; from?: { id?: string } }[];
+    };
+  }>(comment.post_id, token, { fields: "messages.limit(10){id,message,created_time,from}" });
+  const own = [page.page_id, page.ig_user_id].filter(Boolean);
+  return (conv.messages?.data ?? []).find(
+    (m) =>
+      norm(m.message) === norm(text) &&
+      own.includes(m.from?.id ?? "") &&
+      Date.parse(m.created_time ?? "") >= Date.parse(comment.commented_at),
+  );
+}
+
 /**
  * Post a public reply. `new|drafted|unknown → sending` is a compare-and-set,
  * so a double click (or a click racing the automation) sends once. An unclear
@@ -757,6 +889,22 @@ export async function deliverReply(args: {
   if (!ok.ok) throw new HttpError(400, ok.reason);
   if (comment.platform === "instagram" && !page.ig_user_id)
     throw new HttpError(409, "This Page has no Instagram account linked any more.");
+  const dm = comment.kind === "dm";
+  if (dm) {
+    if (!comment.sender_id) throw new HttpError(409, "This message has no sender to answer.");
+    if (ok.text.length > DM_MAX_CHARS)
+      throw new HttpError(
+        400,
+        `A DM can be ${DM_MAX_CHARS.toLocaleString("en")} characters at most.`,
+      );
+    if (!dmWindowOpen(comment.commented_at))
+      throw new HttpError(
+        409,
+        "Meta only allows a reply within 24 hours of their last message. Answer them in Meta's own inbox.",
+      );
+    if (!(await canMessageFor(args.workspaceId))[comment.platform])
+      throw new HttpError(409, "Messages aren't allowed yet. Connect again and allow messages.");
+  }
 
   const { data: claimed } = await db
     .from("engage_comments")
@@ -797,8 +945,19 @@ export async function deliverReply(args: {
 
   try {
     if (comment.status === "unknown") {
-      const found = await findOwnReply(page, comment, token, ok.text);
+      const found = dm
+        ? await findOwnMessage(page, comment, token, ok.text)
+        : await findOwnReply(page, comment, token, ok.text);
       if (found) return await done(found.id);
+    }
+    if (dm) {
+      // Send API: the person who wrote, as a response inside Meta's 24-hour window.
+      const res = await graphPost<{ message_id?: string }>(`${page.page_id}/messages`, token, {
+        recipient: JSON.stringify({ id: comment.sender_id }),
+        messaging_type: "RESPONSE",
+        message: JSON.stringify({ text: ok.text }),
+      });
+      return await done(typeof res.message_id === "string" ? res.message_id.slice(0, 100) : "");
     }
     const path =
       comment.platform === "instagram"

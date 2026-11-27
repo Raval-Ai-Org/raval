@@ -113,6 +113,7 @@ export const draftEngageReply = createServerFn({ method: "POST" })
           draft({
             workspaceId: data.workspaceId,
             platform: comment.platform,
+            kind: comment.kind,
             comment: {
               body: comment.body,
               authorName: comment.author_name,

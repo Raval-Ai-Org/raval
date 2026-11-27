@@ -509,7 +509,8 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
           .eq("workspace_id", row.workspace_id);
         continue;
       }
-      const result = await syncEngage(row.workspace_id);
+      // Mox stops taking new comments once the sweep's budget is spent.
+      const result = await syncEngage(row.workspace_id, { deadline: started + budget });
       ran++;
       sent += result.automated;
     } catch (error) {

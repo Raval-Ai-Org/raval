@@ -26,6 +26,16 @@ export const POST = defineCronRoute({
     // Shared social trends: refreshed every few days, a no-op otherwise. Runs
     // after the response so it never slows or fails the schedules.
     after(async () => {
+      // Inbox first: people expect a comment answered within minutes, so the
+      // slower jobs below (trends refresh, picture captures) never hold it up.
+      // Reads comments for brands with auto-reply or live quick replies (about
+      // every three minutes each) and acts on new ones.
+      try {
+        const { runDueEngage } = await import("@/server/engage/automations.server");
+        await runDueEngage({ max: 10, budgetMs: 40_000 });
+      } catch (error) {
+        console.error("[engage] automation sweep failed", error);
+      }
       try {
         const { refreshSocialTrendsIfDue } = await import("@/server/studio/social-trends.server");
         await refreshSocialTrendsIfDue();
@@ -45,14 +55,6 @@ export const POST = defineCronRoute({
         await runDueVisualCaptures(1);
       } catch (error) {
         console.error("[visual-taste] capture sweep failed", error);
-      }
-      // Engage automations: read comments for brands with live rules (about
-      // every three minutes each) and act on new ones.
-      try {
-        const { runDueEngage } = await import("@/server/engage/automations.server");
-        await runDueEngage({ max: 10, budgetMs: 40_000 });
-      } catch (error) {
-        console.error("[engage] automation sweep failed", error);
       }
       try {
         const { purgeExpiredMemories } = await import("@/server/memory/service.server");

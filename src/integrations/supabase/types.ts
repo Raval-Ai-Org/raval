@@ -5416,6 +5416,424 @@ export type Database = {
         };
         Relationships: [];
       };
+      engage_comments: {
+        Row: {
+          author_name: string | null;
+          auto_sent: boolean;
+          body: string;
+          commented_at: string;
+          created_at: string;
+          dm_error: string | null;
+          dm_status: string;
+          dm_text: string | null;
+          draft: string | null;
+          drafted_at: string | null;
+          external_id: string;
+          id: string;
+          kind: string;
+          last_error: string | null;
+          matched_keyword: string | null;
+          mox_checked: boolean;
+          mox_note: string | null;
+          mox_state: string;
+          page_row_id: string;
+          platform: string;
+          post_caption: string | null;
+          post_id: string;
+          post_permalink: string | null;
+          question_id: string | null;
+          replied_at: string | null;
+          replied_by: string | null;
+          reply_external_id: string | null;
+          reply_text: string | null;
+          rule_id: string | null;
+          rules_checked: boolean;
+          sender_id: string | null;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          author_name?: string | null;
+          auto_sent?: boolean;
+          body: string;
+          commented_at: string;
+          created_at?: string;
+          dm_error?: string | null;
+          dm_status?: string;
+          dm_text?: string | null;
+          draft?: string | null;
+          drafted_at?: string | null;
+          external_id: string;
+          id?: string;
+          kind?: string;
+          last_error?: string | null;
+          matched_keyword?: string | null;
+          mox_checked?: boolean;
+          mox_note?: string | null;
+          mox_state?: string;
+          page_row_id: string;
+          platform: string;
+          post_caption?: string | null;
+          post_id: string;
+          post_permalink?: string | null;
+          question_id?: string | null;
+          replied_at?: string | null;
+          replied_by?: string | null;
+          reply_external_id?: string | null;
+          reply_text?: string | null;
+          rule_id?: string | null;
+          rules_checked?: boolean;
+          sender_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          author_name?: string | null;
+          auto_sent?: boolean;
+          body?: string;
+          commented_at?: string;
+          created_at?: string;
+          dm_error?: string | null;
+          dm_status?: string;
+          dm_text?: string | null;
+          draft?: string | null;
+          drafted_at?: string | null;
+          external_id?: string;
+          id?: string;
+          kind?: string;
+          last_error?: string | null;
+          matched_keyword?: string | null;
+          mox_checked?: boolean;
+          mox_note?: string | null;
+          mox_state?: string;
+          page_row_id?: string;
+          platform?: string;
+          post_caption?: string | null;
+          post_id?: string;
+          post_permalink?: string | null;
+          question_id?: string | null;
+          replied_at?: string | null;
+          replied_by?: string | null;
+          reply_external_id?: string | null;
+          reply_text?: string | null;
+          rule_id?: string | null;
+          rules_checked?: boolean;
+          sender_id?: string | null;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "engage_comments_page_row_id_fkey";
+            columns: ["page_row_id"];
+            isOneToOne: false;
+            referencedRelation: "meta_pages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "engage_comments_question_id_fkey";
+            columns: ["question_id"];
+            isOneToOne: false;
+            referencedRelation: "engage_questions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "engage_comments_rule_id_fkey";
+            columns: ["rule_id"];
+            isOneToOne: false;
+            referencedRelation: "engage_rules";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "engage_comments_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      engage_examples: {
+        Row: {
+          comment: string;
+          created_at: string;
+          id: string;
+          platform: string;
+          reply: string;
+          workspace_id: string;
+        };
+        Insert: {
+          comment: string;
+          created_at?: string;
+          id?: string;
+          platform: string;
+          reply: string;
+          workspace_id: string;
+        };
+        Update: {
+          comment?: string;
+          created_at?: string;
+          id?: string;
+          platform?: string;
+          reply?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "engage_examples_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      engage_knowledge: {
+        Row: {
+          answer: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          question: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          answer: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          question: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          answer?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          question?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "engage_knowledge_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      engage_questions: {
+        Row: {
+          answer: string | null;
+          answered_at: string | null;
+          answered_by: string | null;
+          asked_count: number;
+          created_at: string;
+          example_comment: string | null;
+          fingerprint: string;
+          id: string;
+          knowledge_id: string | null;
+          question: string;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          answer?: string | null;
+          answered_at?: string | null;
+          answered_by?: string | null;
+          asked_count?: number;
+          created_at?: string;
+          example_comment?: string | null;
+          fingerprint: string;
+          id?: string;
+          knowledge_id?: string | null;
+          question: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          answer?: string | null;
+          answered_at?: string | null;
+          answered_by?: string | null;
+          asked_count?: number;
+          created_at?: string;
+          example_comment?: string | null;
+          fingerprint?: string;
+          id?: string;
+          knowledge_id?: string | null;
+          question?: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "engage_questions_knowledge_id_fkey";
+            columns: ["knowledge_id"];
+            isOneToOne: false;
+            referencedRelation: "engage_knowledge";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "engage_questions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      engage_rules: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          dm_count: number;
+          dm_enabled: boolean;
+          dm_link: string | null;
+          dm_message: string | null;
+          id: string;
+          keywords: string[];
+          last_matched_at: string | null;
+          live_since: string;
+          match: string;
+          matched_count: number;
+          mox_guidance: string | null;
+          name: string;
+          platforms: string[];
+          position: number;
+          post_ids: string[];
+          post_scope: string;
+          replies: string[];
+          reply_mode: string;
+          send_mode: string;
+          sent_count: number;
+          status: string;
+          updated_at: string;
+          whole_word: boolean;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          dm_count?: number;
+          dm_enabled?: boolean;
+          dm_link?: string | null;
+          dm_message?: string | null;
+          id?: string;
+          keywords?: string[];
+          last_matched_at?: string | null;
+          live_since?: string;
+          match?: string;
+          matched_count?: number;
+          mox_guidance?: string | null;
+          name: string;
+          platforms?: string[];
+          position?: number;
+          post_ids?: string[];
+          post_scope?: string;
+          replies?: string[];
+          reply_mode?: string;
+          send_mode?: string;
+          sent_count?: number;
+          status?: string;
+          updated_at?: string;
+          whole_word?: boolean;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          dm_count?: number;
+          dm_enabled?: boolean;
+          dm_link?: string | null;
+          dm_message?: string | null;
+          id?: string;
+          keywords?: string[];
+          last_matched_at?: string | null;
+          live_since?: string;
+          match?: string;
+          matched_count?: number;
+          mox_guidance?: string | null;
+          name?: string;
+          platforms?: string[];
+          position?: number;
+          post_ids?: string[];
+          post_scope?: string;
+          replies?: string[];
+          reply_mode?: string;
+          send_mode?: string;
+          sent_count?: number;
+          status?: string;
+          updated_at?: string;
+          whole_word?: boolean;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "engage_rules_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      engage_settings: {
+        Row: {
+          auto_reply: boolean;
+          auto_reply_since: string;
+          automations_on: boolean;
+          guidelines: string;
+          hour_started_at: string;
+          last_run_at: string | null;
+          next_sync_at: string;
+          sent_this_hour: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          auto_reply?: boolean;
+          auto_reply_since?: string;
+          automations_on?: boolean;
+          guidelines?: string;
+          hour_started_at?: string;
+          last_run_at?: string | null;
+          next_sync_at?: string;
+          sent_this_hour?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          auto_reply?: boolean;
+          auto_reply_since?: string;
+          automations_on?: boolean;
+          guidelines?: string;
+          hour_started_at?: string;
+          last_run_at?: string | null;
+          next_sync_at?: string;
+          sent_this_hour?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "engage_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       entitlement_overrides: {
         Row: {
           account_id: string;
@@ -8301,6 +8719,144 @@ export type Database = {
           },
         ];
       };
+      meta_oauth_credentials: {
+        Row: {
+          connection_id: string;
+          created_at: string;
+          scopes: string[];
+          updated_at: string;
+          user_token_enc: string;
+          user_token_expires_at: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id: string;
+          created_at?: string;
+          scopes?: string[];
+          updated_at?: string;
+          user_token_enc: string;
+          user_token_expires_at?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string;
+          created_at?: string;
+          scopes?: string[];
+          updated_at?: string;
+          user_token_enc?: string;
+          user_token_expires_at?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meta_oauth_credentials_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: true;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "meta_oauth_credentials_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meta_page_tokens: {
+        Row: {
+          page_row_id: string;
+          page_token_enc: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          page_row_id: string;
+          page_token_enc: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          page_row_id?: string;
+          page_token_enc?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meta_page_tokens_page_row_id_fkey";
+            columns: ["page_row_id"];
+            isOneToOne: true;
+            referencedRelation: "meta_pages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "meta_page_tokens_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meta_pages: {
+        Row: {
+          connection_id: string;
+          created_at: string;
+          id: string;
+          ig_user_id: string | null;
+          ig_username: string | null;
+          last_error: string | null;
+          page_id: string;
+          page_name: string;
+          synced_at: string | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          connection_id: string;
+          created_at?: string;
+          id?: string;
+          ig_user_id?: string | null;
+          ig_username?: string | null;
+          last_error?: string | null;
+          page_id: string;
+          page_name: string;
+          synced_at?: string | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          connection_id?: string;
+          created_at?: string;
+          id?: string;
+          ig_user_id?: string | null;
+          ig_username?: string | null;
+          last_error?: string | null;
+          page_id?: string;
+          page_name?: string;
+          synced_at?: string | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meta_pages_connection_id_fkey";
+            columns: ["connection_id"];
+            isOneToOne: false;
+            referencedRelation: "workspace_connections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "meta_pages_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       meter_balances: {
         Row: {
           account_id: string;
@@ -8786,6 +9342,81 @@ export type Database = {
           engaged?: boolean;
           key?: string;
           reason?: string | null;
+        };
+        Relationships: [];
+      };
+      platform_trends: {
+        Row: {
+          allow_mood: boolean;
+          brief: string;
+          created_at: string;
+          created_by: string | null;
+          do_nots: string;
+          ends_at: string | null;
+          id: string;
+          industries: string[];
+          languages: string[];
+          links: string[];
+          media: Json;
+          platforms: string[];
+          priority: number;
+          published_at: string | null;
+          scope: string;
+          starts_at: string;
+          status: string;
+          tags: string[];
+          title: string;
+          updated_at: string;
+          what_to_make: string;
+          workspace_ids: string[];
+        };
+        Insert: {
+          allow_mood?: boolean;
+          brief?: string;
+          created_at?: string;
+          created_by?: string | null;
+          do_nots?: string;
+          ends_at?: string | null;
+          id?: string;
+          industries?: string[];
+          languages?: string[];
+          links?: string[];
+          media?: Json;
+          platforms?: string[];
+          priority?: number;
+          published_at?: string | null;
+          scope?: string;
+          starts_at?: string;
+          status?: string;
+          tags?: string[];
+          title: string;
+          updated_at?: string;
+          what_to_make?: string;
+          workspace_ids?: string[];
+        };
+        Update: {
+          allow_mood?: boolean;
+          brief?: string;
+          created_at?: string;
+          created_by?: string | null;
+          do_nots?: string;
+          ends_at?: string | null;
+          id?: string;
+          industries?: string[];
+          languages?: string[];
+          links?: string[];
+          media?: Json;
+          platforms?: string[];
+          priority?: number;
+          published_at?: string | null;
+          scope?: string;
+          starts_at?: string;
+          status?: string;
+          tags?: string[];
+          title?: string;
+          updated_at?: string;
+          what_to_make?: string;
+          workspace_ids?: string[];
         };
         Relationships: [];
       };
@@ -10309,6 +10940,50 @@ export type Database = {
           },
           {
             foreignKeyName: "studio_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tracked_links: {
+        Row: {
+          clicks: number;
+          created_at: string;
+          id: string;
+          job_id: string | null;
+          last_clicked_at: string | null;
+          platform: string | null;
+          slug: string;
+          target_url: string;
+          workspace_id: string;
+        };
+        Insert: {
+          clicks?: number;
+          created_at?: string;
+          id?: string;
+          job_id?: string | null;
+          last_clicked_at?: string | null;
+          platform?: string | null;
+          slug: string;
+          target_url: string;
+          workspace_id: string;
+        };
+        Update: {
+          clicks?: number;
+          created_at?: string;
+          id?: string;
+          job_id?: string | null;
+          last_clicked_at?: string | null;
+          platform?: string | null;
+          slug?: string;
+          target_url?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tracked_links_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -12336,6 +13011,19 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_trend_save: {
+        Args: {
+          p_actor: string;
+          p_actor_role: string;
+          p_id: string;
+          p_trend: Json;
+          p_reason: string;
+          p_request_id: string;
+          p_ip: string;
+          p_user_agent: string;
+        };
+        Returns: Json;
+      };
       admin_usage: { Args: { p_days: number }; Returns: Json };
       admin_user_add_note: {
         Args: {
@@ -12630,6 +13318,11 @@ export type Database = {
       };
       creation_cost_report: { Args: never; Returns: Json };
       creation_plan_window: { Args: { p: Json }; Returns: string };
+      engage_rule_bump: {
+        Args: { p_rule: string; p_matched: number; p_sent: number; p_dm: number };
+        Returns: undefined;
+      };
+      engage_take_send: { Args: { p_workspace: string; p_cap: number }; Returns: boolean };
       ensure_billing_account: { Args: { p_user: string }; Returns: string };
       experiment_overview: {
         Args: never;
@@ -12642,6 +13335,29 @@ export type Database = {
         }[];
       };
       is_workspace_member: { Args: { _workspace_id: string; _user_id: string }; Returns: boolean };
+      live_trends_for: {
+        Args: { p_workspace_id: string };
+        Returns: {
+          id: string;
+          title: string;
+          brief: string;
+          what_to_make: string;
+          do_nots: string;
+          scope: string;
+          industries: string[];
+          aimed_here: boolean;
+          languages: string[];
+          platforms: string[];
+          tags: string[];
+          links: string[];
+          media: Json;
+          allow_mood: boolean;
+          priority: number;
+          status: string;
+          starts_at: string;
+          ends_at: string;
+        }[];
+      };
       log_audit: {
         Args: { _workspace_id: string; _action: string; _entity?: string; _payload?: Json };
         Returns: string;
@@ -12760,6 +13476,8 @@ export type Database = {
       };
       sweep_rixot_donors: { Args: { p_before: string }; Returns: number };
       tombstone_migrated_media: { Args: { paths: string[] }; Returns: undefined };
+      track_link_click: { Args: { p_slug: string }; Returns: string };
+      tracked_link_target: { Args: { p_slug: string }; Returns: string };
       upsert_rixot_donors: { Args: { p_rows: Json }; Returns: number };
       use_manual_visual_look: {
         Args: { p_workspace: string; p_expected: string };

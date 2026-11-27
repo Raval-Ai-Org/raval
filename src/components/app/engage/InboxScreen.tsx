@@ -71,6 +71,7 @@ import {
 import { MAX_REPLY_CHARS } from "@/lib/engage/reply";
 import { MAX_GUIDELINES } from "@/lib/engage/auto-reply";
 import { PLATFORM_LABEL } from "@/lib/engage/contracts";
+import { healthSummary, inboxHealth, type HealthState } from "@/lib/engage/health";
 import { MAX_ANSWERS, tidyAnswer } from "@/lib/engage/training";
 import {
   MAX_KEYWORDS,
@@ -152,7 +153,7 @@ export function InboxScreen(props: InboxScreenProps) {
           </div>
           <p className="max-w-[560px] text-[13px] text-muted-foreground">
             Comments on {handle}
-            {igNames.length ? ` and @${igNames[0]}` : ""}.{" "}
+            {igNames.length ? ` and @${igNames[0]}` : " (Facebook only)"}.{" "}
             {data.autoReply
               ? "Mox answers them by itself and asks you only what it doesn't know."
               : "Turn on Auto-reply and Mox answers them by itself."}
@@ -207,6 +208,9 @@ export function InboxScreen(props: InboxScreenProps) {
           </div>
         )}
       </div>
+
+      {/* ── what works and what is missing ── */}
+      <SetupCheck {...props} />
 
       {/* ── what Mox needs to know ── */}
       {data.questions.length > 0 && (
@@ -272,7 +276,9 @@ export function InboxScreen(props: InboxScreenProps) {
                 description={
                   filter === "waiting"
                     ? data.autoReply
-                      ? "Mox is answering new comments. Only what needs you shows here."
+                      ? data.pages.some((p) => p.hasInstagram)
+                        ? "Mox is answering new comments. Only what needs you shows here."
+                        : "Mox is answering new comments on your Facebook Page. Instagram isn't connected yet (see Setup check)."
                       : "New comments show here. Turn on Auto-reply and Mox answers them by itself."
                     : "Replies Mox and you sent show here."
                 }
@@ -662,6 +668,14 @@ function CommentCard(props: {
         <div className="min-w-0 flex-1">
           <p className="text-[12px] text-muted-foreground">
             <span className="font-semibold text-foreground">{c.authorName ?? "Someone"}</span>
+            {" · "}
+            {c.kind === "dm" ? (
+              <span className="font-medium text-foreground">
+                {c.platform === "instagram" ? "Instagram DM" : "Messenger"}
+              </span>
+            ) : (
+              "Comment"
+            )}
             {" · "}
             {ago(c.commentedAt)}
             {c.postPermalink && (
@@ -1524,6 +1538,87 @@ function QuickReplyDialog(props: {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ───────────────────────── setup check ───────────────────────── */
+
+const HEALTH_DOT: Record<HealthState, string> = {
+  ok: "bg-success",
+  warn: "bg-warning",
+  off: "bg-muted-foreground/40",
+};
+
+/**
+ * What the Inbox can really do now, and what it does for the brand. Open
+ * while something is missing; folds to one line once everything works.
+ */
+function SetupCheck(props: InboxScreenProps) {
+  const items = inboxHealth(props.data);
+  const summary = healthSummary(items);
+  const [open, setOpen] = useState(summary !== null);
+  if (!items.length) return null;
+  const needsReconnect = items.some((i) => i.reconnect && i.state !== "ok");
+  return (
+    <div className="ds-tile p-4" data-testid="inbox-setup-check">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn("flex w-full items-center gap-2 text-left", dsFocus)}
+        aria-expanded={open}
+      >
+        <span
+          className={cn("size-2 shrink-0 rounded-full", summary ? "bg-warning" : "bg-success")}
+          aria-hidden
+        />
+        <span className="ds-label">Setup check</span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
+          {summary ?? "Everything works"}
+        </span>
+        <span className="text-[12px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <p className="text-[12.5px] text-muted-foreground">
+            The Inbox answers comments on your posts and the DMs people send you on Instagram and
+            Messenger: Mox replies within minutes to what it knows, asks you once what it
+            doesn&apos;t know (and remembers your answer), and leaves complaints and orders to you
+            with a draft ready. Quick replies can also send a link by DM to people who comment a
+            keyword.
+          </p>
+          <ul className="space-y-2">
+            {items.map((i) => (
+              <li key={i.id} className="flex gap-2.5 text-[12.5px]">
+                <span
+                  className={cn("mt-1.5 size-2 shrink-0 rounded-full", HEALTH_DOT[i.state])}
+                  aria-hidden
+                />
+                <span className="min-w-0">
+                  <span className="block font-medium text-foreground">{i.title}</span>
+                  <span className="block text-muted-foreground">{i.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {needsReconnect && props.canEdit && (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
+                onClick={props.onConnect}
+                disabled={props.waiting}
+              >
+                {props.waiting ? "Waiting for Meta…" : "Connect again"}
+              </button>
+              <span className="text-[12px] text-muted-foreground">
+                In Meta's window, tick your Page and your Instagram account, and allow every
+                permission it lists.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
