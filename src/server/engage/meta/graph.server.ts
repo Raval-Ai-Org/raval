@@ -121,6 +121,18 @@ export async function graphPost<T>(
   throw classify(res.status, body);
 }
 
+/** A delete (e.g. a Page's webhook subscription). Never retried. */
+export async function graphDelete(path: string, token: string): Promise<void> {
+  const res = await fetch(url(path, {}, token), {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: "no-store",
+  });
+  const body = (await res.json().catch(() => ({}))) as GraphErrorBody;
+  if (!res.ok || body.error) throw classify(res.status, body);
+}
+
 /** Code → user token, then the long-lived one (about 60 days). */
 export async function exchangeMetaCode(
   code: string,

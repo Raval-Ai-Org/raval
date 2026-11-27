@@ -51,6 +51,7 @@ import { metaConfig, metaConfigured } from "./meta/config.server";
 import {
   GraphError,
   exchangeMetaCode,
+  graphDelete,
   graphGet,
   graphPost,
   type GraphList,
@@ -531,6 +532,24 @@ export async function completeMetaOAuth(args: { state: string; code: string }) {
 export async function disconnectMeta(workspaceId: string, userId: string): Promise<void> {
   const conn = await activeConnection(workspaceId);
   if (!conn) return;
+  // Unsubscribe each Page from Mellox's webhook first, while the token is
+  // still here. Best effort: a token Meta already revoked can't do it, and
+  // Meta drops the subscription itself when the app is removed.
+  const { data: pages } = await db
+    .from("meta_pages")
+    .select("id,page_id")
+    .eq("workspace_id", workspaceId);
+  for (const p of (pages ?? []) as { id: string; page_id: string }[]) {
+    try {
+      await graphDelete(`${p.page_id}/subscribed_apps`, await pageToken(workspaceId, p.id));
+    } catch (error) {
+      console.warn(
+        "[engage] page webhook unsubscribe skipped",
+        p.page_id,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
   await db.from("meta_pages").delete().eq("workspace_id", workspaceId);
   await db.from("meta_oauth_credentials").delete().eq("connection_id", conn.id);
   // Everything from the account goes (privacy policy): reply examples and the

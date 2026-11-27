@@ -6,20 +6,21 @@ Written 2026-11-27.
 
 ## Status
 
-| Step                                                          | State                                                                                                  |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Business verification (MELLOX (PRIVATE) LIMITED)              | Done, verified 24 Nov 2026                                                                             |
-| Privacy policy, terms                                         | `https://mellox.ai/privacy`, `https://mellox.ai/terms` (both name Meta data, AI replies and retention) |
-| App icon, category (Business and pages), contact email        | Done                                                                                                   |
-| Data deletion instructions (App settings → Basic)             | `https://mellox.ai/data-deletion`                                                                      |
-| Deauthorize callback (Facebook Login for Business → Settings) | `https://mellox.ai/api/integrations/meta/deauthorize`                                                  |
-| Data deletion request callback (same page)                    | `https://mellox.ai/api/integrations/meta/data-deletion`, status page `/data-deletion/status?code=…`    |
-| Login configuration grants messaging scopes                   | Done (`pages_messaging`, `instagram_manage_messages`)                                                  |
-| Become a Tech Provider (Dashboard)                            | **Owner's click**: needed to submit App Review; Meta says it can't be undone                           |
-| Data handling questions                                       | After Tech Provider; answers below                                                                     |
-| Screencasts (one per permission)                              | **To record**: script below                                                                            |
-| Reviewer test account on Mellox                               | **To create**: a Mellox login with an active plan and the Inbox connected to a test Page               |
-| Submit for review, then switch the app to Live                | After the above                                                                                        |
+| Step                                                          | State                                                                                                                                                                 |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Business verification (MELLOX (PRIVATE) LIMITED)              | Done, verified 24 Nov 2026                                                                                                                                            |
+| Privacy policy, terms                                         | `https://mellox.ai/privacy`, `https://mellox.ai/terms` (both name Meta data, AI replies and retention)                                                                |
+| App icon, category (Business and pages), contact email        | Done                                                                                                                                                                  |
+| Data deletion instructions (App settings → Basic)             | `https://mellox.ai/data-deletion`                                                                                                                                     |
+| Deauthorize callback (Facebook Login for Business → Settings) | `https://mellox.ai/api/integrations/meta/deauthorize`                                                                                                                 |
+| Data deletion request callback (same page)                    | `https://mellox.ai/api/integrations/meta/data-deletion`, status page `/data-deletion/status?code=…`                                                                   |
+| Login configuration grants messaging scopes                   | Done (`pages_messaging`, `instagram_manage_messages`)                                                                                                                 |
+| Become a Tech Provider (Dashboard)                            | Done (27 Nov 2026)                                                                                                                                                    |
+| Data handling questions                                       | Done in the draft submission: processors Supabase (Singapore), Railway (Singapore), KIE and OpenRouter (United States); controller MELLOX (PRIVATE) LIMITED, Pakistan |
+| Screencasts (one per permission)                              | **To record and upload**: script below; every permission's description and agreement are already saved in the draft                                                   |
+| Reviewer test account on Mellox                               | **To create** (owner): a Mellox login with an active plan and the Inbox connected; then App settings → Basic → Website → Add or update instructions                   |
+| Unused items taken out of the submission                      | Human Agent, instagram_business_basic / _manage_messages / _manage_comments (Instagram Login, not used)                                                               |
+| Submit for review, then switch the app to Live                | After the above                                                                                                                                                       |
 
 ## Permissions and what to write for each
 
