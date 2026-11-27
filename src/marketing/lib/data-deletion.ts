@@ -3,7 +3,7 @@
 import { META_DELETION_DAYS, META_MESSAGE_RETENTION_DAYS } from "./privacy";
 import type { TermsSection } from "./terms";
 
-export const DATA_DELETION_UPDATED = "24 November 2026";
+export const DATA_DELETION_UPDATED = "27 November 2026";
 
 export const DATA_DELETION_PREFACE = [
   "You can remove Mellox's access to your accounts and have the data Mellox holds about you deleted at any time. This page explains how, what is deleted and how long it takes.",
@@ -15,7 +15,7 @@ export const DATA_DELETION: TermsSection[] = [
     id: "remove-access",
     title: "Remove Mellox from Instagram or Facebook",
     paras: [
-      "This stops Mellox from reading or posting anything new straight away. Mellox then deletes the data it holds from that account, as described below.",
+      "This stops Mellox from reading or posting anything new straight away. Facebook tells Mellox, and Mellox deletes the data it holds from that account at once, as described below.",
     ],
     blocks: [
       { h: "Instagram" },
@@ -43,7 +43,8 @@ export const DATA_DELETION: TermsSection[] = [
     id: "request-deletion",
     title: "Ask us to delete your data",
     paras: [
-      "Email privacy@mellox.ai with the subject Data deletion request, or use https://mellox.ai/contact. Tell us the Instagram username, Facebook Page or Mellox account email the request is about. We may ask you to confirm the request from that account or email so nobody can delete someone else's data.",
+      "On Facebook you can also ask from Settings and privacy → Settings → Apps and websites → Mellox → Send request: Mellox deletes at once and gives you a confirmation code you can check on this site.",
+      "Or email privacy@mellox.ai with the subject Data deletion request, or use https://mellox.ai/contact. Tell us the Instagram username, Facebook Page or Mellox account email the request is about. We may ask you to confirm the request from that account or email so nobody can delete someone else's data.",
       "If you are not a Mellox customer but commented on or messaged a business that uses Mellox, include the business's account name and your own username. That business controls its own copy of the conversation, but we will delete what Mellox holds.",
     ],
   },

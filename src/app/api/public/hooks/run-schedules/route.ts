@@ -32,10 +32,19 @@ export const POST = defineCronRoute({
       // every three minutes each) and acts on new ones.
       try {
         const { runDueEngage } = await import("@/server/engage/automations.server");
-        await runDueEngage({ max: 10, budgetMs: 40_000 });
+        await runDueEngage({ max: 40, budgetMs: 40_000 });
       } catch (error) {
         console.error("[engage] automation sweep failed", error);
       }
+      // Instagram and Facebook comments and messages are kept 90 days
+      // (privacy policy); cleared once an hour.
+      if (new Date().getUTCMinutes() === 17)
+        try {
+          const { purgeOldEngageData } = await import("@/server/engage/meta/deletion.server");
+          await purgeOldEngageData();
+        } catch (error) {
+          console.error("[engage] retention purge failed", error);
+        }
       try {
         const { refreshSocialTrendsIfDue } = await import("@/server/studio/social-trends.server");
         await refreshSocialTrendsIfDue();

@@ -521,6 +521,14 @@ export async function disconnectMeta(workspaceId: string, userId: string): Promi
   if (!conn) return;
   await db.from("meta_pages").delete().eq("workspace_id", workspaceId);
   await db.from("meta_oauth_credentials").delete().eq("connection_id", conn.id);
+  // Everything from the account goes (privacy policy): reply examples and the
+  // comments quoted on open questions came from it too.
+  await db.from("engage_examples").delete().eq("workspace_id", workspaceId);
+  await db
+    .from("engage_questions")
+    .update({ example_comment: null })
+    .eq("workspace_id", workspaceId)
+    .not("example_comment", "is", null);
   await db
     .from("workspace_connections")
     .update({

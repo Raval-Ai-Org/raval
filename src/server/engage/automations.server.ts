@@ -49,6 +49,8 @@ const db = supabaseAdmin as unknown as SupabaseClient;
 
 /** How often a brand with live automations is read. */
 const SYNC_EVERY_MS = 3 * 60_000;
+/** Brands read at the same time by one sweep. */
+const SWEEP_LANES = 5;
 /** Comments matched per run; the rest wait for the next one. */
 const CHECK_PER_RUN = 60;
 
@@ -466,7 +468,7 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
     .or("automations_on.eq.true,auto_reply.eq.true")
     .lte("next_sync_at", now)
     .order("next_sync_at")
-    .limit(opts.max ?? 10);
+    .limit(opts.max ?? 40);
   const due = (data ?? []) as {
     workspace_id: string;
     next_sync_at: string;
@@ -476,17 +478,16 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
   const { loadBackgroundAccount } = await import("@/server/background/account.server");
   let ran = 0;
   let sent = 0;
-  for (const row of due) {
-    if (Date.now() - started > budget) break;
+  const one = async (row: (typeof due)[number]) => {
     const { data: claimed } = await db
       .from("engage_settings")
       .update({ next_sync_at: new Date(Date.now() + SYNC_EVERY_MS).toISOString() })
       .eq("workspace_id", row.workspace_id)
       .eq("next_sync_at", row.next_sync_at)
       .select("workspace_id");
-    if (!claimed?.length) continue;
+    if (!claimed?.length) return;
     try {
-      if (!isEngageEnabled(row.workspace_id)) continue;
+      if (!isEngageEnabled(row.workspace_id)) return;
       const { count } = await db
         .from("engage_rules")
         .select("id", { count: "exact", head: true })
@@ -498,7 +499,7 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
           .from("engage_settings")
           .update({ next_sync_at: new Date(Date.now() + 60 * 60_000).toISOString() })
           .eq("workspace_id", row.workspace_id);
-        continue;
+        return;
       }
       // A brand without a running plan gets no automatic replies.
       const account = await loadBackgroundAccount(row.workspace_id);
@@ -507,7 +508,7 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
           .from("engage_settings")
           .update({ next_sync_at: new Date(Date.now() + 6 * 60 * 60_000).toISOString() })
           .eq("workspace_id", row.workspace_id);
-        continue;
+        return;
       }
       // Mox stops taking new comments once the sweep's budget is spent.
       const result = await syncEngage(row.workspace_id, { deadline: started + budget });
@@ -516,7 +517,17 @@ export async function runDueEngage(opts: { max?: number; budgetMs?: number } = {
     } catch (error) {
       console.error("[engage] automation sweep failed", row.workspace_id, error);
     }
-  }
+  };
+  // A few brands at a time: each one mostly waits on Meta and the model, so
+  // this serves many brands a minute without one slow brand holding the rest.
+  const queue = [...due];
+  const lanes = Array.from({ length: Math.min(SWEEP_LANES, queue.length) }, async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
+      if (Date.now() - started > budget) return;
+      await one(row);
+    }
+  });
+  await Promise.all(lanes);
   return { due: due.length, ran, sent };
 }
 
