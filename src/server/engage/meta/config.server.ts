@@ -1,6 +1,7 @@
 // config.server.ts — Mellox's own Meta app (Facebook Login for Business).
 // The brand never brings a Meta app or a token of its own.
 import "server-only";
+import { createHmac } from "node:crypto";
 import { connectorEncryptionKeys, SecretKeyError } from "@/server/crypto/secret-box.server";
 import { HttpError } from "@/server/http-error";
 
@@ -19,6 +20,9 @@ export const META_SCOPES = [
   // the public reply still goes out and the message is skipped with a note.
   "instagram_manage_messages",
   "pages_messaging",
+  // Subscribes the Page to Mellox's webhook, so a new comment or message is
+  // read within a minute instead of at the next three-minute sweep.
+  "pages_manage_metadata",
 ] as const;
 
 export function metaConfig() {
@@ -68,6 +72,19 @@ export function metaConfig() {
     throw error;
   }
   return { appId, appSecret, redirectUri: uri.toString(), version, loginConfigId, ...keys };
+}
+
+/**
+ * The token Meta echoes when the webhook is set up. META_WEBHOOK_VERIFY_TOKEN
+ * when set, else derived from the app secret, so no extra secret is needed.
+ */
+export function metaWebhookToken(): string {
+  const set = process.env.META_WEBHOOK_VERIFY_TOKEN?.trim();
+  if (set) return set;
+  return createHmac("sha256", metaConfig().appSecret)
+    .update("mellox-meta-webhook-v1")
+    .digest("hex")
+    .slice(0, 40);
 }
 
 export function metaConfigured(): boolean {

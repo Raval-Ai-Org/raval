@@ -56,6 +56,12 @@ in the Inbox. The business (or Mox, if switched on) answers within 24 hours of
 the person's last message, as a RESPONSE message. Mellox never starts a
 conversation, never sends promotions, and stops if the 24-hour window closed.
 
+**pages_manage_metadata**: When a business connects, Mellox subscribes its
+Page to Mellox's webhook (feed and messages). Meta then tells Mellox the
+moment a new comment or message arrives, and the Inbox reads it within a
+minute instead of waiting for the next scheduled read. Mellox changes no other
+Page setting.
+
 **instagram_basic**: Mellox reads the Instagram professional account's
 username and recent posts so comments can be shown with the post they belong
 to.

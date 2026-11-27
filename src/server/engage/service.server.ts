@@ -495,6 +495,18 @@ export async function completeMetaOAuth(args: { state: string; code: string }) {
       },
       { onConflict: "page_row_id" },
     );
+    // Meta then tells Mellox about new comments and messages at once (the
+    // webhook wakes the sweep). Best effort: without it the sweep still reads
+    // every few minutes. Repeating it is harmless.
+    await graphPost(`${p.id}/subscribed_apps`, p.access_token!, {
+      subscribed_fields: "feed,messages",
+    }).catch((error: unknown) =>
+      console.warn(
+        "[engage] page webhook subscribe skipped",
+        p.id,
+        error instanceof Error ? error.message : error,
+      ),
+    );
   }
   const stale = db.from("meta_pages").delete().eq("workspace_id", txn.workspaceId);
   await (keep.length ? stale.not("id", "in", `(${keep.join(",")})`) : stale);
