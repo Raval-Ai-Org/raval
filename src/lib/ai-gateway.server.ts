@@ -455,11 +455,32 @@ export function setLlmTransport(t: LlmTransport | null): () => void {
   };
 }
 
-export function sendCompletion(body: Record<string, unknown>, opts: TransportOpts): Promise<any> {
-  return (transportOverride ?? (aiProvider() === "kie" ? kieTransport : openRouterTransport))(
-    body,
-    opts,
+/** KIE says it can't pay or can't sign in: ours to fix, and OpenRouter can still answer. */
+function kieAccountProblem(error: unknown): boolean {
+  return (
+    error instanceof AiGatewayError &&
+    (error.code === "insufficient_credits" || error.code === "invalid_api_key")
   );
+}
+
+export async function sendCompletion(
+  body: Record<string, unknown>,
+  opts: TransportOpts,
+): Promise<any> {
+  if (transportOverride) return transportOverride(body, opts);
+  if (aiProvider() !== "kie") return openRouterTransport(body, opts);
+  try {
+    return await kieTransport(body, opts);
+  } catch (error) {
+    // An empty KIE balance must not stop every reply in the app: the same
+    // request goes once to OpenRouter (same model ids) while someone tops up.
+    if (!kieAccountProblem(error) || !process.env.OPENROUTER_API_KEY?.trim()) throw error;
+    console.error("[ai] KIE account problem, answering through OpenRouter", {
+      route: opts.route,
+      code: (error as AiGatewayError).code,
+    });
+    return openRouterTransport(body, opts);
+  }
 }
 
 /* ─────────────────────────────── request body ─────────────────────────────── */

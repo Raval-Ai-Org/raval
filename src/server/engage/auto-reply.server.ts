@@ -47,6 +47,9 @@ async function ensureSettings(workspaceId: string) {
     .upsert({ workspace_id: workspaceId }, { onConflict: "workspace_id", ignoreDuplicates: true });
 }
 
+/** How long Mox keeps retrying a comment when the AI service itself failed. */
+const RETRY_WINDOW_MS = 6 * 60 * 60 * 1000;
+
 const note = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 300);
 
 /** Answer, ask about or set aside every new comment no quick reply took. */
@@ -129,6 +132,18 @@ export async function runAutoReply(
         }
       }
     } catch (error) {
+      // Mox couldn't think (the AI service was down or out of balance): that
+      // says nothing about the comment, so let the next sweep try again while
+      // it's fresh instead of leaving it for a person.
+      const fresh = Date.now() - Date.parse(c.commented_at) < RETRY_WINDOW_MS;
+      if (fresh) {
+        await db
+          .from("engage_comments")
+          .update({ mox_checked: false, mox_note: "Mox will try again in a few minutes." })
+          .eq("workspace_id", workspaceId)
+          .eq("id", c.id);
+        continue;
+      }
       const message = error instanceof Error ? error.message : "Mox couldn't answer this one.";
       outcome = { kind: "hold", draft: null, note: message };
     }

@@ -707,7 +707,7 @@ async function storeMessages(workspaceId: string, page: PageRow, reads: DmRead[]
       continue;
     }
     if (r.kind !== "waiting") continue;
-    const { data: inserted } = await db
+    const { data: inserted, error: insertError } = await db
       .from("engage_comments")
       .upsert(
         // Quick replies are for comments; Mox (auto-reply) takes DMs.
@@ -715,6 +715,7 @@ async function storeMessages(workspaceId: string, page: PageRow, reads: DmRead[]
         { onConflict: "workspace_id,platform,external_id", ignoreDuplicates: true },
       )
       .select("id");
+    if (insertError) throw new Error(`Couldn't save a message: ${insertError.message}`);
     const id = (inserted?.[0] as { id: string } | undefined)?.id;
     if (!id) continue;
     added++;
@@ -749,13 +750,14 @@ export async function syncEngage(
     try {
       const rows = await readPage(page, await pageToken(workspaceId, page.id));
       if (rows.length) {
-        const { data: inserted } = await db
+        const { data: inserted, error: insertError } = await db
           .from("engage_comments")
           .upsert(
             rows.map((r) => ({ ...r, workspace_id: workspaceId, page_row_id: page.id })),
             { onConflict: "workspace_id,platform,external_id", ignoreDuplicates: true },
           )
           .select("id");
+        if (insertError) throw new Error(`Couldn't save comments: ${insertError.message}`);
         added += inserted?.length ?? 0;
       }
       let dmError: string | null = null;
