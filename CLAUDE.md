@@ -146,7 +146,15 @@ table in [MODEL-USAGE-AUDIT.md](MODEL-USAGE-AUDIT.md).
   Flash, GPT-6.1 Sol). Pictures go to GPT-6.1 Sol first and are uploaded to
   KIE's file store (KIE's Gemini can't open base64). Chat streams the finished
   reply as OpenAI SSE. `AI_PROVIDER=openrouter` / `IMAGE_PROVIDER=openrouter`
-  roll back. Live check: `tests/live/kie-chat.live.ts`.
+  roll back. **Back on OpenRouter (2026-11-28):** measured, KIE was 4-5x slower
+  for the same models (a Flare picture 75 s vs 15 s; Haiku 20 s vs 5 s) at the
+  same picture price, so `AI_PROVIDER=openrouter` / `IMAGE_PROVIDER=openrouter`
+  and Recraft V4.1 draws plain pictures again. KIE keeps video, sound and the
+  models in `AI_KIE_MODELS` (`kieTextModels`, default GPT-6.1 Sol: about a
+  quarter of the price there, analyst work nobody waits on per post); a kept
+  model that fails on KIE goes once to OpenRouter. On OpenRouter a 402 sends the
+  text request once to KIE (pictures switch by themselves). Usage rows record
+  the provider that answered (`answeredBy`). Live check: `tests/live/kie-chat.live.ts`.
 - **No Anthropic API.** Without KIE, text, vision, tool use and images all go
   through OpenRouter (`OPENROUTER_API_KEY`). Claude is used as
   Sonnet / Haiku 5.5 via OpenRouter; `anthropic/claude-opus-5.5` is kept only

@@ -39,7 +39,7 @@ import { getAppUrl } from "@/server/env";
 import { humanizeText } from "@/lib/ai/humanize-text";
 import { safeParseJson } from "@/lib/ai/json";
 import { logGuardrailEvent } from "@/server/guardrails/events";
-import { aiProvider } from "./ai-provider.server";
+import { aiProvider, textProviderFor, type AiProvider } from "./ai-provider.server";
 import { completionAsSse, kieTransport } from "./kie-chat.server";
 
 export const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
@@ -468,19 +468,58 @@ export async function sendCompletion(
   opts: TransportOpts,
 ): Promise<any> {
   if (transportOverride) return transportOverride(body, opts);
-  if (aiProvider() !== "kie") return openRouterTransport(body, opts);
+  const tag = (json: any, provider: AiProvider) => {
+    if (json && typeof json === "object") json._provider = provider;
+    return json;
+  };
+  const primary = Array.isArray(body.models) ? String(body.models[0] ?? "") : undefined;
+  const target = textProviderFor(primary);
+  if (target === "openrouter") {
+    try {
+      return tag(await openRouterTransport(body, opts), "openrouter");
+    } catch (error) {
+      // OpenRouter is fast (about 4x KIE, measured 2026-11-28) but its balance
+      // runs dry: a 402 sends the same request once to KIE, like pictures do.
+      if (
+        !(error instanceof AiGatewayError && error.code === "insufficient_credits") ||
+        !process.env.KIE_API_KEY?.trim()
+      )
+        throw error;
+      console.error("[ai] OpenRouter out of credits, answering through KIE", {
+        route: opts.route,
+      });
+      return tag(await kieTransport(body, opts), "kie");
+    }
+  }
+  // A model kept on KIE for price while OpenRouter is the main provider:
+  // any KIE failure goes once to OpenRouter, except a timeout the caller
+  // asked not to repeat (it may already be billed).
+  const keptOnKie = aiProvider() !== "kie";
   try {
-    return await kieTransport(body, opts);
+    return tag(await kieTransport(body, opts), "kie");
   } catch (error) {
+    const moveOn = keptOnKie
+      ? !(
+          error instanceof AiGatewayError &&
+          error.code === "timeout" &&
+          opts.retryOnTimeout === false
+        )
+      : kieAccountProblem(error);
     // An empty KIE balance must not stop every reply in the app: the same
     // request goes once to OpenRouter (same model ids) while someone tops up.
-    if (!kieAccountProblem(error) || !process.env.OPENROUTER_API_KEY?.trim()) throw error;
-    console.error("[ai] KIE account problem, answering through OpenRouter", {
+    if (!moveOn || !process.env.OPENROUTER_API_KEY?.trim()) throw error;
+    console.error("[ai] KIE failed, answering through OpenRouter", {
       route: opts.route,
-      code: (error as AiGatewayError).code,
+      code: error instanceof AiGatewayError ? error.code : undefined,
     });
-    return openRouterTransport(body, opts);
+    return tag(await openRouterTransport(body, opts), "openrouter");
   }
+}
+
+/** The provider that answered (set by sendCompletion), else the configured one. */
+export function answeredBy(json: unknown, primary?: string): AiProvider {
+  const provider = (json as { _provider?: unknown } | null)?._provider;
+  return provider === "kie" || provider === "openrouter" ? provider : textProviderFor(primary);
 }
 
 /* ─────────────────────────────── request body ─────────────────────────────── */
@@ -716,7 +755,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       if (hit) {
         const model = hit.json?.model ?? primary;
         recordUsage({
-          provider: aiProvider(),
+          provider: answeredBy(hit.json, primary),
           model,
           route,
           cached: true,
@@ -742,7 +781,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       });
     } catch (error) {
       recordUsage({
-        provider: aiProvider(),
+        provider: textProviderFor(primary),
         model: primary,
         route,
         status: "error",
@@ -755,7 +794,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
     // content and finish_reason "error". That text is never an answer.
     if (json?.choices?.[0]?.finish_reason === "error") {
       recordUsage({
-        provider: aiProvider(),
+        provider: answeredBy(json, primary),
         model,
         route,
         ...usageTokens(json?.usage),
@@ -774,7 +813,7 @@ export async function chatCompletion(opts: ChatOptions): Promise<any & Completio
       console.info("[ai-gateway] answered by a different model", { route, primary, model });
     }
     recordUsage({
-      provider: aiProvider(),
+      provider: answeredBy(json, primary),
       model,
       route,
       ...usageTokens(usage),
