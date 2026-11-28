@@ -17,6 +17,7 @@ import {
   startMetaConnect,
   syncEngage,
 } from "@/lib/engage.functions";
+import { useOpenCreate } from "@/components/studio/use-open-create";
 import { InboxScreen } from "./InboxScreen";
 import { ConnectFlow } from "./inbox-visuals";
 import { engageKeys, errorText } from "./engage-shared";
@@ -27,6 +28,7 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
   const client = useQueryClient();
   const role = useOptionalWorkspaceRole();
   const canEdit = role !== "viewer";
+  const openCreate = useOpenCreate();
   const key = engageKeys.home(workspaceId);
   const home = useQuery({
     queryKey: key,
@@ -134,6 +136,7 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
         onConnect={connect}
         onDisconnect={() => disconnect.mutate()}
         onChanged={() => void reload()}
+        onPostAbout={(brief) => openCreate.open("social", { brief })}
       />
     </SurfacePage>
   );

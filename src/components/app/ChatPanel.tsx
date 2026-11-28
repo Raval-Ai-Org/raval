@@ -70,6 +70,7 @@ import { WaitingChip } from "./pulse/WaitingChip";
 import { ChatGreeting, ChatStarters, type Starter } from "./chat/ChatEmptyState";
 import { HomeBento } from "./home/HomeBento";
 import { HomeAutopilot } from "./autopilot/home/HomeAutopilot";
+import { HomeInbox } from "./engage/home/HomeInbox";
 import { shouldAskClarify } from "@/lib/chat/clarify-gate";
 import { useStartHere } from "./home/use-start-here";
 import { useOpenCreate } from "@/components/studio/use-open-create";
@@ -1710,6 +1711,7 @@ export function ChatPanel({
                 }}
                 onCommunities={() => navigate({ to: communitiesPath(workspaceId) })}
                 autopilot={<HomeAutopilot workspaceId={workspaceId} campaigns={pulse?.campaigns} />}
+                inbox={<HomeInbox workspaceId={workspaceId} />}
               />
             </div>
           ) : empty ? (

@@ -141,6 +141,7 @@ export function HomeBento({
   create,
   onSwipe,
   autopilot,
+  inbox,
   brain,
   onAsk,
   onCommunities,
@@ -168,6 +169,8 @@ export function HomeBento({
   starters?: ReactNode;
   /** Home's Autopilot area (HomeAutopilot), under the top cards. */
   autopilot?: ReactNode;
+  /** Home's live Inbox card (HomeInbox), on top: what Mox is answering now. */
+  inbox?: ReactNode;
 }) {
   // Confetti only when Start here finishes while you watch, never on load.
   const wasComplete = useRef(start.complete);
@@ -182,6 +185,12 @@ export function HomeBento({
           the canvas is narrow, and three squeezed columns broke words apart. */}
       <div className="@container">
         <RightNow pulse={pulse} onOpenWaiting={onOpenWaiting} />
+        {/* Live work on top: what Mox is answering in comments and DMs. */}
+        {inbox ? (
+          <div className="ds-rise mb-[14px]" style={rise(0)}>
+            {inbox}
+          </div>
+        ) : null}
         {/* Bento */}
         <div className="grid grid-cols-1 gap-[14px] @xl:grid-cols-2">
           {!start.complete ? (

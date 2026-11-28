@@ -313,8 +313,15 @@ export async function getEngageHome(
     last_error: string | null;
     permissions: { scopes?: unknown } | null;
   } | null;
+  // What customers ask (the customer brain), read only once Meta is connected.
+  const voice = c
+    ? await import("./context.server")
+        .then((m) => m.customerVoiceFor(workspaceId))
+        .catch(() => null)
+    : null;
   return {
     configured: metaConfigured(),
+    voice,
     connection: c
       ? {
           status:

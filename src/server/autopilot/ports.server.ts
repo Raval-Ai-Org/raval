@@ -933,7 +933,7 @@ export const realPorts: AutopilotPorts = {
         const cut = text.slice(0, max);
         return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max - 40)).replace(/[,;:.\s]+$/, "")}…`;
       };
-      const [ctx, twins, rivals] = await Promise.all([
+      const [ctx, twins, rivals, voice] = await Promise.all([
         context(workspaceId),
         isAudienceEnabled(workspaceId)
           ? import("@/server/audience/store.server")
@@ -947,6 +947,10 @@ export const realPorts: AutopilotPorts = {
           .eq("status", "tracked")
           .order("confidence", { ascending: false })
           .limit(4),
+        // What the brand's own customers ask in comments and DMs (Inbox).
+        import("@/server/engage/context.server")
+          .then((m) => m.customerVoiceFor(workspaceId))
+          .catch(() => null),
       ]);
       const audience: BrainEntry[] = twins
         .filter((t) => t.kind === "group")
@@ -978,10 +982,21 @@ export const realPorts: AutopilotPorts = {
           };
         })
         .filter((e) => e.name && e.detail);
-      const market: BrainEntry[] = ctx.opportunities.slice(0, 5).map((line) => {
-        const [title, ...rest] = line.split(" — ");
-        return { name: short(title, 120), detail: short(rest.join(" — "), 240) };
-      });
+      // Real customer questions lead Market: a piece may answer one, only
+      // with the team's own answer (customer-voice.ts).
+      const asked: BrainEntry[] = (voice?.asked ?? []).slice(0, 3).map((q) => ({
+        name: short(`Customers ask (${q.count}): ${q.question}`, 160),
+        detail: q.answer
+          ? short(`Team's answer: ${q.answer}`, 240)
+          : "No answer from the team yet: a post may raise the question, never answer it.",
+      }));
+      const market: BrainEntry[] = [
+        ...asked,
+        ...ctx.opportunities.slice(0, 5).map((line) => {
+          const [title, ...rest] = line.split(" — ");
+          return { name: short(title, 120), detail: short(rest.join(" — "), 240) };
+        }),
+      ].slice(0, 7);
       const trends: BrainEntry[] = trendsFor(ctx.socialTrends, platforms as PlatformId[], 6).map(
         (t) => ({
           name: short(`${t.title} (${t.platform === "all" ? "every platform" : t.platform})`, 120),

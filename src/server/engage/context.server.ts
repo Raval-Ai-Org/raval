@@ -7,6 +7,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { wrapUntrusted } from "@/server/guardrails/untrusted";
+import {
+  customerVoice,
+  customerVoiceBlock,
+  type CustomerVoice,
+  type VoiceQuestion,
+} from "@/lib/engage/customer-voice";
 
 const db = supabaseAdmin as unknown as SupabaseClient;
 
@@ -70,4 +76,87 @@ export async function inboxBlockFor(workspaceId: string): Promise<string | null>
     console.error("[chat] inbox block failed, answering without it", error);
     return null;
   }
+}
+
+// ── What customers ask (the customer brain) ─────────────────────────────────
+// Read from the brand's own Inbox, for the verified workspace id. Studio,
+// Autopilot's plan and the Home card read it; cached a minute; never throws.
+
+const VOICE_TTL_MS = 60_000;
+const VOICE_WINDOW_DAYS = 60;
+const voiceCache = new Map<string, { at: number; voice: CustomerVoice }>();
+
+export async function customerVoiceFor(workspaceId: string): Promise<CustomerVoice | null> {
+  const hit = voiceCache.get(workspaceId);
+  if (hit && Date.now() - hit.at < VOICE_TTL_MS) return hit.voice;
+  try {
+    const { isEngageEnabled } = await import("@/lib/feature-flags");
+    if (!isEngageEnabled(workspaceId)) return null;
+    const since = new Date(Date.now() - VOICE_WINDOW_DAYS * 86_400_000).toISOString();
+    const [questions, comments] = await Promise.all([
+      db
+        .from("engage_questions")
+        .select("question,asked_count,status,answer")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "dismissed")
+        .gte("updated_at", since)
+        .order("asked_count", { ascending: false })
+        .limit(30),
+      db
+        .from("engage_comments")
+        .select("body,kind,mox_state")
+        .eq("workspace_id", workspaceId)
+        .gte("commented_at", since)
+        .order("commented_at", { ascending: false })
+        .limit(300),
+    ]);
+    const voice = customerVoice(
+      (
+        (questions.data ?? []) as {
+          question: string;
+          asked_count: number;
+          status: VoiceQuestion["status"];
+          answer: string | null;
+        }[]
+      ).map((r) => ({
+        question: r.question,
+        askedCount: r.asked_count,
+        status: r.status,
+        answer: r.answer,
+      })),
+      (
+        (comments.data ?? []) as { body: string; kind: string | null; mox_state: string | null }[]
+      ).map((r) => ({
+        body: r.body ?? "",
+        kind: r.kind === "dm" ? "dm" : "comment",
+        moxState: r.mox_state ?? "none",
+      })),
+    );
+    voiceCache.set(workspaceId, { at: Date.now(), voice });
+    return voice;
+  } catch (error) {
+    console.warn(
+      "[engage] customer voice unavailable",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+}
+
+/** The block generators read; customers' words are fenced as untrusted. "" when empty. */
+export async function customerVoiceBlockFor(
+  workspaceId: string,
+  route = "studio",
+): Promise<string> {
+  const voice = await customerVoiceFor(workspaceId);
+  const block = voice ? customerVoiceBlock(voice) : "";
+  if (!block) return "";
+  const [head, rule, ...rest] = block.split("\n");
+  return [
+    head,
+    rule,
+    wrapUntrusted("customer-questions", rest.join("\n"), { maxChars: 1_600, route }),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

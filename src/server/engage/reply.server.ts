@@ -9,6 +9,8 @@ import { UNTRUSTED_DATA_RULE, wrapUntrusted } from "@/server/guardrails/untruste
 import { memoryBlockFor } from "@/server/memory/context.server";
 import { lookTextFor } from "@/server/brand-look/resolve.server";
 import { loadCommunityBrand } from "@/server/community/context.server";
+import { catalogBlockFor } from "@/server/products/context.server";
+import { campaignBlockFor } from "@/server/campaigns/context.server";
 import { PLATFORM_LABEL, type EngageDraft, type EngagePlatform } from "@/lib/engage/contracts";
 import { DRAFT_TARGET_CHARS, finishEngageReply } from "@/lib/engage/reply";
 import {
@@ -103,12 +105,16 @@ async function guidelinesFor(workspaceId: string): Promise<string> {
 
 /** Everything Mox knows for one comment, read by the verified workspace id. */
 async function replyContext(args: ReplyArgs, route: string) {
-  const [brand, memory, voice, training, guidelines] = await Promise.all([
+  const [brand, memory, voice, training, guidelines, catalog, campaigns] = await Promise.all([
     loadCommunityBrand(args.workspaceId),
     memoryBlockFor(args.workspaceId, "text").catch(() => ""),
     lookTextFor(args.workspaceId, "comment-reply"),
     trainingFor(args.workspaceId).catch(() => ({ answers: [], examples: [] })),
     guidelinesFor(args.workspaceId).catch(() => ""),
+    // The catalogue with each product's page and benefits, and the offers
+    // running now (exact terms): real facts a reply may point people to.
+    catalogBlockFor(args.workspaceId).catch(() => ""),
+    campaignBlockFor(args.workspaceId).catch(() => ""),
   ]);
   const answers = answersBlock(training.answers);
   const examples = examplesBlock(training.examples, args.platform);
@@ -116,6 +122,9 @@ async function replyContext(args: ReplyArgs, route: string) {
     memory,
     `BRAND: ${brand.brandName}`,
     `BRAND FACTS (the only facts you may state about the brand):\n${brand.facts || "(none saved yet)"}`,
+    catalog && `THE CATALOGUE (part of BRAND FACTS):\n${catalog.slice(0, 1_800)}`,
+    campaigns &&
+      `RUNNING NOW (part of BRAND FACTS; an offer only in its exact terms):\n${campaigns.slice(0, 900)}`,
     voice && `HOW THE BRAND SOUNDS:\n${voice}`,
     answers &&
       `TEAM ANSWERS (questions people ask and the team's own answers; facts you may use):\n${answers}`,
@@ -143,6 +152,8 @@ async function replyContext(args: ReplyArgs, route: string) {
   // Figures the comment or the post already state may be repeated back.
   const facts = [
     brand.facts,
+    catalog,
+    campaigns,
     answersFacts(training.answers),
     guidelines,
     args.guidance ?? "",

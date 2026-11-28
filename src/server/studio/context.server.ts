@@ -304,6 +304,7 @@ export async function loadStudioContext(
     catalog,
     taste,
     campaignsNow,
+    customers,
   ] = await Promise.all([
     loadWorkspaceSnapshot(db, workspaceId),
     settle(readBrandDna(db, workspaceId), null, "brand dna"),
@@ -323,6 +324,12 @@ export async function loadStudioContext(
     tasteContextFor(workspaceId),
     // The campaigns that are on (ADR-0039), so new pieces support them.
     settle(runningCampaignsFor(workspaceId), [], "campaigns"),
+    // What the brand's own customers ask in comments and DMs (the Inbox).
+    settle(
+      import("@/server/engage/context.server").then((m) => m.customerVoiceBlockFor(workspaceId)),
+      "",
+      "customer voice",
+    ),
   ]);
   const campaigns = campaignBlockText(campaignsNow);
   const storedDna = stored && Object.keys(stored.dna).length ? stored.dna : null;
@@ -354,6 +361,7 @@ export async function loadStudioContext(
     brandText + insightsBlock,
     capBlock(catalog, CONTEXT_CAPS.catalog),
     capBlock(audience, CONTEXT_CAPS.audience),
+    capBlock(customers, CONTEXT_CAPS.customers),
     capBlock(snapshot.rivals, CONTEXT_CAPS.rivals),
     capBlock(strategy, CONTEXT_CAPS.strategy),
     capBlock(goal, CONTEXT_CAPS.goal),

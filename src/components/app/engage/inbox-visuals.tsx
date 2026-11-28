@@ -14,6 +14,7 @@ import { Mox } from "@/components/brand/mox/Mox";
 import { Switch } from "@/components/ui/switch";
 import { dsFocus } from "@/components/app/surface/buttons";
 import type { HealthItem } from "@/lib/engage/health";
+import type { CustomerVoice } from "@/lib/engage/customer-voice";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -29,14 +30,30 @@ const SAMPLE_IN = ["Open today?", "Price? 💬", "Do you ship?", "Love this!"];
 const SAMPLE_OUT = ["Yes, 9 to 9 ✨", "Sent you the link", "Across Pakistan 🚚", "Thank you! 💛"];
 
 /** A bubble that travels in, then the answer travels out. Loops; still when motion is reduced. */
-function Travelling({ reduce }: { reduce: boolean }) {
+const bubble = (s: string) => {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > 24 ? `${t.slice(0, 23)}…` : t;
+};
+
+function Travelling({
+  reduce,
+  pairs,
+}: {
+  reduce: boolean;
+  /** Real recent exchanges; samples until there are some. */
+  pairs?: { said: string; reply: string }[];
+}) {
+  const real = pairs?.filter((p) => p.said.trim() && p.reply.trim()) ?? [];
+  const IN = real.length ? real.map((p) => bubble(p.said)) : SAMPLE_IN;
+  const OUT = real.length ? real.map((p) => bubble(p.reply)) : SAMPLE_OUT;
   const [i, setI] = useState(0);
   useEffect(() => {
     if (reduce) return;
-    const t = setInterval(() => setI((n) => (n + 1) % SAMPLE_IN.length), 3200);
+    const t = setInterval(() => setI((n) => (n + 1) % IN.length), 3200);
     return () => clearInterval(t);
-  }, [reduce]);
+  }, [reduce, IN.length]);
   if (reduce) return null;
+  const k = i % IN.length;
   return (
     <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[26px] h-0">
       <AnimatePresence>
@@ -47,7 +64,7 @@ function Travelling({ reduce }: { reduce: boolean }) {
           transition={{ duration: 1.4, ease: EASE }}
           className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full rounded-bl-sm bg-[var(--ds-card-bg)] px-2.5 py-1 text-[11px] font-semibold shadow-[var(--ds-card-shadow-hover)]"
         >
-          {SAMPLE_IN[i]}
+          {IN[k]}
         </motion.span>
         <motion.span
           key={`out-${i}`}
@@ -57,7 +74,7 @@ function Travelling({ reduce }: { reduce: boolean }) {
           className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full rounded-br-sm px-2.5 py-1 text-[11px] font-bold shadow-[var(--ds-card-shadow-hover)]"
           style={{ backgroundImage: "var(--mox-gradient)", color: "var(--mox-ink)" }}
         >
-          {SAMPLE_OUT[i]}
+          {OUT[k]}
         </motion.span>
       </AnimatePresence>
     </div>
@@ -128,7 +145,10 @@ export function InboxFlow({
   onAutoReply,
   onWaiting,
   onAnswered,
+  pairs,
 }: {
+  /** The latest real comment → reply pairs, for the moving bubbles. */
+  pairs?: { said: string; reply: string }[];
   waiting: number;
   answered: number;
   auto: number;
@@ -193,7 +213,18 @@ export function InboxFlow({
             transition={{ duration: 0.9, ease: EASE }}
           />
         </div>
-        {autoReply && <Travelling reduce={reduce} />}
+        {autoReply && !reduce && (
+          // a soft light that keeps running along the track while Mox works
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute top-[24px] h-[15px] w-16 rounded-full blur-md"
+            style={{ backgroundImage: "var(--mox-gradient)" }}
+            initial={{ left: "14%", opacity: 0 }}
+            animate={{ left: ["14%", "80%"], opacity: [0, 0.7, 0] }}
+            transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+          />
+        )}
+        {autoReply && <Travelling reduce={reduce} pairs={pairs} />}
 
         <div className="flex justify-center">
           <Node count={waiting} label="Needs you" glow={waiting > 0} onClick={onWaiting}>
@@ -431,6 +462,104 @@ export function ConnectFlow({
       <p className="relative mt-3 text-[11.5px] text-muted-foreground">
         Instagram must be a Professional account linked to your Facebook Page.
       </p>
+    </div>
+  );
+}
+
+/* ───────────────────────── what customers ask ───────────────────────── */
+
+/**
+ * The customer brain, from the brand's own comments and DMs: the questions
+ * people ask most and where they get stuck. "Post about it" opens Studio with
+ * a brief (nothing is made until Generate). Studio and Autopilot read the
+ * same list on the server (customer-voice.ts).
+ */
+export function CustomerVoiceTile({
+  voice,
+  onPost,
+}: {
+  voice: CustomerVoice | null | undefined;
+  onPost?: (brief: string) => void;
+}) {
+  const reduce = useReducedMotion();
+  if (!voice || (!voice.asked.length && !voice.confused.length)) return null;
+  const top = Math.max(1, ...voice.asked.map((q) => q.count));
+  const brief = (q: string, answer: string | null) =>
+    answer
+      ? `A post that answers what our customers keep asking: "${q}" Our answer: ${answer}`
+      : `A post about what our customers keep asking: "${q}" Don't state an answer we haven't given; invite them to message us.`;
+  return (
+    <div
+      className="relative overflow-hidden rounded-[24px] border border-[var(--ds-card-border)] bg-[var(--ds-card-bg)] p-4 shadow-[var(--ds-card-shadow)]"
+      data-testid="inbox-customer-voice"
+    >
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-50" style={WASH} />
+      <div className="relative flex items-center gap-2">
+        <span className="ds-grad-pill grid size-8 place-items-center rounded-full text-[var(--mox-ink)]">
+          <MessageCircle className="size-4" />
+        </span>
+        <p className="text-[14px] font-bold">What customers ask</p>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          from {voice.read} comment{voice.read === 1 ? "" : "s"} and DMs
+        </span>
+      </div>
+      <ul className="relative mt-3 space-y-2">
+        {voice.asked.map((q, n) => (
+          <motion.li
+            key={q.question}
+            initial={reduce ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: n * 0.05, duration: 0.3, ease: EASE }}
+            className="group flex items-center gap-3"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-[13px] font-semibold">{q.question}</span>
+                {q.answer && (
+                  <Check className="size-3.5 shrink-0 text-emerald-600" aria-label="Answered" />
+                )}
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-foreground/[0.06]">
+                <motion.div
+                  className="ds-grad-bar h-full rounded-full"
+                  initial={reduce ? false : { width: 0 }}
+                  animate={{ width: `${Math.max(8, (q.count / top) * 100)}%` }}
+                  transition={{ delay: 0.1 + n * 0.05, duration: 0.7, ease: EASE }}
+                />
+              </div>
+            </div>
+            <span className="w-7 shrink-0 text-right text-[12px] font-bold tabular-nums">
+              {q.count}
+            </span>
+            {onPost && (
+              <button
+                type="button"
+                onClick={() => onPost(brief(q.question, q.answer))}
+                className={cn(
+                  "h-7 shrink-0 rounded-full bg-[var(--ds-well-bg)] px-2.5 text-[11.5px] font-semibold transition-colors hover:bg-foreground hover:text-background",
+                  dsFocus,
+                )}
+              >
+                Post about it
+              </button>
+            )}
+          </motion.li>
+        ))}
+      </ul>
+      {voice.confused.length > 0 && (
+        <div className="relative mt-3 flex flex-wrap gap-1.5">
+          {voice.confused.map((c) => (
+            <span
+              key={c}
+              className="max-w-full truncate rounded-full bg-[var(--mox-yellow,#f5d547)]/20 px-2.5 py-1 text-[11.5px]"
+              title="People seem unsure about this"
+            >
+              <span className="mr-1 font-bold">?</span>
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

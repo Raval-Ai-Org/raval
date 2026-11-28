@@ -78,7 +78,7 @@ import {
   type RuleInput,
 } from "@/lib/engage/rules";
 import { Chip, ago, errorText } from "./engage-shared";
-import { ChannelChips, InboxFlow } from "./inbox-visuals";
+import { ChannelChips, CustomerVoiceTile, InboxFlow } from "./inbox-visuals";
 
 type Filter = "waiting" | "answered";
 
@@ -92,6 +92,8 @@ export type InboxScreenProps = {
   onConnect: () => void;
   onDisconnect: () => void;
   onChanged: () => void;
+  /** Opens Studio with a brief about what customers ask (nothing is made until Generate). */
+  onPostAbout?: (brief: string) => void;
   /** Open a quick reply's form straight away (the lab uses it). */
   initialRule?: { id?: string; input: RuleInput };
 };
@@ -153,6 +155,10 @@ export function InboxScreen(props: InboxScreenProps) {
   return (
     <div className="mx-auto w-full max-w-[980px] space-y-4" data-testid="inbox-screen">
       <InboxFlow
+        pairs={data.comments
+          .filter((c) => c.status === "replied" && c.replyText)
+          .slice(0, 6)
+          .map((c) => ({ said: c.body, reply: c.replyText ?? "" }))}
         waiting={data.counts.waiting}
         answered={data.counts.replied}
         auto={data.counts.autoReplied}
@@ -314,6 +320,10 @@ export function InboxScreen(props: InboxScreenProps) {
                   onChanged={props.onChanged}
                 />
               )}
+              <CustomerVoiceTile
+                voice={data.voice}
+                onPost={canEdit ? props.onPostAbout : undefined}
+              />
               <div className="grid gap-4 lg:grid-cols-2">
                 <AnswersTile
                   workspaceId={workspaceId}

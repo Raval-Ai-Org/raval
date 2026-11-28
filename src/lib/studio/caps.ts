@@ -9,6 +9,7 @@ export const CONTEXT_CAPS = {
   strategy: 1500,
   goal: 600,
   campaigns: 900,
+  customers: 900,
 } as const;
 
 export function capBlock(text: string | null | undefined, max: number): string {

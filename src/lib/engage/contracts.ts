@@ -2,6 +2,7 @@
 // brand's own Instagram and Facebook posts) sends to the browser. Pure and
 // browser-safe.
 import type { EngageRule } from "./rules";
+import type { CustomerVoice } from "./customer-voice";
 import type { EngageAnswer, EngageExample } from "./training";
 
 export type { EngageRule, RuleInput } from "./rules";
@@ -88,6 +89,8 @@ export type EngageHome = {
   rules: EngageRule[];
   answers: EngageAnswer[];
   examples: EngageExample[];
+  /** What customers ask and get stuck on (customer-voice.ts); null until there is data. */
+  voice?: CustomerVoice | null;
 };
 
 /** A recent post, for choosing which posts an automation listens to. */

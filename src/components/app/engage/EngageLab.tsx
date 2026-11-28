@@ -3,6 +3,7 @@
 // `?scene=connect` (nothing connected), `?scene=setup` (no Instagram or DMs),
 // `?scene=empty` (nothing set up yet) and `?scene=quick-reply` (the quick
 // reply form open). Nothing is sent: buttons call the server only on a click.
+import { toast } from "@/lib/toast";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -230,6 +231,23 @@ function sample(now: number): EngageHome {
         createdAt: at(2000),
       },
     ],
+    voice: {
+      asked: [
+        { question: "Do you deliver to Lahore?", count: 6, answer: null },
+        {
+          question: "What is the price of the cold brew?",
+          count: 4,
+          answer: "Rs 650 for 350 ml, Rs 950 for 500 ml.",
+        },
+        { question: "Is the 1 litre cold brew back in stock?", count: 3, answer: null },
+      ],
+      confused: [
+        "How do I store it once opened?",
+        "What's the difference between cold brew and iced coffee?",
+      ],
+      problems: 1,
+      read: 48,
+    },
   };
 }
 
@@ -301,6 +319,7 @@ export function EngageLab() {
                 onConnect={noop}
                 onDisconnect={noop}
                 onChanged={noop}
+                onPostAbout={(brief) => toast(brief)}
                 initialRule={quick ? { input: quick } : undefined}
               />
             )}

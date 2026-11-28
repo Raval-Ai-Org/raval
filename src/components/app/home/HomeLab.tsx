@@ -19,6 +19,48 @@ import { toast } from "@/lib/toast";
 import { startHere } from "@/lib/home/start-here";
 import { EMPTY_PULSE, type WorkspacePulse } from "@/lib/pulse/pulse";
 import { HomeBento } from "./HomeBento";
+import { InboxHomeCard, type InboxHomeState } from "@/components/app/engage/home/InboxHomeCard";
+
+/** Sample Inbox card (`?scene=inbox-connect` shows the invite). */
+const LAB_INBOX: InboxHomeState = {
+  kind: "live",
+  autoReply: true,
+  waiting: 2,
+  answered: 41,
+  byMox: 34,
+  channels: { facebook: true, instagram: true, dms: true },
+  broken: false,
+  asked: [
+    { question: "Do you deliver to Lahore?", count: 6 },
+    { question: "Is the 1 litre cold brew back in stock?", count: 3 },
+  ],
+  latest: [
+    {
+      id: "a",
+      platform: "instagram",
+      kind: "comment",
+      said: "Is this available in oat milk?",
+      reply: "Yes! Every drink comes with oat milk on request 🌾",
+      byMox: true,
+    },
+    {
+      id: "b",
+      platform: "facebook",
+      kind: "dm",
+      said: "What time do you open on Sunday?",
+      reply: "We open at 10 on Sundays. See you there!",
+      byMox: true,
+    },
+    {
+      id: "c",
+      platform: "instagram",
+      kind: "comment",
+      said: "Love this 😍",
+      reply: "Thank you so much! 💛",
+      byMox: false,
+    },
+  ],
+};
 import { ChatComposer, CHAT_MODELS } from "@/components/app/chat/ChatComposer";
 import { StartHereList } from "./StartHere";
 import { GeneratingPanelView } from "@/components/studio/GeneratingPanel";
@@ -348,6 +390,12 @@ export function HomeLab({ scene }: { scene?: string }) {
                   brain={labBrain(done)}
                   onAsk={(t) => setDraft(t)}
                   onCommunities={() => toast("Opens Communities")}
+                  inbox={
+                    <InboxHomeCard
+                      state={scene === "inbox-connect" ? { kind: "connect" } : LAB_INBOX}
+                      onOpen={() => toast("Opens Inbox")}
+                    />
+                  }
                   starters={
                     <div className="flex flex-wrap gap-2">
                       {["Plan my week", "Write a launch post", "What are rivals posting?"].map(
