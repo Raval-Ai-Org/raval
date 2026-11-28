@@ -8,9 +8,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useOptionalWorkspaceRole } from "@/components/workspace/WorkspaceProvider";
 import { useConnectWindow } from "@/components/app/connectors/useConnectWindow";
 import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
-import { EmptyState, ErrorState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Inbox } from "@/components/icons";
 import { toast } from "@/lib/toast";
 import {
   disconnectMeta,
@@ -18,9 +17,8 @@ import {
   startMetaConnect,
   syncEngage,
 } from "@/lib/engage.functions";
-import { cn } from "@/lib/utils";
-import { dsPrimaryBtn } from "@/components/app/surface/buttons";
 import { InboxScreen } from "./InboxScreen";
+import { ConnectFlow } from "./inbox-visuals";
 import { engageKeys, errorText } from "./engage-shared";
 
 export { engageKeys } from "./engage-shared";
@@ -42,7 +40,7 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
   const sync = useMutation({
     mutationFn: () => syncEngage({ data: { workspaceId } }),
     onSuccess: (r) => {
-      if (r.errors) toast.error("Some comments couldn't be read. See the account above.");
+      if (r.errors) toast.error("Some comments couldn't be read. Tap the red chip.");
       else
         toast.success(
           [
@@ -115,26 +113,11 @@ export function EngagePanel({ workspaceId }: { workspaceId: string }) {
   if (!data.connection)
     return (
       <SurfacePage width="wide">
-        <EmptyState
-          icon={Inbox}
-          title="Answer every comment, even while you sleep"
-          description={
-            data.configured
-              ? "Connect your Instagram professional account and Facebook Page. Teach Mox what people ask, let quick replies answer the easy ones, and send the rest from one place."
-              : "Instagram and Facebook replies aren't set up on this server yet."
-          }
-          action={
-            data.configured && canEdit ? (
-              <button
-                type="button"
-                className={cn(dsPrimaryBtn, "h-10 px-5 text-sm")}
-                onClick={connect}
-                disabled={metaWindow.waiting}
-              >
-                {metaWindow.waiting ? "Waiting for Meta…" : "Connect Instagram and Facebook"}
-              </button>
-            ) : undefined
-          }
+        <ConnectFlow
+          configured={data.configured}
+          canEdit={canEdit}
+          waiting={metaWindow.waiting}
+          onConnect={connect}
         />
       </SurfacePage>
     );

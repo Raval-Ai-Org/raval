@@ -1,16 +1,15 @@
 "use client";
-// InboxScreen — the Inbox on one page, Communities / Autopilot style:
-//   * a header with the accounts, Refresh and the Auto-reply switch;
-//   * "Mox needs to know": what Mox couldn't answer, one line to answer each
-//     (kept for every later reply, and the waiting comments are answered);
-//   * four numbers (answered by itself, needs you, answered, answers known);
-//   * the comments, each with a reply a person can still edit and send;
-//   * on the right, "How Mox replies" (the team's rules), "What people ask"
-//     (answers, editable), "Quick replies" (keyword → reply / link by DM).
+// InboxScreen — the Inbox (Holo / Autopilot style, pictures before words):
+//   * InboxFlow: comment in → Mox → reply out, the counts and Auto-reply;
+//   * channel chips (Facebook, Instagram, DMs) with the one fix each;
+//   * three top tabs: Inbox (what needs you, what was answered), Teach Mox
+//     (open questions, answers, the team's rules), Quick replies.
 // Mox replies by itself in the background (auto-reply.server.ts); this page
 // shows it and takes the team's answers.
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { MoxFace } from "@/components/brand/mox/MoxFace";
 import { PlatformAppIcon } from "@/components/brand/PlatformAppIcon";
 import {
   dsFocus,
@@ -19,7 +18,6 @@ import {
   dsInkBtn,
   dsPrimaryBtn,
 } from "@/components/app/surface/buttons";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +31,6 @@ import {
 import {
   Brain,
   Check,
-  Inbox,
   MessageSquare,
   Pencil,
   Plus,
@@ -71,7 +68,7 @@ import {
 import { MAX_REPLY_CHARS } from "@/lib/engage/reply";
 import { MAX_GUIDELINES } from "@/lib/engage/auto-reply";
 import { PLATFORM_LABEL } from "@/lib/engage/contracts";
-import { healthSummary, inboxHealth, type HealthState } from "@/lib/engage/health";
+import { inboxHealth } from "@/lib/engage/health";
 import { MAX_ANSWERS, tidyAnswer } from "@/lib/engage/training";
 import {
   MAX_KEYWORDS,
@@ -81,6 +78,7 @@ import {
   type RuleInput,
 } from "@/lib/engage/rules";
 import { Chip, ago, errorText } from "./engage-shared";
+import { ChannelChips, InboxFlow } from "./inbox-visuals";
 
 type Filter = "waiting" | "answered";
 
@@ -98,9 +96,15 @@ export type InboxScreenProps = {
   initialRule?: { id?: string; input: RuleInput };
 };
 
+type Tab = "inbox" | "teach" | "quick";
+
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 export function InboxScreen(props: InboxScreenProps) {
   const { data, canEdit, workspaceId } = props;
   const conn = data.connection!;
+  const reduce = useReducedMotion();
+  const [tab, setTab] = useState<Tab>(props.initialRule ? "quick" : "inbox");
   const [filter, setFilter] = useState<Filter>("waiting");
   // The answer form: new, an edit, or a comment turned into an answer.
   const [teaching, setTeaching] = useState<AnswerDraft | null>(null);
@@ -115,13 +119,13 @@ export function InboxScreen(props: InboxScreenProps) {
       ),
     [data.comments, filter],
   );
+  const health = useMemo(() => inboxHealth(data), [data]);
   const liveRules = data.rules.filter((r) => r.status === "live").length;
-  const working = data.autoReply || (liveRules > 0 && data.automationsOn);
 
   const autoReply = useMutation({
     mutationFn: (on: boolean) => setEngageAutoReply({ data: { workspaceId, on } }),
     onSuccess: (_r, on) => {
-      toast.success(on ? "Mox answers new comments by itself" : "Auto-reply is off");
+      toast.success(on ? "Mox is answering" : "Auto-reply is off");
       props.onChanged();
     },
     onError: (e) => toast.error(errorText(e, "Couldn't change that.")),
@@ -136,198 +140,212 @@ export function InboxScreen(props: InboxScreenProps) {
     onError: (e) => toast.error(errorText(e, "Couldn't change that.")),
   });
 
-  const handle = conn.accountName;
-  const igNames = data.pages.map((p) => p.igUsername).filter(Boolean) as string[];
+  const show = (f: Filter) => {
+    setTab("inbox");
+    setFilter(f);
+  };
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: "inbox", label: "Inbox", badge: data.counts.waiting },
+    { id: "teach", label: "Teach Mox", badge: data.questions.length },
+    { id: "quick", label: "Quick replies", badge: liveRules || undefined },
+  ];
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] space-y-5" data-testid="inbox-screen">
-      {/* ── header ── */}
+    <div className="mx-auto w-full max-w-[980px] space-y-4" data-testid="inbox-screen">
+      <InboxFlow
+        waiting={data.counts.waiting}
+        answered={data.counts.replied}
+        auto={data.counts.autoReplied}
+        autoReply={data.autoReply}
+        asking={data.questions.length}
+        canEdit={canEdit}
+        switching={autoReply.isPending}
+        onAutoReply={(on) => autoReply.mutate(on)}
+        onWaiting={() => show("waiting")}
+        onAnswered={() => show("answered")}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="flex -space-x-1.5" aria-hidden>
-              <PlatformAppIcon platform="instagram" size={22} />
-              <PlatformAppIcon platform="facebook" size={22} />
-            </div>
-            <h2 className="text-[17px] font-semibold tracking-tight">Inbox</h2>
-          </div>
-          <p className="max-w-[560px] text-[13px] text-muted-foreground">
-            Comments on {handle}
-            {igNames.length ? ` and @${igNames[0]}` : " (Facebook only)"}.{" "}
-            {data.autoReply
-              ? "Mox answers them by itself and asks you only what it doesn't know."
-              : "Turn on Auto-reply and Mox answers them by itself."}
-          </p>
-          {conn.lastError ? (
-            <p className="text-[12.5px] text-destructive">{conn.lastError}</p>
-          ) : (
-            <p className="text-[12.5px] text-muted-foreground">
-              {data.pages[0]?.syncedAt ? `Checked ${ago(data.pages[0].syncedAt)}` : "Not read yet"}
-              {working ? " · new comments are read every few minutes" : ""}
-            </p>
+        <div className="min-w-0 flex-1">
+          <ChannelChips
+            items={health}
+            canEdit={canEdit}
+            waitingForMeta={props.waiting}
+            onConnect={props.onConnect}
+            onDisconnect={props.onDisconnect}
+            checked={data.pages[0]?.syncedAt ? ago(data.pages[0].syncedAt) : null}
+          />
+          {conn.lastError && (
+            <p className="mt-2 text-[12.5px] text-destructive">{conn.lastError}</p>
           )}
         </div>
-        {canEdit && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <label
-              className={cn(
-                dsGhostBtn,
-                "h-9 cursor-pointer gap-2 px-3.5 text-[13px]",
-                autoReply.isPending && "opacity-60",
-              )}
-              data-testid="inbox-auto-reply"
+        {canEdit &&
+          (conn.status !== "active" ? (
+            <button
+              type="button"
+              className="studio-cta inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-bold disabled:opacity-60"
+              onClick={props.onConnect}
+              disabled={props.waiting}
             >
-              <Switch
-                checked={data.autoReply}
-                disabled={autoReply.isPending}
-                onCheckedChange={(on) => autoReply.mutate(on)}
-                aria-label="Auto-reply"
-              />
-              Auto-reply {data.autoReply ? "on" : "off"}
-            </label>
-            {conn.status !== "active" ? (
-              <button
-                type="button"
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                onClick={props.onConnect}
-                disabled={props.waiting}
-              >
-                {props.waiting ? "Waiting for Meta…" : "Reconnect"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                onClick={props.onSync}
-                disabled={props.syncing}
-              >
-                <RefreshCw className={cn("h-4 w-4", props.syncing && "animate-spin")} />
-                {props.syncing ? "Reading…" : "Refresh"}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── what works and what is missing ── */}
-      <SetupCheck {...props} />
-
-      {/* ── what Mox needs to know ── */}
-      {data.questions.length > 0 && (
-        <QuestionsTile
-          workspaceId={workspaceId}
-          questions={data.questions}
-          canEdit={canEdit}
-          onChanged={props.onChanged}
-        />
-      )}
-
-      {/* ── the numbers ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="inbox-stats">
-        <Stat
-          label="Answered by itself"
-          value={data.counts.autoReplied}
-          onClick={() => setFilter("answered")}
-        />
-        <Stat
-          label="Needs you"
-          value={data.counts.waiting}
-          tone={data.counts.waiting ? "warn" : undefined}
-          onClick={() => setFilter("waiting")}
-        />
-        <Stat label="Answered in all" value={data.counts.replied} />
-        <Stat label="Answers Mox knows" value={data.answers.length} />
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* ── comments ── */}
-        <div className="min-w-0 space-y-3">
-          <div className="flex flex-wrap items-center gap-1.5" role="tablist">
-            {(
-              [
-                ["waiting", `Needs you · ${data.counts.waiting}`],
-                ["answered", "Answered"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={filter === id}
-                onClick={() => setFilter(id)}
-                className={cn(
-                  "h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors",
-                  dsFocus,
-                  filter === id
-                    ? "bg-[var(--ds-tile-bg)] text-foreground shadow-sm ring-1 ring-primary/30"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {shown.length === 0 ? (
-            <div className="ds-tile">
-              <EmptyState
-                size="sm"
-                icon={Inbox}
-                title={filter === "waiting" ? "You're all caught up" : "Nothing answered yet"}
-                description={
-                  filter === "waiting"
-                    ? data.autoReply
-                      ? data.pages.some((p) => p.hasInstagram)
-                        ? "Mox is answering new comments. Only what needs you shows here."
-                        : "Mox is answering new comments on your Facebook Page. Instagram isn't connected yet (see Setup check)."
-                      : "New comments show here. Turn on Auto-reply and Mox answers them by itself."
-                    : "Replies Mox and you sent show here."
-                }
-              />
-            </div>
+              {props.waiting ? "Waiting for Meta…" : "Reconnect"}
+            </button>
           ) : (
-            <ul className="space-y-3">
-              {shown.map((c) => (
-                <CommentCard
-                  key={c.id}
-                  comment={c}
+            <button
+              type="button"
+              className={cn(dsGhostBtn, "h-9 gap-2 px-3.5 text-[13px]")}
+              onClick={props.onSync}
+              disabled={props.syncing}
+            >
+              <RefreshCw className={cn("h-4 w-4", props.syncing && "animate-spin")} />
+              {props.syncing ? "Reading…" : "Refresh"}
+            </button>
+          ))}
+      </div>
+
+      {/* three places as top tabs (never a second sidebar) */}
+      <div
+        role="tablist"
+        aria-label="Inbox sections"
+        className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-[var(--ds-well-bg)] p-1 [scrollbar-width:none]"
+      >
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            data-testid={`inbox-tab-${t.id}`}
+            className={cn(
+              "relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold transition-colors",
+              dsFocus,
+              tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tab === t.id && (
+              <motion.span
+                layoutId="inbox-tab"
+                className="absolute inset-0 rounded-full bg-[var(--ds-card-bg)] shadow-[var(--ds-card-shadow)]"
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              />
+            )}
+            <span className="relative">{t.label}</span>
+            {!!t.badge && (
+              <span className="relative grid h-[18px] min-w-[18px] place-items-center rounded-full bg-foreground px-1 text-[10.5px] font-bold tabular-nums text-background">
+                {t.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={tab}
+          initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
+          transition={{ duration: 0.22, ease: EASE }}
+        >
+          {tab === "inbox" && (
+            <div className="space-y-3">
+              {data.questions.length > 0 && (
+                <QuestionsTile
                   workspaceId={workspaceId}
+                  questions={data.questions}
                   canEdit={canEdit}
                   onChanged={props.onChanged}
-                  onTeach={(q, a) => setTeaching({ question: q, answer: a })}
                 />
-              ))}
-            </ul>
+              )}
+              <div className="flex items-center gap-1.5" role="tablist" aria-label="Show">
+                {(
+                  [
+                    ["waiting", `Needs you · ${data.counts.waiting}`],
+                    ["answered", "Answered"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === id}
+                    onClick={() => setFilter(id)}
+                    className={cn(
+                      "h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors",
+                      dsFocus,
+                      filter === id
+                        ? "bg-[var(--ds-card-bg)] text-foreground shadow-[var(--ds-card-shadow)]"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {shown.length === 0 ? (
+                <CaughtUp waiting={filter === "waiting"} autoReply={data.autoReply} />
+              ) : (
+                <ul className="space-y-3">
+                  {shown.map((c) => (
+                    <CommentCard
+                      key={c.id}
+                      comment={c}
+                      workspaceId={workspaceId}
+                      canEdit={canEdit}
+                      onChanged={props.onChanged}
+                      onTeach={(q, a) => {
+                        setTeaching({ question: q, answer: a });
+                        setTab("teach");
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
-        </div>
 
-        {/* ── the side: what Mox knows, quick replies, the account ── */}
-        <div className="space-y-4">
-          <GuidelinesTile
-            workspaceId={workspaceId}
-            guidelines={data.guidelines}
-            canEdit={canEdit}
-            onChanged={props.onChanged}
-          />
-          <AnswersTile
-            workspaceId={workspaceId}
-            data={data}
-            canEdit={canEdit}
-            teaching={teaching}
-            setTeaching={setTeaching}
-            onChanged={props.onChanged}
-          />
-          <QuickRepliesTile
-            workspaceId={workspaceId}
-            data={data}
-            canEdit={canEdit}
-            onToggleAll={(on) => toggleAll.mutate(on)}
-            toggling={toggleAll.isPending}
-            onOpen={setRuleForm}
-            onChanged={props.onChanged}
-          />
-          <AccountTile {...props} />
-        </div>
-      </div>
+          {tab === "teach" && (
+            <div className="space-y-4">
+              {data.questions.length > 0 && (
+                <QuestionsTile
+                  workspaceId={workspaceId}
+                  questions={data.questions}
+                  canEdit={canEdit}
+                  onChanged={props.onChanged}
+                />
+              )}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <AnswersTile
+                  workspaceId={workspaceId}
+                  data={data}
+                  canEdit={canEdit}
+                  teaching={teaching}
+                  setTeaching={setTeaching}
+                  onChanged={props.onChanged}
+                />
+                <GuidelinesTile
+                  workspaceId={workspaceId}
+                  guidelines={data.guidelines}
+                  canEdit={canEdit}
+                  onChanged={props.onChanged}
+                />
+              </div>
+            </div>
+          )}
+
+          {tab === "quick" && (
+            <QuickRepliesTile
+              workspaceId={workspaceId}
+              data={data}
+              canEdit={canEdit}
+              onToggleAll={(on) => toggleAll.mutate(on)}
+              toggling={toggleAll.isPending}
+              onOpen={setRuleForm}
+              onChanged={props.onChanged}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {ruleForm && (
         <QuickReplyDialog
@@ -347,34 +365,24 @@ export function InboxScreen(props: InboxScreenProps) {
   );
 }
 
-function Stat(props: { label: string; value: number; tone?: "warn"; onClick?: () => void }) {
-  const body = (
-    <>
-      <p className="ds-label">{props.label}</p>
-      <p
-        className={cn(
-          "mt-1 text-[24px] font-semibold tabular-nums tracking-tight",
-          props.tone === "warn" && "text-warning",
-        )}
-      >
-        {props.value.toLocaleString()}
+/** Nothing to show: Mox says so with a picture, not a paragraph. */
+function CaughtUp({ waiting, autoReply }: { waiting: boolean; autoReply: boolean }) {
+  return (
+    <div className="flex flex-col items-center rounded-[24px] border border-dashed border-[var(--ds-card-border)] px-6 py-10 text-center">
+      <MoxFace mood={waiting ? (autoReply ? "happy" : "sleep") : "thinking"} size={56} />
+      <p className="mt-3 text-[15px] font-bold">
+        {waiting ? "All caught up" : "Nothing answered yet"}
       </p>
-    </>
-  );
-  return props.onClick ? (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className={cn("ds-tile ds-tile-hover p-4 text-left", dsFocus)}
-    >
-      {body}
-    </button>
-  ) : (
-    <div className="ds-tile p-4">{body}</div>
+      <p className="mt-1 text-[12.5px] text-muted-foreground">
+        {waiting
+          ? autoReply
+            ? "Mox answers new ones by itself."
+            : "Turn on Auto-reply and Mox answers."
+          : "Replies show here."}
+      </p>
+    </div>
   );
 }
-
-/* ───────────────────────── what Mox needs to know ───────────────────────── */
 
 function QuestionsTile(props: {
   workspaceId: string;
@@ -394,8 +402,7 @@ function QuestionsTile(props: {
             Mox needs to know {n === 1 ? "one thing" : `${n} things`}
           </p>
           <p className="text-[12.5px] text-muted-foreground">
-            Answer once. Mox keeps it, replies to everyone who asked, and uses it from now on. You
-            can also just tell Mox in chat.
+            Answer once. Mox replies to everyone who asked.
           </p>
         </div>
       </div>
@@ -662,7 +669,7 @@ function CommentCard(props: {
   });
 
   return (
-    <li className="ds-tile space-y-3 p-4">
+    <li className="ds-tile ds-enter space-y-3 p-4">
       <div className="flex items-start gap-3">
         <PlatformAppIcon platform={c.platform} size={28} />
         <div className="min-w-0 flex-1">
@@ -1538,122 +1545,5 @@ function QuickReplyDialog(props: {
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/* ───────────────────────── setup check ───────────────────────── */
-
-const HEALTH_DOT: Record<HealthState, string> = {
-  ok: "bg-success",
-  warn: "bg-warning",
-  off: "bg-muted-foreground/40",
-};
-
-/**
- * What the Inbox can really do now, and what it does for the brand. Open
- * while something is missing; folds to one line once everything works.
- */
-function SetupCheck(props: InboxScreenProps) {
-  const items = inboxHealth(props.data);
-  const summary = healthSummary(items);
-  const [open, setOpen] = useState(summary !== null);
-  if (!items.length) return null;
-  const needsReconnect = items.some((i) => i.reconnect && i.state !== "ok");
-  return (
-    <div className="ds-tile p-4" data-testid="inbox-setup-check">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={cn("flex w-full items-center gap-2 text-left", dsFocus)}
-        aria-expanded={open}
-      >
-        <span
-          className={cn("size-2 shrink-0 rounded-full", summary ? "bg-warning" : "bg-success")}
-          aria-hidden
-        />
-        <span className="ds-label">Setup check</span>
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground">
-          {summary ?? "Everything works"}
-        </span>
-        <span className="text-[12px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
-      </button>
-      {open && (
-        <div className="mt-3 space-y-3">
-          <p className="text-[12.5px] text-muted-foreground">
-            The Inbox answers comments on your posts and the DMs people send you on Instagram and
-            Messenger: Mox replies within minutes to what it knows, asks you once what it
-            doesn&apos;t know (and remembers your answer), and leaves complaints and orders to you
-            with a draft ready. Quick replies can also send a link by DM to people who comment a
-            keyword.
-          </p>
-          <ul className="space-y-2">
-            {items.map((i) => (
-              <li key={i.id} className="flex gap-2.5 text-[12.5px]">
-                <span
-                  className={cn("mt-1.5 size-2 shrink-0 rounded-full", HEALTH_DOT[i.state])}
-                  aria-hidden
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium text-foreground">{i.title}</span>
-                  <span className="block text-muted-foreground">{i.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-          {needsReconnect && props.canEdit && (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="button"
-                className={cn(dsPrimaryBtn, "h-9 px-4 text-[13px]")}
-                onClick={props.onConnect}
-                disabled={props.waiting}
-              >
-                {props.waiting ? "Waiting for Meta…" : "Connect again"}
-              </button>
-              <span className="text-[12px] text-muted-foreground">
-                In Meta's window, tick your Page and your Instagram account, and allow every
-                permission it lists.
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────────────────────── the account ───────────────────────── */
-
-function AccountTile(props: InboxScreenProps) {
-  const { data } = props;
-  return (
-    <div className="ds-tile space-y-2 p-4">
-      <p className="ds-label">Connected</p>
-      <ul className="space-y-1.5">
-        {data.pages.map((p) => (
-          <li key={p.id} className="flex items-center gap-2 text-[12.5px]">
-            <PlatformAppIcon platform={p.hasInstagram ? "instagram" : "facebook"} size={18} />
-            <span className="min-w-0 flex-1 truncate">
-              {p.pageName}
-              {p.igUsername ? ` · @${p.igUsername}` : ""}
-            </span>
-            {p.lastError && (
-              <span className="truncate text-destructive" title={p.lastError}>
-                needs a look
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-      {props.canEdit && (
-        <button
-          type="button"
-          onClick={props.onDisconnect}
-          className="text-[12px] text-muted-foreground hover:text-destructive"
-        >
-          Disconnect
-        </button>
-      )}
-    </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 // Development-only visual check for the Inbox, with sample data:
+// `?scene=connect` (nothing connected), `?scene=setup` (no Instagram or DMs),
 // `?scene=empty` (nothing set up yet) and `?scene=quick-reply` (the quick
 // reply form open). Nothing is sent: buttons call the server only on a click.
 import { useMemo, useState } from "react";
@@ -9,6 +10,7 @@ import { SurfacePage } from "@/components/app/surface/SurfaceLayout";
 import type { EngageHome, EngageRule } from "@/lib/engage/contracts";
 import { RULE_TEMPLATES, type RuleInput } from "@/lib/engage/rules";
 import { InboxScreen } from "./InboxScreen";
+import { ConnectFlow } from "./inbox-visuals";
 const WS = "00000000-0000-4000-8000-000000000000";
 const id = (n: number) => `${String(n).padStart(8, "0")}-0000-4000-8000-000000000001`;
 
@@ -285,19 +287,23 @@ export function EngageLab() {
       <div className="min-h-screen bg-[var(--ds-canvas-bg,#f6f6f4)] p-4">
         <div className="mx-auto max-w-[1180px] rounded-[28px] border bg-background shadow-sm">
           <SurfacePage width="wide">
-            <InboxScreen
-              key={scene ?? "home"}
-              workspaceId={WS}
-              data={data}
-              canEdit
-              syncing={false}
-              waiting={false}
-              onSync={noop}
-              onConnect={noop}
-              onDisconnect={noop}
-              onChanged={noop}
-              initialRule={quick ? { input: quick } : undefined}
-            />
+            {scene === "connect" ? (
+              <ConnectFlow configured canEdit waiting={false} onConnect={noop} />
+            ) : (
+              <InboxScreen
+                key={scene ?? "home"}
+                workspaceId={WS}
+                data={data}
+                canEdit
+                syncing={false}
+                waiting={false}
+                onSync={noop}
+                onConnect={noop}
+                onDisconnect={noop}
+                onChanged={noop}
+                initialRule={quick ? { input: quick } : undefined}
+              />
+            )}
           </SurfacePage>
         </div>
       </div>

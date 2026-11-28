@@ -35,14 +35,14 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
           id: "facebook",
           state: "ok",
           title: `Facebook: ${pages.map((p) => p.pageName).join(", ")}`,
-          detail: "Comments on your Page's posts are read and answered.",
+          detail: "Page comments and Messenger are answered.",
           reconnect: false,
         }
       : {
           id: "facebook",
           state: "off",
           title: "No Facebook Page shared",
-          detail: "Connect again and tick your Facebook Page when Meta asks.",
+          detail: "Reconnect and tick your Page.",
           reconnect: true,
         },
   );
@@ -53,7 +53,7 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
           id: "instagram",
           state: "ok",
           title: `Instagram: ${igNames.map((n) => `@${n}`).join(", ") || "connected"}`,
-          detail: "Comments on your Instagram posts and Reels are read and answered.",
+          detail: "Post and Reel comments are answered.",
           reconnect: false,
         }
       : {
@@ -61,7 +61,7 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
           state: "off",
           title: "Instagram isn't connected",
           detail:
-            "Meta didn't share an Instagram account, so Instagram comments are never read. Your Instagram must be a Professional account linked to your Facebook Page. Then connect again and tick the Instagram account too.",
+            "Make it a Professional account, link it to your Facebook Page, then reconnect and tick it.",
           reconnect: true,
         },
   );
@@ -74,8 +74,7 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
           id: "messages",
           state: "ok",
           title: "Private messages allowed",
-          detail:
-            "Mox reads and answers DMs on Instagram and Messenger, and quick replies can send a link by DM to people who comment.",
+          detail: "Mox answers DMs on Instagram and Messenger.",
           reconnect: false,
         }
       : {
@@ -87,8 +86,8 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
               : "Private messages not allowed",
           detail:
             liveDmRules.length > 0
-              ? "Mox can't read or answer DMs, and a quick reply's DM is skipped (the public reply still goes). Connect again and allow messages."
-              : "Mox can't read or answer DMs yet. Connect again and allow messages.",
+              ? "A quick reply's DM is skipped. Reconnect and allow messages."
+              : "Reconnect and allow messages.",
           reconnect: true,
         },
   );
@@ -99,15 +98,14 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
           id: "auto_reply",
           state: "ok",
           title: "Auto-reply on",
-          detail:
-            "Mox answers new comments by itself, asks you what it doesn't know and leaves complaints to you.",
+          detail: "Mox answers, asks what it doesn't know, leaves complaints to you.",
           reconnect: false,
         }
       : {
           id: "auto_reply",
           state: "off",
           title: "Auto-reply off",
-          detail: "New comments wait for you. Turn it on and Mox answers them by itself.",
+          detail: "New comments wait for you.",
           reconnect: false,
         },
   );
@@ -132,7 +130,7 @@ export function inboxHealth(data: EngageHome, now = Date.now()): HealthItem[] {
       id: "reading",
       state: "warn",
       title: last === undefined ? "Not read yet" : "Comments weren't read lately",
-      detail: "Mellox reads new comments every few minutes. Press Refresh to read them now.",
+      detail: "Press Refresh to read them now.",
       reconnect: false,
     });
 
